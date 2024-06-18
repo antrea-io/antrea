@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,10 @@ func (c *FakeStatsV1alpha1) MulticastGroups() v1alpha1.MulticastGroupInterface {
 
 func (c *FakeStatsV1alpha1) NetworkPolicyStats(namespace string) v1alpha1.NetworkPolicyStatsInterface {
 	return &FakeNetworkPolicyStats{c, namespace}
+}
+
+func (c *FakeStatsV1alpha1) NodeLatencyStatses() v1alpha1.NodeLatencyStatsInterface {
+	return &FakeNodeLatencyStatses{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

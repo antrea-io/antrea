@@ -163,8 +163,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroupList":                      schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats":                      schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStatsList":                  schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStats":                        schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStatsList":                    schema_pkg_apis_stats_v1alpha1_NodeLatencyStatsList(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats":                    schema_pkg_apis_stats_v1alpha1_PeerNodeLatencyStats(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference":                            schema_pkg_apis_stats_v1alpha1_PodReference(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats":                        schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.TargetIPLatencyStats":                    schema_pkg_apis_stats_v1alpha1_TargetIPLatencyStats(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats":                            schema_pkg_apis_stats_v1alpha1_TrafficStats(ref),
 		"antrea.io/antrea/pkg/apis/system/v1beta1.SupportBundle":                           schema_pkg_apis_system_v1beta1_SupportBundle(ref),
 		"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource":                              schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
@@ -6673,6 +6677,141 @@ func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref common.ReferenceC
 	}
 }
 
+func schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NodeLatencyStats contains all the latency measurements collected by the Agent from a specific Node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"peerNodeLatencyStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The list of PeerNodeLatencyStats.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_stats_v1alpha1_NodeLatencyStatsList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NodeLatencyStatsList is a list of NodeLatencyStats objects.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The list of NodeLatencyStats.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStats"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_stats_v1alpha1_PeerNodeLatencyStats(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PeerNodeLatencyStats contains the latency stats of a Peer Node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"nodeName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The Node's name.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"targetIPLatencyStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The list of target IP latency stats.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TargetIPLatencyStats"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.TargetIPLatencyStats"},
+	}
+}
+
 func schema_pkg_apis_stats_v1alpha1_PodReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -6724,6 +6863,47 @@ func schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
+	}
+}
+
+func schema_pkg_apis_stats_v1alpha1_TargetIPLatencyStats(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TargetIPLatencyStats contains the latency stats of a target IP.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"targetIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The target IP address.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"lastSendTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The timestamp of the last sent packet.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"lastRecvTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The timestamp of the last received packet.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"lastMeasuredRTTNanoseconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The last measured RTT for this target IP, in nanoseconds.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 

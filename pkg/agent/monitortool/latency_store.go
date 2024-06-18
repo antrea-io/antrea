@@ -22,9 +22,11 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -247,4 +249,44 @@ func (s *LatencyStore) DeleteStaleNodeIPs() {
 			delete(s.nodeIPLatencyMap, nodeIP)
 		}
 	}
+}
+
+// ConvertList converts the latency store to a list of PeerNodeLatencyStats.
+func (l *LatencyStore) ConvertList(currentNodeName string) []statsv1alpha1.PeerNodeLatencyStats {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+
+	// PeerNodeLatencyStats should be a list of size N-1, where N is the number of Nodes in the cluster.
+	// TargetIPLatencyStats will be a list of size 1 (single-stack case) or 2 (dual-stack case).
+	peerNodeLatencyStatsList := make([]statsv1alpha1.PeerNodeLatencyStats, 0, len(l.nodeIPLatencyMap))
+	for nodeName, nodeIPs := range l.nodeTargetIPsMap {
+		// Even though the current Node should already be excluded from the map, we add an extra check as an additional guarantee.
+		if nodeName == currentNodeName {
+			continue
+		}
+
+		targetIPLatencyStats := make([]statsv1alpha1.TargetIPLatencyStats, 0, len(nodeIPs))
+		for _, nodeIP := range nodeIPs {
+			nodeIPStr := nodeIP.String()
+			latencyEntry, ok := l.nodeIPLatencyMap[nodeIPStr]
+			if !ok {
+				continue
+			}
+			entry := statsv1alpha1.TargetIPLatencyStats{
+				TargetIP:                   nodeIPStr,
+				LastSendTime:               metav1.NewTime(latencyEntry.LastSendTime),
+				LastRecvTime:               metav1.NewTime(latencyEntry.LastRecvTime),
+				LastMeasuredRTTNanoseconds: latencyEntry.LastMeasuredRTT.Nanoseconds(),
+			}
+			targetIPLatencyStats = append(targetIPLatencyStats, entry)
+		}
+
+		peerNodeLatencyStats := statsv1alpha1.PeerNodeLatencyStats{
+			NodeName:             nodeName,
+			TargetIPLatencyStats: targetIPLatencyStats,
+		}
+		peerNodeLatencyStatsList = append(peerNodeLatencyStatsList, peerNodeLatencyStats)
+	}
+
+	return peerNodeLatencyStatsList
 }

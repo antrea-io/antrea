@@ -15,6 +15,7 @@
 package monitortool
 
 import (
+	"context"
 	"math/rand"
 	"net"
 	"sync"
@@ -25,13 +26,16 @@ import (
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 )
 
@@ -66,6 +70,8 @@ type NodeLatencyMonitor struct {
 	// isIPv6Enabled is the flag to indicate whether the IPv6 is enabled.
 	isIPv6Enabled bool
 
+	// antreaClientProvider provides interfaces to get antreaClient, which will be used to report the statistics
+	antreaClientProvider client.AntreaClientProvider
 	// nodeName is the name of the current Node, used to filter out the current Node from the latency monitor.
 	nodeName string
 
@@ -88,6 +94,7 @@ type latencyConfig struct {
 
 // NewNodeLatencyMonitor creates a new NodeLatencyMonitor.
 func NewNodeLatencyMonitor(
+	antreaClientProvider client.AntreaClientProvider,
 	nodeInformer coreinformers.NodeInformer,
 	nlmInformer crdinformers.NodeLatencyMonitorInformer,
 	nodeConfig *config.NodeConfig,
@@ -96,6 +103,7 @@ func NewNodeLatencyMonitor(
 	m := &NodeLatencyMonitor{
 		latencyStore:         NewLatencyStore(trafficEncapMode.IsNetworkPolicyOnly()),
 		latencyConfigChanged: make(chan latencyConfig),
+		antreaClientProvider: antreaClientProvider,
 		nodeInformerSynced:   nodeInformer.Informer().HasSynced,
 		nlmInformerSynced:    nlmInformer.Informer().HasSynced,
 		nodeName:             nodeConfig.Name,
@@ -176,7 +184,7 @@ func (m *NodeLatencyMonitor) onNodeDelete(obj interface{}) {
 // onNodeLatencyMonitorAdd is the event handler for adding NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) onNodeLatencyMonitorAdd(obj interface{}) {
 	nlm := obj.(*v1alpha1.NodeLatencyMonitor)
-	klog.InfoS("NodeLatencyMonitor added", "NodeLatencyMonitor", klog.KObj(nlm))
+	klog.V(4).InfoS("NodeLatencyMonitor added", "NodeLatencyMonitor", klog.KObj(nlm))
 
 	m.updateLatencyConfig(nlm)
 }
@@ -367,6 +375,28 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 	klog.V(4).InfoS("Done pinging all Nodes")
 }
 
+// getSummary returns the latency summary of the given Node IP.
+func (m *NodeLatencyMonitor) getSummary() *statsv1alpha1.NodeLatencyStats {
+	return &statsv1alpha1.NodeLatencyStats{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: m.nodeName,
+		},
+		PeerNodeLatencyStats: m.latencyStore.ConvertList(m.nodeName),
+	}
+}
+
+func (m *NodeLatencyMonitor) report() {
+	summary := m.getSummary()
+	antreaClient, err := m.antreaClientProvider.GetAntreaClient()
+	if err != nil {
+		klog.ErrorS(err, "Failed to get Antrea client")
+		return
+	}
+	if _, err := antreaClient.StatsV1alpha1().NodeLatencyStatses().Create(context.TODO(), summary, metav1.CreateOptions{}); err != nil {
+		klog.ErrorS(err, "Failed to create NodeIPLatencyStats")
+	}
+}
+
 // Run starts the NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync("NodeLatencyMonitor", stopCh, m.nodeInformerSynced, m.nlmInformerSynced) {
@@ -418,6 +448,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 			// to avoid consistency issues and because it would not be sufficient to avoid stale entries completely.
 			// This means that we have to periodically invoke DeleteStaleNodeIPs to avoid stale entries in the map.
 			m.latencyStore.DeleteStaleNodeIPs()
+			m.report()
 		case <-stopCh:
 			return
 		case latencyConfig := <-m.latencyConfigChanged:

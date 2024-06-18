@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -98,6 +98,31 @@ message NetworkPolicyStatsList {
   repeated NetworkPolicyStats items = 2;
 }
 
+// NodeLatencyStats contains all the latency measurements collected by the Agent from a specific Node.
+message NodeLatencyStats {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // The list of PeerNodeLatencyStats.
+  repeated PeerNodeLatencyStats peerNodeLatencyStats = 2;
+}
+
+// NodeLatencyStatsList is a list of NodeLatencyStats objects.
+message NodeLatencyStatsList {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  // The list of NodeLatencyStats.
+  repeated NodeLatencyStats items = 2;
+}
+
+// PeerNodeLatencyStats contains the latency stats of a Peer Node.
+message PeerNodeLatencyStats {
+  // The Node's name.
+  optional string nodeName = 1;
+
+  // The list of target IP latency stats.
+  repeated TargetIPLatencyStats targetIPLatencyStats = 2;
+}
+
 // PodReference represents a Pod Reference.
 message PodReference {
   // The name of this Pod.
@@ -112,6 +137,21 @@ message RuleTrafficStats {
   optional string name = 1;
 
   optional TrafficStats trafficStats = 2;
+}
+
+// TargetIPLatencyStats contains the latency stats of a target IP.
+message TargetIPLatencyStats {
+  // The target IP address.
+  optional string targetIP = 1;
+
+  // The timestamp of the last sent packet.
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastSendTime = 2;
+
+  // The timestamp of the last received packet.
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastRecvTime = 3;
+
+  // The last measured RTT for this target IP, in nanoseconds.
+  optional int64 lastMeasuredRTTNanoseconds = 4;
 }
 
 // TrafficStats contains the traffic stats of a NetworkPolicy.
