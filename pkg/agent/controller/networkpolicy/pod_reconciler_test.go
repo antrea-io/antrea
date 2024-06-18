@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
@@ -78,6 +79,8 @@ var (
 	servicesKey1 = normalizeServices(services1)
 	services2    = []v1beta2.Service{serviceTCP}
 	servicesKey2 = normalizeServices(services2)
+	services3    = []v1beta2.Service{serviceTCP443}
+	servicesKey3 = normalizeServices(services3)
 
 	policyPriority = float64(1)
 	tierPriority   = int32(1)
@@ -91,12 +94,12 @@ var (
 	cnp1 = v1beta2.NetworkPolicyReference{
 		Type: v1beta2.AntreaClusterNetworkPolicy,
 		Name: "name1",
-		UID:  "uid1",
+		UID:  "uid2",
 	}
 	anp1 = v1beta2.NetworkPolicyReference{
 		Type: v1beta2.AdminNetworkPolicy,
 		Name: "anp1",
-		UID:  "uid2",
+		UID:  "uid3",
 	}
 
 	transientError = errors.New("Transient OVS error")
@@ -618,6 +621,99 @@ func TestReconcilerReconcile(t *testing.T) {
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
 				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
 			}
+		})
+	}
+}
+
+func TestGetRealizedRulesByPolicy(t *testing.T) {
+	ifaceStore := interfacestore.NewInterfaceStore()
+	tests := []struct {
+		name          string
+		lastRealizeds map[string]*podPolicyLastRealized
+		args          string
+		expectedResp  []apis.PolicyRuleConjunctionIDsResponse
+	}{
+		{
+			name: "single-rule",
+			lastRealizeds: map[string]*podPolicyLastRealized{
+				"foo": {
+					ofIDs: map[servicesKey]uint32{servicesKey1: 8},
+					CompletedRule: &CompletedRule{
+						rule: &rule{Direction: v1beta2.DirectionIn, SourceRef: &np1},
+					},
+				},
+			},
+			args: "uid1",
+			expectedResp: []apis.PolicyRuleConjunctionIDsResponse{
+				{
+					Direction:      "In",
+					ConjunctionIDs: []uint32{8},
+				},
+			},
+		},
+		{
+			name: "multiple-policies",
+			lastRealizeds: map[string]*podPolicyLastRealized{
+				"foo": {
+					ofIDs: map[servicesKey]uint32{servicesKey1: 8},
+					CompletedRule: &CompletedRule{
+						rule: &rule{Direction: v1beta2.DirectionIn, SourceRef: &np1},
+					},
+				},
+				"bar": {
+					ofIDs: map[servicesKey]uint32{servicesKey2: 9},
+					CompletedRule: &CompletedRule{
+						rule: &rule{Direction: v1beta2.DirectionIn, SourceRef: &cnp1},
+					},
+				},
+			},
+			args: "uid2",
+			expectedResp: []apis.PolicyRuleConjunctionIDsResponse{
+				{
+					Direction:      "In",
+					ConjunctionIDs: []uint32{9},
+				},
+			},
+		},
+		{
+			name: "multiple-rules",
+			lastRealizeds: map[string]*podPolicyLastRealized{
+				"foo": {
+					ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9},
+					CompletedRule: &CompletedRule{
+						rule: &rule{Direction: v1beta2.DirectionIn, SourceRef: &np1},
+					},
+				},
+				"bar": {
+					ofIDs: map[servicesKey]uint32{servicesKey3: 10},
+					CompletedRule: &CompletedRule{
+						rule: &rule{Direction: v1beta2.DirectionOut, SourceRef: &np1},
+					},
+				},
+			},
+			args: "uid1",
+			expectedResp: []apis.PolicyRuleConjunctionIDsResponse{
+				{
+					Direction:      "In",
+					ConjunctionIDs: []uint32{8, 9},
+				},
+				{
+					Direction:      "Out",
+					ConjunctionIDs: []uint32{10},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			mockOFClient := openflowtest.NewMockClient(controller)
+			r := newTestReconciler(t, controller, ifaceStore, mockOFClient, true, false)
+			for key, value := range tt.lastRealizeds {
+				r.lastRealizeds.Store(key, value)
+			}
+			resps := r.GetRealizedRulesByPolicy(tt.args)
+			assert.ElementsMatch(t, tt.expectedResp, resps)
 		})
 	}
 }

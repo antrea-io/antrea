@@ -36,6 +36,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/component-base/metrics/legacyregistry"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
 	"antrea.io/antrea/pkg/agent/metrics"
@@ -167,6 +168,10 @@ func (r *mockReconciler) RegisterFQDNController(fc *fqdnController) {
 
 func (r *mockReconciler) GetRuleByFlowID(_ uint32) (*agenttypes.PolicyRule, bool, error) {
 	return nil, false, nil
+}
+
+func (r *mockReconciler) GetRealizedRulesByPolicy(_ string) []apis.PolicyRuleConjunctionIDsResponse {
+	return nil
 }
 
 func (r *mockReconciler) getLastRealized(ruleID string) (*CompletedRule, bool) {

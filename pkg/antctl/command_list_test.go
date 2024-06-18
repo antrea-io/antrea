@@ -70,7 +70,7 @@ func TestGetDebugCommands(t *testing.T) {
 		{
 			name:     "Antctl running against agent mode",
 			mode:     "agent",
-			expected: [][]string{{"version"}, {"get", "podmulticaststats"}, {"log-level"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "agentinfo"}, {"get", "podinterface"}, {"get", "ovsflows"}, {"trace-packet"}, {"get", "serviceexternalip"}, {"get", "memberlist"}, {"supportbundle"}, {"traceflow"}, {"get", "featuregates"}},
+			expected: [][]string{{"version"}, {"get", "podmulticaststats"}, {"log-level"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "agentinfo"}, {"get", "podinterface"}, {"get", "policyconjunctions"}, {"get", "ovsflows"}, {"trace-packet"}, {"get", "serviceexternalip"}, {"get", "memberlist"}, {"supportbundle"}, {"traceflow"}, {"get", "featuregates"}},
 		},
 		{
 			name:     "Antctl running against flow-aggregator mode",

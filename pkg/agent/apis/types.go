@@ -170,6 +170,13 @@ func (r PodInterfaceResponse) SortRows() bool {
 	return true
 }
 
+// PolicyRuleConjunctionIDsResponse describes the response struct of a policy-rule-conjunction-ids command.
+type PolicyRuleConjunctionIDsResponse struct {
+	RuleName       string   `json:"name,omitempty"`
+	Direction      string   `json:"direction,omitempty"`
+	ConjunctionIDs []uint32 `json:"conjunctionIDs,omitempty"`
+}
+
 // ServiceExternalIPInfo contains the essential information for Services with type of Loadbalancer managed by Antrea.
 type ServiceExternalIPInfo struct {
 	ServiceName    string `json:"serviceName,omitempty" antctl:"name,Name of the Service"`

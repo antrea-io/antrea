@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
@@ -68,6 +69,9 @@ type Reconciler interface {
 
 	// GetRuleByFlowID returns the rule from the async rule cache in idAllocator cache.
 	GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, bool, error)
+
+	// GetRealizedRulesByPolicy returns the conjunction info of the queried policy from the lastRealized cache.
+	GetRealizedRulesByPolicy(uid string) []apis.PolicyRuleConjunctionIDsResponse
 
 	// RunIDAllocatorWorker runs the worker that deletes the rules from the cache
 	// in idAllocator.
@@ -162,7 +166,7 @@ type podPolicyLastRealized struct {
 	// It's same in all Openflow rules, because named port is only for
 	// destination Pods.
 	podIPs sets.Set[string]
-	// fqdnIPaddresses tracks the last realized set of IP addresses resolved for
+	// fqdnIPAddresses tracks the last realized set of IP addresses resolved for
 	// the fqdn selector of this policy rule. It must be empty for policy rule
 	// that is not egress and does not have toFQDN field.
 	fqdnIPAddresses sets.Set[string]
@@ -1044,6 +1048,27 @@ func (r *podReconciler) isIGMPRule(rule *CompletedRule) bool {
 
 func (r *podReconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, bool, error) {
 	return r.idAllocator.getRuleFromAsyncCache(ruleFlowID)
+}
+
+func (r *podReconciler) GetRealizedRulesByPolicy(uid string) []apis.PolicyRuleConjunctionIDsResponse {
+	var responses []apis.PolicyRuleConjunctionIDsResponse
+	r.lastRealizeds.Range(func(k, v interface{}) bool {
+		r := v.(*podPolicyLastRealized)
+		if string(r.SourceRef.UID) == uid {
+			resp := apis.PolicyRuleConjunctionIDsResponse{
+				RuleName:  r.Name,
+				Direction: string(r.Direction),
+			}
+			ofIDs := make([]uint32, 0, len(r.ofIDs))
+			for _, ofID := range r.ofIDs {
+				ofIDs = append(ofIDs, ofID)
+			}
+			resp.ConjunctionIDs = ofIDs
+			responses = append(responses, resp)
+		}
+		return true
+	})
+	return responses
 }
 
 func (r *podReconciler) getOFPorts(members v1beta2.GroupMemberSet) sets.Set[int32] {

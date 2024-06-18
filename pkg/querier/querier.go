@@ -42,6 +42,7 @@ type AgentNetworkPolicyInfoQuerier interface {
 	GetAppliedNetworkPolicies(pod, namespace string, npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
 	GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *cpv1beta.NetworkPolicyReference
 	GetRuleByFlowID(ruleFlowID uint32) *types.PolicyRule
+	GetRealizedRulesByPolicy(uid string) []apis.PolicyRuleConjunctionIDsResponse
 }
 
 type AgentMulticastInfoQuerier interface {
