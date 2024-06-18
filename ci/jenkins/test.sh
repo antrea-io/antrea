@@ -530,10 +530,10 @@ function deliver_antrea {
     chmod -R g-w build/images/base
     if [[ "$BUILD_TAG" != "latest" ]]; then
         DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --build-tag ${BUILD_TAG} --pull
-        IMG_TAG="${BUILD_TAG}" ./hack/generate-manifest.sh $MANIFEST_ARGS
+        IMG_TAG="${BUILD_TAG}" ./hack/generate-manifest.sh $MANIFEST_ARGS > build/yamls/antrea.yml
     else
         DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
-        ./hack/generate-manifest.sh $MANIFEST_ARGS
+        ./hack/generate-manifest.sh $MANIFEST_ARGS > build/yamls/antrea.yml
     fi
     make flow-aggregator-image
 
