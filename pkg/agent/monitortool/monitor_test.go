@@ -40,6 +40,7 @@ import (
 	monitortesting "antrea.io/antrea/pkg/agent/monitortool/testing"
 	"antrea.io/antrea/pkg/agent/util/nettest"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/util/ip"
@@ -134,6 +135,14 @@ func (c *fakeClock) NewTicker(d time.Duration) clock.Ticker {
 	return c.FakeClock.NewTicker(d)
 }
 
+type antreaClientGetter struct {
+	clientset versioned.Interface
+}
+
+func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
+	return g.clientset, nil
+}
+
 type testMonitor struct {
 	*NodeLatencyMonitor
 	clientset          *fake.Clientset
@@ -160,7 +169,8 @@ func newTestMonitor(
 	crdClientset := fakeversioned.NewSimpleClientset(crdObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClientset, 0)
 	nlmInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
-	m := NewNodeLatencyMonitor(nodeInformer, nlmInformer, nodeConfig, trafficEncapMode)
+	antreaClientProvider := &antreaClientGetter{fakeversioned.NewSimpleClientset(crdObjects...)}
+	m := NewNodeLatencyMonitor(antreaClientProvider, nodeInformer, nlmInformer, nodeConfig, trafficEncapMode)
 	fakeClock := newFakeClock(clockT)
 	m.clock = fakeClock
 	mockListener := monitortesting.NewMockPacketListener(ctrl)

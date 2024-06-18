@@ -6,6 +6,12 @@ metadata:
     app: antrea
 rules:
   - apiGroups:
+      - stats.antrea.io
+    resources:
+      - nodelatencystats
+    verbs:
+      - create
+  - apiGroups:
       - ""
     resources:
       - nodes

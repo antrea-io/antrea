@@ -146,3 +146,49 @@ type RuleTrafficStats struct {
 	Name         string       `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
 	TrafficStats TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +resourceName=nodelatencystats
+// +genclient:onlyVerbs=create,delete,get,list
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NodeLatencyStats contains all the latency measurements collected by the Agent from a specific Node.
+type NodeLatencyStats struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// The list of PeerNodeLatencyStats.
+	PeerNodeLatencyStats []PeerNodeLatencyStats `json:"peerNodeLatencyStats,omitempty" protobuf:"bytes,2,rep,name=peerNodeLatencyStats"`
+}
+
+// PeerNodeLatencyStats contains the latency stats of a Peer Node.
+type PeerNodeLatencyStats struct {
+	// The Node's name.
+	NodeName string `json:"nodeName,omitempty" protobuf:"bytes,1,opt,name=nodeName"`
+	// The list of target IP latency stats.
+	TargetIPLatencyStats []TargetIPLatencyStats `json:"targetIPLatencyStats,omitempty" protobuf:"bytes,2,rep,name=targetIPLatencyStats"`
+}
+
+// TargetIPLatencyStats contains the latency stats of a target IP.
+type TargetIPLatencyStats struct {
+	// The target IP address.
+	TargetIP string `json:"targetIP,omitempty" protobuf:"bytes,1,opt,name=targetIP"`
+	// The timestamp of the last sent packet.
+	LastSendTime metav1.Time `json:"lastSendTime,omitempty" protobuf:"bytes,2,opt,name=lastSendTime"`
+	// The timestamp of the last received packet.
+	LastRecvTime metav1.Time `json:"lastRecvTime,omitempty" protobuf:"bytes,3,opt,name=lastRecvTime"`
+	// The last measured RTT for this target IP, in nanoseconds.
+	LastMeasuredRTTNanoseconds int64 `json:"lastMeasuredRTTNanoseconds,omitempty" protobuf:"varint,4,opt,name=lastMeasuredRTTNanoseconds"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NodeLatencyStatsList is a list of NodeLatencyStats objects.
+type NodeLatencyStatsList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// The list of NodeLatencyStats.
+	Items []NodeLatencyStats `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
