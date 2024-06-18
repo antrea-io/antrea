@@ -16,6 +16,10 @@
 
 package v1alpha1
 
+// BGPPolicyListerExpansion allows custom methods to be added to
+// BGPPolicyLister.
+type BGPPolicyListerExpansion interface{}
+
 // ExternalNodeListerExpansion allows custom methods to be added to
 // ExternalNodeLister.
 type ExternalNodeListerExpansion interface{}
