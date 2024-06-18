@@ -178,6 +178,28 @@ type IPFIXCollectorResponse struct {
 	FlowRecords []string `json:"flowRecords"`
 }
 
+func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*TestData, bool, bool) {
+	teardownFuncs := make([]func(), 0)
+	t.Cleanup(func() {
+		for _, fn := range teardownFuncs {
+			fn()
+		}
+	})
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	teardownFuncs = append(teardownFuncs, func() { teardownTest(t, data) })
+	err = setupFlowAggregator(t, data, options)
+	if err != nil {
+		t.Fatalf("Error when setting up FlowAggregator: %v", err)
+	}
+	// Execute teardownFlowAggregator later than teardownTest to ensure that the logs of Flow
+	// Aggregator has been exported.
+	teardownFuncs = append(teardownFuncs, func() { teardownFlowAggregator(t, data) })
+	return data, isIPv4Enabled(), isIPv6Enabled()
+}
+
 func TestFlowAggregatorSecureConnection(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
@@ -215,17 +237,9 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 		},
 	}
 	for _, o := range testCases {
-		data, v4Enabled, v6Enabled, err := setupTestForFlowAggregator(t, o.flowVisibilityTestOptions)
-		if err != nil {
-			t.Fatalf("Error when setting up test: %v", err)
-		}
 		t.Run(o.name, func(t *testing.T) {
-			defer func() {
-				teardownTest(t, data)
-				// Execute teardownFlowAggregator later than teardownTest to ensure that the log
-				// of Flow Aggregator has been exported.
-				teardownFlowAggregator(t, data)
-			}()
+			var err error
+			data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, o.flowVisibilityTestOptions)
 			podAIPs, podBIPs, _, _, _, err = createPerftestPods(data)
 			if err != nil {
 				t.Fatalf("Error when creating perftest Pods: %v", err)
@@ -244,21 +258,13 @@ func TestFlowAggregator(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
 
-	data, v4Enabled, v6Enabled, err := setupTestForFlowAggregator(t, flowVisibilityTestOptions{
+	var err error
+	data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
 		databaseURL: defaultCHDatabaseURL,
 	})
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
 	if err := getAndCheckFlowAggregatorMetrics(t, data); err != nil {
 		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
 	}
-	defer func() {
-		teardownTest(t, data)
-		// Execute teardownFlowAggregator later than teardownTest to ensure that the log
-		// of Flow Aggregator has been exported.
-		teardownFlowAggregator(t, data)
-	}()
 
 	k8sUtils, err = NewKubernetesUtils(data)
 	if err != nil {

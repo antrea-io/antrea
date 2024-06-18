@@ -431,6 +431,16 @@ func nodeIP(idx int) string {
 	return node.ip()
 }
 
+// isIPv4Enabled returns true if and only if IPv4 is enabled in the cluster.
+func isIPv4Enabled() bool {
+	return clusterInfo.podV4NetworkCIDR != ""
+}
+
+// isIPv6Enabled returns true if and only if IPv6 is enabled in the cluster.
+func isIPv6Enabled() bool {
+	return clusterInfo.podV6NetworkCIDR != ""
+}
+
 func labelNodeRoleControlPlane() string {
 	// TODO: return labelNodeRoleControlPlane unconditionally when the min K8s version
 	// requirement to run Antrea becomes K8s v1.20
@@ -889,7 +899,7 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 	}
 
 	// check for clickhouse pod Ready. Wait for 2x timeout as ch operator needs to be running first to handle chi
-	if err = data.podWaitForReady(2*defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace); err != nil {
+	if err := data.podWaitForReady(2*defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace); err != nil {
 		return "", err
 	}
 
@@ -903,21 +913,30 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 			return true, nil
 		}
 	}); err != nil {
-		return "", fmt.Errorf("timeout waiting for ClickHouse Service: %v", err)
+		return "", fmt.Errorf("timeout waiting for ClickHouse Service: %w", err)
 	}
 
+	const probePodName = "ch-svc-probe"
+	if err := NewPodBuilder(probePodName, flowVisibilityNamespace, agnhostImage).Create(testData); err != nil {
+		return "", fmt.Errorf("failed to create ClickHouse Service probe Pod: %w", err)
+	}
+	defer testData.DeletePod(flowVisibilityNamespace, probePodName)
+	if err := data.podWaitForReady(defaultTimeout, probePodName, flowVisibilityNamespace); err != nil {
+		return "", err
+	}
+
+	cmd := []string{"/agnhost", "connect", net.JoinHostPort(chSvc.Spec.ClusterIP, clickHouseHTTPPort), "--timeout=5s"}
 	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (bool, error) {
-		rc, stdout, stderr, err := testData.RunCommandOnNode(controlPlaneNodeName(),
-			fmt.Sprintf("curl -Ss %s:%s", chSvc.Spec.ClusterIP, clickHouseHTTPPort))
-		if rc != 0 || err != nil {
-			log.Infof("Failed to curl clickhouse Service: %s", strings.Trim(stderr, "\n"))
+		_, stderr, err := testData.RunCommandFromPod(flowVisibilityNamespace, probePodName, agnhostContainerName, cmd)
+		if err != nil {
+			log.Infof("Failed to connnect to clickhouse Service, err: %v, stderr: %s", err, strings.Trim(stderr, "\n"))
 			return false, nil
 		} else {
-			log.Infof("Successfully curl'ed clickhouse Service: %s", strings.Trim(stdout, "\n"))
+			log.Infof("Successfully connected to clickhouse Service")
 			return true, nil
 		}
 	}); err != nil {
-		return "", fmt.Errorf("timeout checking http port connectivity of clickhouse service: %v", err)
+		return "", fmt.Errorf("timeout checking http port connectivity of clickhouse service: %w", err)
 	}
 
 	return chSvc.Spec.ClusterIP, nil

@@ -285,13 +285,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	return testData, nil
 }
 
-func setupTestForFlowAggregator(tb testing.TB, o flowVisibilityTestOptions) (*TestData, bool, bool, error) {
-	v4Enabled := clusterInfo.podV4NetworkCIDR != ""
-	v6Enabled := clusterInfo.podV6NetworkCIDR != ""
-	testData, err := setupTest(tb)
-	if err != nil {
-		return testData, v4Enabled, v6Enabled, err
-	}
+func setupFlowAggregator(tb testing.TB, testData *TestData, o flowVisibilityTestOptions) error {
 	// Create pod using ipfix collector image
 	if err := NewPodBuilder("ipfix-collector", testData.testNamespace, ipfixCollectorImage).InHostNetwork().Create(testData); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
@@ -299,10 +293,10 @@ func setupTestForFlowAggregator(tb testing.TB, o flowVisibilityTestOptions) (*Te
 	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
 	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
-		return nil, v4Enabled, v6Enabled, err
+		return err
 	}
 	var ipStr string
-	if v6Enabled && ipfixCollectorIP.IPv6 != nil {
+	if isIPv6Enabled() && ipfixCollectorIP.IPv6 != nil {
 		ipStr = ipfixCollectorIP.IPv6.String()
 	} else {
 		ipStr = ipfixCollectorIP.IPv4.String()
@@ -312,17 +306,17 @@ func setupTestForFlowAggregator(tb testing.TB, o flowVisibilityTestOptions) (*Te
 	tb.Logf("Deploying ClickHouse")
 	chSvcIP, err := testData.deployFlowVisibilityClickHouse(o)
 	if err != nil {
-		return testData, v4Enabled, v6Enabled, err
+		return err
 	}
 	tb.Logf("ClickHouse Service created with ClusterIP: %v", chSvcIP)
 	tb.Logf("Applying flow aggregator YAML with ipfix collector: %s and clickHouse enabled",
 		ipfixCollectorAddr)
 
 	if err := testData.deployFlowAggregator(ipfixCollectorAddr, o); err != nil {
-		return testData, v4Enabled, v6Enabled, err
+		return err
 	}
 
-	return testData, v4Enabled, v6Enabled, nil
+	return nil
 }
 
 func exportLogsForSubtest(tb testing.TB, data *TestData) func() {
