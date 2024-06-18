@@ -55,6 +55,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&SupportBundleCollectionList{},
 		&NodeLatencyMonitor{},
 		&NodeLatencyMonitorList{},
+		&BGPPolicy{},
+		&BGPPolicyList{},
 	)
 
 	metav1.AddToGroupVersion(

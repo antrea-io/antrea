@@ -26,6 +26,7 @@ import (
 
 type CrdV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	BGPPoliciesGetter
 	ExternalNodesGetter
 	NodeLatencyMonitorsGetter
 	SupportBundleCollectionsGetter
@@ -34,6 +35,10 @@ type CrdV1alpha1Interface interface {
 // CrdV1alpha1Client is used to interact with features provided by the crd.antrea.io group.
 type CrdV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *CrdV1alpha1Client) BGPPolicies() BGPPolicyInterface {
+	return newBGPPolicies(c)
 }
 
 func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterface {

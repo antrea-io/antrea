@@ -16,6 +16,8 @@
 
 package v1alpha1
 
+type BGPPolicyExpansion interface{}
+
 type ExternalNodeExpansion interface{}
 
 type NodeLatencyMonitorExpansion interface{}
