@@ -17,31 +17,61 @@
 set -o errexit
 set -o pipefail
 
+function echoerr {
+    >&2 echo "$@"
+}
+
 ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
 IMAGE_NAME="antrea/codegen:kubernetes-1.29.2-build.1"
 
-# Recent versions of Git will not access .git directories which are owned by
-# another user (as a security measure), unless the directories are explicitly
-# added to a "safe" list in the Git config. When we run the Docker container,
-# the Antrea source directory may be owned (depends on the Docker platform)
-# by a user which is different from the container user (as the source directory
-# is mounted from the host). If this is the case, the Git program inside the
-# container will refuse to run. This is why we explicitly add the Antrea source
-# directory to the list of "safe" directories. We are still looking into the
-# possibility of running the Docker container as the "current host user".
+# We will use git clone to make a working copy of the repository into a
+# temporary directory. This requires that all changes have been committed
+# otherwise the generated code may not be up-to-date. It is anyway good practice
+# to commit changes before auto-generating code, in case there is an issue with
+# the script.
+# We run these checks here instead of inside the Docker container for 2 reasons:
+# speed (bind mounts are slow) and to avoid having to add the source repository
+# to the "safe" list in the Git config when starting the container (required
+# because of user mismatch).
+modified=$(git ls-files --modified)
+if [ -n "$modified" ]; then
+    echoerr "The following files have been modified, please commit your changes before running this script"
+    echoerr "$modified"
+    exit 1
+fi
+deleted=$(git ls-files --deleted)
+if [ -n "$deleted" ]; then
+    echoerr "The following files have been deleted, please commit your changes before running this script"
+    echoerr "$deleted"
+    exit 1
+fi
+# It is very common to have untracked files in a repository, so we only give an
+# error if we find untracked Golang source files.
+added=$(git ls-files --others --exclude-standard '**.go')
+if [ -n "$added" ]; then
+    echoerr "The following Golang files are untracked, please commit your changes before running this script"
+    echoerr "$added"
+    exit 1
+fi
+if ! git diff-index --cached --quiet HEAD; then
+    echoerr "You have staged but uncommitted changes, please commit your changes before running this script"
+fi
+
 function docker_run() {
   # Silence CLI suggestions.
   export DOCKER_CLI_HINTS=false
   docker pull ${IMAGE_NAME}
   set -x
-  ANTREA_PATH="/go/src/antrea.io/antrea"
+  ANTREA_SRC_PATH="/mnt/antrea"
   docker run --rm \
 		-e GOPROXY=${GOPROXY} \
 		-e HTTP_PROXY=${HTTP_PROXY} \
 		-e HTTPS_PROXY=${HTTPS_PROXY} \
-		-w ${ANTREA_PATH} \
-		-v ${ANTREA_ROOT}:${ANTREA_PATH} \
-		"${IMAGE_NAME}" bash -c "git config --global --add safe.directory ${ANTREA_PATH} && $@"
+		-w ${ANTREA_SRC_PATH} \
+                --mount type=bind,source=${ANTREA_ROOT},target=${ANTREA_SRC_PATH} \
+                --mount type=volume,source=antrea-codegen-gopkgmod,target=/go/pkg/mod \
+                --mount type=volume,source=antrea-codegen-gocache,target=/root/.cache/go-build \
+		"${IMAGE_NAME}" bash -c "$@"
 }
 
 # Combine hack/update-codegen-dockerized.sh and the arguments to the script as a

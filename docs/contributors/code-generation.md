@@ -6,7 +6,8 @@ Antrea uses [protoc](https://github.com/protocolbuffers/protobuf), [protoc-gen-g
 and [protoc-gen-go-grpc](https://github.com/grpc/grpc-go) to generate CNI gRPC service code.
 
 If you make any change to [cni.proto](../../pkg/apis/cni/v1beta1/cni.proto), you can
-re-generate the code by invoking `make codegen`.
+re-generate the code by invoking `make codegen`. Make sure that you commit your changes before
+running the script, and that you commit the generated code after running it.
 
 ## Extension API Resources and Custom Resource Definitions
 
@@ -18,7 +19,9 @@ generated codes are located in the conventional paths: `pkg/apis/<resource group
 types and `pkg/apis/<resource group>/<version>` for versioned types and `pkg/client/clientset` for
 clients.
 
-If you make any change to any `types.go`, you can re-generate the code by invoking `make codegen`.
+If you make any change to any `types.go`, you can re-generate the code by invoking `make
+codegen`. Make sure that you commit your changes before running the script, and that you commit the
+generated code after running it.
 
 ## Mocks
 
@@ -31,6 +34,8 @@ code for the interface `Baz` defined in the package `pkg/foo/bar` will be genera
 `pkg/foo/bar/testing/mock_bar.go`, and you can import it via `pkg/foo/bar/testing`.
 
 Same as above, you can re-generate the mock source code (with `mockgen`) by invoking `make codegen`.
+Make sure that you commit your changes before running the script, and that you commit the
+generated code after running it.
 
 ## Generated Documentation
 
