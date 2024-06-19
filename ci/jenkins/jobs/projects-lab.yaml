@@ -907,6 +907,38 @@
                 credential-id: DOCKER_PASSWORD
                 variable: DOCKER_PASSWORD
       - '{name}-{test_name}-for-pull-request':
+          test_name: kind-e2e
+          node: 'antrea-kind-testbed'
+          description: 'This is for running e2e tests on kind.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-e2e-kind:
+               ip_version: 'ipv4'
+               kind_cluster_name: '{test_name}'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-(e2e|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          throttle_concurrent_builds_enabled: 'true'
+          status_context: jenkins-kind-e2e
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-e2e to re-trigger.
+          error_status: Failed. Add comment /test-kind-e2e to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
           test_name: kind-conformance
           node: 'antrea-kind-testbed'
           description: 'This is for running conformance tests on kind.'
@@ -917,7 +949,7 @@
                conformance_type: 'conformance'
                ip_version: 'ipv4'
                kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-conformance.*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-(conformance|all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -925,6 +957,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: true
+          throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-kind-conformance
           status_url: --none--
           success_status: Build finished.
@@ -949,7 +982,7 @@
                conformance_type: 'networkpolicy'
                ip_version: 'ipv4'
                kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-networkpolicy.*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-(networkpolicy|all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -957,6 +990,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: true
+          throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-kind-networkpolicy
           status_url: --none--
           success_status: Build finished.
