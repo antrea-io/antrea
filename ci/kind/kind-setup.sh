@@ -457,7 +457,7 @@ function printUnixTimestamp {
 
 function setup_external_server {
   if [[ $DEPLOY_EXTERNAL_SERVER == true ]]; then
-    docker run -d --name antrea-external-server-$RANDOM --network kind -it --rm registry.k8s.io/e2e-test-images/agnhost:2.29 netexec &> /dev/null
+    docker run -d --name antrea-external-server-$RANDOM --network kind -it --rm registry.k8s.io/e2e-test-images/agnhost:2.40 netexec &> /dev/null
   fi
 }
 
