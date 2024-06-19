@@ -27,8 +27,8 @@ GOLANGCI_LINT_VERSION := v1.54.0
 GOLANGCI_LINT_BINDIR  := $(CURDIR)/.golangci-bin
 GOLANGCI_LINT_BIN     := $(GOLANGCI_LINT_BINDIR)/$(GOLANGCI_LINT_VERSION)/golangci-lint
 
-BUILD_TAG := 
-ifndef $(CUSTOM_BUILD_TAG)
+BUILD_TAG :=
+ifndef CUSTOM_BUILD_TAG
 	BUILD_TAG = $(shell build/images/build-tag.sh)
 else
 	BUILD_TAG = $(CUSTOM_BUILD_TAG)
