@@ -33,28 +33,16 @@ IMAGE_NAME="antrea/codegen:kubernetes-1.29.2-build.1"
 # speed (bind mounts are slow) and to avoid having to add the source repository
 # to the "safe" list in the Git config when starting the container (required
 # because of user mismatch).
-modified=$(git ls-files --modified)
-if [ -n "$modified" ]; then
-    echoerr "The following files have been modified, please commit your changes before running this script"
-    echoerr "$modified"
-    exit 1
+if git_status=$(git status --porcelain --untracked=no 2>/dev/null) && [[ -n "${git_status}" ]]; then
+  echoerr "!!! Dirty tree. Clean up and try again."
+  exit 1
 fi
-deleted=$(git ls-files --deleted)
-if [ -n "$deleted" ]; then
-    echoerr "The following files have been deleted, please commit your changes before running this script"
-    echoerr "$deleted"
-    exit 1
-fi
-# It is very common to have untracked files in a repository, so we only give an
-# error if we find untracked Golang source files.
-added=$(git ls-files --others --exclude-standard '**.go')
-if [ -n "$added" ]; then
-    echoerr "The following Golang files are untracked, please commit your changes before running this script"
-    echoerr "$added"
-    exit 1
-fi
-if ! git diff-index --cached --quiet HEAD; then
-    echoerr "You have staged but uncommitted changes, please commit your changes before running this script"
+# It is very common to have untracked files in a repository, so we only give a
+# warning if we find untracked Golang source files.
+untracked=$(git ls-files --others --exclude-standard '**.go')
+if [ -n "$untracked" ]; then
+    echoerr "The following Golang files are untracked, and will be ignored by code generation:"
+    echoerr "$untracked"
 fi
 
 function docker_run() {
