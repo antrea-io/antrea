@@ -27,14 +27,6 @@ GOLANGCI_LINT_VERSION := v1.54.0
 GOLANGCI_LINT_BINDIR  := $(CURDIR)/.golangci-bin
 GOLANGCI_LINT_BIN     := $(GOLANGCI_LINT_BINDIR)/$(GOLANGCI_LINT_VERSION)/golangci-lint
 
-BUILD_TAG :=
-ifndef CUSTOM_BUILD_TAG
-	BUILD_TAG = $(shell build/images/build-tag.sh)
-else
-	BUILD_TAG = $(CUSTOM_BUILD_TAG)
-	DOCKER_IMG_VERSION = $(CUSTOM_BUILD_TAG)
-endif
-
 DOCKER_BUILD_ARGS :=
 ifeq ($(NO_PULL),)
 	DOCKER_BUILD_ARGS += --pull
@@ -44,7 +36,6 @@ ifneq ($(NO_CACHE),)
 endif
 DOCKER_BUILD_ARGS += --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
-DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
 
 export CGO_ENABLED
 
@@ -52,6 +43,15 @@ export CGO_ENABLED
 all: build
 
 include versioning.mk
+
+BUILD_TAG :=
+ifndef CUSTOM_BUILD_TAG
+	BUILD_TAG = $(shell build/images/build-tag.sh)
+else
+	BUILD_TAG = $(CUSTOM_BUILD_TAG)
+	DOCKER_IMG_VERSION = $(CUSTOM_BUILD_TAG)
+endif
+DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
 
 LDFLAGS += $(VERSION_LDFLAGS)
 
