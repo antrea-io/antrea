@@ -26,6 +26,7 @@ package testing
 import (
 	net "net"
 	reflect "reflect"
+	time "time"
 
 	ovsconfig "antrea.io/antrea/pkg/ovs/ovsconfig"
 	gomock "go.uber.org/mock/gomock"
@@ -529,4 +530,19 @@ func (m *MockOVSBridgeClient) UpdateOVSOtherConfig(arg0 map[string]any) ovsconfi
 func (mr *MockOVSBridgeClientMockRecorder) UpdateOVSOtherConfig(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).UpdateOVSOtherConfig), arg0)
+}
+
+// WaitForDatapathID mocks base method.
+func (m *MockOVSBridgeClient) WaitForDatapathID(arg0 time.Duration) (string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitForDatapathID", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// WaitForDatapathID indicates an expected call of WaitForDatapathID.
+func (mr *MockOVSBridgeClientMockRecorder) WaitForDatapathID(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForDatapathID", reflect.TypeOf((*MockOVSBridgeClient)(nil).WaitForDatapathID), arg0)
 }

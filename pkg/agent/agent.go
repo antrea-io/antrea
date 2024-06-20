@@ -212,6 +212,12 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
+	// Wait for the datapath ID for the bridge to be available, as it indicates that the bridge
+	// has been configured and that we should be able to query supported datapath features.
+	if _, err := i.ovsBridgeClient.WaitForDatapathID(5 * time.Second); err != nil {
+		return fmt.Errorf("error when waiting for OVS bridge datapath ID: %w", err)
+	}
+
 	if err := i.validateSupportedDPFeatures(); err != nil {
 		return err
 	}
