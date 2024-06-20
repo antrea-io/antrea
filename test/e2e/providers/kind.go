@@ -15,13 +15,15 @@
 package providers
 
 import (
+	"flag"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
 	"antrea.io/antrea/test/e2e/providers/exec"
 )
+
+var kindKubeconfig = flag.String("kind.kubeconfig", path.Join(homedir, ".kube", "config"), "Path of the kubeconfig of the cluster")
 
 type KindProvider struct {
 	controlPlaneNodeName string
@@ -47,15 +49,7 @@ func (provider *KindProvider) RunCommandOnNodeExt(nodeName, cmd string, envs map
 }
 
 func (provider *KindProvider) GetKubeconfigPath() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("error when retrieving user home directory: %v", err)
-	}
-	kubeconfigPath := path.Join(homeDir, ".kube", "config")
-	if _, err := os.Stat(kubeconfigPath); os.IsNotExist(err) {
-		return "", fmt.Errorf("Kubeconfig file not found at expected location '%s'", kubeconfigPath)
-	}
-	return kubeconfigPath, nil
+	return *kindKubeconfig, nil
 }
 
 // enableKubectlOnControlPlane copies the Kubeconfig file on the Kind control-plane / control-plane Node to the
