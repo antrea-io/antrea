@@ -41,6 +41,7 @@ func TestIPSec(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfMulticastEnabled(t, data)
 
 	t.Logf("Redeploy Antrea with IPsec tunnel enabled")
 	data.redeployAntrea(t, deployAntreaIPsec)

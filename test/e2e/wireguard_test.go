@@ -40,6 +40,7 @@ func TestWireGuard(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfMulticastEnabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 	for _, node := range clusterInfo.nodes {
 		skipIfMissingKernelModule(t, data, node.name, []string{"wireguard"})
