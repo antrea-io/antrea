@@ -49,6 +49,7 @@ function generate_mocks {
 }
 
 function reset_year_change {
+  oldstate=$(set +o)
   set +x
   echo "=== Start resetting changes introduced by YEAR ==="
   # The call to 'tac' ensures that we cannot have concurrent git processes, by
@@ -60,4 +61,6 @@ function reset_year_change {
       echo "=== ${file} is reset ==="
     fi
   done
+  # restore options
+  eval "$oldstate"
 }
