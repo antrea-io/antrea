@@ -1,5 +1,19 @@
 # Changelog 1.15
 
+## 1.15.2 - 2024-06-20
+
+### Fixed
+
+- Remove unexpected `altname` after renaming interface to avoid failure when moving host interface to OVS bridge. ([#6321](https://github.com/antrea-io/antrea/pull/6321), [@gran-vmv])
+- Do not try to update type of Secret in selfSignedCertProvider to avoid self-signed certificate update failure. ([#6205](https://github.com/antrea-io/antrea/pull/6205), [@tnqn])
+- Install multicast related iptables rules only on IPv4 chains to fix the antrea-agent initialization failure occurring when the Multicast feature is enabled in dual-stack clusters. ([#6123](https://github.com/antrea-io/antrea/pull/6123), [@wenyingd])
+- Fix a single rule deletion bug for NodePortLocal on Linux and improve robustness of NPL rule cleanup. ([#6284](https://github.com/antrea-io/antrea/pull/6284), [@antoninbas])
+- Fix a bug causing AntreaProxy not to delete stale UDP conntrack entries for the virtual NodePort DNAT IP. ([#6379](https://github.com/antrea-io/antrea/pull/6379), [@hongliangl])
+- Improve stale UDP conntrack entries deletion accuracy in AntreaProxy. ([#6193](https://github.com/antrea-io/antrea/pull/6193), [@hongliangl])
+- Fix antrea-agent crash when enabling proxyAll in networkPolicyOnly mode. ([#6259](https://github.com/antrea-io/antrea/pull/6259), [@hongliangl])
+- Fix a bug preventing local traffic from being identified in networkPolicyOnly mode. ([#6251](https://github.com/antrea-io/antrea/pull/6251), [@hongliangl])
+- Avoid generating defunct process when starting Suricata, the L7 ANP engine. ([#6366](https://github.com/antrea-io/antrea/pull/6366), [@hongliangl])
+
 ## 1.15.1 - 2024-03-25
 
 ### Changed
@@ -94,5 +108,6 @@
 [@qiyueyao]: https://github.com/qiyueyao
 [@tnqn]: https://github.com/tnqn
 [@tushartathgur]: https://github.com/tushartathgur
+[@wenyingd]: https://github.com/wenyingd
 [@xliuxu]: https://github.com/xliuxu
 [@yuntanghsu]: https://github.com/yuntanghsu
