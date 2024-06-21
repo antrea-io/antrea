@@ -15,7 +15,7 @@
 ARG GO_VERSION
 ARG OVS_VERSION
 
-FROM --platform=linux/amd64 golang:${GO_VERSION} as antrea-build-windows
+FROM --platform=linux/amd64 golang:${GO_VERSION} AS antrea-build-windows
 ARG CNI_BINARIES_VERSION
 ENV CNI_PLUGINS="./host-local.exe"
 
@@ -42,7 +42,7 @@ RUN mkdir -p /go/k/antrea/bin && \
     cp /antrea/bin/antctl.exe /go/k/antrea/bin/ && \
     cp /antrea/bin/antrea-cni.exe /go/k/antrea/cni/antrea.exe
 
-FROM antrea/windows-ovs:${OVS_VERSION} as antrea-ovs
+FROM antrea/windows-ovs:${OVS_VERSION} AS antrea-ovs
 
 FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:v1.0.0
 COPY --from=antrea-build-windows /go/k /k
