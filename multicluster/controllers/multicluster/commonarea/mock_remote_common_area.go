@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination multicluster/controllers/multicluster/commonarea/mock_remote_common_area.go -package commonarea antrea.io/antrea/multicluster/controllers/multicluster/commonarea CommonArea,RemoteCommonArea,ImportReconciler,RemoteCommonAreaGetter
 //
+
 // Package commonarea is a generated GoMock package.
 package commonarea
 

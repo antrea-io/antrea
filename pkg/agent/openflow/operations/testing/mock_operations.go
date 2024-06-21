@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/agent/openflow/operations/testing/mock_operations.go -package testing antrea.io/antrea/pkg/agent/openflow/operations OFEntryOperations
 //
+
 // Package testing is a generated GoMock package.
 package testing
 

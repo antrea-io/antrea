@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/ovs/ovsconfig/testing/mock_ovsconfig.go -package testing antrea.io/antrea/pkg/ovs/ovsconfig OVSBridgeClient
 //
+
 // Package testing is a generated GoMock package.
 package testing
 

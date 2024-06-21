@@ -22,7 +22,7 @@ function echoerr {
 }
 
 ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
-IMAGE_NAME="antrea/codegen:kubernetes-1.29.2-build.1"
+IMAGE_NAME="antrea/codegen:kubernetes-1.29.2-build.2"
 
 # We will use git clone to make a working copy of the repository into a
 # temporary directory. This requires that all changes have been committed

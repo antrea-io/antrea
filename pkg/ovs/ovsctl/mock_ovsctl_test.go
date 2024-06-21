@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/ovs/ovsctl/mock_ovsctl_test.go -package ovsctl antrea.io/antrea/pkg/ovs/ovsctl OVSOfctlRunner,OVSAppctlRunner
 //
+
 // Package ovsctl is a generated GoMock package.
 package ovsctl
 

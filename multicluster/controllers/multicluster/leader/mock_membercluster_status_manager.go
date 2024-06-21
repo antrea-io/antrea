@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination multicluster/controllers/multicluster/leader/mock_membercluster_status_manager.go -package leader antrea.io/antrea/multicluster/controllers/multicluster/leader MemberClusterStatusManager
 //
+
 // Package leader is a generated GoMock package.
 package leader
 
