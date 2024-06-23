@@ -35,7 +35,8 @@ IMAGE_PULL_POLICY="Always"
 PROXY_ALL=false
 DEFAULT_IP_MODE="ipv4"
 IP_MODE=""
-K8S_VERSION="1.28.2-00"
+K8S_REPO="https://pkgs.k8s.io/core:/stable:/v1.30/deb/"
+K8S_VERSION="1.30.1-1.1"
 WINDOWS_YAML_NAME="antrea-windows"
 WIN_IMAGE_NODE=""
 echo "" > WIN_DHCP
@@ -176,15 +177,15 @@ function export_govc_env_var {
 
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
-    clean_ns "monitoring"
-    clean_ns "antrea-ipam-test"
-    clean_ns "antrea-test"
+    clean_ns "monitoring" || true
+    clean_ns "antrea-ipam-test" || true
+    clean_ns "antrea-test" || true
     echo "====== Cleanup Conformance Namespaces ======"
-    clean_ns "net"
-    clean_ns "service"
-    clean_ns "x-"
-    clean_ns "y-"
-    clean_ns "z-"
+    clean_ns "net" || true
+    clean_ns "service" || true
+    clean_ns "x-" || true
+    clean_ns "y-" || true
+    clean_ns "z-" || true
 
     # Delete antrea-prometheus first for k8s>=1.22 to avoid Pod stuck in Terminating state.
     kubectl delete -f ${WORKDIR}/antrea-prometheus.yml --ignore-not-found=true || true
@@ -851,24 +852,27 @@ function redeploy_k8s_if_ip_mode_changes() {
     HAS_IPV6=${INITIAL_VALUE}
     POD_CIDRS=($( (kubectl get node ${CONTROL_PLANE_HOSTNAME} -o json | jq -r '.spec.podCIDRs | @sh') | tr -d \'\")) || true
     echo "POD_CIDRS=${POD_CIDRS[*]}"
-    for POD_CIDR in "${POD_CIDRS[@]}"; do
-        if [[ $POD_CIDR =~ .*:.* ]]
-        then
-            (( HAS_IPV6++ ))
+    if [[ -n $POD_CIDRS ]]; then
+        for POD_CIDR in "${POD_CIDRS[@]}"; do
+            if [[ $POD_CIDR =~ .*:.* ]]
+            then
+                (( HAS_IPV6++ ))
+            else
+                (( HAS_IPV4++ ))
+            fi
+        done
+        if [[ ${IP_MODE} == "ipv4" ]]; then
+            (( HAS_IPV4-- ))
+        elif [[ ${IP_MODE} == "ipv6" ]]; then
+            (( HAS_IPV6-- ))
         else
-            (( HAS_IPV4++ ))
+            (( HAS_IPV4-- ))
+            (( HAS_IPV6-- ))
         fi
-    done
-    if [[ ${IP_MODE} == "ipv4" ]]; then
-        (( HAS_IPV4-- ))
-    elif [[ ${IP_MODE} == "ipv6" ]]; then
-        (( HAS_IPV6-- ))
-    else
-        (( HAS_IPV4-- ))
-        (( HAS_IPV6-- ))
-    fi
-    if [ ${HAS_IPV4} -eq ${INITIAL_VALUE} ] && [ ${HAS_IPV6} -eq ${INITIAL_VALUE} ]; then
-      return 0
+        if [ ${HAS_IPV4} -eq ${INITIAL_VALUE} ] && [ ${HAS_IPV6} -eq ${INITIAL_VALUE} ]; then
+          #return 0
+          echo "force deploy"
+        fi
     fi
 
     echo "===== Reset K8s cluster Nodes ====="
@@ -877,10 +881,13 @@ function redeploy_k8s_if_ip_mode_changes() {
     done
 
     echo "===== Redeploy K8s utils ====="
+    echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] ${K8S_REPO} /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+    sudo rm -drf /etc/apt/keyrings/kubernetes-apt-keyring.gpg; curl -fsSL ${K8S_REPO}Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
     sudo apt update < /dev/null
     sudo apt remove -y kubectl < /dev/null
     sudo apt install -y kubectl=${K8S_VERSION} < /dev/null
     for IPV4 in "${IPV4S[@]}"; do
+        ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${IPV4} "echo \"deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] ${K8S_REPO} /\" | sudo tee /etc/apt/sources.list.d/kubernetes.list; sudo rm -drf /etc/apt/keyrings/kubernetes-apt-keyring.gpg; curl -fsSL ${K8S_REPO}Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg"
         ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${IPV4} "sudo apt update < /dev/null; sudo apt remove -y kubectl kubelet kubeadm < /dev/null; sudo apt install -y kubectl=${K8S_VERSION} kubelet=${K8S_VERSION} kubeadm=${K8S_VERSION} < /dev/null"
     done
 
@@ -894,7 +901,7 @@ function redeploy_k8s_if_ip_mode_changes() {
         else
             NODE_IP_STRING="${IPV4S[i]},${IPV6S[i]}"
         fi
-        ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${IPV4S[i]} "echo \"KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP_STRING}\" | sudo tee /etc/default/kubelet; sudo systemctl restart kubelet"
+        ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${IPV4S[i]} "echo \"KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP_STRING}\" | sudo tee /etc/default/kubelet; sudo systemctl unmask kubelet; sudo systemctl restart kubelet"
     done
 
     echo "===== Set up K8s cluster ====="
