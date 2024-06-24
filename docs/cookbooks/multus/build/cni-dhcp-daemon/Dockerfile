@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:22.04 as cni-binary
+FROM ubuntu:22.04 AS cni-binary
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker which runs the dhcp daemon from the containernetworking project."
