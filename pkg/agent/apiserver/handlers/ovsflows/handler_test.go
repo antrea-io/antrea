@@ -50,6 +50,7 @@ type testCase struct {
 	test           string
 	name           string
 	namespace      string
+	policyType     cpv1beta.NetworkPolicyType
 	query          string
 	expectedStatus int
 	resps          []apis.OVSFlowResponse
@@ -177,35 +178,72 @@ func TestNetworkPolicyFlows(t *testing.T) {
 			test:           "Existing NetworkPolicy",
 			name:           "np1",
 			namespace:      "ns1",
-			query:          "?networkpolicy=np1&&namespace=ns1",
+			policyType:     cpv1beta.K8sNetworkPolicy,
+			query:          "?networkpolicy=np1&namespace=ns1&type=K8sNP",
 			expectedStatus: http.StatusOK,
 		},
 		{
 			test:           "Non-existing NetworkPolicy",
 			name:           "np2",
 			namespace:      "ns2",
-			query:          "?networkpolicy=np2&&namespace=ns2",
+			policyType:     cpv1beta.K8sNetworkPolicy,
+			query:          "?networkpolicy=np2&namespace=ns2&type=K8sNP",
 			expectedStatus: http.StatusNotFound,
+		},
+		{
+			test:           "Existing ACNP",
+			name:           "acnp1",
+			policyType:     cpv1beta.AntreaClusterNetworkPolicy,
+			query:          "?networkpolicy=acnp1&type=ACNP",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			test:           "Existing ANNP",
+			name:           "annp1",
+			namespace:      "default",
+			policyType:     cpv1beta.AntreaNetworkPolicy,
+			query:          "?networkpolicy=annp1&namespace=default&type=ANNP",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			test:           "ANNP bad request",
+			name:           "annp2",
+			policyType:     cpv1beta.AntreaNetworkPolicy,
+			query:          "?networkpolicy=annp2&type=ANNP",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			test:           "Existing ANP",
+			name:           "anp1",
+			policyType:     cpv1beta.AdminNetworkPolicy,
+			query:          "?networkpolicy=anp1&type=ANP",
+			expectedStatus: http.StatusOK,
 		},
 	}
 	for i := range testcases {
 		tc := testcases[i]
 		npq := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
-		q.EXPECT().GetNetworkPolicyInfoQuerier().Return(npq).Times(1)
-
-		if tc.expectedStatus != http.StatusNotFound {
-			ofc := oftest.NewMockClient(ctrl)
-			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
-			npq.EXPECT().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: tc.name, Namespace: tc.namespace}).Return([]cpv1beta.NetworkPolicy{*testNetworkPolicy}).Times(1)
-			ofc.EXPECT().GetNetworkPolicyFlowKeys(tc.name, tc.namespace).Return(testFlowKeys).Times(1)
-			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
-			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
-			for i := range testFlowKeys {
-				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpFlows[i], nil).Times(1)
+		npFilter := &querier.NetworkPolicyQueryFilter{
+			SourceName: tc.name,
+			Namespace:  tc.namespace,
+			SourceType: tc.policyType,
+		}
+		if tc.expectedStatus != http.StatusBadRequest {
+			q.EXPECT().GetNetworkPolicyInfoQuerier().Return(npq).Times(1)
+			if tc.expectedStatus == http.StatusOK {
+				ofc := oftest.NewMockClient(ctrl)
+				ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
+				npq.EXPECT().GetNetworkPolicies(npFilter).Return([]cpv1beta.NetworkPolicy{*testNetworkPolicy}).Times(1)
+				ofc.EXPECT().GetNetworkPolicyFlowKeys(tc.name, tc.namespace, tc.policyType).Return(testFlowKeys).Times(1)
+				q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
+				q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
+				for i := range testFlowKeys {
+					ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpFlows[i], nil).Times(1)
+				}
+			} else {
+				npq.EXPECT().GetNetworkPolicies(npFilter).Return(nil).Times(1)
 			}
-		} else {
-			npq.EXPECT().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: tc.name, Namespace: tc.namespace}).Return(nil).Times(1)
 		}
 
 		runHTTPTest(t, &tc, q)

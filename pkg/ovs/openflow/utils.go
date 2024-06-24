@@ -19,11 +19,12 @@ import (
 	"net"
 	"strings"
 
+	"k8s.io/klog/v2"
+
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
-	"k8s.io/klog/v2"
 )
 
 // TableNameCache is for testing.
@@ -1224,6 +1225,23 @@ func FlowModToString(flowMod *openflow15.FlowMod) string {
 
 func FlowModMatchString(flowMod *openflow15.FlowMod) string {
 	return fmt.Sprintf("table=%d,%s", flowMod.TableId, getFlowModMatch(flowMod))
+}
+
+func FlowDumpMatchString(flowMod *openflow15.FlowMod) string {
+	flowModMatch := getFlowModMatch(flowMod)
+	var flowDumpMatch []string
+	for _, m := range strings.Split(flowModMatch, ",") {
+		// From the openvswitch documentation:
+		//   The following priority field sets the priority for flows added by the
+		//   add-flow and add-flows commands. For  mod-flows  and  del-flows  when
+		//   --strict  is  specified, priority must match along with the rest of the
+		//   flow specification. Other commands do not allow priority to be specified.
+		// Hence, the priority matcher needs to be removed for ovs-ofctl dump-flows.
+		if !strings.HasPrefix(m, "priority") {
+			flowDumpMatch = append(flowDumpMatch, m)
+		}
+	}
+	return fmt.Sprintf("table=%d,%s", flowMod.TableId, strings.Join(flowDumpMatch, ","))
 }
 
 func GroupModToString(groupMod *openflow15.GroupMod) string {

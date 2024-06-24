@@ -368,7 +368,7 @@ func copyFlowWithNewPriority(flowMod *openflow15.FlowMod, priority uint16) *open
 }
 
 func flowMessageMatched(oldFlow, newFlow *openflow15.FlowMod) bool {
-	return oldFlow.Priority == newFlow.Priority && getFlowKey(oldFlow) == getFlowKey(newFlow)
+	return oldFlow.Priority == newFlow.Priority && getFlowModKey(oldFlow) == getFlowModKey(newFlow)
 }
 
 // isDropFlow returns true if no instructions are defined in the OpenFlow modification message.
@@ -378,8 +378,12 @@ func isDropFlow(f *openflow15.FlowMod) bool {
 	return len(f.Instructions) == 0
 }
 
-func getFlowKey(fm *openflow15.FlowMod) string {
+func getFlowModKey(fm *openflow15.FlowMod) string {
 	return binding.FlowModMatchString(fm)
+}
+
+func getFlowDumpKey(fm *openflow15.FlowMod) string {
+	return binding.FlowDumpMatchString(fm)
 }
 
 type flowMessageCache map[string]*openflow15.FlowMod

@@ -17,6 +17,7 @@ package querier
 import (
 	v1 "k8s.io/api/core/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -111,6 +112,16 @@ type NetworkPolicyQueryFilter struct {
 	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, ACNP, ANNP)
 	SourceType cpv1beta.NetworkPolicyType
 }
+
+// From user shorthand input to cpv1beta1.NetworkPolicyType
+var NetworkPolicyTypeMap = map[string]cpv1beta.NetworkPolicyType{
+	"K8sNP": cpv1beta.K8sNetworkPolicy,
+	"ACNP":  cpv1beta.AntreaClusterNetworkPolicy,
+	"ANNP":  cpv1beta.AntreaNetworkPolicy,
+	"ANP":   cpv1beta.AdminNetworkPolicy,
+}
+
+var NamespaceScopedPolicyTypes = sets.New[string]("ANNP", "K8sNP")
 
 // ServiceExternalIPStatusQuerier queries the Service external IP status for debugging purposes.
 // Ideally, every Node should have consistent results eventually. This should only be used when
