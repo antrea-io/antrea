@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM quay.io/centos/centos:stream9 as ovs-rpms
+FROM quay.io/centos/centos:stream9 AS ovs-rpms
 # Some patches may not apply cleanly if a non-default version is provided.
 # See build/images/deps/ovs-version for the default version.
 ARG OVS_VERSION

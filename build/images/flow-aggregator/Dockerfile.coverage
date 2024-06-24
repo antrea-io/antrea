@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG GO_VERSION
-FROM golang:${GO_VERSION} as flow-aggregator-build
+FROM golang:${GO_VERSION} AS flow-aggregator-build
 
 WORKDIR /antrea
 
