@@ -16,6 +16,7 @@ package ovsconfig
 
 import (
 	"net"
+	"time"
 )
 
 type TunnelType string
@@ -54,6 +55,7 @@ type OVSBridgeClient interface {
 	GetExternalIDs() (map[string]string, Error)
 	SetExternalIDs(externalIDs map[string]interface{}) Error
 	GetDatapathID() (string, Error)
+	WaitForDatapathID(timeout time.Duration) (string, Error)
 	SetDatapathID(datapathID string) Error
 	GetInterfaceOptions(name string) (map[string]string, Error)
 	SetInterfaceOptions(name string, options map[string]interface{}) Error
