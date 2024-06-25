@@ -317,6 +317,45 @@ func (br *OVSBridge) GetDatapathID() (string, Error) {
 	}
 }
 
+func (br *OVSBridge) WaitForDatapathID(timeout time.Duration) (string, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Wait(dbtransaction.Wait{
+		Table:   "Bridge",
+		Timeout: uint64(timeout.Milliseconds()),
+		Columns: []string{"datapath_id"},
+		Until:   "!=",
+		Rows: []interface{}{
+			map[string]interface{}{
+				"datapath_id": helpers.MakeOVSDBSet(map[string]interface{}{}),
+			},
+		},
+		Where: [][]interface{}{{"name", "==", br.name}},
+	})
+	tx.Select(dbtransaction.Select{
+		Table:   "Bridge",
+		Columns: []string{"datapath_id"},
+		Where:   [][]interface{}{{"name", "==", br.name}},
+	})
+
+	res, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return "", NewTransactionError(err, temporary)
+	}
+
+	if len(res) < 2 || len(res[1].Rows) == 0 {
+		return "", NewTransactionError(fmt.Errorf("bridge %s not found", br.name), false)
+	}
+
+	datapathID := res[1].Rows[0].(map[string]interface{})["datapath_id"]
+	switch datapathID.(type) {
+	case string:
+		return datapathID.(string), nil
+	default:
+		return "", nil
+	}
+}
+
 // GetPortUUIDList returns UUIDs of all ports on the bridge.
 func (br *OVSBridge) GetPortUUIDList() ([]string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
@@ -658,7 +697,7 @@ func (br *OVSBridge) GetOFPort(ifName string, waitUntilValid bool) (int32, Error
 	}
 	tx.Wait(dbtransaction.Wait{
 		Table:   "Interface",
-		Timeout: uint64(defaultGetPortTimeout / time.Millisecond), // The unit of timeout is millisecond
+		Timeout: uint64(defaultGetPortTimeout.Milliseconds()),
 		Columns: []string{"ofport"},
 		Until:   "!=",
 		Rows:    []interface{}{invalidRow},

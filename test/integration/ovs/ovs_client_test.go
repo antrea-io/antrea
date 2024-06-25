@@ -96,27 +96,32 @@ func TestOVSBridge(t *testing.T) {
 	data.setup(t)
 	defer data.teardown(t)
 
-	checkPorts := func(expectedCount int) {
-		portList, err := data.br.GetPortUUIDList()
-		require.Nil(t, err, "Error when retrieving port list")
-		assert.Equal(t, expectedCount, len(portList))
-	}
+	var err error
+
+	start := time.Now()
+	datapathID, err := data.br.WaitForDatapathID(3 * time.Second)
+	end := time.Now()
+	require.NoError(t, err)
+	require.NotEmpty(t, datapathID)
+	t.Logf("Waited %v for datapath ID to be assigned", end.Sub(start))
 
 	// Test set fixed datapath ID
 	expectedDatapathID, err := randomDatapathID()
 	require.Nilf(t, err, "Failed to generate datapath ID: %s", err)
 	err = data.br.SetDatapathID(expectedDatapathID)
 	require.Nilf(t, err, "Set datapath id failed: %s", err)
-	var datapathID string
-	for retry := 0; retry < 3; retry++ {
-		datapathID, _ = data.br.GetDatapathID()
-		if datapathID == expectedDatapathID {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-	assert.Equal(t, expectedDatapathID, datapathID)
+	assert.Eventually(t, func() bool {
+		datapathID, _ := data.br.GetDatapathID()
+		return datapathID == expectedDatapathID
+	}, 5*time.Second, 1*time.Second)
+
 	vlanID := uint16(100)
+
+	checkPorts := func(expectedCount int) {
+		portList, err := data.br.GetPortUUIDList()
+		require.Nil(t, err, "Error when retrieving port list")
+		assert.Equal(t, expectedCount, len(portList))
+	}
 
 	deleteAllPorts(t, data.br)
 	checkPorts(0)
