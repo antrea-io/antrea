@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG BUILD_TAG
-FROM antrea/base-ubuntu:${BUILD_TAG}
+FROM antrea/base-ubuntu-${TARGETARCH}:${BUILD_TAG}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The development Docker image to deploy the antrea-agent."

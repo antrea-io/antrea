@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BUILD_TAG
 FROM ubuntu:24.04 AS cni-binaries
 
 ARG CNI_BINARIES_VERSION
@@ -35,7 +34,7 @@ RUN set -eux; \
     mkdir -p /opt/cni/bin; \
     wget -q -O - https://github.com/containernetworking/plugins/releases/download/$CNI_BINARIES_VERSION/cni-plugins-linux-${pluginsArch}-$CNI_BINARIES_VERSION.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
 
-FROM antrea/openvswitch:${BUILD_TAG}
+FROM antrea-openvswitch
 
 ARG SURICATA_VERSION
 
