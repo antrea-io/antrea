@@ -13,7 +13,6 @@
 # limitations under the License.
 
 ARG GO_VERSION
-ARG BUILD_TAG
 FROM golang:${GO_VERSION} AS antrea-build
 
 WORKDIR /antrea

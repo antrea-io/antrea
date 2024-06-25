@@ -52,6 +52,9 @@ endif
 ifneq ($(NO_CACHE),)
 	DOCKER_BUILD_ARGS += --no-cache
 endif
+ifneq ($(DOCKER_TARGETPLATFORM),)
+	DOCKER_BUILD_ARGS += --platform $(DOCKER_TARGETPLATFORM)
+endif
 DOCKER_BUILD_ARGS += --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
 DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)

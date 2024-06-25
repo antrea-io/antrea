@@ -77,3 +77,24 @@ function docker_build_and_push_windows() {
 
     docker buildx build --platform windows/amd64 -o ${output} -t ${image}:${build_tag} ${pull_option} ${build_args} -f $dockerfile .
 }
+
+function get_target_arch() {
+    local platform="$1"
+    local output_cache_path="$2"
+    local arch=""
+    if [ -n "$output_cache_path" ] && [ -f "$output_cache_path" ]; then
+        arch=$(head -n 1 "$output_cache_path")
+    fi
+    if [ -z "$arch" ]; then
+        local platform_arg=""
+        if [ -n "$platform" ]; then
+            platform_arg="--platform $platform"
+        fi
+        echo "FROM scratch" | docker buildx build $platform_arg -t antrea-test-arch --load -
+        arch=$(docker inspect antrea-test-arch --format '{{ .Architecture }}')
+        if [ -n "$output_cache_path" ]; then
+            echo "$arch" > "$output_cache_path"
+        fi
+    fi
+    echo "$arch"
+}
