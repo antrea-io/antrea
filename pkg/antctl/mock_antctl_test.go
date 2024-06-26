@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/antctl/mock_antctl_test.go -package antctl antrea.io/antrea/pkg/antctl AntctlClient
 //
+
 // Package antctl is a generated GoMock package.
 package antctl
 

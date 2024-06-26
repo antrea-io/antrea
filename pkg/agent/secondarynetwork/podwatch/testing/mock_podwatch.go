@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/agent/secondarynetwork/podwatch/testing/mock_podwatch.go -package testing antrea.io/antrea/pkg/agent/secondarynetwork/podwatch InterfaceConfigurator,IPAMAllocator
 //
+
 // Package testing is a generated GoMock package.
 package testing
 

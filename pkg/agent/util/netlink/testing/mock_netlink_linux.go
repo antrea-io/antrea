@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/agent/util/netlink/testing/mock_netlink_linux.go -package testing antrea.io/antrea/pkg/agent/util/netlink Interface
 //
+
 // Package testing is a generated GoMock package.
 package testing
 

@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/flowaggregator/exporter/testing/mock_exporter.go -package testing antrea.io/antrea/pkg/flowaggregator/exporter Interface
 //
+
 // Package testing is a generated GoMock package.
 package testing
 

@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/querier/testing/mock_querier.go -package testing antrea.io/antrea/pkg/querier AgentNetworkPolicyInfoQuerier,AgentMulticastInfoQuerier,EgressQuerier
 //
+
 // Package testing is a generated GoMock package.
 package testing
 
