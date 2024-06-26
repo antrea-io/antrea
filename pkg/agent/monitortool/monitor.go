@@ -392,7 +392,7 @@ func (m *NodeLatencyMonitor) report() {
 		klog.ErrorS(err, "Failed to get Antrea client")
 		return
 	}
-	if _, err := antreaClient.StatsV1alpha1().NodeLatencyStatses().Create(context.TODO(), summary, metav1.CreateOptions{}); err != nil {
+	if _, err := antreaClient.StatsV1alpha1().NodeLatencyStats().Create(context.TODO(), summary, metav1.CreateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to create NodeIPLatencyStats")
 	}
 }

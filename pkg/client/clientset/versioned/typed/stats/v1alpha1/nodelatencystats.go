@@ -26,10 +26,10 @@ import (
 	rest "k8s.io/client-go/rest"
 )
 
-// NodeLatencyStatsesGetter has a method to return a NodeLatencyStatsInterface.
+// NodeLatencyStatsGetter has a method to return a NodeLatencyStatsInterface.
 // A group's client should implement this interface.
-type NodeLatencyStatsesGetter interface {
-	NodeLatencyStatses() NodeLatencyStatsInterface
+type NodeLatencyStatsGetter interface {
+	NodeLatencyStats() NodeLatencyStatsInterface
 }
 
 // NodeLatencyStatsInterface has methods to work with NodeLatencyStats resources.
@@ -41,20 +41,20 @@ type NodeLatencyStatsInterface interface {
 	NodeLatencyStatsExpansion
 }
 
-// nodeLatencyStatses implements NodeLatencyStatsInterface
-type nodeLatencyStatses struct {
+// nodeLatencyStats implements NodeLatencyStatsInterface
+type nodeLatencyStats struct {
 	client rest.Interface
 }
 
-// newNodeLatencyStatses returns a NodeLatencyStatses
-func newNodeLatencyStatses(c *StatsV1alpha1Client) *nodeLatencyStatses {
-	return &nodeLatencyStatses{
+// newNodeLatencyStats returns a NodeLatencyStats
+func newNodeLatencyStats(c *StatsV1alpha1Client) *nodeLatencyStats {
+	return &nodeLatencyStats{
 		client: c.RESTClient(),
 	}
 }
 
 // Get takes name of the nodeLatencyStats, and returns the corresponding nodeLatencyStats object, and an error if there is any.
-func (c *nodeLatencyStatses) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.NodeLatencyStats, err error) {
+func (c *nodeLatencyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.NodeLatencyStats, err error) {
 	result = &v1alpha1.NodeLatencyStats{}
 	err = c.client.Get().
 		Resource("nodelatencystats").
@@ -65,8 +65,8 @@ func (c *nodeLatencyStatses) Get(ctx context.Context, name string, options v1.Ge
 	return
 }
 
-// List takes label and field selectors, and returns the list of NodeLatencyStatses that match those selectors.
-func (c *nodeLatencyStatses) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.NodeLatencyStatsList, err error) {
+// List takes label and field selectors, and returns the list of NodeLatencyStats that match those selectors.
+func (c *nodeLatencyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.NodeLatencyStatsList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -82,7 +82,7 @@ func (c *nodeLatencyStatses) List(ctx context.Context, opts v1.ListOptions) (res
 }
 
 // Create takes the representation of a nodeLatencyStats and creates it.  Returns the server's representation of the nodeLatencyStats, and an error, if there is any.
-func (c *nodeLatencyStatses) Create(ctx context.Context, nodeLatencyStats *v1alpha1.NodeLatencyStats, opts v1.CreateOptions) (result *v1alpha1.NodeLatencyStats, err error) {
+func (c *nodeLatencyStats) Create(ctx context.Context, nodeLatencyStats *v1alpha1.NodeLatencyStats, opts v1.CreateOptions) (result *v1alpha1.NodeLatencyStats, err error) {
 	result = &v1alpha1.NodeLatencyStats{}
 	err = c.client.Post().
 		Resource("nodelatencystats").
@@ -94,7 +94,7 @@ func (c *nodeLatencyStatses) Create(ctx context.Context, nodeLatencyStats *v1alp
 }
 
 // Delete takes name of the nodeLatencyStats and deletes it. Returns an error if one occurs.
-func (c *nodeLatencyStatses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
+func (c *nodeLatencyStats) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Resource("nodelatencystats").
 		Name(name).

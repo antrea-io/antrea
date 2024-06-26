@@ -118,6 +118,7 @@ function generate_antrea_client_code {
     --plural-exceptions "AntreaClusterNetworkPolicyStats:AntreaClusterNetworkPolicyStats" \
     --plural-exceptions "ClusterGroupMembers:ClusterGroupMembers" \
     --plural-exceptions "GroupMembers:GroupMembers" \
+    --plural-exceptions "NodeLatencyStats:NodeLatencyStats" \
     --go-header-file hack/boilerplate/license_header.go.txt
 
   # Generate listers with K8s codegen tools.
