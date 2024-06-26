@@ -40,9 +40,9 @@ jobs:
         - platform: linux/arm64
           runner: github-arm64-2c-8gb
           suffix: arm64
-        - platform: linux/arm/v7
-          runner: github-arm64-2c-8gb
-          suffix: arm
+        # - platform: linux/arm/v7
+        #   runner: github-arm64-2c-8gb
+        #   suffix: arm
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_TAG: latest
