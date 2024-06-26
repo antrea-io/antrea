@@ -39,6 +39,7 @@ PROMETHEUS=false
 K8S_VERSION=""
 KUBE_NODE_IPAM=true
 DEPLOY_EXTERNAL_SERVER=false
+CONFORMANCE_IMAGE=""
 positional_args=()
 options=()
 
@@ -386,7 +387,7 @@ EOF
 
   IMAGE_OPT=""
   if [[ "$K8S_VERSION" != "" ]]; then
-    if [[ "$K8S_VERSION" != v* ]]; then
+    if [[ "$K8S_VERSION" != v* ]] && [[ "$K8S_VERSION" != "latest" ]]; then
       K8S_VERSION="v${K8S_VERSION}"
     fi
     IMAGE_OPT="--image kindest/node:${K8S_VERSION}"
@@ -663,6 +664,21 @@ if version_lt "$kind_version" "0.12.0" && [[ "$KUBE_PROXY_MODE" == "none" ]]; th
     echoerr "You have kind version v$kind_version installed"
     echoerr "You need to upgrade to kind >= v0.12.0 when disabling kube-proxy"
     exit 1
+fi
+
+# Build Kind node image with the specified K8s version if it doesn't exist in local and remote registry neither
+kind_node_image="kindest/node:${K8S_VERSION}"
+if docker pull "${kind_node_image}" > /dev/null 2>&1; then
+    echo "=== Using prebuild Kind node image with the K8s version ${K8S_VERSION} ==="
+else
+    echo "=== Building Kind node image with the K8s version ${K8S_VERSION} ==="
+    git clone https://github.com/kubernetes/kubernetes.git ${THIS_DIR}/kubernetes
+    tag=${K8S_VERSION}
+    if [[ $K8S_VERSION == "latest" ]]; then
+        tag="master"
+    fi
+    git -C ${THIS_DIR}/kubernetes checkout $tag
+    kind build node-image --image=$kind_node_image ${THIS_DIR}/kubernetes
 fi
 
 if [[ $ACTION == "create" ]]; then

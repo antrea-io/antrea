@@ -71,10 +71,27 @@ jobs:
           ./hack/build-antrea-linux-all.sh --pull --distro ${{ inputs.antrea-image-distro }}
       - name: Install Kind
         run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version || echo v0.20.0)
+          KIND_VERSION=$(head -n1 ./ci/kind/version || echo v0.23.0)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin
+      - name: Clean up disk space for conformance test
+        run: |
+          image="kindest/node:${{ inputs.k8s-version }}"
+          if docker pull $image 2>&1; then
+            echo "Image $image exists, no need to build it."
+          else
+            echo "Image $image does not exist, preparing to build it."
+          fi
+          sudo apt install -y skopeo jq
+          # Building a local Kind Node image with the latest Kubernetes version will consume a lot of disk space.
+          # We need to free up some disk space before building the image.
+          sudo apt-get clean
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf "/usr/local/share/boost" || true
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
+
       - name: Create K8s cluster
         run: |
           # If an image does not exist (unified vs split), a warning will be printed, but the script
@@ -108,7 +125,13 @@ jobs:
           kubectl rollout status -n kube-system ds/antrea-agent --timeout=5m
       - name: Run e2e tests
         run: |
-          ./ci/run-k8s-e2e-tests.sh "--e2e-${{ inputs.test-suite }}"
+          conformance_image_options=()
+          # If the K8s version is 'latest', we need to find the latest conformance image.
+          if [ ${{ inputs.k8s-version == 'latest' }} ]; then
+            latest_tag=$(skopeo list-tags docker://registry.k8s.io/conformance | jq -r '.Tags[]' | sort -V | tail -n 1)
+            conformance_image_options+=(--conformance-image "registry.k8s.io/conformance:${latest_tag}")
+          fi
+          ./ci/run-k8s-e2e-tests.sh "--e2e-${{ inputs.test-suite }}" ${conformance_image_options[@]}
       - name: Upload test log
         uses: actions/upload-artifact@v4
         if: ${{ failure() || inputs.always-upload-logs }}

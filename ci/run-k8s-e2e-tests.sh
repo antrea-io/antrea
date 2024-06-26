@@ -45,10 +45,11 @@ IMAGE_PULL_POLICY="Always"
 CONFORMANCE_IMAGE_CONFIG_PATH="${THIS_DIR}/conformance-image-config.yaml"
 SONOBUOY_IMAGE="antrea/sonobuoy:v0.56.16"
 SYSTEMD_LOGS_IMAGE="antrea/systemd-logs:v0.4"
+CONFORMANCE_IMAGE=""
 
 _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-skip <SkipRegex>]
                   [--kubeconfig <Kubeconfig>] [--kubernetes-version <ConformanceImageVersion>]
-                  [--log-mode <SonobuoyResultLogLevel>]
+                  [--log-mode <SonobuoyResultLogLevel>] [--conformance-image <ConformanceImage>]
 Run the K8s e2e community tests (Conformance & Network Policy) which are relevant to Project Antrea,
 using the sonobuoy tool. Possible exit codes are 0 (all tests pass), 1 (all tests were run, but at
 least one failed) and 2 (internal error when running tests, not a test failure).
@@ -64,6 +65,7 @@ least one failed) and 2 (internal error when running tests, not a test failure).
         --log-mode                                                Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --image-pull-policy                                       The ImagePullPolicy Sonobuoy should use for the aggregators and workers. (default Always)
         --sonobuoy-image SonobuoyImage                            Sonobuoy image to use. Default is $SONOBUOY_IMAGE.
+        --conformance-image                                       Conformance image to use. If not set, the default image will be used.
         --help, -h                                                Print this message and exit
 
 This tool uses sonobuoy (https://github.com/vmware-tanzu/sonobuoy) to run the K8s e2e community
@@ -138,6 +140,10 @@ case $key in
     SYSTEMD_LOGS_IMAGE="$2"
     shift 2
     ;;
+    --conformance-image)
+    CONFORMANCE_IMAGE="$2"
+    shift 2
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -167,6 +173,10 @@ errors=0
 function run_sonobuoy() {
     local focus_regex="$1"
     local skip_regex="$2"
+    conformance_image_option=()
+    if [[ "$CONFORMANCE_IMAGE" != "" ]]; then
+        conformance_image_option=(--kube-conformance-image "$CONFORMANCE_IMAGE")
+    fi
 
     $SONOBUOY delete --wait=10 $KUBECONFIG_OPTION
     echo "Running tests with sonobuoy. While test is running, check logs with: $SONOBUOY $KUBECONFIG_OPTION logs -f."
@@ -176,14 +186,14 @@ function run_sonobuoy() {
                 $KUBECONFIG_OPTION \
                 $KUBE_CONFORMANCE_IMAGE_VERSION_OPTION \
                 --mode "certified-conformance" --image-pull-policy ${IMAGE_PULL_POLICY} \
-                --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
+                --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH} ${conformance_image_option[@]}
     else
         $SONOBUOY run --wait \
                 $KUBECONFIG_OPTION \
                 --e2e-parallel=true \
                 $KUBE_CONFORMANCE_IMAGE_VERSION_OPTION \
                 --e2e-focus "$focus_regex" --e2e-skip "$skip_regex" --image-pull-policy ${IMAGE_PULL_POLICY} \
-                --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
+                --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH} ${conformance_image_option[@]}
     fi
     set +x
     results_path=$($SONOBUOY retrieve $KUBECONFIG_OPTION)
