@@ -51,7 +51,8 @@ jobs:
       if: ${{ matrix.platform == 'linux/arm/v7' }}
       run: |
         sudo dpkg --add-architecture armhf
-        sudo apt-get install libc6:armhf libstdc++6:armhf
+        sudo apt-get update
+        sudo apt-get install -y libc6:armhf libstdc++6:armhf
     - uses: actions/checkout@v4
       with:
         show-progress: false
