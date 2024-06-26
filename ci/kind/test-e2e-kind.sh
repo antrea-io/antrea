@@ -35,7 +35,6 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --networkpolicy-evaluation    Configures additional NetworkPolicy evaluation level when running e2e tests.
         --extra-network               Creates an extra network that worker Nodes will connect to. Cannot be specified with the hybrid mode.
         --extra-vlan                  Creates an subnet-based VLAN that worker Nodes will connect to.
-        --deploy-external-server      Deploy a container running as an external server for the cluster.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
         --coverage                    Enables measure Antrea code coverage when running e2e tests on kind.
         --setup-only                  Only perform setting up the cluster and run test.
@@ -80,7 +79,6 @@ flow_visibility=false
 np_evaluation=false
 extra_network=false
 extra_vlan=false
-deploy_external_server=false
 coverage=false
 skiplist=""
 setup_only=false
@@ -142,10 +140,6 @@ case $key in
     ;;
     --extra-vlan)
     extra_vlan=true
-    shift
-    ;;
-    --deploy-external-server)
-    deploy_external_server=true
     shift
     ;;
     --coverage)

@@ -50,35 +50,35 @@ function echoerr {
 }
 
 _usage="
-Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--service-cidr SERVICE_CIDR]  [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6|dual] [--k8s-version VERSION]
+Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--service-cidr SERVICE_CIDR] [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6|dual] [--k8s-version VERSION]
        $0 destroy CLUSTER_NAME
        $0 help
 where:
-  create: create a kind cluster with name CLUSTER_NAME
-  destroy: delete a kind cluster with name CLUSTER_NAME
-  --pod-cidr: specifies pod cidr used in kind cluster, kind's default value will be used if empty.
-  --service-cidr: specifies service clusterip cidr used in kind cluster, kind's default value will be used if empty.
-  --encap-mode: inter-node pod traffic encap mode, default is encap
-  --no-proxy: disable Antrea proxy
-  --no-kube-proxy: disable Kube proxy
-  --no-kube-node-ipam: disable NodeIPAM in kube-controller-manager
+  create: create a kind cluster with name CLUSTER_NAME.
+  destroy: delete a kind cluster with name CLUSTER_NAME.
+  --pod-cidr: specify pod cidr used in kind cluster, kind's default value will be used if empty.
+  --service-cidr: specify service clusterip cidr used in kind cluster, kind's default value will be used if empty.
+  --encap-mode: inter-node pod traffic encap mode, default is encap.
+  --no-proxy: disable Antrea proxy.
+  --no-kube-proxy: disable Kube proxy.
+  --no-kube-node-ipam: disable NodeIPAM in kube-controller-manager.
   --antrea-cni: install Antrea CNI in Kind cluster; by default the cluster is created without a CNI installed.
-  --prometheus: create RBAC resources for Prometheus, default is false
-  --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
-  --images: specifies images loaded to kind cluster, default is $IMAGES
+  --prometheus: create RBAC resources for Prometheus, default is false.
+  --num-workers: specify number of worker nodes in kind cluster, default is $NUM_WORKERS.
+  --images: specify images loaded to kind cluster, default is $IMAGES.
   --subnets: a subnet creates a separate Docker bridge network (named 'antrea-<idx>') with the assigned subnet. A worker
     Node will be connected to one of those network. Default is empty: all worker Nodes connected to the default Docker
     bridge network created by kind.
-  --vlan-subnets: specifies the subnets of the VLAN to which all Nodes will be connected, in addition to the primary network.
+  --vlan-subnets: specify the subnets of the VLAN to which all Nodes will be connected, in addition to the primary network.
     The IP expression of the subnet will be used as the gateway IP. For example, '--vlan-subnets 10.100.100.1/24' means
     that a VLAN sub-interface will be created on the primary Docker bridge, and it will be assigned the 10.100.100.1/24 address.
-  --vlan-id: specifies the ID of the VLAN to which all Nodes will be connected, in addition to the primary network. Note,
+  --vlan-id: specify the ID of the VLAN to which all Nodes will be connected, in addition to the primary network. Note,
     '--vlan-subnets' and '--vlan-id' must be specified together.
   --extra-networks: an extra network creates a separate Docker bridge network (named 'antrea-<idx>') with the assigned
     subnet. All worker Nodes will be connected to all the extra networks, in addition to the default Docker bridge
     network. Note, '--extra-networks' and '--subnets' cannot be specified together.
-  --ip-family: specifies the ip-family for the kind cluster, default is $IP_FAMILY.
-  --k8s-version: specifies the Kubernetes version of the kind cluster, kind's default K8s version will be used if empty.
+  --ip-family: specify the ip-family for the kind cluster, default is $IP_FAMILY.
+  --k8s-version: specify the Kubernetes version of the kind cluster, kind's default K8s version will be used if empty.
   --deploy-external-server: deploy a container running as an external server for the cluster.
   --all: delete all kind clusters
   --until: delete kind clusters that have been created before the specified duration.
@@ -574,7 +574,7 @@ while [[ $# -gt 0 ]]
       shift
       ;;
     --num-workers)
-     add_option "--num-workers" "create"
+      add_option "--num-workers" "create"
       NUM_WORKERS="$2"
       shift 2
       ;;
