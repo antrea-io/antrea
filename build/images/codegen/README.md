@@ -22,6 +22,7 @@ Here is the table of codegen images that have been uploaded:
 
 | Tag                       | Change                                                                        |
 | :------------------------ | ----------------------------------------------------------------------------- |
+| kubernetes-1.29.2-build.2 | Upgraded go.uber.org/mock/mockgen to v0.4.0                                   |
 | kubernetes-1.29.2-build.1 | Upgraded controller-gen to v0.14.0                                            |
 | kubernetes-1.29.2-build.0 | Upgraded protoc (v26.0), protoc-gen-go (v1.33.0), protoc-gen-go-grpc (v1.3.0) |
 | kubernetes-1.29.2         | Upgraded K8s libraries to v1.29.2                                             |

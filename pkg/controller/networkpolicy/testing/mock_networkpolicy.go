@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/controller/networkpolicy/testing/mock_networkpolicy.go -package testing antrea.io/antrea/pkg/controller/networkpolicy EndpointQuerier,PolicyRuleQuerier
 //
+
 // Package testing is a generated GoMock package.
 package testing
 

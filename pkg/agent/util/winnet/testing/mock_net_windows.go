@@ -20,6 +20,7 @@
 //
 //	mockgen -copyright_file hack/boilerplate/license_header.raw.txt -destination pkg/agent/util/winnet/testing/mock_net_windows.go -package testing antrea.io/antrea/pkg/agent/util/winnet Interface
 //
+
 // Package testing is a generated GoMock package.
 package testing
 
