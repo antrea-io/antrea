@@ -18,6 +18,7 @@
 package networkpolicy
 
 import (
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/types"
 )
@@ -42,6 +43,10 @@ func (r *nodeReconciler) Forget(ruleID string) error {
 
 func (r *nodeReconciler) GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, bool, error) {
 	return nil, false, nil
+}
+
+func (r *nodeReconciler) GetRealizedRulesByPolicy(uid string) []apis.PolicyRuleConjunctionIDsResponse {
+	return nil
 }
 
 func (r *nodeReconciler) RunIDAllocatorWorker(stopCh <-chan struct{}) {

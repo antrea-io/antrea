@@ -216,7 +216,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 						},
 						{
 							name:      "type",
-							usage:     "Get NetworkPolicies with specific type. Type means the type of its source NetworkPolicy: K8sNP, ACNP, ANNP",
+							usage:     "Get NetworkPolicies with specific type. Type means the type of its source NetworkPolicy: K8sNP, ACNP, ANNP or ANP",
 							shorthand: "T",
 						},
 					}, getSortByFlag()),
@@ -356,6 +356,46 @@ $ antctl get podmulticaststats pod -n namespace`,
 			},
 			commandGroup:        get,
 			transformedResponse: reflect.TypeOf(agentapis.PodInterfaceResponse{}),
+		},
+		{
+			use:     "policyconjunctions",
+			aliases: []string{"policyconj"},
+			short:   "Print conjunction IDs assigned to policy rules",
+			long:    "Print all the conjunction IDs assigned by the Antrea agent for the specified policy or rule",
+			example: `  Get conjunction IDs assigned to a policy by UID
+  $ antctl get policyconjunctions 6001549b-ba63-4752-8267-30f52b4332db
+  Get conjunction IDs assigned to a policy by name, namespace and type. For cluster scope resources, namespace can be omitted.
+  $ antctl get policyconjunctions -S allow-http -n test -T annp`,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/policyconjunctions",
+					params: []flagInfo{
+						{
+							name:  "uid",
+							usage: "Retrieve Conjunction IDs by policy UID.",
+							arg:   true,
+						},
+						{
+							name:      "source",
+							usage:     "Retrieve Conjunction IDs by source policy name. If present, source type must be provided. Namespace must also be provided if the source policy is Namespace scoped.",
+							shorthand: "S",
+						},
+						{
+							name:      "namespace",
+							usage:     "Namespace of the source policy being queried. Required if the source policy is Namespace scoped.",
+							shorthand: "n",
+						},
+						{
+							name:      "type",
+							usage:     "Type of the source policy being queried. Valid values are K8sNP, ACNP, ANNP and ANP.",
+							shorthand: "T",
+						},
+					},
+					outputType: multiple,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(agentapis.PolicyRuleConjunctionIDsResponse{}),
 		},
 		{
 			use:     "ovsflows",
