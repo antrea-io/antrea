@@ -40,13 +40,18 @@ jobs:
         - platform: linux/arm64
           runner: github-arm64-2c-8gb
           suffix: arm64
-        # - platform: linux/arm/v7
-        #   runner: github-arm64-2c-8gb
-        #   suffix: arm
+        - platform: linux/arm/v7
+          runner: github-arm64-2c-8gb
+          suffix: arm
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_TAG: latest
     steps:
+    - name: Add missing packages
+      if: ${{ matrix.platform == 'linux/arm/v7' }}
+      run: |
+        dpkg --add-architecture armhf
+        apt-get install libc6:armhf libstdc++6:armhf
     - uses: actions/checkout@v4
       with:
         show-progress: false
