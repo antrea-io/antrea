@@ -28,6 +28,7 @@ These are the CRDs currently available in `crd.antrea.io`.
 |---|---|---|---|---|
 | `AntreaAgentInfo` | v1beta1 | v1.0.0 | N/A | N/A |
 | `AntreaControllerInfo` | v1beta1 | v1.0.0 | N/A | N/A |
+| `BGPPolicy` | v1alpha1 | v2.1.0 | N/A | N/A |
 | `ClusterGroup` | v1beta1 | v1.13.0 | N/A | N/A |
 | `ClusterNetworkPolicy` | v1beta1 | v1.13.0 | N/A | N/A |
 | `Egress` | v1beta1 | v1.13.0 | N/A | N/A |
