@@ -153,6 +153,7 @@ function docker_build_and_push() {
     local image="$1"
     local dockerfile="$2"
     local build_args="--build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION --build-arg BUILD_TAG=$BUILD_TAG"
+    local build_contexts="--build-context antrea-openvswitch=docker-image://antrea/openvswitch:${BUILD_TAG}"
     local cache_args=""
     if $PUSH; then
         cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
@@ -162,7 +163,7 @@ function docker_build_and_push() {
     else
         cache_args="$cache_args --cache-from type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
     fi
-    docker buildx build $PLATFORM_ARG -o type=docker -t $image:$BUILD_TAG $cache_args $build_args -f $dockerfile .
+    docker buildx build $PLATFORM_ARG -o type=docker -t $image:$BUILD_TAG $cache_args $build_contexts $build_args -f $dockerfile .
 
     if $PUSH; then
         docker push $image:$BUILD_TAG
