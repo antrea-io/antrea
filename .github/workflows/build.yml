@@ -50,8 +50,8 @@ jobs:
     - name: Add missing packages
       if: ${{ matrix.platform == 'linux/arm/v7' }}
       run: |
-        dpkg --add-architecture armhf
-        apt-get install libc6:armhf libstdc++6:armhf
+        sudo dpkg --add-architecture armhf
+        sudo apt-get install libc6:armhf libstdc++6:armhf
     - uses: actions/checkout@v4
       with:
         show-progress: false
