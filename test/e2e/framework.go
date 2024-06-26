@@ -190,6 +190,10 @@ type ExternalInfo struct {
 	vlanSubnetIPv6  string
 	vlanGatewayIPv6 string
 	vlanID          int
+
+	externalFRRIPv4 string
+	externalFRRIPv6 string
+	externalFRRCID  string
 }
 
 var clusterInfo ClusterInfo
@@ -213,9 +217,12 @@ type TestOptions struct {
 	// the home directory of the control-plane Node. Note it doesn't affect the tests that redeploy Antrea themselves.
 	deployAntrea bool
 
-	externalServerIPs string
-	vlanSubnets       string
-	vlanID            int
+	externalAgnhostIPs string
+	vlanSubnets        string
+	vlanID             int
+
+	externalFRRIPs string
+	externalFRRCID string
 }
 
 type flowVisibilityTestOptions struct {
@@ -498,14 +505,14 @@ func (data *TestData) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]
 }
 
 func (data *TestData) collectExternalInfo() error {
-	ips := strings.Split(testOptions.externalServerIPs, ",")
+	ips := strings.Split(testOptions.externalAgnhostIPs, ",")
 	for _, ip := range ips {
 		if ip == "" {
 			continue
 		}
 		parsedIP := net.ParseIP(ip)
 		if parsedIP == nil {
-			return fmt.Errorf("invalid external server IP %s", ip)
+			return fmt.Errorf("invalid external agnhost IP %s", ip)
 		}
 		if parsedIP.To4() != nil {
 			externalInfo.externalServerIPv4 = ip
@@ -532,6 +539,25 @@ func (data *TestData) collectExternalInfo() error {
 		}
 	}
 	externalInfo.vlanID = testOptions.vlanID
+
+	frrIPs := strings.Split(testOptions.externalFRRIPs, ",")
+	for _, ip := range frrIPs {
+		if ip == "" {
+			continue
+		}
+		parsedIP := net.ParseIP(ip)
+		if parsedIP == nil {
+			return fmt.Errorf("invalid external FRR IP %s", ip)
+		}
+		if parsedIP.To4() != nil {
+			externalInfo.externalFRRIPv4 = ip
+		} else {
+			externalInfo.externalFRRIPv6 = ip
+		}
+	}
+
+	externalInfo.externalFRRCID = testOptions.externalFRRCID
+
 	return nil
 }
 
