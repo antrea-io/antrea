@@ -125,16 +125,16 @@ fi
 if $PULL; then
     if [ "$DISTRO" == "ubuntu" ]; then
         if [[ ${DOCKER_REGISTRY} == "" ]]; then
-            docker pull $PLATFORM_ARG ubuntu:22.04
+            docker pull $PLATFORM_ARG ubuntu:24.04
         else
-            docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:22.04
-            docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:22.04 ubuntu:22.04
+            docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:24.04
+            docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:24.04 ubuntu:24.04
         fi
     elif [ "$DISTRO" == "ubi" ]; then
         docker pull $PLATFORM_ARG quay.io/centos/centos:stream9
         docker pull $PLATFORM_ARG registry.access.redhat.com/ubi9
     elif [ "$DISTRO" == "windows" ]; then
-        docker pull --platform linux/amd64 ubuntu:22.04
+        docker pull --platform linux/amd64 ubuntu:24.04
     fi
 fi
 
@@ -143,7 +143,7 @@ function docker_build_and_push() {
     local dockerfile="$2"
     local build_args="--build-arg OVS_VERSION=$OVS_VERSION"
     if [ "$DISTRO" == "ubuntu" ]; then
-        local build_contexts="--build-context ubuntu=docker-image://ubuntu:22.04"
+        local build_contexts="--build-context ubuntu=docker-image://ubuntu:24.04"
     elif [ "$DISTRO" == "ubi" ]; then
         local build_contexts="--build-context centos=docker-image://quay.io/centos/centos:stream9 --build-context ubi9=docker-image://registry.access.redhat.com/ubi9"
     fi
