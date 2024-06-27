@@ -153,7 +153,11 @@ function docker_build_and_push() {
     local image="$1"
     local dockerfile="$2"
     local build_args="--build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION --build-arg BUILD_TAG=$BUILD_TAG"
-    local build_contexts="--build-context antrea-openvswitch=docker-image://antrea/openvswitch:${BUILD_TAG}"
+    if [ "$DISTRO" == "ubuntu" ]; then
+        local build_contexts="--build-context ubuntu=docker-image://ubuntu:22.04 --build-context antrea-openvswitch=docker-image://antrea/openvswitch:${BUILD_TAG}"
+    elif [ "$DISTRO" == "ubi" ]; then
+        local build_contexts="--build-context ubuntu=docker-image://ubuntu:22.04 --build-context antrea-openvswitch=docker-image://antrea/openvswitch-ubi:${BUILD_TAG}"
+    fi
     local cache_args=""
     if $PUSH; then
         cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"

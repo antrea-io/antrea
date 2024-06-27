@@ -142,6 +142,11 @@ function docker_build_and_push() {
     local image="$1"
     local dockerfile="$2"
     local build_args="--build-arg OVS_VERSION=$OVS_VERSION"
+    if [ "$DISTRO" == "ubuntu" ]; then
+        local build_contexts="--build-context ubuntu=docker-image://ubuntu:22.04"
+    elif [ "$DISTRO" == "ubi" ]; then
+        local build_contexts="--build-context centos=docker-image://quay.io/centos/centos:stream9 --build-context ubi9=docker-image://registry.access.redhat.com/ubi9"
+    fi
     local cache_args=""
     if $PUSH; then
         cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
@@ -151,7 +156,7 @@ function docker_build_and_push() {
     else
         cache_args="$cache_args --cache-from type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
     fi
-    docker buildx build $PLATFORM_ARG -o type=docker -t $image:$BUILD_TAG $cache_args $build_args -f $dockerfile .
+    docker buildx build $PLATFORM_ARG -o type=docker -t $image:$BUILD_TAG $cache_args $build_contexts $build_args -f $dockerfile .
 
     if $PUSH; then
         docker push $image:$BUILD_TAG
