@@ -53,6 +53,7 @@ jobs:
         sudo dpkg --add-architecture armhf
         sudo apt-get update
         sudo apt-get install -y libc6:armhf libstdc++6:armhf
+        docker run --platform linux/arm/v7 hello-world@sha256:20aea1c63c90d5e117db787c9fe1a8cd0ad98bedb5fd711273ffe05c084ff18a
     - uses: actions/checkout@v4
       with:
         show-progress: false
