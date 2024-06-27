@@ -29,10 +29,12 @@ import (
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 
@@ -40,6 +42,7 @@ import (
 	monitortesting "antrea.io/antrea/pkg/agent/monitortool/testing"
 	"antrea.io/antrea/pkg/agent/util/nettest"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -167,9 +170,30 @@ func newTestMonitor(
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	crdClientset := fakeversioned.NewSimpleClientset(crdObjects...)
+	crdClientset.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		tracker := crdClientset.Tracker()
+		createAction := action.(k8stesting.CreateAction)
+		gvr := createAction.GetResource()
+		obj := createAction.GetObject()
+		stats := obj.(*statsv1alpha1.NodeLatencyStats)
+
+		_, err := tracker.Get(gvr, "", stats.Name)
+		if errors.IsNotFound(err) {
+			err = tracker.Create(gvr, obj, "")
+		} else if err == nil {
+			err = tracker.Update(gvr, obj, "")
+		}
+
+		if err != nil {
+			return true, nil, err
+		}
+
+		obj, err = tracker.Get(gvr, "", stats.Name)
+		return true, obj, err
+	})
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClientset, 0)
 	nlmInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
-	antreaClientProvider := &antreaClientGetter{fakeversioned.NewSimpleClientset(crdObjects...)}
+	antreaClientProvider := &antreaClientGetter{crdClientset}
 	m := NewNodeLatencyMonitor(antreaClientProvider, nodeInformer, nlmInformer, nodeConfig, trafficEncapMode)
 	fakeClock := newFakeClock(clockT)
 	m.clock = fakeClock
