@@ -308,8 +308,6 @@ function run_codecov { (set -e
     flag=$1
     file=$2
     dir=$3
-    remote=$4
-    ip=$5
 
     rm -f trustedkeys.gpg codecov
     # This is supposed to be a one-time step, but there should be no harm in
@@ -327,12 +325,7 @@ function run_codecov { (set -e
 
     chmod +x codecov
 
-    if [[ $remote == true ]]; then
-        ${SCP_WITH_UTILS_KEY} codecov jenkins@${ip}:~
-        ${SSH_WITH_UTILS_KEY} -n jenkins@${ip} "cd antrea; ~/codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -C ${GIT_COMMIT} -r antrea-io/antrea"
-    else
-        ./codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir} -C ${GIT_COMMIT} -r antrea-io/antrea
-    fi
+    ./codecov -c -t "${CODECOV_TOKEN}" -F "${flag}" -f "${file}" -s "${dir}" -C "${GIT_COMMIT}" -r "antrea-io/antrea"
     rm -f trustedkeys.gpg codecov
 )}
 
@@ -547,8 +540,14 @@ function run_e2e {
 
     tar -zcf ${GIT_CHECKOUT_DIR}/antrea-test-logs.tar.gz ${GIT_CHECKOUT_DIR}/antrea-test-logs
     if [[ "$COVERAGE" == true ]]; then
+        pushd ${GIT_CHECKOUT_DIR}/e2e-coverage
+        for dir in */; do
+            go tool covdata textfmt -i="${dir}" -o "${dir%?}.cov.out"
+            rm -rf "${dir}";
+        done
+        popd
         tar -zcf ${GIT_CHECKOUT_DIR}/e2e-coverage.tar.gz ${GIT_CHECKOUT_DIR}/e2e-coverage
-        run_codecov "e2e-tests" "*.cov.out*" "${GIT_CHECKOUT_DIR}/e2e-coverage" false ""
+        run_codecov "e2e-tests" "*.cov.out*" "${GIT_CHECKOUT_DIR}/e2e-coverage"
     fi
 }
 
@@ -618,13 +617,13 @@ function run_conformance {
     if [[ "$COVERAGE" == true ]]; then
         rm -rf ${GIT_CHECKOUT_DIR}/conformance-coverage
         mkdir -p ${GIT_CHECKOUT_DIR}/conformance-coverage
-        collect_coverage
+        collect_coverage_for_conformance
         tar -zcf ${GIT_CHECKOUT_DIR}/$TESTCASE-coverage.tar.gz ${GIT_CHECKOUT_DIR}/conformance-coverage
-        run_codecov "e2e-tests" "*antrea*" "${GIT_CHECKOUT_DIR}/conformance-coverage" false ""
+        run_codecov "e2e-tests" "*antrea*" "${GIT_CHECKOUT_DIR}/conformance-coverage"
     fi
 }
 
-function collect_coverage() {
+function collect_coverage_for_conformance() {
         antrea_controller_pod_name="$(kubectl get pods --selector=app=antrea,component=antrea-controller -n kube-system --no-headers=true | awk '{ print $1 }')"
         controller_pid="$(kubectl exec -i $antrea_controller_pod_name -n kube-system -- pgrep antrea)"
         kubectl exec -i $antrea_controller_pod_name -n kube-system -- kill -SIGINT $controller_pid

@@ -117,6 +117,7 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: '*.cov.out*'
+        disable_search: true
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap
         directory: test-e2e-encap-coverage
@@ -185,6 +186,7 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: '*.cov.out*'
+        disable_search: true
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap-non-default
         directory: test-e2e-encap-non-default-coverage
@@ -255,6 +257,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: '*.cov.out*'
+          disable_search: true
           flags: kind-e2e-tests
           name: codecov-test-e2e-encap-all-features-enabled
           directory: test-e2e-encap-all-features-enabled-coverage
@@ -317,6 +320,7 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: '*.cov.out*'
+        disable_search: true
         flags: kind-e2e-tests
         name: codecov-test-e2e-noencap
         directory: test-e2e-noencap-coverage
@@ -379,6 +383,7 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: '*.cov.out*'
+        disable_search: true
         flags: kind-e2e-tests
         name: codecov-test-e2e-hybrid
         directory: test-e2e-hybrid-coverage
@@ -453,6 +458,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: '*.cov.out*'
+          disable_search: true
           flags: kind-e2e-tests
           name: codecov-test-e2e-fa
           directory: test-e2e-fa-coverage
