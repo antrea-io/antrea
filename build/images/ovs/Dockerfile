@@ -18,6 +18,10 @@ FROM ubuntu AS ovs-debs
 # See build/images/deps/ovs-version for the default version.
 ARG OVS_VERSION
 
+RUN echo "xyz"
+
+RUN apt-get update
+
 # Install dependencies for building OVS deb packages
 # We only install python3 packages and we only support building OVS >= 2.13.0.
 RUN apt-get update && \
