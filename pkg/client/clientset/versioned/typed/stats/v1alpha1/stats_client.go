@@ -30,7 +30,7 @@ type StatsV1alpha1Interface interface {
 	AntreaNetworkPolicyStatsGetter
 	MulticastGroupsGetter
 	NetworkPolicyStatsGetter
-	NodeLatencyStatsesGetter
+	NodeLatencyStatsGetter
 }
 
 // StatsV1alpha1Client is used to interact with features provided by the stats.antrea.io group.
@@ -54,8 +54,8 @@ func (c *StatsV1alpha1Client) NetworkPolicyStats(namespace string) NetworkPolicy
 	return newNetworkPolicyStats(c, namespace)
 }
 
-func (c *StatsV1alpha1Client) NodeLatencyStatses() NodeLatencyStatsInterface {
-	return newNodeLatencyStatses(c)
+func (c *StatsV1alpha1Client) NodeLatencyStats() NodeLatencyStatsInterface {
+	return newNodeLatencyStats(c)
 }
 
 // NewForConfig creates a new StatsV1alpha1Client for the given config.
