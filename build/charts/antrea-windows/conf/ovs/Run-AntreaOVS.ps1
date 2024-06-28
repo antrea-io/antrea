@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
 $mountPath = ($mountPath.Replace('\', '/')).TrimEnd('/')
-$env:PATH = $env:PATH + ";$mountPath/Windows/System32;$mountPath/openvswitch/usr/bin;$mountPath/openvswitch/usr/sbin"
+$env:PATH = $env:PATH + ";$mountPath/openvswitch/usr/bin;$mountPath/openvswitch/usr/sbin"
 $OVSDriverDir = "$mountPath\openvswitch\driver"
 
 # Configure OVS processes
