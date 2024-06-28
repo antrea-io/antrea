@@ -1952,7 +1952,7 @@ func (data *TestData) CreateService(serviceName, namespace string, port, targetP
 
 // CreateServiceWithAnnotations creates a service with Annotation
 func (data *TestData) CreateServiceWithAnnotations(serviceName, namespace string, port, targetPort int32, protocol corev1.Protocol, selector map[string]string, affinity, nodeLocalExternal bool,
-	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
+	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string, mutators ...func(service *corev1.Service)) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	var ipFamilies []corev1.IPFamily
 	if ipFamily != nil {
@@ -1985,6 +1985,9 @@ func (data *TestData) CreateServiceWithAnnotations(serviceName, namespace string
 	}
 	if (serviceType == corev1.ServiceTypeNodePort || serviceType == corev1.ServiceTypeLoadBalancer) && nodeLocalExternal {
 		service.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeLocal
+	}
+	for _, mutator := range mutators {
+		mutator(&service)
 	}
 	return data.clientset.CoreV1().Services(namespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }

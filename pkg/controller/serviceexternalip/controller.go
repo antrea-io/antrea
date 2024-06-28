@@ -16,10 +16,10 @@ package serviceexternalip
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -28,11 +28,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -50,13 +52,18 @@ const (
 	// Default number of workers processing an Service change.
 	defaultWorkers = 4
 
+	// externalIPPoolIndex is an index of serviceInformer.
 	externalIPPoolIndex = "externalIPPool"
+	// ipIndex is an index of ipAllocations.
+	ipIndex = "ip"
 )
 
 // ipAllocation contains the IP and the IP Pool which allocates it.
 type ipAllocation struct {
-	ip     net.IP
-	ipPool string
+	service  apimachinerytypes.NamespacedName
+	ip       net.IP
+	ipPool   string
+	sharable bool
 }
 
 // ServiceExternalIPController is responsible for synchronizing the Services that need external IPs.
@@ -64,8 +71,8 @@ type ServiceExternalIPController struct {
 	externalIPAllocator externalippool.ExternalIPAllocator
 	client              clientset.Interface
 
-	// ipAllocationMap is a map from Service name to IP allocated.
-	ipAllocationMap   map[apimachinerytypes.NamespacedName]*ipAllocation
+	// ipAllocations caches the IP and the IP Pool which allocates it for each Service.
+	ipAllocations     cache.Indexer
 	ipAllocationMutex sync.RWMutex
 
 	serviceInformer     cache.SharedIndexInformer
@@ -87,7 +94,13 @@ func NewServiceExternalIPController(
 		serviceLister:       serviceInformer.Lister(),
 		serviceListerSynced: serviceInformer.Informer().HasSynced,
 		externalIPAllocator: externalIPAllocator,
-		ipAllocationMap:     make(map[apimachinerytypes.NamespacedName]*ipAllocation),
+		ipAllocations: cache.NewIndexer(func(obj interface{}) (string, error) {
+			return obj.(*ipAllocation).service.String(), nil
+		}, cache.Indexers{
+			ipIndex: func(obj interface{}) ([]string, error) {
+				return []string{obj.(*ipAllocation).ip.String()}, nil
+			},
+		}),
 	}
 
 	c.serviceInformer.AddIndexers(cache.Indexers{
@@ -96,8 +109,8 @@ func NewServiceExternalIPController(
 			if !ok {
 				return nil, fmt.Errorf("obj is not Service: %+v", obj)
 			}
-			eipName, ok := service.Annotations[antreaagenttypes.ServiceExternalIPPoolAnnotationKey]
-			if !ok {
+			eipName := getServiceExternalIPPool(service)
+			if eipName == "" {
 				return nil, nil
 			}
 			return []string{eipName}, nil
@@ -150,6 +163,17 @@ func (c *ServiceExternalIPController) enqueueServicesByExternalIPPool(eipName st
 	klog.InfoS("Detected ExternalIPPool event", "ExternalIPPool", eipName)
 }
 
+// enqueueServicesWithoutIPs enqueues all Services that refer to the provided ExternalIPPool and have empty
+// LoadBalancerIP in LoadBalancerStatus.
+func (c *ServiceExternalIPController) enqueueServicesWithoutIPs(eipName string) {
+	objects, _ := c.serviceInformer.GetIndexer().ByIndex(externalIPPoolIndex, eipName)
+	for _, object := range objects {
+		if getServiceExternalIP(object.(*corev1.Service)) == "" {
+			c.enqueueService(object)
+		}
+	}
+}
+
 // Run will create defaultWorkers workers (go routines) which will process the Service events from the
 // workqueue.
 func (c *ServiceExternalIPController) Run(stopCh <-chan struct{}) {
@@ -171,44 +195,94 @@ func (c *ServiceExternalIPController) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-// restoreIPAllocations restores the existing external IPs of Services and records the successful ones in ipAllocationMap.
+// restoreIPAllocations restores the existing external IPs of Services and records the successful ones in ipAllocations.
 func (c *ServiceExternalIPController) restoreIPAllocations(services []*corev1.Service) {
-	var previousIPAllocations []externalippool.IPAllocation
+	// requestedIPAllocations contains IPAllocations we are going to request based on the Service statuses.
+	var requestedIPAllocations []externalippool.IPAllocation
+	// knownIPsByPool is used to deduplicate IPAllocations.
+	knownIPsByPool := map[string]sets.Set[string]{}
+	// eligibleServices contains Services which had a LoadBalancerIP assigned previously.
+	var eligibleServices []*corev1.Service
 	for _, svc := range services {
-		ipPool := svc.ObjectMeta.Annotations[antreaagenttypes.ServiceExternalIPPoolAnnotationKey]
-		if svc.Spec.Type != corev1.ServiceTypeLoadBalancer || ipPool == "" || len(svc.Status.LoadBalancer.Ingress) == 0 {
+		ipPool := getServiceExternalIPPool(svc)
+		ip := getServiceExternalIP(svc)
+		if svc.Spec.Type != corev1.ServiceTypeLoadBalancer || ipPool == "" || ip == "" {
 			continue
 		}
-		ip := net.ParseIP(svc.Status.LoadBalancer.Ingress[0].IP)
+		parsedIP := net.ParseIP(ip)
+		if parsedIP == nil {
+			continue
+		}
+
+		eligibleServices = append(eligibleServices, svc)
+		if _, exists := knownIPsByPool[ipPool]; !exists {
+			knownIPsByPool[ipPool] = sets.New[string]()
+		}
+		// Another Service already tried to restore the IP allocation, and restoring an IP more than once will fail for
+		// sure. Therefore, we use a set to ensure we restore each IP once. If the IP is restored successfully, all
+		// Services that had it assigned can continue using it.
+		if knownIPsByPool[ipPool].Has(ip) {
+			continue
+		}
+		knownIPsByPool[ipPool].Insert(ip)
+		// We don't set ObjectReference here as it might be shared between multiple Services.
 		allocation := externalippool.IPAllocation{
-			ObjectReference: corev1.ObjectReference{
-				Name:      svc.Name,
-				Namespace: svc.Namespace,
-				Kind:      svc.Kind,
-			},
 			IPPoolName: ipPool,
-			IP:         ip,
+			IP:         parsedIP,
 		}
-		previousIPAllocations = append(previousIPAllocations, allocation)
+		requestedIPAllocations = append(requestedIPAllocations, allocation)
 	}
-	succeededAllocations := c.externalIPAllocator.RestoreIPAllocations(previousIPAllocations)
-	for _, alloc := range succeededAllocations {
-		name := apimachinerytypes.NamespacedName{
-			Namespace: alloc.ObjectReference.Namespace,
-			Name:      alloc.ObjectReference.Name,
+
+	succeededAllocations := c.externalIPAllocator.RestoreIPAllocations(requestedIPAllocations)
+	// Convert the succeeded IPAllocations for ease of querying.
+	succeededIPsByPool := map[string]sets.Set[string]{}
+	for _, allocation := range succeededAllocations {
+		if _, exists := succeededIPsByPool[allocation.IPPoolName]; !exists {
+			succeededIPsByPool[allocation.IPPoolName] = sets.New[string]()
 		}
-		c.setIPAllocation(name, alloc.IPPoolName, alloc.IP)
-		klog.InfoS("Restored external IP", "service", name, "ip", alloc.IP, "pool", alloc.IPPoolName)
+		succeededIPsByPool[allocation.IPPoolName].Insert(allocation.IP.String())
+	}
+
+	c.ipAllocationMutex.Lock()
+	defer c.ipAllocationMutex.Unlock()
+	for _, svc := range eligibleServices {
+		ipPool := getServiceExternalIPPool(svc)
+		ip := getServiceExternalIP(svc)
+		if succeededIPsByPool[ipPool].Has(ip) {
+			name := apimachinerytypes.NamespacedName{
+				Namespace: svc.Namespace,
+				Name:      svc.Name,
+			}
+			c.addIPAllocationLocked(name, ipPool, net.ParseIP(ip), isServiceExternalIPSharable(svc))
+		}
+		klog.InfoS("Restored external IP", "service", klog.KObj(svc), "ip", ip, "pool", ipPool)
 	}
 }
 
-func (c *ServiceExternalIPController) setIPAllocation(name apimachinerytypes.NamespacedName, ipPool string, ip net.IP) {
+func (c *ServiceExternalIPController) updateIPAllocation(name apimachinerytypes.NamespacedName, ipPool string, ip net.IP, sharable bool) {
 	c.ipAllocationMutex.Lock()
 	defer c.ipAllocationMutex.Unlock()
-	c.ipAllocationMap[name] = &ipAllocation{
-		ip:     ip,
-		ipPool: ipPool,
+	newAllocation := &ipAllocation{
+		service:  name,
+		ip:       ip,
+		ipPool:   ipPool,
+		sharable: sharable,
 	}
+	oldObj, exists, _ := c.ipAllocations.Get(newAllocation)
+	c.ipAllocations.Update(newAllocation)
+	// Update other Services if the Service changes from unsharable to sharable.
+	if sharable && exists && !oldObj.(*ipAllocation).sharable {
+		c.enqueueServicesWithoutIPs(ipPool)
+	}
+}
+
+func (c *ServiceExternalIPController) addIPAllocationLocked(name apimachinerytypes.NamespacedName, ipPool string, ip net.IP, sharable bool) {
+	c.ipAllocations.Add(&ipAllocation{
+		service:  name,
+		ip:       ip,
+		ipPool:   ipPool,
+		sharable: sharable,
+	})
 }
 
 // worker is a long-running function that will continually call the processNextWorkItem function in
@@ -240,32 +314,101 @@ func (c *ServiceExternalIPController) processNextWorkItem() bool {
 	return true
 }
 
-func (c *ServiceExternalIPController) releaseExternalIP(service apimachinerytypes.NamespacedName) error {
+func (c *ServiceExternalIPController) releaseExternalIP(service apimachinerytypes.NamespacedName) (bool, error) {
 	c.ipAllocationMutex.Lock()
 	defer c.ipAllocationMutex.Unlock()
-	allocation, exists := c.ipAllocationMap[service]
+	obj, exists, _ := c.ipAllocations.GetByKey(service.String())
 	if exists {
-		if err := c.externalIPAllocator.ReleaseIP(allocation.ipPool, allocation.ip); err != nil {
-			if err == externalippool.ErrExternalIPPoolNotFound {
-				// Ignore the error since the external IP Pool could be deleted.
-				klog.Warningf("Failed to release IP %s for service %s: IP Pool %s does not exist", service, allocation.ip, allocation.ipPool)
+		allocation := obj.(*ipAllocation)
+		objs, _ := c.ipAllocations.ByIndex(ipIndex, allocation.ip.String())
+		// The IP is exclusively used by the Service.
+		if len(objs) == 1 {
+			if err := c.externalIPAllocator.ReleaseIP(allocation.ipPool, allocation.ip); err != nil {
+				if err == externalippool.ErrExternalIPPoolNotFound {
+					// Ignore the error since the external IP Pool could be deleted.
+					klog.Warningf("Failed to release IP %s for service %s: IP Pool %s does not exist", service, allocation.ip, allocation.ipPool)
+				} else {
+					klog.ErrorS(err, "Failed to release external IP", "service", service, "ip", allocation.ip, "pool", allocation.ipPool)
+					return false, err
+				}
 			} else {
-				klog.ErrorS(err, "Failed to release external IP", "service", service, "ip", allocation.ip, "pool", allocation.ipPool)
-				return err
+				klog.InfoS("Released external IP", "service", service, "ip", allocation.ip, "pool", allocation.ipPool)
 			}
-		} else {
-			klog.InfoS("Released external IP", "service", service, "ip", allocation.ip, "pool", allocation.ipPool)
 		}
-		delete(c.ipAllocationMap, service)
+		c.ipAllocations.Delete(obj)
+		// Update other Services as they may be affected by the deletion of this allocation.
+		// It's necessary even when the IP was not exclusively used by the deleted Service, considering this case:
+		// 1. Service A requests to share an IP with Service B, and both get the IP assigned.
+		// 2. Service A changes to not allow shared IP, currently the IP is still shared between A and B, but Service C
+		//    cannot get the IP assigned even if it allows shared IP.
+		// 3. Service A is deleted, the only remaining owner of the IP, Service B, allows shared IP, so Service C is
+		//    eligible for the IP.
+		c.enqueueServicesWithoutIPs(allocation.ipPool)
+		return true, nil
 	}
-	return nil
+	return false, nil
+}
+
+func (c *ServiceExternalIPController) allocateExternalIP(service apimachinerytypes.NamespacedName, pool string, requestedIP string, allowSharedIP bool) (net.IP, error) {
+	c.ipAllocationMutex.Lock()
+	defer c.ipAllocationMutex.Unlock()
+
+	// Allocate IP from ExternalIPPool.
+	if requestedIP == "" {
+		ip, err := c.externalIPAllocator.AllocateIPFromPool(pool)
+		if err != nil {
+			return nil, fmt.Errorf("error when allocating IP from ExternalIPPool %s for Service %s: %v", pool, service, err)
+		}
+		klog.InfoS("Allocated external IP for Service", "service", service, "externalIPPool", pool, "ip", ip)
+		c.addIPAllocationLocked(service, pool, ip, allowSharedIP)
+		return ip, nil
+	}
+
+	// Check whether the requested IP is in the IP pool or not.
+	ip := net.ParseIP(requestedIP)
+	if !c.externalIPAllocator.IPPoolHasIP(pool, ip) {
+		klog.ErrorS(nil, "ExternalIPPool did not contain the requested IP", "externalIPPool", pool, "ip", requestedIP)
+		return nil, nil
+	}
+
+	// Check whether the requested IP is already used.
+	objs, _ := c.ipAllocations.ByIndex(ipIndex, ip.String())
+	if len(objs) > 0 {
+		// Fail if the Service itself doesn't allow shared IP.
+		if !allowSharedIP {
+			klog.ErrorS(nil, "The Service didn't allow shared IP but the requested IP had been allocated to other Service", "service", service, "externalIPPool", pool, "ip", requestedIP)
+			return nil, nil
+		}
+		// Fail if any Service already using the IP doesn't allow shared IP.
+		for _, obj := range objs {
+			allocation := obj.(*ipAllocation)
+			if !allocation.sharable {
+				klog.ErrorS(nil, "The requested IP had been allocated to other Service not allowing shared IP", "service", service, "externalIPPool", pool, "ip", requestedIP)
+				return nil, nil
+			}
+		}
+		klog.InfoS("Shared external IP for Service", "service", service, "externalIPPool", pool, "ip", ip)
+		c.addIPAllocationLocked(service, pool, ip, allowSharedIP)
+		return ip, nil
+	}
+
+	// The requested IP is not used yet, allocate it.
+	if err := c.externalIPAllocator.UpdateIPAllocation(pool, ip); err != nil {
+		return nil, fmt.Errorf("error when allocating IP %s from ExternalIPPool %s for Service %s: %v", requestedIP, pool, service, err)
+	}
+	klog.InfoS("Requested external IP for Service", "service", service, "externalIPPool", pool, "ip", ip)
+	c.addIPAllocationLocked(service, pool, ip, allowSharedIP)
+	return ip, nil
 }
 
 func (c *ServiceExternalIPController) getExternalIPAllocation(service apimachinerytypes.NamespacedName) (*ipAllocation, bool) {
 	c.ipAllocationMutex.RLock()
 	defer c.ipAllocationMutex.RUnlock()
-	allocation, exist := c.ipAllocationMap[service]
-	return allocation, exist
+	obj, exist, _ := c.ipAllocations.GetByKey(service.String())
+	if !exist {
+		return nil, false
+	}
+	return obj.(*ipAllocation), true
 }
 
 func getServiceExternalIP(service *corev1.Service) string {
@@ -273,6 +416,19 @@ func getServiceExternalIP(service *corev1.Service) string {
 		return ""
 	}
 	return service.Status.LoadBalancer.Ingress[0].IP
+}
+
+func getServiceExternalIPPool(service *corev1.Service) string {
+	return service.Annotations[antreaagenttypes.ServiceExternalIPPoolAnnotationKey]
+}
+
+func isServiceExternalIPSharable(service *corev1.Service) bool {
+	value, exists := service.Annotations[antreaagenttypes.ServiceAllowSharedIPAnnotationKey]
+	if !exists {
+		return false
+	}
+	sharable, _ := strconv.ParseBool(value)
+	return sharable
 }
 
 func (c *ServiceExternalIPController) syncService(key apimachinerytypes.NamespacedName) error {
@@ -285,7 +441,7 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 	if err != nil {
 		// Service already deleted
 		if apimachineryerrors.IsNotFound(err) {
-			if err := c.releaseExternalIP(key); err != nil {
+			if _, err := c.releaseExternalIP(key); err != nil {
 				return err
 			}
 			return nil
@@ -295,13 +451,19 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 
 	// Service does not need external IP or type has changed.
 	if service.Spec.Type != corev1.ServiceTypeLoadBalancer {
-		if err := c.releaseExternalIP(key); err != nil {
+		released, err := c.releaseExternalIP(key)
+		if err != nil {
 			return err
+		}
+		// Ensure the LoadBalancerStatus in Kubernetes API is unset if the IP was allocated by it.
+		if released {
+			return c.updateServiceLoadBalancerIP(service, nil)
 		}
 		return nil
 	}
 
-	currentIPPool := service.ObjectMeta.Annotations[antreaagenttypes.ServiceExternalIPPoolAnnotationKey]
+	currentIPPool := getServiceExternalIPPool(service)
+	allowSharedIP := isServiceExternalIPSharable(service)
 	prevIPAllocation, allocationExists := c.getExternalIPAllocation(key)
 	currentExternalIP := getServiceExternalIP(service)
 
@@ -313,82 +475,68 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 		c.externalIPAllocator.IPPoolHasIP(currentIPPool, prevIPAllocation.ip) &&
 		currentIPPool == prevIPAllocation.ipPool &&
 		currentExternalIP == prevIPAllocation.ip.String() {
-		return nil
+		// Only the sharable annotation changes, update it.
+		if allowSharedIP != prevIPAllocation.sharable {
+			c.updateIPAllocation(key, prevIPAllocation.ipPool, prevIPAllocation.ip, allowSharedIP)
+		}
+		// Ensure the LoadBalancerStatus in Kubernetes API matches the cache.
+		return c.updateServiceLoadBalancerIP(service, prevIPAllocation.ip)
 	}
 
 	// The ExternalIPPool does not exist or has been deleted. Reclaim the external IP.
 	if currentIPPool != "" && !c.externalIPAllocator.IPPoolExists(currentIPPool) {
-		if err := c.releaseExternalIP(key); err != nil {
+		if _, err := c.releaseExternalIP(key); err != nil {
 			return err
 		}
-		if currentExternalIP != "" {
-			toUpdate := service.DeepCopy()
-			toUpdate.Status.LoadBalancer.Ingress = nil
-			return c.updateServiceStatus(service, toUpdate)
-		}
+		return c.updateServiceLoadBalancerIP(service, nil)
 	}
 
-	// the external IP or ExternalIPPool changed somehow. Delete the previous allocation.
-	if err := c.releaseExternalIP(key); err != nil {
+	// The external IP or ExternalIPPool changes. Delete the previous allocation.
+	released, err := c.releaseExternalIP(key)
+	if err != nil {
 		return err
 	}
 
 	if currentIPPool == "" {
 		klog.V(2).InfoS("Ignored Service as required annotation is not found", "service", key)
+		if released {
+			return c.updateServiceLoadBalancerIP(service, nil)
+		}
 		return nil
 	}
 
-	var newExternalIP net.IP
-	var allocated bool
-	if service.Spec.LoadBalancerIP != "" {
-		// check whether the specified IP is in the desired IP pool or not.
-		newExternalIP = net.ParseIP(service.Spec.LoadBalancerIP)
-		if !c.externalIPAllocator.IPPoolHasIP(currentIPPool, newExternalIP) {
-			klog.ErrorS(nil, "IP pool does not contain required external IP", "ipPool", currentIPPool, "ip", newExternalIP)
-			return nil
-		}
-		err = c.externalIPAllocator.UpdateIPAllocation(currentIPPool, newExternalIP)
-	} else {
-		// Allocate IP from existing ExternalIPPool.
-		newExternalIP, err = c.externalIPAllocator.AllocateIPFromPool(currentIPPool)
-		allocated = true
-	}
+	newExternalIP, err := c.allocateExternalIP(key, currentIPPool, service.Spec.LoadBalancerIP, allowSharedIP)
 	if err != nil {
-		// If the ExternalIPPool does not exist, we can ignore the error since the Service will get requeued by ExternalIPPool change events.
-		if errors.Is(err, externalippool.ErrExternalIPPoolNotFound) {
-			klog.ErrorS(err, "Error when allocating IP from ExternalIPPool", "service", service, "ip", newExternalIP, "externalIPPool", currentIPPool)
-			return nil
-		}
-		return fmt.Errorf("error when allocating IP %s from ExternalIPPool %s for Service %s: %v", newExternalIP, currentIPPool, key, err)
-	}
-	klog.InfoS("Allocated external IP for service", "service", key, "ip", newExternalIP, "externalIPPool", currentIPPool)
-
-	toUpdate := service.DeepCopy()
-	toUpdate.Status.LoadBalancer.Ingress = []corev1.LoadBalancerIngress{
-		{
-			IP: newExternalIP.String(),
-		},
-	}
-	if err := c.updateServiceStatus(service, toUpdate); err != nil {
-		if allocated {
-			if rerr := c.externalIPAllocator.ReleaseIP(currentIPPool, newExternalIP); rerr != nil &&
-				rerr != externalippool.ErrExternalIPPoolNotFound {
-				klog.ErrorS(rerr, "Failed to release IP", "service", key, "ip", newExternalIP, "externalIPPool", currentIPPool)
-			}
-		}
 		return err
 	}
-	c.setIPAllocation(key, currentIPPool, newExternalIP)
+	if err := c.updateServiceLoadBalancerIP(service, newExternalIP); err != nil {
+		return err
+	}
 	return nil
 }
 
 // updateService updates the Service status in Kubernetes API.
-func (c *ServiceExternalIPController) updateServiceStatus(prev, current *corev1.Service) error {
-	if !reflect.DeepEqual(prev.Status, current.Status) {
-		_, err := c.client.CoreV1().Services(current.Namespace).UpdateStatus(context.TODO(), current, metav1.UpdateOptions{})
-		if err != nil {
-			return err
+func (c *ServiceExternalIPController) updateServiceLoadBalancerIP(svc *corev1.Service, ip net.IP) error {
+	expectedLoadBalancerStatus := corev1.LoadBalancerStatus{}
+	if ip != nil {
+		expectedLoadBalancerStatus.Ingress = append(expectedLoadBalancerStatus.Ingress, corev1.LoadBalancerIngress{IP: ip.String()})
+	}
+	toUpdate := svc.DeepCopy()
+	var updateErr, getErr error
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if reflect.DeepEqual(expectedLoadBalancerStatus, toUpdate.Status.LoadBalancer) {
+			return nil
 		}
+		toUpdate.Status.LoadBalancer = expectedLoadBalancerStatus
+		_, updateErr = c.client.CoreV1().Services(toUpdate.Namespace).UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		if updateErr != nil && apimachineryerrors.IsConflict(updateErr) {
+			if toUpdate, getErr = c.client.CoreV1().Services(toUpdate.Namespace).Get(context.TODO(), svc.Name, metav1.GetOptions{}); getErr != nil {
+				return getErr
+			}
+		}
+		return updateErr
+	}); err != nil {
+		return err
 	}
 	return nil
 }
