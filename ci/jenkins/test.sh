@@ -778,15 +778,16 @@ function run_install_windows_ovs {
     govc vm.power -on $OVS_VM_NAME || true
     echo "===== Testing VM has been reverted and powered on ====="
     IP=$(govc vm.ip $OVS_VM_NAME)
-    scp -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -T hack/windows/Install-OVS.ps1 Administrator@${IP}:
-    ssh -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -n Administrator@${IP} '/bin/bash -lc "cp Install-OVS.ps1 C:/k && powershell.exe -File C:/k/Install-OVS.ps1"'
+    scp -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -T hack/windows/Install-OVS.ps1 Administrator@${IP}:/cygdrive/c/k/
+    ssh -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -n Administrator@${IP} '/bin/bash -lc "powershell.exe -File c:/k/Install-OVS.ps1 -InstallUserspace:$true"'
 
     set +e
     RC_SERVER=$(ssh -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -n Administrator@${IP} 'powershell.exe -Command "(get-service ovsdb-server).Status -eq \"Running\""')
     RC_VSWITCHD=$(ssh -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -n Administrator@${IP} 'powershell.exe -Command "(get-service ovs-vswitchd).Status -eq \"Running\""')
+    OVSDriverStatus=$(ssh -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -n Administrator@${IP} 'netcfg.exe -q ovsext')
     set -e
 
-    if [[ $RC_SERVER != *True* || $RC_VSWITCHD != *True* ]]; then
+    if [[ $RC_SERVER != *True* || $RC_VSWITCHD != *True* || $OVSDriverStatus != *"is installed"* ]]; then
         echo "=== TEST FAILURE !!! ==="
         TEST_FAILURE=true
         ssh -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -n Administrator@${IP} "tar zcf openvswitch.tar.gz -C  /cygdrive/c/openvswitch/var/log openvswitch"
