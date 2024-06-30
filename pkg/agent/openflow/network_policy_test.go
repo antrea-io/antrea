@@ -240,11 +240,11 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges2)
 	require.Nil(t, err)
 
-	assert.Equal(t, 0, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 0, len(c.GetNetworkPolicyFlowKeys("np1", "ns1", v1beta2.K8sNetworkPolicy)))
 	err = c.InstallPolicyRuleFlows(rule2)
 	require.Nil(t, err)
 	checkConjunctionConfig(t, ruleID2, 1, 2, 1, 0)
-	assert.Equal(t, 6, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 6, len(c.GetNetworkPolicyFlowKeys("np1", "ns1", v1beta2.K8sNetworkPolicy)))
 
 	ruleID3 := uint32(103)
 	port1 := intstr.FromInt(8080)
@@ -288,7 +288,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	err = c.InstallPolicyRuleFlows(rule3)
 	require.Nil(t, err, "Failed to invoke InstallPolicyRuleFlows")
 	checkConjunctionConfig(t, ruleID3, 1, 2, 1, 3)
-	assert.Equal(t, 15, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 15, len(c.GetNetworkPolicyFlowKeys("np1", "ns1", v1beta2.K8sNetworkPolicy)))
 
 	ctxChanges4 := conj.calculateChangesForRuleDeletion()
 	matchFlows4, dropFlows4 := getChangedFlows(ctxChanges4)
@@ -305,7 +305,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	assert.Equal(t, 2, getChangedFlowOPCount(matchFlows5, deletion))
 	assert.Equal(t, 1, getChangedFlowOPCount(matchFlows5, modification))
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges5)
-	assert.Equal(t, 12, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 12, len(c.GetNetworkPolicyFlowKeys("np1", "ns1", v1beta2.K8sNetworkPolicy)))
 	require.Nil(t, err)
 }
 
@@ -741,11 +741,11 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges2)
 	require.Nil(t, err)
 
-	assert.Equal(t, 0, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 0, len(c.GetNetworkPolicyFlowKeys("np1", "ns1", v1beta2.K8sNetworkPolicy)))
 	err = c.InstallPolicyRuleFlows(rule2)
 	require.Nil(t, err)
 	checkConjunctionConfig(t, ruleID2, 2, 3, 1, 0)
-	assert.Equal(t, 9, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 9, len(c.GetNetworkPolicyFlowKeys("np1", "ns1", v1beta2.K8sNetworkPolicy)))
 
 	ruleID3 := uint32(103)
 	port1 := intstr.FromInt(8080)
@@ -788,7 +788,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	err = c.InstallPolicyRuleFlows(rule3)
 	require.Nil(t, err, "Failed to invoke InstallPolicyRuleFlows")
 	checkConjunctionConfig(t, ruleID3, 2, 2, 1, 4)
-	assert.Equal(t, 20, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 20, len(c.GetNetworkPolicyFlowKeys("np1", "ns1", v1beta2.K8sNetworkPolicy)))
 
 	ctxChanges4 := conj.calculateChangesForRuleDeletion()
 	matchFlows4, dropFlows4 := getChangedFlows(ctxChanges4)
@@ -805,7 +805,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	assert.Equal(t, 3, getChangedFlowOPCount(matchFlows5, deletion))
 	assert.Equal(t, 1, getChangedFlowOPCount(matchFlows5, modification))
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges5)
-	assert.Equal(t, 15, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 15, len(c.GetNetworkPolicyFlowKeys("np1", "ns1", v1beta2.K8sNetworkPolicy)))
 	require.Nil(t, err)
 }
 
