@@ -1,5 +1,5 @@
 ---
-# Source: crds/antreaagentinfo.yaml
+# Source: antrea/crds/antreaagentinfo.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -152,7 +152,7 @@ spec:
       - aai
 
 ---
-# Source: crds/antreacontrollerinfo.yaml
+# Source: antrea/crds/antreacontrollerinfo.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -301,7 +301,7 @@ spec:
       - aci
 
 ---
-# Source: crds/bgppolicy.yaml
+# Source: antrea/crds/bgppolicy.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -430,7 +430,7 @@ spec:
     kind: BGPPolicy
 
 ---
-# Source: crds/clustergroup.yaml
+# Source: antrea/crds/clustergroup.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -575,7 +575,7 @@ spec:
       - cg
 
 ---
-# Source: crds/clusternetworkpolicy.yaml
+# Source: antrea/crds/clusternetworkpolicy.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1361,7 +1361,7 @@ spec:
       - acnp
 
 ---
-# Source: crds/egress.yaml
+# Source: antrea/crds/egress.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1527,7 +1527,7 @@ spec:
       - eg
 
 ---
-# Source: crds/externalentity.yaml
+# Source: antrea/crds/externalentity.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1582,7 +1582,7 @@ spec:
       - ee
 
 ---
-# Source: crds/externalippool.yaml
+# Source: antrea/crds/externalippool.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1710,7 +1710,7 @@ spec:
       - eip
 
 ---
-# Source: crds/externalnode.yaml
+# Source: antrea/crds/externalnode.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1762,7 +1762,7 @@ spec:
       - en
 
 ---
-# Source: crds/group.yaml
+# Source: antrea/crds/group.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1893,7 +1893,7 @@ spec:
       - grp
 
 ---
-# Source: crds/ippool.yaml
+# Source: antrea/crds/ippool.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2153,7 +2153,7 @@ spec:
       - ipp
 
 ---
-# Source: crds/networkpolicy.yaml
+# Source: antrea/crds/networkpolicy.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2816,7 +2816,7 @@ spec:
       - anp
 
 ---
-# Source: crds/nodelatencymonitor.yaml
+# Source: antrea/crds/nodelatencymonitor.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2867,7 +2867,7 @@ spec:
       - nlm
 
 ---
-# Source: crds/supportbundlecollection.yaml
+# Source: antrea/crds/supportbundlecollection.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3016,7 +3016,7 @@ spec:
       - sbc
 
 ---
-# Source: crds/tier.yaml
+# Source: antrea/crds/tier.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3061,7 +3061,7 @@ spec:
       - tr
 
 ---
-# Source: crds/traceflow.yaml
+# Source: antrea/crds/traceflow.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3371,7 +3371,7 @@ spec:
       - tf
 
 ---
-# Source: crds/trafficcontrol.yaml
+# Source: antrea/crds/trafficcontrol.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
