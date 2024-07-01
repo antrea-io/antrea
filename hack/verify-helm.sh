@@ -18,7 +18,7 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 _BINDIR="$THIS_DIR/.bin"
 # Must be an exact match, as the generated YAMLs may not be consistent across
 # versions
-_HELM_VERSION="v3.8.1"
+_HELM_VERSION="v3.15.2"
 
 # Ensure the helm tool exists and is the correct version, or install it
 verify_helm() {
