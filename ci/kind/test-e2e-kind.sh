@@ -234,7 +234,7 @@ if $flow_visibility; then
     manifest_args="$manifest_args --feature-gates FlowExporter=true,L7FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
 fi
 
-COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.29" \
+COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
                     "antrea/nginx:1.21.6-alpine" \
                     "antrea/toolbox:1.3-0")
 
