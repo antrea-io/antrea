@@ -38,6 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/controller/bgp"
 	"antrea.io/antrea/pkg/agent/controller/egress"
 	"antrea.io/antrea/pkg/agent/controller/ipseccertificate"
 	"antrea.io/antrea/pkg/agent/controller/l7flowexporter"
@@ -740,6 +741,24 @@ func run(o *Options) error {
 			&o.config.SecondaryNetwork, ovsdbConnection); err != nil {
 			return fmt.Errorf("failed to initialize secondary network: %v", err)
 		}
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.BGPPolicy) {
+		bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
+		bgpController, err := bgp.NewBGPPolicyController(ctx,
+			nodeInformer,
+			serviceInformer,
+			egressInformer,
+			bgpPolicyInformer,
+			endpointSliceInformer,
+			k8sClient,
+			o.config.BGPPolicy.SecretName,
+			nodeConfig,
+			networkConfig)
+		if err != nil {
+			return err
+		}
+		go bgpController.Run(stopCh)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.TrafficControl) {

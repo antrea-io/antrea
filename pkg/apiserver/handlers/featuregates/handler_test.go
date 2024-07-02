@@ -55,6 +55,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
+				{Component: "agent", Name: "BGPPolicy", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "CleanupStaleUDPSvcConntrack", Status: cleanupStaleUDPSvcConntrackStatus, Version: "BETA"},
 				{Component: "agent", Name: "Egress", Status: egressStatus, Version: "BETA"},
 				{Component: "agent", Name: "EgressSeparateSubnet", Status: "Disabled", Version: "ALPHA"},
@@ -105,6 +106,7 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 			want: []apis.FeatureGateResponse{
 				{Component: "agent-windows", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent-windows", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
+				{Component: "agent-windows", Name: "BGPPolicy", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent-windows", Name: "EndpointSlice", Status: "Enabled", Version: "GA"},
 				{Component: "agent-windows", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent-windows", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},

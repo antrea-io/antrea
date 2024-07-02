@@ -61,6 +61,7 @@ const (
 	defaultAuditLogsMaxAge         = 28
 	defaultAuditLogsCompressed     = true
 	defaultPacketInRate            = 500
+	defaultBGPPolicySecretName     = "antrea-bgp-passwords" //nolint
 )
 
 var defaultIGMPQueryVersions = []int{1, 2, 3}
@@ -492,6 +493,11 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		if o.config.Egress.MaxEgressIPsPerNode == 0 {
 			o.config.Egress.MaxEgressIPsPerNode = defaultMaxEgressIPsPerNode
+		}
+	}
+	if features.DefaultFeatureGate.Enabled(features.BGPPolicy) {
+		if o.config.BGPPolicy.SecretName == "" {
+			o.config.BGPPolicy.SecretName = defaultBGPPolicySecretName
 		}
 	}
 }

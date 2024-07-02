@@ -207,6 +207,10 @@ secondaryNetwork:
   # [{bridgeName: "br1", physicalInterfaces: ["eth1"]}]
   ovsBridges: []
 
+bgpPolicy:
+  # -- The name of the Secret storing the passwords of BGP peers.
+  secretName: "antrea-bgp-passwords"
+
 agent:
   # -- Port for the antrea-agent APIServer to serve on.
   apiPort: 10350

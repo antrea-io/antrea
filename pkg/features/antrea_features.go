@@ -163,6 +163,10 @@ const (
 	// alpha: v2.1
 	// Enable the NodeLatencyMonitor feature.
 	NodeLatencyMonitor featuregate.Feature = "NodeLatencyMonitor"
+
+	// alpha: v2.1
+	// Allow users to advertise Service IPs, Pod IPs, and Egress IPs to external BGP peers.
+	BGPPolicy featuregate.Feature = "BGPPolicy"
 )
 
 var (
@@ -179,6 +183,7 @@ var (
 	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:                {Default: true, PreRelease: featuregate.Beta},
 		AntreaProxy:                 {Default: true, PreRelease: featuregate.GA},
+		BGPPolicy:                   {Default: false, PreRelease: featuregate.Alpha},
 		Egress:                      {Default: true, PreRelease: featuregate.Beta},
 		EndpointSlice:               {Default: true, PreRelease: featuregate.GA},
 		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
@@ -213,6 +218,7 @@ var (
 		AntreaIPAM,
 		AntreaPolicy,
 		AntreaProxy,
+		BGPPolicy,
 		CleanupStaleUDPSvcConntrack,
 		Egress,
 		EndpointSlice,

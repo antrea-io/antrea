@@ -197,6 +197,8 @@ type AgentConfig struct {
 	// second(pps) and the burst size will be automatically set to twice the rate.
 	// When the rate and burst size are exceeded, new packets will be dropped.
 	PacketInRate int `yaml:"packetInRate,omitempty"`
+	// BGPPolicy related configurations.
+	BGPPolicy BGPPolicyConfig `yaml:"bgpPolicy,omitempty"`
 }
 
 type AntreaProxyConfig struct {
@@ -391,4 +393,9 @@ type OVSBridgeConfig struct {
 	BridgeName string `yaml:"bridgeName"`
 	// Names of physical interfaces to be connected to the bridge.
 	PhysicalInterfaces []string `yaml:"physicalInterfaces,omitempty"`
+}
+
+type BGPPolicyConfig struct {
+	// Name of the Secret storing passwords of BGP peers.
+	SecretName string `yaml:"secretName,omitempty"`
 }

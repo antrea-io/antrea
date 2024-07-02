@@ -31,7 +31,7 @@ edit the Agent configuration in the
 ## List of Available Features
 
 | Feature Name                  | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes                                         |
-| ----------------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | --------------------------------------------- |
+|-------------------------------| ------------------ | ------- | ----- |---------------| ------------ | ---------- |--------------------| --------------------------------------------- |
 | `AntreaProxy`                 | Agent              | `true`  | GA    | v0.8          | v0.11        | v1.14      | Yes                | Must be enabled for Windows.                  |
 | `EndpointSlice`               | Agent              | `true`  | GA    | v0.13.0       | v1.11        | v1.14      | Yes                |                                               |
 | `TopologyAwareHints`          | Agent              | `true`  | Beta  | v1.8          | v1.12        | N/A        | Yes                |                                               |
@@ -59,6 +59,7 @@ edit the Agent configuration in the
 | `EgressSeparateSubnet`        | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | No                 |                                               |
 | `NodeNetworkPolicy`           | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
 | `L7FlowExporter`              | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
+| `BGPPolicy`                   | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
 
 ## Description and Requirements of Features
 
@@ -438,3 +439,7 @@ Refer to this [document](network-flow-visibility.md#l7-visibility) for more info
 #### Requirements for this Feature
 
 - Linux Nodes only.
+
+### BGPPolicy
+
+`BGPPolicy` allows users to advertise Service IPs, Pod IPs, and Egress IPs to external BGP peers.
