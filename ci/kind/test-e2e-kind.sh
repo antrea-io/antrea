@@ -28,6 +28,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
         --run                         Run only tests matching the regexp.
         --proxy-all                   Enables Antrea proxy with all Service support.
+        --no-kube-proxy               Don't deploy kube-proxy.
         --load-balancer-mode          LoadBalancer mode.
         --node-ipam                   Enables Antrea NodeIPAM.
         --multicast                   Enables Multicast.
@@ -72,6 +73,7 @@ mode=""
 ipfamily="v4"
 feature_gates=""
 proxy_all=false
+no_kube_proxy=false
 load_balancer_mode=""
 node_ipam=false
 multicast=false
@@ -104,6 +106,10 @@ case $key in
     ;;
     --proxy-all)
     proxy_all=true
+    shift
+    ;;
+    --no-kube-proxy)
+    no_kube_proxy=true
     shift
     ;;
     --load-balancer-mode)
@@ -299,7 +305,7 @@ function setup_cluster {
     echoerr "invalid value for --ip-family \"$ipfamily\", expected \"v4\" or \"v6\""
     exit 1
   fi
-  if $proxy_all; then
+  if $no_kube_proxy; then
     args="$args --no-kube-proxy"
   fi
   if $node_ipam; then
@@ -353,7 +359,7 @@ function run_test {
       cat $CH_OPERATOR_YML | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
   fi
 
-  if $proxy_all; then
+  if $no_kube_proxy; then
       apiserver=$(docker exec -i kind-control-plane kubectl get endpoints kubernetes --no-headers | awk '{print $2}')
       if $coverage; then
         docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*[#]?kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea-coverage.yml /root/antrea-ipsec-coverage.yml

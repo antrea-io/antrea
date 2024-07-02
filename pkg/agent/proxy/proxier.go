@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	discoveryinformers "k8s.io/client-go/informers/discovery/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -121,13 +120,6 @@ type proxier struct {
 	serviceHealthServer healthcheck.ServiceHealthServer
 	numLocalEndpoints   map[apimachinerytypes.NamespacedName]int
 
-	// serviceIPRouteReferences tracks the references of Service IP routes. The key is the Service IP and the value is
-	// the set of ServiceInfo strings. Because a Service could have multiple ports and each port will generate a
-	// ServicePort (which is the unit of the processing), a Service IP route may be required by several ServicePorts.
-	// With the references, we install a route exactly once as long as it's used by any ServicePorts and uninstall it
-	// exactly once when it's no longer used by any ServicePorts.
-	// It applies to ClusterIP and LoadBalancerIP.
-	serviceIPRouteReferences map[string]sets.Set[string]
 	// syncedOnce returns true if the proxier has synced rules at least once.
 	syncedOnce      bool
 	syncedOnceMutex sync.RWMutex
@@ -338,10 +330,7 @@ func (p *proxier) removeStaleServiceConntrackEntries(svcPortName k8sproxy.Servic
 	svcPort := uint16(svcInfo.Port())
 	nodePort := uint16(svcInfo.NodePort())
 	svcProto := svcInfo.OFProtocol
-	virtualNodePortDNATIP := agentconfig.VirtualNodePortDNATIPv4
-	if p.isIPv6 {
-		virtualNodePortDNATIP = agentconfig.VirtualNodePortDNATIPv6
-	}
+	virtualNodePortDNATIP := virtualNodePortDNATIP(p.isIPv6)
 
 	svcIPToPort := make(map[string]uint16)
 	svcIPToPort[svcInfo.ClusterIP().String()] = svcPort
@@ -384,10 +373,7 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 	externalIPStrings := svcInfo.ExternalIPStrings()
 	pLoadBalancerIPStrings := pSvcInfo.LoadBalancerIPStrings()
 	loadBalancerIPStrings := svcInfo.LoadBalancerIPStrings()
-	virtualNodePortDNATIP := agentconfig.VirtualNodePortDNATIPv4
-	if p.isIPv6 {
-		virtualNodePortDNATIP = agentconfig.VirtualNodePortDNATIPv6
-	}
+	virtualNodePortDNATIP := virtualNodePortDNATIP(p.isIPv6)
 	var svcPortChanged, svcNodePortChanged bool
 
 	staleSvcIPToPort := make(map[string]uint16)
@@ -552,12 +538,8 @@ func (p *proxier) installNodePortService(localGroupID, clusterGroupID binding.Gr
 	if svcPort == 0 {
 		return nil
 	}
-	svcIP := agentconfig.VirtualNodePortDNATIPv4
-	if p.isIPv6 {
-		svcIP = agentconfig.VirtualNodePortDNATIPv6
-	}
 	if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
-		ServiceIP:          svcIP,
+		ServiceIP:          virtualNodePortDNATIP(p.isIPv6),
 		ServicePort:        svcPort,
 		Protocol:           protocol,
 		TrafficPolicyLocal: trafficPolicyLocal,
@@ -569,10 +551,10 @@ func (p *proxier) installNodePortService(localGroupID, clusterGroupID binding.Gr
 		IsNested:           false, // Unsupported for NodePort
 		IsDSR:              false, // Unsupported because external traffic has been DNAT'd in host network before it's forwarded to OVS.
 	}); err != nil {
-		return fmt.Errorf("failed to install NodePort load balancing flows: %w", err)
+		return fmt.Errorf("failed to install NodePort load balancing OVS flows: %w", err)
 	}
-	if err := p.routeClient.AddNodePort(p.nodePortAddresses, svcPort, protocol); err != nil {
-		return fmt.Errorf("failed to install NodePort traffic redirecting rules: %w", err)
+	if err := p.routeClient.AddNodePortConfigs(p.nodePortAddresses, svcPort, protocol); err != nil {
+		return fmt.Errorf("failed to install NodePort traffic redirecting routing configurations: %w", err)
 	}
 	return nil
 }
@@ -581,15 +563,11 @@ func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Prot
 	if svcPort == 0 {
 		return nil
 	}
-	svcIP := agentconfig.VirtualNodePortDNATIPv4
-	if p.isIPv6 {
-		svcIP = agentconfig.VirtualNodePortDNATIPv6
-	}
-	if err := p.ofClient.UninstallServiceFlows(svcIP, svcPort, protocol); err != nil {
+	if err := p.ofClient.UninstallServiceFlows(virtualNodePortDNATIP(p.isIPv6), svcPort, protocol); err != nil {
 		return fmt.Errorf("failed to remove NodePort load balancing flows: %w", err)
 	}
-	if err := p.routeClient.DeleteNodePort(p.nodePortAddresses, svcPort, protocol); err != nil {
-		return fmt.Errorf("failed to remove NodePort traffic redirecting rules: %w", err)
+	if err := p.routeClient.DeleteNodePortConfigs(p.nodePortAddresses, svcPort, protocol); err != nil {
+		return fmt.Errorf("failed to remove NodePort traffic redirecting routing configurations: %w", err)
 	}
 	return nil
 }
@@ -603,6 +581,7 @@ func (p *proxier) installExternalIPService(svcInfoStr string,
 	trafficPolicyLocal bool,
 	affinityTimeout uint16,
 	loadBalancerMode agentconfig.LoadBalancerMode) error {
+	isDSR := features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR
 	for _, externalIP := range externalIPStrings {
 		ip := net.ParseIP(externalIP)
 		if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
@@ -616,25 +595,28 @@ func (p *proxier) installExternalIPService(svcInfoStr string,
 			IsExternal:         true,
 			IsNodePort:         false,
 			IsNested:           false, // Unsupported for ExternalIP
-			IsDSR:              features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
+			IsDSR:              isDSR,
 		}); err != nil {
-			return fmt.Errorf("failed to install ExternalIP load balancing flows: %w", err)
+			return fmt.Errorf("failed to install ExternalIP load balancing OVS flows: %w", err)
 		}
-		if err := p.addRouteForServiceIP(svcInfoStr, ip, p.routeClient.AddExternalIPRoute); err != nil {
-			return fmt.Errorf("failed to install ExternalIP traffic redirecting routes: %w", err)
+		if err := p.routeClient.AddExternalIPConfigs(svcInfoStr, ip); err != nil {
+			return fmt.Errorf("failed to install ExternalIP load balancing routing configurations: %w", err)
 		}
 	}
 	return nil
 }
 
-func (p *proxier) uninstallExternalIPService(svcInfoStr string, externalIPStrings []string, svcPort uint16, protocol binding.Protocol) error {
+func (p *proxier) uninstallExternalIPService(svcInfoStr string,
+	externalIPStrings []string,
+	svcPort uint16,
+	protocol binding.Protocol) error {
 	for _, externalIP := range externalIPStrings {
 		ip := net.ParseIP(externalIP)
 		if err := p.ofClient.UninstallServiceFlows(ip, svcPort, protocol); err != nil {
-			return fmt.Errorf("failed to remove ExternalIP load balancing flows: %w", err)
+			return fmt.Errorf("failed to remove ExternalIP load balancing OVS flows: %w", err)
 		}
-		if err := p.deleteRouteForServiceIP(svcInfoStr, ip, p.routeClient.DeleteExternalIPRoute); err != nil {
-			return fmt.Errorf("failed to remove ExternalIP traffic redirecting routes: %w", err)
+		if err := p.routeClient.DeleteExternalIPConfigs(svcInfoStr, ip); err != nil {
+			return fmt.Errorf("failed to remove ExternalIP traffic redirecting routing configurations: %w", err)
 		}
 	}
 	return nil
@@ -649,6 +631,7 @@ func (p *proxier) installLoadBalancerService(svcInfoStr string,
 	trafficPolicyLocal bool,
 	affinityTimeout uint16,
 	loadBalancerMode agentconfig.LoadBalancerMode) error {
+	isDSR := features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR
 	for _, ingress := range loadBalancerIPStrings {
 		if ingress != "" {
 			ip := net.ParseIP(ingress)
@@ -663,33 +646,16 @@ func (p *proxier) installLoadBalancerService(svcInfoStr string,
 				IsExternal:         true,
 				IsNodePort:         false,
 				IsNested:           false, // Unsupported for LoadBalancerIP
-				IsDSR:              features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
+				IsDSR:              isDSR,
 			}); err != nil {
-				return fmt.Errorf("failed to install LoadBalancer load balancing flows: %w", err)
+				return fmt.Errorf("failed to install LoadBalancerIP load balancing OVS flows: %w", err)
 			}
 			if p.proxyAll {
-				if err := p.addRouteForServiceIP(svcInfoStr, ip, p.routeClient.AddExternalIPRoute); err != nil {
-					return fmt.Errorf("failed to install LoadBalancer traffic redirecting routes: %w", err)
+				if err := p.routeClient.AddExternalIPConfigs(svcInfoStr, ip); err != nil {
+					return fmt.Errorf("failed to install LoadBalancerIP traffic redirecting routing configurations: %w", err)
 				}
 			}
 		}
-	}
-	return nil
-}
-
-func (p *proxier) addRouteForServiceIP(svcInfoStr string, ip net.IP, addRouteFn func(net.IP) error) error {
-	ipStr := ip.String()
-	references, exists := p.serviceIPRouteReferences[ipStr]
-	// If the IP was not referenced by any Service port, install a route for it.
-	// Otherwise, just reference it.
-	if !exists {
-		if err := addRouteFn(ip); err != nil {
-			return err
-		}
-		references = sets.New[string](svcInfoStr)
-		p.serviceIPRouteReferences[ipStr] = references
-	} else {
-		references.Insert(svcInfoStr)
 	}
 	return nil
 }
@@ -699,32 +665,13 @@ func (p *proxier) uninstallLoadBalancerService(svcInfoStr string, loadBalancerIP
 		if ingress != "" {
 			ip := net.ParseIP(ingress)
 			if err := p.ofClient.UninstallServiceFlows(ip, svcPort, protocol); err != nil {
-				return fmt.Errorf("failed to remove LoadBalancer load balancing flows: %w", err)
+				return fmt.Errorf("failed to remove LoadBalancerIP load balancing OVS flows: %w", err)
 			}
 			if p.proxyAll {
-				if err := p.deleteRouteForServiceIP(svcInfoStr, ip, p.routeClient.DeleteExternalIPRoute); err != nil {
-					return fmt.Errorf("failed to remove LoadBalancer traffic redirecting routes: %w", err)
+				if err := p.routeClient.DeleteExternalIPConfigs(svcInfoStr, ip); err != nil {
+					return fmt.Errorf("failed to remove LoadBalancerIP traffic redirecting routing configurations: %w", err)
 				}
 			}
-		}
-	}
-	return nil
-}
-
-func (p *proxier) deleteRouteForServiceIP(svcInfoStr string, ip net.IP, deleteRouteFn func(net.IP) error) error {
-	ipStr := ip.String()
-	references, exists := p.serviceIPRouteReferences[ipStr]
-	// If the IP was not referenced by this Service port, skip it.
-	if exists && references.Has(svcInfoStr) {
-		// Delete the IP only if this Service port is the last one referencing it.
-		// Otherwise, just dereference it.
-		if references.Len() == 1 {
-			if err := deleteRouteFn(ip); err != nil {
-				return err
-			}
-			delete(p.serviceIPRouteReferences, ipStr)
-		} else {
-			references.Delete(svcInfoStr)
 		}
 	}
 	return nil
@@ -1392,6 +1339,7 @@ func newProxier(
 	nodeIPChecker nodeip.Checker,
 	nodePortAddresses []net.IP,
 	proxyAllEnabled bool,
+	isKubeAPIServerOverridden bool,
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
 	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
@@ -1422,7 +1370,13 @@ func newProxier(
 	}
 
 	var serviceHealthServer healthcheck.ServiceHealthServer
-	if proxyAllEnabled {
+	if proxyAllEnabled && isKubeAPIServerOverridden {
+		// The serviceHealthServer of AntreaProxy should be initialized only when kube-proxy is removed. If kube-proxy
+		// is present, it also provides the serviceHealthServer functionality, and both servers would attempt to start
+		// one HTTP service on the same port in a K8s Node, causing conflicts. The option  `kubeAPIServerOverride`
+		// in antrea-agent is used to determine if the serviceHealthServer of AntreaProxy should be initialized. The
+		// option must be set if kube-proxy is removed, though it can also be set when kube-proxy is present (not
+		// recommended and unnecessary). We assume this option is set only when kube-proxy is removed.
 		nodePortAddressesString := make([]string, len(nodePortAddresses))
 		for i, address := range nodePortAddresses {
 			nodePortAddressesString[i] = address.String()
@@ -1454,7 +1408,6 @@ func newProxier(
 		endpointsInstalledMap:       types.EndpointsMap{},
 		endpointsMap:                types.EndpointsMap{},
 		endpointReferenceCounter:    map[string]int{},
-		serviceIPRouteReferences:    map[string]sets.Set[string]{},
 		nodeLabels:                  map[string]string{},
 		serviceStringMap:            map[string]k8sproxy.ServicePortName{},
 		groupCounter:                groupCounter,
@@ -1533,6 +1486,7 @@ func newDualStackProxier(
 	nodePortAddressesIPv4 []net.IP,
 	nodePortAddressesIPv6 []net.IP,
 	proxyAllEnabled bool,
+	isKubeAPIServerOverridden bool,
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
 	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
@@ -1554,6 +1508,7 @@ func newDualStackProxier(
 		nodeIPChecker,
 		nodePortAddressesIPv4,
 		proxyAllEnabled,
+		isKubeAPIServerOverridden,
 		skipServices,
 		proxyLoadBalancerIPs,
 		defaultLoadBalancerMode,
@@ -1576,6 +1531,7 @@ func newDualStackProxier(
 		nodeIPChecker,
 		nodePortAddressesIPv6,
 		proxyAllEnabled,
+		isKubeAPIServerOverridden,
 		skipServices,
 		proxyLoadBalancerIPs,
 		defaultLoadBalancerMode,
@@ -1608,6 +1564,7 @@ func NewProxier(hostname string,
 	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
 	v4GroupCounter types.GroupCounter,
 	v6GroupCounter types.GroupCounter,
+	isKubeAPIServerOverridden bool,
 	nestedServiceSupport bool) (Proxier, error) {
 	proxyAllEnabled := proxyConfig.ProxyAll
 	skipServices := proxyConfig.SkipServices
@@ -1631,6 +1588,7 @@ func NewProxier(hostname string,
 			nodePortAddressesIPv4,
 			nodePortAddressesIPv6,
 			proxyAllEnabled,
+			isKubeAPIServerOverridden,
 			skipServices,
 			proxyLoadBalancerIPs,
 			defaultLoadBalancerMode,
@@ -1654,6 +1612,7 @@ func NewProxier(hostname string,
 			nodeIPChecker,
 			nodePortAddressesIPv4,
 			proxyAllEnabled,
+			isKubeAPIServerOverridden,
 			skipServices,
 			proxyLoadBalancerIPs,
 			defaultLoadBalancerMode,
@@ -1676,6 +1635,7 @@ func NewProxier(hostname string,
 			nodeIPChecker,
 			nodePortAddressesIPv6,
 			proxyAllEnabled,
+			isKubeAPIServerOverridden,
 			skipServices,
 			proxyLoadBalancerIPs,
 			defaultLoadBalancerMode,
@@ -1693,4 +1653,11 @@ func NewProxier(hostname string,
 
 func needClearConntrackEntries(protocol binding.Protocol) bool {
 	return protocol == binding.ProtocolUDP || protocol == binding.ProtocolUDPv6
+}
+
+func virtualNodePortDNATIP(isIPv6 bool) net.IP {
+	if isIPv6 {
+		return agentconfig.VirtualNodePortDNATIPv6
+	}
+	return agentconfig.VirtualNodePortDNATIPv4
 }

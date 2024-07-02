@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -141,6 +142,33 @@ func TestProxyLoadBalancerServiceIPv6(t *testing.T) {
 	testProxyLoadBalancerService(t, true)
 }
 
+func getExpectedHealthOutputTmpl(data *TestData) (string, error) {
+	_, err := data.clientset.AppsV1().DaemonSets(kubeNamespace).Get(context.TODO(), "kube-proxy", metav1.GetOptions{})
+	if err == nil {
+		// When kube-proxy is present, healthServer in kube-proxy will be initialized.
+		return fmt.Sprintf(`{
+	"service": {
+		"namespace": "%s",
+		"name": "agnhost-local"
+	},
+	"localEndpoints": 1,
+    "serviceProxyHealthy": true
+}`, data.testNamespace), nil
+	} else if apierrors.IsNotFound(err) {
+		// When kube-proxy is removed, healthServer in AntreaProxy will be initialized, and field `serviceProxyHealthy`
+		// is not supported yet in AntreaProxy healthServer.
+		return fmt.Sprintf(`{
+	"service": {
+		"namespace": "%s",
+		"name": "agnhost-local"
+	},
+	"localEndpoints": 1
+}`, data.testNamespace), nil
+	} else {
+		return "", err
+	}
+}
+
 func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
@@ -185,14 +213,9 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	for _, nodeIP := range nodeIPs {
 		healthUrls = append(healthUrls, net.JoinHostPort(nodeIP, healthPort))
 	}
-	healthOutputTmpl := `{
-	"service": {
-		"namespace": "%s",
-		"name": "agnhost-local"
-	},
-	"localEndpoints": 1
-}`
-	healthExpected := fmt.Sprintf(healthOutputTmpl, data.testNamespace)
+
+	healthExpected, err := getExpectedHealthOutputTmpl(data)
+	require.NoError(t, err)
 
 	port := "8080"
 	clusterUrl := net.JoinHostPort(clusterIngressIP[0], port)

@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/config"
 	servicecidrtesting "antrea.io/antrea/pkg/agent/servicecidr/testing"
@@ -260,17 +261,17 @@ func TestDeleteRoutes(t *testing.T) {
 	assert.NoError(t, c.DeleteRoutes(podCIDR))
 }
 
-func TestAddNodePort(t *testing.T) {
+func TestAddNodePortConf(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
 	c := &Client{
 		winnet: mockWinnet,
 	}
 	mockWinnet.EXPECT().ReplaceNetNatStaticMapping(nodePortNetNatStaticMapping)
-	assert.NoError(t, c.AddNodePort(nil, nodePort, protocol))
+	assert.NoError(t, c.AddNodePortConfigs(nil, nodePort, protocol))
 }
 
-func TestDeleteNodePort(t *testing.T) {
+func TestDeleteNodePortConf(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
 	c := &Client{
@@ -278,7 +279,7 @@ func TestDeleteNodePort(t *testing.T) {
 	}
 	c.netNatStaticMappings.Store(fmt.Sprintf("%d-%s", nodePort, protocol), nodePortNetNatStaticMapping)
 	mockWinnet.EXPECT().RemoveNetNatStaticMapping(nodePortNetNatStaticMapping)
-	assert.NoError(t, c.DeleteNodePort(nil, nodePort, protocol))
+	assert.NoError(t, c.DeleteNodePortConfigs(nil, nodePort, protocol))
 }
 
 func TestAddServiceCIDRRoute(t *testing.T) {
@@ -399,13 +400,22 @@ func TestAddServiceCIDRRoute(t *testing.T) {
 	}
 }
 
-func TestAddExternalIPRoute(t *testing.T) {
-	externalIPs := []string{externalIPv4Addr1, externalIPv4Addr2}
+func TestAddExternalIPConfigs(t *testing.T) {
+	svcToExternalIPs := map[string][]string{
+		"svc1": {externalIPv4Addr1},
+		"svc2": {externalIPv4Addr2},
+		"svc3": {externalIPv4Addr1, externalIPv4Addr2},
+	}
+	expectedServiceExternalIPReferences := map[string]sets.Set[string]{
+		externalIPv4Addr1: sets.New[string]("svc1", "svc3"),
+		externalIPv4Addr2: sets.New[string]("svc2", "svc3"),
+	}
 
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
 	c := &Client{
-		winnet: mockWinnet,
+		winnet:                      mockWinnet,
+		serviceExternalIPReferences: make(map[string]sets.Set[string]),
 		nodeConfig: &config.NodeConfig{
 			GatewayConfig: &config.GatewayConfig{
 				LinkIndex: 10,
@@ -415,18 +425,29 @@ func TestAddExternalIPRoute(t *testing.T) {
 	mockWinnet.EXPECT().ReplaceNetRoute(ipv4Route1)
 	mockWinnet.EXPECT().ReplaceNetRoute(ipv4Route2)
 
-	for _, externalIP := range externalIPs {
-		assert.NoError(t, c.AddExternalIPRoute(net.ParseIP(externalIP)))
+	for svcInfo, externalIPs := range svcToExternalIPs {
+		for _, externalIP := range externalIPs {
+			assert.NoError(t, c.AddExternalIPConfigs(svcInfo, net.ParseIP(externalIP)))
+		}
 	}
+	assert.Equal(t, expectedServiceExternalIPReferences, c.serviceExternalIPReferences)
 }
 
-func TestDeleteExternalIPRoute(t *testing.T) {
-	externalIPs := []string{externalIPv4Addr1, externalIPv4Addr2}
+func TestDeleteExternalIPConfigs(t *testing.T) {
+	svcToExternalIPs := map[string][]string{
+		"svc1": {externalIPv4Addr1},
+		"svc2": {externalIPv4Addr2},
+		"svc3": {externalIPv4Addr1, externalIPv4Addr2},
+	}
 
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
 	c := &Client{
 		winnet: mockWinnet,
+		serviceExternalIPReferences: map[string]sets.Set[string]{
+			externalIPv4Addr1: sets.New[string]("svc1", "svc3"),
+			externalIPv4Addr2: sets.New[string]("svc2", "svc3"),
+		},
 	}
 	for ipStr, route := range map[string]*winnet.Route{externalIPv4Addr1: ipv4Route1, externalIPv4Addr2: ipv4Route2} {
 		c.serviceRoutes.Store(ipStr, route)
@@ -434,8 +455,10 @@ func TestDeleteExternalIPRoute(t *testing.T) {
 
 	mockWinnet.EXPECT().RemoveNetRoute(ipv4Route1)
 	mockWinnet.EXPECT().RemoveNetRoute(ipv4Route2)
-
-	for _, externalIP := range externalIPs {
-		assert.NoError(t, c.DeleteExternalIPRoute(net.ParseIP(externalIP)))
+	for svcInfo, externalIPs := range svcToExternalIPs {
+		for _, externalIP := range externalIPs {
+			assert.NoError(t, c.DeleteExternalIPConfigs(svcInfo, net.ParseIP(externalIP)))
+		}
 	}
+	assert.Equal(t, make(map[string]sets.Set[string]), c.serviceExternalIPReferences)
 }
