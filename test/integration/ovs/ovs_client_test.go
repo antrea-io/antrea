@@ -254,51 +254,79 @@ func TestOVSOtherConfig(t *testing.T) {
 	data.setup(t)
 	defer data.teardown(t)
 
-	otherConfigs := map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar1"}
-	err := data.br.AddOVSOtherConfig(otherConfigs)
-	require.Nil(t, err, "Error when adding OVS other_config")
+	convertOtherConfig := func(from map[string]string) map[string]interface{} {
+		to := make(map[string]interface{})
+		for k, v := range from {
+			to[k] = v
+		}
+		return to
+	}
 
+	// First, ensure that we save existing other_config and delete them, to start from an empty map.
+	// We will restore the saved other_config at the end of the test
 	gotOtherConfigs, err := data.br.GetOVSOtherConfig()
-	require.Nil(t, err, "Error when getting OVS other_config")
+	require.NoError(t, err)
+	savedOtherConfigs := convertOtherConfig(gotOtherConfigs)
+	require.NoError(t, data.br.DeleteOVSOtherConfig(savedOtherConfigs))
+	restoreOtherConfigs := func() error {
+		otherConfigs, err := data.br.GetOVSOtherConfig()
+		if err != nil {
+			return err
+		}
+		if err := data.br.DeleteOVSOtherConfig(convertOtherConfig(otherConfigs)); err != nil {
+			return err
+		}
+		return data.br.AddOVSOtherConfig(savedOtherConfigs)
+	}
+	defer func() {
+		require.NoError(t, restoreOtherConfigs(), "Error when restoring original OVS other_config, subsequent tests may fail")
+	}()
+
+	otherConfigs := map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar1"}
+	err = data.br.AddOVSOtherConfig(otherConfigs)
+	require.NoError(t, err, "Error when adding OVS other_config")
+
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.NoError(t, err, "Error when getting OVS other_config")
 	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1"}, gotOtherConfigs, "other_config mismatched")
 
 	// Expect only the new config "foo2: bar2" will be added.
 	err = data.br.AddOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "false", "foo2": "bar2"})
-	require.Nil(t, err, "Error when adding OVS other_config")
+	require.NoError(t, err, "Error when adding OVS other_config")
 
 	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
-	require.Nil(t, err, "Error when getting OVS other_config")
+	require.NoError(t, err, "Error when getting OVS other_config")
 	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
 
 	// Expect to modify existing values and insert new values
 	err = data.br.UpdateOVSOtherConfig(map[string]interface{}{"foo2": "bar3", "foo3": "bar2"})
-	require.Nil(t, err, "Error when updating OVS other_config")
+	require.NoError(t, err, "Error when updating OVS other_config")
 	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
-	require.Nil(t, err, "Error when getting OVS other_config")
+	require.NoError(t, err, "Error when getting OVS other_config")
 	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1", "foo2": "bar3", "foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
 
 	// Expect only the matched config "flow-restore-wait: true" will be deleted.
 	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar2", "foo2": "bar1"})
-	require.Nil(t, err, "Error when deleting OVS other_config")
+	require.NoError(t, err, "Error when deleting OVS other_config")
 
 	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
-	require.Nil(t, err, "Error when getting OVS other_config")
+	require.NoError(t, err, "Error when getting OVS other_config")
 	require.Equal(t, map[string]string{"foo1": "bar1", "foo2": "bar3", "foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
 
 	// Expect "foo1" will be deleted
 	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"foo1": "", "foo2": "bar4"})
-	require.Nil(t, err, "Error when deleting OVS other_config")
+	require.NoError(t, err, "Error when deleting OVS other_config")
 
 	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
-	require.Nil(t, err, "Error when getting OVS other_config")
+	require.NoError(t, err, "Error when getting OVS other_config")
 	require.Equal(t, map[string]string{"foo2": "bar3", "foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
 
 	// Expect "foo2" will be deleted
 	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"foo2": "", "foo4": ""})
-	require.Nil(t, err, "Error when deleting OVS other_config")
+	require.NoError(t, err, "Error when deleting OVS other_config")
 
 	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
-	require.Nil(t, err, "Error when getting OVS other_config")
+	require.NoError(t, err, "Error when getting OVS other_config")
 	require.Equal(t, map[string]string{"foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
 }
 
