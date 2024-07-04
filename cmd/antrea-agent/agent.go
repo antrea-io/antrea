@@ -731,14 +731,15 @@ func run(o *Options) error {
 		go ipamController.Run(stopCh)
 	}
 
+	var secondaryNetworkController *secondarynetwork.Controller
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-		defer secondarynetwork.RestoreHostInterfaceConfiguration(&o.config.SecondaryNetwork)
-		if err := secondarynetwork.Initialize(
+		secondaryNetworkController, err = secondarynetwork.NewController(
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
-			k8sClient, localPodInformer.Get(), nodeConfig.Name,
-			podUpdateChannel, stopCh,
-			&o.config.SecondaryNetwork, ovsdbConnection); err != nil {
-			return fmt.Errorf("failed to initialize secondary network: %v", err)
+			k8sClient, localPodInformer.Get(),
+			podUpdateChannel,
+			&o.config.SecondaryNetwork, ovsdbConnection)
+		if err != nil {
+			return fmt.Errorf("failed to create secondary network controller: %w", err)
 		}
 	}
 
@@ -863,6 +864,15 @@ func run(o *Options) error {
 		if err := agentInitializer.ConnectUplinkToOVSBridge(); err != nil {
 			return fmt.Errorf("failed to connect uplink to OVS bridge: %w", err)
 		}
+	}
+	// secondaryNetworkController Initialize must be run after FlowRestoreComplete for the case that Node
+	// IPs are moved to the secondary OVS bridge
+	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		defer secondaryNetworkController.Restore()
+		if err = secondaryNetworkController.Initialize(); err != nil {
+			return fmt.Errorf("failed to initialize secondary network: %v", err)
+		}
+		go secondaryNetworkController.Run(stopCh)
 	}
 
 	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for

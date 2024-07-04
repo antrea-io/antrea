@@ -587,7 +587,7 @@ func TestPodControllerAddPod(t *testing.T) {
 	podKey := podKeyGet(podName, testNamespace)
 
 	// Create Pod and wait for Informer cache updated.
-	createPodFn := func(pc *podController, pod *corev1.Pod) {
+	createPodFn := func(pc *PodController, pod *corev1.Pod) {
 		_, err := pc.kubeClient.CoreV1().Pods(testNamespace).Create(context.Background(),
 			pod, metav1.CreateOptions{})
 		require.NoError(t, err, "error when creating test Pod")
@@ -596,7 +596,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			return ok == true && err == nil
 		}, 1*time.Second, 10*time.Millisecond)
 	}
-	deletePodFn := func(pc *podController, podName string) {
+	deletePodFn := func(pc *PodController, podName string) {
 		require.NoError(t, pc.kubeClient.CoreV1().Pods(testNamespace).Delete(context.Background(),
 			podName, metav1.DeleteOptions{}), "error when deleting test Pod")
 		assert.Eventually(t, func() bool {
@@ -899,7 +899,7 @@ func TestPodControllerAddPod(t *testing.T) {
 }
 
 func testPodController(ctrl *gomock.Controller) (
-	*podController, *podwatchtesting.MockIPAMAllocator,
+	*PodController, *podwatchtesting.MockIPAMAllocator,
 	*podwatchtesting.MockInterfaceConfigurator) {
 	client := fake.NewSimpleClientset()
 	netdefclient := netdefclientfake.NewSimpleClientset().K8sCniCncfIoV1()
@@ -907,8 +907,8 @@ func testPodController(ctrl *gomock.Controller) (
 	interfaceConfigurator := podwatchtesting.NewMockInterfaceConfigurator(ctrl)
 	mockIPAM := podwatchtesting.NewMockIPAMAllocator(ctrl)
 
-	// podController without event handlers.
-	return &podController{
+	// PodController without event handlers.
+	return &PodController{
 		kubeClient:         client,
 		netAttachDefClient: netdefclient,
 		queue: workqueue.NewNamedRateLimitingQueue(
@@ -921,9 +921,9 @@ func testPodController(ctrl *gomock.Controller) (
 	}, mockIPAM, interfaceConfigurator
 }
 
-// Create a test podController and start informerFactory.
+// Create a test PodController and start informerFactory.
 func testPodControllerStart(ctrl *gomock.Controller) (
-	*podController, *podwatchtesting.MockIPAMAllocator,
+	*PodController, *podwatchtesting.MockIPAMAllocator,
 	*podwatchtesting.MockInterfaceConfigurator) {
 	podController, mockIPAM, interfaceConfigurator := testPodController(ctrl)
 	informerFactory := informers.NewSharedInformerFactory(podController.kubeClient, resyncPeriod)

@@ -17,30 +17,10 @@
 
 package secondarynetwork
 
-import (
-	"errors"
-
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
-	componentbaseconfig "k8s.io/component-base/config"
-
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/util/channel"
-)
-
-func Initialize(
-	clientConnectionConfig componentbaseconfig.ClientConnectionConfiguration,
-	kubeAPIServerOverride string,
-	k8sClient clientset.Interface,
-	podInformer cache.SharedIndexInformer,
-	nodeName string,
-	podUpdateSubscriber channel.Subscriber,
-	stopCh <-chan struct{},
-	secNetConfig *agentconfig.SecondaryNetworkConfig, ovsdb *ovsdb.OVSDB) error {
-	return errors.New("not supported on Windows")
+func (c *Controller) Initialize() error {
+	return nil
 }
 
-func RestoreHostInterfaceConfiguration(secNetConfig *agentconfig.SecondaryNetworkConfig) {
+func (c *Controller) Restore() {
 	// Not supported on Windows.
 }
