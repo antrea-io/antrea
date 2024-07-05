@@ -44,6 +44,7 @@ import (
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/controller/grouping"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -371,9 +372,9 @@ func (c *EgressController) syncEgress(key string) error {
 	egressGroup := egressGroupObj.(*antreatypes.EgressGroup)
 	pods, _ := c.groupingInterface.GetEntities(egressGroupType, key)
 	for _, pod := range pods {
-		// Ignore Pod if it's not scheduled or not running. And Egress does not support HostNetwork Pods, so also ignore
+		// Ignore Pod if it's not scheduled or is already terminated. And Egress does not support HostNetwork Pods, so also ignore
 		// Pod if it's HostNetwork Pod.
-		if pod.Spec.NodeName == "" || pod.Spec.HostNetwork {
+		if pod.Spec.NodeName == "" || pod.Spec.HostNetwork || k8s.IsPodTerminated(pod) {
 			continue
 		}
 		podNum++
