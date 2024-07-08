@@ -37,7 +37,7 @@ METRICS_DOC="$THIS_DIR/../../docs/prometheus-integration.md"
 cp -v $METRICS_DOC $METRICS_TMP_DOC
 $MAKE_CMD $METRICS_TMP_DOC
 result=0
-cmp -s $METRICS_DOC $METRICS_TMP_DOC || result=$?
+diff $METRICS_DOC $METRICS_TMP_DOC || result=$?
 if [ $result -ne 0 ]; then
     echo "Error: Prometheus metrics document should be updated"
     echo "You can update it by building the Antrea Docker image locally (with 'make'), running ./hack/make-metrics-doc.sh and committing the changes"
