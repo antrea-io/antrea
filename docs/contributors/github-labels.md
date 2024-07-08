@@ -125,8 +125,6 @@ The labels in this list originated within Kubernetes at
 | Label | Description | Added By |
 |-------|-------------|----------|
 | approved                           | Indicates a PR has been approved by owners in accordance with [GOVERNANCE.md](../../GOVERNANCE.md) guidelines. | Maintainers |
-| vmware-cla: no                     | Indicates the PR's author has not signed the [VMware CLA](https://cla.vmware.com/faq) | VMware CLA Bot |
-| vmware-cla: yes                    | Indicates the PR's author has signed the [VMware CLA](https://cla.vmware.com/faq) | VMware CLA Bot |
 | do-not-merge/hold                  | Indicates a PR should not be merged because someone has issued a /hold command | Merge Bot |
 | do-not-merge/work-in-progress      | Indicates that a PR should not be merged because it is a work in progress. | Merge Bot |
 | lgtm                               | Indicates that a PR is ready to be merged. | Merge Bot |
