@@ -61,9 +61,10 @@ jobs:
       run: |
         mkdir log
         ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-e2e-kind.sh --encap-mode encap \
+        --extra-vlan \
         --antrea-controller-image antrea/antrea-controller-ubi \
         --antrea-agent-image antrea/antrea-agent-ubi \
-        --run '^TestBasic$'
+        --run '^TestEgress$'
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
