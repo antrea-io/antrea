@@ -49,7 +49,8 @@ done
 
 # Find the cni conf file with lowest name, which is not installed by us
 while true; do
-  cni_conf_name=$(ls "$HOST_CNI_NET_DIR" | grep -v antrea | head -n1)
+  # CNI conf file must have an extension of ".conflist", "*.conf", or "*.json".
+  cni_conf_name=$(ls "$HOST_CNI_NET_DIR" | grep -E "\.conflist$|\.conf$|\.json$" | grep -v antrea | head -n1)
   if [[ ! -z $cni_conf_name ]]; then
     break
   fi
@@ -67,6 +68,15 @@ cni_conf_sha=""
 
 function update_cni_conf {
     log_info "install_cni_chaining" "updating CNI conf file $cni_conf_name -> $cni_conf_name_antrea"
+
+    # The CNI conf file may not have been completely written.
+    while true; do
+        if [ -s "$cni_conf_path" ] && jq empty "$cni_conf_path" 2>/dev/null; then
+            break
+        fi
+        log_info "install_cni_chaining" "CNI conf file is empty or invalid. Retrying after 2 secs"
+        sleep 2s
+    done
 
     # We use the following steps:
     # 1. read the input file once and store its contents in a variable
