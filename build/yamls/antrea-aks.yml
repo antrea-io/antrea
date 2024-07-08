@@ -4038,7 +4038,7 @@ data:
     antreaProxy:
       # To disable AntreaProxy, set this to false.
       enable: true
-      # ProxyAll tells antrea-agent to proxy all Service traffic, including NodePort, LoadBalancer, and ClusterIP traffic,
+      # proxyAll tells antrea-agent to proxy all Service traffic, including NodePort, LoadBalancer, and ClusterIP traffic,
       # regardless of where they come from. Therefore, running kube-proxy is no longer required.
       # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
       # apiserver directly.
@@ -4055,7 +4055,7 @@ data:
       # External IPs of LoadBalancer Services. This is useful when the external LoadBalancer provides additional
       # capabilities (e.g. TLS termination) and it is desirable for Pod-to-ExternalIP traffic to be sent to the
       # external LoadBalancer instead of being load-balanced to an Endpoint directly by AntreaProxy.
-      # Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
+      # Note that setting ProxyLoadBalancerIPs to false usually only makes sense when proxyAll is set to true and
       # kube-proxy is removed from the cluster, otherwise kube-proxy will still load-balance this traffic.
       proxyLoadBalancerIPs: true
       # The value of the "service.kubernetes.io/service-proxy-name" label for AntreaProxy to match. If it is set,
@@ -5110,7 +5110,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: f976029accf54258d01ad907fe19b50ac671eee014cd8aea968c6a0bc7e8f95a
+        checksum/config: 71bf05ff579aa9bea7b360669c5e2ce2830ca88dc4ab54480638ce006eaeaf11
       labels:
         app: antrea
         component: antrea-agent
@@ -5348,7 +5348,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: f976029accf54258d01ad907fe19b50ac671eee014cd8aea968c6a0bc7e8f95a
+        checksum/config: 71bf05ff579aa9bea7b360669c5e2ce2830ca88dc4ab54480638ce006eaeaf11
       labels:
         app: antrea
         component: antrea-controller

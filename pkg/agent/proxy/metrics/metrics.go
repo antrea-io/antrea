@@ -37,7 +37,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v4"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "sync_proxy_rules_duration_seconds",
-			Help:           "SyncProxyRules duration of AntreaProxy in seconds",
+			Help:           "SyncProxyRules duration of Antrea Proxy in seconds",
 		},
 	)
 	ServicesInstalledTotal = kmetrics.NewGauge(
@@ -47,7 +47,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v4"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "total_services_installed",
-			Help:           "The number of Services installed by AntreaProxy",
+			Help:           "The number of Services installed by Antrea Proxy",
 		},
 	)
 	EndpointsInstalledTotal = kmetrics.NewGauge(
@@ -57,7 +57,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v4"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "total_endpoints_installed",
-			Help:           "The number of Endpoints installed by AntreaProxy",
+			Help:           "The number of Endpoints installed by Antrea Proxy",
 		},
 	)
 	ServicesUpdatesTotal = kmetrics.NewCounter(
@@ -67,7 +67,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v4"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "total_services_updates",
-			Help:           "The cumulative number of Service updates received by AntreaProxy",
+			Help:           "The cumulative number of Service updates received by Antrea Proxy",
 		},
 	)
 	EndpointsUpdatesTotal = kmetrics.NewCounter(
@@ -77,7 +77,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v4"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "total_endpoints_updates",
-			Help:           "The cumulative number of Endpoint updates received by AntreaProxy",
+			Help:           "The cumulative number of Endpoint updates received by Antrea Proxy",
 		},
 	)
 
@@ -88,7 +88,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v6"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "sync_proxy_rules_duration_seconds",
-			Help:           "SyncProxyRules duration of AntreaProxy in seconds",
+			Help:           "SyncProxyRules duration of Antrea Proxy in seconds",
 		},
 	)
 	ServicesInstalledTotalV6 = kmetrics.NewGauge(
@@ -98,7 +98,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v6"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "total_services_installed",
-			Help:           "The number of Services installed by AntreaProxy",
+			Help:           "The number of Services installed by Antrea Proxy",
 		},
 	)
 	EndpointsInstalledTotalV6 = kmetrics.NewGauge(
@@ -108,7 +108,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v6"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "total_endpoints_installed",
-			Help:           "The number of Endpoints installed by AntreaProxy",
+			Help:           "The number of Endpoints installed by Antrea Proxy",
 		},
 	)
 	ServicesUpdatesTotalV6 = kmetrics.NewCounter(
@@ -118,7 +118,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v6"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "total_services_updates",
-			Help:           "The cumulative number of Service updates received by AntreaProxy",
+			Help:           "The cumulative number of Service updates received by Antrea Proxy",
 		},
 	)
 	EndpointsUpdatesTotalV6 = kmetrics.NewCounter(
@@ -128,7 +128,7 @@ var (
 			ConstLabels:    map[string]string{"ip_family": "v6"},
 			StabilityLevel: kmetrics.ALPHA,
 			Name:           "total_endpoints_updates",
-			Help:           "The cumulative number of Endpoint updates received by AntreaProxy",
+			Help:           "The cumulative number of Endpoint updates received by Antrea Proxy",
 		},
 	)
 )

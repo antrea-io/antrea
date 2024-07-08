@@ -64,17 +64,14 @@ edit the Agent configuration in the
 
 ### AntreaProxy
 
-`AntreaProxy` implements Service load-balancing for ClusterIP Services as part of the OVS pipeline, as opposed to
-relying on kube-proxy. This only applies to traffic originating from Pods, and destined to ClusterIP Services. In
-particular, it does not apply to NodePort Services. Please note that due to some restrictions on the implementation of
-Services in Antrea, the maximum number of Endpoints that Antrea can support at the moment is 800. If the number of
-Endpoints for a given Service exceeds 800, extra Endpoints will be dropped.
+`AntreaProxy` enables Antrea Proxy which implements Service load-balancing for ClusterIP Services as part of the OVS
+pipeline, as opposed to relying on kube-proxy. By default, this only applies to traffic originating from Pods, and
+destined to ClusterIP Services. However, it can be configured to support all types of Services, replacing kube-proxy
+entirely. Please refer to this [document](antrea-proxy.md) for extra information on Antrea Proxy and how it can be configured.
 
 Note that this feature must be enabled for Windows. The Antrea Windows YAML manifest provided as part of releases
 enables this feature by default. If you edit the manifest, make sure you do not disable it, as it is needed for correct
 NetworkPolicy implementation for Pod-to-Service traffic.
-
-Please refer to this [document](antrea-proxy.md) for extra information on AntreaProxy and how it can be configured.
 
 #### Requirements for this Feature
 
@@ -83,9 +80,9 @@ opposed to >= 4.4 without this feature).
 
 ### EndpointSlice
 
-`EndpointSlice` enables Service EndpointSlice support in AntreaProxy. The EndpointSlice API was introduced in Kubernetes
+`EndpointSlice` enables Service EndpointSlice support in Antrea Proxy. The EndpointSlice API was introduced in Kubernetes
 1.16 (alpha) and it is enabled by default in Kubernetes 1.17 (beta), promoted to GA in Kubernetes 1.21. The EndpointSlice
-feature will take no effect if AntreaProxy is not enabled. Refer to this [link](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/)
+feature will take no effect if Antrea Proxy is not enabled. Refer to this [link](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/)
 for more information about EndpointSlice. If this feature is enabled but the EndpointSlice v1 API is not available
 (Kubernetes version is lower than 1.21), Antrea Agent will log a message and fallback to the Endpoints API.
 
@@ -96,7 +93,7 @@ for more information about EndpointSlice. If this feature is enabled but the End
 
 ### TopologyAwareHints
 
-`TopologyAwareHints` enables TopologyAwareHints support in AntreaProxy. For AntreaProxy, traffic can be routed to the
+`TopologyAwareHints` enables TopologyAwareHints support in Antrea Proxy. For Antrea Proxy, traffic can be routed to the
 Endpoint which is closer to where it originated when this feature is enabled. Refer to this [link](https://kubernetes.io/docs/concepts/services-networking/topology-aware-hints/)
 for more information about TopologyAwareHints.
 
@@ -111,7 +108,7 @@ for more information about TopologyAwareHints.
 mode determines how external traffic destined to LoadBalancerIPs and ExternalIPs of Services is processed when it's load
 balanced across Nodes. In DSR mode, external traffic is never SNAT'd and backend Pods running on Nodes that are not the
 ingress Node can reply to clients directly, bypassing the ingress Node. Therefore, DSR mode can preserve client IP of
-requests, and usually has lower latency and higher throughput. It's only meaningful to use this feature when AntreaProxy
+requests, and usually has lower latency and higher throughput. It's only meaningful to use this feature when Antrea Proxy
 is enabled and configured to proxy external traffic (proxyAll=true). Refer to this [link](
 antrea-proxy.md#configuring-load-balancer-mode-for-external-traffic) for more information about load balancer mode.
 
@@ -124,7 +121,7 @@ antrea-proxy.md#configuring-load-balancer-mode-for-external-traffic) for more in
 
 ### CleanupStaleUDPSvcConntrack
 
-`CleanupStaleUDPSvcConntrack` enables support for cleaning up stale UDP Service conntrack connections in AntreaProxy.
+`CleanupStaleUDPSvcConntrack` enables support for cleaning up stale UDP Service conntrack connections in Antrea Proxy.
 
 #### Requirements for this Feature
 
@@ -155,7 +152,7 @@ for both Linux and Windows). In v0.11, this feature was graduated to Beta (enabl
 lifted.
 
 In order to support cluster Services as the destination for tracing requests, option `antreaProxy.enable` should be set
-to true to enable AntreaProxy.
+to true to enable Antrea Proxy.
 
 ### Flow Exporter
 

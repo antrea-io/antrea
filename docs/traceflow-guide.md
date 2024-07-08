@@ -30,7 +30,7 @@ graph.
 ## Prerequisites
 
 The Traceflow feature is enabled by default since Antrea version v0.11. In order
-to use a Service as the destination in traces, AntreaProxy (also enabled by
+to use a Service as the destination in traces, Antrea Proxy (also enabled by
 default since v0.11) is required.
 
 ## Start a New Traceflow
