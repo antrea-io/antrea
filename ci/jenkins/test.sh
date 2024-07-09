@@ -696,6 +696,10 @@ function run_conformance {
     export GOCACHE=${WORKDIR}/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
 
+    if [[ "$TESTCASE" == "all-features-conformance" ]]; then
+        ${WORKSPACE}/hack/generate-manifest.sh --mode dev --feature-gates AllAlpha=true,AllBeta=true --proxy-all --verbose-log > build/yamls/antrea.yml
+    fi
+
     kubectl apply -f build/yamls/antrea.yml
     kubectl rollout restart deployment/coredns -n kube-system
     kubectl rollout status deployment/coredns -n kube-system
@@ -705,6 +709,10 @@ function run_conformance {
     set +e
     if [[ "$TESTCASE" =~ "conformance" ]]; then
         ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-skip "$CONFORMANCE_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log
+    elif [[ "$TESTCASE" == "all-features-conformance" ]]; then 
+        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log 
+    elif [[ "$TESTCASE" == "whole-conformance" ]]; then
+        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-whole-conformance --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log
     else
         ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "$NETWORKPOLICY_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log
     fi
