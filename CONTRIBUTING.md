@@ -183,6 +183,7 @@ Here are the trigger phrases for individual checks:
 * `/test-rancher-e2e`: Linux IPv4 e2e tests on Rancher clusters.
 * `/test-rancher-conformance`: Linux IPv4 conformance tests on Rancher clusters.
 * `/test-rancher-networkpolicy`: Linux IPv4 networkpolicy tests on Rancher clusters.
+* `/test-kind-e2e`: Linux IPv4 e2e tests on Kind cluster.
 * `/test-kind-ipv6-e2e`: Linux dual stack e2e tests on Kind cluster.
 * `/test-kind-ipv6-only-e2e`: Linux IPv6 only e2e tests on Kind cluster.
 * `/test-kind-conformance`: Linux IPv4 conformance tests on Kind cluster.
@@ -195,6 +196,7 @@ Here are the trigger phrases for individual checks:
 Here are the trigger phrases for groups of checks:
 
 * `/test-all`: Linux IPv4 tests
+* `/test-kind-all`: Linux IPv4 tests on Kind cluster
 * `/test-windows-all`: Windows IPv4 tests, including e2e tests with proxyAll enabled. It also includes all containerd runtime based Windows tests since 1.10.0.
 * `/test-ipv6-all`: Linux dual stack tests
 * `/test-ipv6-only-all`: Linux IPv6 only tests
