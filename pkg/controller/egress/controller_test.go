@@ -203,6 +203,11 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 }
 
 func TestAddEgress(t *testing.T) {
+	podSucceeded := newPod("default", "succeeded-pod", map[string]string{"app": "foo"}, node1, "1.1.5.1", false)
+	podSucceeded.Status.Phase = v1.PodSucceeded
+	podFailed := newPod("default", "failed-pod", map[string]string{"app": "foo"}, node1, "1.1.5.2", false)
+	podFailed.Status.Phase = v1.PodFailed
+
 	tests := []struct {
 		name                 string
 		inputEgress          *v1beta1.Egress
@@ -347,7 +352,7 @@ func TestAddEgress(t *testing.T) {
 			defer close(stopCh)
 			var fakeObjects []runtime.Object
 			fakeObjects = append(fakeObjects, nsDefault, nsOther)
-			fakeObjects = append(fakeObjects, podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace, podUnscheduled, podNonIP, podWithHostNetwork)
+			fakeObjects = append(fakeObjects, podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace, podUnscheduled, podNonIP, podWithHostNetwork, podSucceeded, podFailed)
 			var fakeCRDObjects []runtime.Object
 			fakeCRDObjects = append(fakeCRDObjects, eipFoo1)
 			controller := newController(fakeObjects, fakeCRDObjects)

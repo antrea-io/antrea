@@ -615,6 +615,72 @@ func TestAddPod(t *testing.T) {
 			groupMatch:           false,
 		},
 		{
+			name: "match-all-selectors-succeeded",
+			addedPod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels: map[string]string{
+						"role":         "app",
+						"group":        "appliedTo",
+						"inGroup":      "inAddress",
+						"outGroup":     "outAddress",
+						"clustergroup": "yes",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodSucceeded,
+					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+			groupMatch:           false,
+		},
+		{
+			name: "match-all-selectors-failed",
+			addedPod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels: map[string]string{
+						"role":         "app",
+						"group":        "appliedTo",
+						"inGroup":      "inAddress",
+						"outGroup":     "outAddress",
+						"clustergroup": "yes",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodFailed,
+					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+			groupMatch:           false,
+		},
+		{
 			name: "match-spec-podselector-no-podip",
 			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
