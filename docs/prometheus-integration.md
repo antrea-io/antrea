@@ -477,6 +477,9 @@ to a non-default GODEBUG=multipartmaxparts=... setting.
 - **go_godebug_non_default_behavior_multipathtcp_events_total:** The number
 of non-default behaviors executed by the net package due to a non-default
 GODEBUG=multipathtcp=... setting.
+- **go_godebug_non_default_behavior_netedns0_events_total:** The number
+of non-default behaviors executed by the net package due to a non-default
+GODEBUG=netedns0=... setting.
 - **go_godebug_non_default_behavior_panicnil_events_total:** The number of
 non-default behaviors executed by the runtime package due to a non-default
 GODEBUG=panicnil=... setting.
