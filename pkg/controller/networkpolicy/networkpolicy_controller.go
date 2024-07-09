@@ -1184,9 +1184,9 @@ func (n *NetworkPolicyController) getMemberSetForGroupType(groupType grouping.Gr
 	groupMemberSet := controlplane.GroupMemberSet{}
 	pods, externalEntities := n.groupingInterface.GetEntities(groupType, name)
 	for _, pod := range pods {
-		// HostNetwork Pods should be excluded from group members
-		// https://github.com/antrea-io/antrea/issues/3078
-		if pod.Spec.HostNetwork == true || len(pod.Status.PodIPs) == 0 {
+		// HostNetwork Pods should be excluded from group members: https://github.com/antrea-io/antrea/issues/3078.
+		// Terminated Pods should be excluded as their IPs can be recycled and used by other Pods.
+		if pod.Spec.HostNetwork || k8s.IsPodTerminated(pod) || len(pod.Status.PodIPs) == 0 {
 			continue
 		}
 		groupMemberSet.Insert(podToGroupMember(pod, true))
@@ -1329,8 +1329,8 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		} else {
 			scheduledPodNum, scheduledExtEntityNum := 0, 0
 			for _, pod := range pods {
-				if pod.Spec.NodeName == "" || pod.Spec.HostNetwork == true {
-					// No need to process Pod when it's not scheduled.
+				if pod.Spec.NodeName == "" || pod.Spec.HostNetwork || k8s.IsPodTerminated(pod) {
+					// No need to process Pod when it's not scheduled or is already terminated.
 					// HostNetwork Pods will not be applied to by policies.
 					continue
 				}
