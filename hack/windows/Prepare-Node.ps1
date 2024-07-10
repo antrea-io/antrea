@@ -34,7 +34,7 @@ Specifies whether OVS userspace processes are included in the installation. If f
 processes will not be installed as a Windows service on the host.
 
 .EXAMPLE
-PS> .\Prepare-Node.ps1 -KubernetesVersion v1.27.0 -NodeIP 192.168.1.10 -ContainerRuntime containerd 
+PS> .\Prepare-Node.ps1 -KubernetesVersion v1.30.0 -NodeIP 192.168.1.10 -ContainerRuntime containerd 
 
 #>
 

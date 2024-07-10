@@ -103,6 +103,22 @@ higher (containerd 1.7 or higher is recommended). It relies on support for
 [Windows HostProcess Pods](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/),
 which is generally available starting with K8s 1.26.
 
+More detailed containerd Version requirements are outlined below:
+
+| Kubernetes Version  | Recommended containerd Version |
+| ------------------- | ---------------- |
+| 1.26                | 1.7.0+, 1.6.18+  |
+| 1.27                | 1.7.0+, 1.6.18+  |
+| 1.28                | 1.7.0+, 1.6.18+  |
+| 1.29                | 1.7.11+, 1.6.27+ |
+| 1.30                | 1.7.13+, 1.6.28+ |
+
+Note: Starting from Antrea v2.1, Antrea Windows image is built based on the HPC (Host
+Process Containers) image, containerd version 1.6.18 or higher is required because
+versions earlier than 1.6.18 do not support importing HPC images on Windows.
+
+For more detailed information on Kubernetes-supported containerd versions, refer to the [Containerd releases page](https://containerd.io/releases/#kubernetes-support)
+
 Starting with Antrea v1.13, Antrea takes over all the responsibilities of
 kube-proxy for Windows Nodes by default, and kube-proxy should not be deployed
 on Windows Nodes with Antrea.
@@ -221,7 +237,7 @@ running the script. The following command downloads and executes
 ```powershell
 # Example:
 curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Prepare-Node.ps1"
-.\Prepare-Node.ps1 -KubernetesVersion v1.29.0 -NodeIP 192.168.1.10
+.\Prepare-Node.ps1 -KubernetesVersion v1.30.0 -NodeIP 192.168.1.10
 ```
 
 ##### 4. Prepare Node environment needed by antrea-agent

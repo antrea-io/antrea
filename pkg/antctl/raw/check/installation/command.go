@@ -68,7 +68,7 @@ const (
 	kindEchoName                = "echo"
 	kindClientName              = "client"
 	agentDaemonSetName          = "antrea-agent"
-	deploymentImage             = "registry.k8s.io/e2e-test-images/agnhost:2.29"
+	deploymentImage             = "registry.k8s.io/e2e-test-images/agnhost:2.40"
 	podReadyTimeout             = 1 * time.Minute
 )
 
