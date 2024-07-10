@@ -82,7 +82,7 @@ type podCNIInfo struct {
 	netNS       string
 }
 
-type podController struct {
+type PodController struct {
 	kubeClient            clientset.Interface
 	netAttachDefClient    netdefclient.K8sCniCncfIoV1Interface
 	queue                 workqueue.RateLimitingInterface
@@ -103,13 +103,13 @@ func NewPodController(
 	podInformer cache.SharedIndexInformer,
 	podUpdateSubscriber channel.Subscriber,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
-) (*podController, error) {
+) (*PodController, error) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	interfaceConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SecondaryInterfaceConfigurator: %v", err)
 	}
-	pc := podController{
+	pc := PodController{
 		kubeClient:         kubeClient,
 		netAttachDefClient: netAttachDefClient,
 		queue: workqueue.NewNamedRateLimitingQueue(
@@ -153,7 +153,7 @@ func allocatePodSecondaryIfaceName(usedIFNames sets.Set[string]) (string, error)
 	return "", fmt.Errorf("no more interface names")
 }
 
-func (pc *podController) enqueuePod(obj interface{}) {
+func (pc *PodController) enqueuePod(obj interface{}) {
 	pod, isPod := obj.(*corev1.Pod)
 	if !isPod {
 		podDeletedState, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -172,7 +172,7 @@ func (pc *podController) enqueuePod(obj interface{}) {
 }
 
 // processCNIUpdate will be called when CNIServer publishes a Pod update event.
-func (pc *podController) processCNIUpdate(e interface{}) {
+func (pc *PodController) processCNIUpdate(e interface{}) {
 	event := e.(types.PodUpdate)
 	podKey := podKeyGet(event.PodName, event.PodNamespace)
 	if event.IsAdd {
@@ -184,7 +184,7 @@ func (pc *podController) processCNIUpdate(e interface{}) {
 }
 
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
-func (pc *podController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo,
+func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo,
 	storedInterfaces []*interfacestore.InterfaceConfig) error {
 	if len(storedInterfaces) > 0 {
 		// We do not support secondary network update at the moment. Return as long as one
@@ -219,7 +219,7 @@ func (pc *podController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 	return pc.configurePodSecondaryNetwork(pod, networklist, podCNIInfo)
 }
 
-func (pc *podController) removeInterfaces(interfaces []*interfacestore.InterfaceConfig) error {
+func (pc *PodController) removeInterfaces(interfaces []*interfacestore.InterfaceConfig) error {
 	var savedErr error
 	for _, interfaceConfig := range interfaces {
 		podName := interfaceConfig.PodName
@@ -256,7 +256,7 @@ func (pc *podController) removeInterfaces(interfaces []*interfacestore.Interface
 	return savedErr
 }
 
-func (pc *podController) syncPod(key string) error {
+func (pc *PodController) syncPod(key string) error {
 	var pod *corev1.Pod
 	var cniInfo *podCNIInfo
 	podExists := false
@@ -297,12 +297,12 @@ func (pc *podController) syncPod(key string) error {
 	return pc.handleAddUpdatePod(pod, cniInfo, storedInterfaces)
 }
 
-func (pc *podController) Worker() {
+func (pc *PodController) Worker() {
 	for pc.processNextWorkItem() {
 	}
 }
 
-func (pc *podController) processNextWorkItem() bool {
+func (pc *PodController) processNextWorkItem() bool {
 	obj, quit := pc.queue.Get()
 	if quit {
 		return false
@@ -319,7 +319,7 @@ func (pc *podController) processNextWorkItem() bool {
 }
 
 // Configure Secondary Network Interface.
-func (pc *podController) configureSecondaryInterface(
+func (pc *PodController) configureSecondaryInterface(
 	pod *corev1.Pod,
 	network *netdefv1.NetworkSelectionElement,
 	podCNIInfo *podCNIInfo,
@@ -370,7 +370,7 @@ func (pc *podController) configureSecondaryInterface(
 	return ifConfigErr
 }
 
-func (pc *podController) configurePodSecondaryNetwork(pod *corev1.Pod, networkList []*netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo) error {
+func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkList []*netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo) error {
 	usedIFNames := sets.New[string]()
 	for _, network := range networkList {
 		if network.InterfaceRequest != "" {
@@ -477,7 +477,7 @@ func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
 	return &networkConfig, nil
 }
 
-func (pc *podController) Run(stopCh <-chan struct{}) {
+func (pc *PodController) Run(stopCh <-chan struct{}) {
 	defer func() {
 		klog.InfoS("Shutting down", "controller", controllerName)
 		pc.queue.ShutDown()
