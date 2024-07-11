@@ -48,6 +48,7 @@ const (
 	SNATTarget       = "SNAT"
 	DNATTarget       = "DNAT"
 	RejectTarget     = "REJECT"
+	NotrackTarget    = "NOTRACK"
 
 	PreRoutingChain  = "PREROUTING"
 	InputChain       = "INPUT"
@@ -101,7 +102,7 @@ type Interface interface {
 
 	DeleteChain(protocol Protocol, table string, chain string) error
 
-	ListRules(table string, chain string) ([]string, error)
+	ListRules(protocol Protocol, table string, chain string) (map[Protocol][]string, error)
 
 	Restore(data string, flush bool, useIPv6 bool) error
 
@@ -312,14 +313,18 @@ func (c *Client) DeleteChain(protocol Protocol, table string, chain string) erro
 }
 
 // ListRules lists all rules from a chain in a table.
-func (c *Client) ListRules(table string, chain string) ([]string, error) {
-	var allRules []string
+func (c *Client) ListRules(protocol Protocol, table string, chain string) (map[Protocol][]string, error) {
+	allRules := make(map[Protocol][]string)
 	for p := range c.ipts {
-		rules, err := c.ipts[p].List(table, chain)
-		if err != nil {
-			return rules, fmt.Errorf("error getting rules from table %s chain %s protocol %s: %v", table, chain, p, err)
+		ipt := c.ipts[p]
+		if !matchProtocol(ipt, protocol) {
+			continue
 		}
-		allRules = append(allRules, rules...)
+		rules, err := ipt.List(table, chain)
+		if err != nil {
+			return nil, fmt.Errorf("error getting rules from table %s chain %s protocol %s: %v", table, chain, p, err)
+		}
+		allRules[p] = rules
 	}
 	return allRules, nil
 }

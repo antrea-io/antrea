@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,9 +67,11 @@ const (
 	// clusterNodeIP6Set contains all other Node IP6s in the cluster.
 	clusterNodeIP6Set = "CLUSTER-NODE-IP6"
 
-	// Antrea proxy NodePort IP
-	antreaNodePortIPSet  = "ANTREA-NODEPORT-IP"
-	antreaNodePortIP6Set = "ANTREA-NODEPORT-IP6"
+	// Antrea managed ipsets for different types of Service IP addresses and ports.
+	antreaNodePortIPSet    = "ANTREA-NODEPORT-IP"
+	antreaNodePortIP6Set   = "ANTREA-NODEPORT-IP6"
+	antreaExternalIPIPSet  = "ANTREA-EXTERNAL-IP"
+	antreaExternalIPIP6Set = "ANTREA-EXTERNAL-IP6"
 
 	// Antrea managed iptables chains.
 	antreaForwardChain     = "ANTREA-FORWARD"
@@ -77,6 +80,8 @@ const (
 	antreaInputChain       = "ANTREA-INPUT"
 	antreaOutputChain      = "ANTREA-OUTPUT"
 	antreaMangleChain      = "ANTREA-MANGLE"
+
+	kubeProxyServiceChain = "KUBE-SERVICES"
 
 	serviceIPv4CIDRKey = "serviceIPv4CIDRKey"
 	serviceIPv6CIDRKey = "serviceIPv6CIDRKey"
@@ -121,12 +126,17 @@ type Client struct {
 	nodeNetworkPolicyEnabled bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
+	// serviceExternalIPReferences tracks the references of Service IP. The key is the Service IP and the value is
+	// the set of ServiceInfo strings. Because a Service could have multiple ports and each port will generate a
+	// ServicePort (which is the unit of the processing), a Service IP route may be required by several ServicePorts.
+	// With the references, we install the configurations for a Service IP exactly once as long as it's used by any
+	// ServicePorts and uninstall it exactly once when it's no longer used by any ServicePorts.
+	// It applies to externalIP and LoadBalancerIP.
+	serviceExternalIPReferences map[string]sets.Set[string]
 	// serviceNeighbors caches neighbors.
 	serviceNeighbors sync.Map
-	// nodePortsIPv4 caches all existing IPv4 NodePorts.
-	nodePortsIPv4 sync.Map
-	// nodePortsIPv6 caches all existing IPv6 NodePorts.
-	nodePortsIPv6 sync.Map
+	// serviceIPSets caches ipsets about Services.
+	serviceIPSets map[string]*sync.Map
 	// clusterNodeIPs stores the IPv4 of all other Nodes in the cluster
 	clusterNodeIPs sync.Map
 	// clusterNodeIP6s stores the IPv6 address of all other Nodes in the cluster. It is maintained but not consumed
@@ -159,16 +169,23 @@ func NewClient(networkConfig *config.NetworkConfig,
 	multicastEnabled bool,
 	serviceCIDRProvider servicecidr.Interface) (*Client, error) {
 	return &Client{
-		networkConfig:            networkConfig,
-		noSNAT:                   noSNAT,
-		proxyAll:                 proxyAll,
-		multicastEnabled:         multicastEnabled,
-		connectUplinkToBridge:    connectUplinkToBridge,
-		nodeNetworkPolicyEnabled: nodeNetworkPolicyEnabled,
-		ipset:                    ipset.NewClient(),
-		netlink:                  &netlink.Handle{},
-		isCloudEKS:               env.IsCloudEKS(),
-		serviceCIDRProvider:      serviceCIDRProvider,
+		networkConfig:               networkConfig,
+		noSNAT:                      noSNAT,
+		proxyAll:                    proxyAll,
+		multicastEnabled:            multicastEnabled,
+		connectUplinkToBridge:       connectUplinkToBridge,
+		nodeNetworkPolicyEnabled:    nodeNetworkPolicyEnabled,
+		ipset:                       ipset.NewClient(),
+		netlink:                     &netlink.Handle{},
+		isCloudEKS:                  env.IsCloudEKS(),
+		serviceCIDRProvider:         serviceCIDRProvider,
+		serviceExternalIPReferences: make(map[string]sets.Set[string]),
+		serviceIPSets: map[string]*sync.Map{
+			antreaNodePortIPSet:    {},
+			antreaNodePortIP6Set:   {},
+			antreaExternalIPIPSet:  {},
+			antreaExternalIPIP6Set: {},
+		},
 	}, nil
 }
 
@@ -388,27 +405,27 @@ func (c *Client) syncIPSet() error {
 	// AntreaProxy proxyAll is available in all traffic modes. If proxyAll is enabled, create the ipsets to store the
 	// pairs of Node IP and NodePort.
 	if c.proxyAll {
-		if err := c.ipset.CreateIPSet(antreaNodePortIPSet, ipset.HashIPPort, false); err != nil {
-			return err
-		}
-		if err := c.ipset.CreateIPSet(antreaNodePortIP6Set, ipset.HashIPPort, true); err != nil {
-			return err
-		}
+		for ipsetName, ipsetEntries := range c.serviceIPSets {
+			isIPv6 := ipsetName == antreaNodePortIP6Set || ipsetName == antreaExternalIPIP6Set
 
-		c.nodePortsIPv4.Range(func(k, _ interface{}) bool {
-			ipSetEntry := k.(string)
-			if err := c.ipset.AddEntry(antreaNodePortIPSet, ipSetEntry); err != nil {
-				return false
+			var ipsetType ipset.SetType
+			if ipsetName == antreaNodePortIP6Set || ipsetName == antreaNodePortIPSet {
+				ipsetType = ipset.HashIPPort
+			} else {
+				ipsetType = ipset.HashIP
 			}
-			return true
-		})
-		c.nodePortsIPv6.Range(func(k, _ interface{}) bool {
-			ipSetEntry := k.(string)
-			if err := c.ipset.AddEntry(antreaNodePortIP6Set, ipSetEntry); err != nil {
-				return false
+
+			if err := c.ipset.CreateIPSet(ipsetName, ipsetType, isIPv6); err != nil {
+				return err
 			}
-			return true
-		})
+			ipsetEntries.Range(func(k, _ interface{}) bool {
+				ipsetEntry := k.(string)
+				if err := c.ipset.AddEntry(ipsetName, ipsetEntry); err != nil {
+					return false
+				}
+				return true
+			})
+		}
 	}
 
 	// AntreaIPAM is available in noEncap mode. There is a validation in Antrea configuration about this traffic mode
@@ -494,6 +511,14 @@ func getNodePortIPSetName(isIPv6 bool) string {
 	}
 }
 
+func getExternalIPIPSetName(isIPv6 bool) string {
+	if isIPv6 {
+		return antreaExternalIPIP6Set
+	} else {
+		return antreaExternalIPIPSet
+	}
+}
+
 func getLocalAntreaFlexibleIPAMPodIPSetName(isIPv6 bool) string {
 	if isIPv6 {
 		return localAntreaFlexibleIPAMPodIP6Set
@@ -562,43 +587,101 @@ func (c *Client) writeEKSNATRules(iptablesData *bytes.Buffer) {
 	}...)
 }
 
+func (c *Client) getIPProtocol() iptables.Protocol {
+	switch {
+	case c.networkConfig.IPv4Enabled && c.networkConfig.IPv6Enabled:
+		return iptables.ProtocolDual
+	case c.networkConfig.IPv6Enabled:
+		return iptables.ProtocolIPv6
+	default:
+		return iptables.ProtocolIPv4
+	}
+}
+
+// Create the antrea managed chains and link them to built-in chains.
+// We cannot use iptables-restore for these jump rules because there
+// are non antrea managed rules in built-in chains.
+type jumpRule struct {
+	table    string
+	srcChain string
+	dstChain string
+	comment  string
+	insert   bool
+}
+
+func (c *Client) removeUnexpectedAntreaJumpRule(protocol iptables.Protocol, jumpRule jumpRule) error {
+	// List all the existing rules of the table and the chain where the Antrea jump rule will be added.
+	allExistingRules, err := c.iptables.ListRules(protocol, jumpRule.table, jumpRule.srcChain)
+	if err != nil {
+		return err
+	}
+
+	// Construct keywords to identify Antrea and kube-proxy jump rules.
+	antreaJumpRuleKeyword := fmt.Sprintf("-j %s", jumpRule.dstChain)
+	kubeProxyJumpRuleKeyword := fmt.Sprintf("-j %s", kubeProxyServiceChain)
+
+	for ipProtocol, rules := range allExistingRules {
+		var antreaJumpRuleIndex, kubeProxyJumpRuleIndex = -1, -1
+
+		for index, rule := range rules {
+			// Check if the current rule is the Antrea jump rule to be added.
+			if strings.Contains(rule, antreaJumpRuleKeyword) {
+				antreaJumpRuleIndex = index
+				// Check if the current rule is the kube-proxy jump rule.
+			} else if strings.Contains(rule, kubeProxyJumpRuleKeyword) {
+				kubeProxyJumpRuleIndex = index
+			}
+		}
+		// If the Antrea jump rule is installed after the kube-proxy jump rule, which is not expected, delete the
+		// existing Antrea jump rule to ensure that a new one will be installed before the kube-proxy one when syncing iptables.
+		if antreaJumpRuleIndex != -1 && kubeProxyJumpRuleIndex != -1 && antreaJumpRuleIndex > kubeProxyJumpRuleIndex {
+			ruleSpec := []string{"-j", jumpRule.dstChain, "-m", "comment", "--comment", jumpRule.comment}
+			if err := c.iptables.DeleteRule(ipProtocol, jumpRule.table, jumpRule.srcChain, ruleSpec); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // syncIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
 func (c *Client) syncIPTables() error {
-	// Create the antrea managed chains and link them to built-in chains.
-	// We cannot use iptables-restore for these jump rules because there
-	// are non antrea managed rules in built-in chains.
-	type jumpRule struct {
-		table    string
-		srcChain string
-		dstChain string
-		comment  string
-	}
+	ipProtocol := c.getIPProtocol()
 	jumpRules := []jumpRule{
-		{iptables.RawTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules"},
-		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
-		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules"},
-		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules"},
-		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"}, // TODO: unify the chain naming style
-		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
+		{iptables.RawTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules", false},
+		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
+		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules", false},
+		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules", false},
+		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules", false}, // TODO: unify the chain naming style
+		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
 	}
 	if c.proxyAll || c.isCloudEKS {
-		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules"})
+		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules", c.proxyAll == true})
 	}
 	if c.proxyAll {
-		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"})
+		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", true})
 	}
 	if c.nodeNetworkPolicyEnabled {
-		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules"})
-		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"})
+		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false})
+		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false})
 	}
 	for _, rule := range jumpRules {
-		if err := c.iptables.EnsureChain(iptables.ProtocolDual, rule.table, rule.dstChain); err != nil {
+		if err := c.iptables.EnsureChain(ipProtocol, rule.table, rule.dstChain); err != nil {
 			return err
 		}
 		ruleSpec := []string{"-j", rule.dstChain, "-m", "comment", "--comment", rule.comment}
-		if err := c.iptables.AppendRule(iptables.ProtocolDual, rule.table, rule.srcChain, ruleSpec); err != nil {
-			return err
+		if rule.insert {
+			if err := c.removeUnexpectedAntreaJumpRule(ipProtocol, rule); err != nil {
+				return err
+			}
+			if err := c.iptables.InsertRule(ipProtocol, rule.table, rule.srcChain, ruleSpec); err != nil {
+				return err
+			}
+		} else {
+			if err := c.iptables.AppendRule(ipProtocol, rule.table, rule.srcChain, ruleSpec); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -636,6 +719,7 @@ func (c *Client) syncIPTables() error {
 			antreaPodIPSet,
 			localAntreaFlexibleIPAMPodIPSet,
 			antreaNodePortIPSet,
+			antreaExternalIPIPSet,
 			clusterNodeIPSet,
 			config.VirtualNodePortDNATIPv4,
 			config.VirtualServiceIPv4,
@@ -655,6 +739,7 @@ func (c *Client) syncIPTables() error {
 			antreaPodIP6Set,
 			localAntreaFlexibleIPAMPodIP6Set,
 			antreaNodePortIP6Set,
+			antreaExternalIPIP6Set,
 			clusterNodeIP6Set,
 			config.VirtualNodePortDNATIPv6,
 			config.VirtualServiceIPv6,
@@ -674,6 +759,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	podIPSet,
 	localAntreaFlexibleIPAMPodIPSet,
 	nodePortIPSet,
+	externalIPSet,
 	clusterNodeIPSet string,
 	nodePortDNATVirtualIP,
 	serviceVirtualIP net.IP,
@@ -730,6 +816,33 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 				"-j", iptables.DropTarget,
 			}...)
 		}
+	}
+
+	if c.proxyAll {
+		// This rule is to bypass conntrack for packets sourced from external and destined to externalIPs, which also
+		// results in bypassing the chains managed by Antrea Proxy and kube-proxy in nat table.
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: do not track request packets destined to external IPs"`,
+			"-m", "set", "--match-set", externalIPSet, "dst",
+			"-j", iptables.NotrackTarget,
+		}...)
+		// This rule is to bypass conntrack for packets sourced from externalIPs, which also results in bypassing the
+		// chains managed by Antrea Proxy and kube-proxy in nat table.
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: do not track reply packets sourced from external IPs"`,
+			"-m", "set", "--match-set", externalIPSet, "src",
+			"-j", iptables.NotrackTarget,
+		}...)
+		// This rule is to bypass conntrack for packets sourced from local and destined to externalIPs, which also
+		// results in bypassing the chains managed by Antrea Proxy and kube-proxy in nat table.
+		writeLine(iptablesData, []string{
+			"-A", antreaOutputChain,
+			"-m", "comment", "--comment", `"Antrea: do not track request packets destined to external IPs"`,
+			"-m", "set", "--match-set", externalIPSet, "dst",
+			"-j", iptables.NotrackTarget,
+		}...)
 	}
 	writeLine(iptablesData, "COMMIT")
 
@@ -1614,9 +1727,9 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	return nil
 }
 
-// AddNodePort is used to add IP,port:protocol entries to target ip set when a NodePort Service is added. An entry is added
-// for every NodePort IP.
-func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
+// AddNodePortConfigs is used to add IP,protocol:port entries to target ipset when a NodePort Service is added. An
+// entry is added for every NodePort IP.
+func (c *Client) AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
 	isIPv6 := isIPv6Protocol(protocol)
 	transProtocol := getTransProtocolStr(protocol)
 	ipSetName := getNodePortIPSetName(isIPv6)
@@ -1626,19 +1739,15 @@ func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol b
 		if err := c.ipset.AddEntry(ipSetName, ipSetEntry); err != nil {
 			return err
 		}
-		if isIPv6 {
-			c.nodePortsIPv6.Store(ipSetEntry, struct{}{})
-		} else {
-			c.nodePortsIPv4.Store(ipSetEntry, struct{}{})
-		}
+		c.serviceIPSets[ipSetName].Store(ipSetEntry, struct{}{})
 		klog.V(4).InfoS("Added ipset for NodePort", "IP", nodePortAddresses[i], "Port", port, "Protocol", protocol)
 	}
 
 	return nil
 }
 
-// DeleteNodePort is used to delete related IP set entries when a NodePort Service is deleted.
-func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
+// DeleteNodePortConfigs is used to delete corresponding ipset entries when a NodePort Service is deleted.
+func (c *Client) DeleteNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
 	isIPv6 := isIPv6Protocol(protocol)
 	transProtocol := getTransProtocolStr(protocol)
 	ipSetName := getNodePortIPSetName(isIPv6)
@@ -1648,11 +1757,8 @@ func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protoco
 		if err := c.ipset.DelEntry(ipSetName, ipSetEntry); err != nil {
 			return err
 		}
-		if isIPv6 {
-			c.nodePortsIPv6.Delete(ipSetEntry)
-		} else {
-			c.nodePortsIPv4.Delete(ipSetEntry)
-		}
+		c.serviceIPSets[ipSetName].Delete(ipSetEntry)
+		klog.V(4).InfoS("Deleted ipset entry for NodePort IP", "IP", nodePortAddresses[i], "Port", port, "Protocol", protocol)
 	}
 
 	return nil
@@ -1752,11 +1858,19 @@ func (c *Client) addVirtualNodePortDNATIPRoute(isIPv6 bool) error {
 	return nil
 }
 
-// AddExternalIPRoute adds a route entry that forwards traffic destined for the external IP to the Antrea gateway interface.
-func (c *Client) AddExternalIPRoute(externalIP net.IP) error {
+// AddExternalIPConfigs adds a route entry to forward traffic destined for the external Service IP to the Antrea
+// gateway interface. Additionally, it adds the IP to the ipset ANTREA-EXTERNAL-IP or ANTREA-EXTERNAL-IP6, which is
+// used by iptables rules to bypass kube-proxy.
+func (c *Client) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	externalIPStr := externalIP.String()
-	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
 	isIPv6 := utilnet.IsIPv6(externalIP)
+	references, exists := c.serviceExternalIPReferences[externalIPStr]
+	if exists {
+		references.Insert(svcInfoStr)
+		return nil
+	}
+
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
 	var gw net.IP
 	var mask int
 	if !isIPv6 {
@@ -1766,19 +1880,40 @@ func (c *Client) AddExternalIPRoute(externalIP net.IP) error {
 		gw = config.VirtualServiceIPv6
 		mask = net.IPv6len * 8
 	}
-
 	route := generateRoute(externalIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
 	if err := c.netlink.RouteReplace(route); err != nil {
-		return fmt.Errorf("failed to install route for external IP %s: %w", externalIPStr, err)
+		return fmt.Errorf("failed to add route for external IP %s: %w", externalIPStr, err)
 	}
-	c.serviceRoutes.Store(externalIPStr, route)
 	klog.V(4).InfoS("Added route for external IP", "IP", externalIPStr)
+
+	ipsetName := getExternalIPIPSetName(isIPv6)
+	if err := c.ipset.AddEntry(ipsetName, externalIPStr); err != nil {
+		return fmt.Errorf("failed to add %s to ipset %s", externalIPStr, ipsetName)
+	}
+	klog.V(4).InfoS("Added external IP to ipset", "IPSet", ipsetName, "IP", externalIPStr)
+
+	references = sets.New[string](svcInfoStr)
+	c.serviceExternalIPReferences[externalIPStr] = references
+	c.serviceRoutes.Store(externalIPStr, route)
+	c.serviceIPSets[ipsetName].Store(externalIPStr, struct{}{})
 	return nil
 }
 
-// DeleteExternalIPRoute deletes the route entry for the external IP.
-func (c *Client) DeleteExternalIPRoute(externalIP net.IP) error {
+// DeleteExternalIPConfigs deletes the route entry to forward traffic destined for the external Service IP to the Antrea
+// gateway interface. Additionally, it removes the IP to the ipset ANTREA-EXTERNAL-IP or ANTREA-EXTERNAL-IP6, which is
+// used by iptables rules to bypass kube-proxy.
+func (c *Client) DeleteExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	externalIPStr := externalIP.String()
+	isIPv6 := utilnet.IsIPv6(externalIP)
+	references, exists := c.serviceExternalIPReferences[externalIPStr]
+	if !exists || !references.Has(svcInfoStr) {
+		return nil
+	}
+	if references.Len() > 1 {
+		references.Delete(svcInfoStr)
+		return nil
+	}
+
 	route, found := c.serviceRoutes.Load(externalIPStr)
 	if !found {
 		klog.V(2).InfoS("Didn't find route for external IP", "IP", externalIPStr)
@@ -1791,8 +1926,17 @@ func (c *Client) DeleteExternalIPRoute(externalIP net.IP) error {
 			return fmt.Errorf("failed to delete route for external IP %s: %w", externalIPStr, err)
 		}
 	}
-	c.serviceRoutes.Delete(externalIPStr)
 	klog.V(4).InfoS("Deleted route for external IP", "IP", externalIPStr)
+
+	ipsetName := getExternalIPIPSetName(isIPv6)
+	if err := c.ipset.DelEntry(ipsetName, externalIPStr); err != nil {
+		return err
+	}
+	klog.V(4).InfoS("Deleted external IP from ipset", "IPSet", ipsetName, "IP", externalIPStr)
+
+	delete(c.serviceExternalIPReferences, externalIPStr)
+	c.serviceRoutes.Delete(externalIPStr)
+	c.serviceIPSets[ipsetName].Delete(externalIPStr)
 	return nil
 }
 
