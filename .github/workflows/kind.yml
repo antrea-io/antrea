@@ -170,6 +170,7 @@ jobs:
           --coverage \
           --encap-mode encap \
           --proxy-all \
+          --no-kube-proxy \
           --feature-gates LoadBalancerModeDSR=true \
           --load-balancer-mode dsr \
           --node-ipam

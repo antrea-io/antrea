@@ -76,17 +76,19 @@ type Interface interface {
 	// DeleteEgressRule deletes the IP rule installed by AddEgressRule.
 	DeleteEgressRule(tableID uint32, mark uint32) error
 
-	// AddNodePort adds configurations when a NodePort Service is created.
-	AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
+	// AddNodePortConfigs adds routing configurations for redirecting traffic to OVS when a NodePort Service is created.
+	AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
 
-	// DeleteNodePort deletes related configurations when a NodePort Service is deleted.
-	DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
+	// DeleteNodePortConfigs deletes corresponding routing configurations when a NodePort Service is deleted.
+	DeleteNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
 
-	// AddExternalIPRoute adds a route entry when an external IP is added.
-	AddExternalIPRoute(externalIP net.IP) error
+	// AddExternalIPConfigs adds routing configurations for redirecting traffic to OVS when an external Service IP
+	// (externalIP or LoadBalancerIP) is created.
+	AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) error
 
-	// DeleteExternalIPRoute deletes the related route entry when an external IP is deleted.
-	DeleteExternalIPRoute(externalIP net.IP) error
+	// DeleteExternalIPConfigs deletes corresponding routing configurations for redirecting traffic to OVS when an
+	// external Service IP (externalIP or LoadBalancerIP) is deleted.
+	DeleteExternalIPConfigs(svcInfoStr string, externalIP net.IP) error
 
 	// Run starts the sync loop.
 	Run(stopCh <-chan struct{})

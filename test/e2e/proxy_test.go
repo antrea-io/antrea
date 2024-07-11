@@ -769,7 +769,13 @@ func testProxyIntraNodeHairpinCases(data *TestData, t *testing.T, expectedClient
 	t.Run("IntraNode/ClusterIP", func(t *testing.T) {
 		clientIP, err := probeClientIPFromPod(data, pod, agnhostContainerName, clusterIPUrl)
 		require.NoError(t, err, "ClusterIP hairpin should be able to be connected")
-		require.Equal(t, expectedClientIP, clientIP)
+		if _, err := data.clientset.AppsV1().DaemonSets(kubeNamespace).Get(context.TODO(), "kube-proxy", metav1.GetOptions{}); err == nil {
+			// When proxyAll is enabled and kube-proxy is present, Antrea Proxy doesn't handle ClusterIP traffic sourced
+			// from local Node, and the got clientIP is not the expected clientIP. As a result, skip the check.
+			t.Logf("Skip checking the clientIP because kube-proxy is present")
+		} else {
+			require.Equal(t, expectedClientIP, clientIP)
+		}
 	})
 	t.Run("IntraNode/NodePort/ExternalTrafficPolicy:Cluster", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)

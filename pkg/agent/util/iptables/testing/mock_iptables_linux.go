@@ -140,18 +140,18 @@ func (mr *MockInterfaceMockRecorder) InsertRule(arg0, arg1, arg2, arg3 any) *gom
 }
 
 // ListRules mocks base method.
-func (m *MockInterface) ListRules(arg0, arg1 string) ([]string, error) {
+func (m *MockInterface) ListRules(arg0 iptables.Protocol, arg1, arg2 string) (map[iptables.Protocol][]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListRules", arg0, arg1)
-	ret0, _ := ret[0].([]string)
+	ret := m.ctrl.Call(m, "ListRules", arg0, arg1, arg2)
+	ret0, _ := ret[0].(map[iptables.Protocol][]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListRules indicates an expected call of ListRules.
-func (mr *MockInterfaceMockRecorder) ListRules(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ListRules(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRules", reflect.TypeOf((*MockInterface)(nil).ListRules), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRules", reflect.TypeOf((*MockInterface)(nil).ListRules), arg0, arg1, arg2)
 }
 
 // Restore mocks base method.
