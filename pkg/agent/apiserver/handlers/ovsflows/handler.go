@@ -16,6 +16,7 @@ package ovsflows
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -36,6 +37,8 @@ var (
 	getFlowTableName = openflow.GetFlowTableName
 	getFlowTableID   = openflow.GetFlowTableID
 	getFlowTableList = openflow.GetTableList
+
+	errAmbiguousQuery = fmt.Errorf("query is ambiguous and matches more than one policy")
 )
 
 func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]apis.OVSFlowResponse, error) {
@@ -177,10 +180,14 @@ func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace strin
 		Namespace:  namespace,
 		SourceType: policyType,
 	}
-	if len(aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicies(npFilter)) == 0 {
+	nps := aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicies(npFilter)
+	if len(nps) == 0 {
 		// NetworkPolicy not found.
 		return nil, nil
+	} else if len(nps) > 1 {
+		return nil, errAmbiguousQuery
 	}
+	namespace, policyType = nps[0].SourceRef.Namespace, nps[0].SourceRef.Type
 	flowKeys := aq.GetOpenflowClient().GetNetworkPolicyFlowKeys(npName, namespace, policyType)
 	return dumpMatchedFlows(aq, flowKeys)
 }
@@ -206,7 +213,7 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		pod := r.URL.Query().Get("pod")
 		service := r.URL.Query().Get("service")
 		networkPolicy := r.URL.Query().Get("networkpolicy")
-		policyType := r.URL.Query().Get("type")
+		policyType := strings.ToUpper(r.URL.Query().Get("type"))
 		namespace := r.URL.Query().Get("namespace")
 		table := r.URL.Query().Get("table")
 		groups := r.URL.Query().Get("groups")
@@ -229,13 +236,18 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			http.Error(w, "namespace must be provided", http.StatusBadRequest)
 			return
 		}
-		if networkPolicy != "" {
-			if policyType == "" {
-				http.Error(w, "policy type must be provided with policy name", http.StatusBadRequest)
+		if networkPolicy != "" && policyType != "" {
+			_, ok := querier.NetworkPolicyTypeMap[policyType]
+			if !ok {
+				http.Error(w, "unknown policy type. Valid types are K8sNP, ACNP, ANNP, BANP or ANP", http.StatusBadRequest)
 				return
 			}
 			if querier.NamespaceScopedPolicyTypes.Has(policyType) && namespace == "" {
 				http.Error(w, "policy Namespace must be provided for policy type "+policyType, http.StatusBadRequest)
+				return
+			}
+			if !querier.NamespaceScopedPolicyTypes.Has(policyType) && namespace != "" {
+				http.Error(w, "policy Namespace should not be provided for cluster-scoped policy type "+policyType, http.StatusBadRequest)
 				return
 			}
 		}
@@ -251,8 +263,16 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			}
 			resps, err = getServiceFlows(aq, service, namespace)
 		} else if networkPolicy != "" {
-			cpPolicyType := querier.NetworkPolicyTypeMap[policyType]
+			var cpPolicyType cpv1beta.NetworkPolicyType
+			if policyType != "" {
+				// policyType string has already been validated above
+				cpPolicyType = querier.NetworkPolicyTypeMap[policyType]
+			}
 			resps, err = getNetworkPolicyFlows(aq, networkPolicy, namespace, cpPolicyType)
+			if err == errAmbiguousQuery {
+				http.Error(w, errAmbiguousQuery.Error(), http.StatusBadRequest)
+				return
+			}
 		} else if table != "" {
 			resps, err = getTableFlows(aq, table)
 			if err == nil && resps == nil {

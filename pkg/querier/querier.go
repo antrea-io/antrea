@@ -109,19 +109,20 @@ type NetworkPolicyQueryFilter struct {
 	SourceName string
 	// The namespace of the original Namespace that the internal NetworkPolicy is created for.
 	Namespace string
-	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, ACNP, ANNP)
+	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, ACNP, ANNP, ANP and BANP)
 	SourceType cpv1beta.NetworkPolicyType
 }
 
 // From user shorthand input to cpv1beta1.NetworkPolicyType
 var NetworkPolicyTypeMap = map[string]cpv1beta.NetworkPolicyType{
-	"K8sNP": cpv1beta.K8sNetworkPolicy,
+	"K8SNP": cpv1beta.K8sNetworkPolicy,
 	"ACNP":  cpv1beta.AntreaClusterNetworkPolicy,
 	"ANNP":  cpv1beta.AntreaNetworkPolicy,
 	"ANP":   cpv1beta.AdminNetworkPolicy,
+	"BANP":  cpv1beta.BaselineAdminNetworkPolicy,
 }
 
-var NamespaceScopedPolicyTypes = sets.New[string]("ANNP", "K8sNP")
+var NamespaceScopedPolicyTypes = sets.New[string]("ANNP", "K8SNP")
 
 // ServiceExternalIPStatusQuerier queries the Service external IP status for debugging purposes.
 // Ideally, every Node should have consistent results eventually. This should only be used when

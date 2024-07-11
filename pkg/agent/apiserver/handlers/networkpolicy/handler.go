@@ -67,8 +67,15 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 			return nil, "", fmt.Errorf("namespace option should not be used with pod option")
 		}
 	}
-	strSourceType := query.Get("type")
-	npSourceType := querier.NetworkPolicyTypeMap[strSourceType]
+	strSourceType := strings.ToUpper(query.Get("type"))
+	var policyType cpv1beta.NetworkPolicyType
+	if strSourceType != "" {
+		npSourceType, ok := querier.NetworkPolicyTypeMap[strSourceType]
+		if !ok {
+			return nil, "", fmt.Errorf("unknown policy type. Valid types are K8sNP, ACNP, ANNP, BANP or ANP")
+		}
+		policyType = npSourceType
+	}
 	source := query.Get("source")
 	name := query.Get("name")
 	if name != "" && (source != "" || namespace != "" || pod != "" || strSourceType != "") {
@@ -78,6 +85,6 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 		Name:       name,
 		SourceName: source,
 		Namespace:  namespace,
-		SourceType: npSourceType,
+		SourceType: policyType,
 	}, pod, nil
 }
