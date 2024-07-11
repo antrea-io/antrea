@@ -1223,23 +1223,19 @@ func FlowModToString(flowMod *openflow15.FlowMod) string {
 	return fmt.Sprintf("%s, %s %s", getFlowModBaseString(flowMod), getFlowModMatch(flowMod), getFlowModAction(flowMod))
 }
 
-func FlowModMatchString(flowMod *openflow15.FlowMod) string {
-	return fmt.Sprintf("table=%d,%s", flowMod.TableId, getFlowModMatch(flowMod))
-}
-
-func FlowDumpMatchString(flowMod *openflow15.FlowMod) string {
+func FlowModMatchString(flowMod *openflow15.FlowMod, omitFields ...string) string {
 	flowModMatch := getFlowModMatch(flowMod)
 	var flowDumpMatch []string
+out:
 	for _, m := range strings.Split(flowModMatch, ",") {
-		// From the openvswitch documentation:
-		//   The following priority field sets the priority for flows added by the
-		//   add-flow and add-flows commands. For  mod-flows  and  del-flows  when
-		//   --strict  is  specified, priority must match along with the rest of the
-		//   flow specification. Other commands do not allow priority to be specified.
-		// Hence, the priority matcher needs to be removed for ovs-ofctl dump-flows.
-		if !strings.HasPrefix(m, "priority") {
-			flowDumpMatch = append(flowDumpMatch, m)
+		// Omit specific fields if needed. For example, the priority match field is not supported
+		// for the ovs-ofctl dump-flows command, and should be removed.
+		for _, field := range omitFields {
+			if strings.HasPrefix(m, field) {
+				continue out
+			}
 		}
+		flowDumpMatch = append(flowDumpMatch, m)
 	}
 	return fmt.Sprintf("table=%d,%s", flowMod.TableId, strings.Join(flowDumpMatch, ","))
 }

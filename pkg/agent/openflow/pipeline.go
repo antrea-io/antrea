@@ -383,7 +383,7 @@ func getFlowModKey(fm *openflow15.FlowMod) string {
 }
 
 func getFlowDumpKey(fm *openflow15.FlowMod) string {
-	return binding.FlowDumpMatchString(fm)
+	return binding.FlowModMatchString(fm, "priority")
 }
 
 type flowMessageCache map[string]*openflow15.FlowMod

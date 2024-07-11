@@ -313,7 +313,7 @@ func TestFlowModMatchString(t *testing.T) {
 	}
 }
 
-func TestFlowModDumpString(t *testing.T) {
+func TestFlowModStringForDumpCommand(t *testing.T) {
 	rm := &RegMark{field: NewRegField(0, 0, 3), value: 2}
 	table := &ofTable{Table: &ofctrl.Table{TableId: 1}}
 	basicFB := table.BuildFlow(100).(*ofFlowBuilder)
@@ -382,7 +382,7 @@ func TestFlowModDumpString(t *testing.T) {
 			require.Equal(t, 1, len(messages))
 			fm, ok := messages[0].GetMessage().(*openflow15.FlowMod)
 			assert.True(t, ok)
-			fmStr := FlowDumpMatchString(fm)
+			fmStr := FlowModMatchString(fm, "priority")
 			assert.Equal(t, tt.expectedMatch, fmStr)
 		})
 	}
