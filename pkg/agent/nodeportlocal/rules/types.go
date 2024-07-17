@@ -14,8 +14,10 @@
 
 package rules
 
-// PodNodePort contains the Node Port, Pod IP, Pod Port and Protocols for NodePortLocal.
+// PodNodePort contains the Pod namespaced name, Node Port, Pod IP, Pod Port and Protocol for NodePortLocal.
 type PodNodePort struct {
+	// PodKey is the namespaced name of the Pod.
+	PodKey   string
 	NodePort int
 	PodPort  int
 	PodIP    string

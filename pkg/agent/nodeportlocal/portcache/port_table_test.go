@@ -24,6 +24,7 @@ const (
 	startPort = 61000
 	endPort   = 65000
 	podIP     = "10.0.0.1"
+	podKey    = "default/test-pod"
 	nodePort1 = startPort
 	nodePort2 = startPort + 1
 )
@@ -33,7 +34,7 @@ func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener LocalPortOpene
 		PortTableCache: cache.NewIndexer(GetPortTableKey, cache.Indexers{
 			NodePortIndex:    NodePortIndexFunc,
 			PodEndpointIndex: PodEndpointIndexFunc,
-			PodIPIndex:       PodIPIndexFunc,
+			PodKeyIndex:      PodKeyIndexFunc,
 		}),
 		StartPort:       startPort,
 		EndPort:         endPort,
