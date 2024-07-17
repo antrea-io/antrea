@@ -175,7 +175,14 @@ function CheckAndInstallOVSDriver {
     $ExportType = [System.Security.Cryptography.X509Certificates.X509ContentType]::Cert
     $Cert = (Get-AuthenticodeSignature $DriverFile).SignerCertificate
     [System.IO.File]::WriteAllBytes($CertificateFile, $Cert.Export($ExportType))
-    Import-Certificate -FilePath "$CertificateFile" -CertStoreLocation cert:\LocalMachine\TrustedPublisher
+    # Use certstore.Add to import cert into trusted publishers instead of Import-Certificate,
+    # otherwise an error "Access is denied. (Exception from HRESULT: 0x80070005 (E_ACCESSDENIED))"
+    # may occur when `Import-Certificate` is used to import a certificate to the trusted publisher
+    # store for the first time on a fresh Windows 2022 Node. See issue #6530.
+    $CertStore = Get-Item cert:\LocalMachine\TrustedPublisher
+    $CertStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]"ReadWrite")
+    $CertStore.Add($(Get-Item $CertificateFile).FullName)
+    $CertStore.Close()
     Import-Certificate -FilePath "$CertificateFile" -CertStoreLocation cert:\LocalMachine\Root
 
     # Install the OVSext driver with the desired version
