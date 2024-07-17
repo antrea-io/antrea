@@ -2967,9 +2967,8 @@ func (f *featurePodConnectivity) hostBridgeLocalFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	return []binding.Flow{
 		// This generates the flow to forward the packets from uplink port to bridge local port.
-		ClassifierTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(cookieID).
-			MatchInPort(f.uplinkPort).
+		f.matchUplinkInPortInClassifierTable(ClassifierTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID)).
 			Action().Output(f.hostIfacePort).
 			Done(),
 		// This generates the flow to forward the packets from bridge local port to uplink port.
