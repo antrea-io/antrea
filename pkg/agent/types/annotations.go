@@ -27,6 +27,9 @@ const (
 	// NodeMaxEgressIPsAnnotationKey represents the key of maximum Egress IP number in the Annotations of the Node.
 	NodeMaxEgressIPsAnnotationKey string = "node.antrea.io/max-egress-ips"
 
+	// NodeBGPRouterIDAnnotationKey represents the key of the Node's BGP router ID in the Annotations of the Node.
+	NodeBGPRouterIDAnnotationKey string = "node.antrea.io/bgp-router-id"
+
 	// ServiceExternalIPPoolAnnotationKey is the key of the Service annotation that specifies the Service's desired external IP pool.
 	ServiceExternalIPPoolAnnotationKey string = "service.antrea.io/external-ip-pool"
 

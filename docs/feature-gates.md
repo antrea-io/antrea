@@ -59,6 +59,7 @@ edit the Agent configuration in the
 | `EgressSeparateSubnet`        | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | No                 |                                               |
 | `NodeNetworkPolicy`           | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
 | `L7FlowExporter`              | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
+| `BGPPolicy`                   | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
 
 ## Description and Requirements of Features
 
@@ -431,6 +432,16 @@ Refer to this [document](egress.md#subnetinfo) for more information.
 
 `L7FlowExporter` enables users to export application-layer flow data using Pod or Namespace annotations.
 Refer to this [document](network-flow-visibility.md#l7-visibility) for more information.
+
+#### Requirements for this Feature
+
+- Linux Nodes only.
+
+### BGPPolicy
+
+`BGPPolicy` allows users to initiate BGP process on selected Kubernetes Nodes and advertise Service IPs (e.g.,
+ClusterIPs, ExternalIPs, LoadBalancerIPs), Pod IPs and Egress IPs to remote BGP peers, providing a flexible mechanism
+for integrating Kubernetes clusters with external BGP-enabled networks.
 
 #### Requirements for this Feature
 
