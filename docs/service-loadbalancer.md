@@ -36,7 +36,7 @@ LoadBalancer
 ## Service external IP management by Antrea
 
 Antrea supports external IP management for Services of type LoadBalancer
-since version 1.5, which can work together with `AntreaProxy` or
+since version 1.5, which can work together with Antrea Proxy or
 `kube-proxy` to implement Services of type LoadBalancer, without requiring an
 external load balancer. With the external IP management feature, Antrea can
 allocate an external IP for a Service of type LoadBalancer from an
@@ -44,7 +44,7 @@ allocate an external IP for a Service of type LoadBalancer from an
 based on the ExternalIPPool's NodeSelector to host the external IP. Antrea
 configures the Service's external IP on the selected Node, and thus Service
 requests to the external IP will get to the Node, and they are then handled by
-`AntreaProxy` or `kube-proxy` on the Node and distributed to the Service's
+Antrea Proxy or `kube-proxy` on the Node and distributed to the Service's
 Endpoints. Antrea also implements a Node failover mechanism for Service
 external IPs. When Antrea detects a Node hosting an external IP is down, it
 will move the external IP to another available Node of the ExternalIPPool.
@@ -56,7 +56,7 @@ enabled in the `kube-proxy` configuration. For more information about how to
 configure `kube-proxy`, please refer to the [Interoperability with kube-proxy
 IPVS mode](#interoperability-with-kube-proxy-ipvs-mode) section.
 
-If you are using `kube-proxy` iptables mode or [`AntreaProxy` with `proxyAll`](antrea-proxy.md#antreaproxy-with-proxyall),
+If you are using `kube-proxy` iptables mode or [Antrea Proxy with `proxyAll`](antrea-proxy.md#antrea-proxy-with-proxyall),
 no extra configuration change is needed.
 
 ### Configuration
@@ -84,15 +84,15 @@ data:
       ServiceExternalIP: true
 ```
 
-The feature works with both `AntreaProxy` and `kube-proxy`, including the
+The feature works with both Antrea Proxy and `kube-proxy`, including the
 following configurations:
 
-- `AntreaProxy` without `proxyAll` enabled - this is `antrea-agent`'s default
+- Antrea Proxy without `proxyAll` enabled - this is `antrea-agent`'s default
 configuration, in which `kube-proxy` serves the request traffic for Services
-of type LoadBalancer (while `AntreaProxy` handles Service requests from Pods).
-- `AntreaProxy` with `proxyAll` enabled - in this case, `AntreaProxy` handles
+of type LoadBalancer (while Antrea Proxy handles Service requests from Pods).
+- Antrea Proxy with `proxyAll` enabled - in this case, Antrea Proxy handles
 all Service traffic, including Services of type LoadBalancer.
-- `AntreaProxy` disabled - `kube-proxy` handles all Service traffic, including
+- Antrea Proxy disabled - `kube-proxy` handles all Service traffic, including
 Services of type LoadBalancer.
 
 #### Create an ExternalIPPool custom resource
@@ -312,7 +312,7 @@ As MetalLB will allocate external IPs for all Services of type LoadBalancer,
 once it is running, the Service external IP management feature of Antrea should
 not be enabled to avoid conflicts with MetalLB. You can deploy Antrea with the
 default configuration (in which the `ServiceExternalIP` feature gate of
-`antrea-agent` is set to `false`). MetalLB can work with both `AntreaProxy` and
+`antrea-agent` is set to `false`). MetalLB can work with both Antrea Proxy and
 `kube-proxy` configurations of `antrea-agent`.
 
 ### Configure MetalLB with layer 2 mode

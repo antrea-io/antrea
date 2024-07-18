@@ -142,10 +142,10 @@ configuration file as the Antrea Proxy `proxyAll` mode is enabled by default.
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
     kubeAPIServerOverride: "10.10.1.1:6443"
 
-    # Option antreaProxy contains AntreaProxy related configuration options.
+    # Option antreaProxy contains Antrea Proxy related configuration options.
     antreaProxy:
-      # ProxyAll tells antrea-agent to proxy ClusterIP Service traffic, regardless of where they come from.
-      # Therefore, running kube-proxy is no longer required. This requires the AntreaProxy feature to be enabled.
+      # Option proxyAll tells antrea-agent to proxy ClusterIP Service traffic, regardless of where they come from.
+      # Therefore, running kube-proxy is no longer required. This requires the Antrea Proxy feature to be enabled.
       # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
       # apiserver directly.
       proxyAll: true

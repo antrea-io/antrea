@@ -205,7 +205,7 @@ so their source IP will be rewritten to the Node's IP before going out.
 ### ClusterIP Service
 
 Antrea supports two ways to implement Services of type ClusterIP - leveraging
-`kube-proxy`, or AntreaProxy that implements load balancing for ClusterIP
+`kube-proxy`, or Antrea Proxy that implements load balancing for ClusterIP
 Service traffic with OVS.
 
 When leveraging `kube-proxy`, Antrea Agent adds OVS flows to forward the packets
@@ -222,12 +222,12 @@ the tunnel.
 See the [Kubernetes Service Proxies documentation](https://kubernetes.io/docs/reference/networking/virtual-ips)
 for more details.
 
-When AntreaProxy is enabled, Antrea Agent will add OVS flows that implement
+When Antrea Proxy is enabled, Antrea Agent will add OVS flows that implement
 load balancing and DNAT for the ClusterIP Service traffic. In this way, Service
 traffic load balancing is done inside OVS together with the rest of the
 forwarding, and it can achieve better performance than using `kube-proxy`, as
 there is no extra overhead of forwarding Service traffic to the host's network
-stack and iptables processing. The AntreaProxy implementation in Antrea Agent
+stack and iptables processing. The Antrea Proxy implementation in Antrea Agent
 leverages some `kube-proxy` packages to watch and process Service Endpoints.
 
 ### NetworkPolicy

@@ -278,8 +278,8 @@ where the underlay router will route the traffic to the destination VLAN.
 ### Requirements for this Feature
 
 As of now, this feature is supported on Linux Nodes, with IPv4, `system` OVS datapath
-type, `noEncap`, `noSNAT` traffic mode, and `AntreaProxy` feature enabled. Configuration
-with `ProxyAll` feature enabled is not verified.
+type, `noEncap`, `noSNAT` traffic mode, and Antrea Proxy enabled. Configuration
+with `proxyAll` enabled is not verified.
 
 The IPs in the `IPPools` without VLAN must be in the same underlay subnet as the Node
 IP, because inter-Node traffic of AntreaIPAM Pods is forwarded by the Node network.

@@ -257,7 +257,7 @@ Like K8s NetworkPolicy, several tables of the pipeline are dedicated to [Kuberne
 Service](https://kubernetes.io/docs/concepts/services-networking/service/) implementation (tables [NodePortMark],
 [SessionAffinity], [ServiceLB], and [EndpointDNAT]).
 
-By enabling `proxyAll`, ClusterIP, NodePort, LoadBalancer, and ExternalIP are all handled by AntreaProxy. Otherwise,
+By enabling `proxyAll`, ClusterIP, NodePort, LoadBalancer, and ExternalIP are all handled by Antrea Proxy. Otherwise,
 only in-cluster ClusterIP is handled. In this document, we use the sample K8s Services below. These Services select Pods
 with the label `app: web` as Endpoints.
 
@@ -788,12 +788,13 @@ Flow 1 is for case 1, matching packets received on the local Antrea gateway port
 addresses. There are some cases where the source IP of the packets through the local Antrea gateway port is not the local
 Antrea gateway IP address:
 
-- When Antrea is deployed with kube-proxy, and `AntreaProxy` is not enabled, packets from local Pods destined for Services
-  will first go through the gateway port, get load-balanced by the kube-proxy data path (undergoes DNAT) then re-enter
-  the OVS pipeline through the gateway port (through an "onlink" route, installed by Antrea, directing the DNAT'd packets
-  to the gateway port), resulting in the source IP being that of a local Pod.
-- When Antrea is deployed without kube-proxy, and both `AntreaProxy` and `proxyAll` are enabled, packets from the external
-  network destined for Services will be routed to OVS through the gateway port without masquerading source IP.
+- When Antrea is deployed with kube-proxy, and the feature `AntreaProxy` is not enabled, packets from local Pods destined
+  for Services will first go through the gateway port, get load-balanced by the kube-proxy data path (undergoes DNAT)
+  then re-enter the OVS pipeline through the gateway port (through an "onlink" route, installed by Antrea, directing the
+  DNAT'd packets to the gateway port), resulting in the source IP being that of a local Pod.
+- When Antrea is deployed without kube-proxy, and both the feature `AntreaProxy` and option `proxyAll` are enabled,
+  packets from the external network destined for Services will be routed to OVS through the gateway port without
+  masquerading source IP.
 - When Antrea is deployed with kube-proxy, packets from the external network destined for Services whose
   `externalTrafficPolicy` is set to `Local` will get load-balanced by the kube-proxy data path (undergoes DNAT with a
   local Endpoint selected by the kube-proxy) and then enter the OVS pipeline through the gateway (through a "onlink"
@@ -1303,7 +1304,7 @@ through the local Antrea gateway. In other words, these are connections for whic
 (SYN packet for TCP) was received through the local Antrea gateway. It rewrites the destination MAC address to
 that of the local Antrea gateway, loads `ToGatewayRegMark`, and forwards them to table [L3DecTTL]. This ensures that
 reply packets can be forwarded back to the local Antrea gateway in subsequent tables. This flow is required to handle
-the following cases when AntreaProxy is not enabled:
+the following cases when Antrea Proxy is not enabled:
 
 - Reply traffic for connections from a local Pod to a ClusterIP Service, which are handled by kube-proxy and go through
   DNAT. In this case, the destination IP address of the reply traffic is the Pod which initiated the connection to the
