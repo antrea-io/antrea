@@ -22,6 +22,7 @@ import (
 	"sort"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
@@ -62,7 +63,7 @@ func patchPod(value []npltypes.NPLAnnotation, pod *corev1.Pod, kubeClient client
 
 	payloadBytes, _ := json.Marshal(newPayload)
 	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.MergePatchType,
-		payloadBytes, metav1.PatchOptions{}, "status"); err != nil {
+		payloadBytes, metav1.PatchOptions{}, "status"); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("unable to update NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace,
 			pod.Name, err)
 	}
