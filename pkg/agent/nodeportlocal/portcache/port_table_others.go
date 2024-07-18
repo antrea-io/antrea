@@ -70,10 +70,10 @@ func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (in
 	return 0, ProtocolSocketData{}, fmt.Errorf("no free port found")
 }
 
-func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, error) {
+func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP string) (int, error) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	npData := pt.getEntryByPodIPPortProto(podIP, podPort, protocol)
+	npData := pt.getEntryByPodKeyPortProto(podKey, podPort, protocol)
 	exists := (npData != nil)
 	if !exists {
 		nodePort, protocolData, err := pt.getFreePort(podIP, podPort, protocol)
@@ -81,6 +81,7 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 			return 0, err
 		}
 		npData = &NodePortData{
+			PodKey:   podKey,
 			NodePort: nodePort,
 			PodIP:    podIP,
 			PodPort:  podPort,
@@ -125,10 +126,10 @@ func (pt *PortTable) deleteRule(data *NodePortData) error {
 	return nil
 }
 
-func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) error {
+func (pt *PortTable) DeleteRule(podKey string, podPort int, protocol string) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	data := pt.getEntryByPodIPPortProto(podIP, podPort, protocol)
+	data := pt.getEntryByPodKeyPortProto(podKey, podPort, protocol)
 	if data == nil {
 		// Delete not required when the PortTable entry does not exist
 		return nil
@@ -136,10 +137,10 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 	return pt.deleteRule(data)
 }
 
-func (pt *PortTable) DeleteRulesForPod(podIP string) error {
+func (pt *PortTable) DeleteRulesForPod(podKey string) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	podEntries := pt.getDataForPodIP(podIP)
+	podEntries := pt.getDataForPod(podKey)
 	for _, podEntry := range podEntries {
 		return pt.deleteRule(podEntry)
 	}
@@ -155,6 +156,7 @@ func (pt *PortTable) syncRules() error {
 	for _, obj := range objs {
 		npData := obj.(*NodePortData)
 		nplPorts = append(nplPorts, rules.PodNodePort{
+			PodKey:   npData.PodKey,
 			NodePort: npData.NodePort,
 			PodPort:  npData.PodPort,
 			PodIP:    npData.PodIP,
@@ -185,6 +187,7 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 		}
 
 		npData := &NodePortData{
+			PodKey:   nplPort.PodKey,
 			NodePort: nplPort.NodePort,
 			PodPort:  nplPort.PodPort,
 			PodIP:    nplPort.PodIP,

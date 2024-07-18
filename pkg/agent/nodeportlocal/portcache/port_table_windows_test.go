@@ -36,18 +36,21 @@ func TestRestoreRules(t *testing.T) {
 	portTable := newPortTable(mockPortRules, mockPortOpener)
 	allNPLPorts := []rules.PodNodePort{
 		{
+			PodKey:   podKey,
 			NodePort: nodePort1,
 			PodPort:  1001,
 			PodIP:    podIP,
 			Protocol: "tcp",
 		},
 		{
+			PodKey:   podKey,
 			NodePort: nodePort1,
 			PodPort:  1001,
 			PodIP:    podIP,
 			Protocol: "udp",
 		},
 		{
+			PodKey:   podKey,
 			NodePort: nodePort2,
 			PodPort:  1002,
 			PodIP:    podIP,
@@ -70,6 +73,7 @@ func TestDeleteRule(t *testing.T) {
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
 	portTable := newPortTable(mockPortRules, mockPortOpener)
 	npData := &NodePortData{
+		PodKey:   podKey,
 		NodePort: startPort,
 		PodIP:    podIP,
 		PodPort:  1001,
@@ -80,7 +84,7 @@ func TestDeleteRule(t *testing.T) {
 
 	portTable.addPortTableCache(npData)
 	mockPortRules.EXPECT().DeleteRule(startPort, podIP, 1001, "tcp")
-	err := portTable.DeleteRule(podIP, 1001, "tcp")
+	err := portTable.DeleteRule(podKey, 1001, "tcp")
 	require.NoError(t, err)
 }
 
@@ -92,6 +96,7 @@ func TestDeleteRulesForPod(t *testing.T) {
 
 	npData := []*NodePortData{
 		{
+			PodKey:   podKey,
 			NodePort: startPort,
 			PodIP:    podIP,
 			PodPort:  1001,
@@ -100,6 +105,7 @@ func TestDeleteRulesForPod(t *testing.T) {
 			},
 		},
 		{
+			PodKey:   podKey,
 			NodePort: startPort + 1,
 			PodIP:    podIP,
 			PodPort:  1002,
@@ -114,7 +120,7 @@ func TestDeleteRulesForPod(t *testing.T) {
 		mockPortRules.EXPECT().DeleteRule(data.NodePort, podIP, data.PodPort, data.Protocol.Protocol)
 	}
 
-	err := portTable.DeleteRulesForPod(podIP)
+	err := portTable.DeleteRulesForPod(podKey)
 	require.NoError(t, err)
 }
 
@@ -127,11 +133,11 @@ func TestAddRule(t *testing.T) {
 
 	// Adding the rule the first time should succeed.
 	mockPortRules.EXPECT().AddRule(startPort, podIP, podPort, "udp")
-	gotNodePort, err := portTable.AddRule(podIP, podPort, "udp")
+	gotNodePort, err := portTable.AddRule(podKey, podPort, "udp", podIP)
 	require.NoError(t, err)
 	assert.Equal(t, startPort, gotNodePort)
 
 	// Add the same rule the second time should fail.
-	_, err = portTable.AddRule(podIP, podPort, "udp")
+	_, err = portTable.AddRule(podKey, podPort, "udp", podIP)
 	assert.ErrorContains(t, err, "existing Windows Nodeport entry for")
 }
