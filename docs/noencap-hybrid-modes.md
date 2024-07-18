@@ -9,10 +9,10 @@ are in different subnets, but does not encapsulate when the source and the
 destination Nodes are in the same subnet. This document describes how to
 configure Antrea with the `NoEncap` and `Hybrid` modes.
 
-The NoEncap and Hybrid traffic modes require AntreaProxy to support correct
-NetworkPolicy enforcement, which is why trying to disable AntreaProxy in these
+The NoEncap and Hybrid traffic modes require Antrea Proxy to support correct
+NetworkPolicy enforcement, which is why trying to disable Antrea Proxy in these
 modes will normally cause the Antrea Agent to fail. It is possible to override
-this behavior and force AntreaProxy to be disabled by setting the
+this behavior and force Antrea Proxy to be disabled by setting the
 ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY environment variable to true for the Antrea
 Agent in the [Antrea deployment yaml](../build/yamls/antrea.yml).
 For example:

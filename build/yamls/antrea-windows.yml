@@ -174,7 +174,7 @@ data:
       # To disable AntreaProxy, set this to false. It should be enabled on Windows, otherwise NetworkPolicy will
       # not take effect on Service traffic.
       enable: true
-      # ProxyAll tells antrea-agent to proxy ClusterIP Service traffic, regardless of where they come from.
+      # proxyAll tells antrea-agent to proxy ClusterIP Service traffic, regardless of where they come from.
       # Therefore, running kube-proxy is no longer required. This requires the AntreaProxy feature to be enabled.
       # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
       # apiserver directly.
@@ -234,7 +234,7 @@ spec:
     metadata:
       annotations:
         checksum/agent-windows: 63f16e1fadb6b1354efda21c73702b4290400181136d4d47d4b1cd6a5f82d037
-        checksum/windows-config: 10ad2be0a04b1752abc224fed0124f7b1da36efc5e7323e193eb38e11b25e798
+        checksum/windows-config: 4f07164f32afc61e20b4aef984a8781142e5d99f7c58f7581e4ccfeabb34855f
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
         app: antrea

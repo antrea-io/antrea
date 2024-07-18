@@ -1490,7 +1490,7 @@ Kubernetes](https://kubernetes.io/docs/concepts/services-networking/dns-pod-serv
 Services. The reason is that Antrea will use the information included in A or
 AAAA DNS records to implement FQDN based policies. In the case of "normal" (not
 headless) Services, the DNS name resolves to the ClusterIP for the Service, but
-policy rules are enforced after AntreaProxy Service Load-Balancing and at that
+policy rules are enforced after Antrea Proxy Service Load-Balancing and at that
 stage the destination IP address has already been rewritten to the address of an
 endpoint backing the Service. For headless Services, a ClusterIP is not
 allocated and, assuming the Service has a selector, the DNS server returns A /
@@ -1571,8 +1571,8 @@ A combination of Service name and Service Namespace can be used in `toServices` 
 by this field. A sample policy can be found [here](#acnp-for-toservices-rule).
 
 Since `toServices` represents a combination of IP+port, it cannot be used with `to` or `ports` within the same egress rule.
-Also, since the matching process relies on the groupID assigned to Service by AntreaProxy, this field can only be used when
-AntreaProxy is enabled.
+Also, since the matching process relies on the groupID assigned to Service by Antrea Proxy, this field can only be used when
+Antrea Proxy is enabled.
 
 This clusterIP-based match has one caveat: direct access to the Endpoints of this Service is not affected by
 `toServices` rules. To restrict access towards backend Endpoints of a Service, define a `ClusterGroup` with `ServiceReference`
@@ -1952,11 +1952,11 @@ Similar RBAC is applied to the ClusterGroup resource.
   won't be blocked by new rules.
 - For hairpin Service traffic, when a Pod initiates traffic towards the Service it
   provides, and the same Pod is selected as the Endpoint, NetworkPolicies will
-  consistently permit this traffic during ingress enforcement if AntreaProxy is enabled,
+  consistently permit this traffic during ingress enforcement if Antrea Proxy is enabled,
   irrespective of the ingress rules defined by the user. In the presence of ingress rules
   preventing access to the Service from Pods providing the Service, accessing the Service
   from one of these Pods will succeed if traffic is hairpinned back to the source Pod, and
-  will fail if a different Endpoint is selected by AntreaProxy. However, when AntreaProxy
+  will fail if a different Endpoint is selected by Antrea Proxy. However, when Antrea Proxy
   is disabled, NetworkPolicies may not function as expected for hairpin Service traffic.
   This is due to kube-proxy performing SNAT, which conceals the original source IP from
   Antrea. Consequently, NetworkPolicies are unable to differentiate between hairpin
