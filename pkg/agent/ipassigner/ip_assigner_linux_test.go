@@ -36,6 +36,9 @@ func ensureRPFInt(name string, y int) error {
 	return nil
 }
 
+func dummyAdvertise(a *assignee, ip net.IP) {
+}
+
 func DummyInterfaceByName(name string) (*net.Interface, error) {
 	return &net.Interface{
 		Index:        0,
@@ -216,11 +219,16 @@ func TestIPAssigner_AssignIP(t *testing.T) {
 					mutex:       sync.RWMutex{},
 				}
 				a.defaultAssignee.link = &dummyDeviceMock{}
-				a.defaultAssignee.advertiseFn = advertiseFnc
 				a.defaultAssignee.arpResponder = mockResponder
 				a.defaultAssignee.ndpResponder = mockResponder
 				tt.expectFunc(mockResponder)
 				tt.expectedCalls(mockNetlink)
+
+				originalAdvertiseResponder := advertiseResponder
+				advertiseResponder = dummyAdvertise
+				defer func() {
+					advertiseResponder = originalAdvertiseResponder
+				}()
 
 				_, err = a.AssignIP(tt.ip, subnetInfo, false)
 				if tt.expectedError {
@@ -374,6 +382,12 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 			defer func() { netInterfaceByName = netInterfaceByNameFunc }()
 			netInterfaceByName = DummyInterfaceByName
 
+			originalAdvertiseResponder := advertiseResponder
+			advertiseResponder = dummyAdvertise
+			defer func() {
+				advertiseResponder = originalAdvertiseResponder
+			}()
+
 			_, err = a.AssignIP(tt.ip, subnetInfo, false)
 			if tt.expectedError {
 				require.Error(t, err)
@@ -385,7 +399,7 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 	}
 }
 
-func TestIPAssigner_UnAssignIP(t *testing.T) {
+func TestIPAssigner_UnassignIP(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockResponder := respondertest.NewMockResponder(controller)
 	var subnetInfo *crdv1b1.SubnetInfo
@@ -487,11 +501,16 @@ func TestIPAssigner_UnAssignIP(t *testing.T) {
 				mutex:       sync.RWMutex{},
 			}
 			a.defaultAssignee.link = &dummyDeviceMock{}
-			a.defaultAssignee.advertiseFn = advertiseFnc
 			a.defaultAssignee.arpResponder = mockResponder
 			a.defaultAssignee.ndpResponder = mockResponder
 			tt.expectFunc(mockResponder)
 			tt.expectedCalls(mockNetlink)
+
+			originalAdvertiseResponder := advertiseResponder
+			advertiseResponder = dummyAdvertise
+			defer func() {
+				advertiseResponder = originalAdvertiseResponder
+			}()
 
 			_, err := a.UnassignIP(tt.ip)
 			if tt.expectedError {
@@ -504,7 +523,7 @@ func TestIPAssigner_UnAssignIP(t *testing.T) {
 	}
 }
 
-func TestIPAssigner_UnAssignIPVlan(t *testing.T) {
+func TestIPAssigner_UnassignIPVlan(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockResponder := respondertest.NewMockResponder(controller)
 	var subnetInfo *crdv1b1.SubnetInfo
@@ -673,9 +692,14 @@ func TestIPAssigner_AssignedIPs(t *testing.T) {
 		mutex: sync.RWMutex{},
 	}
 	a.defaultAssignee.link = &dummyDeviceMock{}
-	a.defaultAssignee.advertiseFn = advertiseFnc
 	a.defaultAssignee.arpResponder = mockResponder
 	a.defaultAssignee.ndpResponder = mockResponder
+
+	originalAdvertiseResponder := advertiseResponder
+	advertiseResponder = dummyAdvertise
+	defer func() {
+		advertiseResponder = originalAdvertiseResponder
+	}()
 
 	ips := a.AssignedIPs()
 
@@ -888,13 +912,18 @@ func TestIPAssigner_InitIPs(t *testing.T) {
 				mutex:       sync.RWMutex{},
 			}
 			a.defaultAssignee.link = &dummyDeviceMock{}
-			a.defaultAssignee.advertiseFn = advertiseFnc
 			a.defaultAssignee.arpResponder = mockResponder
 			a.defaultAssignee.ndpResponder = mockResponder
 			tt.expectFunc(mockResponder)
 			tt.expectedCalls(mockNetlink)
 
 			netlinkAddrDel = mockNetlink.AddrDel
+
+			originalAdvertiseResponder := advertiseResponder
+			advertiseResponder = dummyAdvertise
+			defer func() {
+				advertiseResponder = originalAdvertiseResponder
+			}()
 
 			err = a.InitIPs(tt.desiredIPs)
 			if tt.expectedError {
@@ -982,11 +1011,16 @@ func TestIPAssigner_InitIPsVlan(t *testing.T) {
 				mutex:         sync.RWMutex{},
 			}
 			a.defaultAssignee.link = &dummyDeviceMock{}
-			a.defaultAssignee.advertiseFn = advertiseFnc
 			a.defaultAssignee.arpResponder = mockResponder
 			a.defaultAssignee.ndpResponder = mockResponder
 			tt.expectFunc(mockResponder)
 			tt.expectedCalls(mockNetlink)
+
+			originalAdvertiseResponder := advertiseResponder
+			advertiseResponder = dummyAdvertise
+			defer func() {
+				advertiseResponder = originalAdvertiseResponder
+			}()
 
 			ensRpfFunc := ensureRPF
 			defer func() { ensureRPF = ensRpfFunc }()

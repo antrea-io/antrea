@@ -46,8 +46,9 @@ var (
 	netlinkAddrList    = netlink.AddrList
 )
 
-func advertiseFnc(ip net.IP, externalInterface *net.Interface) {
-}
+type advertiseArpNdp func(a *assignee, ip net.IP)
+
+var advertiseResponder advertiseArpNdp = (*assignee).advertise
 
 // VLAN interfaces created by antrea-agent will be named with the prefix.
 // For example, when VLAN ID is 10, the name will be antrea-ext.10.
@@ -69,8 +70,7 @@ type assignee struct {
 	// NDP queries itself.
 	ndpResponder responder.Responder
 	// ips tracks IPs that have been assigned to this assignee.
-	ips         sets.Set[string]
-	advertiseFn func(ip net.IP, externalInterface *net.Interface)
+	ips sets.Set[string]
 }
 
 // deletable returns whether this assignee can be safely deleted.
@@ -126,20 +126,20 @@ func (as *assignee) assign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
 		}
 	}
 	// Always advertise the IP when the IP is newly assigned to this Node.
-	as.advertiseFn(ip, as.logicalInterface)
+	advertiseResponder(as, ip)
 	as.ips.Insert(ip.String())
 	return nil
 }
 
-func advertise(ip net.IP, logicalInterface *net.Interface) {
+func (as *assignee) advertise(ip net.IP) {
 	if utilnet.IsIPv4(ip) {
 		klog.V(2).InfoS("Sending gratuitous ARP", "ip", ip)
-		if err := arping.GratuitousARPOverIface(ip, logicalInterface); err != nil {
+		if err := arping.GratuitousARPOverIface(ip, as.logicalInterface); err != nil {
 			klog.ErrorS(err, "Failed to send gratuitous ARP", "ip", ip)
 		}
 	} else {
 		klog.V(2).InfoS("Sending neighbor advertisement", "ip", ip)
-		if err := ndp.NeighborAdvertisement(ip, logicalInterface); err != nil {
+		if err := ndp.NeighborAdvertisement(ip, as.logicalInterface); err != nil {
 			klog.ErrorS(err, "Failed to send neighbor advertisement", "ip", ip)
 		}
 	}
@@ -282,7 +282,6 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (IPAss
 	for _, vlan := range vlans {
 		a.addVLANAssignee(vlan, int32(vlan.VlanId))
 	}
-	a.defaultAssignee.advertiseFn = advertise
 	return a, nil
 }
 
@@ -378,7 +377,7 @@ func (a *ipAssigner) AssignIP(ip string, subnetInfo *crdv1b1.SubnetInfo, forceAd
 		if crdv1b1.CompareSubnetInfo(subnetInfo, oldSubnetInfo, true) {
 			klog.V(2).InfoS("The IP is already assigned", "ip", ip)
 			if forceAdvertise {
-				as.advertiseFn(parsedIP, as.logicalInterface)
+				advertiseResponder(as, parsedIP)
 			}
 			return false, nil
 		}
@@ -544,7 +543,6 @@ func (a *ipAssigner) addVLANAssignee(link netlink.Link, vlan int32) (*assignee, 
 		logicalInterface: iface,
 		link:             link,
 		ips:              sets.New[string](),
-		advertiseFn:      advertiseFnc,
 	}
 	a.vlanAssignees[vlan] = as
 	return as, nil
