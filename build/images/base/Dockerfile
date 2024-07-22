@@ -35,6 +35,24 @@ RUN set -eux; \
     mkdir -p /opt/cni/bin; \
     wget -q -O - https://github.com/containernetworking/plugins/releases/download/$CNI_BINARIES_VERSION/cni-plugins-linux-${pluginsArch}-$CNI_BINARIES_VERSION.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
 
+FROM ubuntu:22.04 AS gobgp-binary
+
+ARG GOBGP_VERSION
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends wget ca-certificates
+
+RUN set -eux; \
+    dpkgArch="$(dpkg --print-architecture)"; \
+    case "${dpkgArch##*-}" in \
+         amd64) pluginsArch='amd64' ;; \
+         armhf) pluginsArch='arm' ;; \
+         arm64) pluginsArch='arm64' ;; \
+         *) pluginsArch=''; echo >&2; echo >&2 "unsupported architecture '$dpkgArch'"; echo >&2 ; exit 1 ;; \
+         esac; \
+         mkdir -p /opt/bgp; \
+         wget -q -O - https://github.com/osrg/gobgp/releases/download/v$GOBGP_VERSION/gobgp_${GOBGP_VERSION}_linux_${pluginsArch}.tar.gz | tar xz -C /opt/bgp
+
 FROM antrea/openvswitch:${BUILD_TAG}
 
 ARG SURICATA_VERSION
@@ -57,3 +75,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends ipset jq inotif
     /iptables-wrapper-installer.sh
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
+COPY --from=gobgp-binary /opt/bgp/gobgp /usr/local/bin
