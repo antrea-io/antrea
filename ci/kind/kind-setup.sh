@@ -38,7 +38,8 @@ KUBE_PROXY_MODE="iptables"
 PROMETHEUS=false
 K8S_VERSION=""
 KUBE_NODE_IPAM=true
-DEPLOY_EXTERNAL_SERVER=false
+DEPLOY_EXTERNAL_AGNHOST=false
+DEPLOY_EXTERNAL_FRR=false
 positional_args=()
 options=()
 
@@ -79,8 +80,9 @@ where:
     network. Note, '--extra-networks' and '--subnets' cannot be specified together.
   --ip-family: specify the ip-family for the kind cluster, default is $IP_FAMILY.
   --k8s-version: specify the Kubernetes version of the kind cluster, kind's default K8s version will be used if empty.
-  --deploy-external-server: deploy a container running as an external server for the cluster.
-  --all: delete all kind clusters
+  --deploy-external-agnhost: deploy a container running agnhost as an external server for the cluster, default is $DEPLOY_EXTERNAL_AGNHOST.
+  --deploy-external-frr: deploy a container running FRR as an external router for the cluster, default is $DEPLOY_EXTERNAL_FRR.
+  --all: delete all kind clusters.
   --until: delete kind clusters that have been created before the specified duration.
 "
 
@@ -411,7 +413,7 @@ EOF
   configure_networks
   configure_extra_networks
   configure_vlan_subnets
-  setup_external_server
+  setup_external_servers
   load_images
 
   if [[ $ANTREA_CNI == true ]]; then
@@ -441,7 +443,7 @@ function destroy {
   else
       kind delete cluster --name $CLUSTER_NAME
   fi
-  destroy_external_server
+  destroy_external_servers
   delete_networks
   delete_vlan_subnets
 }
@@ -455,15 +457,31 @@ function printUnixTimestamp {
     fi
 }
 
-function setup_external_server {
-  if [[ $DEPLOY_EXTERNAL_SERVER == true ]]; then
-    docker run -d --name antrea-external-server-$RANDOM --network kind -it --rm registry.k8s.io/e2e-test-images/agnhost:2.40 netexec &> /dev/null
+function setup_external_servers {
+  if [[ $DEPLOY_EXTERNAL_AGNHOST == true ]]; then
+    docker run -d --name antrea-external-agnhost-$RANDOM --network kind -it --rm registry.k8s.io/e2e-test-images/agnhost:2.40 netexec &> /dev/null
   fi
+
+  if [[ $DEPLOY_EXTERNAL_FRR == true ]]; then
+    docker run -d \
+      --name antrea-external-frr-$RANDOM \
+      --network kind --cap-add=NET_BIND_SERVICE \
+      --cap-add=NET_ADMIN \
+      --cap-add=NET_RAW \
+      --cap-add=SYS_ADMIN \
+      -it \
+      --rm \
+      frrouting/frr:v8.4.0 \
+      bash -c "/bin/sed -i s/bgpd=no/bgpd=yes/g /etc/frr/daemons && /sbin/tini -- /usr/lib/frr/docker-start" &> /dev/null
+    fi
 }
 
-function destroy_external_server {
-  echo "Deleting external server"
-  cid=$(docker ps -f name="^antrea-external-server" --format '{{.ID}}')
+function destroy_external_servers {
+  echo "Deleting external servers"
+  cid=$(docker ps -f name="^antrea-external-agnhost" --format '{{.ID}}')
+  docker rm -f $cid &> /dev/null || true
+
+  cid=$(docker ps -f name="^antrea-external-frr" --format '{{.ID}}')
   docker rm -f $cid &> /dev/null || true
 }
 
@@ -583,9 +601,14 @@ while [[ $# -gt 0 ]]
       K8S_VERSION="$2"
       shift 2
       ;;
-    --deploy-external-server)
-      add_option "--deploy-external-server" "create"
-      DEPLOY_EXTERNAL_SERVER=true
+    --deploy-external-agnhost)
+      add_option "--deploy-external-agnhost" "create"
+      DEPLOY_EXTERNAL_AGNHOST=true
+      shift
+      ;;
+    --deploy-external-frr)
+      add_option "--deploy-external-frr" "create"
+      DEPLOY_EXTERNAL_FRR=true
       shift
       ;;
     --all)
