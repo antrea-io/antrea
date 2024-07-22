@@ -102,6 +102,7 @@ func TestDeleteRule(t *testing.T) {
 	closer := &mockCloser{}
 
 	data := &NodePortData{
+		PodKey:   podKey,
 		NodePort: nodePort1,
 		PodPort:  podPort,
 		PodIP:    podIP,
@@ -115,20 +116,20 @@ func TestDeleteRule(t *testing.T) {
 	assert.False(t, data.Defunct())
 
 	mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol).Return(fmt.Errorf("iptables error"))
-	require.ErrorContains(t, portTable.DeleteRule(podIP, podPort, protocol), "iptables error")
+	require.ErrorContains(t, portTable.DeleteRule(podKey, podPort, protocol), "iptables error")
 
 	mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol)
 	closer.closeErr = fmt.Errorf("close error")
-	require.ErrorContains(t, portTable.DeleteRule(podIP, podPort, protocol), "close error")
+	require.ErrorContains(t, portTable.DeleteRule(podKey, podPort, protocol), "close error")
 	assert.True(t, data.Defunct())
 
 	closer.closeErr = nil
 
 	// First successful call to DeleteRule.
 	mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol)
-	assert.NoError(t, portTable.DeleteRule(podIP, podPort, protocol))
+	assert.NoError(t, portTable.DeleteRule(podKey, podPort, protocol))
 
 	// Calling DeleteRule again will return immediately as the NodePortData entry has been
 	// removed from the cache.
-	assert.NoError(t, portTable.DeleteRule(podIP, podPort, protocol))
+	assert.NoError(t, portTable.DeleteRule(podKey, podPort, protocol))
 }
