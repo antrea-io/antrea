@@ -110,6 +110,7 @@ fi
 pushd $THIS_DIR > /dev/null
 
 CNI_BINARIES_VERSION=$(head -n 1 ../deps/cni-binaries-version)
+BGP_VERSION=$(head -n 1 ../deps/bgp-version)
 SURICATA_VERSION=$(head -n 1 ../deps/suricata-version)
 
 BUILD_CACHE_TAG=$(../build-tag.sh)
@@ -152,8 +153,7 @@ fi
 function docker_build_and_push() {
     local image="$1"
     local dockerfile="$2"
-    local build_args="--build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION --build-arg BUILD_TAG=$BUILD_TAG"
-    local cache_args=""
+    local build_args="--build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg BGP_VERSION=$BGP_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION --build-arg BUILD_TAG=$BUILD_TAG"
     if $PUSH; then
         cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
     fi
