@@ -24,20 +24,21 @@ function echoerr {
 
 _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap').
-        --ip-family                   Configures the ipFamily for the KinD cluster.
+        --ip-family                   Configure the ipFamily for the KinD cluster.
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
         --run                         Run only tests matching the regexp.
-        --proxy-all                   Enables Antrea proxy with all Service support.
+        --proxy-all                   Enable Antrea proxy with all Service support.
         --no-kube-proxy               Don't deploy kube-proxy.
         --load-balancer-mode          LoadBalancer mode.
-        --node-ipam                   Enables Antrea NodeIPAM.
-        --multicast                   Enables Multicast.
+        --node-ipam                   Enable Antrea NodeIPAM.
+        --multicast                   Enable Multicast.
+        --bgp-policy                  Enable Antrea BGPPolicy.
         --flow-visibility             Only run flow visibility related e2e tests.
-        --networkpolicy-evaluation    Configures additional NetworkPolicy evaluation level when running e2e tests.
-        --extra-network               Creates an extra network that worker Nodes will connect to. Cannot be specified with the hybrid mode.
-        --extra-vlan                  Creates an subnet-based VLAN that worker Nodes will connect to.
+        --networkpolicy-evaluation    Configure additional NetworkPolicy evaluation level when running e2e tests.
+        --extra-network               Create an extra network that worker Nodes will connect to. Cannot be specified with the hybrid mode.
+        --extra-vlan                  Create an subnet-based VLAN that worker Nodes will connect to.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
-        --coverage                    Enables measure Antrea code coverage when running e2e tests on kind.
+        --coverage                    Enable measure Antrea code coverage when running e2e tests on kind.
         --setup-only                  Only perform setting up the cluster and run test.
         --cleanup-only                Only perform cleaning up the cluster.
         --test-only                   Only run test on current cluster. Not set up/clean up the cluster.
@@ -77,6 +78,7 @@ no_kube_proxy=false
 load_balancer_mode=""
 node_ipam=false
 multicast=false
+bgp_policy=false
 flow_visibility=false
 np_evaluation=false
 extra_network=false
@@ -122,6 +124,10 @@ case $key in
     ;;
     --multicast)
     multicast=true
+    shift
+    ;;
+    --bgp-policy)
+    bgp_policy=true
     shift
     ;;
     --ip-family)
@@ -236,6 +242,9 @@ fi
 if $multicast; then
     manifest_args="$manifest_args --multicast"
 fi
+if $bgp_policy; then
+    manifest_args="$manifest_args --feature-gates BGPPolicy=true"
+fi
 if $flow_visibility; then
     manifest_args="$manifest_args --feature-gates FlowExporter=true,L7FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
 fi
@@ -314,8 +323,12 @@ function setup_cluster {
   if $extra_network && [[ "$mode" != "hybrid" ]]; then
     args="$args --extra-networks \"20.20.30.0/24\""
   fi
-  # Deploy an external server which could be used when testing Pod-to-External traffic.
-  args="$args --deploy-external-server $vlan_args"
+  # Deploy an external agnhost which could be used when testing Pod-to-External traffic.
+  args="$args --deploy-external-agnhost $vlan_args"
+  # Deploy an external FRR which could be used when testing BGPPolicy.
+  if $bgp_policy; then
+    args="$args --deploy-external-frr"
+  fi
 
   echo "creating test bed with args $args"
   eval "timeout 600 $TESTBED_CMD create kind $args"
@@ -379,9 +392,15 @@ function run_test {
     np_evaluation_flag="--networkpolicy-evaluation"
   fi
 
-  external_server_cid=$(docker ps -f name="^antrea-external-server" --format '{{.ID}}')
-  external_server_ips=$(docker inspect $external_server_cid -f '{{.NetworkSettings.Networks.kind.IPAddress}},{{.NetworkSettings.Networks.kind.GlobalIPv6Address}}')
-  EXTRA_ARGS="$vlan_args --external-server-ips $external_server_ips"
+  external_agnhost_cid=$(docker ps -f name="^antrea-external-agnhost" --format '{{.ID}}')
+  external_agnhost_ips=$(docker inspect $external_agnhost_cid -f '{{.NetworkSettings.Networks.kind.IPAddress}},{{.NetworkSettings.Networks.kind.GlobalIPv6Address}}')
+  EXTRA_ARGS="$vlan_args --external-agnhost-ips $external_agnhost_ips"
+
+  if $bgp_policy; then
+    external_frr_cid=$(docker ps -f name="^antrea-external-frr" --format '{{.ID}}')
+    external_frr_ips=$(docker inspect $external_frr_cid -f '{{.NetworkSettings.Networks.kind.IPAddress}},{{.NetworkSettings.Networks.kind.GlobalIPv6Address}}')
+    EXTRA_ARGS="$EXTRA_ARGS --external-frr-cid $external_frr_cid --external-frr-ips $external_frr_ips"
+  fi
 
   go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR $np_evaluation_flag --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
 
