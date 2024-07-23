@@ -93,9 +93,9 @@ for more information about EndpointSlice. If this feature is enabled but the End
 
 ### TopologyAwareHints
 
-`TopologyAwareHints` enables TopologyAwareHints support in Antrea Proxy. For Antrea Proxy, traffic can be routed to the
-Endpoint which is closer to where it originated when this feature is enabled. Refer to this [link](https://kubernetes.io/docs/concepts/services-networking/topology-aware-hints/)
-for more information about TopologyAwareHints.
+`TopologyAwareHints` enables Topology Aware Routing support in Antrea Proxy. For Antrea Proxy, traffic can be routed to the
+Endpoint which is closer to where it originated when this feature is enabled. Prior to Kubernetes 1.27, this feature was known as Topology Aware Hints.
+Refer to this [link](https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/) for more information about Topology Aware Routing.
 
 #### Requirements for this Feature
 
