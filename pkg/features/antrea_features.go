@@ -163,6 +163,11 @@ const (
 	// alpha: v2.1
 	// Enable the NodeLatencyMonitor feature.
 	NodeLatencyMonitor featuregate.Feature = "NodeLatencyMonitor"
+
+	// alpha: v2.1
+	// Allow users to initiate BGP process on selected Kubernetes Nodes and advertise Service IPs, Pod IPs and Egress
+	// IPs to remote BGP peers.
+	BGPPolicy featuregate.Feature = "BGPPolicy"
 )
 
 var (
@@ -179,6 +184,7 @@ var (
 	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:                {Default: true, PreRelease: featuregate.Beta},
 		AntreaProxy:                 {Default: true, PreRelease: featuregate.GA},
+		BGPPolicy:                   {Default: false, PreRelease: featuregate.Alpha},
 		Egress:                      {Default: true, PreRelease: featuregate.Beta},
 		EndpointSlice:               {Default: true, PreRelease: featuregate.GA},
 		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
@@ -213,6 +219,7 @@ var (
 		AntreaIPAM,
 		AntreaPolicy,
 		AntreaProxy,
+		BGPPolicy,
 		CleanupStaleUDPSvcConntrack,
 		Egress,
 		EndpointSlice,
@@ -267,8 +274,11 @@ var (
 	// can have different FeatureSpecs between Linux and Windows, we should
 	// still define a separate defaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
-		Egress:            {},
-		AntreaIPAM:        {},
+		Egress:     {},
+		AntreaIPAM: {},
+		// BGPPolicy feature is not validated on Windows yet. This can be removed
+		// in the future if it's fully tested on Windows.
+		BGPPolicy:         {},
 		Multicast:         {},
 		SecondaryNetwork:  {},
 		ServiceExternalIP: {},
