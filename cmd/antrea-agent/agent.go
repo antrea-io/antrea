@@ -38,6 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/controller/bgp"
 	"antrea.io/antrea/pkg/agent/controller/egress"
 	"antrea.io/antrea/pkg/agent/controller/ipseccertificate"
 	"antrea.io/antrea/pkg/agent/controller/l7flowexporter"
@@ -741,6 +742,23 @@ func run(o *Options) error {
 		if err != nil {
 			return fmt.Errorf("failed to create secondary network controller: %w", err)
 		}
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.BGPPolicy) {
+		bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
+		bgpController, err := bgp.NewBGPPolicyController(nodeInformer,
+			serviceInformer,
+			egressInformer,
+			bgpPolicyInformer,
+			endpointSliceInformer,
+			o.enableEgress,
+			k8sClient,
+			nodeConfig,
+			networkConfig)
+		if err != nil {
+			return err
+		}
+		go bgpController.Run(ctx)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.TrafficControl) {
