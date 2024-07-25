@@ -102,8 +102,8 @@ func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOpti
 		ColumnDefinitions: []metav1.TableColumnDefinition{
 			{Name: "Node Name", Type: "string", Format: "name", Description: "Name of Node from which latency was measured."},
 			{Name: "Num Latency Entries", Type: "integer", Format: "int64", Description: "Number of peers for which latency measurements are available."},
-			{Name: "Max Latency", Type: "string", Format: "", Description: "Name of the peer with the highest latency and the latency value."},
 			{Name: "Avg Latency", Type: "string", Format: "", Description: "Average latency value across all peers."},
+			{Name: "Max Latency", Type: "string", Format: "", Description: "Largest latency value across all peers."},
 		},
 	}
 	if m, err := meta.ListAccessor(obj); err == nil {
@@ -146,7 +146,7 @@ func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOpti
 			avgLatency = avgLatency / targetIPLatencyCount
 		}
 
-		return []interface{}{name, peerNodeLatencyEntriesCount, time.Duration(maxLatency).String(), time.Duration(avgLatency).String()}, nil
+		return []interface{}{name, peerNodeLatencyEntriesCount, time.Duration(avgLatency).String(), time.Duration(maxLatency).String()}, nil
 	})
 	return table, err
 }

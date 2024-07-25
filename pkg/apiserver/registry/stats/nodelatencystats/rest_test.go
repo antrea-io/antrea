@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -50,7 +49,7 @@ func TestRESTCreate(t *testing.T) {
 	ctx := context.Background()
 
 	obj, err := r.Create(ctx, summary, nil, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedObj, obj)
 }
 
@@ -161,10 +160,6 @@ func TestRESTList(t *testing.T) {
 		ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
 		PeerNodeLatencyStats: nil,
 	}
-	options := &internalversion.ListOptions{
-		Limit:    10,
-		Continue: "",
-	}
 	expectedObj := &statsv1alpha1.NodeLatencyStatsList{
 		Items: []statsv1alpha1.NodeLatencyStats{
 			{
@@ -179,7 +174,7 @@ func TestRESTList(t *testing.T) {
 
 	_, err := r.Create(ctx, summary, nil, nil)
 	require.NoError(t, err)
-	objs, err := r.List(ctx, options)
+	objs, err := r.List(ctx, nil)
 	require.NoError(t, err)
 	assert.Equal(t, expectedObj, objs)
 }
@@ -193,32 +188,27 @@ func TestRESTConvertToTable(t *testing.T) {
 				NodeName: "node2",
 				TargetIPLatencyStats: []statsv1alpha1.TargetIPLatencyStats{
 					{
-						TargetIP:                   "192.168.0.1",
+						TargetIP:                   "192.168.0.2",
 						LastSendTime:               metav1.Time{Time: mockTime},
 						LastRecvTime:               metav1.Time{Time: mockTime},
-						LastMeasuredRTTNanoseconds: 0,
+						LastMeasuredRTTNanoseconds: 1000000,
 					},
 				},
 			},
-		},
-	}
-	expectedObj := &statsv1alpha1.NodeLatencyStats{
-		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
-		PeerNodeLatencyStats: []statsv1alpha1.PeerNodeLatencyStats{
 			{
-				NodeName: "node2",
+				NodeName: "node3",
 				TargetIPLatencyStats: []statsv1alpha1.TargetIPLatencyStats{
 					{
-						TargetIP:                   "192.168.0.1",
+						TargetIP:                   "192.168.0.3",
 						LastSendTime:               metav1.Time{Time: mockTime},
 						LastRecvTime:               metav1.Time{Time: mockTime},
-						LastMeasuredRTTNanoseconds: 0,
+						LastMeasuredRTTNanoseconds: 2000000,
 					},
 				},
 			},
 		},
 	}
-	expectedCells := []interface{}{"node1", 1, "0s", "0s"}
+	expectedCells := []interface{}{"node1", 2, "1.5ms", "2ms"}
 
 	r := NewREST()
 	ctx := context.Background()
@@ -227,6 +217,5 @@ func TestRESTConvertToTable(t *testing.T) {
 	require.NoError(t, err)
 	obj, err := r.ConvertToTable(ctx, summary, nil)
 	require.NoError(t, err)
-	assert.Equal(t, expectedObj, obj.Rows[0].Object.Object)
 	assert.Equal(t, expectedCells, obj.Rows[0].Cells)
 }
