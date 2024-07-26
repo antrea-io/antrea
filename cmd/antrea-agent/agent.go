@@ -778,6 +778,17 @@ func run(o *Options) error {
 		go localPodInformer.Get().Run(stopCh)
 	}
 
+	var nodeLatencyMonitor *monitortool.NodeLatencyMonitor
+	if features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor) && o.nodeType == config.K8sNode {
+		nodeLatencyMonitor = monitortool.NewNodeLatencyMonitor(
+			antreaClientProvider,
+			nodeInformer,
+			nodeLatencyMonitorInformer,
+			nodeConfig,
+			networkConfig.TrafficEncapMode,
+		)
+	}
+
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
 
@@ -978,15 +989,8 @@ func run(o *Options) error {
 		go flowExporter.Run(stopCh)
 	}
 
-	// Start the node latency monitor.
-	if features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor) && o.nodeType == config.K8sNode {
-		nodeLatencyMonitor := monitortool.NewNodeLatencyMonitor(
-			antreaClientProvider,
-			nodeInformer,
-			nodeLatencyMonitorInformer,
-			nodeConfig,
-			networkConfig.TrafficEncapMode,
-		)
+	// Start the node latency monitor if applicable.
+	if nodeLatencyMonitor != nil {
 		go nodeLatencyMonitor.Run(stopCh)
 	}
 
