@@ -33,6 +33,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/types"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/test/e2e/providers/exec"
 )
 
@@ -74,6 +75,7 @@ func routesToStrings(routes []FRRRoute) []string {
 }
 
 func TestBGPPolicy(t *testing.T) {
+	skipIfFeatureDisabled(t, features.BGPPolicy, true, false)
 	skipIfNotIPv4Cluster(t)
 	skipIfHasWindowsNodes(t)
 	skipIfExternalFRRNotSet(t)

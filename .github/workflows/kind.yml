@@ -244,6 +244,7 @@ jobs:
             --node-ipam \
             --extra-vlan \
             --multicast \
+            --bgp-policy \
             --networkpolicy-evaluation
       - name: Tar coverage files
         run: tar -czf test-e2e-encap-all-features-enabled-coverage.tar.gz test-e2e-encap-all-features-enabled-coverage
