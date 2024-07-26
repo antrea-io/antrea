@@ -2068,6 +2068,20 @@ func (data *TestData) updateServiceExternalTrafficPolicy(serviceName string, nod
 	return data.clientset.CoreV1().Services(data.testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{})
 }
 
+func (data *TestData) updateServiceInternalTrafficPolicy(serviceName string, nodeLocalInternal bool) (*corev1.Service, error) {
+	svc, err := data.clientset.CoreV1().Services(data.testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+	if err != nil {
+		return svc, err
+	}
+	if nodeLocalInternal {
+		svc.Spec.InternalTrafficPolicy = ptr.To(corev1.ServiceInternalTrafficPolicyLocal)
+	} else {
+		svc.Spec.InternalTrafficPolicy = ptr.To(corev1.ServiceInternalTrafficPolicyCluster)
+	}
+
+	return data.clientset.CoreV1().Services(data.testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{})
+}
+
 func (data *TestData) updateService(serviceName string, mutateFunc func(service *corev1.Service)) (*corev1.Service, error) {
 	svc, err := data.clientset.CoreV1().Services(data.testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	if err != nil {
