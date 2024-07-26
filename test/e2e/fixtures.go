@@ -68,6 +68,12 @@ func skipIfProviderIs(tb testing.TB, name string, reason string) {
 	}
 }
 
+func skipIfExternalFRRNotSet(tb testing.TB) {
+	if testOptions.externalFRRIPs == "" {
+		tb.Skipf("Skipping test since the external FRR IPs are not set ")
+	}
+}
+
 func skipIfNotRequired(tb testing.TB, keys ...string) {
 	for _, v := range keys {
 		if strings.Contains(testOptions.skipCases, v) {
