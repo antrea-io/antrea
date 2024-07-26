@@ -76,6 +76,7 @@ jobs:
           chmod +x ./kind
           sudo mv kind /usr/local/bin
       - name: Build local image for conformance test
+        if: ${{ inputs.k8s-version != '' }}
         run: |
           image="kindest/node:${{ inputs.k8s-version }}"
           if docker pull $image 2>&1; then
