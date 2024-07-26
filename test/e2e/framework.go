@@ -2074,9 +2074,9 @@ func (data *TestData) updateServiceInternalTrafficPolicy(serviceName string, nod
 		return svc, err
 	}
 	if nodeLocalInternal {
-		svc.Spec.InternalTrafficPolicy = ptr.To[corev1.ServiceInternalTrafficPolicyType](corev1.ServiceInternalTrafficPolicyLocal)
+		svc.Spec.InternalTrafficPolicy = ptr.To(corev1.ServiceInternalTrafficPolicyLocal)
 	} else {
-		svc.Spec.InternalTrafficPolicy = ptr.To[corev1.ServiceInternalTrafficPolicyType](corev1.ServiceInternalTrafficPolicyCluster)
+		svc.Spec.InternalTrafficPolicy = ptr.To(corev1.ServiceInternalTrafficPolicyCluster)
 	}
 
 	return data.clientset.CoreV1().Services(data.testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{})

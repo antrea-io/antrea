@@ -37,10 +37,10 @@ import (
 )
 
 const (
-	remoteASN = int32(65000)
+	externalASN = int32(65000)
 
-	localASN        = int32(64512)
-	updatedLocalASN = int32(64513)
+	nodeASN        = int32(64512)
+	updatedNodeASN = int32(64513)
 
 	bgpPeerPassword = "password"
 
@@ -85,12 +85,7 @@ func TestBGPPolicy(t *testing.T) {
 	defer teardownTest(t, data)
 
 	t.Log("Configure the remote FRR router with BGP")
-	rc, stdout, stderr, err := runVtyshCommands(generateVtyshCommandsForConfiguringBGP(remoteASN, localASN))
-	defer runVtyshCommands(generateVtyshCommandsForClearingBGP(remoteASN))
-	t.Log(stdout)
-	t.Log(stderr)
-	require.NoError(t, err)
-	require.Equal(t, 0, rc)
+	configureExternalBGPRouter(t, externalASN, nodeASN, true)
 
 	t.Log("Update the specific Secret storing the passwords of BGP peers")
 	secret := &corev1.Secret{
@@ -99,7 +94,7 @@ func TestBGPPolicy(t *testing.T) {
 			Name:      types.BGPPolicySecretName,
 		},
 		Data: map[string][]byte{
-			fmt.Sprintf("%s-%d", externalInfo.externalFRRIPv4, remoteASN): []byte(bgpPeerPassword),
+			fmt.Sprintf("%s-%d", externalInfo.externalFRRIPv4, externalASN): []byte(bgpPeerPassword),
 		},
 	}
 	_, err = data.clientset.CoreV1().Secrets(kubeNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
@@ -142,7 +137,7 @@ func TestBGPPolicy(t *testing.T) {
 			NodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{},
 			},
-			LocalASN:   localASN,
+			LocalASN:   nodeASN,
 			ListenPort: ptr.To[int32](179),
 			Advertisements: crdv1alpha1.Advertisements{
 				Service: &crdv1alpha1.ServiceAdvertisement{
@@ -151,7 +146,7 @@ func TestBGPPolicy(t *testing.T) {
 				Pod: &crdv1alpha1.PodAdvertisement{},
 			},
 			BGPPeers: []crdv1alpha1.BGPPeer{
-				{Address: externalInfo.externalFRRIPv4, ASN: remoteASN},
+				{Address: externalInfo.externalFRRIPv4, ASN: externalASN},
 			},
 		},
 	}
@@ -165,7 +160,7 @@ func TestBGPPolicy(t *testing.T) {
 		expectedRoutes = append(expectedRoutes, FRRRoute{Prefix: node.podV4NetworkCIDR, Nexthops: []string{node.ipv4Addr}})
 	}
 	expectedRoutes = append(expectedRoutes, FRRRoute{Prefix: clusterIP + "/32", Nexthops: getAllNodeIPs()})
-	checkFRRRouterBGPRoutes(t, routesToStrings(expectedRoutes), nil)
+	checkFRRRouterBGPRoutes(t, expectedRoutes, nil)
 
 	t.Log("Verify the connectivity of the installed routes on remote FRR route")
 	ipsToConnect := []string{podIP, clusterIP}
@@ -178,18 +173,14 @@ func TestBGPPolicy(t *testing.T) {
 	}
 
 	t.Log("Update the BGP configuration on the remote FRR router")
-	rc, stdout, stderr, err = runVtyshCommands(generateVtyshCommandsForConfiguringBGP(remoteASN, updatedLocalASN))
-	t.Log(stdout)
-	t.Log(stderr)
-	require.NoError(t, err)
-	require.Equal(t, 0, rc)
+	configureExternalBGPRouter(t, externalASN, updatedNodeASN, false)
 
 	_, err = data.updateServiceInternalTrafficPolicy("agnhost-svc", true)
 	require.NoError(t, err)
 
 	t.Log("Update the test BGPPolicy with a new local ASN")
 	updatedBGPPolicy := bgpPolicy.DeepCopy()
-	updatedBGPPolicy.Spec.LocalASN = updatedLocalASN
+	updatedBGPPolicy.Spec.LocalASN = updatedNodeASN
 	updatedBGPPolicy.Spec.Advertisements.Pod = nil
 	_, err = data.crdClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), updatedBGPPolicy, metav1.UpdateOptions{})
 	require.NoError(t, err)
@@ -197,7 +188,7 @@ func TestBGPPolicy(t *testing.T) {
 	t.Log("Get routes installed on remote FRR router and verify them")
 	expectedRoutes = []FRRRoute{{Prefix: clusterIP + "/32", Nexthops: []string{nodeIPv4(0)}}}
 	notExpectedRoutes := []FRRRoute{{Prefix: clusterIP + "/32", Nexthops: getAllNodeIPs()}}
-	checkFRRRouterBGPRoutes(t, routesToStrings(expectedRoutes), routesToStrings(notExpectedRoutes))
+	checkFRRRouterBGPRoutes(t, expectedRoutes, notExpectedRoutes)
 
 	t.Log("verify the connectivity of the installed routes on remote FRR route")
 	ipsToConnect = []string{clusterIP}
@@ -210,64 +201,69 @@ func TestBGPPolicy(t *testing.T) {
 	}
 }
 
-func checkFRRRouterBGPRoutes(t *testing.T, expectedRouteStrings, notExpectedRouteStrings []string) {
+func checkFRRRouterBGPRoutes(t *testing.T, expectedRoutes, notExpectedRoutes []FRRRoute) {
 	t.Helper()
+	expectedRouteStrings := routesToStrings(expectedRoutes)
+	notExpectedRouteStrings := routesToStrings(notExpectedRoutes)
+	var gotRoutes []FRRRoute
 	err := wait.PollUntilContextTimeout(context.Background(), time.Second, 30*time.Second, true, func(context.Context) (bool, error) {
-		gotRoutes, err := dumpFRRRouterBGPRoutes()
+		var err error
+		gotRoutes, err = dumpFRRRouterBGPRoutes()
 		if err != nil {
 			return false, err
 		}
-		gotRouteStrings := routesToStrings(gotRoutes)
-		gotRoutesSet := sets.NewString(gotRouteStrings...)
-		notExpectedRoutesSet := sets.NewString(notExpectedRouteStrings...)
-		expectedRoutesSet := sets.NewString(expectedRouteStrings...)
-		if !gotRoutesSet.IsSuperset(expectedRoutesSet) {
+		gotRoutesSet := sets.NewString(routesToStrings(gotRoutes)...)
+		if !gotRoutesSet.HasAll(expectedRouteStrings...) {
 			return false, nil
 		}
-		if notExpectedRoutesSet.Len() != 0 && gotRoutesSet.IsSuperset(notExpectedRoutesSet) {
+		if gotRoutesSet.HasAny(notExpectedRouteStrings...) {
 			return false, nil
 		}
 		return true, nil
 	})
 
-	if err != nil {
-		t.Fatalf("Failed to get the expected BGP routes: %v", err)
-	}
+	require.NoError(t, err, "Failed to get the expected BGP routes, expected: %v, unexpected: %v, got: %v", expectedRoutes, notExpectedRoutes, gotRoutes)
 }
 
 func runVtyshCommands(commands []string) (int, string, string, error) {
 	return exec.RunDockerExecCommand(externalInfo.externalFRRCID, "/usr/bin/vtysh", "/", nil, strings.Join(commands, "\n"))
 }
 
-func generateVtyshCommandsForConfiguringBGP(localASN, remoteASN int32) []string {
+func configureExternalBGPRouter(t *testing.T, externalASN, nodeASN int32, deferCleanup bool) {
 	commands := []string{
 		"configure terminal",
-		fmt.Sprintf("router bgp %d", localASN),
+		fmt.Sprintf("router bgp %d", externalASN),
 		"no bgp ebgp-requires-policy",
 		"no bgp network import-check",
 	}
 	for _, node := range clusterInfo.nodes {
-		commands = append(commands, fmt.Sprintf("neighbor %s remote-as %d", node.ipv4Addr, remoteASN))
+		commands = append(commands, fmt.Sprintf("neighbor %s remote-as %d", node.ipv4Addr, nodeASN))
 		commands = append(commands, fmt.Sprintf("neighbor %s password %s", node.ipv4Addr, bgpPeerPassword))
 	}
 	commands = append(commands,
 		"exit",
 		"exit",
 		"write memory")
-	return commands
-}
+	rc, stdout, stderr, err := runVtyshCommands(commands)
+	require.NoError(t, err, "Configuring external BGP router failed, rc: %v, stdout: %s, stderr: %s", rc, stdout, stderr)
+	require.Equal(t, 0, rc, "Configuring external BGP router returned non-zero code, stdout: %s, stderr: %s", stdout, stderr)
 
-func generateVtyshCommandsForClearingBGP(localASN int32) []string {
-	return []string{
-		"configure terminal",
-		fmt.Sprintf("no router bgp %d", localASN),
-		"exit",
-		"write memory",
+	if deferCleanup {
+		t.Cleanup(func() {
+			rc, stdout, stderr, err := runVtyshCommands([]string{
+				"configure terminal",
+				fmt.Sprintf("no router bgp %d", externalASN),
+				"exit",
+				"write memory",
+			})
+			require.NoError(t, err, "Restoring external BGP router failed, rc: %v, stdout: %s, stderr: %s", rc, stdout, stderr)
+			require.Equal(t, 0, rc, "Restoring external BGP router returned non-zero code, stdout: %s, stderr: %s", stdout, stderr)
+		})
 	}
 }
 
 func dumpFRRRouterBGPRoutes() ([]FRRRoute, error) {
-	rc, stdout, stderr, err := exec.RunDockerExecCommand(externalInfo.externalFRRCID, "/usr/bin/vtysh", "/", nil, "show ip route bgp")
+	rc, stdout, stderr, err := runVtyshCommands([]string{"show ip route bgp"})
 	log.Println(stdout)
 	log.Println(stderr)
 	if err != nil || rc != 0 {
