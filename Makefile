@@ -45,6 +45,8 @@ endif
 DOCKER_BUILD_ARGS += --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
 DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
+DOCKER_BUILD_ARGS += --build-context antrea-base-ubuntu=docker-image://antrea/base-ubuntu:$(BUILD_TAG)
+DOCKER_BUILD_ARGS += --build-context antrea-base-ubi=docker-image://antrea/base-ubi:$(BUILD_TAG)
 
 export CGO_ENABLED
 

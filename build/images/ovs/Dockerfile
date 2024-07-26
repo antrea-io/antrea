@@ -12,11 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:22.04 AS ovs-debs
+FROM ubuntu AS ovs-debs
 
 # Some patches may not apply cleanly if a non-default version is provided.
 # See build/images/deps/ovs-version for the default version.
 ARG OVS_VERSION
+
+RUN echo "xyz"
+
+RUN apt-get update
 
 # Install dependencies for building OVS deb packages
 # We only install python3 packages and we only support building OVS >= 2.13.0.
@@ -39,7 +43,7 @@ RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.t
     cd / && rm -rf /tmp/openvswitch*
 
 
-FROM ubuntu:22.04
+FROM ubuntu
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image based on Ubuntu 22.04 which includes Open vSwitch built from source."

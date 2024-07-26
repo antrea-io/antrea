@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM quay.io/centos/centos:stream9 AS ovs-rpms
+FROM centos AS ovs-rpms
 # Some patches may not apply cleanly if a non-default version is provided.
 # See build/images/deps/ovs-version for the default version.
 ARG OVS_VERSION
@@ -39,7 +39,7 @@ RUN cd /tmp/openvswitch* && \
     mv /tmp/openvswitch-$OVS_VERSION/rpm/rpmbuild/RPMS/*/*.rpm  /tmp/ovs-rpms && \
     rm -rf /tmp/openvswitch*
 
-FROM registry.access.redhat.com/ubi9
+FROM ubi9
 ARG OVS_VERSION
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
