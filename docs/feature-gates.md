@@ -464,8 +464,8 @@ spec:
   pingIntervalSeconds: 60
 ```
 
-You can adjust `pingIntervalSeconds` to your desired value. To stop latency measurements, simply
-delete the Custom Resource with `kubectl delete nodelatencymonitor/default`.
+You can adjust `pingIntervalSeconds` to any positive value that suits your needs. To stop latency
+measurements, simply delete the Custom Resource with `kubectl delete nodelatencymonitor/default`.
 
 Latency measurements can be queried using the `NodeLatencyStats` API in `stats.antrea.io/v1alpha1`.
 This can be done with kubectl:
@@ -509,8 +509,8 @@ peerNodeLatencyStats:
 
 The feature supports both IPv4 and IPv6. When enabled in a dual-stack cluster, Antrea Agents will
 generate both ICMP and ICMPv6 probes, and report both latency results. In general (except when
-policyOnly mode is used), inter-Node latency will be measured between Antrea gateway
-interfaces. Therefore, in encap mode, ICMP probes will traverse the overlay, just like regular
+`networkPolicyOnly` mode is used), inter-Node latency will be measured between Antrea gateway
+interfaces. Therefore, in `encap` mode, ICMP probes will traverse the overlay, just like regular
 inter-Node Pod traffic. We believe this gives an accurate representation of the east-west latency
 experienced by Pod traffic.
 
