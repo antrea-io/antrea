@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"antrea.io/antrea/pkg/antctl/raw/check"
 )
 
 func overrideTestsRegistry(t *testing.T, registry map[string]Test) {
@@ -103,7 +105,7 @@ func TestRun(t *testing.T) {
 			overrideTestsRegistry(t, tc.registry)
 			runFilterRegex, err := compileRunFilter(tc.runFilter)
 			require.NoError(t, err)
-			testContext := NewTestContext(nil, nil, "test-cluster", "kube-system", runFilterRegex)
+			testContext := NewTestContext(nil, nil, "test-cluster", "kube-system", runFilterRegex, check.DefaultTestImage)
 			stats := testContext.runTests(ctx)
 			assert.Equal(t, tc.expectedStats, stats)
 		})

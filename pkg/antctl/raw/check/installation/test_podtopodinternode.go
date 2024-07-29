@@ -35,7 +35,7 @@ func (t *PodToPodInterNodeConnectivityTest) Run(ctx context.Context, testContext
 		for _, podIP := range testContext.echoOtherNodePod.Status.PodIPs {
 			echoIP := podIP.IP
 			testContext.Log("Validating from Pod %s to Pod %s at IP %s...", srcPod, dstPod, echoIP)
-			if err := testContext.runAgnhostConnect(ctx, clientPod.Name, "", echoIP, 80); err != nil {
+			if err := testContext.tcpProbe(ctx, clientPod.Name, "", echoIP, 80); err != nil {
 				return fmt.Errorf("client Pod %s was not able to communicate with echo Pod %s (%s): %w", clientPod.Name, testContext.echoOtherNodePod.Name, echoIP, err)
 			}
 			testContext.Log("client Pod %s was able to communicate with echo Pod %s (%s)", clientPod.Name, testContext.echoOtherNodePod.Name, echoIP)

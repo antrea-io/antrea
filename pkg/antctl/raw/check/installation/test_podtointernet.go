@@ -29,7 +29,7 @@ func (t *PodToInternetConnectivityTest) Run(ctx context.Context, testContext *te
 	for _, clientPod := range testContext.clientPods {
 		srcPod := testContext.namespace + "/" + clientPod.Name
 		testContext.Log("Validating connectivity from Pod %s to the world (google.com)...", srcPod)
-		if err := testContext.runAgnhostConnect(ctx, clientPod.Name, "", "google.com", 80); err != nil {
+		if err := testContext.tcpProbe(ctx, clientPod.Name, "", "google.com", 80); err != nil {
 			return fmt.Errorf("Pod %s was not able to connect to google.com: %w", srcPod, err)
 		}
 		testContext.Log("Pod %s was able to connect to google.com", srcPod)
