@@ -42,6 +42,8 @@ jobs:
         show-progress: false
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+      with:
+        driver: docker
     - uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'

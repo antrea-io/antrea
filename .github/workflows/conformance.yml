@@ -65,6 +65,8 @@ jobs:
       - name: Set up Docker Buildx if required
         if: ${{ steps.check-release.outputs.released == 'false' }}
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
       - name: Build Antrea image if required
         if: ${{ steps.check-release.outputs.released == 'false' }}
         run: |
