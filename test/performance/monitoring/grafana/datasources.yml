@@ -1,0 +1,24 @@
+# config file version
+apiVersion: 1
+
+# list of datasources that should be deleted from the database
+deleteDatasources:
+  - name: Prometheus-Nodes
+    orgId: 2
+
+# list of datasources to insert/update depending
+# whats available in the database
+datasources:
+    # <string, required> name of the datasource. Required
+  - name: Prometheus-Nodes
+    # <string, required> datasource type. Required
+    type: prometheus
+    # <string, required> access mode. direct or proxy. Required
+    access: proxy
+    # <int> org id. will default to orgId 1 if not specified
+    orgId: 1
+    # <string> url
+    url: "http://prometheus-service.monitoring.svc.cluster.local:8080"
+    # <bool> mark as default datasource. Max one per org
+    isDefault: false
+    # <map> fields that will be converted to json and stored in json_data
