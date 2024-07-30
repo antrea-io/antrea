@@ -937,7 +937,14 @@
               fail: true
               timeout: 135
               type: absolute
-          publishers: []
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: antrea-test-logs.tar.gz
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
       - '{name}-{test_name}-for-pull-request':
           test_name: kind-conformance
           node: 'antrea-kind-testbed'
@@ -970,7 +977,14 @@
               fail: true
               timeout: 135
               type: absolute
-          publishers: []
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
       - '{name}-{test_name}-for-pull-request':
           test_name: kind-networkpolicy
           node: 'antrea-kind-testbed'
@@ -1003,7 +1017,14 @@
               fail: true
               timeout: 135
               type: absolute
-          publishers: []
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
       - '{name}-{test_name}-for-pull-request':
           test_name: rancher-e2e
           node: 'antrea-rancher-testbed'
@@ -1360,7 +1381,14 @@
               fail: true
               timeout: 135
               type: absolute
-          publishers: []
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
       - '{name}-{test_name}-for-pull-request':
           test_name: kind-ipv6-only-conformance
           node: 'antrea-kind-testbed'
@@ -1392,7 +1420,14 @@
               fail: true
               timeout: 135
               type: absolute
-          publishers: []
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
       - '{name}-{test_name}-for-pull-request':
             test_name: kind-ipv6-only-e2e
             node: 'antrea-kind-testbed'
@@ -1423,7 +1458,14 @@
                 fail: true
                 timeout: 135
                 type: absolute
-            publishers: []
+            publishers:
+            - archive:
+                allow-empty: true
+                artifacts: antrea-test-logs.tar.gz
+                case-sensitive: true
+                default-excludes: true
+                fingerprint: false
+                only-if-success: false
       - '{name}-{test_name}-for-pull-request':
           test_name: kind-ipv6-ds-networkpolicy
           node: 'antrea-kind-testbed'
@@ -1455,7 +1497,14 @@
               fail: true
               timeout: 135
               type: absolute
-          publishers: []
+          publishers: 
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
       - '{name}-{test_name}-for-pull-request':
           test_name: kind-ipv6-ds-conformance
           node: 'antrea-kind-testbed'
@@ -1487,7 +1536,14 @@
               fail: true
               timeout: 135
               type: absolute
-          publishers: []
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
       - '{name}-{test_name}-for-pull-request':
             test_name: kind-ipv6-ds-e2e
             node: 'antrea-kind-testbed'
@@ -1518,4 +1574,11 @@
                 fail: true
                 timeout: 135
                 type: absolute
-            publishers: []
+            publishers:
+            - archive:
+                allow-empty: true
+                artifacts: antrea-test-logs.tar.gz
+                case-sensitive: true
+                default-excludes: true
+                fingerprint: false
+                only-if-success: false
