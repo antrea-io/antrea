@@ -32,7 +32,7 @@ spec:
       serviceAccountName: antrea-agent
       initContainers:
       - name: init-inotify-limit
-        image: antrea/ubuntu:22.04
+        image: antrea/ubuntu:24.04
         command: ['sysctl', '-w', 'fs.inotify.max_user_instances=200']
         securityContext:
           privileged: true

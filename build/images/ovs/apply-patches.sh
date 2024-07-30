@@ -107,8 +107,18 @@ if version_get "$OVS_VERSION" "2.13.0" && version_let "$OVS_VERSION" "2.17.5" ; 
     apply_patch "489553b1c21692063931a9f50b6849b23128443c"
 fi
 
+# These patches are necessary to avoid build errors on Ubuntu 24.04 (when generating manpages).
+if version_lt "$OVS_VERSION" "3.3.0"; then
+    # https://github.com/openvswitch/ovs/commit/6180fefa835c7cad36e89f77f3d9de13c680fb88
+    apply_patch "6180fefa835c7cad36e89f77f3d9de13c680fb88"
+    # https://github.com/openvswitch/ovs/commit/d542f0ea8587f9ae1cad1f9610b6f3ce62dc3b7a
+    apply_patch "d542f0ea8587f9ae1cad1f9610b6f3ce62dc3b7a"
+    # https://github.com/openvswitch/ovs/commit/e46d455201d08725687dc90d3d0ee99fe8f70ca6
+    apply_patch "e46d455201d08725687dc90d3d0ee99fe8f70ca6"
+fi
+
 # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
-# does not seem to be in the Python path in Ubuntu 22.04. There may be a better way to do this,
+# does not seem to be in the Python path in Ubuntu. There may be a better way to do this,
 # but this seems like an acceptable workaround.
 sed -i 's/python3\.7/python3\.10/' debian/openvswitch-test.install
 sed -i 's/python3\.7/python3\.10/' debian/python3-openvswitch.install
