@@ -25,7 +25,7 @@ COPY . /antrea
 
 RUN cd multicluster && make antrea-mc-instr-binary
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The Docker image to deploy the Antrea Multi-cluster Controller with code coverage measurement enabled (used for testing)."

@@ -34,7 +34,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     make flow-aggregator
 
 # Chose this base image so that a shell is available for users to exec into the container, run antctl and run tools like pprof easily
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The docker image for the flow aggregator"

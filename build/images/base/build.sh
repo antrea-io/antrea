@@ -121,10 +121,10 @@ fi
 if $PULL; then
     # The ubuntu image is also used for the UBI build (for the cni-binaries intermediate image).
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
-        docker pull $PLATFORM_ARG ubuntu:22.04
+        docker pull $PLATFORM_ARG ubuntu:24.04
     else
-        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:22.04
-        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:22.04 ubuntu:22.04
+        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:24.04
+        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:24.04 ubuntu:24.04
     fi
 
     if [ "$DISTRO" == "ubuntu" ]; then

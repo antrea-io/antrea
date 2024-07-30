@@ -28,7 +28,7 @@ RUN make antctl-instr-binary
 
 RUN make antrea-controller-instr-binary
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The Docker image to deploy the antrea-controller with code coverage measurement enabled (used for testing)."
