@@ -60,6 +60,7 @@ edit the Agent configuration in the
 | `NodeNetworkPolicy`           | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
 | `L7FlowExporter`              | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
 | `BGPPolicy`                   | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
+| `NodeLatencyMonitor`          | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
 
 ## Description and Requirements of Features
 
@@ -446,3 +447,73 @@ for integrating Kubernetes clusters with external BGP-enabled networks.
 #### Requirements for this Feature
 
 - Linux Nodes only.
+
+### NodeLatencyMonitor
+
+`NodeLatencyMonitor` enables latency measurements between all pairs of Nodes using ICMP probes,
+which are generated periodically by each Antrea Agent. After enabling the feature gate, you will
+need to create a `NodeLatencyMonitor` Custom Resource named `default`, after which probes will start
+being generated. For example, you can apply the following YAML manifest using kubectl:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: NodeLatencyMonitor
+metadata:
+  name: default
+spec:
+  pingIntervalSeconds: 60
+```
+
+You can adjust `pingIntervalSeconds` to any positive value that suits your needs. To stop latency
+measurements, simply delete the Custom Resource with `kubectl delete nodelatencymonitor/default`.
+
+Latency measurements can be queried using the `NodeLatencyStats` API in `stats.antrea.io/v1alpha1`.
+This can be done with kubectl:
+
+```bash
+> kubectl get nodelatencystats
+NODE NAME            NUM LATENCY ENTRIES   AVG LATENCY   MAX LATENCY
+kind-control-plane   2                     7.110553ms    8.94447ms
+kind-worker          2                     11.177585ms   11.508751ms
+kind-worker2         2                     11.356675ms   15.265629ms
+```
+
+Note that it may take up to one period interval (`pingIntervalSeconds`) for results to become
+visible. Use `kubectl get nodelatencystats -o yaml` or `kubectl get nodelatencystats -o json` to see all the
+individual latency measurements. For example:
+
+```bash
+> kubectl get nodelatencystats/kind-worker -o yaml
+```
+
+```yaml
+apiVersion: stats.antrea.io/v1alpha1
+kind: NodeLatencyStats
+metadata:
+  creationTimestamp: null
+  name: kind-worker
+peerNodeLatencyStats:
+- nodeName: kind-control-plane
+  targetIPLatencyStats:
+  - lastMeasuredRTTNanoseconds: 5837000
+    lastRecvTime: "2024-07-26T22:40:03Z"
+    lastSendTime: "2024-07-26T22:40:33Z"
+    targetIP: 10.10.0.1
+- nodeName: kind-worker2
+  targetIPLatencyStats:
+  - lastMeasuredRTTNanoseconds: 4704000
+    lastRecvTime: "2024-07-26T22:40:03Z"
+    lastSendTime: "2024-07-26T22:40:33Z"
+    targetIP: 10.10.2.1
+```
+
+The feature supports both IPv4 and IPv6. When enabled in a dual-stack cluster, Antrea Agents will
+generate both ICMP and ICMPv6 probes, and report both latency results. In general (except when
+`networkPolicyOnly` mode is used), inter-Node latency will be measured between Antrea gateway
+interfaces. Therefore, in `encap` mode, ICMP probes will traverse the overlay, just like regular
+inter-Node Pod traffic. We believe this gives an accurate representation of the east-west latency
+experienced by Pod traffic.
+
+#### Requirements for this Feature
+
+- Linux Nodes only - the feature has not been tested on Windows Nodes yet.
