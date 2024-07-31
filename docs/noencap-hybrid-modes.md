@@ -34,6 +34,13 @@ spec:
               value: "true"
 ```
 
+Note that changing the traffic mode in an existing cluster, where Antrea is
+currently installed or was previously installed, may require restarting existing
+workloads. In particular, the choice of traffic mode has an impact on the MTU
+value used for Pod network interfaces. When changing the traffic mode from
+`NoEncap` to `Encap`, existing workloads should be restarted, so that new
+network interfaces with a lower MTU value can be created.
+
 ## Hybrid Mode
 
 Let us start from `Hybrid` mode which is simpler to configure. `Hybrid` mode

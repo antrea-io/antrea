@@ -48,6 +48,7 @@ func (c *Controller) Initialize() error {
 				map[string]interface{}{
 					interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 				},
+				0, // do not request a specific MTU
 			)
 			if err != nil {
 				return err

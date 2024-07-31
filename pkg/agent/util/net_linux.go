@@ -412,6 +412,7 @@ func PrepareHostInterfaceConnection(
 	ifaceName string,
 	ifaceOFPort int32,
 	externalIDs map[string]interface{},
+	mtu int,
 ) (string, bool, error) {
 	bridgedName := GenerateUplinkInterfaceName(ifaceName)
 	// If the port already exists, just return.
@@ -451,6 +452,12 @@ func PrepareHostInterfaceConnection(
 	}
 	if _, _, err = SetLinkUp(ifaceName); err != nil {
 		return "", false, fmt.Errorf("failed to set link up: %v", err)
+	}
+
+	if mtu > 0 {
+		if err := bridge.SetInterfaceMTU(ifaceName, mtu); err != nil {
+			return "", false, fmt.Errorf("failed to set bridge interface MTU: %w", err)
+		}
 	}
 
 	// Check if interface is configured with an IPv6 address: if it is, we need to ensure that IPv6

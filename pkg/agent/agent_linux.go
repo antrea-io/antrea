@@ -129,11 +129,16 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	externalIDs := map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 	}
+	// We request the same MTU for the bridge interface as for the uplink adapter. If we don't,
+	// OVS will default to the lowest MTU among all existing bridge ports, including container
+	// ports. There may be some existing workloads with a lower MTU, and using that lower value
+	// may impact host connectivity.
 	bridgedUplinkName, exists, err := util.PrepareHostInterfaceConnection(
 		i.ovsBridgeClient,
 		uplinkNetConfig.Name,
 		int32(i.nodeConfig.HostInterfaceOFPort),
 		externalIDs,
+		i.nodeConfig.NodeTransportInterfaceMTU,
 	)
 	if err != nil {
 		return err
