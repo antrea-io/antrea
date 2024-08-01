@@ -113,21 +113,34 @@ func (l *L7Listener) listenAndAcceptConn(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to listen on Suricata socket")
 		return
 	}
+	var wg sync.WaitGroup
+	// Wait for all goroutines (accept + all connection handlers) to return.
+	// The call to Wait() needs to happen after the listener is closed.
+	defer wg.Wait()
 	defer listener.Close()
+	errCh := make(chan error, 1)
 	klog.InfoS("L7 Listener Server started. Listening for connections...")
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				klog.ErrorS(err, "Error accepting Suricata connection")
+				errCh <- err
 				return
 			}
-			go l.handleClientConnection(conn)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				l.handleClientConnection(conn)
+			}()
 		}
 	}()
-	<-stopCh
-	// We could wait here for all goroutines created by the function to return, but it would add
-	// complexity and should not really matter for our use case.
+	select {
+	case <-stopCh:
+	case <-errCh:
+	}
 }
 
 func (l *L7Listener) handleClientConnection(conn net.Conn) {
