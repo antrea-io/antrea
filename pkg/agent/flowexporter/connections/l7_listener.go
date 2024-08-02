@@ -93,11 +93,12 @@ func NewL7Listener(
 }
 
 func (l *L7Listener) Run(stopCh <-chan struct{}) {
-	go wait.Until(l.listenAndAcceptConn, 5*time.Second, stopCh)
-	<-stopCh
+	wait.Until(func() {
+		l.listenAndAcceptConn(stopCh)
+	}, 5*time.Second, stopCh)
 }
 
-func (l *L7Listener) listenAndAcceptConn() {
+func (l *L7Listener) listenAndAcceptConn(stopCh <-chan struct{}) {
 	// Remove stale connections
 	if err := os.Remove(l.suricataEventSocketPath); err != nil && !os.IsNotExist(err) {
 		klog.V(2).ErrorS(err, "failed to remove stale socket")
@@ -112,15 +113,33 @@ func (l *L7Listener) listenAndAcceptConn() {
 		klog.ErrorS(err, "Failed to listen on Suricata socket")
 		return
 	}
+	var wg sync.WaitGroup
+	// Wait for all goroutines (accept + all connection handlers) to return.
+	// The call to Wait() needs to happen after the listener is closed.
+	defer wg.Wait()
 	defer listener.Close()
+	errCh := make(chan error, 1)
 	klog.InfoS("L7 Listener Server started. Listening for connections...")
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			klog.ErrorS(err, "Error accepting Suricata connection")
-			return
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				klog.ErrorS(err, "Error accepting Suricata connection")
+				errCh <- err
+				return
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				l.handleClientConnection(conn)
+			}()
 		}
-		go l.handleClientConnection(conn)
+	}()
+	select {
+	case <-stopCh:
+	case <-errCh:
 	}
 }
 
@@ -129,7 +148,10 @@ func (l *L7Listener) handleClientConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	for {
 		buffer, err := reader.ReadBytes('\n')
-		if err != nil && err != io.EOF {
+		if err == io.EOF {
+			return
+		}
+		if err != nil {
 			klog.ErrorS(err, "Error reading data", "buffer", buffer)
 			return
 		}

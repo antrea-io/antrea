@@ -20,10 +20,12 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,33 +76,20 @@ func (fl *fakePodL7FlowExporterAttrGetter) IsL7FlowExporterRequested(podNN strin
 	return false
 }
 
-func newFakeL7Listener(podStore *podstoretest.MockInterface) *L7Listener {
+func newFakeL7Listener(socketPath string, podStore *podstoretest.MockInterface) *L7Listener {
 	return &L7Listener{
 		l7Events:                    make(map[flowexporter.ConnectionKey]L7ProtocolFields),
-		suricataEventSocketPath:     "suricata_Test.socket",
+		suricataEventSocketPath:     socketPath,
 		podL7FlowExporterAttrGetter: &fakePodL7FlowExporterAttrGetter{},
 		podStore:                    podStore,
 	}
 }
 
 func TestFlowExporterL7ListenerHttp(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
-	l := newFakeL7Listener(mockPodStore)
-
-	stopCh := make(chan struct{})
-	defer func() {
-		close(stopCh)
-		os.RemoveAll(l.suricataEventSocketPath)
-	}()
-	go l.Run(stopCh)
-	<-time.After(100 * time.Millisecond)
-
 	testCases := []struct {
 		name           string
 		input          []JsonToEvent
 		eventPresent   bool
-		expectedErr    error
 		expectedEvents L7ProtocolFields
 	}{
 		{
@@ -252,15 +241,37 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			socketConn, err := net.Dial("unix", l.suricataEventSocketPath)
-			if err != nil {
-				t.Fatalf("Failed to connect to server: %s", err)
-			}
-			defer socketConn.Close()
-			writer := bufio.NewWriter(socketConn)
 			timeNow, _ := time.Parse(time.RFC3339Nano, tc.input[0].Timestamp)
-			mockPodStore.EXPECT().GetPodByIPAndTime("10.10.0.1", timeNow).Return(fakeSrcPod, true)
-			mockPodStore.EXPECT().GetPodByIPAndTime("10.10.0.2", timeNow).Return(fakeDestPod, true)
+			ctrl := gomock.NewController(t)
+			mockPodStore := podstoretest.NewMockInterface(ctrl)
+			mockPodStore.EXPECT().GetPodByIPAndTime("10.10.0.1", timeNow).AnyTimes().Return(fakeSrcPod, true)
+			mockPodStore.EXPECT().GetPodByIPAndTime("10.10.0.2", timeNow).AnyTimes().Return(fakeDestPod, true)
+			socketFile, err := os.CreateTemp(".", "suricata_test_*.socket")
+			require.NoError(t, err)
+			socketFile.Close()
+			socketPath := socketFile.Name()
+			defer os.RemoveAll(socketPath)
+			l := newFakeL7Listener(socketPath, mockPodStore)
+
+			stopCh := make(chan struct{})
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				l.Run(stopCh)
+			}()
+			defer wg.Wait()
+			defer close(stopCh)
+
+			var socketConn net.Conn
+			require.EventuallyWithT(t, func(t *assert.CollectT) {
+				var err error
+				socketConn, err = net.Dial("unix", l.suricataEventSocketPath)
+				assert.NoError(t, err)
+			}, 1*time.Second, 100*time.Millisecond, "Failed to connect to Suricata event socket %s", l.suricataEventSocketPath)
+			defer socketConn.Close()
+
+			writer := bufio.NewWriter(socketConn)
 			for _, msg := range tc.input {
 				jsonData, err := json.Marshal(msg)
 				if err != nil {
@@ -276,26 +287,22 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 				}
 			}
 			writer.Flush()
-			socketConn.Close()
-			<-time.After(100 * time.Millisecond)
-			protocol, _ := flowexporter.LookupProtocolMap(tc.input[0].Proto)
-			// Get 5-tuple information
-			tuple := flowexporter.Tuple{
-				SourceAddress:      tc.input[0].SrcIP,
-				DestinationAddress: tc.input[0].DestIP,
-				Protocol:           protocol,
-				SourcePort:         uint16(tc.input[0].SrcPort),
-				DestinationPort:    uint16(tc.input[0].DestPort),
-			}
-			conn := flowexporter.Connection{}
-			conn.FlowKey = tuple
-			connKey := flowexporter.NewConnectionKey(&conn)
-			allL7Events := l.ConsumeL7EventMap()
-			existingEvent, exists := allL7Events[connKey]
-			assert.Equal(t, tc.eventPresent, exists)
-			if exists {
-				assert.Equal(t, tc.expectedEvents.http, existingEvent.http)
-			}
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				protocol, _ := flowexporter.LookupProtocolMap(tc.input[0].Proto)
+				connKey := flowexporter.Tuple{
+					SourceAddress:      tc.input[0].SrcIP,
+					DestinationAddress: tc.input[0].DestIP,
+					Protocol:           protocol,
+					SourcePort:         uint16(tc.input[0].SrcPort),
+					DestinationPort:    uint16(tc.input[0].DestPort),
+				}
+				allL7Events := l.ConsumeL7EventMap()
+				existingEvent, exists := allL7Events[connKey]
+				assert.Equal(t, tc.eventPresent, exists)
+				if exists {
+					assert.Equal(t, tc.expectedEvents.http, existingEvent.http)
+				}
+			}, 1*time.Second, 100*time.Millisecond, "L7 event map does not match")
 		})
 	}
 }
