@@ -392,6 +392,8 @@ function  build_and_deliver_antrea_windows_and_linux_images {
     ${PRINT_DOCKER_STATUS}
     export_govc_env_var
     # Enable verbose log for troubleshooting.
+    curl -OL http://build-squid.eng.vmware.com/build/mts/release/sb-77412861/publish/windows-advanced/manifests/${WINDOWS_YAML_NAME}.yml
+    cp ${WINDOWS_YAML_NAME}.yml build/yamls/${WINDOWS_YAML_NAME}.yml
     sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml build/yamls/${WINDOWS_YAML_NAME}.yml
 
     echo "====== Updating yaml files to enable proxyAll ======"
@@ -463,12 +465,8 @@ function deliver_antrea_linux {
 function deliver_antrea_windows {
     echo "===== Build Antrea Windows ====="
     rm -f antrea-windows.tar.gz
-    make build-windows
-    if ! (test -f antrea-windows.tar); then
-        echo "antrea-windows.tar wasn't built, exiting"
-        exit 1
-    fi
-    gzip -f antrea-windows.tar
+    curl -OL http://build-squid.eng.vmware.com/build/mts/release/sb-77412861/publish/windows-advanced/images/antrea-advanced-windows-v2.1.0_vmware.1.tar.gz
+    mv antrea-advanced-windows-v2.1.0_vmware.1.tar.gz antrea-windows.tar.gz
 
     echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
@@ -1004,9 +1002,9 @@ fi
 trap clean_antrea EXIT
 if [[ ${TESTCASE} =~ "windows" ]]; then
     if [[ ${TESTCASE} == "windows-e2e-ovs-as-service" ]]; then
-        WINDOWS_YAML_NAME="antrea-windows"
+        WINDOWS_YAML_NAME="antrea-windows-v2.1.0+vmware.1"
     else
-        WINDOWS_YAML_NAME="antrea-windows-with-ovs"
+        WINDOWS_YAML_NAME="antrea-windows-v2.1.0+vmware.1"
     fi
     build_and_deliver_antrea_windows_and_linux_images
     if [[ ${TESTCASE} =~ "e2e" ]]; then
