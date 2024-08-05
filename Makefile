@@ -27,6 +27,16 @@ GOLANGCI_LINT_VERSION := v1.54.0
 GOLANGCI_LINT_BINDIR  := $(CURDIR)/.golangci-bin
 GOLANGCI_LINT_BIN     := $(GOLANGCI_LINT_BINDIR)/$(GOLANGCI_LINT_VERSION)/golangci-lint
 
+# Arguments to pass to go test invocation.
+#
+# Example:
+#   make test-unit TEST_ARGS="-run ^TestAddEgress$"
+#   make docker-test-integration TEST_ARGS="-run TestGoBGPLifecycle"
+TEST_ARGS ?=
+
+# If we have stdin we can run interactive so the tests running in docker can be interrupted.
+INTERACTIVE_ARGS := $(shell [ -t 0 ] && echo "-it")
+
 BUILD_TAG :=
 ifndef CUSTOM_BUILD_TAG
 	BUILD_TAG = $(shell build/images/build-tag.sh)
@@ -189,9 +199,10 @@ $(DOCKER_CACHE):
 # Since the WORKDIR is mounted from host, the $(id -u):$(id -g) user can access it.
 # Inside the docker, the user is nameless and does not have a home directory. This is ok for our use case.
 DOCKER_ENV := \
-	@docker run --rm -u $$(id -u):$$(id -g) \
+	@docker run $(INTERACTIVE_ARGS) --rm -u $$(id -u):$$(id -g) \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
+		-e "TEST_ARGS=$(TEST_ARGS)" \
 		-w /usr/src/antrea.io/antrea \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
@@ -216,10 +227,11 @@ docker-test-unit: $(DOCKER_CACHE)
 docker-test-integration: .coverage
 	@echo "===> Building Antrea Integration Test Docker image <==="
 	docker build -t antrea/test -f build/images/test/Dockerfile $(DOCKER_BUILD_ARGS) .
-	@docker run --privileged --rm \
+	@docker run $(INTERACTIVE_ARGS) --privileged --rm \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
 		-e "INCONTAINER=true" \
+		-e "TEST_ARGS=$(TEST_ARGS)" \
 		-w /usr/src/antrea.io/antrea \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
@@ -266,7 +278,7 @@ add-copyright:
 .linux-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	CGO_ENABLED=1 $(GO) test -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/...,antrea.io/antrea/multicluster/cmd/...,antrea.io/antrea/multicluster/controllers/... \
+	CGO_ENABLED=1 $(GO) test $(TEST_ARGS) -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/...,antrea.io/antrea/multicluster/cmd/...,antrea.io/antrea/multicluster/controllers/... \
 	  -coverprofile=.coverage/coverage-unit.txt -covermode=atomic \
 	  antrea.io/antrea/cmd/... antrea.io/antrea/pkg/... antrea.io/antrea/multicluster/cmd/... antrea.io/antrea/multicluster/controllers/...
 
@@ -274,7 +286,7 @@ add-copyright:
 .windows-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	CGO_ENABLED=1 $(GO) test -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/... \
+	CGO_ENABLED=1 $(GO) test $(TEST_ARGS) -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/... \
 	  -coverprofile=.coverage/coverage-unit.txt -covermode=atomic \
 	  antrea.io/antrea/cmd/... antrea.io/antrea/pkg/...
 
@@ -288,7 +300,7 @@ tidy:
 	@echo
 	@echo "==> Running integration tests <=="
 	@echo "SOME TESTS WILL FAIL IF NOT RUN AS ROOT!"
-	$(GO) test -v -coverpkg=antrea.io/antrea/pkg/... -coverprofile=.coverage/coverage-integration.txt -covermode=atomic antrea.io/antrea/test/integration/...
+	$(GO) test $(TEST_ARGS) -v -coverpkg=antrea.io/antrea/pkg/... -coverprofile=.coverage/coverage-integration.txt -covermode=atomic antrea.io/antrea/test/integration/...
 
 test-tidy:
 	@echo
