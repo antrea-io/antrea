@@ -27,6 +27,7 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud.
         --ipsec                       Generate a manifest with IPsec encryption of tunnel traffic enabled.
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. TrafficControl=true,Egress=false.
+                                      This option can be specified multiple times.
         --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled.
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve).
         --on-delete                   Generate a manifest with antrea-agent's update strategy set to OnDelete.
@@ -43,6 +44,7 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --multicast-interfaces        Multicast interface names (default is empty).
         --extra-helm-values-file      Optional extra helm values file to override the default config values.
         --extra-helm-values           Optional extra helm values to override the default config values.
+                                      This option can be specified multiple times.
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
                                       This option will work only in 'dev' mode.
         --help, -h                    Print this message and exit.
@@ -86,6 +88,7 @@ MULTICAST=false
 MULTICAST_INTERFACES=""
 HELM_VALUES_FILES=()
 HELM_VALUES=()
+FEATURE_GATES=()
 
 while [[ $# -gt 0 ]]
 do
@@ -112,7 +115,7 @@ case $key in
     shift
     ;;
     --feature-gates)
-    FEATURE_GATES="$2"
+    FEATURE_GATES+=("$2")
     shift 2
     ;;
     --proxy-all)
@@ -277,9 +280,11 @@ if [ -n "$MULTICAST_INTERFACES" ]; then
     HELM_VALUES+=("multicast.multicastInterfaces={$MULTICAST_INTERFACES}")
 fi
 
-IFS=',' read -r -a feature_gates <<< "$FEATURE_GATES"
-for feature_gate in "${feature_gates[@]}"; do
-    HELM_VALUES+=("featureGates.${feature_gate}")
+for v in "${FEATURE_GATES[@]}"; do
+    IFS=',' read -r -a feature_gates <<< "$v"
+    for feature_gate in "${feature_gates[@]}"; do
+        HELM_VALUES+=("featureGates.${feature_gate}")
+    done
 done
 
 if $PROXY_ALL; then
