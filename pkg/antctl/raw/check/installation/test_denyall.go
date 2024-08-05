@@ -88,7 +88,7 @@ func (t *DenyAllConnectivityTest) Run(ctx context.Context, testContext *testCont
 	for _, clientPod := range testContext.clientPods {
 		for _, service := range services {
 			for _, clusterIP := range service.Spec.ClusterIPs {
-				if err := testContext.runAgnhostConnect(ctx, clientPod.Name, "", clusterIP, 80); err != nil {
+				if err := testContext.tcpProbe(ctx, clientPod.Name, "", clusterIP, 80); err != nil {
 					testContext.Log("NetworkPolicy is working as expected: Pod %s cannot connect to Service %s (%s)", clientPod.Name, service.Name, clusterIP)
 				} else {
 					return fmt.Errorf("NetworkPolicy is not working as expected: Pod %s connected to Service %s (%s) when it should not", clientPod.Name, service.Name, clusterIP)

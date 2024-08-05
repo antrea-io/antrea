@@ -30,17 +30,18 @@ import (
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/antctl/raw/check"
-	"antrea.io/antrea/pkg/version"
 )
 
 func Command() *cobra.Command {
+	o := newOptions()
 	command := &cobra.Command{
 		Use:   "cluster",
 		Short: "Runs pre installation checks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return Run()
+			return Run(o)
 		},
 	}
+	command.Flags().StringVar(&o.testImage, "test-image", o.testImage, "Container image override for the cluster checker")
 	return command
 }
 
@@ -49,6 +50,17 @@ const (
 	deploymentName      = "cluster-checker"
 	podReadyTimeout     = 1 * time.Minute
 )
+
+type options struct {
+	// Container image for the cluster checker.
+	testImage string
+}
+
+func newOptions() *options {
+	return &options{
+		testImage: check.DefaultTestImage,
+	}
+}
 
 type uncertainError struct {
 	reason string
@@ -78,15 +90,17 @@ type testContext struct {
 	clusterName string
 	namespace   string
 	testPod     *corev1.Pod
+	// Container image for the cluster checker.
+	testImage string
 }
 
-func Run() error {
+func Run(o *options) error {
 	client, config, clusterName, err := check.NewClient()
 	if err != nil {
 		return fmt.Errorf("unable to create Kubernetes client: %s", err)
 	}
 	ctx := context.Background()
-	testContext := NewTestContext(client, config, clusterName)
+	testContext := NewTestContext(client, config, clusterName, o.testImage)
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
@@ -122,7 +136,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	deployment := check.NewDeployment(check.DeploymentParameters{
 		Name:        deploymentName,
-		Image:       getAntreaAgentImage(),
+		Image:       t.testImage,
 		Replicas:    1,
 		Command:     []string{"bash", "-c"},
 		Args:        []string{"trap 'exit 0' SIGTERM; sleep infinity & pid=$!; wait $pid"},
@@ -197,19 +211,13 @@ func (t *testContext) setup(ctx context.Context) error {
 	return nil
 }
 
-func getAntreaAgentImage() string {
-	if version.ReleaseStatus == "released" {
-		return fmt.Sprintf("antrea/antrea-agent-ubuntu:%s", version.Version)
-	}
-	return "antrea/antrea-agent-ubuntu:latest"
-}
-
-func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName string) *testContext {
+func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName, testImage string) *testContext {
 	return &testContext{
 		client:      client,
 		config:      config,
 		clusterName: clusterName,
 		namespace:   check.GenerateRandomNamespace(testNamespacePrefix),
+		testImage:   testImage,
 	}
 }
 

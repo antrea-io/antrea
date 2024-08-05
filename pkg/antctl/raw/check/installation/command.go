@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"regexp"
 	"strings"
@@ -46,17 +45,21 @@ func Command() *cobra.Command {
 	}
 	command.Flags().StringVarP(&o.antreaNamespace, "namespace", "n", o.antreaNamespace, "Configure Namespace in which Antrea is running")
 	command.Flags().StringVar(&o.runFilter, "run", o.runFilter, "Run only the tests that match the provided regex")
+	command.Flags().StringVar(&o.testImage, "test-image", o.testImage, "Container image override for the installation checker")
 	return command
 }
 
 type options struct {
 	antreaNamespace string
 	runFilter       string
+	// Container image for the installation checker.
+	testImage string
 }
 
 func newOptions() *options {
 	return &options{
 		antreaNamespace: "kube-system",
+		testImage:       check.DefaultTestImage,
 	}
 }
 
@@ -68,7 +71,6 @@ const (
 	kindEchoName                = "echo"
 	kindClientName              = "client"
 	agentDaemonSetName          = "antrea-agent"
-	deploymentImage             = "registry.k8s.io/e2e-test-images/agnhost:2.40"
 	podReadyTimeout             = 1 * time.Minute
 )
 
@@ -109,6 +111,8 @@ type testContext struct {
 	namespace            string
 	// A nil regex indicates that all the tests should be run.
 	runFilterRegex *regexp.Regexp
+	// Container image for the installation checker.
+	testImage string
 }
 
 type testStats struct {
@@ -143,7 +147,7 @@ func Run(o *options) error {
 		return fmt.Errorf("unable to create Kubernetes client: %w", err)
 	}
 	ctx := context.Background()
-	testContext := NewTestContext(client, config, clusterName, o.antreaNamespace, runFilterRegex)
+	testContext := NewTestContext(client, config, clusterName, o.antreaNamespace, runFilterRegex, o.testImage)
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
@@ -157,9 +161,12 @@ func Run(o *options) error {
 	return nil
 }
 
-func agnhostConnectCommand(ip string, port string) []string {
-	hostPort := net.JoinHostPort(ip, port)
-	return []string{"/agnhost", "connect", hostPort, "--timeout=3s"}
+func tcpProbeCommand(ip string, port int) []string {
+	return []string{"nc", ip, fmt.Sprint(port), "--wait=3s", "-vz"}
+}
+
+func tcpServerCommand(port int) []string {
+	return []string{"nc", "-l", fmt.Sprint(port), "-k"}
 }
 
 func newService(name string, selector map[string]string, port int) *corev1.Service {
@@ -184,6 +191,7 @@ func NewTestContext(
 	clusterName string,
 	antreaNamespace string,
 	runFilterRegex *regexp.Regexp,
+	testImage string,
 ) *testContext {
 	return &testContext{
 		client:          client,
@@ -192,6 +200,7 @@ func NewTestContext(
 		antreaNamespace: antreaNamespace,
 		namespace:       check.GenerateRandomNamespace(testNamespacePrefix),
 		runFilterRegex:  runFilterRegex,
+		testImage:       testImage,
 	}
 }
 
@@ -223,8 +232,8 @@ func (t *testContext) setup(ctx context.Context) error {
 		Name:    echoSameNodeDeploymentName,
 		Role:    kindEchoName,
 		Port:    80,
-		Image:   deploymentImage,
-		Command: []string{"/agnhost", "netexec", "--http-port=80"},
+		Image:   t.testImage,
+		Command: tcpServerCommand(80),
 		Affinity: &corev1.Affinity{
 			PodAffinity: &corev1.PodAffinity{
 				RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
@@ -254,8 +263,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	clientDeployment := check.NewDeployment(check.DeploymentParameters{
 		Name:        clientDeploymentName,
 		Role:        kindClientName,
-		Image:       deploymentImage,
-		Command:     []string{"/agnhost", "pause"},
+		Image:       t.testImage,
 		Port:        80,
 		Tolerations: commonToleration,
 		Labels:      map[string]string{"app": "antrea", "component": "installation-checker", "name": clientDeploymentName},
@@ -268,8 +276,8 @@ func (t *testContext) setup(ctx context.Context) error {
 		Name:    echoOtherNodeDeploymentName,
 		Role:    kindEchoName,
 		Port:    80,
-		Image:   deploymentImage,
-		Command: []string{"/agnhost", "netexec", "--http-port=80"},
+		Image:   t.testImage,
+		Command: tcpServerCommand(80),
 		Affinity: &corev1.Affinity{
 			PodAntiAffinity: &corev1.PodAntiAffinity{
 				RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
@@ -357,14 +365,14 @@ func (t *testContext) runTests(ctx context.Context) testStats {
 	return stats
 }
 
-func (t *testContext) runAgnhostConnect(ctx context.Context, clientPodName string, container string, target string, targetPort int) error {
-	cmd := agnhostConnectCommand(target, fmt.Sprint(targetPort))
+func (t *testContext) tcpProbe(ctx context.Context, clientPodName string, container string, target string, targetPort int) error {
+	cmd := tcpProbeCommand(target, targetPort)
 	_, stderr, err := check.ExecInPod(ctx, t.client, t.config, t.namespace, clientPodName, container, cmd)
 	if err != nil {
 		// We log the contents of stderr here for troubleshooting purposes.
-		t.Log("/agnhost command '%s' failed: %v", strings.Join(cmd, " "), err)
+		t.Log("tcp probe command '%s' failed: %v", strings.Join(cmd, " "), err)
 		if stderr != "" {
-			t.Log("/agnhost stderr: %s", strings.TrimSpace(stderr))
+			t.Log("tcp probe stderr: %s", strings.TrimSpace(stderr))
 		}
 	}
 	return err
