@@ -53,7 +53,7 @@ func (t *PodToServiceConnectivityTest) Run(ctx context.Context, testContext *tes
 		for _, clusterIP := range service.Spec.ClusterIPs {
 			// Service is realized asynchronously, retry a few times.
 			if err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
-				if err := testContext.runAgnhostConnect(ctx, clientPod.Name, "", clusterIP, 80); err != nil {
+				if err := testContext.tcpProbe(ctx, clientPod.Name, "", clusterIP, 80); err != nil {
 					testContext.Log("Client Pod %s was not able to communicate with Service %s (%s): %v, retrying...", clientPod.Name, service.Name, clusterIP, err)
 					return false, nil
 				}
