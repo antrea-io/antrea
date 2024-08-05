@@ -105,7 +105,7 @@ var ipv4Localhost = net.ParseIP("127.0.0.1")
 
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
-	klog.InfoS("Starting Antrea agent", "version", version.GetFullVersion())
+	klog.InfoS("Starting Antrea Agent", "version", version.GetFullVersion())
 
 	// Create K8s Clientset, CRD Clientset, Multicluster CRD Clientset and SharedInformerFactory for the given config.
 	k8sClient, _, crdClient, _, mcClient, _, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
@@ -995,6 +995,6 @@ func run(o *Options) error {
 	}
 
 	<-stopCh
-	klog.Info("Stopping Antrea agent")
+	klog.InfoS("Stopping Antrea Agent")
 	return nil
 }

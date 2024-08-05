@@ -30,12 +30,13 @@ import (
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/cipher"
 	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/version"
 )
 
 const informerDefaultResync = 12 * time.Hour
 
 func run(configFile string) error {
-	klog.Infof("Flow aggregator starting...")
+	klog.InfoS("Starting Flow Aggregator", "version", version.GetFullVersion())
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
@@ -85,7 +86,7 @@ func run(configFile string) error {
 	informerFactory.Start(stopCh)
 
 	<-stopCh
-	klog.InfoS("Stopping flow aggregator")
+	klog.InfoS("Stopping Flow Aggregator")
 	wg.Wait()
 	return nil
 }
