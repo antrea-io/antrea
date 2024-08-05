@@ -199,7 +199,7 @@ func (t *testContext) setup(ctx context.Context) error {
 
 func getAntreaAgentImage() string {
 	if version.ReleaseStatus == "released" {
-		return fmt.Sprintf("antrea/antrea-agent-ubuntu:%s", version.GetVersion())
+		return fmt.Sprintf("antrea/antrea-agent-ubuntu:%s", version.Version)
 	}
 	return "antrea/antrea-agent-ubuntu:latest"
 }
