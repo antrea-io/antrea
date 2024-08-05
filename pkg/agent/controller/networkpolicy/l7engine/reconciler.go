@@ -360,10 +360,10 @@ func (r *Reconciler) addBindingSuricataTenant(vlanID uint32, rulesPath string) e
 	tenantConfigData := bytes.NewBuffer([]byte(fmt.Sprintf(`%%YAML 1.1
 
 ---
-default-rule-path: /etc/suricata/rules
+default-rule-path: %s
 rule-files:
   - %s
-`, rulesPath)))
+`, tenantRulesDir, rulesPath)))
 	if err = writeConfigFile(tenantConfigPath, tenantConfigData); err != nil {
 		return fmt.Errorf("failed to write config file %s for Suricata tenant %d: %w", tenantConfigPath, vlanID, err)
 	}
@@ -509,9 +509,13 @@ func (r *Reconciler) startSuricata() {
 }
 
 func startSuricata() {
+	// Ensure that rules directory exists.
+	if err := os.Mkdir(tenantRulesDir, 0755); err != nil && !os.IsExist(err) {
+		klog.ErrorS(err, "Failed to create Suricata rule directory", "directory", tenantRulesDir)
+	}
 	// Create log directory /var/log/antrea/networkpolicy/l7engine/ for Suricata.
-	if err := os.Mkdir(antreaSuricataLogPath, os.ModePerm); err != nil {
-		klog.ErrorS(err, "Failed to create L7 Network Policy log directory", "Directory", antreaSuricataLogPath)
+	if err := os.Mkdir(antreaSuricataLogPath, 0755); err != nil && !os.IsExist(err) {
+		klog.ErrorS(err, "Failed to create L7 Network Policy log directory", "directory", antreaSuricataLogPath)
 	}
 	// Start Suricata with default Suricata config file /etc/suricata/suricata.yaml.
 	cmd := exec.Command("suricata", "-c", defaultSuricataConfigPath, "--af-packet", "-D", "-l", antreaSuricataLogPath)
