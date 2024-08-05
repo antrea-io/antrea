@@ -721,7 +721,7 @@ be enforced in the order in which they are written.
 
 **egress**: Each ClusterNetworkPolicy may consist of zero or more ordered set
 of egress rules. Each rule, depending on the `action` field of the rule, allows
-or drops traffic which matches all `from`, `ports` sections.
+or drops traffic which matches all `to`, `ports` sections.
 Under `ports`, the optional field `endPort` can only be set when a numerical `port`
 is set to represent a range of ports from `port` to `endPort` inclusive.
 `protocols` defines additional protocols that are not supported by `ports`. Currently, only
