@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
@@ -581,6 +582,10 @@ func (c *Controller) GetRuleByFlowID(ruleFlowID uint32) *types.PolicyRule {
 		return nil
 	}
 	return rule
+}
+
+func (c *Controller) GetRealizedRulesByPolicy(uid string) []apis.PolicyRuleConjunctionIDsResponse {
+	return c.podReconciler.GetRealizedRulesByPolicy(uid)
 }
 
 func (c *Controller) GetControllerConnectionStatus() bool {

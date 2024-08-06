@@ -27,6 +27,7 @@ package testing
 import (
 	reflect "reflect"
 
+	apis "antrea.io/antrea/pkg/agent/apis"
 	interfacestore "antrea.io/antrea/pkg/agent/interfacestore"
 	multicast "antrea.io/antrea/pkg/agent/multicast"
 	types "antrea.io/antrea/pkg/agent/types"
@@ -183,6 +184,20 @@ func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicyNum() int {
 func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicyNum() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyNum", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetNetworkPolicyNum))
+}
+
+// GetRealizedRulesByPolicy mocks base method.
+func (m *MockAgentNetworkPolicyInfoQuerier) GetRealizedRulesByPolicy(arg0 string) []apis.PolicyRuleConjunctionIDsResponse {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRealizedRulesByPolicy", arg0)
+	ret0, _ := ret[0].([]apis.PolicyRuleConjunctionIDsResponse)
+	return ret0
+}
+
+// GetRealizedRulesByPolicy indicates an expected call of GetRealizedRulesByPolicy.
+func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetRealizedRulesByPolicy(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRealizedRulesByPolicy", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetRealizedRulesByPolicy), arg0)
 }
 
 // GetRuleByFlowID mocks base method.
