@@ -71,7 +71,8 @@ multicast:
 # -- Default MTU to use for the host gateway interface and the network interface
 # of each Pod. By default, antrea-agent will discover the MTU of the Node's
 # primary interface and adjust it to accommodate for tunnel encapsulation
-# overhead if applicable.
+# overhead if applicable. If the MTU is updated, the new value will only be
+# applied to new workloads.
 defaultMTU: 0
 
 # -- packetInRate defines the OVS controller packet rate limits for different

@@ -404,14 +404,16 @@ func removeInterfaceAltName(name string, altName string) error {
 // PrepareHostInterfaceConnection prepares host interface connection to the OVS bridge client by:
 // 1. Renaming the host interface (a bridged suffix will be added to it).
 // 2. Creating an internal port (original name of the host interface will be used here).
-// 3. Moving IPs of host interface to this new link/internal-port.
-// 4. Moving routes of host interface to the new link/internal-port.
+// 3. Set the MTU of this new link/internal-port to the provided mtu parameter value, unless mtu is zero.
+// 4. Moving IPs of host interface to this new link/internal-port.
+// 5. Moving routes of host interface to the new link/internal-port.
 // and returns the bridged name, true if it already exists, and error.
 func PrepareHostInterfaceConnection(
 	bridge ovsconfig.OVSBridgeClient,
 	ifaceName string,
 	ifaceOFPort int32,
 	externalIDs map[string]interface{},
+	mtu int,
 ) (string, bool, error) {
 	bridgedName := GenerateUplinkInterfaceName(ifaceName)
 	// If the port already exists, just return.
@@ -451,6 +453,12 @@ func PrepareHostInterfaceConnection(
 	}
 	if _, _, err = SetLinkUp(ifaceName); err != nil {
 		return "", false, fmt.Errorf("failed to set link up: %v", err)
+	}
+
+	if mtu > 0 {
+		if err := bridge.SetInterfaceMTU(ifaceName, mtu); err != nil {
+			return "", false, fmt.Errorf("failed to set bridge interface MTU: %w", err)
+		}
 	}
 
 	// Check if interface is configured with an IPv6 address: if it is, we need to ensure that IPv6
