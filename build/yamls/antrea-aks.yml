@@ -3891,6 +3891,7 @@ data:
     # Default MTU to use for the host gateway interface and the network interface of each Pod.
     # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
     # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
+    # If the MTU is updated, the new value will only be applied to new workloads.
     defaultMTU: 0
 
     # packetInRate defines the OVS controller packet rate limits for different
@@ -5125,7 +5126,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: cce7d6644fb552607ebeda9bf30a5fafa871dd4382afc609500fcb493b61768c
+        checksum/config: f950d38c3e5f05b4e6290aae92fc46eeda9126a68a0ed6b88eee7f5c4c6fb491
       labels:
         app: antrea
         component: antrea-agent
@@ -5363,7 +5364,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: cce7d6644fb552607ebeda9bf30a5fafa871dd4382afc609500fcb493b61768c
+        checksum/config: f950d38c3e5f05b4e6290aae92fc46eeda9126a68a0ed6b88eee7f5c4c6fb491
       labels:
         app: antrea
         component: antrea-controller
