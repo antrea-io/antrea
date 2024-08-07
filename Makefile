@@ -19,6 +19,7 @@ ANTCTL_BINARY_NAME ?= antctl
 OVS_VERSION        := $(shell head -n 1 build/images/deps/ovs-version)
 GO_VERSION         := $(shell head -n 1 build/images/deps/go-version)
 CNI_BINARIES_VERSION := $(shell head -n 1 build/images/deps/cni-binaries-version)
+BGP_VERSION	   := $(shell head -n 1 build/images/deps/bgp-version)
 GIT_HOOKS          := $(shell find hack/git_client_side_hooks -type f -print)
 DOCKER_NETWORK     ?= default
 TRIVY_TARGET_IMAGE ?=

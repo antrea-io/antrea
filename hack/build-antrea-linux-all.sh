@@ -126,6 +126,7 @@ fi
 
 CNI_BINARIES_VERSION=$(head -n 1 build/images/deps/cni-binaries-version)
 GO_VERSION=$(head -n 1 build/images/deps/go-version)
+BGP_VERSION=$(head -n 1 build/images/deps/bgp-version)
 
 if [ "$BUILD_TAG" != "" ]; then
     ARGS="$ARGS --build-tag $BUILD_TAG"
