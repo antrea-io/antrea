@@ -60,6 +60,9 @@ func (o *Options) checkUnsupportedFeatures() error {
 	if o.config.EnableBridgingMode {
 		unsupported = append(unsupported, "EnableBridgingMode")
 	}
+	if o.config.SNATFullyRandomPorts {
+		unsupported = append(unsupported, "SNATFullyRandomPorts")
+	}
 	if unsupported != nil {
 		return fmt.Errorf("unsupported features on Windows: {%s}", strings.Join(unsupported, ", "))
 	}

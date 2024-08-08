@@ -125,6 +125,20 @@ func (mr *MockInterfaceMockRecorder) EnsureChain(arg0, arg1, arg2 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureChain", reflect.TypeOf((*MockInterface)(nil).EnsureChain), arg0, arg1, arg2)
 }
 
+// HasRandomFully mocks base method.
+func (m *MockInterface) HasRandomFully() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasRandomFully")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasRandomFully indicates an expected call of HasRandomFully.
+func (mr *MockInterfaceMockRecorder) HasRandomFully() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasRandomFully", reflect.TypeOf((*MockInterface)(nil).HasRandomFully))
+}
+
 // InsertRule mocks base method.
 func (m *MockInterface) InsertRule(arg0 iptables.Protocol, arg1, arg2 string, arg3 []string) error {
 	m.ctrl.T.Helper()
