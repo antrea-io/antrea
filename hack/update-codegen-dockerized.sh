@@ -67,6 +67,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/querier AgentQuerier testing"
   "pkg/agent/route Interface testing"
   "pkg/agent/ipassigner IPAssigner testing"
+  "pkg/agent/ipassigner/responder Responder testing"
   "pkg/agent/secondarynetwork/podwatch InterfaceConfigurator,IPAMAllocator testing"
   "pkg/agent/servicecidr Interface testing"
   "pkg/agent/util/ipset Interface testing"
