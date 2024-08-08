@@ -350,7 +350,7 @@ in the specified OVS flow tables, or all or the specified OVS groups.
 antctl get ovsflows
 antctl get ovsflows -p POD -n NAMESPACE
 antctl get ovsflows -S SERVICE -n NAMESPACE
-antctl get ovsflows -N NETWORKPOLICY -n NAMESPACE
+antctl get ovsflows -N NETWORKPOLICY -n NAMESPACE --type NETWORKPOLICY_TYPE
 antctl get ovsflows -T TABLE_A,TABLE_B
 antctl get ovsflows -T TABLE_A,TABLE_B_NUM
 antctl get ovsflows -G all
@@ -381,13 +381,22 @@ kube-system kube-dns 160ea6d7-0234-5d1d-8ea0-b703d0aa3b46 1
 # Dump OVS flows of NetworkPolicy "kube-dns"
 $ antctl get of -N kube-dns -n kube-system
 FLOW
-table=90, n_packets=0, n_bytes=0, priority=190,conj_id=1,ip actions=resubmit(,105)
-table=90, n_packets=0, n_bytes=0, priority=200,ip actions=conjunction(1,1/3)
-table=90, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=conjunction(2,2/3),conjunction(1,2/3)
-table=90, n_packets=0, n_bytes=0, priority=200,udp,tp_dst=53 actions=conjunction(1,3/3)
-table=90, n_packets=0, n_bytes=0, priority=200,tcp,tp_dst=53 actions=conjunction(1,3/3)
-table=90, n_packets=0, n_bytes=0, priority=200,tcp,tp_dst=9153 actions=conjunction(1,3/3)
-table=100, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=drop
+table=IngressRule, n_packets=0, n_bytes=0, priority=190,conj_id=1,ip actions=set_field:0x1->reg5,ct(commit,table=IngressMetric,zone=65520,exec(set_field:0x1/0xffffffff->ct_label))
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,ip actions=conjunction(1,1/3)
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=conjunction(2,2/3),conjunction(1,2/3)
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,udp,tp_dst=53 actions=conjunction(1,3/3)
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,tcp,tp_dst=53 actions=conjunction(1,3/3)
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,tcp,tp_dst=9153 actions=conjunction(1,3/3)
+table=IngressDefaultRule, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=drop
+
+# Dump OVS flows of AntreaNetworkPolicy "test-annp"
+$ antctl get ovsflows -N test-annp -n default --type ANNP
+FLOW
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,conj_id=6 actions=set_field:0x6->reg3,set_field:0x400/0x400->reg0,goto_table:IngressMetric
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,ip,nw_src=10.20.1.8 actions=conjunction(6,1/3)
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,ip,nw_src=10.20.2.8 actions=conjunction(6,1/3)
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,reg1=0x3 actions=conjunction(6,2/3)
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,tcp,tp_dst=443 actions=conjunction(6,3/3)
 ```
 
 ### OVS packet tracing
