@@ -18,6 +18,8 @@ import (
 	"context"
 	"time"
 
+	"k8s.io/utils/clock"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metatable "k8s.io/apimachinery/pkg/api/meta/table"
@@ -32,6 +34,7 @@ import (
 
 type REST struct {
 	indexer cache.Indexer
+	clock   clock.Clock
 }
 
 var (
@@ -45,8 +48,13 @@ var (
 
 // NewREST returns a REST object that will work against API services.
 func NewREST() *REST {
+	return newRESTWithClock(clock.RealClock{})
+}
+
+func newRESTWithClock(clock clock.Clock) *REST {
 	return &REST{
 		indexer: cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{}),
+		clock:   clock,
 	}
 }
 
@@ -60,6 +68,9 @@ func (r *REST) Destroy() {
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	// Update will add the object if the key does not exist.
 	summary := obj.(*statsv1alpha1.NodeLatencyStats)
+	if summary.ObjectMeta.CreationTimestamp.IsZero() {
+		summary.ObjectMeta.CreationTimestamp = metav1.Time{Time: r.clock.Now()}
+	}
 	if err := r.indexer.Update(summary); err != nil {
 		return nil, errors.NewInternalError(err)
 	}
