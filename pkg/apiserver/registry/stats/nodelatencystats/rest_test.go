@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	clocktesting "k8s.io/utils/clock/testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -29,31 +31,61 @@ import (
 )
 
 func TestREST(t *testing.T) {
-	r := NewREST()
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	r := newRESTWithClock(fakeClock)
 	assert.Equal(t, &statsv1alpha1.NodeLatencyStats{}, r.New())
 	assert.Equal(t, &statsv1alpha1.NodeLatencyStats{}, r.NewList())
 	assert.False(t, r.NamespaceScoped())
 }
 
 func TestRESTCreate(t *testing.T) {
-	summary := &statsv1alpha1.NodeLatencyStats{
-		ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
-		PeerNodeLatencyStats: nil,
-	}
-	expectedObj := &statsv1alpha1.NodeLatencyStats{
-		ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
-		PeerNodeLatencyStats: nil,
-	}
-
-	r := NewREST()
 	ctx := context.Background()
+	now := time.Now()
+	const timeStep = 1 * time.Minute
+	tests := []struct {
+		name        string
+		summary     *statsv1alpha1.NodeLatencyStats
+		expectedObj *statsv1alpha1.NodeLatencyStats
+	}{
+		{
+			name: "create with existing timestamp",
+			summary: &statsv1alpha1.NodeLatencyStats{
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
+				PeerNodeLatencyStats: nil,
+			},
+			expectedObj: &statsv1alpha1.NodeLatencyStats{
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
+				PeerNodeLatencyStats: nil,
+			},
+		},
+		{
+			name: "create with no existing timestamp",
+			summary: &statsv1alpha1.NodeLatencyStats{
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
+				PeerNodeLatencyStats: nil,
+			},
+			expectedObj: &statsv1alpha1.NodeLatencyStats{
+				// the test case advances the clock by timeStep
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now.Add(timeStep)}},
+				PeerNodeLatencyStats: nil,
+			},
+		},
+	}
 
-	obj, err := r.Create(ctx, summary, nil, nil)
-	require.NoError(t, err)
-	assert.Equal(t, expectedObj, obj)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClock := clocktesting.NewFakeClock(now)
+			r := newRESTWithClock(fakeClock)
+			fakeClock.Step(timeStep)
+			obj, err := r.Create(ctx, tt.summary, nil, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedObj, obj)
+		})
+	}
 }
 
 func TestRESTGet(t *testing.T) {
+	now := time.Now()
 	tests := []struct {
 		name        string
 		summary     *statsv1alpha1.NodeLatencyStats
@@ -64,12 +96,12 @@ func TestRESTGet(t *testing.T) {
 		{
 			name: "get summary",
 			summary: &statsv1alpha1.NodeLatencyStats{
-				ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
 				PeerNodeLatencyStats: nil,
 			},
 			nodeName: "node1",
 			expectedObj: &statsv1alpha1.NodeLatencyStats{
-				ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
 				PeerNodeLatencyStats: nil,
 			},
 			err: nil,
@@ -77,7 +109,7 @@ func TestRESTGet(t *testing.T) {
 		{
 			name: "get summary not found",
 			summary: &statsv1alpha1.NodeLatencyStats{
-				ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
 				PeerNodeLatencyStats: nil,
 			},
 			nodeName:    "node2",
@@ -87,12 +119,12 @@ func TestRESTGet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewREST()
+			fakeClock := clocktesting.NewFakeClock(now)
+			r := newRESTWithClock(fakeClock)
 			ctx := context.Background()
 
 			_, err := r.Create(ctx, tt.summary, nil, nil)
 			require.NoError(t, err)
-
 			obj, err := r.Get(ctx, tt.nodeName, nil)
 			if tt.err != nil {
 				assert.EqualError(t, tt.err, err.Error())
@@ -105,6 +137,7 @@ func TestRESTGet(t *testing.T) {
 }
 
 func TestRESTDelete(t *testing.T) {
+	now := time.Now()
 	tests := []struct {
 		name        string
 		summary     *statsv1alpha1.NodeLatencyStats
@@ -115,12 +148,12 @@ func TestRESTDelete(t *testing.T) {
 		{
 			name: "delete summary",
 			summary: &statsv1alpha1.NodeLatencyStats{
-				ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
 				PeerNodeLatencyStats: nil,
 			},
 			nodeName: "node1",
 			expectedObj: &statsv1alpha1.NodeLatencyStats{
-				ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
 				PeerNodeLatencyStats: nil,
 			},
 			err: nil,
@@ -128,7 +161,7 @@ func TestRESTDelete(t *testing.T) {
 		{
 			name: "delete summary not found",
 			summary: &statsv1alpha1.NodeLatencyStats{
-				ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
 				PeerNodeLatencyStats: nil,
 			},
 			nodeName:    "node2",
@@ -138,7 +171,8 @@ func TestRESTDelete(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewREST()
+			fakeClock := clocktesting.NewFakeClock(now)
+			r := newRESTWithClock(fakeClock)
 			ctx := context.Background()
 
 			_, err := r.Create(ctx, tt.summary, nil, nil)
@@ -156,20 +190,22 @@ func TestRESTDelete(t *testing.T) {
 }
 
 func TestRESTList(t *testing.T) {
+	now := time.Now()
+	fakeClock := clocktesting.NewFakeClock(now)
 	summary := &statsv1alpha1.NodeLatencyStats{
-		ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
+		ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
 		PeerNodeLatencyStats: nil,
 	}
 	expectedObj := &statsv1alpha1.NodeLatencyStatsList{
 		Items: []statsv1alpha1.NodeLatencyStats{
 			{
-				ObjectMeta:           metav1.ObjectMeta{Name: "node1"},
+				ObjectMeta:           metav1.ObjectMeta{Name: "node1", CreationTimestamp: metav1.Time{Time: now}},
 				PeerNodeLatencyStats: nil,
 			},
 		},
 	}
 
-	r := NewREST()
+	r := newRESTWithClock(fakeClock)
 	ctx := context.Background()
 
 	_, err := r.Create(ctx, summary, nil, nil)
