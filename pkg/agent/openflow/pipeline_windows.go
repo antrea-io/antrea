@@ -23,6 +23,11 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
+// matchUplinkInPortInClassifierTable matches dstIP field to prevent unintended forwarding when promiscuous mode is enabled on Windows.
+func (f *featurePodConnectivity) matchUplinkInPortInClassifierTable(flowBuilder binding.FlowBuilder) binding.FlowBuilder {
+	return flowBuilder.MatchInPort(f.uplinkPort).MatchProtocol(binding.ProtocolIP).MatchDstIP(f.nodeConfig.NodeTransportIPv4Addr.IP)
+}
+
 // hostBridgeUplinkFlows generates the flows that forward traffic between the bridge local port and the uplink port to
 // support the host traffic with outside.
 func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {

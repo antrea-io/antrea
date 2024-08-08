@@ -25,6 +25,10 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
+func (f *featurePodConnectivity) matchUplinkInPortInClassifierTable(flowBuilder binding.FlowBuilder) binding.FlowBuilder {
+	return flowBuilder.MatchInPort(f.uplinkPort)
+}
+
 // hostBridgeUplinkFlows generates the flows that forward traffic between the bridge local port and the uplink port to
 // support the host traffic.
 // TODO(gran): sync latest changes from pipeline_windows.go
