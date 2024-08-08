@@ -41,6 +41,10 @@ You may be interested in using this capability if any of the following apply:
 - You want to force outgoing external connections to leave the cluster via
   certain Nodes, for security controls, or due to network topology restrictions.
 
+**Note**: A dummy interface `antrea-egress0` is automatically created on the
+Node hosting the egress IP, the interface is intended to be down and egress
+traffic will not flow through it but the interface determined by the route table.
+
 This guide demonstrates how to configure `Egress` to achieve the above result.
 
 ## Prerequisites
