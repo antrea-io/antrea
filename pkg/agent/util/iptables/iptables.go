@@ -85,9 +85,19 @@ const (
 	ProtocolICMPv6 = "icmp6"
 )
 
-// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.2.txt:
-// iptables-restore: support acquiring the lock.
-var restoreWaitSupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
+var (
+	// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.2.txt:
+	// iptables-restore: support acquiring the lock.
+	restoreWaitSupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
+
+	// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.0.txt:
+	// iptables: snat: add randomize-full support
+	// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.2.txt:
+	// iptables: masquerade: add randomize-full support
+	// In our case, we do not differentiate between SNAT and MASQUERADE support for the option,
+	// and we use 1.6.2 as the common minimum version number.
+	randomFullySupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
+)
 
 type Interface interface {
 	EnsureChain(protocol Protocol, table string, chain string) error
@@ -107,6 +117,8 @@ type Interface interface {
 	Restore(data string, flush bool, useIPv6 bool) error
 
 	Save() ([]byte, error)
+
+	HasRandomFully() bool
 }
 
 type IPTablesRuleBuilder interface {
@@ -136,18 +148,25 @@ type Client struct {
 	ipts map[Protocol]*iptables.IPTables
 	// restoreWaitSupported indicates whether iptables-restore (or ip6tables-restore) supports --wait flag.
 	restoreWaitSupported bool
+	// randomFullySupported indicates whether --random-fully is supported for SNAT and MASQUERADE rules.
+	randomFullySupported bool
 }
 
 func New(enableIPV4, enableIPV6 bool) (*Client, error) {
 	ipts := make(map[Protocol]*iptables.IPTables)
-	var restoreWaitSupported bool
+	var restoreWaitSupported, randomFullySupported bool
+	if enableIPV4 || enableIPV6 {
+		restoreWaitSupported = true
+		randomFullySupported = true
+	}
 	if enableIPV4 {
 		ipt, err := iptables.New()
 		if err != nil {
 			return nil, fmt.Errorf("error creating IPTables instance: %v", err)
 		}
 		ipts[ProtocolIPv4] = ipt
-		restoreWaitSupported = isRestoreWaitSupported(ipt)
+		restoreWaitSupported = restoreWaitSupported && isRestoreWaitSupported(ipt)
+		randomFullySupported = randomFullySupported && isRandomFullySupported(ipt)
 	}
 	if enableIPV6 {
 		ip6t, err := iptables.NewWithProtocol(iptables.ProtocolIPv6)
@@ -155,17 +174,27 @@ func New(enableIPV4, enableIPV6 bool) (*Client, error) {
 			return nil, fmt.Errorf("error creating IPTables instance for IPv6: %v", err)
 		}
 		ipts[ProtocolIPv6] = ip6t
-		if !restoreWaitSupported {
-			restoreWaitSupported = isRestoreWaitSupported(ip6t)
-		}
+		restoreWaitSupported = restoreWaitSupported && isRestoreWaitSupported(ip6t)
+		randomFullySupported = randomFullySupported && isRandomFullySupported(ip6t)
 	}
-	return &Client{ipts: ipts, restoreWaitSupported: restoreWaitSupported}, nil
+	return &Client{ipts: ipts, restoreWaitSupported: restoreWaitSupported, randomFullySupported: randomFullySupported}, nil
 }
 
 func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
 	major, minor, patch := ipt.GetIptablesVersion()
 	version := semver.Version{Major: uint64(major), Minor: uint64(minor), Patch: uint64(patch)}
 	return version.GE(restoreWaitSupportedMinVersion)
+}
+
+func isRandomFullySupported(ipt *iptables.IPTables) bool {
+	// Note that even if the iptables version supports it, the kernel version may not.
+	// For SNAT rules, kernel >= 3.14 is required. For MASQUERADE rules, kernel >= 3.13 is required.
+	// Given how old these kernel releases are, we do not check the version here. This is
+	// consistent with how K8s checks for --random-fully support:
+	// https://github.com/kubernetes/kubernetes/blob/60c4c2b2521fb454ce69dee737e3eb91a25e0535/pkg/util/iptables/iptables.go#L239
+	major, minor, patch := ipt.GetIptablesVersion()
+	version := semver.Version{Major: uint64(major), Minor: uint64(minor), Patch: uint64(patch)}
+	return version.GE(randomFullySupportedMinVersion)
 }
 
 // EnsureChain checks if target chain already exists, creates it if not.
@@ -388,6 +417,12 @@ func (c *Client) Save() ([]byte, error) {
 		output = append(output, data...)
 	}
 	return output, nil
+}
+
+// HasRandomFully returns true if the iptables version supports --random-fully for SNAT and
+// MASQUERADE rules.
+func (c *Client) HasRandomFully() bool {
+	return c.randomFullySupported
 }
 
 func MakeChainLine(chain string) string {

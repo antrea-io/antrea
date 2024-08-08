@@ -3842,6 +3842,10 @@ data:
     # performs SNAT and this option will be ignored; for other modes it must be set to false.
     noSNAT: false
 
+    # Fully randomize source port mapping in SNAT rules enforced by Nodes for egress traffic from local
+    # Pods to the external network. This has no impact on the SNAT rules for the Egress feature.
+    snatFullyRandomPorts: false
+
     # Tunnel protocols used for encapsulating traffic across Nodes. If WireGuard is enabled in trafficEncryptionMode,
     # this option will not take effect. Supported values:
     # - geneve (default)
@@ -3912,6 +3916,9 @@ data:
       # The maximum number of Egress IPs that can be assigned to a Node. It's useful when the Node network restricts
       # the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255.
       maxEgressIPsPerNode: 255
+      # Fully randomize source port mapping in Egress SNAT rules. This has no impact on the default SNAT
+      # rules enforced by each Node for local Pod traffic the top-level snatFullyRandomPorts value).
+      snatFullyRandomPorts: false
 
     # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
     # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
@@ -5126,7 +5133,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 5bab13c466e83f8a14191bfb9aad49229945c442808ea135f80cafe5e21be5f3
+        checksum/config: c01fcdf2b926b036749251d1357b927759921c42d27d3767058a5edd529e872c
       labels:
         app: antrea
         component: antrea-agent
@@ -5362,7 +5369,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 5bab13c466e83f8a14191bfb9aad49229945c442808ea135f80cafe5e21be5f3
+        checksum/config: c01fcdf2b926b036749251d1357b927759921c42d27d3767058a5edd529e872c
       labels:
         app: antrea
         component: antrea-controller

@@ -3855,6 +3855,10 @@ data:
     # performs SNAT and this option will be ignored; for other modes it must be set to false.
     noSNAT: false
 
+    # Fully randomize source port mapping in SNAT rules enforced by Nodes for egress traffic from local
+    # Pods to the external network. This has no impact on the SNAT rules for the Egress feature.
+    snatFullyRandomPorts: false
+
     # Tunnel protocols used for encapsulating traffic across Nodes. If WireGuard is enabled in trafficEncryptionMode,
     # this option will not take effect. Supported values:
     # - geneve (default)
@@ -3925,6 +3929,9 @@ data:
       # The maximum number of Egress IPs that can be assigned to a Node. It's useful when the Node network restricts
       # the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255.
       maxEgressIPsPerNode: 255
+      # Fully randomize source port mapping in Egress SNAT rules. This has no impact on the default SNAT
+      # rules enforced by each Node for local Pod traffic the top-level snatFullyRandomPorts value).
+      snatFullyRandomPorts: false
 
     # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
     # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
@@ -5139,7 +5146,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7212fbcdde8fe4be00f31ebbbcd7b03a7335666b4af245eed7dac1ba9e99118c
+        checksum/config: 42d41e73df1555214d3bbe4ccda2ddebdd5c6757c9342c08f127deb3672e6025
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5421,7 +5428,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7212fbcdde8fe4be00f31ebbbcd7b03a7335666b4af245eed7dac1ba9e99118c
+        checksum/config: 42d41e73df1555214d3bbe4ccda2ddebdd5c6757c9342c08f127deb3672e6025
       labels:
         app: antrea
         component: antrea-controller
