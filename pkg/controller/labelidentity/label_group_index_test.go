@@ -286,15 +286,16 @@ func TestDeletePolicySelectors(t *testing.T) {
 	i.AddSelector(selectorItemD.selector, "policyA")
 	i.AddSelector(selectorItemC.selector, "policyB")
 	for _, tt := range tests {
-		i.DeletePolicySelectors(tt.policyKey)
-		for k, l := range i.labelIdentities {
-			if l.selectorItemKeys.Has(tt.staleSelector) {
-				t.Errorf("Stale selector %s is not deleted from labelMatch %s", tt.staleSelector, k)
+		t.Run(tt.policyKey, func(t *testing.T) {
+			i.DeletePolicySelectors(tt.policyKey)
+			i.lock.Lock()
+			defer i.lock.Unlock()
+			for k, l := range i.labelIdentities {
+				assert.Falsef(t, l.selectorItemKeys.Has(tt.staleSelector), "Stale selector %s is not deleted from labelMatch %s", tt.staleSelector, k)
 			}
-		}
-		if _, exists, _ := i.selectorItems.GetByKey(tt.staleSelector); exists {
-			t.Errorf("Stale selector %s is not deleted from selectorItem cache", tt.staleSelector)
-		}
+			_, exists, _ := i.selectorItems.GetByKey(tt.staleSelector)
+			assert.Falsef(t, exists, "Stale selector %s is not deleted from selectorItem cache", tt.staleSelector)
+		})
 	}
 }
 
@@ -396,9 +397,7 @@ func TestSetPolicySelectors(t *testing.T) {
 			assert.Equalf(t, len(tt.expSelectorItems), len(i.selectorItems.List()), "Unexpected number of cached selectorItems")
 			for selKey, expSelItem := range tt.expSelectorItems {
 				s, exists, _ := i.selectorItems.GetByKey(selKey)
-				if !exists {
-					t.Errorf("Selector %s is not added", selKey)
-				}
+				assert.Truef(t, exists, "Selector %s is not added", selKey)
 				sItem := s.(*selectorItem)
 				assert.Truef(t, sItem.policyKeys.Equal(expSelItem.policyKeys), "Unexpected policy keys for selectorItem %s", selKey)
 				assert.Truef(t, sItem.labelIdentityKeys.Equal(expSelItem.labelIdentityKeys), "Unexpected labelIdentity keys for selectorItem %s", selKey)
@@ -424,19 +423,19 @@ func dedupLabelIdentites(labelIdentityIDs []uint32) []uint32 {
 func TestAddLabelIdentity(t *testing.T) {
 	labelIdentityAOriginalID := uint32(1)
 	tests := []struct {
-		name              string
-		normalizedLabel   string
-		id                uint32
-		originalID        *uint32
-		expPolicyCalled   []string
-		expLabelIdenities map[string]*labelIdentityMatch
+		name               string
+		normalizedLabel    string
+		id                 uint32
+		originalID         *uint32
+		expPolicyCalled    []string
+		expLabelIdentities map[string]*labelIdentityMatch
 	}{
 		{
 			name:            "Add label identity A",
 			normalizedLabel: labelA,
 			id:              1,
 			expPolicyCalled: []string{"policyA", "policyB"},
-			expLabelIdenities: map[string]*labelIdentityMatch{
+			expLabelIdentities: map[string]*labelIdentityMatch{
 				labelA: {
 					id:               1,
 					selectorItemKeys: sets.New[string](selectorItemA.getKey(), selectorItemB.getKey()),
@@ -449,7 +448,7 @@ func TestAddLabelIdentity(t *testing.T) {
 			id:              4,
 			originalID:      &labelIdentityAOriginalID,
 			expPolicyCalled: []string{"policyA", "policyB", "policyA", "policyB"},
-			expLabelIdenities: map[string]*labelIdentityMatch{
+			expLabelIdentities: map[string]*labelIdentityMatch{
 				labelA: {
 					id:               4,
 					selectorItemKeys: sets.New[string](selectorItemA.getKey(), selectorItemB.getKey()),
@@ -461,7 +460,7 @@ func TestAddLabelIdentity(t *testing.T) {
 			normalizedLabel: labelB,
 			id:              2,
 			expPolicyCalled: []string{"policyA", "policyB", "policyD"},
-			expLabelIdenities: map[string]*labelIdentityMatch{
+			expLabelIdentities: map[string]*labelIdentityMatch{
 				labelB: {
 					id:               2,
 					selectorItemKeys: sets.New[string](selectorItemC.getKey(), selectorItemD.getKey()),
@@ -473,7 +472,7 @@ func TestAddLabelIdentity(t *testing.T) {
 			normalizedLabel: labelC,
 			id:              3,
 			expPolicyCalled: []string{"policyA", "policyB"},
-			expLabelIdenities: map[string]*labelIdentityMatch{
+			expLabelIdentities: map[string]*labelIdentityMatch{
 				labelC: {
 					id:               3,
 					selectorItemKeys: sets.New[string](selectorItemC.getKey()),
@@ -506,17 +505,17 @@ func TestAddLabelIdentity(t *testing.T) {
 				i.AddLabelIdentity(tt.normalizedLabel, *tt.originalID)
 			}
 			i.AddLabelIdentity(tt.normalizedLabel, tt.id)
-			// Wait for event handler to handle label add event
-			time.Sleep(10 * time.Millisecond)
-			lock.Lock()
-			defer lock.Unlock()
-			assert.ElementsMatchf(t, actualPoliciesCalled, tt.expPolicyCalled, "Unexpected policy sync calls")
-			for key, l := range tt.expLabelIdenities {
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				lock.Lock()
+				defer lock.Unlock()
+				assert.ElementsMatch(t, actualPoliciesCalled, tt.expPolicyCalled, "Unexpected policy sync calls")
+			}, time.Second, 10*time.Millisecond)
+			i.lock.Lock()
+			defer i.lock.Unlock()
+			for key, l := range tt.expLabelIdentities {
 				actLabelMatch := i.labelIdentities[key]
-				assert.Equalf(t, actLabelMatch.id, l.id, "Unexpected id cached for label")
-				if !actLabelMatch.selectorItemKeys.Equal(l.selectorItemKeys) {
-					t.Errorf("Unexpected matched selectorItems for label %s in step %s", tt.normalizedLabel, tt.name)
-				}
+				assert.Equal(t, actLabelMatch.id, l.id, "Unexpected id cached for label")
+				assert.Truef(t, actLabelMatch.selectorItemKeys.Equal(l.selectorItemKeys), "Unexpected matched selectorItems for label %s", tt.normalizedLabel)
 			}
 		})
 	}
@@ -524,16 +523,16 @@ func TestAddLabelIdentity(t *testing.T) {
 
 func TestDeleteLabelIdentity(t *testing.T) {
 	tests := []struct {
-		name              string
-		labelToDelete     string
-		expPolicyCalled   []string
-		expLabelIdenities map[string]*labelIdentityMatch
+		name               string
+		labelToDelete      string
+		expPolicyCalled    []string
+		expLabelIdentities map[string]*labelIdentityMatch
 	}{
 		{
 			name:            "Delete label identity A",
 			labelToDelete:   labelA,
 			expPolicyCalled: []string{"policyA", "policyB"},
-			expLabelIdenities: map[string]*labelIdentityMatch{
+			expLabelIdentities: map[string]*labelIdentityMatch{
 				labelB: {
 					id:               2,
 					selectorItemKeys: sets.New[string](selectorItemC.getKey(), selectorItemD.getKey()),
@@ -548,7 +547,7 @@ func TestDeleteLabelIdentity(t *testing.T) {
 			name:            "Delete label identity B",
 			labelToDelete:   labelB,
 			expPolicyCalled: []string{"policyA", "policyB", "policyD"},
-			expLabelIdenities: map[string]*labelIdentityMatch{
+			expLabelIdentities: map[string]*labelIdentityMatch{
 				labelA: {
 					id:               1,
 					selectorItemKeys: sets.New[string](selectorItemA.getKey(), selectorItemB.getKey()),
@@ -563,7 +562,7 @@ func TestDeleteLabelIdentity(t *testing.T) {
 			name:            "Delete label identity C",
 			labelToDelete:   labelC,
 			expPolicyCalled: []string{"policyA", "policyB"},
-			expLabelIdenities: map[string]*labelIdentityMatch{
+			expLabelIdentities: map[string]*labelIdentityMatch{
 				labelA: {
 					id:               1,
 					selectorItemKeys: sets.New[string](selectorItemA.getKey(), selectorItemB.getKey()),
@@ -599,24 +598,29 @@ func TestDeleteLabelIdentity(t *testing.T) {
 			i.AddLabelIdentity(labelA, 1)
 			i.AddLabelIdentity(labelB, 2)
 			i.AddLabelIdentity(labelC, 3)
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				lock.Lock()
+				defer lock.Unlock()
+				assert.ElementsMatch(t, actualPoliciesCalled, []string{"policyA", "policyB", "policyA", "policyB", "policyD", "policyA", "policyB"}, "Unexpected policy sync calls")
+			}, time.Second, 10*time.Millisecond)
 			// Reset the actualPoliciesCalled slice. Otherwise, the list will be filled with extra items
 			// in the channel from preloading label identities.
-			time.Sleep(10 * time.Millisecond)
 			lock.Lock()
 			actualPoliciesCalled = []string{}
 			lock.Unlock()
 
 			i.DeleteLabelIdentity(tt.labelToDelete)
-			time.Sleep(10 * time.Millisecond)
-			lock.Lock()
-			defer lock.Unlock()
-			assert.ElementsMatchf(t, actualPoliciesCalled, tt.expPolicyCalled, "Unexpected policy sync calls")
-			for key, l := range tt.expLabelIdenities {
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				lock.Lock()
+				defer lock.Unlock()
+				assert.ElementsMatch(t, actualPoliciesCalled, tt.expPolicyCalled, "Unexpected policy sync calls after delete")
+			}, time.Second, 10*time.Millisecond)
+			i.lock.Lock()
+			defer i.lock.Unlock()
+			for key, l := range tt.expLabelIdentities {
 				actLabelMatch := i.labelIdentities[key]
-				assert.Equalf(t, actLabelMatch.id, l.id, "Unexpected id cached for label")
-				if !actLabelMatch.selectorItemKeys.Equal(l.selectorItemKeys) {
-					t.Errorf("Unexpected matched selectorItems for label %s in step %s", tt.labelToDelete, tt.name)
-				}
+				assert.Equal(t, actLabelMatch.id, l.id, "Unexpected id cached for label")
+				assert.Truef(t, actLabelMatch.selectorItemKeys.Equal(l.selectorItemKeys), "Unexpected matched selectorItems for label %s", tt.labelToDelete)
 			}
 		})
 	}
