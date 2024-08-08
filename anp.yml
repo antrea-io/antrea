@@ -1,0 +1,19 @@
+apiVersion: crd.antrea.io/v1beta1
+kind: NetworkPolicy
+metadata:
+  name: lfx-policy
+  namespace: lfx-mentorship
+spec:
+  priority: 100
+  tier: application
+  appliedTo:
+    - podSelector: {}
+  egress:
+    - action: Allow
+      to:
+        - namespaceSelector: {}
+    - action: Allow
+      to:
+        - fqdn: "api.github.com"
+    - action: Drop
+

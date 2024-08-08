@@ -82,6 +82,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/util/lazy"
 	"antrea.io/antrea/pkg/util/podstore"
@@ -106,6 +107,8 @@ var ipv4Localhost = net.ParseIP("127.0.0.1")
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.InfoS("Starting Antrea Agent", "version", version.GetFullVersion())
+	klog.InfoS("Hello I am Vivek !!", "Github Username", "viveksahu26")
+	klog.InfoS("I am running inside Pod", "name", env.GetPodName())
 
 	// Create K8s Clientset, CRD Clientset, Multicluster CRD Clientset and SharedInformerFactory for the given config.
 	k8sClient, _, crdClient, _, mcClient, _, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
@@ -662,7 +665,8 @@ func run(o *Options) error {
 			IdleFlowTimeout:        o.idleFlowTimeout,
 			StaleConnectionTimeout: o.staleConnectionTimeout,
 			PollInterval:           o.pollInterval,
-			ConnectUplinkToBridge:  connectUplinkToBridge}
+			ConnectUplinkToBridge:  connectUplinkToBridge,
+		}
 		flowExporter, err = exporter.NewFlowExporter(
 			podStore,
 			proxier,

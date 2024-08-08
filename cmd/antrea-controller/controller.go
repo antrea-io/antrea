@@ -123,6 +123,8 @@ var allowedPaths = []string{
 // run starts Antrea Controller with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.InfoS("Starting Antrea Controller", "version", version.GetFullVersion())
+	klog.InfoS("Hello I am Vivek !!", "Github Username", "viveksahu26")
+	klog.InfoS("I am running inside Pod", "name", env.GetPodName())
 	// Create K8s Clientset, Aggregator Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	// Aggregator Clientset is used to update the CABundle of the APIServices backed by antrea-controller so that
 	// the aggregator can verify its serving certificate.
@@ -458,8 +460,8 @@ func startNodeIPAM(client clientset.Interface,
 	serviceCIDRv6 *net.IPNet,
 	nodeCIDRMaskSizeIPv4 int,
 	nodeCIDRMaskSizeIPv6 int,
-	stopCh <-chan struct{}) error {
-
+	stopCh <-chan struct{},
+) error {
 	nodeCIDRMaskSizes := getNodeCIDRMaskSizes(clusterCIDRs, nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6)
 	nodeIPAM, err := nodeipam.NewNodeIpamController(
 		nodeInformer,
@@ -502,7 +504,8 @@ func createAPIServerConfig(kubeconfig string,
 	traceflowController *traceflow.Controller,
 	enableMetrics bool,
 	cipherSuites []uint16,
-	tlsMinVersion uint16) (*apiserver.Config, error) {
+	tlsMinVersion uint16,
+) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
@@ -537,7 +540,7 @@ func createAPIServerConfig(kubeconfig string,
 	if err := os.MkdirAll(path.Dir(apis.APIServerLoopbackTokenPath), os.ModeDir); err != nil {
 		return nil, fmt.Errorf("error when creating dirs of token file: %v", err)
 	}
-	if err := os.WriteFile(apis.APIServerLoopbackTokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
+	if err := os.WriteFile(apis.APIServerLoopbackTokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0o600); err != nil {
 		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
 	}
 	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
