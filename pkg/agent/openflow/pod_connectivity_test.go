@@ -90,7 +90,7 @@ func podConnectivityInitFlows(
 			flows = append(flows,
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,in_port=32770 actions=output:4294967294",
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,in_port=4294967294 actions=output:32770",
-				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32770 actions=output:4294967294",
+				"cookie=0x1010000000000, table=Classifier, priority=200,ip,in_port=32770,nw_dst=192.168.77.100 actions=output:4294967294",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4294967294 actions=output:32770",
 				"cookie=0x1010000000000, table=IngressSecurityClassifier, priority=210,ct_state=-rpl+trk,ip,nw_src=10.10.0.1 actions=goto_table:ConntrackCommit",
 			)
@@ -161,7 +161,7 @@ func podConnectivityInitFlows(
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,in_port=32770 actions=output:4294967294",
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,in_port=4294967294 actions=output:32770",
 				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=32770,nw_dst=10.10.0.0/24 actions=set_field:0x4/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
-				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32770 actions=output:4294967294",
+				"cookie=0x1010000000000, table=Classifier, priority=200,ip,in_port=32770,nw_dst=192.168.77.100 actions=output:4294967294",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4294967294 actions=output:32770",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=32769 actions=goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=ConntrackZone, priority=200,ip actions=ct(table=ConntrackState,zone=65520,nat)",
