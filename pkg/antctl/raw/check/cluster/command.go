@@ -205,7 +205,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	testPods, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "component=cluster-checker"})
 	if err != nil {
-		return fmt.Errorf("no pod found for test Deployment")
+		return fmt.Errorf("no Pod found for test Deployment")
 	}
 	t.testPod = &testPods.Items[0]
 	return nil
