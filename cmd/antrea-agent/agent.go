@@ -239,6 +239,8 @@ func run(o *Options) error {
 		connectUplinkToBridge,
 		nodeNetworkPolicyEnabled,
 		multicastEnabled,
+		o.config.SNATFullyRandomPorts,
+		*o.config.Egress.SNATFullyRandomPorts,
 		serviceCIDRProvider)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)

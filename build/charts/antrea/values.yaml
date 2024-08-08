@@ -45,6 +45,9 @@ disableTXChecksumOffload: false
 # -- Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to
 # the external network.
 noSNAT: false
+# -- Fully randomize source port mapping in SNAT rules used for egress traffic
+# from Pods to the external network.
+snatFullyRandomPorts: false
 # -- Name of the interface antrea-agent will create and use for host <-> Pod
 # communication.
 hostGateway: "antrea-gw0"
@@ -113,6 +116,12 @@ egress:
   # useful when the Node network restricts the number of secondary IPs a Node
   # can have, e.g. EKS. It must not be greater than 255.
   maxEgressIPsPerNode: 255
+  # -- (bool) Fully randomize source port mapping in Egress SNAT rules. This has
+  # no impact on the default SNAT rules enforced by each Node for local Pod
+  # traffic. By default, we use the same value as for the top-level
+  # snatFullyRandomPorts configuration, but this field can be used as an
+  # override.
+  snatFullyRandomPorts:
 
 nodePortLocal:
   # -- Enable the NodePortLocal feature.
