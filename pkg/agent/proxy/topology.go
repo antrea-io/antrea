@@ -115,21 +115,26 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint, sv
 
 // canUseTopology returns true if topology aware routing is enabled and properly configured in this cluster. That is,
 // it checks that:
-// - The TopologyAwareHints feature is enabled.
-// - The "service.kubernetes.io/topology-aware-hints" annotation on this Service is set to "Auto".
-// - The node's labels include "topology.kubernetes.io/zone".
-// - All of the Endpoints for this Service have a topology hint.
-// - At least one Endpoint for this Service is hinted for this Node's zone.
+//   - The TopologyAwareHints or ServiceTrafficDistribution feature is enabled.
+//   - If ServiceTrafficDistribution feature is not enabled, then the "service.kubernetes.io/topology-aware-hints"
+//     annotation on this Service should be set to "Auto" or "auto".
+//   - The node's labels include "topology.kubernetes.io/zone".
+//   - All of the Endpoints for this Service have a topology hint.
+//   - At least one Endpoint for this Service is hinted for this Node's zone.
 func (p *proxier) canUseTopology(endpoints map[string]k8sproxy.Endpoint, svcInfo k8sproxy.ServicePort) bool {
-	if !p.topologyAwareHintsEnabled {
+	if !p.topologyAwareHintsEnabled && !p.serviceTrafficDistributionEnabled {
 		return false
 	}
-	hintsAnnotation := svcInfo.HintsAnnotation()
-	if hintsAnnotation != "Auto" && hintsAnnotation != "auto" {
-		if hintsAnnotation != "" && hintsAnnotation != "Disabled" && hintsAnnotation != "disabled" {
-			klog.InfoS("Skipping topology aware Endpoint filtering since Service has unexpected value", "annotationTopologyAwareHints", v1.DeprecatedAnnotationTopologyAwareHints, "hints", hintsAnnotation)
+
+	// Ignore the value of hintsAnnotation if the ServiceTrafficDistribution feature is enabled.
+	if !p.serviceTrafficDistributionEnabled {
+		hintsAnnotation := svcInfo.HintsAnnotation()
+		if hintsAnnotation != "Auto" && hintsAnnotation != "auto" {
+			if hintsAnnotation != "" && hintsAnnotation != "Disabled" && hintsAnnotation != "disabled" {
+				klog.InfoS("Skipping topology aware Endpoint filtering since Service has unexpected value", "annotationTopologyAwareHints", v1.DeprecatedAnnotationTopologyAwareHints, "hints", hintsAnnotation)
+			}
+			return false
 		}
-		return false
 	}
 
 	zone, ok := p.nodeLabels[v1.LabelTopologyZone]
