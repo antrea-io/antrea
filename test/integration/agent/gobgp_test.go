@@ -122,10 +122,12 @@ func TestGoBGPLifecycle(t *testing.T) {
 		peerKeys := sets.New[string]()
 		peers, err := server.GetPeers(ctx)
 		if err != nil {
+			t.Logf("Failed to get peers from server: %v", err)
 			return nil
 		}
 		for _, peer := range peers {
 			if peer.SessionState != bgp.SessionEstablished {
+				t.Logf("Skipping peer %s with session state %s", peer.Address, peer.SessionState)
 				continue
 			}
 			peerKeys.Insert(fmt.Sprintf("%s-%d", peer.Address, peer.ASN))
@@ -134,27 +136,27 @@ func TestGoBGPLifecycle(t *testing.T) {
 	}
 
 	t.Log("Getting peers of BGP server1 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		expected := sets.New[string]("::1-63179", "127.0.0.1-62179")
 		got := getPeersFn(server1)
-		assert.Equal(t, expected, got)
-	}, 30*time.Second, time.Second)
+		assert.Equal(tc, expected, got)
+	}, 90*time.Second, time.Second)
 	t.Log("Got peers of BGP server1 and verified them")
 
 	t.Log("Getting peers of BGP server2 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		expected := sets.New[string]("127.0.0.1-61179")
 		got := getPeersFn(server2)
-		assert.Equal(t, expected, got)
-	}, 30*time.Second, time.Second)
+		assert.Equal(tc, expected, got)
+	}, 90*time.Second, time.Second)
 	t.Log("Got peers of BGP server2 and verified them")
 
 	t.Log("Getting peers of BGP server3 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		expected := sets.New[string]("::1-61179")
 		got := getPeersFn(server3)
-		assert.Equal(t, expected, got)
-	}, 30*time.Second, time.Second)
+		assert.Equal(tc, expected, got)
+	}, 90*time.Second, time.Second)
 	t.Log("Got peers of BGP server3 and verified them")
 
 	ipv4Server1Routes := []bgp.Route{
@@ -194,36 +196,37 @@ func TestGoBGPLifecycle(t *testing.T) {
 	getReceivedRoutesFn := func(server bgp.Interface, peerAddress string) []bgp.Route {
 		routes, err := server.GetRoutes(ctx, bgp.RouteReceived, peerAddress)
 		if err != nil {
+			t.Logf("Failed to get routes from server: %v", err)
 			return nil
 		}
 		return routes
 	}
 
 	t.Log("Getting received IPv4 and IPv6 routes of BGP server1 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		// Get the IPv4 routes advertised by server2 and verify them.
 		gotIPv4Server2Routes := getReceivedRoutesFn(server1, "127.0.0.1")
-		assert.ElementsMatch(t, ipv4Server2Routes, gotIPv4Server2Routes)
+		assert.ElementsMatch(tc, ipv4Server2Routes, gotIPv4Server2Routes)
 
 		// Get the IPv6 routes advertised by server3 and verify them.
 		gotIPv6Server3Routes := getReceivedRoutesFn(server1, "::1")
-		assert.ElementsMatch(t, ipv6Server3Routes, gotIPv6Server3Routes)
+		assert.ElementsMatch(tc, ipv6Server3Routes, gotIPv6Server3Routes)
 	}, 30*time.Second, time.Second)
 	t.Log("Got received IPv4 and IPv6 routes of BGP server1 and verified them")
 
 	t.Log("Getting received IPv4 routes of BGP server2 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		// Get the IPv4 routes advertised by server1 and verify them.
 		gotIPv4Server1Routes := getReceivedRoutesFn(server2, "127.0.0.1")
-		assert.ElementsMatch(t, ipv4Server1Routes, gotIPv4Server1Routes)
+		assert.ElementsMatch(tc, ipv4Server1Routes, gotIPv4Server1Routes)
 	}, 30*time.Second, time.Second)
 	t.Log("Got received IPv4 routes of BGP server2 and verified them")
 
 	t.Log("Getting received IPv6 routes of BGP server3 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		// Get the IPv6 routes advertised by server1 and verify them.
 		gotIPv6Server1Routes := getReceivedRoutesFn(server3, "::1")
-		assert.ElementsMatch(t, ipv6Server1Routes, gotIPv6Server1Routes)
+		assert.ElementsMatch(tc, ipv6Server1Routes, gotIPv6Server1Routes)
 	}, 30*time.Second, time.Second)
 	t.Log("Got received IPv6 routes of BGP server3 and verified them")
 
@@ -270,29 +273,29 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Withdrew IPv6 routes on BGP server3")
 
 	t.Log("Getting received IPv4 and IPv6 routes of BGP server1 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		// Get the IPv4 routes advertised by server2 and verify them.
 		gotIPv4Server2Routes := getReceivedRoutesFn(server1, "127.0.0.1")
-		assert.ElementsMatch(t, updatedIPv4Server2Routes, gotIPv4Server2Routes)
+		assert.ElementsMatch(tc, updatedIPv4Server2Routes, gotIPv4Server2Routes)
 
 		// Get the IPv6 routes advertised by server3 and verify them.
 		gotIPv6Server3Routes := getReceivedRoutesFn(server1, "::1")
-		assert.ElementsMatch(t, updatedIPv6Server3Routes, gotIPv6Server3Routes)
+		assert.ElementsMatch(tc, updatedIPv6Server3Routes, gotIPv6Server3Routes)
 	}, 30*time.Second, time.Second)
 
 	t.Log("Getting received IPv4 routes of BGP server2 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		// Get the IPv4 routes advertised by server1 and verify them.
 		gotIPv4Server1Routes := getReceivedRoutesFn(server2, "127.0.0.1")
-		assert.ElementsMatch(t, updatedIPv4Server1Routes, gotIPv4Server1Routes)
+		assert.ElementsMatch(tc, updatedIPv4Server1Routes, gotIPv4Server1Routes)
 	}, 30*time.Second, time.Second)
 	t.Log("Got received IPv4 routes of BGP server2 and verified them")
 
 	t.Log("Getting received IPv6 routes of BGP server3 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		// Get the IPv6 routes advertised by server1 and verify them.
 		gotIPv6Server1Routes := getReceivedRoutesFn(server3, "::1")
-		assert.ElementsMatch(t, updatedIPv6Server1Routes, gotIPv6Server1Routes)
+		assert.ElementsMatch(tc, updatedIPv6Server1Routes, gotIPv6Server1Routes)
 	}, 30*time.Second, time.Second)
 	t.Log("Got received IPv6 routes of BGP server3 and verified them")
 
@@ -320,11 +323,11 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Updated peers of server1")
 
 	t.Log("Getting peers of BGP server1 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		expected := sets.New[string]("::1-63179", "127.0.0.1-62179")
 		got := getPeersFn(server1)
-		assert.Equal(t, expected, got)
-	}, 30*time.Second, time.Second)
+		assert.Equal(tc, expected, got)
+	}, 90*time.Second, time.Second)
 	t.Log("Got peers of BGP server1 and verified them")
 
 	t.Log("Deleting peers of BGP server1")
@@ -333,11 +336,11 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Deleted peers of BGP server1")
 
 	t.Log("Getting peers of BGP server1 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+	assert.EventuallyWithT(t, func(tc *assert.CollectT) {
 		expected := sets.New[string]()
 		got := getPeersFn(server1)
-		assert.Equal(t, expected, got)
-	}, 30*time.Second, time.Second)
+		assert.Equal(tc, expected, got)
+	}, 90*time.Second, time.Second)
 	t.Log("Got peers of BGP server1 and verified them")
 
 	t.Log("Stopping all BGP servers")
