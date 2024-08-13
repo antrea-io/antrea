@@ -124,11 +124,9 @@ func (p *proxier) canUseTopology(endpoints map[string]k8sproxy.Endpoint, svcInfo
 	if !p.topologyAwareHintsEnabled {
 		return false
 	}
+	// Any non-empty and non-disabled values for the hints annotation are acceptable.
 	hintsAnnotation := svcInfo.HintsAnnotation()
-	if hintsAnnotation != "Auto" && hintsAnnotation != "auto" {
-		if hintsAnnotation != "" && hintsAnnotation != "Disabled" && hintsAnnotation != "disabled" {
-			klog.InfoS("Skipping topology aware Endpoint filtering since Service has unexpected value", "annotationTopologyAwareHints", v1.DeprecatedAnnotationTopologyAwareHints, "hints", hintsAnnotation)
-		}
+	if hintsAnnotation == "" || hintsAnnotation == "disabled" || hintsAnnotation == "Disabled" {
 		return false
 	}
 

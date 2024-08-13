@@ -97,7 +97,7 @@ func TestCategorizeEndpoints(t *testing.T) {
 			localEndpoints:   nil,
 		},
 		{
-			name:         "hints enabled, hints annotation == aUto (wrong capitalization), hints ignored",
+			name:         "hints enabled, hints annotation == aUto (wrong capitalization), hints no longer ignored",
 			hintsEnabled: true,
 			nodeLabels:   map[string]string{v1.LabelTopologyZone: "zone-a"},
 			serviceInfo:  k8sproxy.NewBaseServiceInfo(net.ParseIP("10.96.0.1"), 80, v1.ProtocolTCP, 0, nil, "", 0, nil, nil, 0, false, false, nil, "aUto"),
@@ -107,7 +107,7 @@ func TestCategorizeEndpoints(t *testing.T) {
 				"10.1.2.5:80": &k8sproxy.BaseEndpointInfo{Endpoint: "10.1.2.5:80", ZoneHints: sets.New[string]("zone-c"), Ready: true},
 				"10.1.2.6:80": &k8sproxy.BaseEndpointInfo{Endpoint: "10.1.2.6:80", ZoneHints: sets.New[string]("zone-a"), Ready: true},
 			},
-			clusterEndpoints: sets.New[string]("10.1.2.3:80", "10.1.2.4:80", "10.1.2.5:80", "10.1.2.6:80"),
+			clusterEndpoints: sets.New[string]("10.1.2.3:80", "10.1.2.6:80"),
 			localEndpoints:   nil,
 		},
 		{
