@@ -251,7 +251,7 @@ output format. The `NAME` of a control plane NetworkPolicy is the UID of its sou
 NetworkPolicy.
 
 ```bash
-antctl get networkpolicy [NAME] [-n NAMESPACE] [-o yaml]
+antctl get networkpolicy [NAME] [-n NAMESPACE] [-T K8sNP|ACNP|ANNP|ANP|BANP] [-o yaml]
 antctl get appliedtogroup [NAME] [-o yaml]
 antctl get addressgroup [NAME] [-o yaml]
 ```
@@ -350,7 +350,7 @@ in the specified OVS flow tables, or all or the specified OVS groups.
 antctl get ovsflows
 antctl get ovsflows -p POD -n NAMESPACE
 antctl get ovsflows -S SERVICE -n NAMESPACE
-antctl get ovsflows -N NETWORKPOLICY -n NAMESPACE --type NETWORKPOLICY_TYPE
+antctl get ovsflows [-n NAMESPACE] -N NETWORKPOLICY --type NETWORKPOLICY_TYPE
 antctl get ovsflows -T TABLE_A,TABLE_B
 antctl get ovsflows -T TABLE_A,TABLE_B_NUM
 antctl get ovsflows -G all

@@ -239,7 +239,8 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		if networkPolicy != "" && policyType != "" {
 			_, ok := querier.NetworkPolicyTypeMap[policyType]
 			if !ok {
-				http.Error(w, "unknown policy type. Valid types are K8sNP, ACNP, ANNP, BANP or ANP", http.StatusBadRequest)
+				errorMsg := fmt.Sprintf("unknown policy type. Valid types are %v", querier.GetNetworkPolicyTypeShorthands())
+				http.Error(w, errorMsg, http.StatusBadRequest)
 				return
 			}
 			if querier.NamespaceScopedPolicyTypes.Has(policyType) && namespace == "" {

@@ -44,17 +44,30 @@ var (
 	testDumpGroups     = []string{"group1", "group2"}
 	testResponses      = []apis.OVSFlowResponse{{Flow: "flow1"}, {Flow: "flow2"}}
 	testGroupResponses = []apis.OVSFlowResponse{{Flow: "group1"}, {Flow: "group2"}}
+
+	testNetworkPolicy = &cpv1beta.NetworkPolicy{
+		SourceRef: &cpv1beta.NetworkPolicyReference{
+			Type:      cpv1beta.K8sNetworkPolicy,
+			Namespace: "default",
+		},
+	}
+	testANNP = &cpv1beta.NetworkPolicy{
+		SourceRef: &cpv1beta.NetworkPolicyReference{
+			Type:      cpv1beta.AntreaNetworkPolicy,
+			Namespace: "default",
+		},
+	}
 )
 
 type testCase struct {
-	test           string
-	name           string
-	namespace      string
-	policyType     cpv1beta.NetworkPolicyType
-	query          string
-	expectedStatus int
-	expectedErr    error
-	resps          []apis.OVSFlowResponse
+	testName           string
+	name               string
+	namespace          string
+	policyType         cpv1beta.NetworkPolicyType
+	policyTypeToReturn cpv1beta.NetworkPolicyType
+	query              string
+	expectedStatus     int
+	resps              []apis.OVSFlowResponse
 }
 
 func TestBadRequests(t *testing.T) {
@@ -89,14 +102,14 @@ func TestPodFlows(t *testing.T) {
 	testInterface := &interfacestore.InterfaceConfig{InterfaceName: "interface0"}
 	testcases := []testCase{
 		{
-			test:           "Existing Pod",
+			testName:       "Existing Pod",
 			name:           "pod1",
 			namespace:      "ns1",
 			query:          "?pod=pod1&&namespace=ns1",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			test:           "Non-existing Pod",
+			testName:       "Non-existing Pod",
 			name:           "pod2",
 			namespace:      "ns2",
 			query:          "?pod=pod2&&namespace=ns2",
@@ -131,7 +144,7 @@ func TestServiceFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testcases := []testCase{
 		{
-			test:           "Existing Service",
+			testName:       "Existing Service",
 			name:           "svc1",
 			namespace:      "ns1",
 			query:          "?service=svc1&&namespace=ns1",
@@ -139,7 +152,7 @@ func TestServiceFlows(t *testing.T) {
 			resps:          append(testResponses, testGroupResponses...),
 		},
 		{
-			test:           "Non-existing Service",
+			testName:       "Non-existing Service",
 			name:           "svc2",
 			namespace:      "ns2",
 			query:          "?service=svc2&&namespace=ns2",
@@ -170,33 +183,10 @@ func TestServiceFlows(t *testing.T) {
 	}
 }
 
-func TestNetworkPolicyFlows(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	testNetworkPolicy := &cpv1beta.NetworkPolicy{
-		SourceRef: &cpv1beta.NetworkPolicyReference{
-			Type:      cpv1beta.K8sNetworkPolicy,
-			Namespace: "default",
-		},
-	}
-	testANNP := &cpv1beta.NetworkPolicy{
-		SourceRef: &cpv1beta.NetworkPolicyReference{
-			Type:      cpv1beta.AntreaNetworkPolicy,
-			Namespace: "default",
-		},
-	}
-	testACNP := &cpv1beta.NetworkPolicy{
-		SourceRef: &cpv1beta.NetworkPolicyReference{
-			Type: cpv1beta.AntreaClusterNetworkPolicy,
-		},
-	}
-	testANP := &cpv1beta.NetworkPolicy{
-		SourceRef: &cpv1beta.NetworkPolicyReference{
-			Type: cpv1beta.AdminNetworkPolicy,
-		},
-	}
+func TestNetworkPolicyFlowsSuccess(t *testing.T) {
 	testcases := []testCase{
 		{
-			test:           "Existing NetworkPolicy",
+			testName:       "Existing NetworkPolicy",
 			name:           "np1",
 			namespace:      "default",
 			policyType:     cpv1beta.K8sNetworkPolicy,
@@ -204,37 +194,14 @@ func TestNetworkPolicyFlows(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			test:           "Non-existing NetworkPolicy",
-			name:           "np2",
-			namespace:      "ns2",
-			policyType:     cpv1beta.K8sNetworkPolicy,
-			query:          "?networkpolicy=np2&namespace=ns2&type=K8sNP",
-			expectedStatus: http.StatusNotFound,
-		},
-		{
-			test:           "Ambiguous query",
-			name:           "np3",
-			namespace:      "ns3",
-			query:          "?networkpolicy=np3&namespace=ns3",
-			expectedStatus: http.StatusBadRequest,
-			expectedErr:    errAmbiguousQuery,
-		},
-		{
-			test:           "Existing ACNP",
+			testName:       "Existing ACNP",
 			name:           "acnp1",
 			policyType:     cpv1beta.AntreaClusterNetworkPolicy,
 			query:          "?networkpolicy=acnp1&type=ACNP",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			test:           "ACNP bad request",
-			name:           "acnp2",
-			policyType:     cpv1beta.AntreaClusterNetworkPolicy,
-			query:          "?networkpolicy=acnp2&type=ACNP&namespace=default",
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
-			test:           "Existing ANNP",
+			testName:       "Existing ANNP",
 			name:           "annp1",
 			namespace:      "default",
 			policyType:     cpv1beta.AntreaNetworkPolicy,
@@ -242,14 +209,15 @@ func TestNetworkPolicyFlows(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			test:           "ANNP bad request",
-			name:           "annp2",
-			policyType:     cpv1beta.AntreaNetworkPolicy,
-			query:          "?networkpolicy=annp2&type=ANNP",
-			expectedStatus: http.StatusBadRequest,
+			testName:           "Existing ANNP - no type provided",
+			name:               "annp1",
+			namespace:          "default",
+			query:              "?networkpolicy=annp1&namespace=default",
+			policyTypeToReturn: cpv1beta.AntreaNetworkPolicy,
+			expectedStatus:     http.StatusOK,
 		},
 		{
-			test:           "Existing ANP",
+			testName:       "Existing ANP",
 			name:           "anp1",
 			policyType:     cpv1beta.AdminNetworkPolicy,
 			query:          "?networkpolicy=anp1&type=ANP",
@@ -258,43 +226,110 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	}
 	for i := range testcases {
 		tc := testcases[i]
-		npq := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-		q := aqtest.NewMockAgentQuerier(ctrl)
-		npFilter := &querier.NetworkPolicyQueryFilter{
-			SourceName: tc.name,
-			Namespace:  tc.namespace,
-			SourceType: tc.policyType,
-		}
-		if tc.expectedStatus != http.StatusBadRequest || tc.expectedErr == errAmbiguousQuery {
-			q.EXPECT().GetNetworkPolicyInfoQuerier().Return(npq).Times(1)
-			if tc.expectedStatus == http.StatusOK {
-				ofc := oftest.NewMockClient(ctrl)
-				ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
-				switch tc.policyType {
-				case cpv1beta.K8sNetworkPolicy:
-					npq.EXPECT().GetNetworkPolicies(npFilter).Return([]cpv1beta.NetworkPolicy{*testNetworkPolicy}).Times(1)
-				case cpv1beta.AntreaClusterNetworkPolicy:
-					npq.EXPECT().GetNetworkPolicies(npFilter).Return([]cpv1beta.NetworkPolicy{*testACNP}).Times(1)
-				case cpv1beta.AntreaNetworkPolicy:
-					npq.EXPECT().GetNetworkPolicies(npFilter).Return([]cpv1beta.NetworkPolicy{*testANNP}).Times(1)
-				case cpv1beta.AdminNetworkPolicy:
-					npq.EXPECT().GetNetworkPolicies(npFilter).Return([]cpv1beta.NetworkPolicy{*testANP}).Times(1)
-				}
-				ofc.EXPECT().GetNetworkPolicyFlowKeys(tc.name, tc.namespace, tc.policyType).Return(testFlowKeys).Times(1)
-				q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
-				q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
-				for i := range testFlowKeys {
-					ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpFlows[i], nil).Times(1)
-				}
-			} else if tc.expectedStatus == http.StatusNotFound {
-				npq.EXPECT().GetNetworkPolicies(npFilter).Return(nil).Times(1)
-			} else {
-				npq.EXPECT().GetNetworkPolicies(npFilter).Return([]cpv1beta.NetworkPolicy{*testNetworkPolicy, *testNetworkPolicy}).Times(1)
+		t.Run(tc.testName, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			npq := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+			q := aqtest.NewMockAgentQuerier(ctrl)
+			ofc := oftest.NewMockClient(ctrl)
+			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
+			npFilter := &querier.NetworkPolicyQueryFilter{
+				SourceName: tc.name,
+				Namespace:  tc.namespace,
+				SourceType: tc.policyType,
 			}
-		}
-		runHTTPTest(t, &tc, q)
+			q.EXPECT().GetNetworkPolicyInfoQuerier().Return(npq).Times(1)
+			if tc.policyTypeToReturn == "" {
+				tc.policyTypeToReturn = tc.policyType
+			}
+			npq.EXPECT().GetNetworkPolicies(npFilter).Return([]cpv1beta.NetworkPolicy{
+				{
+					SourceRef: &cpv1beta.NetworkPolicyReference{
+						Type:      tc.policyTypeToReturn,
+						Namespace: tc.namespace,
+						Name:      tc.name,
+					},
+				},
+			}).Times(1)
+			ofc.EXPECT().GetNetworkPolicyFlowKeys(tc.name, tc.namespace, tc.policyTypeToReturn).Return(testFlowKeys).Times(1)
+			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
+			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
+			for i := range testFlowKeys {
+				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpFlows[i], nil).Times(1)
+			}
+			runHTTPTest(t, &tc, q)
+		})
 	}
+}
 
+func TestNetworkPolicyFlowsBadRequest(t *testing.T) {
+	testcases := []testCase{
+		{
+			testName:       "ACNP bad request - namespace should not be provided",
+			name:           "acnp2",
+			policyType:     cpv1beta.AntreaClusterNetworkPolicy,
+			query:          "?networkpolicy=acnp2&type=ACNP&namespace=default",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			testName:       "ANNP bad request - namespace should be provided",
+			name:           "annp2",
+			policyType:     cpv1beta.AntreaNetworkPolicy,
+			query:          "?networkpolicy=annp2&type=ANNP",
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+	for i := range testcases {
+		tc := testcases[i]
+		t.Run(tc.testName, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			q := aqtest.NewMockAgentQuerier(ctrl)
+			runHTTPTest(t, &tc, q)
+		})
+	}
+}
+
+func TestNetworkPolicyFlowsPolicyAmbiguousQuery(t *testing.T) {
+	tc := &testCase{
+		testName:       "Ambiguous query",
+		name:           "np-annp-same-name",
+		namespace:      "ns1",
+		query:          "?networkpolicy=np-annp-same-name&namespace=ns1",
+		expectedStatus: http.StatusBadRequest,
+	}
+	ctrl := gomock.NewController(t)
+	q := aqtest.NewMockAgentQuerier(ctrl)
+	// Simulates an ambiguous query where more than one matching NP is returned
+	npq := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+	q.EXPECT().GetNetworkPolicyInfoQuerier().Return(npq).Times(1)
+	npFilter := &querier.NetworkPolicyQueryFilter{
+		SourceName: tc.name,
+		Namespace:  tc.namespace,
+		SourceType: tc.policyType,
+	}
+	npq.EXPECT().GetNetworkPolicies(npFilter).Return([]cpv1beta.NetworkPolicy{*testNetworkPolicy, *testANNP}).Times(1)
+	runHTTPTest(t, tc, q)
+}
+
+func TestNetworkPolicyFlowsPolicyNotFound(t *testing.T) {
+	tc := &testCase{
+		testName:       "Non-existing NetworkPolicy",
+		name:           "np1",
+		namespace:      "ns1",
+		policyType:     cpv1beta.K8sNetworkPolicy,
+		query:          "?networkpolicy=np1&namespace=ns1&type=K8sNP",
+		expectedStatus: http.StatusNotFound,
+	}
+	ctrl := gomock.NewController(t)
+	q := aqtest.NewMockAgentQuerier(ctrl)
+	npq := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+	q.EXPECT().GetNetworkPolicyInfoQuerier().Return(npq).Times(1)
+	npFilter := &querier.NetworkPolicyQueryFilter{
+		SourceName: tc.name,
+		Namespace:  tc.namespace,
+		SourceType: tc.policyType,
+	}
+	npq.EXPECT().GetNetworkPolicies(npFilter).Return(nil).Times(1)
+	runHTTPTest(t, tc, q)
 }
 
 func TestTableFlows(t *testing.T) {
@@ -303,33 +338,34 @@ func TestTableFlows(t *testing.T) {
 	getFlowTableID = mockGetFlowTableID
 	testcases := []testCase{
 		{
-			test:           "Table 80",
+			testName:       "Table 80",
 			query:          "?table=80",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			test:           "Table IngressRule",
+			testName:       "Table IngressRule",
 			query:          "?table=IngressRule",
 			expectedStatus: http.StatusOK,
 		},
 	}
 	for i := range testcases {
 		tc := testcases[i]
-		ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
-		q := aqtest.NewMockAgentQuerier(ctrl)
-		q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(1)
-		ovsctl.EXPECT().DumpTableFlows(gomock.Any()).Return(testDumpFlows, nil).Times(1)
+		t.Run(tc.testName, func(t *testing.T) {
+			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
+			q := aqtest.NewMockAgentQuerier(ctrl)
+			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(1)
+			ovsctl.EXPECT().DumpTableFlows(gomock.Any()).Return(testDumpFlows, nil).Times(1)
 
-		runHTTPTest(t, &tc, q)
+			runHTTPTest(t, &tc, q)
+		})
 	}
-
 }
 
 func TestTableNamesOnly(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	getFlowTableList = mockGetTableList
 	tc := testCase{
-		test:           "Get table names only",
+		testName:       "Get table names only",
 		query:          "?table-names-only",
 		expectedStatus: http.StatusOK,
 		resps:          []apis.OVSFlowResponse{{Flow: "table0"}, {Flow: "table1"}},
@@ -368,7 +404,7 @@ func TestGroups(t *testing.T) {
 	}{
 		{
 			testCase: testCase{
-				test:           "All groups",
+				testName:       "All groups",
 				query:          "?groups=all",
 				expectedStatus: http.StatusOK,
 				resps:          testGroupResponses,
@@ -377,7 +413,7 @@ func TestGroups(t *testing.T) {
 		},
 		{
 			testCase: testCase{
-				test:           "Group 1234",
+				testName:       "Group 1234",
 				query:          "?groups=1234",
 				expectedStatus: http.StatusOK,
 				resps:          []apis.OVSFlowResponse{{Flow: "group1234"}},
@@ -387,7 +423,7 @@ func TestGroups(t *testing.T) {
 		},
 		{
 			testCase: testCase{
-				test:           "Non-existing group 1234",
+				testName:       "Non-existing group 1234",
 				query:          "?groups=1234",
 				expectedStatus: http.StatusOK,
 				resps:          []apis.OVSFlowResponse{},
@@ -397,7 +433,7 @@ func TestGroups(t *testing.T) {
 		},
 		{
 			testCase: testCase{
-				test:           "Group 10, 100, and 1000",
+				testName:       "Group 10, 100, and 1000",
 				query:          "?groups=10,100,1000",
 				expectedStatus: http.StatusOK,
 				resps:          []apis.OVSFlowResponse{{Flow: "group10"}, {Flow: "group1000"}},
@@ -407,21 +443,22 @@ func TestGroups(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
-		ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
-		q := aqtest.NewMockAgentQuerier(ctrl)
-		if tc.groupIDs == nil {
-			// Get all.
-			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(1)
-			ovsctl.EXPECT().DumpGroups().Return(tc.dumpedGroups, nil).Times(1)
-		} else {
-			// Get all.
-			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(tc.groupIDs))
-			for i, id := range tc.groupIDs {
-				ovsctl.EXPECT().DumpGroup(id).Return(tc.dumpedGroups[i], nil).Times(1)
+		t.Run(tc.testName, func(t *testing.T) {
+			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
+			q := aqtest.NewMockAgentQuerier(ctrl)
+			if tc.groupIDs == nil {
+				// Get all.
+				q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(1)
+				ovsctl.EXPECT().DumpGroups().Return(tc.dumpedGroups, nil).Times(1)
+			} else {
+				// Get all.
+				q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(tc.groupIDs))
+				for i, id := range tc.groupIDs {
+					ovsctl.EXPECT().DumpGroup(id).Return(tc.dumpedGroups[i], nil).Times(1)
+				}
 			}
-		}
-
-		runHTTPTest(t, &tc.testCase, q)
+			runHTTPTest(t, &tc.testCase, q)
+		})
 	}
 }
 
@@ -432,7 +469,7 @@ func runHTTPTest(t *testing.T, tc *testCase, aq agentquerier.AgentQuerier) {
 
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)
-	assert.Equal(t, tc.expectedStatus, recorder.Code, tc.test)
+	assert.Equal(t, tc.expectedStatus, recorder.Code, tc.testName)
 
 	if tc.expectedStatus == http.StatusOK {
 		var received []apis.OVSFlowResponse

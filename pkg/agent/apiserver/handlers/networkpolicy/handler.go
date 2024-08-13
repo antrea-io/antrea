@@ -72,7 +72,7 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 	if strSourceType != "" {
 		npSourceType, ok := querier.NetworkPolicyTypeMap[strSourceType]
 		if !ok {
-			return nil, "", fmt.Errorf("unknown policy type. Valid types are K8sNP, ACNP, ANNP, BANP or ANP")
+			return nil, "", fmt.Errorf("unknown policy type. Valid types are %v", querier.GetNetworkPolicyTypeShorthands())
 		}
 		policyType = npSourceType
 	}

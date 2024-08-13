@@ -122,6 +122,14 @@ var NetworkPolicyTypeMap = map[string]cpv1beta.NetworkPolicyType{
 	"BANP":  cpv1beta.BaselineAdminNetworkPolicy,
 }
 
+func GetNetworkPolicyTypeShorthands() []string {
+	validTypes := make([]string, 0, len(NetworkPolicyTypeMap))
+	for k := range NetworkPolicyTypeMap {
+		validTypes = append(validTypes, k)
+	}
+	return validTypes
+}
+
 var NamespaceScopedPolicyTypes = sets.New[string]("ANNP", "K8SNP")
 
 // ServiceExternalIPStatusQuerier queries the Service external IP status for debugging purposes.

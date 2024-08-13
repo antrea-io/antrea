@@ -17,14 +17,14 @@ package openflow
 import (
 	"fmt"
 	"net"
+	"slices"
 	"strings"
-
-	"k8s.io/klog/v2"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
+	"k8s.io/klog/v2"
 )
 
 // TableNameCache is for testing.
@@ -1225,17 +1225,18 @@ func FlowModToString(flowMod *openflow15.FlowMod) string {
 
 func FlowModMatchString(flowMod *openflow15.FlowMod, omitFields ...string) string {
 	flowModMatch := getFlowModMatch(flowMod)
+	if len(omitFields) == 0 {
+		return fmt.Sprintf("table=%d,%s", flowMod.TableId, flowModMatch)
+	}
 	var flowDumpMatch []string
-out:
 	for _, m := range strings.Split(flowModMatch, ",") {
 		// Omit specific fields if needed. For example, the priority match field is not supported
 		// for the ovs-ofctl dump-flows command, and should be removed.
-		for _, field := range omitFields {
-			if strings.HasPrefix(m, field) {
-				continue out
-			}
+		if !slices.ContainsFunc(omitFields, func(field string) bool {
+			return strings.HasPrefix(m, field)
+		}) {
+			flowDumpMatch = append(flowDumpMatch, m)
 		}
-		flowDumpMatch = append(flowDumpMatch, m)
 	}
 	return fmt.Sprintf("table=%d,%s", flowMod.TableId, strings.Join(flowDumpMatch, ","))
 }
