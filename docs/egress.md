@@ -120,7 +120,10 @@ Node will be elected (from among the remaining Nodes selected by the
 `nodeSelector` of the `externalIPPool`) as the new egress Node of this Egress.
 It will take over the IP and send layer 2 advertisement (for example, Gratuitous
 ARP for IPv4) to notify the other hosts and routers on the network that the MAC
-address associated with the IP has changed.
+address associated with the IP has changed. A dummy interface `antrea-egress0` is
+automatically created on the Node hosting the egress IP, the interface is intended
+to be down and egress traffic will not flow through it but the interface determined
+by the route table.
 
 **Note**: If more than one Egress applies to a Pod and they specify different
 `egressIP`, the effective egress IP will be selected randomly.
