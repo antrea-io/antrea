@@ -68,7 +68,7 @@ data:
 ```
 
 At the moment, Antrea supports only a single OVS bridge for secondary networks,
-and supports upto eight physical interfaces on the bridge. The physical
+and supports up to eight physical interfaces on the bridge. The physical
 interfaces cannot be the Node's management interface, otherwise the Node's
 management network connectivity can be broken after `antrea-agent` creates the
 OVS bridge and moves the management interface to the bridge.
@@ -99,7 +99,7 @@ spec:
 ```
 
 `antrea-agent` will connect Pod secondary interfaces belonging to a VLAN network
-to the secondary OVS bridge on the Node. If a non-zero VLAN is speficied in the
+to the secondary OVS bridge on the Node. If a non-zero VLAN is specified in the
 network's `config`, `antrea-agent` will configure the VLAN ID on the OVS port,
 so the interface's traffic will be isolated within the VLAN. And before the
 traffic is forwarded out of the Node via the secondary bridge's physical

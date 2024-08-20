@@ -22,7 +22,7 @@ following Docker Desktop alternatives.
 
 [Colima](https://github.com/abiosoft/colima) is a UI built with
 [Lima](https://github.com/lima-vm/lima). It supports running a container runtime
-(docker, containerd or kuberneters) on macOS, inside a Lima VM. Major benefits
+(docker, containerd or kubernetes) on macOS, inside a Lima VM. Major benefits
 of Colima include its ability to be used as a drop-in replacement for Docker
 Desktop and its ability to coexist with Docker Desktop on the same macOS
 machine.
