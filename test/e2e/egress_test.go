@@ -329,16 +329,14 @@ func testEgressClientIPFromVLANSubnet(t *testing.T, data *TestData) {
 			})
 			require.NoError(t, err, "Egress didn't meet expected conditions, current status: %v", egress.Status)
 
-			serverIPStr := tt.serverIP
 			// By default, Pod will be SNATed to Node IP.
 			defaultClientIP := workerNodeIPv4(1)
 			if utilnet.IsIPv6String(tt.serverIP) {
-				serverIPStr = fmt.Sprintf("[%s]", tt.serverIP)
 				defaultClientIP = workerNodeIPv6(1)
 			}
 
-			assertClientIP(data, t, clientPod1, toolboxContainerName, serverIPStr, egress.Spec.EgressIP)
-			assertClientIP(data, t, clientPod2, toolboxContainerName, serverIPStr, defaultClientIP)
+			assertClientIP(data, t, clientPod1, toolboxContainerName, tt.serverIP, egress.Spec.EgressIP)
+			assertClientIP(data, t, clientPod2, toolboxContainerName, tt.serverIP, defaultClientIP)
 
 			t.Log("Updating the Egress's AppliedTo to clientPod2 only")
 			egress.Spec.AppliedTo = v1beta1.AppliedTo{
@@ -350,16 +348,16 @@ func testEgressClientIPFromVLANSubnet(t *testing.T, data *TestData) {
 			if err != nil {
 				t.Fatalf("Failed to update Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, clientPod1, toolboxContainerName, serverIPStr, defaultClientIP)
-			assertClientIP(data, t, clientPod2, toolboxContainerName, serverIPStr, egress.Spec.EgressIP)
+			assertClientIP(data, t, clientPod1, toolboxContainerName, tt.serverIP, defaultClientIP)
+			assertClientIP(data, t, clientPod2, toolboxContainerName, tt.serverIP, egress.Spec.EgressIP)
 
 			t.Log("Deleting the Egress")
 			err = data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			if err != nil {
 				t.Fatalf("Failed to delete Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, clientPod1, toolboxContainerName, serverIPStr, defaultClientIP)
-			assertClientIP(data, t, clientPod2, toolboxContainerName, serverIPStr, defaultClientIP)
+			assertClientIP(data, t, clientPod1, toolboxContainerName, tt.serverIP, defaultClientIP)
+			assertClientIP(data, t, clientPod2, toolboxContainerName, tt.serverIP, defaultClientIP)
 		})
 	}
 }
