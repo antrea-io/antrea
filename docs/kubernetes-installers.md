@@ -27,7 +27,7 @@ work with that Antrea version.
 | v1.11.0 | Kubeadm v1.25.5 | N/A | openEuler 22.03 LTS, containerd://1.6.18 | 10GB RAM | | |
 | v1.15.0 | Talos v1.5.5 | Docker provisioner | Talos | 2 vCPUs, 2.1 GB RAM | Pass | Requires Antrea v1.15 or above |
 | - | - | QEMU provisioner | Talos | 2 vCPUs, 2.1 GB RAM | Pass | Requires Antrea v1.15 or above |
-| v2.0 | Rancher v2.7.0, RKE2, K8s v1.24.10 | vSphere | Ubuntu 22.04.1 LTS (5.15.0-57-generic) amd64, docker://20.10.21 | 4 vCPUs, 4GB RAM |  | ANTREA CI |
+| v2.0 | Rancher v2.7.0, RKE2, K8s v1.24.10 | vSphere | Ubuntu 22.04.1 LTS (5.15.0-57-generic) amd64, docker://20.10.21 | 4 vCPUs, 4GB RAM |  | Antrea CI |
 
 ## Installer-specific instructions
 
