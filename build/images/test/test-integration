@@ -17,4 +17,10 @@
 trap "chown -R $1:$2 /tmp/gopath /tmp/gocache" EXIT
 
 /usr/share/openvswitch/scripts/ovs-ctl --system-id=random start --db-file=/var/run/openvswitch/conf.db
+# The current directory (Antrea source directory) is likely to be owned by a
+# user which is different from the container user as it is mounted from the
+# host. If this is the case, the Git program inside the container will refuse to
+# run. This is why we explicitly add the Antrea source directory to the list of
+# "safe" directories.
+git config --global --add safe.directory $(pwd)
 make test-integration
