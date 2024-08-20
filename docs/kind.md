@@ -15,9 +15,7 @@
 <!-- /toc -->
 
 We support running Antrea inside of Kind clusters on both Linux and macOS
-hosts. On macOS, support for Kind requires the use of Docker Desktop, instead of
-the legacy [Docker
-Toolbox](https://docs.docker.com/docker-for-mac/docker-toolbox/).
+hosts.
 
 To deploy a released version of Antrea on an existing Kind cluster, you can
 simply use the same command as for other types of clusters:
