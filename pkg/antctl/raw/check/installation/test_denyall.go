@@ -17,6 +17,7 @@ package installation
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -26,6 +27,9 @@ import (
 type DenyAllConnectivityTest struct {
 	networkPolicy *networkingv1.NetworkPolicy
 }
+
+// Provide enough time for policies to be enforced by the CNI plugin.
+const networkPolicyDelay = 2 * time.Second
 
 func init() {
 	RegisterTest("egress-deny-all-connectivity", &DenyAllConnectivityTest{networkPolicy: &networkingv1.NetworkPolicy{
@@ -84,6 +88,7 @@ func (t *DenyAllConnectivityTest) Run(ctx context.Context, testContext *testCont
 		testContext.Log("NetworkPolicy deletion was successful")
 		return nil
 	}()
+	time.Sleep(networkPolicyDelay)
 	testContext.Log("NetworkPolicy applied successfully")
 	for _, clientPod := range testContext.clientPods {
 		for _, service := range services {
