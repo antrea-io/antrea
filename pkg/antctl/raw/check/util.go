@@ -24,6 +24,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -216,12 +217,18 @@ func GenerateRandomNamespace(baseName string) string {
 
 func Teardown(ctx context.Context, client kubernetes.Interface, clusterName string, namespace string) {
 	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Deleting installation tests setup...\n")
-	client.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
+	err := client.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "Namespace %s deletion failed: %v", namespace, err)
+		return
+	}
 	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Namespace %s to be deleted\n", namespace)
-	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
 		_, err := client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 		if err != nil {
-			return true, nil
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
 		}
 		return false, nil
 	})

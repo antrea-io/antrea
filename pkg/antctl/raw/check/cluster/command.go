@@ -101,6 +101,7 @@ func Run(o *options) error {
 	}
 	ctx := context.Background()
 	testContext := NewTestContext(client, config, clusterName, o.testImage)
+	defer check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
@@ -121,7 +122,6 @@ func Run(o *options) error {
 		}
 	}
 	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were uncertain", numSuccess, numFailure, numUncertain)
-	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
 	if numFailure > 0 {
 		return fmt.Errorf("%v/%v tests failed", numFailure, len(testsRegistry))
 	}
@@ -205,7 +205,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	testPods, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "component=cluster-checker"})
 	if err != nil {
-		return fmt.Errorf("no pod found for test Deployment")
+		return fmt.Errorf("no Pod found for Deployment %s", deploymentName)
 	}
 	t.testPod = &testPods.Items[0]
 	return nil
