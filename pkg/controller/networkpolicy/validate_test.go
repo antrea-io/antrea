@@ -451,6 +451,113 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 			expectedReason: "",
 		},
 		{
+			name: "acnp-appliedto-node-set-with-psel",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-appliedto-node-set-with-psel",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+							NodeSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo2": "bar2"},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "nodeSelector cannot be set with other peers in appliedTo",
+		},
+		{
+			name: "acnp-appliedto-node-set-with-nssel",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-appliedto-node-set-with-nssel",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+							NodeSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo2": "bar2"},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "nodeSelector cannot be set with other peers in appliedTo",
+		},
+		{
+			name: "acnp-appliedto-node-alone",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-appliedto-node-alone",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NodeSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo2": "bar2"},
+							},
+						},
+					},
+					Ingress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									NodeSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo1": "bar1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "",
+		},
+		{
+			name: "acnp-appliedto-node-with-logging",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-appliedto-node-with-logging",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NodeSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo2": "bar2"},
+							},
+						},
+					},
+					Ingress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									NodeSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo1": "bar1"},
+									},
+								},
+							},
+							EnableLogging: true,
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "traffic logging for NodeNetworkPolicy is not supported",
+		},
+		{
 			name: "acnp-rule-group-set-with-psel",
 			policy: &crdv1beta1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{

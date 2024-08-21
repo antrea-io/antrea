@@ -118,3 +118,4 @@ spec:
 - FQDN is not supported for ACNPs applied to Nodes.
 - Layer 7 NetworkPolicy is not supported yet.
 - For UDP or SCTP, when the `Reject` action is specified in an egress rule, it behaves identical to the `Drop` action.
+- Traffic logging is not supported yet for ACNPs applied to Nodes.

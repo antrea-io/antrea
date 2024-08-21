@@ -599,12 +599,19 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1beta1.R
 		appliedToEgressRule  = 2
 	)
 
+	appliedToNode := false
 	checkAppliedTo := func(appliedTo []crdv1beta1.AppliedTo, appliedToScope int) (string, bool) {
 		appliedToSvcNum := 0
 		for _, eachAppliedTo := range appliedTo {
 			appliedToFieldsNum := numFieldsSetInStruct(eachAppliedTo)
 			if eachAppliedTo.Group != "" && appliedToFieldsNum > 1 {
 				return "group cannot be set with other peers in appliedTo", false
+			}
+			if eachAppliedTo.NodeSelector != nil {
+				if appliedToFieldsNum > 1 {
+					return "nodeSelector cannot be set with other peers in appliedTo", false
+				}
+				appliedToNode = true
 			}
 			if eachAppliedTo.ServiceAccount != nil && appliedToFieldsNum > 1 {
 				return "serviceAccount cannot be set with other peers in appliedTo", false
@@ -618,7 +625,7 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1beta1.R
 				}
 				appliedToSvcNum++
 			}
-			if reason, allowed := checkSelectorsLabels(eachAppliedTo.PodSelector, eachAppliedTo.NamespaceSelector, eachAppliedTo.ExternalEntitySelector); !allowed {
+			if reason, allowed := checkSelectorsLabels(eachAppliedTo.PodSelector, eachAppliedTo.NamespaceSelector, eachAppliedTo.ExternalEntitySelector, eachAppliedTo.NodeSelector); !allowed {
 				return reason, allowed
 			}
 		}
@@ -633,17 +640,23 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1beta1.R
 		return reason, allowed
 	}
 
+	enableLogging := false
 	for _, eachIngress := range ingress {
+		enableLogging = enableLogging || eachIngress.EnableLogging
 		reason, allowed = checkAppliedTo(eachIngress.AppliedTo, appliedToIngressRule)
 		if !allowed {
 			return reason, allowed
 		}
 	}
 	for _, eachEgress := range egress {
+		enableLogging = enableLogging || eachEgress.EnableLogging
 		reason, allowed = checkAppliedTo(eachEgress.AppliedTo, appliedToEgressRule)
 		if !allowed {
 			return reason, allowed
 		}
+	}
+	if enableLogging && appliedToNode {
+		return "traffic logging for NodeNetworkPolicy is not supported", false
 	}
 	return "", true
 }
