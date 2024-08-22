@@ -45,10 +45,10 @@ import (
 type validator interface {
 	// createValidate is the interface which must be satisfied for resource
 	// CREATE events.
-	createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool)
+	createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool)
 	// updateValidate is the interface which must be satisfied for resource
 	// UPDATE events.
-	updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool)
+	updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool)
 	// deleteValidate is the interface which must be satisfied for resource
 	// DELETE events.
 	deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool)
@@ -163,6 +163,7 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
 	var msg string
+	var warnings []string
 	allowed := false
 	op := ar.Request.Operation
 	ui := ar.Request.UserInfo
@@ -187,7 +188,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateTier(&curTier, &oldTier, op, ui)
+		warnings, msg, allowed = v.validateTier(&curTier, &oldTier, op, ui)
 	case "ClusterGroup":
 		klog.V(2).Info("Validating ClusterGroup CRD")
 		// Current serving versions of ClusterGroup are v1alpha3 and v1beta1. They have
@@ -206,7 +207,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaGroup(&curCG, &oldCG, op, ui)
+		warnings, msg, allowed = v.validateAntreaGroup(&curCG, &oldCG, op, ui)
 	case "Group":
 		klog.V(2).Info("Validating Group CRD")
 		// Current serving versions of Group are v1alpha3 and v1beta1. They have the same
@@ -225,7 +226,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaGroup(&curG, &oldG, op, ui)
+		warnings, msg, allowed = v.validateAntreaGroup(&curG, &oldG, op, ui)
 	case "ClusterNetworkPolicy":
 		klog.V(2).Info("Validating Antrea ClusterNetworkPolicy CRD")
 		var curACNP, oldACNP crdv1beta1.ClusterNetworkPolicy
@@ -241,7 +242,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(&curACNP, &oldACNP, op, ui)
+		warnings, msg, allowed = v.validateAntreaPolicy(&curACNP, &oldACNP, op, ui)
 	case "NetworkPolicy":
 		klog.V(2).Info("Validating Antrea NetworkPolicy CRD")
 		var curANNP, oldANNP crdv1beta1.NetworkPolicy
@@ -257,7 +258,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(&curANNP, &oldANNP, op, ui)
+		warnings, msg, allowed = v.validateAntreaPolicy(&curANNP, &oldANNP, op, ui)
 	case "AdminNetworkPolicy":
 		klog.V(2).Info("Validating AdminNetworkPolicy CRD")
 		var curANP, oldANP v1alpha1.AdminNetworkPolicy
@@ -273,7 +274,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAdminNetworkPolicy(&curANP, &oldANP, op, ui)
+		warnings, msg, allowed = v.validateAdminNetworkPolicy(&curANP, &oldANP, op, ui)
 	case "BaselineAdminNetworkPolicy":
 		klog.V(2).Info("Validating BaselineAdminNetworkPolicy CRD")
 		var curBANP, oldBANP v1alpha1.BaselineAdminNetworkPolicy
@@ -289,7 +290,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAdminNetworkPolicy(&curBANP, &oldBANP, op, ui)
+		warnings, msg, allowed = v.validateAdminNetworkPolicy(&curBANP, &oldBANP, op, ui)
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -297,28 +298,30 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 		}
 	}
 	return &admv1.AdmissionResponse{
-		Allowed: allowed,
-		Result:  result,
+		Allowed:  allowed,
+		Result:   result,
+		Warnings: warnings,
 	}
 }
 
-// validateAntreaPolicy validates the admission of a Antrea NetworkPolicy CRDs
-func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
+// validateAntreaPolicy validates the admission of Antrea NetworkPolicy CRDs
+func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	allowed := true
 	reason := ""
+	var warnings []string
 	switch op {
 	case admv1.Create:
 		for _, val := range v.antreaPolicyValidators {
-			reason, allowed = val.createValidate(curObj, userInfo)
+			warnings, reason, allowed = val.createValidate(curObj, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	case admv1.Update:
 		for _, val := range v.antreaPolicyValidators {
-			reason, allowed = val.updateValidate(curObj, oldObj, userInfo)
+			warnings, reason, allowed = val.updateValidate(curObj, oldObj, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	case admv1.Delete:
@@ -327,40 +330,66 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 		for _, val := range v.antreaPolicyValidators {
 			reason, allowed = val.deleteValidate(oldObj, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	}
-	return reason, allowed
+	return warnings, reason, allowed
 }
 
-func (v *NetworkPolicyValidator) validateAdminNetworkPolicy(curObj, oldObj interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *NetworkPolicyValidator) validateAdminNetworkPolicy(curObj, oldObj interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	allowed := true
 	reason := ""
+	var warnings []string
 	switch op {
 	case admv1.Create:
 		for _, val := range v.adminNPValidators {
-			reason, allowed = val.createValidate(curObj, userInfo)
+			warnings, reason, allowed = val.createValidate(curObj, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	case admv1.Update:
 		for _, val := range v.adminNPValidators {
-			reason, allowed = val.updateValidate(curObj, oldObj, userInfo)
+			warnings, reason, allowed = val.updateValidate(curObj, oldObj, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	case admv1.Delete:
 		for _, val := range v.adminNPValidators {
 			reason, allowed = val.deleteValidate(oldObj, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	}
-	return reason, allowed
+	return warnings, reason, allowed
+}
+
+func (v *antreaPolicyValidator) checkLogLabel(specAppliedTo []crdv1beta1.AppliedTo, ingress, egress []crdv1beta1.Rule) []string {
+	appliedToNode := false
+	for _, eachAppliedTo := range specAppliedTo {
+		if eachAppliedTo.NodeSelector != nil {
+			appliedToNode = true
+			break
+		}
+	}
+	if !appliedToNode {
+		return nil
+	}
+	var warnings []string
+	for _, eachIngress := range ingress {
+		if eachIngress.EnableLogging && len(eachIngress.LogLabel) > 12 {
+			warnings = append(warnings, fmt.Sprintf("LogLabels for Node NetworkPolicies are limited to 12 characters, but the label %q for policy rule %q exceeds the limit and will be truncated in kernel logs", eachIngress.LogLabel, eachIngress.Name))
+		}
+	}
+	for _, eachEgress := range egress {
+		if eachEgress.EnableLogging && len(eachEgress.LogLabel) > 12 {
+			warnings = append(warnings, fmt.Sprintf("LogLabels for Node NetworkPolicies are limited to 12 characters, but the label %q for policy rule %q exceeds the limit and will be truncated in kernel logs", eachEgress.LogLabel, eachEgress.Name))
+		}
+	}
+	return warnings
 }
 
 // validatePort validates if ports is valid
@@ -401,24 +430,25 @@ func (v *antreaPolicyValidator) validatePort(ingress, egress []crdv1beta1.Rule) 
 }
 
 // validateAntreaGroup validates the admission of a Group, ClusterGroup resource
-func (v *NetworkPolicyValidator) validateAntreaGroup(curAG, oldAG interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *NetworkPolicyValidator) validateAntreaGroup(curAG, oldAG interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	allowed := true
 	reason := ""
+	var warnings []string
 	switch op {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for ClusterGroup/Group")
 		for _, val := range v.groupValidators {
-			reason, allowed = val.createValidate(curAG, userInfo)
+			warnings, reason, allowed = val.createValidate(curAG, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	case admv1.Update:
 		klog.V(2).Info("Validating UPDATE request for ClusterGroup/Group")
 		for _, val := range v.groupValidators {
-			reason, allowed = val.updateValidate(curAG, oldAG, userInfo)
+			warnings, reason, allowed = val.updateValidate(curAG, oldAG, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	case admv1.Delete:
@@ -426,33 +456,34 @@ func (v *NetworkPolicyValidator) validateAntreaGroup(curAG, oldAG interface{}, o
 		for _, val := range v.groupValidators {
 			reason, allowed = val.deleteValidate(oldAG, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	}
-	return reason, allowed
+	return warnings, reason, allowed
 }
 
 // validateTier validates the admission of a Tier resource
-func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *crdv1beta1.Tier, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *crdv1beta1.Tier, op admv1.Operation, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	allowed := true
 	reason := ""
+	var warnings []string
 	switch op {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for Tier")
 		for _, val := range v.tierValidators {
-			reason, allowed = val.createValidate(curTier, userInfo)
+			warnings, reason, allowed = val.createValidate(curTier, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	case admv1.Update:
 		// Tier priority updates are not allowed
 		klog.V(2).Info("Validating UPDATE request for Tier")
 		for _, val := range v.tierValidators {
-			reason, allowed = val.updateValidate(curTier, oldTier, userInfo)
+			warnings, reason, allowed = val.updateValidate(curTier, oldTier, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	case admv1.Delete:
@@ -460,11 +491,11 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *crdv1beta1.Tier,
 		for _, val := range v.tierValidators {
 			reason, allowed = val.deleteValidate(oldTier, userInfo)
 			if !allowed {
-				return reason, allowed
+				return warnings, reason, allowed
 			}
 		}
 	}
-	return reason, allowed
+	return warnings, reason, allowed
 }
 
 func (v *antreaPolicyValidator) tierExists(name string) bool {
@@ -486,15 +517,16 @@ func GetAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 }
 
 // createValidate validates the CREATE events of Antrea-native policies,
-func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	return v.validatePolicy(curObj)
 }
 
 // validatePolicy validates the CREATE and UPDATE events of Antrea-native policies,
-func (v *antreaPolicyValidator) validatePolicy(curObj interface{}) (string, bool) {
+func (v *antreaPolicyValidator) validatePolicy(curObj interface{}) ([]string, string, bool) {
 	var tier string
 	var ingress, egress []crdv1beta1.Rule
 	var specAppliedTo []crdv1beta1.AppliedTo
+	var warnings []string
 	switch curObj.(type) {
 	case *crdv1beta1.ClusterNetworkPolicy:
 		curACNP := curObj.(*crdv1beta1.ClusterNetworkPolicy)
@@ -511,47 +543,48 @@ func (v *antreaPolicyValidator) validatePolicy(curObj interface{}) (string, bool
 	}
 	reason, allowed := v.validateTierForPolicy(tier)
 	if !allowed {
-		return reason, allowed
+		return warnings, reason, allowed
 	}
 	reason, allowed = v.validateTierForPassAction(tier, ingress, egress)
 	if !allowed {
-		return reason, allowed
+		return warnings, reason, allowed
 	}
 	if ruleNameUnique := v.validateRuleName(ingress, egress); !ruleNameUnique {
-		return "rules names must be unique within the policy", false
+		return warnings, "rules names must be unique within the policy", false
 	}
 	reason, allowed = v.validateAppliedTo(ingress, egress, specAppliedTo)
 	if !allowed {
-		return reason, allowed
+		return warnings, reason, allowed
 	}
 	reason, allowed = v.validatePeers(ingress, egress)
 	if !allowed {
-		return reason, allowed
+		return warnings, reason, allowed
 	}
 	reason, allowed = v.validateAppliedToServiceIngressPeer(specAppliedTo, ingress)
 	if !allowed {
-		return reason, allowed
+		return warnings, reason, allowed
 	}
 	reason, allowed = v.validateFQDNSelectors(egress)
 	if !allowed {
-		return reason, allowed
+		return warnings, reason, allowed
 	}
 	reason, allowed = v.validateEgressMulticastAddress(egress)
 	if !allowed {
-		return reason, allowed
+		return warnings, reason, allowed
 	}
 	reason, allowed = v.validateMulticastIGMP(ingress, egress)
 	if !allowed {
-		return reason, allowed
+		return warnings, reason, allowed
 	}
 	reason, allowed = v.validateL7Protocols(ingress, egress)
 	if !allowed {
-		return reason, allowed
+		return warnings, reason, allowed
 	}
 	if err := v.validatePort(ingress, egress); err != nil {
-		return err.Error(), false
+		return warnings, err.Error(), false
 	}
-	return "", true
+	warnings = append(warnings, v.checkLogLabel(specAppliedTo, ingress, egress)...)
+	return warnings, "", true
 }
 
 // validateRuleName validates if the name of each rule is unique within a policy
@@ -599,7 +632,6 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1beta1.R
 		appliedToEgressRule  = 2
 	)
 
-	appliedToNode := false
 	checkAppliedTo := func(appliedTo []crdv1beta1.AppliedTo, appliedToScope int) (string, bool) {
 		appliedToSvcNum := 0
 		for _, eachAppliedTo := range appliedTo {
@@ -611,7 +643,6 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1beta1.R
 				if appliedToFieldsNum > 1 {
 					return "nodeSelector cannot be set with other peers in appliedTo", false
 				}
-				appliedToNode = true
 			}
 			if eachAppliedTo.ServiceAccount != nil && appliedToFieldsNum > 1 {
 				return "serviceAccount cannot be set with other peers in appliedTo", false
@@ -640,23 +671,17 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1beta1.R
 		return reason, allowed
 	}
 
-	enableLogging := false
 	for _, eachIngress := range ingress {
-		enableLogging = enableLogging || eachIngress.EnableLogging
 		reason, allowed = checkAppliedTo(eachIngress.AppliedTo, appliedToIngressRule)
 		if !allowed {
 			return reason, allowed
 		}
 	}
 	for _, eachEgress := range egress {
-		enableLogging = enableLogging || eachEgress.EnableLogging
 		reason, allowed = checkAppliedTo(eachEgress.AppliedTo, appliedToEgressRule)
 		if !allowed {
 			return reason, allowed
 		}
-	}
-	if enableLogging && appliedToNode {
-		return "traffic logging for NodeNetworkPolicy is not supported", false
 	}
 	return "", true
 }
@@ -929,7 +954,7 @@ func (v *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1beta1.R
 }
 
 // updateValidate validates the UPDATE events of Antrea-native policies.
-func (v *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	return v.validatePolicy(curObj)
 }
 
@@ -939,25 +964,25 @@ func (v *antreaPolicyValidator) deleteValidate(oldObj interface{}, userInfo auth
 }
 
 // createValidate validates the CREATE events of Tier resources.
-func (t *tierValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (t *tierValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	if len(t.networkPolicyController.tierInformer.Informer().GetIndexer().ListIndexFuncValues(PriorityIndex)) >= maxSupportedTiers {
-		return fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers), false
+		return nil, fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers), false
 	}
 	curTier := curObj.(*crdv1beta1.Tier)
 	// Tier priority must not overlap reserved tier's priority.
 	if reservedTierPriorities.Has(curTier.Spec.Priority) {
-		return fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority), false
+		return nil, fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority), false
 	}
 	// Tier priority must not overlap existing tier's priority
 	trs, err := t.networkPolicyController.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, strconv.FormatInt(int64(curTier.Spec.Priority), 10))
 	if err != nil || len(trs) > 0 {
-		return fmt.Sprintf("tier %s priority %d overlaps with existing Tier", curTier.Name, curTier.Spec.Priority), false
+		return nil, fmt.Sprintf("tier %s priority %d overlaps with existing Tier", curTier.Name, curTier.Spec.Priority), false
 	}
-	return "", true
+	return nil, "", true
 }
 
 // updateValidate validates the UPDATE events of Tier resources.
-func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	allowed := true
 	reason := ""
 	curTier := curObj.(*crdv1beta1.Tier)
@@ -966,13 +991,13 @@ func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo auth
 	namespace := env.GetAntreaNamespace()
 	// Allow exception of Tier Priority updates performed by the antrea-controller
 	if serviceaccount.MatchesUsername(namespace, env.GetAntreaControllerServiceAccount(), userInfo.Username) {
-		return "", true
+		return nil, "", true
 	}
 	if curTier.Spec.Priority != oldTier.Spec.Priority {
 		allowed = false
 		reason = "update to Tier priority is not allowed"
 	}
-	return reason, allowed
+	return nil, reason, allowed
 }
 
 // deleteValidate validates the DELETE events of Tier resources.
@@ -1116,17 +1141,17 @@ func (g *groupValidator) validateG(grp *crdv1beta1.Group) (string, bool) {
 }
 
 // createValidate validates the CREATE events of Group, ClusterGroup resources.
-func (g *groupValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (g *groupValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	return g.validateGroup(curObj)
 }
 
 // updateValidate validates the UPDATE events of Group, ClusterGroup resources.
-func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	return g.validateGroup(curObj)
 }
 
 // validateGroup validates the CREATE and UPDATE events of Group, ClusterGroup resources.
-func (g *groupValidator) validateGroup(curObj interface{}) (string, bool) {
+func (g *groupValidator) validateGroup(curObj interface{}) ([]string, string, bool) {
 	var curCG *crdv1beta1.ClusterGroup
 	var curG *crdv1beta1.Group
 	var reason string
@@ -1139,7 +1164,7 @@ func (g *groupValidator) validateGroup(curObj interface{}) (string, bool) {
 		curG = curObj.(*crdv1beta1.Group)
 		reason, allowed = g.validateG(curG)
 	}
-	return reason, allowed
+	return nil, reason, allowed
 }
 
 // deleteValidate validates the DELETE events of Group, ClusterGroup resources.
@@ -1161,7 +1186,7 @@ func (a *adminPolicyValidator) validateBANP(banp *v1alpha1.BaselineAdminNetworkP
 	return "", true
 }
 
-func (a *adminPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (a *adminPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	var reason string
 	var allowed bool
 	switch curObj.(type) {
@@ -1172,10 +1197,10 @@ func (a *adminPolicyValidator) createValidate(curObj interface{}, userInfo authe
 		curBANP := curObj.(*v1alpha1.BaselineAdminNetworkPolicy)
 		reason, allowed = a.validateBANP(curBANP)
 	}
-	return reason, allowed
+	return nil, reason, allowed
 }
 
-func (a *adminPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (a *adminPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	return a.createValidate(curObj, userInfo)
 }
 
