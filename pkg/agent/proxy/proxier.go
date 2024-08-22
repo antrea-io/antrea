@@ -124,19 +124,20 @@ type proxier struct {
 	syncedOnce      bool
 	syncedOnceMutex sync.RWMutex
 
-	runner                      *k8sproxy.BoundedFrequencyRunner
-	stopChan                    <-chan struct{}
-	ofClient                    openflow.Client
-	routeClient                 route.Interface
-	nodePortAddresses           []net.IP
-	hostname                    string
-	isIPv6                      bool
-	proxyAll                    bool
-	endpointSliceEnabled        bool
-	proxyLoadBalancerIPs        bool
-	topologyAwareHintsEnabled   bool
-	supportNestedService        bool
-	cleanupStaleUDPSvcConntrack bool
+	runner                            *k8sproxy.BoundedFrequencyRunner
+	stopChan                          <-chan struct{}
+	ofClient                          openflow.Client
+	routeClient                       route.Interface
+	nodePortAddresses                 []net.IP
+	hostname                          string
+	isIPv6                            bool
+	proxyAll                          bool
+	endpointSliceEnabled              bool
+	proxyLoadBalancerIPs              bool
+	topologyAwareHintsEnabled         bool
+	serviceTrafficDistributionEnabled bool
+	supportNestedService              bool
+	cleanupStaleUDPSvcConntrack       bool
 
 	// When a Service's LoadBalancerMode is DSR, the following changes will be applied to the OpenFlow flows and groups:
 	// 1. ClusterGroup will be used by traffic working in DSR mode on ingress Node.
@@ -1221,7 +1222,7 @@ func (p *proxier) Run(stopCh <-chan struct{}) {
 		go p.serviceConfig.Run(stopCh)
 		if p.endpointSliceEnabled {
 			go p.endpointSliceConfig.Run(stopCh)
-			if p.topologyAwareHintsEnabled {
+			if p.topologyAwareHintsEnabled || p.serviceTrafficDistributionEnabled {
 				go p.nodeConfig.Run(stopCh)
 			}
 		} else {
@@ -1372,6 +1373,7 @@ func newProxier(
 		}
 	}
 	topologyAwareHintsEnabled := endpointSliceEnabled && features.DefaultFeatureGate.Enabled(features.TopologyAwareHints)
+	serviceTrafficDistributionEnabled := endpointSliceEnabled && features.DefaultFeatureGate.Enabled(features.ServiceTrafficDistribution)
 	ipFamily := corev1.IPv4Protocol
 	if isIPv6 {
 		ipFamily = corev1.IPv6Protocol
@@ -1401,32 +1403,33 @@ func newProxier(
 	serviceLabelSelector = serviceLabelSelector.Add(*serviceProxyNameSelector, *nonHeadlessServiceSelector)
 
 	p := &proxier{
-		nodeIPChecker:               nodeIPChecker,
-		serviceConfig:               config.NewServiceConfig(serviceInformer, resyncPeriod),
-		endpointsChanges:            newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
-		serviceChanges:              newServiceChangesTracker(recorder, ipFamily, serviceLabelSelector, skipServices),
-		serviceMap:                  k8sproxy.ServiceMap{},
-		serviceInstalledMap:         k8sproxy.ServiceMap{},
-		endpointsInstalledMap:       types.EndpointsMap{},
-		endpointsMap:                types.EndpointsMap{},
-		endpointReferenceCounter:    map[string]int{},
-		nodeLabels:                  map[string]string{},
-		serviceStringMap:            map[string]k8sproxy.ServicePortName{},
-		groupCounter:                groupCounter,
-		ofClient:                    ofClient,
-		routeClient:                 routeClient,
-		nodePortAddresses:           nodePortAddresses,
-		isIPv6:                      isIPv6,
-		proxyAll:                    proxyAllEnabled,
-		endpointSliceEnabled:        endpointSliceEnabled,
-		topologyAwareHintsEnabled:   topologyAwareHintsEnabled,
-		cleanupStaleUDPSvcConntrack: features.DefaultFeatureGate.Enabled(features.CleanupStaleUDPSvcConntrack),
-		proxyLoadBalancerIPs:        proxyLoadBalancerIPs,
-		hostname:                    hostname,
-		serviceHealthServer:         serviceHealthServer,
-		numLocalEndpoints:           map[apimachinerytypes.NamespacedName]int{},
-		supportNestedService:        supportNestedService,
-		defaultLoadBalancerMode:     defaultLoadBalancerMode,
+		nodeIPChecker:                     nodeIPChecker,
+		serviceConfig:                     config.NewServiceConfig(serviceInformer, resyncPeriod),
+		endpointsChanges:                  newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
+		serviceChanges:                    newServiceChangesTracker(recorder, ipFamily, serviceLabelSelector, skipServices),
+		serviceMap:                        k8sproxy.ServiceMap{},
+		serviceInstalledMap:               k8sproxy.ServiceMap{},
+		endpointsInstalledMap:             types.EndpointsMap{},
+		endpointsMap:                      types.EndpointsMap{},
+		endpointReferenceCounter:          map[string]int{},
+		nodeLabels:                        map[string]string{},
+		serviceStringMap:                  map[string]k8sproxy.ServicePortName{},
+		groupCounter:                      groupCounter,
+		ofClient:                          ofClient,
+		routeClient:                       routeClient,
+		nodePortAddresses:                 nodePortAddresses,
+		isIPv6:                            isIPv6,
+		proxyAll:                          proxyAllEnabled,
+		endpointSliceEnabled:              endpointSliceEnabled,
+		topologyAwareHintsEnabled:         topologyAwareHintsEnabled,
+		serviceTrafficDistributionEnabled: serviceTrafficDistributionEnabled,
+		cleanupStaleUDPSvcConntrack:       features.DefaultFeatureGate.Enabled(features.CleanupStaleUDPSvcConntrack),
+		proxyLoadBalancerIPs:              proxyLoadBalancerIPs,
+		hostname:                          hostname,
+		serviceHealthServer:               serviceHealthServer,
+		numLocalEndpoints:                 map[apimachinerytypes.NamespacedName]int{},
+		supportNestedService:              supportNestedService,
+		defaultLoadBalancerMode:           defaultLoadBalancerMode,
 	}
 
 	p.serviceConfig.RegisterEventHandler(p)
@@ -1434,7 +1437,7 @@ func newProxier(
 	if endpointSliceEnabled {
 		p.endpointSliceConfig = config.NewEndpointSliceConfig(endpointSliceInformer, resyncPeriod)
 		p.endpointSliceConfig.RegisterEventHandler(p)
-		if p.topologyAwareHintsEnabled {
+		if p.topologyAwareHintsEnabled || p.serviceTrafficDistributionEnabled {
 			p.nodeConfig = config.NewNodeConfig(nodeInformer, resyncPeriod)
 			p.nodeConfig.RegisterEventHandler(p)
 		}
