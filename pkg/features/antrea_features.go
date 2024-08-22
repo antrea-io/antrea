@@ -50,6 +50,11 @@ const (
 	// flag will not take effect.
 	TopologyAwareHints featuregate.Feature = "TopologyAwareHints"
 
+	// beta: v2.2
+	// Enables trafficDistribution in AntreaProxy. If EndpointSlice is not enabled, this
+	// flag will not take effect.
+	ServiceTrafficDistribution featuregate.Feature = "ServiceTrafficDistribution"
+
 	// alpha: v1.13
 	// beta: v2.1
 	// Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy.
@@ -188,6 +193,7 @@ var (
 		Egress:                      {Default: true, PreRelease: featuregate.Beta},
 		EndpointSlice:               {Default: true, PreRelease: featuregate.GA},
 		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
+		ServiceTrafficDistribution:  {Default: true, PreRelease: featuregate.Beta},
 		CleanupStaleUDPSvcConntrack: {Default: true, PreRelease: featuregate.Beta},
 		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},
 		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
@@ -234,6 +240,7 @@ var (
 		NodePortLocal,
 		SecondaryNetwork,
 		ServiceExternalIP,
+		ServiceTrafficDistribution,
 		SupportBundleCollection,
 		TopologyAwareHints,
 		Traceflow,
