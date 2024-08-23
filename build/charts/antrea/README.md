@@ -89,6 +89,7 @@ Kubernetes: `>= 1.19.0-0`
 | dnsServerOverride | string | `""` | Address of DNS server, to override the kube-dns Service. It's used to resolve hostnames in a FQDN policy. |
 | egress.exceptCIDRs | list | `[]` | CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses. |
 | egress.maxEgressIPsPerNode | int | `255` | The maximum number of Egress IPs that can be assigned to a Node. It is useful when the Node network restricts the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255. |
+| egress.snatFullyRandomPorts | bool | `nil` | Fully randomize source port mapping in Egress SNAT rules. This has no impact on the default SNAT rules enforced by each Node for local Pod traffic. By default, we use the same value as for the top-level snatFullyRandomPorts configuration, but this field can be used as an override. |
 | enableBridgingMode | bool | `false` | Enable bridging mode of Pod network on Nodes, in which the Node's transport interface is connected to the OVS bridge. |
 | featureGates | object | `{}` | To explicitly enable or disable a FeatureGate and bypass the Antrea defaults, add an entry to the dictionary with the FeatureGate's name as the key and a boolean as the value. |
 | flowExporter.activeFlowExportTimeout | string | `"5s"` | timeout after which a flow record is sent to the collector for active flows. |
@@ -129,6 +130,7 @@ Kubernetes: `>= 1.19.0-0`
 | secondaryNetwork.ovsBridges | list | `[]` | Configuration of OVS bridges for secondary network. At the moment, at most one OVS bridge can be specified. If the specified bridge does not exist on the Node, antrea-agent will create it based on the configuration. The following configuration specifies an OVS bridge with name "br1" and a physical interface "eth1": [{bridgeName: "br1", physicalInterfaces: ["eth1"]}] |
 | serviceCIDR | string | `""` | IPv4 CIDR range used for Services. Required when AntreaProxy is disabled. |
 | serviceCIDRv6 | string | `""` | IPv6 CIDR range used for Services. Required when AntreaProxy is disabled. |
+| snatFullyRandomPorts | bool | `false` | Fully randomize source port mapping in SNAT rules used for egress traffic from Pods to the external network. |
 | testing.coverage | bool | `false` | Enable code coverage measurement (used when testing Antrea only). |
 | testing.simulator.enable | bool | `false` |  |
 | tlsCipherSuites | string | `""` | Comma-separated list of cipher suites that will be used by the Antrea APIservers. If empty, the default Go Cipher Suites will be used. See https://golang.org/pkg/crypto/tls/#pkg-constants. |

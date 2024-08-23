@@ -327,11 +327,12 @@ func TestSyncIPTables(t *testing.T) {
 		nodeNetworkPolicyEnabled bool
 		networkConfig            *config.NetworkConfig
 		nodeConfig               *config.NodeConfig
+		nodeSNATRandomFully      bool
 		markToSNATIP             map[uint32]string
 		expectedCalls            func(iptables *iptablestest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:                     "encap,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true",
+			name:                     "encap,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeSNATRandomFully=true",
 			proxyAll:                 true,
 			multicastEnabled:         true,
 			nodeNetworkPolicyEnabled: true,
@@ -348,6 +349,7 @@ func TestSyncIPTables(t *testing.T) {
 					Name: "antrea-gw0",
 				},
 			},
+			nodeSNATRandomFully: true,
 			markToSNATIP: map[uint32]string{
 				1: "1.1.1.1",
 				2: "fe80::e643:4bff:fe02",
@@ -439,7 +441,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: DNAT local to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP dst,dst -j DNAT --to-destination 169.254.0.252
 :ANTREA-POSTROUTING - [0:0]
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000001/0x000000ff -j SNAT --to 1.1.1.1
--A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE --random-fully
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s 169.254.0.253 -j MASQUERADE
 COMMIT
@@ -485,7 +487,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: DNAT local to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP6 dst,dst -j DNAT --to-destination fc01::aabb:ccdd:eefe
 :ANTREA-POSTROUTING - [0:0]
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000002/0x000000ff -j SNAT --to fe80::e643:4bff:fe02
--A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 2001:ab03:cd04:55ef::/64 -m set ! --match-set ANTREA-POD-IP6 dst ! -o antrea-gw0 -j MASQUERADE
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 2001:ab03:cd04:55ef::/64 -m set ! --match-set ANTREA-POD-IP6 dst ! -o antrea-gw0 -j MASQUERADE --random-fully
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s fc01::aabb:ccdd:eeff -j MASQUERADE
 COMMIT
@@ -639,6 +641,7 @@ COMMIT
 				multicastEnabled:         tt.multicastEnabled,
 				connectUplinkToBridge:    tt.connectUplinkToBridge,
 				nodeNetworkPolicyEnabled: tt.nodeNetworkPolicyEnabled,
+				nodeSNATRandomFully:      tt.nodeSNATRandomFully,
 				deterministic:            true,
 			}
 			for mark, snatIP := range tt.markToSNATIP {
@@ -1295,12 +1298,13 @@ func TestAddSNATRule(t *testing.T) {
 
 func TestDeleteSNATRule(t *testing.T) {
 	tests := []struct {
-		name          string
-		networkConfig *config.NetworkConfig
-		markToSNATIP  map[uint32]net.IP
-		nodeConfig    *config.NodeConfig
-		mark          uint32
-		expectedCalls func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
+		name                  string
+		networkConfig         *config.NetworkConfig
+		egressSNATRandomFully bool
+		markToSNATIP          map[uint32]net.IP
+		nodeConfig            *config.NodeConfig
+		mark                  uint32
+		expectedCalls         func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
 	}{
 		{
 			name: "IPv4",
@@ -1344,15 +1348,38 @@ func TestDeleteSNATRule(t *testing.T) {
 				})
 			},
 		},
+		{
+			name: "IPv4 with random ports for SNAT",
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			egressSNATRandomFully: true,
+			markToSNATIP: map[uint32]net.IP{
+				10: net.ParseIP("1.1.1.1"),
+				11: net.ParseIP("1.1.1.2"),
+			},
+			mark: 10,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, []string{
+					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
+					"!", "-o", "antrea-gw0",
+					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 10, types.SNATIPMarkMask),
+					"-j", iptables.SNATTarget, "--to", "1.1.1.1", "--random-fully",
+				})
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
 			c := &Client{
-				iptables:     mockIPTables,
-				nodeConfig:   tt.nodeConfig,
-				markToSNATIP: sync.Map{},
+				iptables:              mockIPTables,
+				nodeConfig:            tt.nodeConfig,
+				egressSNATRandomFully: tt.egressSNATRandomFully,
+				markToSNATIP:          sync.Map{},
 			}
 			for mark, snatIP := range tt.markToSNATIP {
 				c.markToSNATIP.Store(mark, snatIP)

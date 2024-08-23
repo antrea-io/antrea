@@ -61,6 +61,9 @@ type AgentConfig struct {
 	// the external network needs not be SNAT'd. In the networkPolicyOnly mode, antrea-agent never
 	// performs SNAT and this option will be ignored; for other modes it must be set to false.
 	NoSNAT bool `yaml:"noSNAT,omitempty"`
+	// Fully randomize source port mapping in SNAT rules used for egress traffic from Pods to
+	// the external network. Default is false.
+	SNATFullyRandomPorts bool `yaml:"snatFullyRandomPorts"`
 	// Tunnel protocols used for encapsulating traffic across Nodes. Supported values:
 	// - geneve (default)
 	// - vxlan
@@ -313,6 +316,11 @@ type EgressConfig struct {
 	// the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255.
 	// Defaults to 255.
 	MaxEgressIPsPerNode int `yaml:"maxEgressIPsPerNode,omitempty"`
+	// Fully randomize source port mapping in Egress SNAT rules. This has no impact on the
+	// default SNAT rules enforced by each Node for local Pod traffic. By default, we use the
+	// same value as for the top-level snatFullyRandomPorts configuration, but this field can be
+	// used as an override.
+	SNATFullyRandomPorts *bool `yaml:"snatFullyRandomPorts,omitempty"`
 }
 
 type IPsecConfig struct {
