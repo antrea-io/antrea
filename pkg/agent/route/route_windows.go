@@ -80,12 +80,15 @@ type Client struct {
 }
 
 // NewClient returns a route client.
+// nodeSNATRandomFully and egressSNATRandomFully are ignored on Windows.
 func NewClient(networkConfig *config.NetworkConfig,
 	noSNAT bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
 	nodeNetworkPolicyEnabled bool,
 	multicastEnabled bool,
+	nodeSNATRandomFully bool, // ignored
+	egressSNATRandomFully bool, // ignored
 	serviceCIDRProvider servicecidr.Interface) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,

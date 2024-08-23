@@ -493,6 +493,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 		if o.config.Egress.MaxEgressIPsPerNode == 0 {
 			o.config.Egress.MaxEgressIPsPerNode = defaultMaxEgressIPsPerNode
 		}
+		if o.config.Egress.SNATFullyRandomPorts == nil {
+			o.config.Egress.SNATFullyRandomPorts = ptr.To(o.config.SNATFullyRandomPorts)
+		}
 	}
 }
 
