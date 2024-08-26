@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"antrea.io/libOpenflow/protocol"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -491,6 +492,16 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 		} else if packet.DestinationIP.To4() != nil {
 			return nil, errors.New("destination Service does not have an IPv6 ClusterIP")
 		}
+		if !liveTraffic {
+			switch dstSvc.Spec.Ports[0].Protocol {
+			case corev1.ProtocolTCP:
+				packet.IPProto = protocol.Type_TCP
+				packet.TCPFlags = uint8(2)
+			case corev1.ProtocolUDP:
+				packet.IPProto = protocol.Type_UDP
+			}
+			packet.DestinationPort = uint16(dstSvc.Spec.Ports[0].Port)
+		}
 	} else if !liveTraffic {
 		return nil, errors.New("destination is not specified")
 	}
@@ -507,7 +518,9 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 			packet.IPFlags = 0
 		}
 	} else if tf.Spec.Packet.IPHeader != nil {
-		packet.IPProto = uint8(tf.Spec.Packet.IPHeader.Protocol)
+		if tf.Spec.Packet.IPHeader.Protocol > 0 {
+			packet.IPProto = uint8(tf.Spec.Packet.IPHeader.Protocol)
+		}
 		if !liveTraffic {
 			packet.TTL = uint8(tf.Spec.Packet.IPHeader.TTL)
 			packet.IPFlags = uint16(tf.Spec.Packet.IPHeader.Flags)
@@ -534,10 +547,12 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 		}
 	} else if tf.Spec.Packet.TransportHeader.UDP != nil {
 		packet.IPProto = protocol.Type_UDP
+		packet.TCPFlags = uint8(0)
 		packet.SourcePort = uint16(tf.Spec.Packet.TransportHeader.UDP.SrcPort)
 		packet.DestinationPort = uint16(tf.Spec.Packet.TransportHeader.UDP.DstPort)
 	} else if tf.Spec.Packet.TransportHeader.ICMP != nil {
 		isICMP = true
+		packet.TCPFlags = uint8(0)
 		if !liveTraffic {
 			packet.ICMPEchoID = uint16(tf.Spec.Packet.TransportHeader.ICMP.ID)
 			packet.ICMPEchoSeq = uint16(tf.Spec.Packet.TransportHeader.ICMP.Sequence)
