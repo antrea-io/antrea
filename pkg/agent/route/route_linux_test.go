@@ -642,6 +642,7 @@ COMMIT
 				connectUplinkToBridge:    tt.connectUplinkToBridge,
 				nodeNetworkPolicyEnabled: tt.nodeNetworkPolicyEnabled,
 				nodeSNATRandomFully:      tt.nodeSNATRandomFully,
+				iptablesHasRandomFully:   true,
 				deterministic:            true,
 			}
 			for mark, snatIP := range tt.markToSNATIP {

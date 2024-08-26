@@ -105,14 +105,15 @@ var (
 
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
 type Client struct {
-	nodeConfig            *config.NodeConfig
-	networkConfig         *config.NetworkConfig
-	noSNAT                bool
-	nodeSNATRandomFully   bool
-	egressSNATRandomFully bool
-	iptables              iptables.Interface
-	ipset                 ipset.Interface
-	netlink               utilnetlink.Interface
+	nodeConfig             *config.NodeConfig
+	networkConfig          *config.NetworkConfig
+	noSNAT                 bool
+	nodeSNATRandomFully    bool
+	egressSNATRandomFully  bool
+	iptablesHasRandomFully bool
+	iptables               iptables.Interface
+	ipset                  ipset.Interface
+	netlink                utilnetlink.Interface
 	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
 	nodeRoutes sync.Map
 	// nodeNeighbors caches IPv6 Neighbors to remote host gateway
@@ -211,7 +212,8 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	if err != nil {
 		return fmt.Errorf("error creating IPTables instance: %v", err)
 	}
-	if (c.nodeSNATRandomFully || c.egressSNATRandomFully) && !c.iptables.HasRandomFully() {
+	c.iptablesHasRandomFully = c.iptables.HasRandomFully()
+	if (c.nodeSNATRandomFully || c.egressSNATRandomFully) && !c.iptablesHasRandomFully {
 		return fmt.Errorf("iptables does not support --random-fully for SNAT / MASQUERADE rules")
 	}
 
@@ -1009,14 +1011,18 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	// that ARP requests may advertise a different source IP address, in which case they will be
 	// dropped by the SpoofGuard table in the OVS pipeline. See description for the arp_announce
 	// sysctl parameter.
-	writeLine(iptablesData, []string{
+	rule := []string{
 		"-A", antreaPostRoutingChain,
 		"-m", "comment", "--comment", `"Antrea: masquerade LOCAL traffic"`,
 		"-o", c.nodeConfig.GatewayConfig.Name,
 		"-m", "addrtype", "!", "--src-type", "LOCAL", "--limit-iface-out",
 		"-m", "addrtype", "--src-type", "LOCAL",
-		"-j", iptables.MasqueradeTarget, "--random-fully",
-	}...)
+		"-j", iptables.MasqueradeTarget,
+	}
+	if c.iptablesHasRandomFully {
+		rule = append(rule, "--random-fully")
+	}
+	writeLine(iptablesData, rule...)
 
 	// If AntreaProxy full support is enabled, it SNATs the packets whose source IP is VirtualServiceIPv4/VirtualServiceIPv6
 	// so the packets can be routed back to this Node.
@@ -1048,6 +1054,8 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	//   01. AntreaIPAM VLAN Pod      -- hostPort [request]              --> AntreaIPAM VLAN Pod (same subnet)
 	//   02. Regular Pod (local)      -- hostPort [request]              --> AntreaIPAM VLAN Pod
 	if c.connectUplinkToBridge {
+		// We do not use --random-fully for this rule for consistency with the portmap CNI plugin.
+		// https://github.com/containernetworking/plugins/blob/c29dc79f96cd50452a247a4591443d2aac033429/plugins/meta/portmap/portmap.go#L321-L345
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: masquerade traffic to local AntreaIPAM hostPort Pod"`,
