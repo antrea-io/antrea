@@ -151,16 +151,16 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 }
 
 func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
-	templateID := e.templateIDv4
-	if isRecordIPv6 {
-		templateID = e.templateIDv6
-	}
-
 	if e.exportingProcess == nil {
 		if err := initIPFIXExportingProcess(e); err != nil {
 			// in case of error, the FlowAggregator flowExportLoop will retry after activeFlowRecordTimeout
 			return fmt.Errorf("error when initializing IPFIX exporting process: %v", err)
 		}
+	}
+
+	templateID := e.templateIDv4
+	if isRecordIPv6 {
+		templateID = e.templateIDv6
 	}
 
 	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
