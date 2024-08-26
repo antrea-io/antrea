@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -1701,8 +1702,8 @@ func (c *Client) DeleteEgressRoutes(tableID uint32) error {
 func (c *Client) AddEgressRule(tableID uint32, mark uint32) error {
 	rule := netlink.NewRule()
 	rule.Table = int(tableID)
-	rule.Mark = int(mark)
-	rule.Mask = int(types.SNATIPMarkMask)
+	rule.Mark = mark
+	rule.Mask = ptr.To(types.SNATIPMarkMask)
 	if err := c.netlink.RuleAdd(rule); err != nil {
 		return fmt.Errorf("error adding ip rule %v: %w", rule, err)
 	}
@@ -1712,8 +1713,8 @@ func (c *Client) AddEgressRule(tableID uint32, mark uint32) error {
 func (c *Client) DeleteEgressRule(tableID uint32, mark uint32) error {
 	rule := netlink.NewRule()
 	rule.Table = int(tableID)
-	rule.Mark = int(mark)
-	rule.Mask = int(types.SNATIPMarkMask)
+	rule.Mark = mark
+	rule.Mask = ptr.To(types.SNATIPMarkMask)
 	if err := c.netlink.RuleDel(rule); err != nil {
 		if err.Error() != "no such process" {
 			return fmt.Errorf("error deleting ip rule %v: %w", rule, err)

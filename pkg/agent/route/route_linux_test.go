@@ -26,6 +26,7 @@ import (
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilnet "k8s.io/utils/net"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -127,11 +128,11 @@ func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	rule1 := netlink.NewRule()
 	rule1.Table = 101
 	rule1.Mark = 1
-	rule1.Mask = int(types.SNATIPMarkMask)
+	rule1.Mask = ptr.To(types.SNATIPMarkMask)
 	rule2 := netlink.NewRule()
 	rule2.Table = 50
 	rule2.Mark = 10
-	rule2.Mask = int(types.SNATIPMarkMask)
+	rule2.Mask = ptr.To(types.SNATIPMarkMask)
 
 	mockNetlink.EXPECT().RouteList(nil, netlink.FAMILY_ALL).Return([]netlink.Route{*route1, *route2, *route3, *route4}, nil)
 	mockNetlink.EXPECT().RuleList(netlink.FAMILY_ALL).Return([]netlink.Rule{*rule1, *rule2}, nil)
@@ -2037,7 +2038,7 @@ func TestEgressRule(t *testing.T) {
 				rule := netlink.NewRule()
 				rule.Table = 101
 				rule.Mark = 1
-				rule.Mask = int(types.SNATIPMarkMask)
+				rule.Mask = ptr.To(types.SNATIPMarkMask)
 				mockNetlink.RuleAdd(rule)
 				mockNetlink.RuleDel(rule)
 			},
@@ -2050,7 +2051,7 @@ func TestEgressRule(t *testing.T) {
 				rule := netlink.NewRule()
 				rule.Table = 101
 				rule.Mark = 1
-				rule.Mask = int(types.SNATIPMarkMask)
+				rule.Mask = ptr.To(types.SNATIPMarkMask)
 				mockNetlink.RuleAdd(rule)
 				mockNetlink.RuleDel(rule).Return(fmt.Errorf("no such process"))
 			},
