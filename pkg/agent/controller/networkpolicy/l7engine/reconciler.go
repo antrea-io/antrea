@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -32,12 +33,13 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/logdir"
 )
 
 const (
 	defaultSuricataConfigPath = "/etc/suricata/suricata.yaml"
 	antreaSuricataConfigPath  = "/etc/suricata/antrea.yaml"
-	antreaSuricataLogPath     = "/var/log/antrea/networkpolicy/l7engine/"
+	antreaSuricataLogSubdir   = "networkpolicy/l7engine"
 
 	tenantConfigsDir = "/etc/suricata"
 	tenantRulesDir   = "/etc/suricata/rules"
@@ -510,11 +512,12 @@ func (r *Reconciler) startSuricata() {
 
 func startSuricata() {
 	// Ensure that rules directory exists.
-	if err := os.Mkdir(tenantRulesDir, 0755); err != nil && !os.IsExist(err) {
+	if err := os.MkdirAll(tenantRulesDir, 0755); err != nil {
 		klog.ErrorS(err, "Failed to create Suricata rule directory", "directory", tenantRulesDir)
 	}
-	// Create log directory /var/log/antrea/networkpolicy/l7engine/ for Suricata.
-	if err := os.Mkdir(antreaSuricataLogPath, 0755); err != nil && !os.IsExist(err) {
+	// Create log directory for Suricata.
+	antreaSuricataLogPath := filepath.Join(logdir.GetLogDir(), antreaSuricataLogSubdir)
+	if err := os.MkdirAll(antreaSuricataLogPath, 0755); err != nil {
 		klog.ErrorS(err, "Failed to create L7 Network Policy log directory", "directory", antreaSuricataLogPath)
 	}
 	// Start Suricata with default Suricata config file /etc/suricata/suricata.yaml.
