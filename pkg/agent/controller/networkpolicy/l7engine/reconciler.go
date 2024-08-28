@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -32,12 +33,13 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/logdir"
 )
 
 const (
 	defaultSuricataConfigPath = "/etc/suricata/suricata.yaml"
 	antreaSuricataConfigPath  = "/etc/suricata/antrea.yaml"
-	antreaSuricataLogPath     = "/var/log/antrea/networkpolicy/l7engine/"
+	antreaSuricataLogSubdir   = "networkpolicy/l7engine"
 
 	tenantConfigsDir = "/etc/suricata"
 	tenantRulesDir   = "/etc/suricata/rules"
@@ -360,10 +362,10 @@ func (r *Reconciler) addBindingSuricataTenant(vlanID uint32, rulesPath string) e
 	tenantConfigData := bytes.NewBuffer([]byte(fmt.Sprintf(`%%YAML 1.1
 
 ---
-default-rule-path: /etc/suricata/rules
+default-rule-path: %s
 rule-files:
   - %s
-`, rulesPath)))
+`, tenantRulesDir, rulesPath)))
 	if err = writeConfigFile(tenantConfigPath, tenantConfigData); err != nil {
 		return fmt.Errorf("failed to write config file %s for Suricata tenant %d: %w", tenantConfigPath, vlanID, err)
 	}
@@ -509,9 +511,14 @@ func (r *Reconciler) startSuricata() {
 }
 
 func startSuricata() {
-	// Create log directory /var/log/antrea/networkpolicy/l7engine/ for Suricata.
-	if err := os.Mkdir(antreaSuricataLogPath, os.ModePerm); err != nil {
-		klog.ErrorS(err, "Failed to create L7 Network Policy log directory", "Directory", antreaSuricataLogPath)
+	// Ensure that rules directory exists.
+	if err := os.MkdirAll(tenantRulesDir, 0755); err != nil {
+		klog.ErrorS(err, "Failed to create Suricata rule directory", "directory", tenantRulesDir)
+	}
+	// Create log directory for Suricata.
+	antreaSuricataLogPath := filepath.Join(logdir.GetLogDir(), antreaSuricataLogSubdir)
+	if err := os.MkdirAll(antreaSuricataLogPath, 0755); err != nil {
+		klog.ErrorS(err, "Failed to create L7 Network Policy log directory", "directory", antreaSuricataLogPath)
 	}
 	// Start Suricata with default Suricata config file /etc/suricata/suricata.yaml.
 	cmd := exec.Command("suricata", "-c", defaultSuricataConfigPath, "--af-packet", "-D", "-l", antreaSuricataLogPath)
