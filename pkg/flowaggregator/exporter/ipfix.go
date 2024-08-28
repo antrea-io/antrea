@@ -104,11 +104,15 @@ func NewIPFIXExporter(
 }
 
 func (e *IPFIXExporter) Start() {
-	// no-op
+	// no-op, initIPFIXExportingProcess will be called whenever AddRecord is
+	// called as needed.
 }
 
 func (e *IPFIXExporter) Stop() {
-	// no-op
+	if e.exportingProcess != nil {
+		e.exportingProcess.CloseConnToCollector()
+		e.exportingProcess = nil
+	}
 }
 
 func (e *IPFIXExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
