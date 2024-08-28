@@ -297,75 +297,78 @@ for dropped traffic it is `alert`. If `enableLogging` is set for the rule, dropp
 packets that match the rule will also be logged in addition to the event with
 event type `packet`. Below are examples for allow, drop, packet scenarios.
 
-Allow ingress from client (10.10.1.8) to web (10.10.1.7/public/*)
+Allow ingress from client (10.10.1.9) to web (10.10.1.10/public/*).
 
 ```json
 {
-  "timestamp": "2024-02-22T21:26:07.074791+0000",
-  "flow_id": 757085628206447,
+  "timestamp": "2024-08-26T22:37:30.895673+0000",
+  "flow_id": 742847661553363,
   "in_iface": "antrea-l7-tap0",
   "event_type": "http",
-  "vlan": [1],
-  "src_ip": "10.10.1.8",
-  "src_port": 44132,
-  "dest_ip": "10.10.1.7",
+  "vlan": [
+    2
+  ],
+  "src_ip": "10.10.1.9",
+  "src_port": 55822,
+  "dest_ip": "10.10.1.10",
   "dest_port": 80,
   "proto": "TCP",
+  "pkt_src": "wire/pcap",
+  "tenant_id": 2,
   "tx_id": 0,
   "http": {
-      "hostname": "10.10.1.7",
-      "url": "/public/main.html",
-      "http_user_agent": "Wget/1.21.1",
-      "http_content_type": "text/html",
-      "http_method": "GET",
-      "protocol": "HTTP/1.1",
-      "status": 404,
-      "length": 153
+    "hostname": "10.10.1.10",
+    "url": "/public/index.html",
+    "http_user_agent": "curl/7.81.0",
+    "http_content_type": "text/html",
+    "http_method": "GET",
+    "protocol": "HTTP/1.1",
+    "status": 200,
+    "length": 0
   }
 }
 ```
 
-Deny ingress from client (10.10.1.5) to web (10.10.1.4/admin)
+Deny ingress from client (10.10.1.9) to web (10.10.1.10/admin/*)
 
 ```json
 {
-  "timestamp": "2023-03-09T20:00:28.210821+0000",
-  "flow_id": 627175734391745,
+  "timestamp": "2024-08-26T22:38:26.019956+0000",
+  "flow_id": 642636870504569,
   "in_iface": "antrea-l7-tap0",
   "event_type": "alert",
   "vlan": [
-    1
+    2
   ],
-  "src_ip": "10.10.1.5",
-  "src_port": 43352,
-  "dest_ip": "10.10.1.4",
+  "src_ip": "10.10.1.9",
+  "src_port": 37892,
+  "dest_ip": "10.10.1.10",
   "dest_port": 80,
   "proto": "TCP",
+  "pkt_src": "wire/pcap",
+  "tenant_id": 2,
   "alert": {
     "action": "blocked",
     "gid": 1,
     "signature_id": 1,
     "rev": 0,
-    "signature": "Reject by AntreaClusterNetworkPolicy:test-l7-ingress",
+    "signature": "Reject by AntreaNetworkPolicy:default/allow-privileged-url-to-admin-role",
     "category": "",
     "severity": 3,
-    "tenant_id": 1
-  },
-  "http": {
-    "hostname": "10.10.1.4",
-    "url": "/admin",
-    "http_user_agent": "curl/7.74.0",
-    "http_method": "GET",
-    "protocol": "HTTP/1.1",
-    "length": 0
+    "tenant_id": 2
   },
   "app_proto": "http",
+  "direction": "to_server",
   "flow": {
     "pkts_toserver": 3,
     "pkts_toclient": 1,
-    "bytes_toserver": 284,
-    "bytes_toclient": 74,
-    "start": "2023-03-09T20:00:28.209857+0000"
+    "bytes_toserver": 308,
+    "bytes_toclient": 78,
+    "start": "2024-08-26T22:38:26.018553+0000",
+    "src_ip": "10.10.1.9",
+    "dest_ip": "10.10.1.10",
+    "src_port": 37892,
+    "dest_port": 80
   }
 }
 ```
@@ -374,19 +377,21 @@ Additional packet log when `enableLogging` is set
 
 ```json
 {
-  "timestamp": "2023-03-09T20:00:28.225016+0000",
-  "flow_id": 627175734391745,
+  "timestamp": "2024-08-26T22:38:26.025742+0000",
+  "flow_id": 642636870504569,
   "in_iface": "antrea-l7-tap0",
   "event_type": "packet",
   "vlan": [
-    1
+    2
   ],
-  "src_ip": "10.10.1.4",
+  "src_ip": "10.10.1.10",
   "src_port": 80,
-  "dest_ip": "10.10.1.5",
-  "dest_port": 43352,
+  "dest_ip": "10.10.1.9",
+  "dest_port": 37892,
   "proto": "TCP",
-  "packet": "/lhtPRglzmQvxnJoCABFAAAoUGYAAEAGFE4KCgEECgoBBQBQqVhIGzbi/odenlAUAfsR7QAA",
+  "pkt_src": "wire/pcap",
+  "tenant_id": 2,
+  "packet": "/hYGSsKknh8fnhcggQAAAggARQAAKN7MAABABoXdCgoBCgoKAQkAUJQE0EfjHLfFVXZQFAH7QroAAA==",
   "packet_info": {
     "linktype": 1
   }
