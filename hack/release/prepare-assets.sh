@@ -58,6 +58,7 @@ ANTREA_BUILDS=(
     "linux arm linux-arm"
     "windows amd64 windows-x86_64.exe"
     "darwin amd64 darwin-x86_64"
+    "darwin arm64 darwin-arm64"
 )
 
 for build in "${ANTREA_BUILDS[@]}"; do
