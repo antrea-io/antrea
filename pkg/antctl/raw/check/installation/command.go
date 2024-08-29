@@ -18,12 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -99,6 +97,7 @@ func RegisterTest(name string, test Test) {
 }
 
 type testContext struct {
+	check.Logger
 	client               kubernetes.Interface
 	config               *rest.Config
 	clusterName          string
@@ -169,7 +168,7 @@ func tcpServerCommand(port int) []string {
 	return []string{"nc", "-l", fmt.Sprint(port), "-k"}
 }
 
-func newService(name string, selector map[string]string, port int) *corev1.Service {
+func newService(name string, selector map[string]string, port int32) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -177,7 +176,7 @@ func newService(name string, selector map[string]string, port int) *corev1.Servi
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
 			Ports: []corev1.ServicePort{
-				{Name: name, Port: int32(port)},
+				{Name: name, Port: port},
 			},
 			Selector:       selector,
 			IPFamilyPolicy: ptr.To(corev1.IPFamilyPolicyPreferDualStack),
@@ -194,6 +193,7 @@ func NewTestContext(
 	testImage string,
 ) *testContext {
 	return &testContext{
+		Logger:          check.NewLogger(fmt.Sprintf("[%s] ", clusterName)),
 		client:          client,
 		config:          config,
 		clusterName:     clusterName,
@@ -376,22 +376,6 @@ func (t *testContext) tcpProbe(ctx context.Context, clientPodName string, contai
 		}
 	}
 	return err
-}
-
-func (t *testContext) Log(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+format+"\n", a...)
-}
-
-func (t *testContext) Success(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.GreenString(format, a...)+"\n")
-}
-
-func (t *testContext) Fail(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.RedString(format, a...)+"\n")
-}
-
-func (t *testContext) Warning(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.YellowString(format, a...)+"\n")
 }
 
 func (t *testContext) Header(format string, a ...interface{}) {

@@ -514,8 +514,8 @@ func TestPodDelete(t *testing.T) {
 // It verifies that the Pod's NPL annotation and the local port table are updated with both ports.
 // It then updates the Service to remove one of the target ports.
 func TestAddMultiPortPodSvc(t *testing.T) {
-	newPort := 90
-	testSvc := getTestSvc(defaultPort, int32(newPort))
+	const newPort = 90
+	testSvc := getTestSvc(defaultPort, newPort)
 	testPod := getTestPod()
 	testData := setUp(t, newTestConfig(), testSvc, testPod)
 	defer testData.tearDown()

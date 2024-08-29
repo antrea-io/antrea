@@ -2,13 +2,23 @@
 run:
   tests: true
   timeout: 15m
-  skip-files:
-    - ".*\\.pb\\.go"
-  skip-dirs-use-default: true
 
 linters-settings:
   goimports:
     local-prefixes: antrea.io/antrea
+  gosec:
+    excludes:
+      # At the time of writing this, the G115 rule is not even part of an
+      # official release of gosec. This rule causes a lot of errors to be
+      # reported in the codebase. While some of the reported errors should be
+      # addressed, a lot can also be ignored and there are also some clear false
+      # positives that should not be flagged by gosec in the first place (see
+      # https://github.com/securego/gosec/issues/1187). We will re-enable this
+      # rule in the future when it becomes more accurate.
+      - G115 # Potential integer overflow when converting between integer types
+  misspell:
+    ignore-words:
+      - creater
   revive:
     ignore-generated-header: false
     severity: warning
@@ -30,6 +40,6 @@ linters:
     - staticcheck
     - gosec
     - goimports
-    - vet
+    - govet
     - revive
     - loggercheck

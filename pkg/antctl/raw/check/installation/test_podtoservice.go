@@ -48,7 +48,8 @@ func (t *PodToServiceConnectivityTest) Run(ctx context.Context, testContext *tes
 	if err != nil {
 		return err
 	}
-	for _, clientPod := range testContext.clientPods {
+	for idx := range testContext.clientPods {
+		clientPod := &testContext.clientPods[idx]
 		testContext.Log("Validating from Pod %s to Service %s in Namespace %s...", clientPod.Name, service.Name, testContext.namespace)
 		for _, clusterIP := range service.Spec.ClusterIPs {
 			// Service is realized asynchronously, retry a few times.

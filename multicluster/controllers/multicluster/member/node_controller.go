@@ -392,7 +392,8 @@ func (r *NodeReconciler) clusterSetMapFunc(ctx context.Context, a client.Object)
 		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {
 			nodeList := &corev1.NodeList{}
 			r.Client.List(ctx, nodeList)
-			for _, n := range nodeList.Items {
+			for idx := range nodeList.Items {
+				n := &nodeList.Items[idx]
 				if _, ok := n.Annotations[common.GatewayAnnotation]; ok {
 					requests = append(requests, reconcile.Request{
 						NamespacedName: types.NamespacedName{

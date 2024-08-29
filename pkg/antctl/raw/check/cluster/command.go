@@ -18,10 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,6 +83,7 @@ func RegisterTest(name string, test Test) {
 }
 
 type testContext struct {
+	check.Logger
 	client      kubernetes.Interface
 	config      *rest.Config
 	clusterName string
@@ -213,28 +212,13 @@ func (t *testContext) setup(ctx context.Context) error {
 
 func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName, testImage string) *testContext {
 	return &testContext{
+		Logger:      check.NewLogger(fmt.Sprintf("[%s] ", clusterName)),
 		client:      client,
 		config:      config,
 		clusterName: clusterName,
 		namespace:   check.GenerateRandomNamespace(testNamespacePrefix),
 		testImage:   testImage,
 	}
-}
-
-func (t *testContext) Log(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+format+"\n", a...)
-}
-
-func (t *testContext) Success(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.GreenString(format, a...)+"\n")
-}
-
-func (t *testContext) Fail(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.RedString(format, a...)+"\n")
-}
-
-func (t *testContext) Warning(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.YellowString(format, a...)+"\n")
 }
 
 func (t *testContext) Header(format string, a ...interface{}) {

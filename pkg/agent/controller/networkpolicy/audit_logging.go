@@ -110,7 +110,7 @@ func (l *AuditLogger) terminateLogKey(logMsg string) {
 	defer l.logDeduplication.logMutex.Unlock()
 	logRecord := l.logDeduplication.logMap[logMsg]
 	if logRecord.count == 1 {
-		l.npLogger.Printf(logMsg)
+		l.npLogger.Print(logMsg)
 	} else {
 		l.npLogger.Printf("%s [%d packets in %s]", logMsg, logRecord.count, time.Since(logRecord.initTime))
 	}
@@ -155,7 +155,7 @@ func (l *AuditLogger) LogDedupPacket(ob *logInfo) {
 	// Deduplicate non-Allow packet log.
 	logMsg := buildLogMsg(ob)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
-		l.npLogger.Printf(logMsg)
+		l.npLogger.Print(logMsg)
 	} else {
 		// Increase count if duplicated within 1 sec, create buffer otherwise.
 		exists := l.updateLogKey(logMsg, l.bufferLength)

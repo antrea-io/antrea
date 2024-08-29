@@ -91,7 +91,7 @@ func (a *IPPoolAllocator) initIPAllocators(ipPool *v1beta1.IPPool) (ipallocator.
 			}
 
 			size, bits := ipNet.Mask.Size()
-			if int32(size) == ipPool.Spec.SubnetInfo.PrefixLength && bits == 32 {
+			if size == int(ipPool.Spec.SubnetInfo.PrefixLength) && bits == 32 {
 				// Allocation CIDR covers entire subnet, thus we need
 				// to reserve broadcast IP as well for IPv4
 				reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))

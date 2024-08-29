@@ -70,7 +70,7 @@ func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 	}
 	for clusterName := range data.clusterTestDataMap {
 		d := data.clusterTestDataMap[clusterName]
-		k8sUtils, err := antreae2e.NewKubernetesUtils(&d)
+		k8sUtils, err := antreae2e.NewKubernetesUtils(d)
 		failOnError(err, t)
 		if clusterName != leaderCluster {
 			_, err = k8sUtils.Bootstrap(perClusterNamespaces, perNamespacePods, true, nil, nil)

@@ -216,13 +216,14 @@ func GenerateRandomNamespace(baseName string) string {
 }
 
 func Teardown(ctx context.Context, client kubernetes.Interface, clusterName string, namespace string) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Deleting installation tests setup...\n")
+	logger := NewLogger(fmt.Sprintf("[%s] ", clusterName))
+	logger.Log("Deleting installation tests setup...")
 	err := client.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "Namespace %s deletion failed: %v", namespace, err)
+		logger.Fail("Namespace %s deletion failed: %v", namespace, err)
 		return
 	}
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Namespace %s to be deleted\n", namespace)
+	logger.Log("Waiting for Namespace %s to be deleted", namespace)
 	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
 		_, err := client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 		if err != nil {
@@ -233,8 +234,8 @@ func Teardown(ctx context.Context, client kubernetes.Interface, clusterName stri
 		return false, nil
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Setup deletion failed\n")
+		logger.Success("Setup deletion failed")
 	} else {
-		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Setup deletion successful\n")
+		logger.Fail("Setup deletion successful")
 	}
 }
