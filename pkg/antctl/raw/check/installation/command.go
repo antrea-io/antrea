@@ -147,7 +147,7 @@ func Run(o *options) error {
 	}
 	ctx := context.Background()
 	testContext := NewTestContext(client, config, clusterName, o.antreaNamespace, runFilterRegex, o.testImage)
-	defer check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
+	defer check.Teardown(ctx, testContext.Logger, testContext.client, testContext.namespace)
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}

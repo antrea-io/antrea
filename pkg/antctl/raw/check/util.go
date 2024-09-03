@@ -215,8 +215,7 @@ func GenerateRandomNamespace(baseName string) string {
 	return fmt.Sprintf("%s-%s", baseName, string(bytes))
 }
 
-func Teardown(ctx context.Context, client kubernetes.Interface, clusterName string, namespace string) {
-	logger := NewLogger(fmt.Sprintf("[%s] ", clusterName))
+func Teardown(ctx context.Context, logger Logger, client kubernetes.Interface, namespace string) {
 	logger.Log("Deleting installation tests setup...")
 	err := client.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
 	if err != nil {
@@ -234,8 +233,8 @@ func Teardown(ctx context.Context, client kubernetes.Interface, clusterName stri
 		return false, nil
 	})
 	if err != nil {
-		logger.Success("Setup deletion failed")
+		logger.Fail("Setup deletion failed")
 	} else {
-		logger.Fail("Setup deletion successful")
+		logger.Success("Setup deletion successful")
 	}
 }
