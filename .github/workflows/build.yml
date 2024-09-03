@@ -38,7 +38,7 @@ jobs:
         show-progress: false
     - name: Checking if image needs to be pushed
       run: |
-        if [ ${{ github.repository }} == 'antrea-io/antrea' && ${{ github.event_name }} == 'push' && ${{ github.ref }} == 'refs/heads/main' ]; then
+        if [ "${{ github.repository }}" == "antrea-io/antrea" ] && [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
           echo "push_needed=true" >> $GITHUB_ENV
           echo "docker_driver=docker-container" >> $GITHUB_ENV
         else
@@ -90,7 +90,7 @@ jobs:
         show-progress: false
     - name: Checking if image needs to be pushed
       run: |
-        if [ ${{ github.repository }} == 'antrea-io/antrea' && ${{ github.event_name }} == 'push' && ${{ github.ref }} == 'refs/heads/main' ]; then
+        if [ "${{ github.repository }}" == "antrea-io/antrea" ] && [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
           echo "push_needed=true" >> $GITHUB_ENV
           echo "docker_driver=docker-container" >> $GITHUB_ENV
         else
