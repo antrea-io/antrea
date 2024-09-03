@@ -114,7 +114,7 @@ func TestNodeLatencyMonitor(t *testing.T) {
 		}
 		return true, nil
 	})
-	require.NoError(t, err, "Failed to validate NodeLatencyStats after update")
+	require.NoError(t, err, "Failed to validate updated NodeLatencyStats")
 
 	t.Logf("Successfully received and validated NodeLatencyStats")
 
