@@ -43,6 +43,11 @@ func TestNodeLatencyMonitor(t *testing.T) {
 	require.NoError(t, err, "Failed to create NodeLatencyMonitor CR")
 	t.Logf("NodeLatencyMonitor CR created successfully.")
 
+	defer func() {
+		err = data.crdClient.CrdV1alpha1().NodeLatencyMonitors().Delete(context.TODO(), "default", metav1.DeleteOptions{})
+		require.NoError(t, err, "Failed to delete NodeLatencyMonitor CR")
+		t.Logf("NodeLatencyMonitor CR deleted successfully.")
+	}()
 	previousTimes := make(map[string]map[string]metav1.Time)
 
 	validateNodeLatencyStats := func(statsList *v1alpha1.NodeLatencyStatsList, initialPoll bool) (bool, error) {
@@ -93,12 +98,7 @@ func TestNodeLatencyMonitor(t *testing.T) {
 		if err != nil {
 			return false, err
 		}
-
-		valid, validateErr := validateNodeLatencyStats(statsList, true)
-		if !valid {
-			return false, validateErr
-		}
-		return true, nil
+		return validateNodeLatencyStats(statsList, true)
 	})
 	require.NoError(t, err, "Failed to validate initial NodeLatencyStats")
 
@@ -107,18 +107,10 @@ func TestNodeLatencyMonitor(t *testing.T) {
 		if err != nil {
 			return false, err
 		}
-
-		valid, validateErr := validateNodeLatencyStats(statsList, false)
-		if !valid {
-			return false, validateErr
-		}
-		return true, nil
+		return validateNodeLatencyStats(statsList, false)
 	})
 	require.NoError(t, err, "Failed to validate updated NodeLatencyStats")
 
 	t.Logf("Successfully received and validated NodeLatencyStats")
 
-	err = data.crdClient.CrdV1alpha1().NodeLatencyMonitors().Delete(context.TODO(), "default", metav1.DeleteOptions{})
-	require.NoError(t, err, "Failed to delete NodeLatencyMonitor CR")
-	t.Logf("NodeLatencyMonitor CR deleted successfully.")
 }
