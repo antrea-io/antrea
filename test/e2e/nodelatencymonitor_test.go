@@ -100,7 +100,7 @@ func TestNodeLatencyMonitor(t *testing.T) {
 		}
 		return true, nil
 	})
-	require.NoError(t, err, "Failed to retrieve initial NodeLatencyStats")
+	require.NoError(t, err, "Failed to validate initial NodeLatencyStats")
 
 	err = wait.PollImmediate(time.Second, 30*time.Second, func() (bool, error) {
 		statsList, err := data.crdClient.StatsV1alpha1().NodeLatencyStats().List(context.TODO(), metav1.ListOptions{})
