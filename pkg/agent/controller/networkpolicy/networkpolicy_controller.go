@@ -72,7 +72,7 @@ const (
 )
 
 type L7RuleReconciler interface {
-	AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta2.L7Protocol, enableLogging bool) error
+	AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta2.L7Protocol) error
 	DeleteRule(ruleID string, vlanID uint32) error
 }
 
@@ -797,7 +797,7 @@ func (c *Controller) syncRule(key string) error {
 		vlanID := c.l7VlanIDAllocator.allocate(key)
 		rule.L7RuleVlanID = &vlanID
 
-		if err := c.l7RuleReconciler.AddRule(key, rule.SourceRef.ToString(), vlanID, rule.L7Protocols, rule.EnableLogging); err != nil {
+		if err := c.l7RuleReconciler.AddRule(key, rule.SourceRef.ToString(), vlanID, rule.L7Protocols); err != nil {
 			return err
 		}
 	}
@@ -852,7 +852,7 @@ func (c *Controller) syncRules(keys []string) error {
 				vlanID := c.l7VlanIDAllocator.allocate(key)
 				rule.L7RuleVlanID = &vlanID
 
-				if err := c.l7RuleReconciler.AddRule(key, rule.SourceRef.ToString(), vlanID, rule.L7Protocols, rule.EnableLogging); err != nil {
+				if err := c.l7RuleReconciler.AddRule(key, rule.SourceRef.ToString(), vlanID, rule.L7Protocols); err != nil {
 					return err
 				}
 			}

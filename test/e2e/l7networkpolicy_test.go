@@ -15,11 +15,13 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -396,12 +398,16 @@ func testL7NetworkPolicyLogging(t *testing.T, data *TestData) {
 	var l7LogMatchers []*L7LogEntry
 	for _, ip := range serverIPs {
 		clientMatcher := &L7LogEntry{
-			EventType:   "alert",
-			DestIP:      ip.String(),
-			DestPort:    8080,
-			Protocol:    "TCP",
-			AppProtocol: "http",
-			Alert:       &L7LogAlertEntry{Action: "blocked", Signature: fmt.Sprintf("Reject by AntreaNetworkPolicy:%s/%s", data.testNamespace, policyAllowPathHostname)},
+			EventType:           "alert",
+			DestIP:              ip.String(),
+			DestPort:            8080,
+			Protocol:            "TCP",
+			AppProtocol:         "http",
+			expectedPacketRegex: regexp.MustCompile(fmt.Sprintf("%s|HTTP|GET|%s", ip.String(), "/clientip")),
+			Alert: &L7LogAlertEntry{
+				Action:    "blocked",
+				Signature: fmt.Sprintf("Reject by AntreaNetworkPolicy:%s/%s", data.testNamespace, policyAllowPathHostname),
+			},
 		}
 		hostMatcher := &L7LogEntry{
 			EventType: "http",
@@ -429,17 +435,44 @@ type L7LogAlertEntry struct {
 }
 
 type L7LogEntry struct {
-	EventType   string           `json:"event_type"`
-	DestIP      string           `json:"dest_ip"`
-	DestPort    int32            `json:"dest_port"`
-	Protocol    string           `json:"proto"`
-	AppProtocol string           `json:"app_proto,omitempty"`
-	Http        *L7LogHttpEntry  `json:"http,omitempty"`
-	Alert       *L7LogAlertEntry `json:"alert,omitempty"`
+	EventType           string           `json:"event_type"`
+	DestIP              string           `json:"dest_ip"`
+	DestPort            int32            `json:"dest_port"`
+	Protocol            string           `json:"proto"`
+	AppProtocol         string           `json:"app_proto,omitempty"`
+	PacketBytes         []byte           `json:"packet,omitempty"`
+	Http                *L7LogHttpEntry  `json:"http,omitempty"`
+	Alert               *L7LogAlertEntry `json:"alert,omitempty"`
+	expectedPacketRegex *regexp.Regexp
 }
 
-func (e *L7LogEntry) Equal(x *L7LogEntry) bool {
-	return reflect.DeepEqual(e, x)
+// Matches the 2 L7LogEntries. If an L7LogEntry includes an expectedPacketRegex, the
+// PacketBytes field in the other L7LogEntry must match the regex. If none of the
+// L7LogEntries include an expectedPacketRegex, the PacketBytes fields must be
+// strictly equal for both entries.
+func (e *L7LogEntry) Match(x *L7LogEntry) bool {
+	packetMatch := func(e, x *L7LogEntry) bool {
+		if e.expectedPacketRegex != nil {
+			if !e.expectedPacketRegex.Match(x.PacketBytes) {
+				return false
+			}
+		}
+		if x.expectedPacketRegex != nil {
+			if !x.expectedPacketRegex.Match(e.PacketBytes) {
+				return false
+			}
+		}
+		if e.expectedPacketRegex == nil && x.expectedPacketRegex == nil {
+			if !bytes.Equal(e.PacketBytes, x.PacketBytes) {
+				return false
+			}
+		}
+		return true
+	}
+
+	return e.EventType == x.EventType && e.DestIP == x.DestIP && e.DestPort == x.DestPort &&
+		e.Protocol == x.Protocol && e.AppProtocol == x.AppProtocol && packetMatch(e, x) &&
+		reflect.DeepEqual(e.Http, x.Http) && reflect.DeepEqual(e.Alert, x.Alert)
 }
 
 func (e *L7LogEntry) String() string {
@@ -469,11 +502,11 @@ func checkL7LoggingResult(t *testing.T, data *TestData, antreaPodName string, l7
 				return false, err
 			}
 			// ignore unexpected log entries and duplicates
-			if slices.ContainsFunc(expected, log.Equal) && !slices.ContainsFunc(actual, log.Equal) {
+			if slices.ContainsFunc(expected, log.Match) && !slices.ContainsFunc(actual, log.Match) {
 				actual = append(actual, log)
 			}
 		}
-		if !slices.EqualFunc(actual, expected, func(e1, e2 *L7LogEntry) bool { return e1.Equal(e2) }) {
+		if !slices.EqualFunc(actual, expected, func(e1, e2 *L7LogEntry) bool { return e1.Match(e2) }) {
 			t.Logf("L7NP log mismatch")
 			t.Logf("Expected: %v", expected)
 			t.Logf("Actual: %v", actual)

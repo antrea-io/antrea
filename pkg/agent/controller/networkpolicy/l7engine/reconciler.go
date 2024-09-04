@@ -78,10 +78,9 @@ outputs:
         enabled: no
       types:
         - alert:
-            tagged-packets: yes
+            packet: yes
         - http:
             extended: yes
-            tagged-packets: yes
         - tls:
             extended: yes
   - eve-log:
@@ -170,19 +169,12 @@ func NewReconciler() *Reconciler {
 	}
 }
 
-func generateTenantRulesData(policyName string, protoKeywords map[string]sets.Set[string], enableLogging bool) *bytes.Buffer {
+func generateTenantRulesData(policyName string, protoKeywords map[string]sets.Set[string]) *bytes.Buffer {
 	rulesData := bytes.NewBuffer(nil)
 	sid := 1
 
-	// Enable logging of packets in the session that set off the rule, the session is tagged for 30 seconds.
-	// Refer to Suricata detect engine in codebase for detailed tag keyword configuration.
-	var tagKeyword string
-	if enableLogging {
-		tagKeyword = " tag: session, 30, seconds;"
-	}
-
 	// Generate default reject rule.
-	allKeywords := fmt.Sprintf(`msg: "Reject by %s"; flow: to_server, established;%s sid: %d;`, policyName, tagKeyword, sid)
+	allKeywords := fmt.Sprintf(`msg: "Reject by %s"; flow: to_server, established; sid: %d;`, policyName, sid)
 	rule := fmt.Sprintf("reject ip any any -> any any (%s)\n", allKeywords)
 	rulesData.WriteString(rule)
 	sid++
@@ -193,9 +185,9 @@ func generateTenantRulesData(policyName string, protoKeywords map[string]sets.Se
 			// It is a convention that the sid is provided as the last keyword (or second-to-last if there is a rev)
 			// of a rule.
 			if keywords != "" {
-				allKeywords = fmt.Sprintf(`msg: "Allow %s by %s"; %s%s sid: %d;`, proto, policyName, keywords, tagKeyword, sid)
+				allKeywords = fmt.Sprintf(`msg: "Allow %s by %s"; %s sid: %d;`, proto, policyName, keywords, sid)
 			} else {
-				allKeywords = fmt.Sprintf(`msg: "Allow %s by %s";%s sid: %d;`, proto, policyName, tagKeyword, sid)
+				allKeywords = fmt.Sprintf(`msg: "Allow %s by %s"; sid: %d;`, proto, policyName, sid)
 			}
 			rule = fmt.Sprintf("pass %s any any -> any any (%s)\n", proto, allKeywords)
 			rulesData.WriteString(rule)
@@ -274,7 +266,7 @@ func (r *Reconciler) StartSuricataOnce() {
 	})
 }
 
-func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta.L7Protocol, enableLogging bool) error {
+func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta.L7Protocol) error {
 	start := time.Now()
 	defer func() {
 		klog.V(5).Infof("AddRule took %v", time.Since(start))
@@ -304,7 +296,7 @@ func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protoco
 	klog.InfoS("Reconciling L7 rule", "RuleID", ruleID, "PolicyName", policyName)
 	// Write the Suricata rules to file.
 	rulesPath := generateTenantRulesPath(vlanID)
-	rulesData := generateTenantRulesData(policyName, protoKeywords, enableLogging)
+	rulesData := generateTenantRulesData(policyName, protoKeywords)
 	if err := writeConfigFile(rulesPath, rulesData); err != nil {
 		return fmt.Errorf("failed to write Suricata rules data to file %s for L7 rule %s of %s, err: %w", rulesPath, ruleID, policyName, err)
 	}
