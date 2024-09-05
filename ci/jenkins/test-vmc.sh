@@ -301,6 +301,22 @@ function copy_image {
   ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
 }
 
+function copy_test_image {
+  image=$1
+  tag=$2
+
+  docker pull ${image} && docker save -o image.tar ${image}
+
+  for IP in "${IPs[@]}"; do
+      echo "Processing image on node: $IP"
+      ${SCP_WITH_ANTREA_CI_KEY} image.tar capv@${IP}:/home/capv
+      ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo ctr -n=k8s.io images import /home/capv/image.tar"
+      if [ -n "$tag" ]; then
+          ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo ctr -n=k8s.io images tag $image $tag --force"
+      fi
+  done
+}
+
 # We run the function in a subshell with "set -e" to ensure that it exits in
 # case of error (e.g. integrity check), no matter the context in which the
 # function is called.
@@ -431,6 +447,16 @@ function deliver_antrea {
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
 
     IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
+    antrea_images=("registry.k8s.io/e2e-test-images/agnhost:2.40" "antrea/nginx:1.21.6-alpine" "antrea/sonobuoy:v0.56.16" "antrea/toolbox:1.3-0" "antrea/systemd-logs:v0.4")
+    k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
+    e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
+    for image in "${antrea_images[@]}"; do
+        copy_test_image ${image}
+    done
+    for k in "${!k8s_images[@]}"; do
+        copy_test_image ${k8s_images[$k]} ${e2e_images[$k]}
+    done
+
     for i in "${!IPs[@]}"
     do
         ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IPs[$i]}
