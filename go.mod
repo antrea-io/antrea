@@ -1,6 +1,7 @@
 module antrea.io/antrea
 
 go 1.21.0
+toolchain go1.22.5
 
 require (
 	antrea.io/libOpenflow v0.14.0
@@ -55,10 +56,10 @@ require (
 	github.com/vmware/go-ipfix v0.9.0
 	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.26.0
-	golang.org/x/mod v0.20.0
+	golang.org/x/mod v0.21.0
 	golang.org/x/net v0.28.0
 	golang.org/x/sync v0.8.0
-	golang.org/x/sys v0.24.0
+	golang.org/x/sys v0.25.0
 	golang.org/x/time v0.6.0
 	golang.org/x/tools v0.24.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5
