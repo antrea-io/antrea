@@ -1,16 +1,32 @@
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package e2e
 
 import (
+	// Standard library imports
 	"context"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/pkg/features"
-	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func TestNodeLatencyMonitor(t *testing.T) {
@@ -93,8 +109,8 @@ func TestNodeLatencyMonitor(t *testing.T) {
 		return true, nil
 	}
 
-	err = wait.PollImmediate(time.Second, 30*time.Second, func() (bool, error) {
-		statsList, err := data.crdClient.StatsV1alpha1().NodeLatencyStats().List(context.TODO(), metav1.ListOptions{})
+	err = wait.PollUntilContextTimeout(context.TODO(), time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+		statsList, err := data.crdClient.StatsV1alpha1().NodeLatencyStats().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -102,8 +118,8 @@ func TestNodeLatencyMonitor(t *testing.T) {
 	})
 	require.NoError(t, err, "Failed to validate initial NodeLatencyStats")
 
-	err = wait.PollImmediate(time.Second, 30*time.Second, func() (bool, error) {
-		statsList, err := data.crdClient.StatsV1alpha1().NodeLatencyStats().List(context.TODO(), metav1.ListOptions{})
+	err = wait.PollUntilContextTimeout(context.TODO(), time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+		statsList, err := data.crdClient.StatsV1alpha1().NodeLatencyStats().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
