@@ -679,6 +679,11 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1beta1.Rule)
 					}
 				}
 			}
+			if peer.IPBlock != nil {
+				if reason, allowed := validateIPBlock(peer.IPBlock); !allowed {
+					return reason, allowed
+				}
+			}
 			peerFieldsNum := numFieldsSetInStruct(peer)
 			if peer.Group != "" && peerFieldsNum > 1 {
 				return "group cannot be set with other peers in rules", false
@@ -747,6 +752,29 @@ func numFieldsSetInStruct(obj interface{}) int {
 		}
 	}
 	return num
+}
+
+// validateIPBlock validates the CIDR values in the IPBlock.
+func validateIPBlock(ipb *crdv1beta1.IPBlock) (string, bool) {
+	if ipb.CIDR == "" {
+		return "field 'cidr' is required in an ipBlock", false
+	}
+	_, cidrIPNet, err := net.ParseCIDR(ipb.CIDR)
+	if err != nil {
+		return err.Error(), false
+	}
+	for _, exceptCIDRStr := range ipb.Except {
+		_, exceptCIDR, err := net.ParseCIDR(exceptCIDRStr)
+		if err != nil {
+			return fmt.Sprintf("invalid except CIDR value: %v", err), false
+		}
+		cidrMaskLen, _ := cidrIPNet.Mask.Size()
+		exceptMaskLen, _ := exceptCIDR.Mask.Size()
+		if !cidrIPNet.Contains(exceptCIDR.IP) || cidrMaskLen >= exceptMaskLen {
+			return fmt.Sprintf("except CIDR %s is not a strict subset of CIDR %s", exceptCIDRStr, ipb.CIDR), false
+		}
+	}
+	return "", true
 }
 
 // checkSelectorsLabels validates labels used in all selectors passed in.
@@ -1011,23 +1039,7 @@ func validateAntreaClusterGroupSpec(s crdv1beta1.GroupSpec) (string, bool) {
 			return reason, allowed
 		}
 	}
-	multicast := false
-	unicast := false
-	for _, ipb := range s.IPBlocks {
-		ipaddr, _, err := net.ParseCIDR(ipb.CIDR)
-		if err != nil {
-			return fmt.Sprintf("invalid ip address: %v", err), false
-		}
-		if ipaddr.IsMulticast() {
-			multicast = true
-		} else {
-			unicast = true
-		}
-	}
-	if multicast && unicast {
-		return "can not set multicast groupAddress together with unicast ip address", false
-	}
-	return "", true
+	return validateGroupIPBlocks(s.IPBlocks)
 }
 
 func validateAntreaGroupSpec(s crdv1beta1.GroupSpec) (string, bool) {
@@ -1045,6 +1057,26 @@ func validateAntreaGroupSpec(s crdv1beta1.GroupSpec) (string, bool) {
 		if reason, allowed := checkSelectorsLabels(s.PodSelector, s.NamespaceSelector, s.ExternalEntitySelector); !allowed {
 			return reason, allowed
 		}
+	}
+	return validateGroupIPBlocks(s.IPBlocks)
+}
+
+func validateGroupIPBlocks(ipbs []crdv1beta1.IPBlock) (string, bool) {
+	unicast, multicast := false, false
+	for i, ipb := range ipbs {
+		if reason, ok := validateIPBlock(&ipbs[i]); !ok {
+			return reason, ok
+		}
+		// CIDR formats are already validated in validateIPBlock()
+		ipaddr, _, _ := net.ParseCIDR(ipb.CIDR)
+		if ipaddr.IsMulticast() {
+			multicast = true
+		} else {
+			unicast = true
+		}
+	}
+	if multicast && unicast {
+		return "can not set multicast groupAddress together with unicast ip address", false
 	}
 	return "", true
 }

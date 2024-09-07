@@ -654,6 +654,105 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
+			name: "acnp-rule-ipblock-invalid-ipv4-cidr",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-rule-ipblock-invalid-ipv4-cidr",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Egress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1beta1.IPBlock{
+										CIDR: "192.168.5.6",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "invalid CIDR address: 192.168.5.6",
+		},
+		{
+			name: "acnp-rule-ipblock-invalid-ipv6-except-cidr",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-rule-ipblock-invalid-ipv6-except-cidr",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Egress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1beta1.IPBlock{
+										CIDR: "fd00:192:168:1::/64",
+										Except: []string{
+											"fd00:192:168::",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Update,
+			expectedReason: "invalid except CIDR value: invalid CIDR address: fd00:192:168::",
+		},
+		{
+			name: "acnp-rule-ipblock-except-outside-of-cidr-range",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-rule-ipblock-except-outside-of-cidr-range",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Egress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1beta1.IPBlock{
+										CIDR: "192.168.8.0/24",
+										Except: []string{
+											"192.168.9.0/24",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "except CIDR 192.168.9.0/24 is not a strict subset of CIDR 192.168.8.0/24",
+		},
+		{
 			name: "acnp-rule-group-set-with-ns",
 			policy: &crdv1beta1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1899,6 +1998,41 @@ func TestValidateAntreaNetworkPolicy(t *testing.T) {
 			operation:      admv1.Update,
 			expectedReason: "tier non-existent-tier does not exist",
 		},
+		{
+			name: "annp-rule-ipblock-except-outside-of-cidr-range",
+			policy: &crdv1beta1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "annp-rule-ipblock-except-outside-of-cidr-range",
+					Namespace: "default",
+				},
+				Spec: crdv1beta1.NetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Egress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1beta1.IPBlock{
+										CIDR: "fd00:192:168:1::/64",
+										Except: []string{
+											"fd00:192:168:2::/64",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "except CIDR fd00:192:168:2::/64 is not a strict subset of CIDR fd00:192:168:1::/64",
+		},
 	}
 
 	for _, tt := range tests {
@@ -2064,6 +2198,25 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 			operation: admv1.Create,
 		},
 		{
+			name: "cg-set-with-ipblock-with-except",
+			curCG: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-set-with-ipblock-with-except",
+				},
+				Spec: crdv1beta1.GroupSpec{
+					IPBlocks: []crdv1beta1.IPBlock{
+						{
+							CIDR: "192.168.0.0/16",
+							Except: []string{
+								"192.168.3.0/24", "192.168.4.0/24",
+							},
+						},
+					},
+				},
+			},
+			operation: admv1.Update,
+		},
+		{
 			name: "cg-set-with-multicast",
 			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
@@ -2216,10 +2369,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 		expectedReason string
 	}{
 		{
-			name: "annp-group-three-fields-set",
+			name: "group-three-fields-set",
 			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-three-fields-set",
+					Name:      "group-three-fields-set",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{
@@ -2238,10 +2391,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
 		},
 		{
-			name: "annp-group-set-with-psel-and-nssel",
+			name: "group-set-with-psel-and-nssel",
 			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-set-with-podselector-and-namespaceselector",
+					Name:      "group-set-with-podselector-and-namespaceselector",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{
@@ -2256,10 +2409,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Create,
 		},
 		{
-			name: "annp-group-set-with-nssel-and-eesel",
+			name: "group-set-with-nssel-and-eesel",
 			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-set-with-podselector-and-namespaceselector",
+					Name:      "group-set-with-podselector-and-namespaceselector",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{
@@ -2274,10 +2427,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Create,
 		},
 		{
-			name: "annp-group-set-with-psel-and-eesel",
+			name: "group-set-with-psel-and-eesel",
 			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-set-with-podselector-and-namespaceselector",
+					Name:      "group-set-with-podselector-and-namespaceselector",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{
@@ -2293,10 +2446,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
 		},
 		{
-			name: "annp-group-set-with-podselector-and-ipblock",
+			name: "group-set-with-podselector-and-ipblock",
 			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-set-with-podselector-and-ipblock",
+					Name:      "group-set-with-podselector-and-ipblock",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{
@@ -2312,10 +2465,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
 		},
 		{
-			name: "annp-group-set-with-ipblock",
+			name: "group-set-with-ipblock",
 			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-set-with-ipblock",
+					Name:      "group-set-with-ipblock",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{
@@ -2327,10 +2480,28 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Create,
 		},
 		{
-			name: "annp-group-set-with-invalid-psel",
+			name: "group-set-with-ipblock-except",
 			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-set-with-invalid-psel",
+					Name:      "group-set-with-ipblock-except",
+					Namespace: "x",
+				},
+				Spec: crdv1beta1.GroupSpec{
+					IPBlocks: []crdv1beta1.IPBlock{
+						{
+							CIDR:   "fd00:192:168::/48",
+							Except: []string{"fd00:192:168:3::/64", "fd00:192:168:4::/64"},
+						},
+					},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "group-set-with-invalid-psel",
+			curGroup: &crdv1beta1.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "group-set-with-invalid-psel",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{
@@ -2343,10 +2514,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
 		},
 		{
-			name: "annp-group-with-childGroup",
+			name: "group-with-childGroup",
 			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-with-childGroup",
+					Name:      "group-with-childGroup",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{
@@ -2403,10 +2574,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		// Update using the same func as creation. Only put one case here.
 		{
-			name: "annp-group-update",
+			name: "group-update",
 			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-update",
+					Name:      "group-update",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{
@@ -2429,10 +2600,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Update,
 		},
 		{
-			name: "annp-group-to-delete",
+			name: "group-to-delete",
 			oldGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "annp-group-to-delete",
+					Name:      "group-to-delete",
 					Namespace: "x",
 				},
 				Spec: crdv1beta1.GroupSpec{

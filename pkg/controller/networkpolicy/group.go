@@ -16,7 +16,6 @@ package networkpolicy
 
 import (
 	"context"
-	"net"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -130,10 +129,8 @@ func (n *NetworkPolicyController) processGroup(g *crdv1beta1.Group) *antreatypes
 		for i := range g.Spec.IPBlocks {
 			ipb, _ := toAntreaIPBlockForCRD(&g.Spec.IPBlocks[i])
 			internalGroup.IPBlocks = append(internalGroup.IPBlocks, *ipb)
-			// CIDR format is already validated by the webhook
-			_, ipNet, _ := net.ParseCIDR(g.Spec.IPBlocks[i].CIDR)
-			internalGroup.IPNets = append(internalGroup.IPNets, *ipNet)
 		}
+		internalGroup.IPNets = computeEffectiveIPNetForIPBlocks(g.Spec.IPBlocks)
 		return &internalGroup
 	}
 	svcSelector := g.Spec.ServiceReference

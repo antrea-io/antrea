@@ -745,12 +745,17 @@ const (
 	ScopeClusterSet PeerScope = "ClusterSet"
 )
 
-// IPBlock describes a particular CIDR (Ex. "192.168.1.1/24") that is allowed
+// IPBlock describes a particular CIDR (Ex. "192.168.1.0/24") that is allowed
 // or denied to/from the workloads matched by a Spec.AppliedTo.
 type IPBlock struct {
 	// CIDR is a string representing the IP Block
-	// Valid examples are "192.168.1.1/24".
+	// Valid examples are "192.168.1.0/24".
 	CIDR string `json:"cidr"`
+	// except is a slice of CIDRs that should not be included within an IPBlock
+	// Valid examples are "192.168.1.0/28" or "2001:db8::/64"
+	// Except values will be rejected if they are outside the cidr range
+	// +optional
+	Except []string `json:"except,omitempty"`
 }
 
 // NetworkPolicyPort describes the port and protocol to match in a rule.

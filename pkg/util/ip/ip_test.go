@@ -83,32 +83,32 @@ func TestMergeCIDRs(t *testing.T) {
 		testList[2], testList[3]}
 	correctList0 := []*net.IPNet{testList[0], testList[1]}
 
-	ipNetList0 = mergeCIDRs(ipNetList0)
+	ipNetList0 = MergeCIDRs(ipNetList0)
 
 	assert.ElementsMatch(t, correctList0, ipNetList0)
 
 	ipNetList1 := []*net.IPNet{testList[0]}
 	correctList1 := []*net.IPNet{testList[0]}
 
-	ipNetList1 = mergeCIDRs(ipNetList1)
+	ipNetList1 = MergeCIDRs(ipNetList1)
 	assert.ElementsMatch(t, correctList1, ipNetList1)
 
 	ipNetList2 := []*net.IPNet{testList[2], testList[3]}
 	correctList2 := []*net.IPNet{testList[2], testList[3]}
 
-	ipNetList2 = mergeCIDRs(ipNetList2)
+	ipNetList2 = MergeCIDRs(ipNetList2)
 	assert.ElementsMatch(t, correctList2, ipNetList2)
 
 	ipNetList3 := []*net.IPNet{testList[0], testList[3]}
 	correctList3 := []*net.IPNet{testList[0], testList[3]}
 
-	ipNetList3 = mergeCIDRs(ipNetList3)
+	ipNetList3 = MergeCIDRs(ipNetList3)
 	assert.ElementsMatch(t, correctList3, ipNetList3)
 
 	ipNetList4 := []*net.IPNet{}
 	correctList4 := []*net.IPNet{}
 
-	ipNetList4 = mergeCIDRs(ipNetList4)
+	ipNetList4 = MergeCIDRs(ipNetList4)
 	assert.ElementsMatch(t, correctList4, ipNetList4)
 }
 
