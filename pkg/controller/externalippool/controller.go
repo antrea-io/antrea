@@ -204,7 +204,8 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 		existingIPRanges.Insert(multiIPAllocator.Names()...)
 	}
 
-	for _, ipRange := range ipPool.Spec.IPRanges {
+	for idx := range ipPool.Spec.IPRanges {
+		ipRange := &ipPool.Spec.IPRanges[idx]
 		ipAllocator, err := func() (*ipallocator.SingleIPAllocator, error) {
 			if ipRange.CIDR != "" {
 				_, ipNet, err := net.ParseCIDR(ipRange.CIDR)

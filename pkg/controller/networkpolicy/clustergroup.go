@@ -439,7 +439,8 @@ func (c *NetworkPolicyController) GetAssociatedIPBlockGroups(ip net.IP) []antrea
 	var matchedGroups []antreatypes.Group
 	for _, obj := range ipBlockGroupObjs {
 		group := obj.(*antreatypes.Group)
-		for _, ipNet := range group.IPNets {
+		for idx := range group.IPNets {
+			ipNet := &group.IPNets[idx]
 			if ipNet.Contains(ip) {
 				matchedGroups = append(matchedGroups, *group)
 				// Append all parent groups to matchedGroups

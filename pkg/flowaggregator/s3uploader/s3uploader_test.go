@@ -80,7 +80,7 @@ func TestCacheRecord(t *testing.T) {
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
 	s3UploadProc.CacheRecord(mockRecord)
-	assert.Equal(t, 1, s3UploadProc.cachedRecordCount)
+	assert.Equal(t, int32(1), s3UploadProc.cachedRecordCount)
 	currentBuffer := strings.TrimRight(s3UploadProc.currentBuffer.String(), "\n")
 	assert.Equal(t, strings.Split(currentBuffer, ",")[:50], strings.Split(recordStrIPv4, ",")[:50])
 	assert.Equal(t, strings.Split(currentBuffer, ",")[51:], strings.Split(recordStrIPv4, ",")[51:])
@@ -94,7 +94,7 @@ func TestCacheRecord(t *testing.T) {
 	currentBuf := strings.TrimRight(strings.Split(buf.String(), "\n")[1], "\n")
 	assert.Equal(t, strings.Split(currentBuf, ",")[:50], strings.Split(recordStrIPv6, ",")[:50])
 	assert.Equal(t, strings.Split(currentBuf, ",")[51:], strings.Split(recordStrIPv6, ",")[51:])
-	assert.Equal(t, 0, s3UploadProc.cachedRecordCount)
+	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
 }
 
@@ -118,14 +118,14 @@ func TestBatchUploadAll(t *testing.T) {
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
 	s3UploadProc.CacheRecord(mockRecord)
-	assert.Equal(t, 1, s3UploadProc.cachedRecordCount)
+	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
 	err := s3UploadProc.batchUploadAll(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, 0, len(s3UploadProc.buffersToUpload))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
-	assert.Equal(t, 0, s3UploadProc.cachedRecordCount)
+	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
 }
 
 func TestBatchUploadAllPartialSuccess(t *testing.T) {
@@ -184,7 +184,7 @@ func TestBatchUploadAllError(t *testing.T) {
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
 	s3UploadProc.CacheRecord(mockRecord)
-	assert.Equal(t, 1, s3UploadProc.cachedRecordCount)
+	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
 	// It is expected to fail when calling uploadFile, as the correct S3 bucket
 	// configuration is not provided.
@@ -192,7 +192,7 @@ func TestBatchUploadAllError(t *testing.T) {
 	assert.Equal(t, 1, len(s3UploadProc.buffersToUpload))
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
-	assert.Equal(t, 0, s3UploadProc.cachedRecordCount)
+	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
 	expectedErrMsg := "error when uploading file to S3: operation error S3: PutObject, https response error StatusCode: 301"
 	assert.Contains(t, err.Error(), expectedErrMsg)
 }
@@ -224,7 +224,7 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
 	s3UploadProc.CacheRecord(mockRecord)
-	assert.Equal(t, 1, s3UploadProc.cachedRecordCount)
+	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
 	s3UploadProc.startExportProcess()
 	assert.Eventually(t, func() bool {
@@ -241,7 +241,7 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, 0, len(s3UploadProc.buffersToUpload))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
-	assert.Equal(t, 0, s3UploadProc.cachedRecordCount)
+	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
 }
 
 func TestFlushCacheOnStop(t *testing.T) {
@@ -264,12 +264,12 @@ func TestFlushCacheOnStop(t *testing.T) {
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
 	s3UploadProc.CacheRecord(mockRecord)
-	assert.Equal(t, 1, s3UploadProc.cachedRecordCount)
+	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
 	s3UploadProc.startExportProcess()
 	s3UploadProc.stopExportProcess(true)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, 0, len(s3UploadProc.buffersToUpload))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
-	assert.Equal(t, 0, s3UploadProc.cachedRecordCount)
+	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
 }

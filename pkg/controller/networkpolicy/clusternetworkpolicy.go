@@ -401,16 +401,18 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1beta1.Cl
 	}
 	var rules []controlplane.NetworkPolicyRule
 	processRules := func(cnpRules []crdv1beta1.Rule, direction controlplane.Direction) {
-		for idx, cnpRule := range cnpRules {
+		for idx := range cnpRules {
+			cnpRule := &cnpRules[idx]
 			services, namedPortExists := toAntreaServicesForCRD(cnpRule.Ports, cnpRule.Protocols)
 			clusterPeers, perNSPeers, nsLabelPeers := splitPeersByScope(cnpRule, direction)
+			priority := int32(idx)
 			addRule := func(peer *controlplane.NetworkPolicyPeer, ruleAddressGroups []*antreatypes.AddressGroup, dir controlplane.Direction, ruleAppliedTos []*antreatypes.AppliedToGroup) {
 				rule := controlplane.NetworkPolicyRule{
 					Direction:       dir,
 					Services:        services,
 					Name:            cnpRule.Name,
 					Action:          cnpRule.Action,
-					Priority:        int32(idx),
+					Priority:        priority,
 					EnableLogging:   cnpRule.EnableLogging,
 					AppliedToGroups: getAppliedToGroupNames(ruleAppliedTos),
 					L7Protocols:     toAntreaL7ProtocolsForCRD(cnpRule.L7Protocols),
@@ -719,7 +721,7 @@ func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1beta1
 
 // splitPeersByScope splits the ClusterNetworkPolicy peers in the rule by whether the peer
 // is cluster-scoped or per-namespace.
-func splitPeersByScope(rule crdv1beta1.Rule, dir controlplane.Direction) ([]crdv1beta1.NetworkPolicyPeer, []crdv1beta1.NetworkPolicyPeer, []crdv1beta1.NetworkPolicyPeer) {
+func splitPeersByScope(rule *crdv1beta1.Rule, dir controlplane.Direction) ([]crdv1beta1.NetworkPolicyPeer, []crdv1beta1.NetworkPolicyPeer, []crdv1beta1.NetworkPolicyPeer) {
 	var clusterPeers, perNSPeers, nsLabelPeers []crdv1beta1.NetworkPolicyPeer
 	peers := rule.From
 	if dir == controlplane.DirectionOut {

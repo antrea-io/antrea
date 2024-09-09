@@ -96,7 +96,7 @@ func diffFromCIDR(allowCIDR, exceptCIDR *net.IPNet) []*net.IPNet {
 	remainingCIDRs := make([]*net.IPNet, 0, exceptPrefix-allowPrefix)
 	for i := allowPrefix + 1; i <= exceptPrefix; i++ {
 		// Flip the (ipBitLen - i)th bit from LSB in exceptCIDR to get the IP which is not in exceptCIDR
-		ipOfNewCIDR := flipSingleBit(&exceptStartIP, uint8(bits-i))
+		ipOfNewCIDR := flipSingleBit(&exceptStartIP, bits-i)
 		newCIDRMask := net.CIDRMask(i, bits)
 		for j := range allowStartIP {
 			ipOfNewCIDR[j] = allowStartIP[j] | ipOfNewCIDR[j]
@@ -108,10 +108,10 @@ func diffFromCIDR(allowCIDR, exceptCIDR *net.IPNet) []*net.IPNet {
 	return remainingCIDRs
 }
 
-func flipSingleBit(ip *net.IP, bitIndex uint8) net.IP {
+func flipSingleBit(ip *net.IP, bitIndex int) net.IP {
 	newIP := make(net.IP, len(*ip))
 	copy(newIP, *ip)
-	byteIndex := uint8(len(newIP)) - (bitIndex / 8) - 1
+	byteIndex := len(newIP) - (bitIndex / 8) - 1
 	// XOR bit operation to flip
 	newIP[byteIndex] = newIP[byteIndex] ^ (1 << (bitIndex % 8))
 	return newIP

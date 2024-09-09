@@ -138,7 +138,7 @@ func HandleCRDConversion(crdConvertFunc convertFunc) http.HandlerFunc {
 			convertReview, ok := obj.(*v1beta1.ConversionReview)
 			if !ok {
 				msg := fmt.Sprintf("Expected v1beta1.ConversionReview but got: %T", obj)
-				klog.Errorf(msg)
+				klog.Error(msg)
 				http.Error(w, html.EscapeString(msg), http.StatusBadRequest)
 				return
 			}
@@ -153,7 +153,7 @@ func HandleCRDConversion(crdConvertFunc convertFunc) http.HandlerFunc {
 			convertReview, ok := obj.(*v1.ConversionReview)
 			if !ok {
 				msg := fmt.Sprintf("Expected v1.ConversionReview but got: %T", obj)
-				klog.Errorf(msg)
+				klog.Error(msg)
 				http.Error(w, html.EscapeString(msg), http.StatusBadRequest)
 				return
 			}
@@ -175,7 +175,7 @@ func HandleCRDConversion(crdConvertFunc convertFunc) http.HandlerFunc {
 		outSerializer := getOutputSerializer(accept)
 		if outSerializer == nil {
 			msg := fmt.Sprintf("invalid accept header `%s`", accept)
-			klog.Errorf(msg)
+			klog.Error(msg)
 			http.Error(w, html.EscapeString(msg), http.StatusBadRequest)
 			return
 		}

@@ -388,8 +388,8 @@ func (m *matchPair) KeyString() string {
 func (m *conjunctiveMatch) generateGlobalMapKey() string {
 	var priorityStr string
 	var matchPairStrList []string
-	for _, eachMatchPair := range m.matchPairs {
-		matchPairStrList = append(matchPairStrList, eachMatchPair.KeyString())
+	for idx := range m.matchPairs {
+		matchPairStrList = append(matchPairStrList, m.matchPairs[idx].KeyString())
 	}
 	if m.priority == nil {
 		priorityStr = strconv.Itoa(int(priorityNormal))
