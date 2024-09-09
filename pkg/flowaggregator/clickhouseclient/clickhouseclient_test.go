@@ -218,8 +218,8 @@ func TestPushRecordsToFrontOfQueue(t *testing.T) {
 
 	// init deque [0]
 	records := make([]*flowrecord.FlowRecord, 5)
-	for i := 0; i < 5; i++ {
-		records[i] = &flowrecord.FlowRecord{SourceTransportPort: uint16(i)}
+	for i := range uint16(5) {
+		records[i] = &flowrecord.FlowRecord{SourceTransportPort: i}
 	}
 	chExportProc.deque.PushBack(records[0])
 

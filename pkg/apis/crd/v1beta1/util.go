@@ -15,9 +15,10 @@
 package v1beta1
 
 func GetEgressCondition(conditions []EgressCondition, conditionType EgressConditionType) *EgressCondition {
-	for _, c := range conditions {
+	for idx := range conditions {
+		c := &conditions[idx]
 		if c.Type == conditionType {
-			return &c
+			return c
 		}
 	}
 	return nil

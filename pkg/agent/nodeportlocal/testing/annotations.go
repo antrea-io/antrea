@@ -38,9 +38,10 @@ func NewExpectedNPLAnnotations(nodeIP *string, nplStartPort, nplEndPort int) *Ex
 }
 
 func (a *ExpectedNPLAnnotations) find(podPort int, protocol string) *types.NPLAnnotation {
-	for _, annotation := range a.annotations {
+	for idx := range a.annotations {
+		annotation := &a.annotations[idx]
 		if annotation.PodPort == podPort && annotation.Protocol == protocol {
-			return &annotation
+			return annotation
 		}
 	}
 	return nil

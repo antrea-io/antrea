@@ -2099,7 +2099,7 @@ func (c *Client) DeleteRouteForLink(cidr *net.IPNet, linkIndex int) error {
 
 func (c *Client) ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, endpointIP net.IP, protocol binding.Protocol) error {
 	var protoVar uint8
-	var ipFamilyVar int
+	var ipFamilyVar uint8
 	var zone uint16
 	switch protocol {
 	case binding.ProtocolTCP:

@@ -540,7 +540,8 @@ func (r *ServiceExportReconciler) clusterSetMapFunc(ctx context.Context, a clien
 		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {
 			svcExports := &k8smcsv1alpha1.ServiceExportList{}
 			r.Client.List(ctx, svcExports)
-			for _, svcExport := range svcExports.Items {
+			for idx := range svcExports.Items {
+				svcExport := &svcExports.Items[idx]
 				namespacedName := types.NamespacedName{
 					Name:      svcExport.GetName(),
 					Namespace: svcExport.GetNamespace(),
