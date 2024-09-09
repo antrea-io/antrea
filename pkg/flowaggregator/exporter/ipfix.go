@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"reflect"
+	"time"
 
 	"github.com/google/uuid"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
@@ -46,6 +47,7 @@ type IPFIXExporter struct {
 	exportingProcess           ipfix.IPFIXExportingProcess
 	sendJSONRecord             bool
 	observationDomainID        uint32
+	templateRefreshTimeout     time.Duration
 	templateIDv4               uint16
 	templateIDv6               uint16
 	registry                   ipfix.IPFIXRegistry
@@ -95,6 +97,7 @@ func NewIPFIXExporter(
 		externalFlowCollectorProto: opt.ExternalFlowCollectorProto,
 		sendJSONRecord:             sendJSONRecord,
 		observationDomainID:        observationDomainID,
+		templateRefreshTimeout:     opt.TemplateRefreshTimeout,
 		registry:                   registry,
 		set:                        ipfixentities.NewSet(false),
 		k8sClient:                  k8sClient,
@@ -146,7 +149,8 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	} else {
 		e.observationDomainID = genObservationDomainID(e.k8sClient)
 	}
-	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID)
+	e.templateRefreshTimeout = opt.TemplateRefreshTimeout
+	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "templateRefreshTimeout", e.templateRefreshTimeout)
 
 	if e.exportingProcess != nil {
 		e.exportingProcess.CloseConnToCollector()
@@ -188,22 +192,21 @@ func (e *IPFIXExporter) initExportingProcess() error {
 	// externalFlowCollectorAddr and externalFlowCollectorProto instead of net.Addr input.
 	var expInput exporter.ExporterInput
 	if e.externalFlowCollectorProto == "tcp" {
-		// TCP transport does not need any tempRefTimeout, so sending 0.
 		expInput = exporter.ExporterInput{
 			CollectorAddress:    e.externalFlowCollectorAddr,
 			CollectorProtocol:   e.externalFlowCollectorProto,
 			ObservationDomainID: e.observationDomainID,
-			TempRefTimeout:      0,
-			TLSClientConfig:     nil,
-			SendJSONRecord:      e.sendJSONRecord,
+			// TCP transport does not need any tempRefTimeout, so sending 0.
+			TempRefTimeout:  0,
+			TLSClientConfig: nil,
+			SendJSONRecord:  e.sendJSONRecord,
 		}
 	} else {
-		// For UDP transport, hardcoding tempRefTimeout value as 1800s. So we will send out template every 30 minutes.
 		expInput = exporter.ExporterInput{
 			CollectorAddress:    e.externalFlowCollectorAddr,
 			CollectorProtocol:   e.externalFlowCollectorProto,
 			ObservationDomainID: e.observationDomainID,
-			TempRefTimeout:      1800,
+			TempRefTimeout:      uint32(e.templateRefreshTimeout.Seconds()),
 			TLSClientConfig:     nil,
 			SendJSONRecord:      e.sendJSONRecord,
 		}

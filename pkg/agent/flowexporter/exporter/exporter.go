@@ -341,15 +341,11 @@ func (exp *FlowExporter) initFlowExporter(ctx context.Context) error {
 		}
 		// TLS transport does not need any tempRefTimeout, so sending 0.
 		exp.exporterInput.TempRefTimeout = 0
-	} else if exp.exporterInput.CollectorProtocol == "tcp" {
-		// TCP transport does not need any tempRefTimeout, so sending 0.
-		// tempRefTimeout is the template refresh timeout, which specifies how often
-		// the exporting process should send the template again.
-		exp.exporterInput.TempRefTimeout = 0
-	} else {
-		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
-		exp.exporterInput.TempRefTimeout = 1800
 	}
+	// TempRefTimeout specifies how often the exporting process should send the template
+	// again. It is only relevant when using the UDP protocol. We use 0 to tell the go-ipfix
+	// library to use the default value, which should be 600s as per the IPFIX standards.
+	exp.exporterInput.TempRefTimeout = 0
 	expProcess, err := exporter.InitExportingProcess(exp.exporterInput)
 	if err != nil {
 		return fmt.Errorf("error when starting exporter: %v", err)
