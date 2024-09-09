@@ -9,3 +9,4 @@ generated_expansion
 generated.pb.go
 generated.proto
 zz_generated
+.golangci.yml

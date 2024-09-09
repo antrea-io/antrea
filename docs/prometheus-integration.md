@@ -345,13 +345,14 @@ could not otherwise find a use for. This should be subtracted from the
 total GC CPU time to obtain a measure of compulsory GC CPU time. This
 metric is an overestimate, and not directly comparable to system CPU time
 measurements. Compare only with other /cpu/classes metrics.
-- **go_cpu_classes_gc_pause_cpu_seconds_total:** Estimated total CPU time spent
-with the application paused by the GC. Even if only one thread is running
-during the pause, this is computed as GOMAXPROCS times the pause latency
-because nothing else can be executing. This is the exact sum of samples in
-/gc/pause:seconds if each sample is multiplied by GOMAXPROCS at the time
-it is taken. This metric is an overestimate, and not directly comparable to
-system CPU time measurements. Compare only with other /cpu/classes metrics.
+- **go_cpu_classes_gc_pause_cpu_seconds_total:** Estimated total CPU time
+spent with the application paused by the GC. Even if only one thread is
+running during the pause, this is computed as GOMAXPROCS times the pause
+latency because nothing else can be executing. This is the exact sum of
+samples in /sched/pauses/total/gc:seconds if each sample is multiplied by
+GOMAXPROCS at the time it is taken. This metric is an overestimate, and not
+directly comparable to system CPU time measurements. Compare only with other
+/cpu/classes metrics.
 - **go_cpu_classes_gc_total_cpu_seconds_total:** Estimated total CPU
 time spent performing GC tasks. This metric is an overestimate, and not
 directly comparable to system CPU time measurements. Compare only with other
@@ -434,8 +435,8 @@ of an out-of-memory error, because the limiter trades memory for CPU time
 when the GC's CPU time gets too high. This is most likely to occur with use
 of SetMemoryLimit. The first GC cycle is cycle 1, so a value of 0 indicates
 that it was never enabled.
-- **go_gc_pauses_seconds:** Distribution of individual GC-related
-stop-the-world pause latencies. Bucket counts increase monotonically.
+- **go_gc_pauses_seconds:** Deprecated. Prefer the identical
+/sched/pauses/total/gc:seconds.
 - **go_gc_scan_globals_bytes:** The total amount of global variable space
 that is scannable.
 - **go_gc_scan_heap_bytes:** The total amount of heap space that is scannable.
@@ -444,6 +445,9 @@ last GC cycle.
 - **go_gc_scan_total_bytes:** The total amount space that is scannable. Sum
 of all metrics in /gc/scan.
 - **go_gc_stack_starting_size_bytes:** The stack size of new goroutines.
+- **go_godebug_non_default_behavior_asynctimerchan_events_total:** The number
+of non-default behaviors executed by the time package due to a non-default
+GODEBUG=asynctimerchan=... setting.
 - **go_godebug_non_default_behavior_execerrdot_events_total:** The number of
 non-default behaviors executed by the os/exec package due to a non-default
 GODEBUG=execerrdot=... setting.
@@ -456,18 +460,27 @@ GODEBUG=gocachetest=... setting.
 - **go_godebug_non_default_behavior_gocacheverify_events_total:** The number
 of non-default behaviors executed by the cmd/go package due to a non-default
 GODEBUG=gocacheverify=... setting.
+- **go_godebug_non_default_behavior_gotypesalias_events_total:** The number
+of non-default behaviors executed by the go/types package due to a non-default
+GODEBUG=gotypesalias=... setting.
 - **go_godebug_non_default_behavior_http2client_events_total:** The number of
 non-default behaviors executed by the net/http package due to a non-default
 GODEBUG=http2client=... setting.
 - **go_godebug_non_default_behavior_http2server_events_total:** The number of
 non-default behaviors executed by the net/http package due to a non-default
 GODEBUG=http2server=... setting.
+- **go_godebug_non_default_behavior_httplaxcontentlength_events_total:**
+The number of non-default behaviors executed by the net/http package due to
+a non-default GODEBUG=httplaxcontentlength=... setting.
+- **go_godebug_non_default_behavior_httpmuxgo121_events_total:** The number
+of non-default behaviors executed by the net/http package due to a non-default
+GODEBUG=httpmuxgo121=... setting.
+- **go_godebug_non_default_behavior_httpservecontentkeepheaders_events_total:**
+The number of non-default behaviors executed by the net/http package due to
+a non-default GODEBUG=httpservecontentkeepheaders=... setting.
 - **go_godebug_non_default_behavior_installgoroot_events_total:** The number
 of non-default behaviors executed by the go/build package due to a non-default
 GODEBUG=installgoroot=... setting.
-- **go_godebug_non_default_behavior_jstmpllitinterp_events_total:** The
-number of non-default behaviors executed by the html/template package due
-to a non-default GODEBUG=jstmpllitinterp=... setting.
 - **go_godebug_non_default_behavior_multipartmaxheaders_events_total:**
 The number of non-default behaviors executed by the mime/multipart package
 due to a non-default GODEBUG=multipartmaxheaders=... setting.
@@ -489,15 +502,42 @@ GODEBUG=randautoseed=... setting.
 - **go_godebug_non_default_behavior_tarinsecurepath_events_total:** The
 number of non-default behaviors executed by the archive/tar package due to
 a non-default GODEBUG=tarinsecurepath=... setting.
+- **go_godebug_non_default_behavior_tls10server_events_total:** The number of
+non-default behaviors executed by the crypto/tls package due to a non-default
+GODEBUG=tls10server=... setting.
+- **go_godebug_non_default_behavior_tls3des_events_total:** The number of
+non-default behaviors executed by the crypto/tls package due to a non-default
+GODEBUG=tls3des=... setting.
 - **go_godebug_non_default_behavior_tlsmaxrsasize_events_total:** The
 number of non-default behaviors executed by the crypto/tls package due to
 a non-default GODEBUG=tlsmaxrsasize=... setting.
+- **go_godebug_non_default_behavior_tlsrsakex_events_total:** The number of
+non-default behaviors executed by the crypto/tls package due to a non-default
+GODEBUG=tlsrsakex=... setting.
+- **go_godebug_non_default_behavior_tlsunsafeekm_events_total:** The number of
+non-default behaviors executed by the crypto/tls package due to a non-default
+GODEBUG=tlsunsafeekm=... setting.
+- **go_godebug_non_default_behavior_winreadlinkvolume_events_total:**
+The number of non-default behaviors executed by the os package due to a
+non-default GODEBUG=winreadlinkvolume=... setting.
+- **go_godebug_non_default_behavior_winsymlink_events_total:** The number
+of non-default behaviors executed by the os package due to a non-default
+GODEBUG=winsymlink=... setting.
+- **go_godebug_non_default_behavior_x509keypairleaf_events_total:** The
+number of non-default behaviors executed by the crypto/tls package due to
+a non-default GODEBUG=x509keypairleaf=... setting.
+- **go_godebug_non_default_behavior_x509negativeserial_events_total:** The
+number of non-default behaviors executed by the crypto/x509 package due to
+a non-default GODEBUG=x509negativeserial=... setting.
 - **go_godebug_non_default_behavior_x509sha1_events_total:** The number of
 non-default behaviors executed by the crypto/x509 package due to a non-default
 GODEBUG=x509sha1=... setting.
 - **go_godebug_non_default_behavior_x509usefallbackroots_events_total:**
 The number of non-default behaviors executed by the crypto/x509 package due
 to a non-default GODEBUG=x509usefallbackroots=... setting.
+- **go_godebug_non_default_behavior_x509usepolicies_events_total:** The
+number of non-default behaviors executed by the crypto/x509 package due to
+a non-default GODEBUG=x509usepolicies=... setting.
 - **go_godebug_non_default_behavior_zipinsecurepath_events_total:** The
 number of non-default behaviors executed by the archive/zip package due to
 a non-default GODEBUG=zipinsecurepath=... setting.
@@ -588,11 +628,33 @@ code simultaneously.
 - **go_sched_latencies_seconds:** Distribution of the time goroutines have
 spent in the scheduler in a runnable state before actually running. Bucket
 counts increase monotonically.
-- **go_sync_mutex_wait_total_seconds_total:** Approximate cumulative time
-goroutines have spent blocked on a sync.Mutex or sync.RWMutex. This metric
-is useful for identifying global changes in lock contention. Collect a
-mutex or block profile using the runtime/pprof package for more detailed
-contention data.
+- **go_sched_pauses_stopping_gc_seconds:** Distribution of individual
+GC-related stop-the-world stopping latencies. This is the time it takes from
+deciding to stop the world until all Ps are stopped. This is a subset of the
+total GC-related stop-the-world time (/sched/pauses/total/gc:seconds). During
+this time, some threads may be executing. Bucket counts increase monotonically.
+- **go_sched_pauses_stopping_other_seconds:** Distribution of
+individual non-GC-related stop-the-world stopping latencies. This
+is the time it takes from deciding to stop the world until all Ps are
+stopped. This is a subset of the total non-GC-related stop-the-world time
+(/sched/pauses/total/other:seconds). During this time, some threads may be
+executing. Bucket counts increase monotonically.
+- **go_sched_pauses_total_gc_seconds:** Distribution of individual
+GC-related stop-the-world pause latencies. This is the time from deciding
+to stop the world until the world is started again. Some of this time
+is spent getting all threads to stop (this is measured directly in
+/sched/pauses/stopping/gc:seconds), during which some threads may still be
+running. Bucket counts increase monotonically.
+- **go_sched_pauses_total_other_seconds:** Distribution of individual
+non-GC-related stop-the-world pause latencies. This is the time from
+deciding to stop the world until the world is started again. Some of
+this time is spent getting all threads to stop (measured directly in
+/sched/pauses/stopping/other:seconds). Bucket counts increase monotonically.
+- **go_sync_mutex_wait_total_seconds_total:** Approximate cumulative
+time goroutines have spent blocked on a sync.Mutex, sync.RWMutex, or
+runtime-internal lock. This metric is useful for identifying global changes
+in lock contention. Collect a mutex or block profile using the runtime/pprof
+package for more detailed contention data.
 - **go_threads:** Number of OS threads created.
 
 #### Hidden Metrics

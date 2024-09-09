@@ -402,7 +402,7 @@ func TestOfCtl(t *testing.T) {
 			bridge:         "br-int",
 			ovsOfctlRunner: mockOVSOfctlRunner,
 		}
-		groupID := 3
+		groupID := uint32(3)
 		DumpGroup := func(id string) ([]byte, error) {
 			var x = []byte{}
 			for i := 0; i < len(testDumpGroups); i++ {
@@ -415,7 +415,7 @@ func TestOfCtl(t *testing.T) {
 			return x, nil
 		}
 		mockOVSOfctlRunner.EXPECT().RunOfctlCmd("dump-groups", strconv.FormatUint(uint64(groupID), 10)).Return(DumpGroup(fmt.Sprintf("%d", groupID)))
-		out, err := client.DumpGroup(uint32(groupID))
+		out, err := client.DumpGroup(groupID)
 		require.NoError(err)
 		expectedGroup := "group_id=3,type=select,bucket=bucket_id:1,output:1,bucket=bucket_id:2,output:2,bucket=bucket_id:3,output:3,bucket=bucket_id:4,output:4"
 		assert.Equal(expectedGroup, out)

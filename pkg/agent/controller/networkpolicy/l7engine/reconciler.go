@@ -123,27 +123,27 @@ multi-detect:
 `, config.L7SuricataSocketPath, config.L7RedirectTargetPortName, config.L7RedirectReturnPortName)
 )
 
-type threadSafeInt32Set struct {
+type threadSafeSet[T comparable] struct {
 	sync.RWMutex
-	cached sets.Set[int32]
+	cached sets.Set[T]
 }
 
-func (g *threadSafeInt32Set) has(key uint32) bool {
+func (g *threadSafeSet[T]) has(key T) bool {
 	g.RLock()
 	defer g.RUnlock()
-	return g.cached.Has(int32(key))
+	return g.cached.Has(key)
 }
 
-func (g *threadSafeInt32Set) insert(key uint32) {
+func (g *threadSafeSet[T]) insert(key T) {
 	g.Lock()
 	defer g.Unlock()
-	g.cached.Insert(int32(key))
+	g.cached.Insert(key)
 }
 
-func (g *threadSafeInt32Set) delete(key uint32) {
+func (g *threadSafeSet[T]) delete(key T) {
 	g.Lock()
 	defer g.Unlock()
-	g.cached.Delete(int32(key))
+	g.cached.Delete(key)
 }
 
 type Reconciler struct {
@@ -151,8 +151,8 @@ type Reconciler struct {
 	startSuricataFn func()
 	suricataScFn    func(scCmd string) (*scCmdRet, error)
 
-	suricataTenantCache        *threadSafeInt32Set
-	suricataTenantHandlerCache *threadSafeInt32Set
+	suricataTenantCache        *threadSafeSet[uint32]
+	suricataTenantHandlerCache *threadSafeSet[uint32]
 
 	once sync.Once
 }
@@ -161,11 +161,11 @@ func NewReconciler() *Reconciler {
 	return &Reconciler{
 		suricataScFn:    suricataSc,
 		startSuricataFn: startSuricata,
-		suricataTenantCache: &threadSafeInt32Set{
-			cached: sets.New[int32](),
+		suricataTenantCache: &threadSafeSet[uint32]{
+			cached: sets.New[uint32](),
 		},
-		suricataTenantHandlerCache: &threadSafeInt32Set{
-			cached: sets.New[int32](),
+		suricataTenantHandlerCache: &threadSafeSet[uint32]{
+			cached: sets.New[uint32](),
 		},
 	}
 }

@@ -69,7 +69,7 @@ var testOptions TestOptions
 
 type MCTestData struct {
 	clusters            []string
-	clusterTestDataMap  map[string]antreae2e.TestData
+	clusterTestDataMap  map[string]*antreae2e.TestData
 	controlPlaneNames   map[string]string
 	logsDirForTestCase  string
 	clusterGateways     map[string]string
@@ -87,9 +87,9 @@ func (data *MCTestData) createClients() error {
 	data.clusters = []string{
 		leaderCluster, eastCluster, westCluster,
 	}
-	data.clusterTestDataMap = map[string]antreae2e.TestData{}
+	data.clusterTestDataMap = make(map[string]*antreae2e.TestData)
 	for i, cluster := range data.clusters {
-		testData := antreae2e.TestData{ClusterName: cluster}
+		testData := &antreae2e.TestData{ClusterName: cluster}
 		if err := testData.CreateClient(kubeConfigPaths[i]); err != nil {
 			return fmt.Errorf("error initializing clients for cluster %s: %v", cluster, err)
 		}
@@ -193,7 +193,7 @@ func (data *MCTestData) createPod(clusterName, name, nodeName, namespace, ctrNam
 			WithCommand(command).WithArgs(args).
 			WithEnv(env).WithPorts(ports).WithHostNetwork(hostNetwork).
 			WithMutateFunc(mutateFunc).
-			Create(&d)
+			Create(d)
 	}
 	return fmt.Errorf("clusterName %s not found", clusterName)
 }
