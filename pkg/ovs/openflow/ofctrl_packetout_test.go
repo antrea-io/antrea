@@ -15,7 +15,7 @@
 package openflow
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"reflect"
 	"testing"

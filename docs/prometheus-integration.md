@@ -497,7 +497,7 @@ GODEBUG=netedns0=... setting.
 non-default behaviors executed by the runtime package due to a non-default
 GODEBUG=panicnil=... setting.
 - **go_godebug_non_default_behavior_randautoseed_events_total:** The number of
-non-default behaviors executed by the math/rand package due to a non-default
+non-default behaviors executed by the math/rand/v2 package due to a non-default
 GODEBUG=randautoseed=... setting.
 - **go_godebug_non_default_behavior_tarinsecurepath_events_total:** The
 number of non-default behaviors executed by the archive/tar package due to

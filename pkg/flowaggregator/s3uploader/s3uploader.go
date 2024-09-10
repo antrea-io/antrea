@@ -17,10 +17,11 @@ package s3uploader
 import (
 	"bytes"
 	"compress/gzip"
+
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
