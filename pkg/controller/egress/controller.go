@@ -19,7 +19,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os/exec"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -241,6 +243,20 @@ func (c *EgressController) setIPAllocation(egressName string, ip net.IP, poolNam
 	}
 }
 
+func pingEgressIP(egressIP string) (bool, error) {
+	cmd := exec.Command("ping", "-c", "3", "-w", "5", egressIP)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return false, fmt.Errorf("ping command failed: %v. output: %s", err, string(output))
+	}
+
+	if strings.Contains(string(output), "3 packets transmitted, 3 received") {
+		return true, nil
+	}
+	return false, nil
+}
+
 // syncEgressIP is responsible for releasing stale EgressIP and allocating new EgressIP for an Egress if applicable.
 func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *egressv1beta1.Egress, error) {
 	prevIP, prevIPPool, exists := c.getIPAllocation(egress.Name)
@@ -257,7 +273,20 @@ func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *
 
 	// Skip allocating EgressIP if ExternalIPPool is not specified and return whatever user specifies.
 	if egress.Spec.ExternalIPPool == "" {
-		return net.ParseIP(egress.Spec.EgressIP), egress, nil
+
+		if egress.Spec.EgressIP != "" {
+			reachable, err := pingEgressIP(egress.Spec.EgressIP)
+			if reachable && err == nil {
+				return net.ParseIP(egress.Spec.EgressIP), egress, nil
+			} else {
+				if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
+					return nil, egress, err
+				} else {
+					egress = updatedEgress
+				}
+			}
+		}
+		return nil, egress, fmt.Errorf("EgressIP %s not configured on any interface", egress.Spec.EgressIP)
 	}
 
 	if !c.externalIPAllocator.IPPoolExists(egress.Spec.ExternalIPPool) {
