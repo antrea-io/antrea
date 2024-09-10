@@ -46,6 +46,7 @@ type AgentQuerier interface {
 	GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier
 	GetMemberlistCluster() memberlist.Interface
 	GetNodeLister() corelisters.NodeLister
+	GetBGPPolicyInfoQuerier() querier.AgentBGPPolicyInfoQuerier
 }
 
 type agentQuerier struct {
@@ -61,6 +62,7 @@ type agentQuerier struct {
 	nplRange                 string
 	memberlistCluster        memberlist.Interface
 	nodeLister               corelisters.NodeLister
+	bgpPolicyInfoQuerier     querier.AgentBGPPolicyInfoQuerier
 }
 
 func NewAgentQuerier(
@@ -76,6 +78,7 @@ func NewAgentQuerier(
 	nplRange string,
 	memberlistCluster memberlist.Interface,
 	nodeLister corelisters.NodeLister,
+	bgpPolicyInfoQuerier querier.AgentBGPPolicyInfoQuerier,
 ) *agentQuerier {
 	return &agentQuerier{
 		nodeConfig:               nodeConfig,
@@ -90,6 +93,7 @@ func NewAgentQuerier(
 		nplRange:                 nplRange,
 		memberlistCluster:        memberlistCluster,
 		nodeLister:               nodeLister,
+		bgpPolicyInfoQuerier:     bgpPolicyInfoQuerier,
 	}
 }
 
@@ -247,4 +251,9 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 		agentInfo.APIPort = aq.apiPort
 		agentInfo.NodePortLocalPortRange = aq.nplRange
 	}
+}
+
+// GetBGPPolicyInfoQuerier returns AgentBGPPolicyInfoQuerier.
+func (aq agentQuerier) GetBGPPolicyInfoQuerier() querier.AgentBGPPolicyInfoQuerier {
+	return aq.bgpPolicyInfoQuerier
 }

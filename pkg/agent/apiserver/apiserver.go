@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/addressgroup"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgppolicy"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
@@ -84,7 +85,7 @@ func (s *agentAPIServer) GetCertData() []byte {
 	return cert
 }
 
-func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier, s *genericapiserver.GenericAPIServer) {
+func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier, s *genericapiserver.GenericAPIServer, bgpq querier.AgentBGPPolicyInfoQuerier) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/podmulticaststats", multicast.HandleFunc(mq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/featuregates", featuregates.HandleFunc())
@@ -97,6 +98,7 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovstracing", ovstracing.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/serviceexternalip", serviceexternalip.HandleFunc(seipq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/memberlist", memberlist.HandleFunc(aq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/bgppolicy", bgppolicy.HandleFunc(bgpq))
 }
 
 func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool) error {
@@ -114,6 +116,7 @@ func New(aq agentquerier.AgentQuerier,
 	npq querier.AgentNetworkPolicyInfoQuerier,
 	mq querier.AgentMulticastInfoQuerier,
 	seipq querier.ServiceExternalIPStatusQuerier,
+	bgpq querier.AgentBGPPolicyInfoQuerier,
 	secureServing *genericoptions.SecureServingOptionsWithLoopback,
 	authentication *genericoptions.DelegatingAuthenticationOptions,
 	authorization *genericoptions.DelegatingAuthorizationOptions,
@@ -134,7 +137,7 @@ func New(aq agentquerier.AgentQuerier,
 	if err := installAPIGroup(s, aq, npq, v4Enabled, v6Enabled); err != nil {
 		return nil, err
 	}
-	installHandlers(aq, npq, mq, seipq, s)
+	installHandlers(aq, npq, mq, seipq, s, bgpq)
 	return &agentAPIServer{GenericAPIServer: s}, nil
 }
 

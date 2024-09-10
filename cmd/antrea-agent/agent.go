@@ -746,9 +746,10 @@ func run(o *Options) error {
 		}
 	}
 
+	var bgpController *bgp.Controller
 	if features.DefaultFeatureGate.Enabled(features.BGPPolicy) {
 		bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
-		bgpController, err := bgp.NewBGPPolicyController(nodeInformer,
+		bgpController, err = bgp.NewBGPPolicyController(nodeInformer,
 			serviceInformer,
 			egressInformer,
 			bgpPolicyInformer,
@@ -926,6 +927,7 @@ func run(o *Options) error {
 		o.config.NodePortLocal.PortRange,
 		memberlistCluster,
 		nodeInformer.Lister(),
+		bgpController,
 	)
 
 	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
@@ -956,6 +958,7 @@ func run(o *Options) error {
 		networkPolicyController,
 		mcastController,
 		externalIPController,
+		bgpController,
 		secureServing,
 		authentication,
 		authorization,
