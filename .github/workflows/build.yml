@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - main
+      - build-arm-images-using-github-hosted-runners-test
       - release-*
       - feature/*
 
@@ -58,43 +59,43 @@ jobs:
           suffix: arm
     runs-on: ${{ matrix.runner }}
     env:
-      DOCKER_TAG: latest
+      DOCKER_TAG: latest-test
     steps:
     - uses: actions/checkout@v4
       with:
         show-progress: false
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      with:
-        driver: ${{ needs.check-env.outputs.docker_driver }}
-    - name: Build Antrea Docker image without pushing to registry
-      if: ${{ needs.check-env.outputs.push_needed == 'false' }}
-      run: |
-        ./hack/build-antrea-linux-all.sh --platform ${{ matrix.platform }} --pull
+      # with:
+      #   driver: ${{ needs.check-env.outputs.docker_driver }}
+    # - name: Build Antrea Docker image without pushing to registry
+    #   if: ${{ needs.check-env.outputs.push_needed == 'false' }}
+    #   run: |
+    #     ./hack/build-antrea-linux-all.sh --platform ${{ matrix.platform }} --pull
     - name: Build and push Antrea Docker image to registry
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+      # if: ${{ needs.check-env.outputs.push_needed == 'true' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       run: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         ./hack/build-antrea-linux-all.sh --platform ${{ matrix.platform }} --pull --push-base-images
-        docker tag antrea/antrea-controller-ubuntu:"${DOCKER_TAG}" antrea/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
-        docker tag antrea/antrea-agent-ubuntu:"${DOCKER_TAG}" antrea/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
+        docker tag antrea/antrea-controller-ubuntu:latest antrea/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
+        docker tag antrea/antrea-agent-ubuntu:latest antrea/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
         docker push antrea/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
         docker push antrea/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
 
   push-manifest:
     needs: [check-env, build]
-    if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+    # if: ${{ needs.check-env.outputs.push_needed == 'true' }}
     runs-on: ubuntu-latest
     env:
-      DOCKER_TAG: latest
+      DOCKER_TAG: latest-test
     steps:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      with:
-        driver: ${{ needs.check-env.outputs.docker_driver }}
+      # with:
+      #   driver: ${{ needs.check-env.outputs.docker_driver }}
     - name: Docker login
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
