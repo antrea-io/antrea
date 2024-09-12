@@ -120,5 +120,5 @@ fi
 # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
 # does not seem to be in the Python path in Ubuntu. There may be a better way to do this,
 # but this seems like an acceptable workaround.
-sed -i 's/python3\.7/python3\.10/' debian/openvswitch-test.install
-sed -i 's/python3\.7/python3\.10/' debian/python3-openvswitch.install
+sed -i 's/python3\.7/python3\.12/' debian/openvswitch-test.install
+sed -i 's/python3\.7/python3\.12/' debian/python3-openvswitch.install
