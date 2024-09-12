@@ -45,7 +45,7 @@ spec:
       cloneMode: linkedClone
       datacenter: DATACENTERNAME
       datastore: DATASTORENAME
-      diskGiB: 25
+      diskGiB: 50
       folder: FOLDERENAME
       memoryMiB: 8192
       network:
