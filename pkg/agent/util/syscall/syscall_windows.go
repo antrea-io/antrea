@@ -307,11 +307,14 @@ type NetIOInterface interface {
 }
 
 type netIO struct {
-	syscallN func(trap uintptr, args ...uintptr) (r1, r2 uintptr, err syscall.Errno)
+	syscallN            func(trap uintptr, args ...uintptr) (r1, r2 uintptr, err syscall.Errno)
+	getIPForwardTableFn func(family uint16, ipForwardTable **MibIPForwardTable) (errcode error)
 }
 
 func NewNetIO() NetIOInterface {
-	return &netIO{syscallN: syscall.SyscallN}
+	io := &netIO{syscallN: syscall.SyscallN}
+	io.getIPForwardTableFn = io.getIPForwardTable
+	return io
 }
 
 func (n *netIO) GetIPInterfaceEntry(ipInterfaceRow *MibIPInterfaceRow) (errcode error) {
@@ -361,7 +364,7 @@ func (n *netIO) getIPForwardTable(family uint16, ipForwardTable **MibIPForwardTa
 
 func (n *netIO) ListIPForwardRows(family uint16) ([]MibIPForwardRow, error) {
 	var table *MibIPForwardTable
-	err := n.getIPForwardTable(family, &table)
+	err := n.getIPForwardTableFn(family, &table)
 	if table != nil {
 		defer n.freeMibTable(unsafe.Pointer(table))
 	}
