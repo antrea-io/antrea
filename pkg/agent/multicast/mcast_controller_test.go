@@ -17,7 +17,7 @@ package multicast
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"sync"

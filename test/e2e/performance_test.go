@@ -18,7 +18,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/url"
 	"strings"
 	"testing"
