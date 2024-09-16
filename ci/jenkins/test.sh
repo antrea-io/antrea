@@ -69,7 +69,9 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
         --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds.
         --win-image-node         Name of the windows image node in containerd cluster. Images are built by docker on this node.
-        --kind-cluster-name      Name of the kind Cluster." 
+        --kind-cluster-name      Name of the kind Cluster.
+        --docker-user            Username for Docker account.
+        --docker-password        Password for Docker account."
 
 function print_usage {
     echoerr "$_usage"
@@ -118,6 +120,14 @@ case $key in
     ;;
     --win-image-node)
     WIN_IMAGE_NODE="$2"
+    shift 2
+    ;;
+    --docker-user)
+    DOCKER_USERNAME="$2"
+    shift 2
+    ;;
+    --docker-password)
+    DOCKER_PASSWORD="$2"
     shift 2
     ;;
     -h|--help)
@@ -588,7 +598,8 @@ function deliver_antrea_linux_containerd {
     antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
     common_images=("registry.k8s.io/e2e-test-images/agnhost:2.29")
     k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
-    e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
+    conformance_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
+    e2e_images=("toolbox:1.3-0" "nginx:1.21.6-alpine")
 
     echo "===== Deliver Antrea YAML to Controller nodes ====="
     IP=$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')
@@ -611,15 +622,18 @@ function deliver_antrea_linux_containerd {
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
 
         for i in "${!harbor_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "ctr -n=k8s.io images pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && ctr -n=k8s.io images tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "ctr -n=k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && ctr -n=k8s.io images tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
         done
         # Pull necessary images in advance to avoid transient error
         for image in "${common_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "ctr -n=k8s.io images pull ${image}" || true
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "ctr -n=k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${image}" || true
         done
         # Pull necessary images for Kubernetes conformance test
         for i in "${!k8s_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "ctr -n=k8s.io images pull ${k8s_images[i]} && ctr -n=k8s.io images tag ${k8s_images[i]} ${e2e_images[i]}" || true
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "ctr -n=k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${k8s_images[i]} && ctr -n=k8s.io images tag ${k8s_images[i]} ${conformance_images[i]}" || true
+        done
+        for image in "${e2e_images[@]}"; do
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "ctr -n k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${DOCKER_REGISTRY}/antrea/${image}" || true
         done
     done
     echo "==== Finish building and delivering Linux containerd images ===="
@@ -651,13 +665,17 @@ function deliver_antrea_windows_containerd {
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
         antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "registry.k8s.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
         k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2" "registry.k8s.io/pause:3.8")
-        e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2" "k8sprow.azurecr.io/kubernetes-e2e-test-images/pause:3.8")
+        conformance_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2" "k8sprow.azurecr.io/kubernetes-e2e-test-images/pause:3.8")
+        e2e_images=("toolbox:1.3-0")
         # Pull necessary images in advance to avoid transient error
         for i in "${!harbor_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && ctr -n k8s.io images tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && ctr -n k8s.io images tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
         done
         for i in "${!k8s_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull ${k8s_images[i]} && ctr -n k8s.io images tag ${k8s_images[i]} ${e2e_images[i]}" || true
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${k8s_images[i]} && ctr -n k8s.io images tag ${k8s_images[i]} ${conformance_images[i]}" || true
+        done
+        for image in "${e2e_images[@]}"; do
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${DOCKER_REGISTRY}/antrea/${image}" || true
         done
         if ! (test -f antrea-windows.tar.gz); then
             echo "Windows VM ${WIN_IMAGE_NODE} didn't build antrea-windows.tar.gz, exiting"
