@@ -457,9 +457,10 @@ type NetworkPolicyNodeStatus struct {
 
 // NetworkPolicyEvaluation contains the request and response for a NetworkPolicy evaluation.
 type NetworkPolicyEvaluation struct {
-	metav1.TypeMeta `json:",inline"`
-	Request         *NetworkPolicyEvaluationRequest  `json:"request,omitempty" protobuf:"bytes,1,opt,name=request"`
-	Response        *NetworkPolicyEvaluationResponse `json:"response,omitempty" protobuf:"bytes,2,opt,name=response"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,3,opt,name=metadata"`
+	Request           *NetworkPolicyEvaluationRequest  `json:"request,omitempty" protobuf:"bytes,1,opt,name=request"`
+	Response          *NetworkPolicyEvaluationResponse `json:"response,omitempty" protobuf:"bytes,2,opt,name=response"`
 }
 
 // Entity contains Namespace and Pod name as a request parameter.
