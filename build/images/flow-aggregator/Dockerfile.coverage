@@ -27,7 +27,7 @@ RUN make antctl-instr-binary
 
 RUN make flow-aggregator-instr-binary
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The docker image for the flow aggregator with code coverage measurement enabled for testing purposes."
