@@ -131,7 +131,7 @@
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           [ "$DOCKER_REGISTRY" != "docker.io" ] || ./ci/jenkins/docker_login.sh --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
-          ./ci/jenkins/test.sh --testcase '{e2e_type}' --registry ${{DOCKER_REGISTRY}}
+          ./ci/jenkins/test.sh --testcase '{e2e_type}' --registry ${{DOCKER_REGISTRY}} --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
 
 - builder:
     name: builder-conformance-win
@@ -141,7 +141,7 @@
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           [ "$DOCKER_REGISTRY" != "docker.io" ] || ./ci/jenkins/docker_login.sh --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
-          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}}
+          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
 
 - builder:
     name: builder-flexible-ipam-e2e
