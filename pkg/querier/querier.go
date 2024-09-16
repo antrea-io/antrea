@@ -17,6 +17,7 @@ package querier
 import (
 	v1 "k8s.io/api/core/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -108,9 +109,28 @@ type NetworkPolicyQueryFilter struct {
 	SourceName string
 	// The namespace of the original Namespace that the internal NetworkPolicy is created for.
 	Namespace string
-	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, ACNP, ANNP)
+	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, ACNP, ANNP, ANP and BANP)
 	SourceType cpv1beta.NetworkPolicyType
 }
+
+// From user shorthand input to cpv1beta1.NetworkPolicyType
+var NetworkPolicyTypeMap = map[string]cpv1beta.NetworkPolicyType{
+	"K8SNP": cpv1beta.K8sNetworkPolicy,
+	"ACNP":  cpv1beta.AntreaClusterNetworkPolicy,
+	"ANNP":  cpv1beta.AntreaNetworkPolicy,
+	"ANP":   cpv1beta.AdminNetworkPolicy,
+	"BANP":  cpv1beta.BaselineAdminNetworkPolicy,
+}
+
+func GetNetworkPolicyTypeShorthands() []string {
+	validTypes := make([]string, 0, len(NetworkPolicyTypeMap))
+	for k := range NetworkPolicyTypeMap {
+		validTypes = append(validTypes, k)
+	}
+	return validTypes
+}
+
+var NamespaceScopedPolicyTypes = sets.New[string]("ANNP", "K8SNP")
 
 // ServiceExternalIPStatusQuerier queries the Service external IP status for debugging purposes.
 // Ideally, every Node should have consistent results eventually. This should only be used when

@@ -16,6 +16,7 @@ package ovsflows
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -26,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/openflow"
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/querier"
 )
@@ -35,10 +37,12 @@ var (
 	getFlowTableName = openflow.GetFlowTableName
 	getFlowTableID   = openflow.GetFlowTableID
 	getFlowTableList = openflow.GetTableList
+
+	errAmbiguousQuery = fmt.Errorf("query is ambiguous and matches more than one policy")
 )
 
 func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]apis.OVSFlowResponse, error) {
-	resps := []apis.OVSFlowResponse{}
+	var resps []apis.OVSFlowResponse
 	for _, f := range flowKeys {
 		flowStr, err := aq.GetOVSCtlClient().DumpMatchedFlow(f)
 		if err != nil {
@@ -53,7 +57,7 @@ func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]apis.O
 }
 
 func dumpFlows(aq agentquerier.AgentQuerier, table uint8) ([]apis.OVSFlowResponse, error) {
-	resps := []apis.OVSFlowResponse{}
+	var resps []apis.OVSFlowResponse
 	var flowStrs []string
 	var err error
 	if table != binding.TableIDAll {
@@ -170,19 +174,27 @@ func getServiceFlows(aq agentquerier.AgentQuerier, serviceName, namespace string
 	return append(resps, groupResps...), nil
 }
 
-func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace string) ([]apis.OVSFlowResponse, error) {
-	if len(aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: npName, Namespace: namespace})) == 0 {
+func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace string, policyType cpv1beta.NetworkPolicyType) ([]apis.OVSFlowResponse, error) {
+	npFilter := &querier.NetworkPolicyQueryFilter{
+		SourceName: npName,
+		Namespace:  namespace,
+		SourceType: policyType,
+	}
+	nps := aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicies(npFilter)
+	if len(nps) == 0 {
 		// NetworkPolicy not found.
 		return nil, nil
+	} else if len(nps) > 1 {
+		return nil, errAmbiguousQuery
 	}
-
-	flowKeys := aq.GetOpenflowClient().GetNetworkPolicyFlowKeys(npName, namespace)
+	namespace, policyType = nps[0].SourceRef.Namespace, nps[0].SourceRef.Type
+	flowKeys := aq.GetOpenflowClient().GetNetworkPolicyFlowKeys(npName, namespace, policyType)
 	return dumpMatchedFlows(aq, flowKeys)
 }
 
-func getTableNames(aq agentquerier.AgentQuerier) []apis.OVSFlowResponse {
-	resps := []apis.OVSFlowResponse{}
-	names := []string{}
+func getTableNames() []apis.OVSFlowResponse {
+	var resps []apis.OVSFlowResponse
+	var names []string
 	for _, t := range getFlowTableList() {
 		names = append(names, t.GetName())
 	}
@@ -201,6 +213,7 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		pod := r.URL.Query().Get("pod")
 		service := r.URL.Query().Get("service")
 		networkPolicy := r.URL.Query().Get("networkpolicy")
+		policyType := strings.ToUpper(r.URL.Query().Get("type"))
 		namespace := r.URL.Query().Get("namespace")
 		table := r.URL.Query().Get("table")
 		groups := r.URL.Query().Get("groups")
@@ -214,16 +227,31 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		}
 
 		if tableNamesOnly {
-			resps = getTableNames(aq)
+			resps = getTableNames()
 			encodeResp()
 			return
 		}
 
-		if (pod != "" || service != "" || networkPolicy != "") && namespace == "" {
+		if (pod != "" || service != "") && namespace == "" {
 			http.Error(w, "namespace must be provided", http.StatusBadRequest)
 			return
 		}
-
+		if networkPolicy != "" && policyType != "" {
+			_, ok := querier.NetworkPolicyTypeMap[policyType]
+			if !ok {
+				errorMsg := fmt.Sprintf("unknown policy type. Valid types are %v", querier.GetNetworkPolicyTypeShorthands())
+				http.Error(w, errorMsg, http.StatusBadRequest)
+				return
+			}
+			if querier.NamespaceScopedPolicyTypes.Has(policyType) && namespace == "" {
+				http.Error(w, "policy Namespace must be provided for policy type "+policyType, http.StatusBadRequest)
+				return
+			}
+			if !querier.NamespaceScopedPolicyTypes.Has(policyType) && namespace != "" {
+				http.Error(w, "policy Namespace should not be provided for cluster-scoped policy type "+policyType, http.StatusBadRequest)
+				return
+			}
+		}
 		if pod == "" && service == "" && networkPolicy == "" && namespace == "" && table == "" && groups == "" {
 			resps, err = dumpFlows(aq, binding.TableIDAll)
 		} else if pod != "" {
@@ -236,7 +264,16 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			}
 			resps, err = getServiceFlows(aq, service, namespace)
 		} else if networkPolicy != "" {
-			resps, err = getNetworkPolicyFlows(aq, networkPolicy, namespace)
+			var cpPolicyType cpv1beta.NetworkPolicyType
+			if policyType != "" {
+				// policyType string has already been validated above
+				cpPolicyType = querier.NetworkPolicyTypeMap[policyType]
+			}
+			resps, err = getNetworkPolicyFlows(aq, networkPolicy, namespace, cpPolicyType)
+			if err == errAmbiguousQuery {
+				http.Error(w, errAmbiguousQuery.Error(), http.StatusBadRequest)
+				return
+			}
 		} else if table != "" {
 			resps, err = getTableFlows(aq, table)
 			if err == nil && resps == nil {
