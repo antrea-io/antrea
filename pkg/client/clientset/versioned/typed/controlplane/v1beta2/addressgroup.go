@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,12 @@ package v1beta2
 
 import (
 	"context"
-	"time"
 
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // AddressGroupsGetter has a method to return a AddressGroupInterface.
@@ -43,54 +42,18 @@ type AddressGroupInterface interface {
 
 // addressGroups implements AddressGroupInterface
 type addressGroups struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1beta2.AddressGroup, *v1beta2.AddressGroupList]
 }
 
 // newAddressGroups returns a AddressGroups
 func newAddressGroups(c *ControlplaneV1beta2Client) *addressGroups {
 	return &addressGroups{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1beta2.AddressGroup, *v1beta2.AddressGroupList](
+			"addressgroups",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1beta2.AddressGroup { return &v1beta2.AddressGroup{} },
+			func() *v1beta2.AddressGroupList { return &v1beta2.AddressGroupList{} }),
 	}
-}
-
-// Get takes name of the addressGroup, and returns the corresponding addressGroup object, and an error if there is any.
-func (c *addressGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.AddressGroup, err error) {
-	result = &v1beta2.AddressGroup{}
-	err = c.client.Get().
-		Resource("addressgroups").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of AddressGroups that match those selectors.
-func (c *addressGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.AddressGroupList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1beta2.AddressGroupList{}
-	err = c.client.Get().
-		Resource("addressgroups").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested addressGroups.
-func (c *addressGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("addressgroups").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
 }

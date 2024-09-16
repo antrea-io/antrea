@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // IPGroupAssociationsGetter has a method to return a IPGroupAssociationInterface.
@@ -39,24 +39,17 @@ type IPGroupAssociationInterface interface {
 
 // iPGroupAssociations implements IPGroupAssociationInterface
 type iPGroupAssociations struct {
-	client rest.Interface
+	*gentype.Client[*v1beta2.IPGroupAssociation]
 }
 
 // newIPGroupAssociations returns a IPGroupAssociations
 func newIPGroupAssociations(c *ControlplaneV1beta2Client) *iPGroupAssociations {
 	return &iPGroupAssociations{
-		client: c.RESTClient(),
+		gentype.NewClient[*v1beta2.IPGroupAssociation](
+			"ipgroupassociations",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1beta2.IPGroupAssociation { return &v1beta2.IPGroupAssociation{} }),
 	}
-}
-
-// Get takes name of the iPGroupAssociation, and returns the corresponding iPGroupAssociation object, and an error if there is any.
-func (c *iPGroupAssociations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.IPGroupAssociation, err error) {
-	result = &v1beta2.IPGroupAssociation{}
-	err = c.client.Get().
-		Resource("ipgroupassociations").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
 }

@@ -37,20 +37,22 @@ var supportbundlecollectionsKind = v1beta2.SchemeGroupVersion.WithKind("SupportB
 
 // Get takes name of the supportBundleCollection, and returns the corresponding supportBundleCollection object, and an error if there is any.
 func (c *FakeSupportBundleCollections) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.SupportBundleCollection, err error) {
+	emptyResult := &v1beta2.SupportBundleCollection{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(supportbundlecollectionsResource, name), &v1beta2.SupportBundleCollection{})
+		Invokes(testing.NewRootGetActionWithOptions(supportbundlecollectionsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta2.SupportBundleCollection), err
 }
 
 // List takes label and field selectors, and returns the list of SupportBundleCollections that match those selectors.
 func (c *FakeSupportBundleCollections) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.SupportBundleCollectionList, err error) {
+	emptyResult := &v1beta2.SupportBundleCollectionList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(supportbundlecollectionsResource, supportbundlecollectionsKind, opts), &v1beta2.SupportBundleCollectionList{})
+		Invokes(testing.NewRootListActionWithOptions(supportbundlecollectionsResource, supportbundlecollectionsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -69,5 +71,5 @@ func (c *FakeSupportBundleCollections) List(ctx context.Context, opts v1.ListOpt
 // Watch returns a watch.Interface that watches the requested supportBundleCollections.
 func (c *FakeSupportBundleCollections) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(supportbundlecollectionsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(supportbundlecollectionsResource, opts))
 }

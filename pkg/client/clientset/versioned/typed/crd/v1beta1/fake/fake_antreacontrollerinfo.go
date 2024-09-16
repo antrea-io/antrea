@@ -38,20 +38,22 @@ var antreacontrollerinfosKind = v1beta1.SchemeGroupVersion.WithKind("AntreaContr
 
 // Get takes name of the antreaControllerInfo, and returns the corresponding antreaControllerInfo object, and an error if there is any.
 func (c *FakeAntreaControllerInfos) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AntreaControllerInfo, err error) {
+	emptyResult := &v1beta1.AntreaControllerInfo{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(antreacontrollerinfosResource, name), &v1beta1.AntreaControllerInfo{})
+		Invokes(testing.NewRootGetActionWithOptions(antreacontrollerinfosResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.AntreaControllerInfo), err
 }
 
 // List takes label and field selectors, and returns the list of AntreaControllerInfos that match those selectors.
 func (c *FakeAntreaControllerInfos) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.AntreaControllerInfoList, err error) {
+	emptyResult := &v1beta1.AntreaControllerInfoList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(antreacontrollerinfosResource, antreacontrollerinfosKind, opts), &v1beta1.AntreaControllerInfoList{})
+		Invokes(testing.NewRootListActionWithOptions(antreacontrollerinfosResource, antreacontrollerinfosKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -70,25 +72,27 @@ func (c *FakeAntreaControllerInfos) List(ctx context.Context, opts v1.ListOption
 // Watch returns a watch.Interface that watches the requested antreaControllerInfos.
 func (c *FakeAntreaControllerInfos) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(antreacontrollerinfosResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(antreacontrollerinfosResource, opts))
 }
 
 // Create takes the representation of a antreaControllerInfo and creates it.  Returns the server's representation of the antreaControllerInfo, and an error, if there is any.
 func (c *FakeAntreaControllerInfos) Create(ctx context.Context, antreaControllerInfo *v1beta1.AntreaControllerInfo, opts v1.CreateOptions) (result *v1beta1.AntreaControllerInfo, err error) {
+	emptyResult := &v1beta1.AntreaControllerInfo{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(antreacontrollerinfosResource, antreaControllerInfo), &v1beta1.AntreaControllerInfo{})
+		Invokes(testing.NewRootCreateActionWithOptions(antreacontrollerinfosResource, antreaControllerInfo, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.AntreaControllerInfo), err
 }
 
 // Update takes the representation of a antreaControllerInfo and updates it. Returns the server's representation of the antreaControllerInfo, and an error, if there is any.
 func (c *FakeAntreaControllerInfos) Update(ctx context.Context, antreaControllerInfo *v1beta1.AntreaControllerInfo, opts v1.UpdateOptions) (result *v1beta1.AntreaControllerInfo, err error) {
+	emptyResult := &v1beta1.AntreaControllerInfo{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(antreacontrollerinfosResource, antreaControllerInfo), &v1beta1.AntreaControllerInfo{})
+		Invokes(testing.NewRootUpdateActionWithOptions(antreacontrollerinfosResource, antreaControllerInfo, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.AntreaControllerInfo), err
 }
@@ -102,7 +106,7 @@ func (c *FakeAntreaControllerInfos) Delete(ctx context.Context, name string, opt
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeAntreaControllerInfos) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(antreacontrollerinfosResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(antreacontrollerinfosResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1beta1.AntreaControllerInfoList{})
 	return err
@@ -110,10 +114,11 @@ func (c *FakeAntreaControllerInfos) DeleteCollection(ctx context.Context, opts v
 
 // Patch applies the patch and returns the patched antreaControllerInfo.
 func (c *FakeAntreaControllerInfos) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.AntreaControllerInfo, err error) {
+	emptyResult := &v1beta1.AntreaControllerInfo{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(antreacontrollerinfosResource, name, pt, data, subresources...), &v1beta1.AntreaControllerInfo{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(antreacontrollerinfosResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.AntreaControllerInfo), err
 }

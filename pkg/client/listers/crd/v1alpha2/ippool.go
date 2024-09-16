@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha2
 
 import (
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -37,30 +37,10 @@ type IPPoolLister interface {
 
 // iPPoolLister implements the IPPoolLister interface.
 type iPPoolLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha2.IPPool]
 }
 
 // NewIPPoolLister returns a new IPPoolLister.
 func NewIPPoolLister(indexer cache.Indexer) IPPoolLister {
-	return &iPPoolLister{indexer: indexer}
-}
-
-// List lists all IPPools in the indexer.
-func (s *iPPoolLister) List(selector labels.Selector) (ret []*v1alpha2.IPPool, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha2.IPPool))
-	})
-	return ret, err
-}
-
-// Get retrieves the IPPool from the index for a given name.
-func (s *iPPoolLister) Get(name string) (*v1alpha2.IPPool, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha2.Resource("ippool"), name)
-	}
-	return obj.(*v1alpha2.IPPool), nil
+	return &iPPoolLister{listers.New[*v1alpha2.IPPool](indexer, v1alpha2.Resource("ippool"))}
 }

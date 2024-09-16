@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1beta1
 
 import (
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -37,30 +37,10 @@ type TraceflowLister interface {
 
 // traceflowLister implements the TraceflowLister interface.
 type traceflowLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1beta1.Traceflow]
 }
 
 // NewTraceflowLister returns a new TraceflowLister.
 func NewTraceflowLister(indexer cache.Indexer) TraceflowLister {
-	return &traceflowLister{indexer: indexer}
-}
-
-// List lists all Traceflows in the indexer.
-func (s *traceflowLister) List(selector labels.Selector) (ret []*v1beta1.Traceflow, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1beta1.Traceflow))
-	})
-	return ret, err
-}
-
-// Get retrieves the Traceflow from the index for a given name.
-func (s *traceflowLister) Get(name string) (*v1beta1.Traceflow, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1beta1.Resource("traceflow"), name)
-	}
-	return obj.(*v1beta1.Traceflow), nil
+	return &traceflowLister{listers.New[*v1beta1.Traceflow](indexer, v1beta1.Resource("traceflow"))}
 }

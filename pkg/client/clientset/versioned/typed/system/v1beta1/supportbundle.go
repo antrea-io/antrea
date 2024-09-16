@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	v1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // SupportBundlesGetter has a method to return a SupportBundleInterface.
@@ -41,46 +41,17 @@ type SupportBundleInterface interface {
 
 // supportBundles implements SupportBundleInterface
 type supportBundles struct {
-	client rest.Interface
+	*gentype.Client[*v1beta1.SupportBundle]
 }
 
 // newSupportBundles returns a SupportBundles
 func newSupportBundles(c *SystemV1beta1Client) *supportBundles {
 	return &supportBundles{
-		client: c.RESTClient(),
+		gentype.NewClient[*v1beta1.SupportBundle](
+			"supportbundles",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1beta1.SupportBundle { return &v1beta1.SupportBundle{} }),
 	}
-}
-
-// Get takes name of the supportBundle, and returns the corresponding supportBundle object, and an error if there is any.
-func (c *supportBundles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.SupportBundle, err error) {
-	result = &v1beta1.SupportBundle{}
-	err = c.client.Get().
-		Resource("supportbundles").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Create takes the representation of a supportBundle and creates it.  Returns the server's representation of the supportBundle, and an error, if there is any.
-func (c *supportBundles) Create(ctx context.Context, supportBundle *v1beta1.SupportBundle, opts v1.CreateOptions) (result *v1beta1.SupportBundle, err error) {
-	result = &v1beta1.SupportBundle{}
-	err = c.client.Post().
-		Resource("supportbundles").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(supportBundle).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the supportBundle and deletes it. Returns an error if one occurs.
-func (c *supportBundles) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	return c.client.Delete().
-		Resource("supportbundles").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
 }

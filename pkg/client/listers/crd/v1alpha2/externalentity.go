@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha2
 
 import (
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,25 +36,17 @@ type ExternalEntityLister interface {
 
 // externalEntityLister implements the ExternalEntityLister interface.
 type externalEntityLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha2.ExternalEntity]
 }
 
 // NewExternalEntityLister returns a new ExternalEntityLister.
 func NewExternalEntityLister(indexer cache.Indexer) ExternalEntityLister {
-	return &externalEntityLister{indexer: indexer}
-}
-
-// List lists all ExternalEntities in the indexer.
-func (s *externalEntityLister) List(selector labels.Selector) (ret []*v1alpha2.ExternalEntity, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha2.ExternalEntity))
-	})
-	return ret, err
+	return &externalEntityLister{listers.New[*v1alpha2.ExternalEntity](indexer, v1alpha2.Resource("externalentity"))}
 }
 
 // ExternalEntities returns an object that can list and get ExternalEntities.
 func (s *externalEntityLister) ExternalEntities(namespace string) ExternalEntityNamespaceLister {
-	return externalEntityNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return externalEntityNamespaceLister{listers.NewNamespaced[*v1alpha2.ExternalEntity](s.ResourceIndexer, namespace)}
 }
 
 // ExternalEntityNamespaceLister helps list and get ExternalEntities.
@@ -72,26 +64,5 @@ type ExternalEntityNamespaceLister interface {
 // externalEntityNamespaceLister implements the ExternalEntityNamespaceLister
 // interface.
 type externalEntityNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ExternalEntities in the indexer for a given namespace.
-func (s externalEntityNamespaceLister) List(selector labels.Selector) (ret []*v1alpha2.ExternalEntity, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha2.ExternalEntity))
-	})
-	return ret, err
-}
-
-// Get retrieves the ExternalEntity from the indexer for a given namespace and name.
-func (s externalEntityNamespaceLister) Get(name string) (*v1alpha2.ExternalEntity, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha2.Resource("externalentity"), name)
-	}
-	return obj.(*v1alpha2.ExternalEntity), nil
+	listers.ResourceIndexer[*v1alpha2.ExternalEntity]
 }

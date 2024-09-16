@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha2
 
 import (
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -37,30 +37,10 @@ type TrafficControlLister interface {
 
 // trafficControlLister implements the TrafficControlLister interface.
 type trafficControlLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha2.TrafficControl]
 }
 
 // NewTrafficControlLister returns a new TrafficControlLister.
 func NewTrafficControlLister(indexer cache.Indexer) TrafficControlLister {
-	return &trafficControlLister{indexer: indexer}
-}
-
-// List lists all TrafficControls in the indexer.
-func (s *trafficControlLister) List(selector labels.Selector) (ret []*v1alpha2.TrafficControl, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha2.TrafficControl))
-	})
-	return ret, err
-}
-
-// Get retrieves the TrafficControl from the index for a given name.
-func (s *trafficControlLister) Get(name string) (*v1alpha2.TrafficControl, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha2.Resource("trafficcontrol"), name)
-	}
-	return obj.(*v1alpha2.TrafficControl), nil
+	return &trafficControlLister{listers.New[*v1alpha2.TrafficControl](indexer, v1alpha2.Resource("trafficcontrol"))}
 }

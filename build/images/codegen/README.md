@@ -9,7 +9,7 @@ can run the following:
 ```bash
 cd build/images/codegen
 GO_VERSION=$(head -n 1 ../deps/go-version)
-docker build -t antrea/codegen:<TAG> --build-arg GO_VERSION=$GO_VERSION .
+docker build --pull -t antrea/codegen:<TAG> --build-arg GO_VERSION=$GO_VERSION .
 docker push antrea/codegen:<TAG>
 ```
 
@@ -22,6 +22,7 @@ Here is the table of codegen images that have been uploaded:
 
 | Tag                       | Change                                                                        |
 | :------------------------ | ----------------------------------------------------------------------------- |
+| kubernetes-1.31.1         | Upgraded K8s libraries to v1.31.1 and base image to ubuntu:24.04              |
 | kubernetes-1.29.2-build.3 | Upgraded Go to v1.23                                                          |
 | kubernetes-1.29.2-build.2 | Upgraded go.uber.org/mock/mockgen to v0.4.0                                   |
 | kubernetes-1.29.2-build.1 | Upgraded controller-gen to v0.14.0                                            |

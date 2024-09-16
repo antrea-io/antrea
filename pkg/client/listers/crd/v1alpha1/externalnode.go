@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,25 +36,17 @@ type ExternalNodeLister interface {
 
 // externalNodeLister implements the ExternalNodeLister interface.
 type externalNodeLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.ExternalNode]
 }
 
 // NewExternalNodeLister returns a new ExternalNodeLister.
 func NewExternalNodeLister(indexer cache.Indexer) ExternalNodeLister {
-	return &externalNodeLister{indexer: indexer}
-}
-
-// List lists all ExternalNodes in the indexer.
-func (s *externalNodeLister) List(selector labels.Selector) (ret []*v1alpha1.ExternalNode, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ExternalNode))
-	})
-	return ret, err
+	return &externalNodeLister{listers.New[*v1alpha1.ExternalNode](indexer, v1alpha1.Resource("externalnode"))}
 }
 
 // ExternalNodes returns an object that can list and get ExternalNodes.
 func (s *externalNodeLister) ExternalNodes(namespace string) ExternalNodeNamespaceLister {
-	return externalNodeNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return externalNodeNamespaceLister{listers.NewNamespaced[*v1alpha1.ExternalNode](s.ResourceIndexer, namespace)}
 }
 
 // ExternalNodeNamespaceLister helps list and get ExternalNodes.
@@ -72,26 +64,5 @@ type ExternalNodeNamespaceLister interface {
 // externalNodeNamespaceLister implements the ExternalNodeNamespaceLister
 // interface.
 type externalNodeNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ExternalNodes in the indexer for a given namespace.
-func (s externalNodeNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.ExternalNode, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ExternalNode))
-	})
-	return ret, err
-}
-
-// Get retrieves the ExternalNode from the indexer for a given namespace and name.
-func (s externalNodeNamespaceLister) Get(name string) (*v1alpha1.ExternalNode, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("externalnode"), name)
-	}
-	return obj.(*v1alpha1.ExternalNode), nil
+	listers.ResourceIndexer[*v1alpha1.ExternalNode]
 }

@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1beta1
 
 import (
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -37,30 +37,10 @@ type ClusterGroupLister interface {
 
 // clusterGroupLister implements the ClusterGroupLister interface.
 type clusterGroupLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1beta1.ClusterGroup]
 }
 
 // NewClusterGroupLister returns a new ClusterGroupLister.
 func NewClusterGroupLister(indexer cache.Indexer) ClusterGroupLister {
-	return &clusterGroupLister{indexer: indexer}
-}
-
-// List lists all ClusterGroups in the indexer.
-func (s *clusterGroupLister) List(selector labels.Selector) (ret []*v1beta1.ClusterGroup, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1beta1.ClusterGroup))
-	})
-	return ret, err
-}
-
-// Get retrieves the ClusterGroup from the index for a given name.
-func (s *clusterGroupLister) Get(name string) (*v1beta1.ClusterGroup, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1beta1.Resource("clustergroup"), name)
-	}
-	return obj.(*v1beta1.ClusterGroup), nil
+	return &clusterGroupLister{listers.New[*v1beta1.ClusterGroup](indexer, v1beta1.Resource("clustergroup"))}
 }

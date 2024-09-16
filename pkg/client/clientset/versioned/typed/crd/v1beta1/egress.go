@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,14 +18,13 @@ package v1beta1
 
 import (
 	"context"
-	"time"
 
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // EgressesGetter has a method to return a EgressInterface.
@@ -38,6 +37,7 @@ type EgressesGetter interface {
 type EgressInterface interface {
 	Create(ctx context.Context, egress *v1beta1.Egress, opts v1.CreateOptions) (*v1beta1.Egress, error)
 	Update(ctx context.Context, egress *v1beta1.Egress, opts v1.UpdateOptions) (*v1beta1.Egress, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 	UpdateStatus(ctx context.Context, egress *v1beta1.Egress, opts v1.UpdateOptions) (*v1beta1.Egress, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
@@ -50,133 +50,18 @@ type EgressInterface interface {
 
 // egresses implements EgressInterface
 type egresses struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1beta1.Egress, *v1beta1.EgressList]
 }
 
 // newEgresses returns a Egresses
 func newEgresses(c *CrdV1beta1Client) *egresses {
 	return &egresses{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1beta1.Egress, *v1beta1.EgressList](
+			"egresses",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1beta1.Egress { return &v1beta1.Egress{} },
+			func() *v1beta1.EgressList { return &v1beta1.EgressList{} }),
 	}
-}
-
-// Get takes name of the egress, and returns the corresponding egress object, and an error if there is any.
-func (c *egresses) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.Egress, err error) {
-	result = &v1beta1.Egress{}
-	err = c.client.Get().
-		Resource("egresses").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of Egresses that match those selectors.
-func (c *egresses) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.EgressList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1beta1.EgressList{}
-	err = c.client.Get().
-		Resource("egresses").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested egresses.
-func (c *egresses) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("egresses").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a egress and creates it.  Returns the server's representation of the egress, and an error, if there is any.
-func (c *egresses) Create(ctx context.Context, egress *v1beta1.Egress, opts v1.CreateOptions) (result *v1beta1.Egress, err error) {
-	result = &v1beta1.Egress{}
-	err = c.client.Post().
-		Resource("egresses").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(egress).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a egress and updates it. Returns the server's representation of the egress, and an error, if there is any.
-func (c *egresses) Update(ctx context.Context, egress *v1beta1.Egress, opts v1.UpdateOptions) (result *v1beta1.Egress, err error) {
-	result = &v1beta1.Egress{}
-	err = c.client.Put().
-		Resource("egresses").
-		Name(egress.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(egress).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *egresses) UpdateStatus(ctx context.Context, egress *v1beta1.Egress, opts v1.UpdateOptions) (result *v1beta1.Egress, err error) {
-	result = &v1beta1.Egress{}
-	err = c.client.Put().
-		Resource("egresses").
-		Name(egress.Name).
-		SubResource("status").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(egress).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the egress and deletes it. Returns an error if one occurs.
-func (c *egresses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	return c.client.Delete().
-		Resource("egresses").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *egresses) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Resource("egresses").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched egress.
-func (c *egresses) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.Egress, err error) {
-	result = &v1beta1.Egress{}
-	err = c.client.Patch(pt).
-		Resource("egresses").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

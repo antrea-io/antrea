@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1beta1
 
 import (
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -37,30 +37,10 @@ type ExternalIPPoolLister interface {
 
 // externalIPPoolLister implements the ExternalIPPoolLister interface.
 type externalIPPoolLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1beta1.ExternalIPPool]
 }
 
 // NewExternalIPPoolLister returns a new ExternalIPPoolLister.
 func NewExternalIPPoolLister(indexer cache.Indexer) ExternalIPPoolLister {
-	return &externalIPPoolLister{indexer: indexer}
-}
-
-// List lists all ExternalIPPools in the indexer.
-func (s *externalIPPoolLister) List(selector labels.Selector) (ret []*v1beta1.ExternalIPPool, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1beta1.ExternalIPPool))
-	})
-	return ret, err
-}
-
-// Get retrieves the ExternalIPPool from the index for a given name.
-func (s *externalIPPoolLister) Get(name string) (*v1beta1.ExternalIPPool, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1beta1.Resource("externalippool"), name)
-	}
-	return obj.(*v1beta1.ExternalIPPool), nil
+	return &externalIPPoolLister{listers.New[*v1beta1.ExternalIPPool](indexer, v1beta1.Resource("externalippool"))}
 }

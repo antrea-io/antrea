@@ -35,10 +35,11 @@ var nodestatssummariesKind = v1beta2.SchemeGroupVersion.WithKind("NodeStatsSumma
 
 // Create takes the representation of a nodeStatsSummary and creates it.  Returns the server's representation of the nodeStatsSummary, and an error, if there is any.
 func (c *FakeNodeStatsSummaries) Create(ctx context.Context, nodeStatsSummary *v1beta2.NodeStatsSummary, opts v1.CreateOptions) (result *v1beta2.NodeStatsSummary, err error) {
+	emptyResult := &v1beta2.NodeStatsSummary{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(nodestatssummariesResource, nodeStatsSummary), &v1beta2.NodeStatsSummary{})
+		Invokes(testing.NewRootCreateActionWithOptions(nodestatssummariesResource, nodeStatsSummary, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta2.NodeStatsSummary), err
 }

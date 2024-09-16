@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -37,30 +37,10 @@ type SupportBundleCollectionLister interface {
 
 // supportBundleCollectionLister implements the SupportBundleCollectionLister interface.
 type supportBundleCollectionLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.SupportBundleCollection]
 }
 
 // NewSupportBundleCollectionLister returns a new SupportBundleCollectionLister.
 func NewSupportBundleCollectionLister(indexer cache.Indexer) SupportBundleCollectionLister {
-	return &supportBundleCollectionLister{indexer: indexer}
-}
-
-// List lists all SupportBundleCollections in the indexer.
-func (s *supportBundleCollectionLister) List(selector labels.Selector) (ret []*v1alpha1.SupportBundleCollection, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.SupportBundleCollection))
-	})
-	return ret, err
-}
-
-// Get retrieves the SupportBundleCollection from the index for a given name.
-func (s *supportBundleCollectionLister) Get(name string) (*v1alpha1.SupportBundleCollection, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("supportbundlecollection"), name)
-	}
-	return obj.(*v1alpha1.SupportBundleCollection), nil
+	return &supportBundleCollectionLister{listers.New[*v1alpha1.SupportBundleCollection](indexer, v1alpha1.Resource("supportbundlecollection"))}
 }

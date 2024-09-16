@@ -129,7 +129,8 @@ function generate_antrea_client_code {
     --input "crd/v1alpha2" \
     --input "crd/v1beta1" \
     --input "stats/v1alpha1" \
-    --output-package "${ANTREA_PKG}/pkg/client/clientset" \
+    --output-dir "pkg/client/clientset" \
+    --output-pkg "${ANTREA_PKG}/pkg/client/clientset" \
     --plural-exceptions "NetworkPolicyStats:NetworkPolicyStats" \
     --plural-exceptions "AntreaNetworkPolicyStats:AntreaNetworkPolicyStats" \
     --plural-exceptions "AntreaClusterNetworkPolicyStats:AntreaClusterNetworkPolicyStats" \
@@ -140,50 +141,56 @@ function generate_antrea_client_code {
 
   # Generate listers with K8s codegen tools.
   $GOPATH/bin/lister-gen \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
-    --output-package "${ANTREA_PKG}/pkg/client/listers" \
-    --go-header-file hack/boilerplate/license_header.go.txt
+    --output-dir "pkg/client/listers" \
+    --output-pkg "${ANTREA_PKG}/pkg/client/listers" \
+    --go-header-file hack/boilerplate/license_header.go.txt \
+    "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
+    "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
+    "${ANTREA_PKG}/pkg/apis/crd/v1beta1"
 
   # Generate informers with K8s codegen tools.
   $GOPATH/bin/informer-gen \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
     --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
     --listers-package "${ANTREA_PKG}/pkg/client/listers" \
-    --output-package "${ANTREA_PKG}/pkg/client/informers" \
-    --go-header-file hack/boilerplate/license_header.go.txt
+    --output-dir "pkg/client/informers" \
+    --output-pkg "${ANTREA_PKG}/pkg/client/informers" \
+    --go-header-file hack/boilerplate/license_header.go.txt \
+    "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
+    "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
+    "${ANTREA_PKG}/pkg/apis/crd/v1beta1"
 
   $GOPATH/bin/deepcopy-gen \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/stats" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
-    -O zz_generated.deepcopy \
-    --go-header-file hack/boilerplate/license_header.go.txt
+    --output-file zz_generated.deepcopy.go \
+    --go-header-file hack/boilerplate/license_header.go.txt \
+     "${ANTREA_PKG}/pkg/apis/controlplane" \
+     "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
+     "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
+     "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
+     "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
+     "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+     "${ANTREA_PKG}/pkg/apis/stats" \
+     "${ANTREA_PKG}/pkg/apis/stats/v1alpha1"
 
   $GOPATH/bin/conversion-gen  \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2,${ANTREA_PKG}/pkg/apis/controlplane/" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/stats/" \
-    -O zz_generated.conversion \
-    --go-header-file hack/boilerplate/license_header.go.txt
+    --output-file zz_generated.conversion.go \
+    --go-header-file hack/boilerplate/license_header.go.txt \
+    "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
+    "${ANTREA_PKG}/pkg/apis/controlplane" \
+    "${ANTREA_PKG}/pkg/apis/stats/v1alpha1"
 
   $GOPATH/bin/openapi-gen  \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
-    --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr" \
-    --input-dirs "k8s.io/api/core/v1" \
-    --output-package "${ANTREA_PKG}/pkg/apiserver/openapi" \
-    -O zz_generated.openapi \
-    --go-header-file hack/boilerplate/license_header.go.txt
+    --output-dir "pkg/apiserver/openapi" \
+    --output-pkg "${ANTREA_PKG}/pkg/apiserver/openapi" \
+    --output-file zz_generated.openapi.go \
+    --go-header-file hack/boilerplate/license_header.go.txt \
+     "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
+     "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
+     "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
+     "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+     "k8s.io/apimachinery/pkg/apis/meta/v1" \
+     "k8s.io/apimachinery/pkg/runtime" \
+     "k8s.io/apimachinery/pkg/util/intstr" \
+     "k8s.io/api/core/v1"
 }
 
 generate_antrea_client_code
@@ -197,9 +204,14 @@ export GOFLAGS="-mod=mod"
 go mod vendor
 PACKAGES="${ANTREA_PKG}/pkg/apis/stats/v1alpha1=${ANTREA_PROTO_PKG}.pkg.apis.stats.v1alpha1,\
 ${ANTREA_PKG}/pkg/apis/controlplane/v1beta2=${ANTREA_PROTO_PKG}.pkg.apis.controlplane.v1beta2"
+# Ask go-to-protobuf not to generate apimachinery types ("-" sign before the
+# package name), as we only want to generate our own types. The command fails
+# without this, as there is no /go/src/k8s.io folder.
 $GOPATH/bin/go-to-protobuf \
+  --output-dir="/go/src" \
   --proto-import vendor \
   --packages "${PACKAGES}" \
+  --apimachinery-packages "-k8s.io/apimachinery/pkg/util/intstr,-k8s.io/apimachinery/pkg/api/resource,-k8s.io/apimachinery/pkg/runtime/schema,-k8s.io/apimachinery/pkg/runtime,-k8s.io/apimachinery/pkg/apis/meta/v1,-k8s.io/apimachinery/pkg/apis/meta/v1beta1,-k8s.io/apimachinery/pkg/apis/testapigroup/v1" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 rm -rf vendor
