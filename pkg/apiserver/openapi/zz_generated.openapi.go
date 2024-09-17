@@ -1701,6 +1701,12 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref common.Ref
 							Format:      "",
 						},
 					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
 					"request": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest"),
@@ -1715,7 +1721,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref common.Ref
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse"},
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 

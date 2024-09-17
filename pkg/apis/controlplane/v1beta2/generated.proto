@@ -296,6 +296,8 @@ message NetworkPolicy {
 
 // NetworkPolicyEvaluation contains the request and response for a NetworkPolicy evaluation.
 message NetworkPolicyEvaluation {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 3;
+
   optional NetworkPolicyEvaluationRequest request = 1;
 
   optional NetworkPolicyEvaluationResponse response = 2;
