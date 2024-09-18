@@ -76,6 +76,8 @@ const dummyKey = "dummyKey"
 type bgpPolicyState struct {
 	// The local BGP server.
 	bgpServer bgp.Interface
+	// name of the BGP policy.
+	bgpPolicyName string
 	// The port on which the local BGP server listens.
 	listenPort int32
 	// The AS number used by the local BGP server.
@@ -112,7 +114,8 @@ type Controller struct {
 
 	secretInformer cache.SharedIndexInformer
 
-	bgpPolicyState *bgpPolicyState
+	bgpPolicyState      *bgpPolicyState
+	bgpPolicyStateMutex sync.RWMutex
 
 	k8sClient             kubernetes.Interface
 	bgpPeerPasswords      map[string]string
@@ -306,6 +309,9 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 	// Get the oldest BGPPolicy applied to the current Node as the effective BGPPolicy.
 	effectivePolicy := c.getEffectiveBGPPolicy()
 
+	c.bgpPolicyStateMutex.Lock()
+	defer c.bgpPolicyStateMutex.Unlock()
+
 	// When the effective BGPPolicy is nil, it means that there is no available BGPPolicy.
 	if effectivePolicy == nil {
 		// If the BGPPolicy state is nil, just return.
@@ -322,17 +328,18 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 	}
 
 	klog.V(2).InfoS("Syncing BGPPolicy", "BGPPolicy", klog.KObj(effectivePolicy))
-	// Retrieve the listen port, local AS number and router ID from the effective BGPPolicy, and update them to the
+	// Retrieve the BGP policy name, listen port, local AS number and router ID from the effective BGPPolicy, and update them to the
 	// current state.
 	routerID, err := c.getRouterID()
 	if err != nil {
 		return err
 	}
+	bgpPolicyName := effectivePolicy.Name
 	listenPort := *effectivePolicy.Spec.ListenPort
 	localASN := effectivePolicy.Spec.LocalASN
 
 	// If the BGPPolicy state is nil, a new BGP server should be started, initialize the BGPPolicy state to store the
-	// new BGP server, listen port, local ASN, and router ID.
+	// new BGP server, BGP policy name, listen port, local ASN, and router ID.
 	// If the BGPPolicy is not nil, any of the listen port, local AS number, or router ID have changed, stop the current
 	// BGP server first and reset the BGPPolicy state to nil; then start a new BGP server and initialize the BGPPolicy
 	// state to store the new BGP server, listen port, local ASN, and router ID.
@@ -363,15 +370,19 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 			return fmt.Errorf("failed to start BGP server: %w", err)
 		}
 
-		// Initialize the BGPPolicy state to store the new BGP server, listen port, local ASN, and router ID.
+		// Initialize the BGPPolicy state to store the new BGP server, BGP policy name, listen port, local ASN, and router ID.
 		c.bgpPolicyState = &bgpPolicyState{
-			bgpServer:   bgpServer,
-			routerID:    routerID,
-			listenPort:  listenPort,
-			localASN:    localASN,
-			routes:      make(sets.Set[bgp.Route]),
-			peerConfigs: make(map[string]bgp.PeerConfig),
+			bgpServer:     bgpServer,
+			bgpPolicyName: bgpPolicyName,
+			routerID:      routerID,
+			listenPort:    listenPort,
+			localASN:      localASN,
+			routes:        make(sets.Set[bgp.Route]),
+			peerConfigs:   make(map[string]bgp.PeerConfig),
 		}
+	} else if c.bgpPolicyState.bgpPolicyName != bgpPolicyName {
+		// It may happen that only BGP policy name has changed in effective BGP policy.
+		c.bgpPolicyState.bgpPolicyName = bgpPolicyName
 	}
 
 	// Reconcile BGP peers.
@@ -930,4 +941,21 @@ func (c *Controller) updateBGPPeerPasswords(secret *corev1.Secret) {
 			c.bgpPeerPasswords[k] = string(v)
 		}
 	}
+}
+
+// GetBGPPolicyInfo returns Name, RouterID, LocalASN and ListenPort of effective BGP Policy applied on the Node.
+func (c *Controller) GetBGPPolicyInfo() (string, string, int32, int32) {
+	var name, routerID string
+	var localASN, listenPort int32
+
+	c.bgpPolicyStateMutex.RLock()
+	defer c.bgpPolicyStateMutex.RUnlock()
+
+	if c.bgpPolicyState != nil {
+		name = c.bgpPolicyState.bgpPolicyName
+		routerID = c.bgpPolicyState.routerID
+		localASN = c.bgpPolicyState.localASN
+		listenPort = c.bgpPolicyState.listenPort
+	}
+	return name, routerID, localASN, listenPort
 }

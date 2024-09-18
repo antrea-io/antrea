@@ -79,7 +79,7 @@ current-context: cluster
 	// InClusterLookup is skipped when testing, otherwise it would always fail as there is no real cluster.
 	authentication.SkipInClusterLookup = true
 	authorization := options.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz", "/livez", "/readyz")
-	apiServer, err := New(agentQuerier, npQuerier, nil, nil, secureServing, authentication, authorization, true, kubeConfigPath, tokenPath, true, true)
+	apiServer, err := New(agentQuerier, npQuerier, nil, nil, nil, secureServing, authentication, authorization, true, kubeConfigPath, tokenPath, true, true)
 	require.NoError(t, err)
 	fakeAPIServer := &fakeAgentAPIServer{
 		agentAPIServer: apiServer,

@@ -639,6 +639,19 @@ $ antctl get podmulticaststats pod -n namespace`,
 			},
 			transformedResponse: reflect.TypeOf(agentapis.MemberlistResponse{}),
 		},
+		{
+			use:   "bgppolicy",
+			short: "Print effective bgppolicy information",
+			long:  "Print effective bgppolicy information including name, local ASN, router ID and listen port",
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:       "/bgppolicy",
+					outputType: single,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(agentapis.BGPPolicyResponse{}),
+		},
 	},
 	rawCommands: []rawCommand{
 		{
