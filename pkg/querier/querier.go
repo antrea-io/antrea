@@ -138,3 +138,8 @@ var NamespaceScopedPolicyTypes = sets.New[string]("ANNP", "K8SNP")
 type ServiceExternalIPStatusQuerier interface {
 	GetServiceExternalIPStatus() []apis.ServiceExternalIPInfo
 }
+
+type AgentBGPPolicyInfoQuerier interface {
+	// GetBGPPolicyInfo returns Name, RouterID, LocalASN and ListenPort of effective BGP Policy applied on the Node.
+	GetBGPPolicyInfo() (string, string, int32, int32)
+}

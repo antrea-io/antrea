@@ -40,6 +40,7 @@ running in three different modes:
   - [Multi-cluster commands](#multi-cluster-commands)
   - [Multicast commands](#multicast-commands)
   - [Showing memberlist state](#showing-memberlist-state)
+  - [BGP commands](#bgp-commands)
   - [Upgrade existing objects of CRDs](#upgrade-existing-objects-of-crds)
 <!-- /toc -->
 
@@ -754,6 +755,18 @@ NODE    IP         STATUS
 worker1 172.18.0.4 Alive 
 worker2 172.18.0.3 Alive 
 worker3 172.18.0.2 Dead
+```
+
+### BGP commands
+
+`antctl` agent command `get bgppolicy` prints the effective BGP policy applied on the local Node.
+It includes the name, local ASN, router ID and listen port of the effective BGP policy.
+
+```bash
+$ antctl get bgppolicy
+
+NAME               ROUTER-ID  LOCAL-ASN LISTEN-PORT
+example-bgp-policy 172.18.0.2 64512     179
 ```
 
 ### Upgrade existing objects of CRDs

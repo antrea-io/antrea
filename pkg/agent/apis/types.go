@@ -190,3 +190,23 @@ func (r ServiceExternalIPInfo) GetTableRow(_ int) []string {
 func (r ServiceExternalIPInfo) SortRows() bool {
 	return true
 }
+
+// BGPPolicyResponse describes the response struct of bgppolicy command.
+type BGPPolicyResponse struct {
+	BGPPolicyName string `json:"name,omitempty"`
+	RouterID      string `json:"routerID,omitempty"`
+	LocalASN      int32  `json:"localASN,omitempty"`
+	ListenPort    int32  `json:"listenPort,omitempty"`
+}
+
+func (r BGPPolicyResponse) GetTableHeader() []string {
+	return []string{"NAME", "ROUTER-ID", "LOCAL-ASN", "LISTEN-PORT"}
+}
+
+func (r BGPPolicyResponse) GetTableRow(_ int) []string {
+	return []string{r.BGPPolicyName, r.RouterID, strconv.Itoa(int(r.LocalASN)), strconv.Itoa(int(r.ListenPort))}
+}
+
+func (r BGPPolicyResponse) SortRows() bool {
+	return true
+}
