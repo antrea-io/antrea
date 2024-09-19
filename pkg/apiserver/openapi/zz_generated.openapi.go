@@ -1701,6 +1701,13 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref common.Ref
 							Format:      "",
 						},
 					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ObjectMeta was omitted by mistake when this type was first defined, and was added later on. To ensure backwards-compatibility, we had to use Protobuf field number 3 when adding the field, as 1 was already taken by the request field. This is unusual, as K8s API types always use 1 as the Protobuf field number for the metadata field, and that's also what we do for all other Antrea API types. It should only affect the wire format, and nothing else. When a new version of this API is introduced in the future (e.g., v1), we can correct this and assign 1 as the Protobuf field number for the metadata field.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
 					"request": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest"),
@@ -1715,7 +1722,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref common.Ref
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse"},
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 

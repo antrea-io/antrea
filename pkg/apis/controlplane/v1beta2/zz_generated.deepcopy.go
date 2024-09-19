@@ -845,6 +845,7 @@ func (in *NetworkPolicy) DeepCopyObject() runtime.Object {
 func (in *NetworkPolicyEvaluation) DeepCopyInto(out *NetworkPolicyEvaluation) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	if in.Request != nil {
 		in, out := &in.Request, &out.Request
 		*out = new(NetworkPolicyEvaluationRequest)

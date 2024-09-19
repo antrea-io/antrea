@@ -1198,6 +1198,7 @@ func Convert_controlplane_NetworkPolicy_To_v1beta2_NetworkPolicy(in *controlplan
 }
 
 func autoConvert_v1beta2_NetworkPolicyEvaluation_To_controlplane_NetworkPolicyEvaluation(in *NetworkPolicyEvaluation, out *controlplane.NetworkPolicyEvaluation, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
 	out.Request = (*controlplane.NetworkPolicyEvaluationRequest)(unsafe.Pointer(in.Request))
 	out.Response = (*controlplane.NetworkPolicyEvaluationResponse)(unsafe.Pointer(in.Response))
 	return nil
@@ -1209,6 +1210,7 @@ func Convert_v1beta2_NetworkPolicyEvaluation_To_controlplane_NetworkPolicyEvalua
 }
 
 func autoConvert_controlplane_NetworkPolicyEvaluation_To_v1beta2_NetworkPolicyEvaluation(in *controlplane.NetworkPolicyEvaluation, out *NetworkPolicyEvaluation, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
 	out.Request = (*NetworkPolicyEvaluationRequest)(unsafe.Pointer(in.Request))
 	out.Response = (*NetworkPolicyEvaluationResponse)(unsafe.Pointer(in.Response))
 	return nil
