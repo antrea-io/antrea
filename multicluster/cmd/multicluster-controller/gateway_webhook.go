@@ -40,7 +40,7 @@ const (
 // Gateway validator
 type gatewayValidator struct {
 	Client    client.Client
-	decoder   *admission.Decoder
+	decoder   admission.Decoder
 	namespace string
 }
 

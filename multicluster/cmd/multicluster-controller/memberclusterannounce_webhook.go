@@ -37,7 +37,7 @@ import (
 
 type memberClusterAnnounceValidator struct {
 	Client    client.Client
-	decoder   *admission.Decoder
+	decoder   admission.Decoder
 	namespace string
 }
 
