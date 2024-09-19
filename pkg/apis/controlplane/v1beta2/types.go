@@ -458,8 +458,16 @@ type NetworkPolicyNodeStatus struct {
 // NetworkPolicyEvaluation contains the request and response for a NetworkPolicy evaluation.
 type NetworkPolicyEvaluation struct {
 	metav1.TypeMeta `json:",inline"`
-	Request         *NetworkPolicyEvaluationRequest  `json:"request,omitempty" protobuf:"bytes,1,opt,name=request"`
-	Response        *NetworkPolicyEvaluationResponse `json:"response,omitempty" protobuf:"bytes,2,opt,name=response"`
+	// ObjectMeta was omitted by mistake when this type was first defined, and was added later on.
+	// To ensure backwards-compatibility, we had to use Protobuf field number 3 when adding the
+	// field, as 1 was already taken by the request field. This is unusual, as K8s API types
+	// always use 1 as the Protobuf field number for the metadata field, and that's also what we
+	// do for all other Antrea API types. It should only affect the wire format, and nothing else.
+	// When a new version of this API is introduced in the future (e.g., v1), we can correct
+	// this and assign 1 as the Protobuf field number for the metadata field.
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,3,opt,name=metadata"`
+	Request           *NetworkPolicyEvaluationRequest  `json:"request,omitempty" protobuf:"bytes,1,opt,name=request"`
+	Response          *NetworkPolicyEvaluationResponse `json:"response,omitempty" protobuf:"bytes,2,opt,name=response"`
 }
 
 // Entity contains Namespace and Pod name as a request parameter.

@@ -453,6 +453,7 @@ type NetworkPolicyNodeStatus struct {
 // NetworkPolicyEvaluation contains the request and response for a NetworkPolicy evaluation.
 type NetworkPolicyEvaluation struct {
 	metav1.TypeMeta
+	metav1.ObjectMeta
 	Request  *NetworkPolicyEvaluationRequest
 	Response *NetworkPolicyEvaluationResponse
 }
