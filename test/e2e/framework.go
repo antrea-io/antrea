@@ -219,7 +219,6 @@ type TestOptions struct {
 
 	externalAgnhostIPs string
 	vlanSubnets        string
-	vlanID             int
 
 	externalFRRIPs string
 	// FRR cannot currently be configured remotely over networking. As a result, the e2e tests for BGPPolicy can only
@@ -525,24 +524,32 @@ func (data *TestData) collectExternalInfo() error {
 		}
 	}
 
-	subnets := strings.Split(testOptions.vlanSubnets, ",")
-	for _, subnet := range subnets {
-		if subnet == "" {
-			continue
-		}
-		gatewayIP, _, err := net.ParseCIDR(subnet)
+	vlanSubnetsList := strings.Split(testOptions.vlanSubnets, "=")
+	vlanIDStr := vlanSubnetsList[0]
+	if vlanIDStr != "" {
+		vlanID, err := strconv.Atoi(vlanIDStr)
 		if err != nil {
-			return fmt.Errorf("invalid vlan subnet %s: %w", subnet, err)
+			return fmt.Errorf("invalid vlan id %s: %w", vlanIDStr, err)
 		}
-		if gatewayIP.To4() != nil {
-			externalInfo.vlanSubnetIPv4 = subnet
-			externalInfo.vlanGatewayIPv4 = gatewayIP.String()
-		} else {
-			externalInfo.vlanSubnetIPv6 = subnet
-			externalInfo.vlanGatewayIPv6 = gatewayIP.String()
+		externalInfo.vlanID = vlanID
+		subnets := strings.Split(vlanSubnetsList[1], ",")
+		for _, subnet := range subnets {
+			if subnet == "" {
+				continue
+			}
+			gatewayIP, _, err := net.ParseCIDR(subnet)
+			if err != nil {
+				return fmt.Errorf("invalid vlan subnet %s: %w", subnet, err)
+			}
+			if gatewayIP.To4() != nil {
+				externalInfo.vlanSubnetIPv4 = subnet
+				externalInfo.vlanGatewayIPv4 = gatewayIP.String()
+			} else {
+				externalInfo.vlanSubnetIPv6 = subnet
+				externalInfo.vlanGatewayIPv6 = gatewayIP.String()
+			}
 		}
 	}
-	externalInfo.vlanID = testOptions.vlanID
 
 	frrIPs := strings.Split(testOptions.externalFRRIPs, ",")
 	for _, ip := range frrIPs {
