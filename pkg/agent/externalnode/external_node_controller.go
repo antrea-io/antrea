@@ -79,7 +79,7 @@ type ExternalNodeController struct {
 	externalNodeInformer     cache.SharedIndexInformer
 	externalNodeLister       enlister.ExternalNodeLister
 	externalNodeListerSynced cache.InformerSynced
-	queue                    workqueue.RateLimitingInterface
+	queue                    workqueue.TypedRateLimitingInterface[string]
 	ifaceStore               interfacestore.InterfaceStore
 	syncedExternalNode       *v1alpha1.ExternalNode
 	// externalEntityUpdateNotifier is used for notifying ExternalEntity updates to NetworkPolicyController.
@@ -92,13 +92,18 @@ type ExternalNodeController struct {
 func NewExternalNodeController(ovsBridgeClient ovsconfig.OVSBridgeClient, ofClient openflow.Client, externalNodeInformer cache.SharedIndexInformer,
 	ifaceStore interfacestore.InterfaceStore, externalEntityUpdateNotifier channel.Notifier, externalNodeNamespace string, policyBypassRules []agentConfig.PolicyBypassRule) (*ExternalNodeController, error) {
 	c := &ExternalNodeController{
-		ovsBridgeClient:              ovsBridgeClient,
-		ovsctlClient:                 ovsctl.NewClient(ovsBridgeClient.GetBridgeName()),
-		ofClient:                     ofClient,
-		externalNodeInformer:         externalNodeInformer,
-		externalNodeLister:           enlister.NewExternalNodeLister(externalNodeInformer.GetIndexer()),
-		externalNodeListerSynced:     externalNodeInformer.HasSynced,
-		queue:                        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "externalNode"),
+		ovsBridgeClient:          ovsBridgeClient,
+		ovsctlClient:             ovsctl.NewClient(ovsBridgeClient.GetBridgeName()),
+		ofClient:                 ofClient,
+		externalNodeInformer:     externalNodeInformer,
+		externalNodeLister:       enlister.NewExternalNodeLister(externalNodeInformer.GetIndexer()),
+		externalNodeListerSynced: externalNodeInformer.HasSynced,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "externalNode",
+			},
+		),
 		ifaceStore:                   ifaceStore,
 		externalEntityUpdateNotifier: externalEntityUpdateNotifier,
 		policyBypassRules:            policyBypassRules,
@@ -218,17 +223,13 @@ func (c *ExternalNodeController) worker() {
 }
 
 func (c *ExternalNodeController) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	if key, ok := obj.(string); !ok {
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string type in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncExternalNode(key); err == nil {
+	if err := c.syncExternalNode(key); err == nil {
 		// If no error occurs, then forget this item so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)

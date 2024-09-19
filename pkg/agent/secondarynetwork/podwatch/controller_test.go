@@ -911,9 +911,12 @@ func testPodController(ctrl *gomock.Controller) (
 	return &PodController{
 		kubeClient:         client,
 		netAttachDefClient: netdefclient,
-		queue: workqueue.NewNamedRateLimitingQueue(
-			workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay),
-			"podcontroller"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "podcontroller",
+			},
+		),
 		podInformer:           informerFactory.Core().V1().Pods().Informer(),
 		interfaceConfigurator: interfaceConfigurator,
 		ipamAllocator:         mockIPAM,

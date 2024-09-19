@@ -131,7 +131,7 @@ type Cluster struct {
 	externalIPPoolInformerHasSynced cache.InformerSynced
 
 	// queue maintains the ExternalIPPool names that need to be synced.
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 }
 
 // NewCluster returns a new *Cluster.
@@ -157,7 +157,12 @@ func NewCluster(
 		externalIPPoolInformer:          externalIPPoolInformer.Informer(),
 		externalIPPoolLister:            externalIPPoolInformer.Lister(),
 		externalIPPoolInformerHasSynced: externalIPPoolInformer.Informer().HasSynced,
-		queue:                           workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "externalIPPool"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "externalIPPool",
+			},
+		),
 	}
 
 	if ml == nil {
@@ -409,21 +414,13 @@ func (c *Cluster) worker() {
 }
 
 func (c *Cluster) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	// We expect strings (ExternalIPPool name) to come off the work queue.
-	if key, ok := obj.(string); !ok {
-		// As the item in the work queue is actually invalid, we call Forget here else we'd
-		// go into a loop of attempting to process a work item that is invalid.
-		// This should not happen.
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncConsistentHash(key); err == nil {
+	if err := c.syncConsistentHash(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)

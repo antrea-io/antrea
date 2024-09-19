@@ -62,7 +62,7 @@ type selfSignedCertProvider struct {
 
 	listeners []dynamiccertificates.Listener
 	// queue only ever has one item, but it has nice error handling backoff/retry semantics
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 
 	// mutex protects the fields following it.
 	mutex sync.RWMutex
@@ -100,10 +100,15 @@ func newSelfSignedCertProvider(client kubernetes.Interface, secureServing *optio
 	secureServing.ServerCert.CertKey.KeyFile = filepath.Join(caConfig.SelfSignedCertDir, caConfig.PairName+".key")
 
 	provider := &selfSignedCertProvider{
-		client:                    client,
-		secureServing:             secureServing,
-		caConfig:                  caConfig,
-		queue:                     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "selfSignedCertProvider"),
+		client:        client,
+		secureServing: secureServing,
+		caConfig:      caConfig,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "selfSignedCertProvider",
+			},
+		),
 		clock:                     clockutils.RealClock{},
 		generateSelfSignedCertKey: certutil.GenerateSelfSignedCertKey,
 	}

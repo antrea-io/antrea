@@ -55,7 +55,7 @@ type Discoverer struct {
 	serviceIPv6CIDR *net.IPNet
 	eventHandlers   []EventHandler
 	// queue maintains the Service objects that need to be synced.
-	queue workqueue.Interface
+	queue workqueue.TypedInterface[types.NamespacedName]
 	// initialized indicates whether the Discoverer has been initialized.
 	initialized bool
 }
@@ -64,7 +64,7 @@ func NewServiceCIDRDiscoverer(serviceInformer coreinformers.ServiceInformer) *Di
 	d := &Discoverer{
 		serviceInformer: serviceInformer.Informer(),
 		serviceLister:   serviceInformer.Lister(),
-		queue:           workqueue.New(),
+		queue:           workqueue.NewTyped[types.NamespacedName](),
 	}
 	d.serviceInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -89,18 +89,17 @@ func (d *Discoverer) Run(stopCh <-chan struct{}) {
 
 	go func() {
 		for {
-			obj, quit := d.queue.Get()
+			nn, quit := d.queue.Get()
 			if quit {
 				return
 			}
-			nn := obj.(types.NamespacedName)
 
 			svc, _ := d.serviceLister.Services(nn.Namespace).Get(nn.Name)
 			// Ignore it if not found.
 			if svc != nil {
 				d.updateServiceCIDR(svc)
 			}
-			d.queue.Done(obj)
+			d.queue.Done(nn)
 		}
 	}()
 	<-stopCh

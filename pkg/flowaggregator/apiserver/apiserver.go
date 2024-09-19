@@ -15,6 +15,7 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -63,8 +64,8 @@ type flowAggregatorAPIServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
 }
 
-func (s *flowAggregatorAPIServer) Run(stopCh <-chan struct{}) error {
-	return s.GenericAPIServer.PrepareRun().Run(stopCh)
+func (s *flowAggregatorAPIServer) Run(ctx context.Context) error {
+	return s.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
 
 func installHandlers(s *genericapiserver.GenericAPIServer, faq querier.FlowAggregatorQuerier) {

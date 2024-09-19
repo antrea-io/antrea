@@ -240,7 +240,7 @@ func TestIdAllocatorWorker(t *testing.T) {
 			fakeClock := newFakeClock(startTime)
 			minAsyncDeleteInterval = testMinAsyncDeleteInterval
 			testAsyncDeleteInterval = tt.testAsyncDeleteInterval
-			a := newIDAllocatorWithCustomClock(fakeClock, testAsyncDeleteInterval, tt.args...)
+			a := newIDAllocatorWithClock(testAsyncDeleteInterval, fakeClock, tt.args...)
 			require.NoError(t, a.allocateForRule(tt.rule), "Error allocating ID for rule")
 			stopCh := make(chan struct{})
 			defer close(stopCh)

@@ -113,7 +113,7 @@ type Controller struct {
 	externalNodeListerSynced            cache.InformerSynced
 
 	// queue maintains the ExternalNode objects that need to be synced.
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 
 	// supportBundleCollectionStore is the storage where the populated internal support bundle collections are stored.
 	supportBundleCollectionStore storage.Interface
@@ -146,8 +146,13 @@ func NewSupportBundleCollectionController(
 		nodeListerSynced:                    nodeInformer.Informer().HasSynced,
 		externalNodeLister:                  externalNodeInformer.Lister(),
 		externalNodeListerSynced:            externalNodeInformer.Informer().HasSynced,
-		queue:                               workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "supportBundleCollection"),
-		supportBundleCollectionStore:        supportBundleCollectionStore,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "supportBundleCollection",
+			},
+		),
+		supportBundleCollectionStore: supportBundleCollectionStore,
 		supportBundleCollectionAppliedToStore: cache.NewIndexer(getSupportBundleCollectionKey, cache.Indexers{
 			processingNodesIndex:         processingNodesIndexFunc,
 			processingExternalNodesIndex: processingExternalNodesIndexFunc,
@@ -278,17 +283,13 @@ func (c *Controller) worker() {
 }
 
 func (c *Controller) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	if key, ok := obj.(string); !ok {
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string in SupportBundleCollection work queue but got %#v", obj)
-		return true
-	} else if err := c.syncSupportBundleCollection(key); err == nil {
+	if err := c.syncSupportBundleCollection(key); err == nil {
 		// If no error occurs we Forget this item, so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)

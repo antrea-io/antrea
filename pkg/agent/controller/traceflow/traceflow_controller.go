@@ -101,7 +101,7 @@ type Controller struct {
 	networkConfig          *config.NetworkConfig
 	nodeConfig             *config.NodeConfig
 	serviceCIDR            *net.IPNet // K8s Service ClusterIP CIDR
-	queue                  workqueue.RateLimitingInterface
+	queue                  workqueue.TypedRateLimitingInterface[string]
 	runningTraceflowsMutex sync.RWMutex
 	// runningTraceflows is a map for storing the running Traceflow state
 	// with dataplane tag to be the key.
@@ -137,9 +137,14 @@ func NewTraceflowController(
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
 		serviceCIDR:           serviceCIDR,
-		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "traceflow"),
-		runningTraceflows:     make(map[int8]*traceflowState),
-		enableAntreaProxy:     enableAntreaProxy,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "traceflow",
+			},
+		),
+		runningTraceflows: make(map[int8]*traceflowState),
+		enableAntreaProxy: enableAntreaProxy,
 	}
 
 	// Add handlers for Traceflow events.
@@ -219,7 +224,7 @@ func (c *Controller) worker() {
 // until we get notified of a new change. This function returns false if and only if the work queue
 // was shutdown (no more items will be processed).
 func (c *Controller) processTraceflowItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
@@ -227,17 +232,9 @@ func (c *Controller) processTraceflowItem() bool {
 	// must remember to call Forget if we do not want this work item being re-queued. For
 	// example, we do not call Forget if a transient error occurs, instead the item is put back
 	// on the workqueue and attempted again after a back-off period.
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	// We expect strings (Traceflow name) to come off the workqueue.
-	if key, ok := obj.(string); !ok {
-		// As the item in the workqueue is actually invalid, we call Forget here else we'd
-		// go into a loop of attempting to process a work item that is invalid.
-		// This should not happen: enqueueTraceflow only enqueues strings.
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncTraceflow(key); err == nil {
+	if err := c.syncTraceflow(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again.
 		c.queue.Forget(key)
 	} else {

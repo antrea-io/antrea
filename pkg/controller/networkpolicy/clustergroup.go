@@ -187,8 +187,7 @@ func (c *NetworkPolicyController) processNextInternalGroupWorkItem() bool {
 	}
 	defer c.internalGroupQueue.Done(key)
 
-	err := c.syncInternalGroup(key.(string))
-	if err != nil {
+	if err := c.syncInternalGroup(key); err != nil {
 		// Put the item back in the workqueue to handle any transient errors.
 		c.internalGroupQueue.AddRateLimited(key)
 		klog.Errorf("Failed to sync internal Group %s: %v", key, err)

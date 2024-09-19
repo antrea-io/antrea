@@ -372,7 +372,12 @@ func TestAddSupportBundleCollection(t *testing.T) {
 			testClient := newTestClient(nil, nil)
 			controller := &Controller{
 				crdClient: testClient.crdClient,
-				queue:     workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "supportBundle"),
+				queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+					workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+					workqueue.TypedRateLimitingQueueConfig[string]{
+						Name: "supportBundle",
+					},
+				),
 			}
 			controller.addSupportBundleCollection(tc.supportBundleCollection)
 			if tc.expectedItem != "" {
@@ -415,12 +420,11 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		processNextWorkItem := func() bool {
-			obj, quit := controller.queue.Get()
+			key, quit := controller.queue.Get()
 			if quit {
 				return false
 			}
-			defer controller.queue.Done(obj)
-			key, _ := obj.(string)
+			defer controller.queue.Done(key)
 			if _, exists := enqueuedBundleNameCountMappings[key]; !exists {
 				enqueuedBundleNameCountMappings[key] = 0
 			}
@@ -1664,7 +1668,7 @@ func TestUpdateStatus(t *testing.T) {
 	syncSupportBundleCollection := func() {
 		key, _ := controller.queue.Get()
 		controller.queue.Done(key)
-		err := controller.syncSupportBundleCollection(key.(string))
+		err := controller.syncSupportBundleCollection(key)
 		assert.NoError(t, err)
 	}
 

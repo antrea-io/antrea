@@ -53,7 +53,7 @@ const (
 type NPLController struct {
 	portTable   *portcache.PortTable
 	kubeClient  clientset.Interface
-	queue       workqueue.RateLimitingInterface
+	queue       workqueue.TypedRateLimitingInterface[string]
 	podInformer cache.SharedIndexInformer
 	podLister   corelisters.PodLister
 	svcInformer cache.SharedIndexInformer
@@ -106,7 +106,12 @@ func NewNPLController(kubeClient clientset.Interface,
 		},
 	)
 
-	c.queue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "nodeportlocal")
+	c.queue = workqueue.NewTypedRateLimitingQueueWithConfig(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+		workqueue.TypedRateLimitingQueueConfig[string]{
+			Name: "nodeportlocal",
+		},
+	)
 	return &c
 }
 
@@ -357,17 +362,13 @@ func (c *NPLController) Worker() {
 }
 
 func (c *NPLController) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	if key, ok := obj.(string); !ok {
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncPod(key); err == nil {
+	if err := c.syncPod(key); err == nil {
 		klog.V(2).Infof("Successfully processed key: %s, in queue", key)
 		c.queue.Forget(key)
 	} else {

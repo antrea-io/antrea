@@ -210,7 +210,7 @@ func TestPodAdd(t *testing.T) {
 			waitEvents(t, 1, c)
 			item, _ := c.queue.Get()
 			tt.expectedCalls(c.mockOFClient)
-			err := c.syncPod(item.(string))
+			err := c.syncPod(item)
 			if tt.expectedError != nil {
 				assert.ErrorContains(t, err, tt.expectedError.Error())
 			} else {
@@ -308,7 +308,7 @@ func TestPodUpdate(t *testing.T) {
 
 			waitEvents(t, 1, c)
 			item, _ := c.queue.Get()
-			require.NoError(t, c.syncPod(item.(string)))
+			require.NoError(t, c.syncPod(item))
 			assert.Equal(t, tt.expectedPodToDirectionMap, c.podToDirectionMap)
 			c.queue.Done(item)
 		})
@@ -367,7 +367,7 @@ func TestPodUpdateRemoveFlows(t *testing.T) {
 			waitEvents(t, 2, c)
 			for i := 0; i < 2; i++ {
 				item, _ := c.queue.Get()
-				require.NoError(t, c.syncPod(item.(string)))
+				require.NoError(t, c.syncPod(item))
 				c.queue.Done(item)
 			}
 			if tt.deletePod {
@@ -384,7 +384,7 @@ func TestPodUpdateRemoveFlows(t *testing.T) {
 
 			waitEvents(t, 1, c)
 			item, _ := c.queue.Get()
-			require.NoError(t, c.syncPod(item.(string)))
+			require.NoError(t, c.syncPod(item))
 			assert.Equal(t, tt.expectedL7PodNNDirAfterFlowRemoved, c.podToDirectionMap)
 			c.queue.Done(item)
 		})
@@ -457,7 +457,7 @@ func TestNamespaceUpdate(t *testing.T) {
 			waitEvents(t, tt.expectedPodsCount, c)
 			for i := 0; i < tt.expectedPodsCount; i++ {
 				item, _ := c.queue.Get()
-				require.NoError(t, c.syncPod(item.(string)))
+				require.NoError(t, c.syncPod(item))
 				c.queue.Done(item)
 			}
 			assert.Equal(t, tt.expectedPodToDirectionMap, c.podToDirectionMap)
@@ -518,7 +518,7 @@ func TestNSUpdateRemoveFlows(t *testing.T) {
 			waitEvents(t, 2, c)
 			for i := 0; i < 2; i++ {
 				item, _ := c.queue.Get()
-				require.NoError(t, c.syncPod(item.(string)))
+				require.NoError(t, c.syncPod(item))
 				c.queue.Done(item)
 			}
 			// Update Pods with no annotations
@@ -529,7 +529,7 @@ func TestNSUpdateRemoveFlows(t *testing.T) {
 			waitEvents(t, tt.expectedQueueLen, c)
 			for i := 0; i < tt.expectedQueueLen; i++ {
 				item, _ := c.queue.Get()
-				require.NoError(t, c.syncPod(item.(string)))
+				require.NoError(t, c.syncPod(item))
 				c.queue.Done(item)
 			}
 			assert.Equal(t, tt.expectedL7PodNNDirMapAfterFlowRemoved, c.podToDirectionMap)

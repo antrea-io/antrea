@@ -59,7 +59,7 @@ type idAllocator struct {
 	asyncRuleCache cache.Store
 	// deleteQueue is used to place a rule ID after a given delay for deleting the
 	// the rule in the asyncRuleCache.
-	deleteQueue workqueue.DelayingInterface
+	deleteQueue workqueue.TypedDelayingInterface[uint32]
 	// deleteInterval is the delay interval for deleting the rule in the asyncRuleCache.
 	deleteInterval time.Duration
 }
@@ -70,13 +70,16 @@ func asyncRuleCacheKeyFunc(obj interface{}) (string, error) {
 	return strconv.Itoa(int(rule.FlowID)), nil
 }
 
-// newIDAllocator returns a new *idAllocator.
-// It takes a list of allocated IDs, which can be used for the restart case.
-func newIDAllocator(asyncRuleDeleteInterval time.Duration, allocatedIDs ...uint32) *idAllocator {
+// newIDAllocatorWithClock creates an ID allocator with a custom clock, which is
+// useful when writing unit tests.
+func newIDAllocatorWithClock(asyncRuleDeleteInterval time.Duration, clock clock.WithTicker, allocatedIDs ...uint32) *idAllocator {
 	allocator := &idAllocator{
 		availableSet:   make(map[uint32]struct{}),
 		asyncRuleCache: cache.NewStore(asyncRuleCacheKeyFunc),
-		deleteQueue:    workqueue.NewNamedDelayingQueue(deleteQueueName),
+		deleteQueue: workqueue.NewTypedDelayingQueueWithConfig(workqueue.TypedDelayingQueueConfig[uint32]{
+			Name:  deleteQueueName,
+			Clock: clock,
+		}),
 	}
 
 	// Set the deleteInterval.
@@ -104,13 +107,10 @@ func newIDAllocator(asyncRuleDeleteInterval time.Duration, allocatedIDs ...uint3
 	return allocator
 }
 
-// newIDAllocatorWithCustomClock creates an ID allocator with a custom clock,
-// which is useful when writing robust unit tests.
-func newIDAllocatorWithCustomClock(clock clock.WithTicker, asyncRuleDeleteInterval time.Duration, allocatedIDs ...uint32) *idAllocator {
-	allocator := newIDAllocator(asyncRuleDeleteInterval, allocatedIDs...)
-	// override regular delaying workqueue with one using a custom clock
-	allocator.deleteQueue = workqueue.NewDelayingQueueWithCustomClock(clock, deleteQueueName)
-	return allocator
+// newIDAllocator returns a new *idAllocator.
+// It takes a list of allocated IDs, which can be used for the restart case.
+func newIDAllocator(asyncRuleDeleteInterval time.Duration, allocatedIDs ...uint32) *idAllocator {
+	return newIDAllocatorWithClock(asyncRuleDeleteInterval, clock.RealClock{}, allocatedIDs...)
 }
 
 // allocateForRule allocates an uint32 ID for a given rule if it's available, otherwise
@@ -176,13 +176,13 @@ func (a *idAllocator) processDeleteQueueItem() bool {
 	}
 	defer a.deleteQueue.Done(key)
 
-	rule, exists, err := a.getRuleFromAsyncCache(key.(uint32))
+	rule, exists, err := a.getRuleFromAsyncCache(key)
 	if !exists {
-		klog.Warningf("Rule with id %v is not present in the async rule cache", key.(uint32))
+		klog.Warningf("Rule with id %v is not present in the async rule cache", key)
 		return true
 	}
 	if err != nil {
-		klog.Errorf("Unexpected error when trying to get rule with id %d: %v", key.(uint32), err)
+		klog.Errorf("Unexpected error when trying to get rule with id %d: %v", key, err)
 		return true
 	}
 	if err := a.asyncRuleCache.Delete(rule); err != nil {
@@ -190,8 +190,8 @@ func (a *idAllocator) processDeleteQueueItem() bool {
 		return true
 	}
 
-	if err := a.release(key.(uint32)); err != nil {
-		klog.Errorf("Unexpected error when releasing id %d: %v", key.(uint32), err)
+	if err := a.release(key); err != nil {
+		klog.Errorf("Unexpected error when releasing id %d: %v", key, err)
 		return true
 	}
 

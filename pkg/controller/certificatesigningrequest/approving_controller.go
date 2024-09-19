@@ -47,7 +47,7 @@ type CSRApprovingController struct {
 	csrInformer     cache.SharedIndexInformer
 	csrLister       csrlisters.CertificateSigningRequestLister
 	csrListerSynced cache.InformerSynced
-	queue           workqueue.RateLimitingInterface
+	queue           workqueue.TypedRateLimitingInterface[string]
 	approvers       []approver
 }
 
@@ -58,7 +58,12 @@ func NewCSRApprovingController(client clientset.Interface, csrInformer cache.Sha
 		csrInformer:     csrInformer,
 		csrLister:       csrLister,
 		csrListerSynced: csrInformer.HasSynced,
-		queue:           workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "certificateSigningRequest"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "certificateSigningRequest",
+			},
+		),
 		approvers: []approver{
 			newIPsecCSRApprover(client),
 		},
@@ -156,7 +161,7 @@ func (c *CSRApprovingController) processNextWorkItem() bool {
 		return false
 	}
 	defer c.queue.Done(key)
-	err := c.syncCSR(key.(string))
+	err := c.syncCSR(key)
 	if err != nil {
 		c.queue.AddRateLimited(key)
 		klog.ErrorS(err, "Failed to sync CertificateSigningRequest", "CertificateSigningRequest", key)

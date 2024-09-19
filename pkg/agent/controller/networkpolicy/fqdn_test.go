@@ -188,7 +188,7 @@ func TestAddFQDNRule(t *testing.T) {
 			for f.dnsQueryQueue.Len() > 0 {
 				item, _ := f.dnsQueryQueue.Get()
 				f.dnsQueryQueue.Done(item)
-				enqueuedFQDNs = append(enqueuedFQDNs, item.(string))
+				enqueuedFQDNs = append(enqueuedFQDNs, item)
 			}
 			assert.ElementsMatch(t, tt.enqueuedFQDNs, enqueuedFQDNs)
 		})

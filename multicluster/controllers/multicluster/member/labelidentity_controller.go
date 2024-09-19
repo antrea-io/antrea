@@ -49,27 +49,25 @@ import (
 // LabelIdentityReconciler watches relevant Pod and Namespace events in the member cluster,
 // computes the label identities added to and deleted from the cluster, and exports them to the
 // leader cluster for further processing.
-type (
-	LabelIdentityReconciler struct {
-		client.Client
-		Scheme           *runtime.Scheme
-		commonAreaMutex  sync.Mutex
-		commonAreaGetter commonarea.RemoteCommonAreaGetter
-		remoteCommonArea commonarea.RemoteCommonArea
-		namespace        string
-		// labelMutex prevents concurrent access to labelToPodsCache and podLabelCache.
-		// It also prevents concurrent updates to labelExportUpdatesInProgress.
-		labelMutex sync.RWMutex
-		// labelToPodsCache stores mapping from label identities to Pods that have this label identity.
-		labelToPodsCache map[string]sets.Set[string]
-		// podLabelCache stores mapping from Pods to their label identities.
-		podLabelCache map[string]string
-		// labelQueue maintains the normalized labels whose corresponding ResourceExport objects are
-		// determined to be created/deleted by the reconciler.
-		labelQueue     workqueue.RateLimitingInterface
-		localClusterID string
-	}
-)
+type LabelIdentityReconciler struct {
+	client.Client
+	Scheme           *runtime.Scheme
+	commonAreaMutex  sync.Mutex
+	commonAreaGetter commonarea.RemoteCommonAreaGetter
+	remoteCommonArea commonarea.RemoteCommonArea
+	namespace        string
+	// labelMutex prevents concurrent access to labelToPodsCache and podLabelCache.
+	// It also prevents concurrent updates to labelExportUpdatesInProgress.
+	labelMutex sync.RWMutex
+	// labelToPodsCache stores mapping from label identities to Pods that have this label identity.
+	labelToPodsCache map[string]sets.Set[string]
+	// podLabelCache stores mapping from Pods to their label identities.
+	podLabelCache map[string]string
+	// labelQueue maintains the normalized labels whose corresponding ResourceExport objects are
+	// determined to be created/deleted by the reconciler.
+	labelQueue     workqueue.TypedRateLimitingInterface[string]
+	localClusterID string
+}
 
 func NewLabelIdentityReconciler(
 	client client.Client,
@@ -83,7 +81,7 @@ func NewLabelIdentityReconciler(
 		commonAreaGetter: commonAreaGetter,
 		labelToPodsCache: map[string]sets.Set[string]{},
 		podLabelCache:    map[string]string{},
-		labelQueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter()),
+		labelQueue:       workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedItemBasedRateLimiter[string]()),
 	}
 }
 
@@ -273,8 +271,7 @@ func (r *LabelIdentityReconciler) processLabelForResourceExport() bool {
 		return false
 	}
 	defer r.labelQueue.Done(key)
-	err := r.syncLabelResourceExport(key.(string))
-	if err != nil {
+	if err := r.syncLabelResourceExport(key); err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		r.labelQueue.AddRateLimited(key)
 		klog.ErrorS(err, "Failed to sync ResourceExport for label identity", "label", key)

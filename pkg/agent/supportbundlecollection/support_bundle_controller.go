@@ -70,7 +70,7 @@ type SupportBundleController struct {
 	supportBundleNodeType        controlplane.SupportBundleCollectionNodeType
 	namespace                    string
 	antreaClientGetter           client.AntreaClientProvider
-	queue                        workqueue.Interface
+	queue                        workqueue.TypedInterface[string]
 	supportBundleCollection      *cpv1b2.SupportBundleCollection
 	supportBundleCollectionMutex sync.RWMutex
 	ovsCtlClient                 ovsctl.OVSCtlClient
@@ -95,13 +95,15 @@ func NewSupportBundleController(nodeName string,
 		supportBundleNodeType: supportBundleNodeType,
 		namespace:             namespace,
 		antreaClientGetter:    antreaClientGetter,
-		queue:                 workqueue.NewNamed("supportbundle"),
-		ovsCtlClient:          ovsCtlClient,
-		aq:                    aq,
-		npq:                   npq,
-		v4Enabled:             v4Enabled,
-		v6Enabled:             v6Enabled,
-		sftpUploader:          &sftpUploader{},
+		queue: workqueue.NewTypedWithConfig(workqueue.TypedQueueConfig[string]{
+			Name: "supportbundle",
+		}),
+		ovsCtlClient: ovsCtlClient,
+		aq:           aq,
+		npq:          npq,
+		v4Enabled:    v4Enabled,
+		v6Enabled:    v6Enabled,
+		sftpUploader: &sftpUploader{},
 	}
 	return c
 }
@@ -195,16 +197,13 @@ func (c *SupportBundleController) worker() {
 }
 
 func (c *SupportBundleController) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	if key, ok := obj.(string); !ok {
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncSupportBundleCollection(key); err == nil {
+	if err := c.syncSupportBundleCollection(key); err == nil {
 		klog.InfoS("Successfully synced support bundle", "name", key)
 	} else {
 		// Skip retrying as the time may not meet the requirements for SupportBundle.

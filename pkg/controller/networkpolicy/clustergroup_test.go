@@ -1018,7 +1018,7 @@ func TestSyncInternalGroup(t *testing.T) {
 	actualKeys := make([]controlplane.NetworkPolicyReference, 0, 2)
 	for i := 0; i < 2; i++ {
 		key, _ := npc.internalNetworkPolicyQueue.Get()
-		actualKeys = append(actualKeys, key.(controlplane.NetworkPolicyReference))
+		actualKeys = append(actualKeys, key)
 		npc.internalNetworkPolicyQueue.Done(key)
 	}
 	assert.ElementsMatch(t, expectedKeys, actualKeys)

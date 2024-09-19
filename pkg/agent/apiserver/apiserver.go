@@ -15,6 +15,7 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -72,8 +73,8 @@ type agentAPIServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
 }
 
-func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
-	return s.GenericAPIServer.PrepareRun().Run(stopCh)
+func (s *agentAPIServer) Run(ctx context.Context) error {
+	return s.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
 
 func (s *agentAPIServer) GetCertData() []byte {

@@ -87,7 +87,7 @@ type EgressController struct {
 	// egressGroupStore is the storage where the EgressGroups are stored.
 	egressGroupStore storage.Interface
 	// queue maintains the EgressGroup objects that need to be synced.
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 	// groupingInterface knows Pods that a given group selects.
 	groupingInterface grouping.Interface
 	// Added as a member to the struct to allow injection for testing.
@@ -101,13 +101,18 @@ func NewEgressController(crdClient clientset.Interface,
 	externalIPAllocator externalippool.ExternalIPAllocator,
 	egressGroupStore storage.Interface) *EgressController {
 	c := &EgressController{
-		crdClient:               crdClient,
-		egressInformer:          egressInformer,
-		egressLister:            egressInformer.Lister(),
-		egressListerSynced:      egressInformer.Informer().HasSynced,
-		egressIndexer:           egressInformer.Informer().GetIndexer(),
-		egressGroupStore:        egressGroupStore,
-		queue:                   workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "egress"),
+		crdClient:          crdClient,
+		egressInformer:     egressInformer,
+		egressLister:       egressInformer.Lister(),
+		egressListerSynced: egressInformer.Informer().HasSynced,
+		egressIndexer:      egressInformer.Informer().GetIndexer(),
+		egressGroupStore:   egressGroupStore,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "egress",
+			},
+		),
 		groupingInterface:       groupingInterface,
 		groupingInterfaceSynced: groupingInterface.HasSynced,
 		ipAllocationMap:         map[string]*ipAllocation{},
@@ -203,8 +208,7 @@ func (c *EgressController) processNextEgressGroupWorkItem() bool {
 	}
 	defer c.queue.Done(key)
 
-	err := c.syncEgress(key.(string))
-	if err != nil {
+	if err := c.syncEgress(key); err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		c.queue.AddRateLimited(key)
 		klog.ErrorS(err, "Failed to sync EgressGroup", "key", key)

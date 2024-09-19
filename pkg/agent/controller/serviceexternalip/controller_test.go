@@ -134,11 +134,16 @@ func newFakeController(t *testing.T, objs ...runtime.Object) *fakeController {
 		endpointsInformer:     endpointInformer.Informer(),
 		endpointsListerSynced: endpointInformer.Informer().HasSynced,
 		endpointsLister:       endpointInformer.Lister(),
-		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "serviceExternalIP"),
-		externalIPStates:      make(map[apimachinerytypes.NamespacedName]externalIPState),
-		cluster:               memberlistCluster,
-		ipAssigner:            mockIPAssigner,
-		assignedIPs:           make(map[string]sets.Set[string]),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[apimachinerytypes.NamespacedName](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[apimachinerytypes.NamespacedName]{
+				Name: "ServiceExternalIP",
+			},
+		),
+		externalIPStates: make(map[apimachinerytypes.NamespacedName]externalIPState),
+		cluster:          memberlistCluster,
+		ipAssigner:       mockIPAssigner,
+		assignedIPs:      make(map[string]sets.Set[string]),
 	}
 	return &fakeController{
 		ServiceExternalIPController: eipController,

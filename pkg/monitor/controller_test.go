@@ -632,8 +632,8 @@ func TestEnqueueNode(t *testing.T) {
 	controller := newControllerMonitor(clientset)
 	controller.controllerMonitor.enqueueNode(node)
 	expectedkey, _ := keyFunc(node)
-	obj, _ := controller.controllerMonitor.nodeQueue.Get()
-	assert.Equal(t, expectedkey, obj.(string))
+	key, _ := controller.controllerMonitor.nodeQueue.Get()
+	assert.Equal(t, expectedkey, key)
 }
 
 func TestEnqueueExternalNode(t *testing.T) {
@@ -648,8 +648,8 @@ func TestEnqueueExternalNode(t *testing.T) {
 	controller := newControllerMonitor(clientset)
 	controller.controllerMonitor.enqueueExternalNode(externalNode)
 	expectedkey, _ := keyFunc(externalNode)
-	obj, _ := controller.controllerMonitor.externalNodeQueue.Get()
-	assert.Equal(t, expectedkey, obj.(string))
+	key, _ := controller.controllerMonitor.externalNodeQueue.Get()
+	assert.Equal(t, expectedkey, key)
 }
 
 func TestAntreaAgentInfoAPIAvailable(t *testing.T) {

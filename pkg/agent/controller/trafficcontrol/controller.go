@@ -139,7 +139,7 @@ type Controller struct {
 	trafficControlInformer     cache.SharedIndexInformer
 	trafficControlLister       crdlisters.TrafficControlLister
 	trafficControlListerSynced cache.InformerSynced
-	queue                      workqueue.RateLimitingInterface
+	queue                      workqueue.TypedRateLimitingInterface[string]
 }
 
 func NewTrafficControlController(ofClient openflow.Client,
@@ -167,7 +167,12 @@ func NewTrafficControlController(ofClient openflow.Client,
 		podToTCBindings:            map[string]*podToTCBinding{},
 		portToTCBindings:           map[string]*portToTCBinding{},
 		tcStates:                   map[string]*trafficControlState{},
-		queue:                      workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "trafficControlGroup"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "trafficControlGroup",
+			},
+		),
 	}
 	c.trafficControlInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -392,20 +397,13 @@ func (c *Controller) worker() {
 }
 
 func (c *Controller) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	if key, ok := obj.(string); !ok {
-		// As the item in the work queue is actually invalid, we call Forget here else we'd
-		// go into a loop of attempting to process a work item that is invalid.
-		// This should not happen.
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncTrafficControl(key); err == nil {
+	if err := c.syncTrafficControl(key); err == nil {
 		// If no error occurs we Forget this item, so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)

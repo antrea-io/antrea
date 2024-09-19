@@ -71,7 +71,7 @@ type Controller struct {
 	kubeClient      clientset.Interface
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	nodeName        string
-	queue           workqueue.RateLimitingInterface
+	queue           workqueue.TypedRateLimitingInterface[string]
 
 	rotateCertificate  func() (*certificateKeyPair, error)
 	certificateKeyPair *certificateKeyPair
@@ -110,8 +110,13 @@ func newIPSecCertificateControllerWithCustomClock(kubeClient clientset.Interface
 		kubeClient:      kubeClient,
 		ovsBridgeClient: ovsBridgeClient,
 		nodeName:        nodeName,
-		queue: workqueue.NewRateLimitingQueueWithDelayingInterface(workqueue.NewDelayingQueueWithCustomClock(clock, "IPsecCertificateController"),
-			workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay)),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name:  "IPsecCertificateController",
+				Clock: clock,
+			},
+		),
 		clock:                 clock,
 		caPath:                filepath.Join(defaultCertificatesPath, "ca", "ca.crt"),
 		certificateFolderPath: defaultCertificatesPath,
@@ -128,16 +133,12 @@ func (c *Controller) worker() {
 }
 
 func (c *Controller) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
-	if key, ok := obj.(string); !ok {
-		c.queue.Forget(obj)
-		klog.ErrorS(nil, "Unexpected object in work queue", "object", obj)
-		return true
-	} else if err := c.syncConfigurations(); err == nil {
+	defer c.queue.Done(key)
+	if err := c.syncConfigurations(); err == nil {
 		c.queue.Forget(key)
 	} else {
 		c.queue.AddRateLimited(key)

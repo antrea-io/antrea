@@ -57,8 +57,8 @@ type MCPodRouteController struct {
 	k8sClient   kubernetes.Interface
 	ofClient    openflow.Client
 	nodeConfig  *config.NodeConfig
-	podQueue    workqueue.RateLimitingInterface
-	gwQueue     workqueue.RateLimitingInterface
+	podQueue    workqueue.TypedRateLimitingInterface[string]
+	gwQueue     workqueue.TypedRateLimitingInterface[string]
 	podInformer cache.SharedIndexInformer
 	podLister   corelisters.PodLister
 	gwInformer  cache.SharedIndexInformer
@@ -76,11 +76,21 @@ func NewMCPodRouteController(
 	nodeConfig *config.NodeConfig,
 ) *MCPodRouteController {
 	controller := &MCPodRouteController{
-		k8sClient:       k8sClient,
-		ofClient:        client,
-		nodeConfig:      nodeConfig,
-		podQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "MCPodRouteControllerForPod"),
-		gwQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "MCPodRouteControllerForGateway"),
+		k8sClient:  k8sClient,
+		ofClient:   client,
+		nodeConfig: nodeConfig,
+		podQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "MCPodRouteControllerForPod",
+			},
+		),
+		gwQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "MCPodRouteControllerForGateway",
+			},
+		),
 		gwInformer:      gwInformer.Informer(),
 		gwLister:        gwInformer.Lister(),
 		podWorkerStopCh: make(chan struct{}),
@@ -249,11 +259,7 @@ func (c *MCPodRouteController) processGatewayNextWorkItem() bool {
 	}
 	defer c.gwQueue.Done(key)
 
-	if k, ok := key.(string); !ok {
-		c.gwQueue.Forget(k)
-		klog.InfoS("Expected string in work queue but got %#v", "object", k)
-		return true
-	} else if err := c.syncGateway(); err == nil {
+	if err := c.syncGateway(); err == nil {
 		c.gwQueue.Forget(key)
 	} else {
 		c.gwQueue.AddRateLimited(key)
@@ -324,21 +330,17 @@ func (c *MCPodRouteController) podWorker() {
 }
 
 func (c *MCPodRouteController) processPodNextWorkItem() bool {
-	obj, quit := c.podQueue.Get()
+	key, quit := c.podQueue.Get()
 	if quit {
 		return false
 	}
-	defer c.podQueue.Done(obj)
+	defer c.podQueue.Done(key)
 
-	if k, ok := obj.(string); !ok {
-		c.podQueue.Forget(obj)
-		klog.InfoS("Expected string in work queue but got %#v", "object", obj)
-		return true
-	} else if err := c.syncPod(k); err == nil {
-		c.podQueue.Forget(k)
+	if err := c.syncPod(key); err == nil {
+		c.podQueue.Forget(key)
 	} else {
-		c.podQueue.AddRateLimited(k)
-		klog.ErrorS(err, "Error syncing key, requeuing", "key", k)
+		c.podQueue.AddRateLimited(key)
+		klog.ErrorS(err, "Error syncing key, requeuing", "key", key)
 	}
 	return true
 }

@@ -72,7 +72,7 @@ type EndpointResolver struct {
 	// endpointLister is used to retrieve the Endpoints for the Service during Endpoint selection.
 	endpointsLister       corev1listers.EndpointsLister
 	endpointsListerSynced cache.InformerSynced
-	queue                 workqueue.RateLimitingInterface
+	queue                 workqueue.TypedRateLimitingInterface[string]
 	// listeners need to implement the Listerner interface and will get notified when the
 	// current Endpoint URL changes.
 	listeners   []Listener
@@ -101,7 +101,12 @@ func NewEndpointResolver(kubeClient kubernetes.Interface, namespace, serviceName
 		serviceListerSynced:   serviceInformer.Informer().HasSynced,
 		endpointsLister:       endpointsInformer.Lister(),
 		endpointsListerSynced: endpointsInformer.Informer().HasSynced,
-		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), controllerName),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: controllerName,
+			},
+		),
 	}
 
 	serviceInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{

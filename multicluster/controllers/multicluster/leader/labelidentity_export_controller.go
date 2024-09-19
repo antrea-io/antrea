@@ -50,21 +50,19 @@ const (
 // LabelIdentityExportReconciler watches LabelIdentity ResourceExport events in the Common Area,
 // computes if such an event causes a new LabelIdentity to become present/stale in the entire
 // ClusterSet, and updates ResourceImports accordingly.
-type (
-	LabelIdentityExportReconciler struct {
-		client.Client
-		Scheme           *runtime.Scheme
-		mutex            sync.RWMutex
-		namespace        string
-		clusterToLabels  map[string]sets.Set[string]
-		labelsToClusters map[string]sets.Set[string]
-		hashToLabels     map[string]string
-		labelQueue       workqueue.RateLimitingInterface
-		numWorkers       int
-		labelsToID       sync.Map
-		allocator        *idAllocator
-	}
-)
+type LabelIdentityExportReconciler struct {
+	client.Client
+	Scheme           *runtime.Scheme
+	mutex            sync.RWMutex
+	namespace        string
+	clusterToLabels  map[string]sets.Set[string]
+	labelsToClusters map[string]sets.Set[string]
+	hashToLabels     map[string]string
+	labelQueue       workqueue.TypedRateLimitingInterface[string]
+	numWorkers       int
+	labelsToID       sync.Map
+	allocator        *idAllocator
+}
 
 func NewLabelIdentityExportReconciler(
 	client client.Client,
@@ -77,7 +75,7 @@ func NewLabelIdentityExportReconciler(
 		clusterToLabels:  map[string]sets.Set[string]{},
 		labelsToClusters: map[string]sets.Set[string]{},
 		hashToLabels:     map[string]string{},
-		labelQueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter()),
+		labelQueue:       workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedItemBasedRateLimiter[string]()),
 		numWorkers:       common.DefaultWorkerCount,
 		labelsToID:       sync.Map{},
 		allocator:        newIDAllocator(1, maxIDForAllocation),
@@ -194,8 +192,7 @@ func (r *LabelIdentityExportReconciler) processLabelForResourceImport() bool {
 		return false
 	}
 	defer r.labelQueue.Done(key)
-	err := r.syncLabelResourceImport(key.(string))
-	if err != nil {
+	if err := r.syncLabelResourceImport(key); err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		r.labelQueue.AddRateLimited(key)
 		klog.ErrorS(err, "Failed to sync ResourceImport for label identity", "label", key)
