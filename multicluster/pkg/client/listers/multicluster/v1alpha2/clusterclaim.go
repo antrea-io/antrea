@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha2
 
 import (
 	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,25 +36,17 @@ type ClusterClaimLister interface {
 
 // clusterClaimLister implements the ClusterClaimLister interface.
 type clusterClaimLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha2.ClusterClaim]
 }
 
 // NewClusterClaimLister returns a new ClusterClaimLister.
 func NewClusterClaimLister(indexer cache.Indexer) ClusterClaimLister {
-	return &clusterClaimLister{indexer: indexer}
-}
-
-// List lists all ClusterClaims in the indexer.
-func (s *clusterClaimLister) List(selector labels.Selector) (ret []*v1alpha2.ClusterClaim, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha2.ClusterClaim))
-	})
-	return ret, err
+	return &clusterClaimLister{listers.New[*v1alpha2.ClusterClaim](indexer, v1alpha2.Resource("clusterclaim"))}
 }
 
 // ClusterClaims returns an object that can list and get ClusterClaims.
 func (s *clusterClaimLister) ClusterClaims(namespace string) ClusterClaimNamespaceLister {
-	return clusterClaimNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return clusterClaimNamespaceLister{listers.NewNamespaced[*v1alpha2.ClusterClaim](s.ResourceIndexer, namespace)}
 }
 
 // ClusterClaimNamespaceLister helps list and get ClusterClaims.
@@ -72,26 +64,5 @@ type ClusterClaimNamespaceLister interface {
 // clusterClaimNamespaceLister implements the ClusterClaimNamespaceLister
 // interface.
 type clusterClaimNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ClusterClaims in the indexer for a given namespace.
-func (s clusterClaimNamespaceLister) List(selector labels.Selector) (ret []*v1alpha2.ClusterClaim, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha2.ClusterClaim))
-	})
-	return ret, err
-}
-
-// Get retrieves the ClusterClaim from the indexer for a given namespace and name.
-func (s clusterClaimNamespaceLister) Get(name string) (*v1alpha2.ClusterClaim, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha2.Resource("clusterclaim"), name)
-	}
-	return obj.(*v1alpha2.ClusterClaim), nil
+	listers.ResourceIndexer[*v1alpha2.ClusterClaim]
 }

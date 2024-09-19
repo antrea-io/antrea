@@ -38,20 +38,22 @@ var labelidentitiesKind = v1alpha1.SchemeGroupVersion.WithKind("LabelIdentity")
 
 // Get takes name of the labelIdentity, and returns the corresponding labelIdentity object, and an error if there is any.
 func (c *FakeLabelIdentities) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.LabelIdentity, err error) {
+	emptyResult := &v1alpha1.LabelIdentity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(labelidentitiesResource, name), &v1alpha1.LabelIdentity{})
+		Invokes(testing.NewRootGetActionWithOptions(labelidentitiesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.LabelIdentity), err
 }
 
 // List takes label and field selectors, and returns the list of LabelIdentities that match those selectors.
 func (c *FakeLabelIdentities) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.LabelIdentityList, err error) {
+	emptyResult := &v1alpha1.LabelIdentityList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(labelidentitiesResource, labelidentitiesKind, opts), &v1alpha1.LabelIdentityList{})
+		Invokes(testing.NewRootListActionWithOptions(labelidentitiesResource, labelidentitiesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -70,25 +72,27 @@ func (c *FakeLabelIdentities) List(ctx context.Context, opts v1.ListOptions) (re
 // Watch returns a watch.Interface that watches the requested labelIdentities.
 func (c *FakeLabelIdentities) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(labelidentitiesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(labelidentitiesResource, opts))
 }
 
 // Create takes the representation of a labelIdentity and creates it.  Returns the server's representation of the labelIdentity, and an error, if there is any.
 func (c *FakeLabelIdentities) Create(ctx context.Context, labelIdentity *v1alpha1.LabelIdentity, opts v1.CreateOptions) (result *v1alpha1.LabelIdentity, err error) {
+	emptyResult := &v1alpha1.LabelIdentity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(labelidentitiesResource, labelIdentity), &v1alpha1.LabelIdentity{})
+		Invokes(testing.NewRootCreateActionWithOptions(labelidentitiesResource, labelIdentity, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.LabelIdentity), err
 }
 
 // Update takes the representation of a labelIdentity and updates it. Returns the server's representation of the labelIdentity, and an error, if there is any.
 func (c *FakeLabelIdentities) Update(ctx context.Context, labelIdentity *v1alpha1.LabelIdentity, opts v1.UpdateOptions) (result *v1alpha1.LabelIdentity, err error) {
+	emptyResult := &v1alpha1.LabelIdentity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(labelidentitiesResource, labelIdentity), &v1alpha1.LabelIdentity{})
+		Invokes(testing.NewRootUpdateActionWithOptions(labelidentitiesResource, labelIdentity, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.LabelIdentity), err
 }
@@ -102,7 +106,7 @@ func (c *FakeLabelIdentities) Delete(ctx context.Context, name string, opts v1.D
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeLabelIdentities) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(labelidentitiesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(labelidentitiesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.LabelIdentityList{})
 	return err
@@ -110,10 +114,11 @@ func (c *FakeLabelIdentities) DeleteCollection(ctx context.Context, opts v1.Dele
 
 // Patch applies the patch and returns the patched labelIdentity.
 func (c *FakeLabelIdentities) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.LabelIdentity, err error) {
+	emptyResult := &v1alpha1.LabelIdentity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(labelidentitiesResource, name, pt, data, subresources...), &v1alpha1.LabelIdentity{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(labelidentitiesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.LabelIdentity), err
 }
