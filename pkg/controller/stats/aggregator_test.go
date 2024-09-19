@@ -514,7 +514,7 @@ func TestAggregatorCollectListGet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, true)()
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, true)
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -553,7 +553,7 @@ func TestAggregatorCollectListGet(t *testing.T) {
 }
 
 func TestDeleteNetworkPolicy(t *testing.T) {
-	defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, true)()
+	featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, true)
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)

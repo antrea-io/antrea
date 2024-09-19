@@ -31,8 +31,8 @@ type GroupMembersExpansion interface {
 
 func (c *groupMembers) PaginatedGet(ctx context.Context, name string, pagination v1beta2.PaginationGetOptions, options v1.GetOptions) (result *v1beta2.GroupMembers, err error) {
 	result = &v1beta2.GroupMembers{}
-	err = c.client.Get().
-		Namespace(c.ns).
+	err = c.GetClient().Get().
+		Namespace(c.GetNamespace()).
 		Resource("groupmembers").
 		Name(name).
 		Param("limit", fmt.Sprint(pagination.Limit)).

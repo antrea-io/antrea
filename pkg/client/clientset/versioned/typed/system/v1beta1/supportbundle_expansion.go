@@ -24,7 +24,7 @@ type SupportBundleExpansion interface {
 }
 
 func (c *supportBundles) Download(ctx context.Context, name string) (io.ReadCloser, error) {
-	return c.client.Get().
+	return c.GetClient().Get().
 		Resource("supportbundles").
 		Name(name).
 		SubResource("download").
