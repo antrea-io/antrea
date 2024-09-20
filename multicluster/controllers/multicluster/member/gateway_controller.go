@@ -185,6 +185,7 @@ func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.R
 func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcv1alpha1.Gateway{}).
+		Named("gateway").
 		Watches(&mcv1alpha2.ClusterSet{}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
 			builder.WithPredicates(statusReadyPredicate)).
 		WithOptions(controller.Options{

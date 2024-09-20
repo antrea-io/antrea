@@ -132,6 +132,7 @@ func (r *LabelIdentityReconciler) checkRemoteCommonArea() bool {
 func (r *LabelIdentityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}, builder.WithPredicates(predicate.LabelChangedPredicate{})).
+		Named("labelidentity").
 		Watches(&v1.Namespace{},
 			handler.EnqueueRequestsFromMapFunc(r.namespaceMapFunc),
 			builder.WithPredicates(predicate.LabelChangedPredicate{})).

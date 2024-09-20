@@ -483,6 +483,7 @@ func (r *ResourceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	instance := predicate.And(generationPredicate, labelIdentityResExportPredicate)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcsv1alpha1.ResourceExport{}).
+		Named("resourceexport").
 		WithEventFilter(instance).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,

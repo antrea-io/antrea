@@ -8,6 +8,7 @@ rules:
   - ""
   resources:
   - endpoints
+  - services
   verbs:
   - create
   - delete
@@ -29,18 +30,6 @@ rules:
   verbs:
   - get
   - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - crd.antrea.io
@@ -74,135 +63,10 @@ rules:
   - multicluster.crd.antrea.io
   resources:
   - clusterinfoimports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - clusterinfoimports/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - clusterinfoimports/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
   - clustersets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - clustersets/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - clustersets/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
   - gateways
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - gateways/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - gateways/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
   - memberclusterannounces
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - memberclusterannounces/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - memberclusterannounces/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
   - resourceexports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - resourceexports/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - resourceexports/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
   - resourceimports
   verbs:
   - create
@@ -215,12 +79,22 @@ rules:
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
+  - clusterinfoimports/finalizers
+  - clustersets/finalizers
+  - gateways/finalizers
+  - memberclusterannounces/finalizers
+  - resourceexports/finalizers
   - resourceimports/finalizers
   verbs:
   - update
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
+  - clusterinfoimports/status
+  - clustersets/status
+  - gateways/status
+  - memberclusterannounces/status
+  - resourceexports/status
   - resourceimports/status
   verbs:
   - get
@@ -230,25 +104,6 @@ rules:
   - multicluster.x-k8s.io
   resources:
   - serviceexports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.x-k8s.io
-  resources:
-  - serviceexports/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - multicluster.x-k8s.io
-  resources:
   - serviceimports
   verbs:
   - create
@@ -261,6 +116,7 @@ rules:
 - apiGroups:
   - multicluster.x-k8s.io
   resources:
+  - serviceexports/status
   - serviceimports/status
   verbs:
   - get

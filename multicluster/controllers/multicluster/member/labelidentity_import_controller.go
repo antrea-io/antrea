@@ -138,6 +138,7 @@ func (r *LabelIdentityResourceImportReconciler) SetupWithManager(mgr ctrl.Manage
 	instance := predicate.And(generationPredicate, labelIdentityResImportPredicate)
 	err := ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ResourceImport{}).
+		Named("labelidentity_import").
 		WithEventFilter(instance).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.LabelIdentityWorkerCount,
