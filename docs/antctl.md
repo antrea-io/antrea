@@ -769,6 +769,18 @@ NAME               ROUTER-ID  LOCAL-ASN LISTEN-PORT
 example-bgp-policy 172.18.0.2 64512     179
 ```
 
+`antctl` agent command `get bgppeers` print the current status of all BGP peers
+of effective BGP policy applied on the local Node. It includes Peer IP address with port,
+ASN, and State of the BGP Peers.
+
+```bash
+$ antctl get bgppeers
+
+PEER               ASN   STATE
+192.168.77.200:179 65001 Established
+192.168.77.201:179 65002 Active
+```
+
 ### Upgrade existing objects of CRDs
 
 antctl supports upgrading existing objects of Antrea CRDs to the storage version.

@@ -210,3 +210,22 @@ func (r BGPPolicyResponse) GetTableRow(_ int) []string {
 func (r BGPPolicyResponse) SortRows() bool {
 	return true
 }
+
+// BGPPeerResponse describes the response struct of bgppeers command.
+type BGPPeerResponse struct {
+	Peer  string `json:"peer,omitempty"`
+	ASN   int32  `json:"asn,omitempty"`
+	State string `json:"state,omitempty"`
+}
+
+func (r BGPPeerResponse) GetTableHeader() []string {
+	return []string{"PEER", "ASN", "STATE"}
+}
+
+func (r BGPPeerResponse) GetTableRow(_ int) []string {
+	return []string{r.Peer, strconv.Itoa(int(r.ASN)), r.State}
+}
+
+func (r BGPPeerResponse) SortRows() bool {
+	return true
+}

@@ -15,11 +15,14 @@
 package querier
 
 import (
+	"context"
+
 	v1 "k8s.io/api/core/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/bgp"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/multicast"
 	"antrea.io/antrea/pkg/agent/types"
@@ -142,4 +145,6 @@ type ServiceExternalIPStatusQuerier interface {
 type AgentBGPPolicyInfoQuerier interface {
 	// GetBGPPolicyInfo returns Name, RouterID, LocalASN and ListenPort of effective BGP Policy applied on the Node.
 	GetBGPPolicyInfo() (string, string, int32, int32)
+	// GetBGPPeerStatus returns current status of all BGP Peers of effective BGP Policy applied on the Node.
+	GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error)
 }

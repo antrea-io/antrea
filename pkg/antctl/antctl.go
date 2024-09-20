@@ -652,6 +652,23 @@ $ antctl get podmulticaststats pod -n namespace`,
 			commandGroup:        get,
 			transformedResponse: reflect.TypeOf(agentapis.BGPPolicyResponse{}),
 		},
+		{
+			use:     "bgppeers",
+			aliases: []string{"bgppeer"},
+			short:   "Print the current status of all bgp peers of effective bgppolicy",
+			long:    "Print the current status of all bgp peers of effective bgppolicy which includes peer IP address with port, asn and state",
+			example: `  Get the list of bgppeers with their current status
+  $ antctl get bgppeers
+`,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:       "/bgppeers",
+					outputType: multiple,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(agentapis.BGPPeerResponse{}),
+		},
 	},
 	rawCommands: []rawCommand{
 		{
