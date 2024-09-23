@@ -61,7 +61,6 @@ var (
 	ofPortPod2         = uint32(2)
 	testTCPFlags       = int32(11)
 	icmp6Proto         = intstr.FromInt(58)
-	tcpProto           = intstr.FromString("TCP")
 	icmpProto          = intstr.FromString("ICMP")
 	port80       int32 = 80
 	port81       int32 = 81

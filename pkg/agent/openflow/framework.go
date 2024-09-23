@@ -340,14 +340,3 @@ type traceableFeature interface {
 		ofPort uint32,
 		timeoutSeconds uint16) []binding.Flow
 }
-
-type packetCaptureFeature interface {
-	flowsToCapture(dataplaneTag uint8,
-		ovsMetersAreSupported,
-		senderOnly bool,
-		receiverOnly bool,
-		packet *binding.Packet,
-		endpointPackets []binding.Packet,
-		ofPort uint32,
-		timeoutSeconds uint16) []binding.Flow
-}
