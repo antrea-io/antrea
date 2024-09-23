@@ -133,19 +133,21 @@ func (p *proxier) canUseTopology(endpoints map[string]k8sproxy.Endpoint, svcInfo
 		}
 	}
 
-	zone, ok := p.nodeLabels[v1.LabelTopologyZone]
-	if !ok || zone == "" {
-		klog.InfoS("Skipping topology aware Endpoint filtering since Node is missing label", "label", v1.LabelTopologyZone)
-		return false
-	}
-
+	zone, foundZone := p.nodeLabels[v1.LabelTopologyZone]
 	hasEndpointForZone := false
 	for _, endpoint := range endpoints {
 		if !endpoint.IsReady() {
 			continue
 		}
+		// If any of the Endpoints do not have zone hints, we bail out.
 		if endpoint.GetZoneHints().Len() == 0 {
-			klog.InfoS("Skipping topology aware Endpoint filtering since one or more Endpoints is missing a zone hint")
+			klog.V(7).InfoS("Skipping topology aware Endpoint filtering since one or more Endpoints is missing a zone hint")
+			return false
+		}
+		// If we've made it this far, we have Endpoints with hints set. Now we check if there is a zone label, if
+		// there isn't one we log a warning and bail out.
+		if !foundZone || zone == "" {
+			klog.V(2).InfoS("Skipping topology aware Endpoint filtering since Node is missing label", "label", v1.LabelTopologyZone)
 			return false
 		}
 		if endpoint.GetZoneHints().Has(zone) {
@@ -154,7 +156,7 @@ func (p *proxier) canUseTopology(endpoints map[string]k8sproxy.Endpoint, svcInfo
 	}
 
 	if !hasEndpointForZone {
-		klog.InfoS("Skipping topology aware Endpoint filtering since no hints were provided for zone", "zone", zone)
+		klog.V(7).InfoS("Skipping topology aware Endpoint filtering since no hints were provided for zone", "zone", zone)
 		return false
 	}
 
