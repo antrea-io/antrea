@@ -249,14 +249,24 @@ func (c *EgressController) setIPAllocation(egressName string, ip net.IP, poolNam
 func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *egressv1beta1.Egress, error) {
 	prevIP, prevIPPool, exists := c.getIPAllocation(egress.Name)
 	if exists {
-		// The EgressIP and the ExternalIPPool don't change, do nothing.
-		if prevIP.String() == egress.Spec.EgressIP && prevIPPool == egress.Spec.ExternalIPPool && c.externalIPAllocator.IPPoolExists(egress.Spec.ExternalIPPool) {
-			return prevIP, egress, nil
+		// The EgressIP and the ExternalIPPool haven't changed.
+		if prevIP.String() == egress.Spec.EgressIP && prevIPPool == egress.Spec.ExternalIPPool {
+			// If the EgressIP is still valid for the ExternalIPPool, nothing needs to be done.
+			if c.externalIPAllocator.IPPoolHasIP(prevIPPool, prevIP) {
+				return prevIP, egress, nil
+			}
+			// If the ExternalIPPool exists, but the IP is not in range, reclaim the IP from the Egress API.
+			if c.externalIPAllocator.IPPoolExists(egress.Spec.ExternalIPPool) {
+				klog.InfoS("Allocated EgressIP is no longer part of ExternalIPPool, releasing it", "egress", klog.KObj(egress), "ip", egress.Spec.EgressIP, "pool", egress.Spec.ExternalIPPool)
+				if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
+					return nil, egress, err
+				} else {
+					egress = updatedEgress
+				}
+			}
 		}
 		// Either EgressIP or ExternalIPPool changes, release the previous one first.
-		if err := c.releaseEgressIP(egress.Name, prevIP, prevIPPool); err != nil {
-			return nil, egress, err
-		}
+		c.releaseEgressIP(egress.Name, prevIP, prevIPPool)
 	}
 
 	// Skip allocating EgressIP if ExternalIPPool is not specified and return whatever user specifies.
@@ -326,20 +336,23 @@ func (c *EgressController) updateEgressIP(egress *egressv1beta1.Egress, ip strin
 }
 
 // releaseEgressIP removes the Egress's ipAllocation in the cache and releases the IP to the pool.
-func (c *EgressController) releaseEgressIP(egressName string, egressIP net.IP, poolName string) error {
+func (c *EgressController) releaseEgressIP(egressName string, egressIP net.IP, poolName string) {
 	if err := c.externalIPAllocator.ReleaseIP(poolName, egressIP); err != nil {
 		if err == externalippool.ErrExternalIPPoolNotFound {
 			// Ignore the error since the external IP Pool could be deleted.
 			klog.InfoS("Failed to release EgressIP because IP Pool does not exist", "egress", egressName, "ip", egressIP, "pool", poolName)
 		} else {
+			// It is possible for the external IP Pool to have been deleted and
+			// recreated immediately with a different range, which would trigger this
+			// case. Transient errors in ReleaseIP are not possible, so there is no
+			// point in retrying. We should still delete our own state by calling
+			// deleteIPAllocation.
 			klog.ErrorS(err, "Failed to release IP", "ip", egressIP, "pool", poolName)
-			return err
 		}
 	} else {
 		klog.InfoS("Released EgressIP", "egress", egressName, "ip", egressIP, "pool", poolName)
 	}
 	c.deleteIPAllocation(egressName)
-	return nil
 }
 
 func (c *EgressController) syncEgress(key string) error {

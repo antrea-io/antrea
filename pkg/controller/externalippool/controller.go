@@ -88,6 +88,10 @@ type ExternalIPAllocator interface {
 	// UpdateIPAllocation marks the IP in the specified ExternalIPPool as occupied.
 	UpdateIPAllocation(externalIPPool string, ip net.IP) error
 	// ReleaseIP releases the IP to the IP pool.
+	// It returns ErrExternalIPPoolNotFound if the externalIPPool does not exist.
+	// Any other error indicates that the IP was not allocated, or is not currently allocated.
+	// In case of an error, there is no reason to try again with the same arguments, as
+	// transient errors are not possible.
 	ReleaseIP(externalIPPool string, ip net.IP) error
 	// HasSynced indicates ExternalIPAllocator has finished syncing all ExternalIPPool resources.
 	HasSynced() bool
