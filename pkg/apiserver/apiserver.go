@@ -143,7 +143,7 @@ func (s *APIServer) Run(ctx context.Context) error {
 	}
 	go s.caCertController.Run(ctx, 1)
 
-	return s.GenericAPIServer.PrepareRun().Run(ctx.Done())
+	return s.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
 
 type completedConfig struct {

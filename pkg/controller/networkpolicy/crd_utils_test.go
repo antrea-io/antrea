@@ -476,7 +476,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			npc.addClusterGroup(&cgA)
 			npc.cgStore.Add(&cgA)
 			if tt.clusterSetScope {
-				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicluster, true)()
+				featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicluster, true)
 				labelIdentityA := "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:foo1=bar1"
 				labelIdentityB := "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:foo2=bar2"
 				npc.labelIdentityInterface.AddLabelIdentity(labelIdentityA, 1)

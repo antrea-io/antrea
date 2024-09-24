@@ -160,7 +160,7 @@ type EgressController struct {
 	egressInformer     cache.SharedIndexInformer
 	egressLister       crdlisters.EgressLister
 	egressListerSynced cache.InformerSynced
-	queue              workqueue.RateLimitingInterface
+	queue              workqueue.TypedRateLimitingInterface[string]
 
 	externalIPPoolLister       crdlisters.ExternalIPPoolLister
 	externalIPPoolListerSynced cache.InformerSynced
@@ -242,7 +242,12 @@ func NewEgressController(
 		k8sClient:            k8sClient,
 		antreaClientProvider: antreaClientGetter,
 		crdClient:            crdClient,
-		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "egressgroup"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "egressgroup",
+			},
+		),
 		egressInformer:       egressInformer.Informer(),
 		egressLister:         egressInformer.Lister(),
 		egressListerSynced:   egressInformer.Informer().HasSynced,
@@ -554,21 +559,13 @@ func (c *EgressController) worker() {
 }
 
 func (c *EgressController) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	// We expect strings (Egress name) to come off the workqueue.
-	if key, ok := obj.(string); !ok {
-		// As the item in the workqueue is actually invalid, we call Forget here else we'd
-		// go into a loop of attempting to process a work item that is invalid.
-		// This should not happen.
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncEgress(key); err == nil {
+	if err := c.syncEgress(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)

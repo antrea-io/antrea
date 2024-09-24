@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,14 +18,13 @@ package v1alpha2
 
 import (
 	"context"
-	"time"
 
 	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	scheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // ClusterClaimsGetter has a method to return a ClusterClaimInterface.
@@ -49,128 +48,18 @@ type ClusterClaimInterface interface {
 
 // clusterClaims implements ClusterClaimInterface
 type clusterClaims struct {
-	client rest.Interface
-	ns     string
+	*gentype.ClientWithList[*v1alpha2.ClusterClaim, *v1alpha2.ClusterClaimList]
 }
 
 // newClusterClaims returns a ClusterClaims
 func newClusterClaims(c *MulticlusterV1alpha2Client, namespace string) *clusterClaims {
 	return &clusterClaims{
-		client: c.RESTClient(),
-		ns:     namespace,
+		gentype.NewClientWithList[*v1alpha2.ClusterClaim, *v1alpha2.ClusterClaimList](
+			"clusterclaims",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			namespace,
+			func() *v1alpha2.ClusterClaim { return &v1alpha2.ClusterClaim{} },
+			func() *v1alpha2.ClusterClaimList { return &v1alpha2.ClusterClaimList{} }),
 	}
-}
-
-// Get takes name of the clusterClaim, and returns the corresponding clusterClaim object, and an error if there is any.
-func (c *clusterClaims) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.ClusterClaim, err error) {
-	result = &v1alpha2.ClusterClaim{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("clusterclaims").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of ClusterClaims that match those selectors.
-func (c *clusterClaims) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.ClusterClaimList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1alpha2.ClusterClaimList{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("clusterclaims").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested clusterClaims.
-func (c *clusterClaims) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Namespace(c.ns).
-		Resource("clusterclaims").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a clusterClaim and creates it.  Returns the server's representation of the clusterClaim, and an error, if there is any.
-func (c *clusterClaims) Create(ctx context.Context, clusterClaim *v1alpha2.ClusterClaim, opts v1.CreateOptions) (result *v1alpha2.ClusterClaim, err error) {
-	result = &v1alpha2.ClusterClaim{}
-	err = c.client.Post().
-		Namespace(c.ns).
-		Resource("clusterclaims").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(clusterClaim).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a clusterClaim and updates it. Returns the server's representation of the clusterClaim, and an error, if there is any.
-func (c *clusterClaims) Update(ctx context.Context, clusterClaim *v1alpha2.ClusterClaim, opts v1.UpdateOptions) (result *v1alpha2.ClusterClaim, err error) {
-	result = &v1alpha2.ClusterClaim{}
-	err = c.client.Put().
-		Namespace(c.ns).
-		Resource("clusterclaims").
-		Name(clusterClaim.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(clusterClaim).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the clusterClaim and deletes it. Returns an error if one occurs.
-func (c *clusterClaims) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	return c.client.Delete().
-		Namespace(c.ns).
-		Resource("clusterclaims").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *clusterClaims) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Namespace(c.ns).
-		Resource("clusterclaims").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched clusterClaim.
-func (c *clusterClaims) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.ClusterClaim, err error) {
-	result = &v1alpha2.ClusterClaim{}
-	err = c.client.Patch(pt).
-		Namespace(c.ns).
-		Resource("clusterclaims").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

@@ -67,7 +67,7 @@ type StretchedNetworkPolicyController struct {
 	labelIdentityInformer     mcinformers.LabelIdentityInformer
 	labelIdentityLister       mclisters.LabelIdentityLister
 	LabelIdentityListerSynced cache.InformerSynced
-	queue                     workqueue.RateLimitingInterface
+	queue                     workqueue.TypedRateLimitingInterface[types.NamespacedName]
 	lock                      sync.RWMutex
 
 	labelToPods map[string]podSet
@@ -94,9 +94,14 @@ func NewMCAgentStretchedNetworkPolicyController(
 		labelIdentityInformer:     labelIdentityInformer,
 		labelIdentityLister:       labelIdentityInformer.Lister(),
 		LabelIdentityListerSynced: labelIdentityInformer.Informer().HasSynced,
-		queue:                     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter(), "stretchedNetworkPolicy"),
-		labelToPods:               map[string]podSet{},
-		podToLabel:                map[types.NamespacedName]string{},
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedItemBasedRateLimiter[types.NamespacedName](),
+			workqueue.TypedRateLimitingQueueConfig[types.NamespacedName]{
+				Name: "stretchedNetworkPolicy",
+			},
+		),
+		labelToPods: map[string]podSet{},
+		podToLabel:  map[types.NamespacedName]string{},
 	}
 
 	controller.podInformer.AddEventHandlerWithResyncPeriod(
@@ -176,16 +181,13 @@ func (s *StretchedNetworkPolicyController) worker() {
 }
 
 func (s *StretchedNetworkPolicyController) processNextWorkItem() bool {
-	obj, quit := s.queue.Get()
+	podRef, quit := s.queue.Get()
 	if quit {
 		return false
 	}
-	defer s.queue.Done(obj)
+	defer s.queue.Done(podRef)
 
-	if podRef, ok := obj.(types.NamespacedName); !ok {
-		s.queue.Forget(obj)
-		klog.ErrorS(nil, "Expected type 'NamespacedName' in work queue but got object", "object", obj)
-	} else if err := s.syncPodClassifierFlow(podRef); err == nil {
+	if err := s.syncPodClassifierFlow(podRef); err == nil {
 		s.queue.Forget(podRef)
 	} else {
 		// Put the item back on the workqueue to handle any transient errors.

@@ -389,6 +389,7 @@ func (r *ResourceImportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	instance := predicate.And(generationPredicate, labelIdentityResImportPredicate)
 	err := ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ResourceImport{}).
+		Named("resourceimport").
 		WithEventFilter(instance).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,

@@ -1210,7 +1210,7 @@ func TestPodUpdateShouldSyncEgress(t *testing.T) {
 	require.Equal(t, 1, c.queue.Len())
 	item, _ := c.queue.Get()
 	require.Equal(t, egress.Name, item)
-	require.NoError(t, c.syncEgress(item.(string)))
+	require.NoError(t, c.syncEgress(item))
 	c.queue.Done(item)
 
 	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(10), net.ParseIP(fakeLocalEgressIP1), uint32(1))
@@ -1227,7 +1227,7 @@ func TestPodUpdateShouldSyncEgress(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 	item, _ = c.queue.Get()
 	require.Equal(t, egress.Name, item)
-	require.NoError(t, c.syncEgress(item.(string)))
+	require.NoError(t, c.syncEgress(item))
 	c.queue.Done(item)
 }
 
@@ -1261,7 +1261,7 @@ func TestExternalIPPoolUpdateShouldSyncEgress(t *testing.T) {
 		for i := 0; i < len(items); i++ {
 			item, _ := c.queue.Get()
 			c.queue.Done(item)
-			expectedItems.Delete(item.(string))
+			expectedItems.Delete(item)
 		}
 		assert.Empty(t, expectedItems)
 	}
@@ -1821,16 +1821,16 @@ func TestUpdateServiceCIDRs(t *testing.T) {
 	}
 }
 
-func checkQueueItemExistence(t *testing.T, queue workqueue.RateLimitingInterface, items ...string) {
+func checkQueueItemExistence[T comparable](t *testing.T, queue workqueue.TypedRateLimitingInterface[T], items ...T) {
 	t.Logf("queue len %d", queue.Len())
 	require.Eventually(t, func() bool {
 		return len(items) == queue.Len()
 	}, time.Second, 10*time.Millisecond, "Didn't find enough items in the queue")
-	expectedItems := sets.New[string](items...)
-	actualItems := sets.New[string]()
+	expectedItems := sets.New[T](items...)
+	actualItems := sets.New[T]()
 	for i := 0; i < len(expectedItems); i++ {
 		key, _ := queue.Get()
-		actualItems.Insert(key.(string))
+		actualItems.Insert(key)
 		queue.Done(key)
 	}
 	assert.Equal(t, expectedItems, actualItems)

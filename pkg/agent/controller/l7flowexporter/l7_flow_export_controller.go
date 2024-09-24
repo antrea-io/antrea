@@ -69,7 +69,7 @@ type L7FlowExporterController struct {
 
 	targetPort uint32
 
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 }
 
 func NewL7FlowExporterController(
@@ -89,7 +89,12 @@ func NewL7FlowExporterController(
 		namespaceListerSynced: namespaceInformer.Informer().HasSynced,
 		l7Reconciler:          l7Reconciler,
 		podToDirectionMap:     make(map[string]v1alpha2.Direction),
-		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "L7FlowExporterController"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "L7FlowExporterController",
+			},
+		),
 	}
 	l7c.podInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -134,20 +139,13 @@ func (l7c *L7FlowExporterController) worker() {
 }
 
 func (l7c *L7FlowExporterController) processNextWorkItem() bool {
-	obj, quit := l7c.queue.Get()
+	key, quit := l7c.queue.Get()
 	if quit {
 		return false
 	}
-	defer l7c.queue.Done(obj)
+	defer l7c.queue.Done(key)
 
-	if key, ok := obj.(string); !ok {
-		// As the item in the work queue is actually invalid, we call Forget here else we'd
-		// go into a loop of attempting to process a work item that is invalid.
-		// This should not happen.
-		l7c.queue.Forget(key)
-		klog.ErrorS(nil, "Expected string in work queue but got", "key", obj)
-		return true
-	} else if err := l7c.syncPod(key); err == nil {
+	if err := l7c.syncPod(key); err == nil {
 		// If no error occurs we Forget this item, so it does not get queued again until
 		// another change happens.
 		l7c.queue.Forget(key)

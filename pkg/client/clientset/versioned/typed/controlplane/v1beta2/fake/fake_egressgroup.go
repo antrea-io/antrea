@@ -37,20 +37,22 @@ var egressgroupsKind = v1beta2.SchemeGroupVersion.WithKind("EgressGroup")
 
 // Get takes name of the egressGroup, and returns the corresponding egressGroup object, and an error if there is any.
 func (c *FakeEgressGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.EgressGroup, err error) {
+	emptyResult := &v1beta2.EgressGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(egressgroupsResource, name), &v1beta2.EgressGroup{})
+		Invokes(testing.NewRootGetActionWithOptions(egressgroupsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta2.EgressGroup), err
 }
 
 // List takes label and field selectors, and returns the list of EgressGroups that match those selectors.
 func (c *FakeEgressGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.EgressGroupList, err error) {
+	emptyResult := &v1beta2.EgressGroupList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(egressgroupsResource, egressgroupsKind, opts), &v1beta2.EgressGroupList{})
+		Invokes(testing.NewRootListActionWithOptions(egressgroupsResource, egressgroupsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -69,5 +71,5 @@ func (c *FakeEgressGroups) List(ctx context.Context, opts v1.ListOptions) (resul
 // Watch returns a watch.Interface that watches the requested egressGroups.
 func (c *FakeEgressGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(egressgroupsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(egressgroupsResource, opts))
 }

@@ -18,8 +18,8 @@ package v1beta1
 
 import (
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -37,30 +37,10 @@ type IPPoolLister interface {
 
 // iPPoolLister implements the IPPoolLister interface.
 type iPPoolLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1beta1.IPPool]
 }
 
 // NewIPPoolLister returns a new IPPoolLister.
 func NewIPPoolLister(indexer cache.Indexer) IPPoolLister {
-	return &iPPoolLister{indexer: indexer}
-}
-
-// List lists all IPPools in the indexer.
-func (s *iPPoolLister) List(selector labels.Selector) (ret []*v1beta1.IPPool, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1beta1.IPPool))
-	})
-	return ret, err
-}
-
-// Get retrieves the IPPool from the index for a given name.
-func (s *iPPoolLister) Get(name string) (*v1beta1.IPPool, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1beta1.Resource("ippool"), name)
-	}
-	return obj.(*v1beta1.IPPool), nil
+	return &iPPoolLister{listers.New[*v1beta1.IPPool](indexer, v1beta1.Resource("ippool"))}
 }

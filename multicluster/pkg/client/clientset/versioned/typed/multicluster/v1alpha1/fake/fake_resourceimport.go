@@ -39,22 +39,24 @@ var resourceimportsKind = v1alpha1.SchemeGroupVersion.WithKind("ResourceImport")
 
 // Get takes name of the resourceImport, and returns the corresponding resourceImport object, and an error if there is any.
 func (c *FakeResourceImports) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ResourceImport, err error) {
+	emptyResult := &v1alpha1.ResourceImport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(resourceimportsResource, c.ns, name), &v1alpha1.ResourceImport{})
+		Invokes(testing.NewGetActionWithOptions(resourceimportsResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceImport), err
 }
 
 // List takes label and field selectors, and returns the list of ResourceImports that match those selectors.
 func (c *FakeResourceImports) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ResourceImportList, err error) {
+	emptyResult := &v1alpha1.ResourceImportList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(resourceimportsResource, resourceimportsKind, c.ns, opts), &v1alpha1.ResourceImportList{})
+		Invokes(testing.NewListActionWithOptions(resourceimportsResource, resourceimportsKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -73,40 +75,43 @@ func (c *FakeResourceImports) List(ctx context.Context, opts v1.ListOptions) (re
 // Watch returns a watch.Interface that watches the requested resourceImports.
 func (c *FakeResourceImports) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(resourceimportsResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(resourceimportsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a resourceImport and creates it.  Returns the server's representation of the resourceImport, and an error, if there is any.
 func (c *FakeResourceImports) Create(ctx context.Context, resourceImport *v1alpha1.ResourceImport, opts v1.CreateOptions) (result *v1alpha1.ResourceImport, err error) {
+	emptyResult := &v1alpha1.ResourceImport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(resourceimportsResource, c.ns, resourceImport), &v1alpha1.ResourceImport{})
+		Invokes(testing.NewCreateActionWithOptions(resourceimportsResource, c.ns, resourceImport, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceImport), err
 }
 
 // Update takes the representation of a resourceImport and updates it. Returns the server's representation of the resourceImport, and an error, if there is any.
 func (c *FakeResourceImports) Update(ctx context.Context, resourceImport *v1alpha1.ResourceImport, opts v1.UpdateOptions) (result *v1alpha1.ResourceImport, err error) {
+	emptyResult := &v1alpha1.ResourceImport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(resourceimportsResource, c.ns, resourceImport), &v1alpha1.ResourceImport{})
+		Invokes(testing.NewUpdateActionWithOptions(resourceimportsResource, c.ns, resourceImport, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceImport), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeResourceImports) UpdateStatus(ctx context.Context, resourceImport *v1alpha1.ResourceImport, opts v1.UpdateOptions) (*v1alpha1.ResourceImport, error) {
+func (c *FakeResourceImports) UpdateStatus(ctx context.Context, resourceImport *v1alpha1.ResourceImport, opts v1.UpdateOptions) (result *v1alpha1.ResourceImport, err error) {
+	emptyResult := &v1alpha1.ResourceImport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(resourceimportsResource, "status", c.ns, resourceImport), &v1alpha1.ResourceImport{})
+		Invokes(testing.NewUpdateSubresourceActionWithOptions(resourceimportsResource, "status", c.ns, resourceImport, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceImport), err
 }
@@ -121,7 +126,7 @@ func (c *FakeResourceImports) Delete(ctx context.Context, name string, opts v1.D
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeResourceImports) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(resourceimportsResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(resourceimportsResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ResourceImportList{})
 	return err
@@ -129,11 +134,12 @@ func (c *FakeResourceImports) DeleteCollection(ctx context.Context, opts v1.Dele
 
 // Patch applies the patch and returns the patched resourceImport.
 func (c *FakeResourceImports) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ResourceImport, err error) {
+	emptyResult := &v1alpha1.ResourceImport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(resourceimportsResource, c.ns, name, pt, data, subresources...), &v1alpha1.ResourceImport{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(resourceimportsResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceImport), err
 }

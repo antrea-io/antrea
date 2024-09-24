@@ -38,7 +38,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
@@ -547,20 +546,19 @@ func BenchmarkSyncAddressGroup(b *testing.B) {
 
 	for c.appliedToGroupQueue.Len() > 0 {
 		key, _ := c.appliedToGroupQueue.Get()
-		c.syncAppliedToGroup(key.(string))
+		c.syncAppliedToGroup(key)
 		c.appliedToGroupQueue.Done(key)
 	}
 	for c.internalNetworkPolicyQueue.Len() > 0 {
 		key, _ := c.internalNetworkPolicyQueue.Get()
-		networkPolicyRef := key.(controlplane.NetworkPolicyReference)
-		c.syncInternalNetworkPolicy(&networkPolicyRef)
+		c.syncInternalNetworkPolicy(&key)
 		c.internalNetworkPolicyQueue.Done(key)
 	}
 	key, _ := c.addressGroupQueue.Get()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c.syncAddressGroup(key.(string))
+		c.syncAddressGroup(key)
 	}
 }
 
@@ -658,18 +656,17 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 		}
 		for c.appliedToGroupQueue.Len() > 0 {
 			key, _ := c.appliedToGroupQueue.Get()
-			c.syncAppliedToGroup(key.(string))
+			c.syncAppliedToGroup(key)
 			c.appliedToGroupQueue.Done(key)
 		}
 		for c.internalNetworkPolicyQueue.Len() > 0 {
 			key, _ := c.internalNetworkPolicyQueue.Get()
-			networkPolicyRef := key.(controlplane.NetworkPolicyReference)
-			c.syncInternalNetworkPolicy(&networkPolicyRef)
+			c.syncInternalNetworkPolicy(&key)
 			c.internalNetworkPolicyQueue.Done(key)
 		}
 		for c.addressGroupQueue.Len() > 0 {
 			key, _ := c.addressGroupQueue.Get()
-			c.syncAddressGroup(key.(string))
+			c.syncAddressGroup(key)
 			c.addressGroupQueue.Done(key)
 		}
 		// We stop the time for deferred functions, even if they should

@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,25 +36,17 @@ type ResourceExportLister interface {
 
 // resourceExportLister implements the ResourceExportLister interface.
 type resourceExportLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.ResourceExport]
 }
 
 // NewResourceExportLister returns a new ResourceExportLister.
 func NewResourceExportLister(indexer cache.Indexer) ResourceExportLister {
-	return &resourceExportLister{indexer: indexer}
-}
-
-// List lists all ResourceExports in the indexer.
-func (s *resourceExportLister) List(selector labels.Selector) (ret []*v1alpha1.ResourceExport, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ResourceExport))
-	})
-	return ret, err
+	return &resourceExportLister{listers.New[*v1alpha1.ResourceExport](indexer, v1alpha1.Resource("resourceexport"))}
 }
 
 // ResourceExports returns an object that can list and get ResourceExports.
 func (s *resourceExportLister) ResourceExports(namespace string) ResourceExportNamespaceLister {
-	return resourceExportNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return resourceExportNamespaceLister{listers.NewNamespaced[*v1alpha1.ResourceExport](s.ResourceIndexer, namespace)}
 }
 
 // ResourceExportNamespaceLister helps list and get ResourceExports.
@@ -72,26 +64,5 @@ type ResourceExportNamespaceLister interface {
 // resourceExportNamespaceLister implements the ResourceExportNamespaceLister
 // interface.
 type resourceExportNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ResourceExports in the indexer for a given namespace.
-func (s resourceExportNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.ResourceExport, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ResourceExport))
-	})
-	return ret, err
-}
-
-// Get retrieves the ResourceExport from the indexer for a given namespace and name.
-func (s resourceExportNamespaceLister) Get(name string) (*v1alpha1.ResourceExport, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("resourceexport"), name)
-	}
-	return obj.(*v1alpha1.ResourceExport), nil
+	listers.ResourceIndexer[*v1alpha1.ResourceExport]
 }

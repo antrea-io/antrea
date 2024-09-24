@@ -29,21 +29,21 @@ option go_package = "antrea.io/antrea/pkg/apis/controlplane/v1beta2";
 
 // AddressGroup is the message format of antrea/pkg/controller/types.AddressGroup in an API response.
 message AddressGroup {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   repeated GroupMember groupMembers = 2;
 }
 
 // AddressGroupList is a list of AddressGroup objects.
 message AddressGroupList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated AddressGroup items = 2;
 }
 
 // AddressGroupPatch describes the incremental update of an AddressGroup.
 message AddressGroupPatch {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   repeated GroupMember addedGroupMembers = 2;
 
@@ -52,7 +52,7 @@ message AddressGroupPatch {
 
 // AppliedToGroup is the message format of antrea/pkg/controller/types.AppliedToGroup in an API response.
 message AppliedToGroup {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // GroupMembers is list of resources selected by this group.
   repeated GroupMember groupMembers = 2;
@@ -60,14 +60,14 @@ message AppliedToGroup {
 
 // AppliedToGroupList is a list of AppliedToGroup objects.
 message AppliedToGroupList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated AppliedToGroup items = 2;
 }
 
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 message AppliedToGroupPatch {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   repeated GroupMember addedGroupMembers = 2;
 
@@ -94,7 +94,7 @@ message BundleServerAuthConfiguration {
 
 // ClusterGroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a ClusterGroup.
 message ClusterGroupMembers {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   repeated GroupMember effectiveMembers = 2;
 
@@ -108,7 +108,7 @@ message ClusterGroupMembers {
 }
 
 message EgressGroup {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // GroupMembers is list of resources selected by this group.
   repeated GroupMember groupMembers = 2;
@@ -116,14 +116,14 @@ message EgressGroup {
 
 // EgressGroupList is a list of EgressGroup objects.
 message EgressGroupList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated EgressGroup items = 2;
 }
 
 // EgressGroupPatch describes the incremental update of an EgressGroup.
 message EgressGroupPatch {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta objectMeta = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta objectMeta = 1;
 
   repeated GroupMember addedGroupMembers = 2;
 
@@ -146,7 +146,7 @@ message ExternalEntityReference {
 
 // GroupAssociation is the message format in an API response for groupassociation queries.
 message GroupAssociation {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // AssociatedGroups is a list of GroupReferences that is associated with the
   // Pod/ExternalEntity being queried.
@@ -177,7 +177,7 @@ message GroupMember {
 
 // GroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a Group.
 message GroupMembers {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   repeated GroupMember effectiveMembers = 2;
 
@@ -229,7 +229,7 @@ message IPBlock {
 }
 
 message IPGroupAssociation {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // AssociatedGroups is a list of GroupReferences that is associated with the
   // IP address being queried.
@@ -273,7 +273,7 @@ message NamedPort {
 
 // NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.
 message NetworkPolicy {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // Rules is a list of rules to be applied to the selected GroupMembers.
   repeated NetworkPolicyRule rules = 2;
@@ -303,7 +303,7 @@ message NetworkPolicyEvaluation {
   // do for all other Antrea API types. It should only affect the wire format, and nothing else.
   // When a new version of this API is introduced in the future (e.g., v1), we can correct
   // this and assign 1 as the Protobuf field number for the metadata field.
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 3;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 3;
 
   optional NetworkPolicyEvaluationRequest request = 1;
 
@@ -330,7 +330,7 @@ message NetworkPolicyEvaluationResponse {
 
 // NetworkPolicyList is a list of NetworkPolicy objects.
 message NetworkPolicyList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated NetworkPolicy items = 2;
 }
@@ -436,15 +436,15 @@ message NetworkPolicyStats {
   optional NetworkPolicyReference networkPolicy = 1;
 
   // The stats of the NetworkPolicy.
-  optional antrea_io.antrea.pkg.apis.stats.v1alpha1.TrafficStats trafficStats = 2;
+  optional .antrea_io.antrea.pkg.apis.stats.v1alpha1.TrafficStats trafficStats = 2;
 
   // The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
-  repeated antrea_io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats ruleTrafficStats = 3;
+  repeated .antrea_io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats ruleTrafficStats = 3;
 }
 
 // NetworkPolicyStatus is the status of a NetworkPolicy.
 message NetworkPolicyStatus {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // Nodes contains statuses produced on a list of Nodes.
   repeated NetworkPolicyNodeStatus nodes = 2;
@@ -458,7 +458,7 @@ message NodeReference {
 
 // NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.
 message NodeStatsSummary {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // The TrafficStats of K8s NetworkPolicies collected from the Node.
   repeated NetworkPolicyStats networkPolicies = 2;
@@ -508,7 +508,7 @@ message Service {
   // Port defines the port name or number on the given protocol. If not specified
   // and the Protocol is TCP, UDP, or SCTP, this matches all port numbers.
   // +optional
-  optional k8s.io.apimachinery.pkg.util.intstr.IntOrString port = 2;
+  optional .k8s.io.apimachinery.pkg.util.intstr.IntOrString port = 2;
 
   // EndPort defines the end of the port range, being the end included within the range.
   // It can only be specified when a numerical `port` is specified.
@@ -547,9 +547,9 @@ message ServiceReference {
 
 // SupportBundleCollection is the message format of antrea/pkg/controller/types.SupportBundleCollection in an API response.
 message SupportBundleCollection {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time expiredAt = 2;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time expiredAt = 2;
 
   optional string sinceTime = 3;
 
@@ -560,7 +560,7 @@ message SupportBundleCollection {
 
 // SupportBundleCollectionList is a list of SupportBundleCollection objects.
 message SupportBundleCollectionList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated SupportBundleCollection items = 2;
 }
@@ -584,7 +584,7 @@ message SupportBundleCollectionNodeStatus {
 
 // SupportBundleCollectionStatus is the status of a SupportBundleCollection.
 message SupportBundleCollectionStatus {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // Nodes contains statuses produced on a list of Nodes.
   repeated SupportBundleCollectionNodeStatus nodes = 2;

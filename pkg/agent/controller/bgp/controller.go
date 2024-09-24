@@ -132,7 +132,7 @@ type Controller struct {
 
 	newBGPServerFn func(globalConfig *bgp.GlobalConfig) bgp.Interface
 
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 }
 
 func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
@@ -169,7 +169,12 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 		newBGPServerFn: func(globalConfig *bgp.GlobalConfig) bgp.Interface {
 			return gobgp.NewGoBGPServer(globalConfig)
 		},
-		queue: workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "bgpPolicy"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "bgpPolicy",
+			},
+		),
 	}
 	c.bgpPolicyInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{

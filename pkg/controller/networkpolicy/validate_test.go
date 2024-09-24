@@ -1832,7 +1832,7 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for feature, value := range tt.featureGates {
-				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)()
+				featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)
 			}
 			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
@@ -1904,7 +1904,7 @@ func TestValidateAntreaNetworkPolicy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for feature, value := range tt.featureGates {
-				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)()
+				featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)
 			}
 			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)

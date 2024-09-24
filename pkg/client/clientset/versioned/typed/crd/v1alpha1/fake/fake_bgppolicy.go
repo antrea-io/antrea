@@ -38,20 +38,22 @@ var bgppoliciesKind = v1alpha1.SchemeGroupVersion.WithKind("BGPPolicy")
 
 // Get takes name of the bGPPolicy, and returns the corresponding bGPPolicy object, and an error if there is any.
 func (c *FakeBGPPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.BGPPolicy, err error) {
+	emptyResult := &v1alpha1.BGPPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(bgppoliciesResource, name), &v1alpha1.BGPPolicy{})
+		Invokes(testing.NewRootGetActionWithOptions(bgppoliciesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.BGPPolicy), err
 }
 
 // List takes label and field selectors, and returns the list of BGPPolicies that match those selectors.
 func (c *FakeBGPPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.BGPPolicyList, err error) {
+	emptyResult := &v1alpha1.BGPPolicyList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(bgppoliciesResource, bgppoliciesKind, opts), &v1alpha1.BGPPolicyList{})
+		Invokes(testing.NewRootListActionWithOptions(bgppoliciesResource, bgppoliciesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -70,25 +72,27 @@ func (c *FakeBGPPolicies) List(ctx context.Context, opts v1.ListOptions) (result
 // Watch returns a watch.Interface that watches the requested bGPPolicies.
 func (c *FakeBGPPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(bgppoliciesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(bgppoliciesResource, opts))
 }
 
 // Create takes the representation of a bGPPolicy and creates it.  Returns the server's representation of the bGPPolicy, and an error, if there is any.
 func (c *FakeBGPPolicies) Create(ctx context.Context, bGPPolicy *v1alpha1.BGPPolicy, opts v1.CreateOptions) (result *v1alpha1.BGPPolicy, err error) {
+	emptyResult := &v1alpha1.BGPPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(bgppoliciesResource, bGPPolicy), &v1alpha1.BGPPolicy{})
+		Invokes(testing.NewRootCreateActionWithOptions(bgppoliciesResource, bGPPolicy, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.BGPPolicy), err
 }
 
 // Update takes the representation of a bGPPolicy and updates it. Returns the server's representation of the bGPPolicy, and an error, if there is any.
 func (c *FakeBGPPolicies) Update(ctx context.Context, bGPPolicy *v1alpha1.BGPPolicy, opts v1.UpdateOptions) (result *v1alpha1.BGPPolicy, err error) {
+	emptyResult := &v1alpha1.BGPPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(bgppoliciesResource, bGPPolicy), &v1alpha1.BGPPolicy{})
+		Invokes(testing.NewRootUpdateActionWithOptions(bgppoliciesResource, bGPPolicy, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.BGPPolicy), err
 }
@@ -102,7 +106,7 @@ func (c *FakeBGPPolicies) Delete(ctx context.Context, name string, opts v1.Delet
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeBGPPolicies) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(bgppoliciesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(bgppoliciesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.BGPPolicyList{})
 	return err
@@ -110,10 +114,11 @@ func (c *FakeBGPPolicies) DeleteCollection(ctx context.Context, opts v1.DeleteOp
 
 // Patch applies the patch and returns the patched bGPPolicy.
 func (c *FakeBGPPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.BGPPolicy, err error) {
+	emptyResult := &v1alpha1.BGPPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(bgppoliciesResource, name, pt, data, subresources...), &v1alpha1.BGPPolicy{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(bgppoliciesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.BGPPolicy), err
 }

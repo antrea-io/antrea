@@ -28,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
@@ -419,7 +418,6 @@ func TestEnqueueExternalNodeUpdate(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			c.queue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "externalNode")
 			c.enqueueExternalNodeUpdate(tt.oldObj, tt.newObj)
 			if tt.expectEnqueued {
 				assert.Equal(t, 1, c.queue.Len())

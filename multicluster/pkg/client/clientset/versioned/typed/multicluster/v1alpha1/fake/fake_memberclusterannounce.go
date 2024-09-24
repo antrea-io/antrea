@@ -39,22 +39,24 @@ var memberclusterannouncesKind = v1alpha1.SchemeGroupVersion.WithKind("MemberClu
 
 // Get takes name of the memberClusterAnnounce, and returns the corresponding memberClusterAnnounce object, and an error if there is any.
 func (c *FakeMemberClusterAnnounces) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.MemberClusterAnnounce, err error) {
+	emptyResult := &v1alpha1.MemberClusterAnnounce{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(memberclusterannouncesResource, c.ns, name), &v1alpha1.MemberClusterAnnounce{})
+		Invokes(testing.NewGetActionWithOptions(memberclusterannouncesResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.MemberClusterAnnounce), err
 }
 
 // List takes label and field selectors, and returns the list of MemberClusterAnnounces that match those selectors.
 func (c *FakeMemberClusterAnnounces) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.MemberClusterAnnounceList, err error) {
+	emptyResult := &v1alpha1.MemberClusterAnnounceList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(memberclusterannouncesResource, memberclusterannouncesKind, c.ns, opts), &v1alpha1.MemberClusterAnnounceList{})
+		Invokes(testing.NewListActionWithOptions(memberclusterannouncesResource, memberclusterannouncesKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -73,28 +75,30 @@ func (c *FakeMemberClusterAnnounces) List(ctx context.Context, opts v1.ListOptio
 // Watch returns a watch.Interface that watches the requested memberClusterAnnounces.
 func (c *FakeMemberClusterAnnounces) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(memberclusterannouncesResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(memberclusterannouncesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a memberClusterAnnounce and creates it.  Returns the server's representation of the memberClusterAnnounce, and an error, if there is any.
 func (c *FakeMemberClusterAnnounces) Create(ctx context.Context, memberClusterAnnounce *v1alpha1.MemberClusterAnnounce, opts v1.CreateOptions) (result *v1alpha1.MemberClusterAnnounce, err error) {
+	emptyResult := &v1alpha1.MemberClusterAnnounce{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(memberclusterannouncesResource, c.ns, memberClusterAnnounce), &v1alpha1.MemberClusterAnnounce{})
+		Invokes(testing.NewCreateActionWithOptions(memberclusterannouncesResource, c.ns, memberClusterAnnounce, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.MemberClusterAnnounce), err
 }
 
 // Update takes the representation of a memberClusterAnnounce and updates it. Returns the server's representation of the memberClusterAnnounce, and an error, if there is any.
 func (c *FakeMemberClusterAnnounces) Update(ctx context.Context, memberClusterAnnounce *v1alpha1.MemberClusterAnnounce, opts v1.UpdateOptions) (result *v1alpha1.MemberClusterAnnounce, err error) {
+	emptyResult := &v1alpha1.MemberClusterAnnounce{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(memberclusterannouncesResource, c.ns, memberClusterAnnounce), &v1alpha1.MemberClusterAnnounce{})
+		Invokes(testing.NewUpdateActionWithOptions(memberclusterannouncesResource, c.ns, memberClusterAnnounce, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.MemberClusterAnnounce), err
 }
@@ -109,7 +113,7 @@ func (c *FakeMemberClusterAnnounces) Delete(ctx context.Context, name string, op
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeMemberClusterAnnounces) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(memberclusterannouncesResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(memberclusterannouncesResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.MemberClusterAnnounceList{})
 	return err
@@ -117,11 +121,12 @@ func (c *FakeMemberClusterAnnounces) DeleteCollection(ctx context.Context, opts 
 
 // Patch applies the patch and returns the patched memberClusterAnnounce.
 func (c *FakeMemberClusterAnnounces) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.MemberClusterAnnounce, err error) {
+	emptyResult := &v1alpha1.MemberClusterAnnounce{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(memberclusterannouncesResource, c.ns, name, pt, data, subresources...), &v1alpha1.MemberClusterAnnounce{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(memberclusterannouncesResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.MemberClusterAnnounce), err
 }

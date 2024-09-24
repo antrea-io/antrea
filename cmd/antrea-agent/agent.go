@@ -977,7 +977,7 @@ func run(o *Options) error {
 		return fmt.Errorf("error when getting generated cert for agent API server")
 	}
 
-	go apiServer.Run(stopCh)
+	go apiServer.Run(ctx)
 
 	// The API certificate is passed on directly to the monitor, instead of being provided by
 	// the agentQuerier. This is to avoid a circular dependency between apiServer and

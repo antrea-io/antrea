@@ -149,6 +149,7 @@ func (c *StaleResCleanupController) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcv1alpha1.MemberClusterAnnounce{}).
+		Named("memberclusterannounce_stale").
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
 		}).

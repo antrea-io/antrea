@@ -37,20 +37,22 @@ var appliedtogroupsKind = v1beta2.SchemeGroupVersion.WithKind("AppliedToGroup")
 
 // Get takes name of the appliedToGroup, and returns the corresponding appliedToGroup object, and an error if there is any.
 func (c *FakeAppliedToGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.AppliedToGroup, err error) {
+	emptyResult := &v1beta2.AppliedToGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(appliedtogroupsResource, name), &v1beta2.AppliedToGroup{})
+		Invokes(testing.NewRootGetActionWithOptions(appliedtogroupsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta2.AppliedToGroup), err
 }
 
 // List takes label and field selectors, and returns the list of AppliedToGroups that match those selectors.
 func (c *FakeAppliedToGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.AppliedToGroupList, err error) {
+	emptyResult := &v1beta2.AppliedToGroupList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(appliedtogroupsResource, appliedtogroupsKind, opts), &v1beta2.AppliedToGroupList{})
+		Invokes(testing.NewRootListActionWithOptions(appliedtogroupsResource, appliedtogroupsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -69,5 +71,5 @@ func (c *FakeAppliedToGroups) List(ctx context.Context, opts v1.ListOptions) (re
 // Watch returns a watch.Interface that watches the requested appliedToGroups.
 func (c *FakeAppliedToGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(appliedtogroupsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(appliedtogroupsResource, opts))
 }

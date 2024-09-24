@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha2
 
 import (
 	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,25 +36,17 @@ type ClusterSetLister interface {
 
 // clusterSetLister implements the ClusterSetLister interface.
 type clusterSetLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha2.ClusterSet]
 }
 
 // NewClusterSetLister returns a new ClusterSetLister.
 func NewClusterSetLister(indexer cache.Indexer) ClusterSetLister {
-	return &clusterSetLister{indexer: indexer}
-}
-
-// List lists all ClusterSets in the indexer.
-func (s *clusterSetLister) List(selector labels.Selector) (ret []*v1alpha2.ClusterSet, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha2.ClusterSet))
-	})
-	return ret, err
+	return &clusterSetLister{listers.New[*v1alpha2.ClusterSet](indexer, v1alpha2.Resource("clusterset"))}
 }
 
 // ClusterSets returns an object that can list and get ClusterSets.
 func (s *clusterSetLister) ClusterSets(namespace string) ClusterSetNamespaceLister {
-	return clusterSetNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return clusterSetNamespaceLister{listers.NewNamespaced[*v1alpha2.ClusterSet](s.ResourceIndexer, namespace)}
 }
 
 // ClusterSetNamespaceLister helps list and get ClusterSets.
@@ -72,26 +64,5 @@ type ClusterSetNamespaceLister interface {
 // clusterSetNamespaceLister implements the ClusterSetNamespaceLister
 // interface.
 type clusterSetNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ClusterSets in the indexer for a given namespace.
-func (s clusterSetNamespaceLister) List(selector labels.Selector) (ret []*v1alpha2.ClusterSet, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha2.ClusterSet))
-	})
-	return ret, err
-}
-
-// Get retrieves the ClusterSet from the indexer for a given namespace and name.
-func (s clusterSetNamespaceLister) Get(name string) (*v1alpha2.ClusterSet, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha2.Resource("clusterset"), name)
-	}
-	return obj.(*v1alpha2.ClusterSet), nil
+	listers.ResourceIndexer[*v1alpha2.ClusterSet]
 }

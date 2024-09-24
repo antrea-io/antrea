@@ -547,7 +547,12 @@ func TestEnqueueGateway(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			c.queue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "gatewayroute")
+			c.queue = workqueue.NewTypedRateLimitingQueueWithConfig(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+				workqueue.TypedRateLimitingQueueConfig[string]{
+					Name: "gatewayroute",
+				},
+			)
 			c.enqueueGateway(tt.obj, tt.isDeleted)
 			assert.Equal(t, tt.expectNum, c.queue.Len())
 		})
@@ -619,7 +624,12 @@ func TestEnqueueClusterInfoImport(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			c.queue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "gatewayroute")
+			c.queue = workqueue.NewTypedRateLimitingQueueWithConfig(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+				workqueue.TypedRateLimitingQueueConfig[string]{
+					Name: "gatewayroute",
+				},
+			)
 			c.enqueueClusterInfoImport(tt.obj, tt.isDeleted)
 			assert.Equal(t, tt.expectNum, c.queue.Len())
 		})

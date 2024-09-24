@@ -503,7 +503,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 type fakeManager struct {
 	remoteClient client.Client
 	reconciler   *LabelIdentityResourceImportReconciler
-	queue        workqueue.RateLimitingInterface
+	queue        workqueue.TypedRateLimitingInterface[*mcv1alpha1.ResourceImport]
 }
 
 func (fm *fakeManager) Run(stopCh <-chan struct{}) {
@@ -520,12 +520,11 @@ func (fm *fakeManager) worker() {
 }
 
 func (fm *fakeManager) syncNextItemInQueue() bool {
-	resImpObj, quit := fm.queue.Get()
+	resImp, quit := fm.queue.Get()
 	if quit {
 		return false
 	}
-	defer fm.queue.Done(resImpObj)
-	resImp := resImpObj.(*mcv1alpha1.ResourceImport)
+	defer fm.queue.Done(resImp)
 	err := fm.remoteClient.Create(ctx, resImp)
 	if err != nil {
 		fm.queue.AddRateLimited(resImp)
@@ -561,7 +560,7 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-	q := workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter())
+	q := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedItemBasedRateLimiter[*mcv1alpha1.ResourceImport]())
 	const numInitialResImp = 50
 	for i := uint32(1); i <= numInitialResImp; i++ {
 		resImp := &mcv1alpha1.ResourceImport{

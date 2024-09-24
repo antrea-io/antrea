@@ -635,7 +635,7 @@ func testLoadBalancerAdd(t *testing.T,
 		options = append(options, withoutProxyLoadBalancerIPs)
 	}
 	if dsrEnabled {
-		defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, true)()
+		featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, true)
 		options = append(options, withDSRMode)
 	}
 	if !endpointSliceEnabled {

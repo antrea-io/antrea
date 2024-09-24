@@ -35,10 +35,11 @@ var clustergroupmembersKind = v1beta2.SchemeGroupVersion.WithKind("ClusterGroupM
 
 // Get takes name of the clusterGroupMembers, and returns the corresponding clusterGroupMembers object, and an error if there is any.
 func (c *FakeClusterGroupMembers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.ClusterGroupMembers, err error) {
+	emptyResult := &v1beta2.ClusterGroupMembers{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(clustergroupmembersResource, name), &v1beta2.ClusterGroupMembers{})
+		Invokes(testing.NewRootGetActionWithOptions(clustergroupmembersResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta2.ClusterGroupMembers), err
 }

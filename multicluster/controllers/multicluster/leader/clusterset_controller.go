@@ -129,6 +129,7 @@ func (r *LeaderClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	instance := predicate.GenerationChangedPredicate{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcv1alpha2.ClusterSet{}).
+		Named("clusterset").
 		WithEventFilter(instance).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
