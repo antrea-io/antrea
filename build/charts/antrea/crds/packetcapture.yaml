@@ -1,0 +1,196 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: packetcaptures.crd.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - jsonPath: .status.phase
+          description: The phase of the PacketCapture.
+          name: Phase
+          type: string
+        - jsonPath: .spec.source.pod
+          description: The name of the source Pod.
+          name: Source-Pod
+          type: string
+          priority: 10
+        - jsonPath: .spec.destination.pod
+          description: The name of the destination Pod.
+          name: Destination-Pod
+          type: string
+          priority: 10
+        - jsonPath: .spec.destination.ip
+          description: The IP address of the destination.
+          name: Destination-IP
+          type: string
+          priority: 10
+        - jsonPath: .spec.timeout
+          description: Timeout in seconds.
+          name: Timeout
+          type: integer
+          priority: 10
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - fileServer
+                - source
+                - captureConfig
+                - destination
+              anyOf:
+                - properties:
+                    source:
+                      required: [pod]
+                - properties:
+                    destination:
+                      required: [pod]
+              properties:
+                source:
+                  type: object
+                  nullable: true
+                  oneOf:
+                    - required:
+                      - pod
+                    - required:
+                      - ip
+                  properties:
+                    pod:
+                      type: string
+                    namespace:
+                      type: string
+                    ip:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                destination:
+                  type: object
+                  nullable: true
+                  oneOf:
+                    - required:
+                      - pod
+                    - required:
+                      - ip
+                    - required:
+                      - service
+                  properties:
+                    pod:
+                      type: string
+                    service:
+                      type: string
+                    namespace:
+                      type: string
+                    ip:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                packet:
+                  type: object
+                  x-kubernetes-validations:
+                    - rule: "(self.ipFamily == 'IPv4' && self.protocol != 'IPv6-ICMP' && self.protocol != 58) || (self.ipFamily == 'IPv6' && self.protocol != 'ICMP' && self.protocol != 1) "
+                      message: "packet.ipFamily is incompatiable with packet.protocol"
+                  properties:
+                    ipFamily:
+                      type: string
+                      enum: [IPv4, IPv6]
+                      default: IPv4
+                    protocol:
+                      x-kubernetes-int-or-string: true
+                      enum: [ICMP, TCP, UDP, IPv6-ICMP, 1, 6, 17, 58]
+                      default: ICMP
+                    transportHeader:
+                      type: object
+                      nullable: true
+                      oneOf:
+                        - required:
+                          - tcp
+                        - required:
+                          - udp
+                      properties:
+                        udp:
+                          type: object
+                          properties:
+                            srcPort:
+                              type: integer
+                              minimum: 1
+                              maximum: 65535
+                            dstPort:
+                              type: integer
+                              minimum: 1
+                              maximum: 65535
+                        tcp:
+                          type: object
+                          properties:
+                            srcPort:
+                              type: integer
+                              minimum: 1
+                              maximum: 65535
+                            dstPort:
+                              type: integer
+                              minimum: 1
+                              maximum: 65535
+                            flags:
+                              type: integer
+                              minimum: 0
+                              maximum: 255
+                timeout:
+                  type: integer
+                  minimum: 1
+                  maximum: 300
+                  default: 60
+                captureConfig:
+                  type: object
+                  anyOf:
+                    - properties:
+                        firstN:
+                          required: [number]
+                  properties:
+                    firstN:
+                      type: object
+                      properties:
+                        number:
+                          type: integer
+                          format: int32
+                fileServer:
+                  type: object
+                  properties:
+                    url:
+                      type: string
+                      pattern: 's{0,1}ftps{0,1}:\/\/[\w-_./]+:\d+'
+            status:
+              type: object
+              properties:
+                reason:
+                  type: string
+                phase:
+                  type: string
+                startTime:
+                  type: string
+                numCapturedPackets:
+                  type: integer
+                packetsFileName:
+                  type: string
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: packetcaptures
+    singular: packetcapture
+    kind: PacketCapture
+    shortNames:
+      - pcap
