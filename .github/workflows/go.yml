@@ -171,8 +171,18 @@ jobs:
       run: GOARCH=arm64 make bin
     - name: Build Antrea binaries for arm
       run: GOARCH=arm make bin
-    - name: Build antctl binaries
-      run: make antctl
+    - name: Build antctl binary for linux amd64
+      run: GOOS=linux GOARCH=amd64 make antctl
+    - name: Build antctl binary for linux arm64
+      run: GOOS=linux GOARCH=arm64 make antctl
+    - name: Build antctl binary for linux arm
+      run: GOOS=linux GOARCH=arm make antctl
+    - name: Build antctl binary for windows amd64
+      run: GOOS=windows GOARCH=amd64 make antctl
+    - name: Build antctl binary for darwin amd64
+      run: GOOS=darwin GOARCH=amd64 make antctl
+    - name: Build antctl binary for darwin arm64
+      run: GOOS=darwin GOARCH=arm64 make antctl
     - name: Build Multi-cluster binaries
       run: |
         cd multicluster
