@@ -570,24 +570,7 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 		},
 	}
 
-	eventCh := make(chan string, 1)
-	waitForEvent := func(timeout time.Duration) error {
-		select {
-		case <-time.After(timeout):
-			return fmt.Errorf("timeout while waiting for IPPool event")
-		case <-eventCh:
-			return nil
-		}
-	}
-
 	controller := newController(nil, []runtime.Object{eipFoo1, egress})
-	// Register our own event handler to be able to determine when changes have been processed
-	// by the ExternalIPPool controller.
-	controller.externalIPAllocator.AddEventHandler(func(poolName string) {
-		eventCh <- poolName
-	})
-	// A call to RestoreIPAllocations is required for every registered event handler.
-	controller.externalIPAllocator.RestoreIPAllocations(nil)
 	controller.informerFactory.Start(stopCh)
 	controller.crdInformerFactory.Start(stopCh)
 	controller.informerFactory.WaitForCacheSync(stopCh)
@@ -596,6 +579,7 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
 	controller.restoreIPAllocations([]*v1beta1.Egress{egress})
 
+	require.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
 	getEgressIP, egress, err := controller.syncEgressIP(egress)
 	require.NoError(t, err)
 	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
@@ -604,13 +588,16 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	// call syncEgressIP in-between, so the Egress controller doesn't have a chance to process
 	// both changes independently.
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eipFoo1.Name, metav1.DeleteOptions{})
-	require.NoError(t, waitForEvent(1*time.Second))
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
+		assert.False(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
+	}, 1*time.Second, 10*time.Millisecond)
 
 	eipFoo1 = newExternalIPPool("pool1", "1.1.2.0/24", "", "")
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eipFoo1, metav1.CreateOptions{})
-	require.NoError(t, waitForEvent(1*time.Second))
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
+		assert.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
+	}, 1*time.Second, 10*time.Millisecond)
 
-	egress.Spec.EgressIP = getEgressIP.String()
 	getEgressIP, _, err = controller.syncEgressIP(egress)
 	require.NoError(t, err)
 	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)

@@ -255,14 +255,13 @@ func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *
 			if c.externalIPAllocator.IPPoolHasIP(prevIPPool, prevIP) {
 				return prevIP, egress, nil
 			}
-			// If the ExternalIPPool exists, but the IP is not in range, reclaim the IP from the Egress API.
-			if c.externalIPAllocator.IPPoolExists(egress.Spec.ExternalIPPool) {
-				klog.InfoS("Allocated EgressIP is no longer part of ExternalIPPool, releasing it", "egress", klog.KObj(egress), "ip", egress.Spec.EgressIP, "pool", egress.Spec.ExternalIPPool)
-				if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
-					return nil, egress, err
-				} else {
-					egress = updatedEgress
-				}
+			// The ExternalIPPool may no longer exist, or the IP is not in range.
+			// Reclaim the IP from the Egress API.
+			klog.InfoS("Allocated EgressIP is no longer part of ExternalIPPool, releasing it", "egress", klog.KObj(egress), "ip", egress.Spec.EgressIP, "pool", egress.Spec.ExternalIPPool)
+			if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
+				return nil, egress, err
+			} else {
+				egress = updatedEgress
 			}
 		}
 		// Either EgressIP or ExternalIPPool changes, release the previous one first.
