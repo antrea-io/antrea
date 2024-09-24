@@ -596,7 +596,7 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
 	controller.restoreIPAllocations([]*v1beta1.Egress{egress})
 
-	getEgressIP, _, err := controller.syncEgressIP(egress)
+	getEgressIP, egress, err := controller.syncEgressIP(egress)
 	require.NoError(t, err)
 	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
 
