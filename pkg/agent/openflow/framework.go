@@ -309,6 +309,10 @@ func (f *featureTraceflow) getRequiredTables() []*Table {
 	return nil
 }
 
+func (f *featurePacketCapture) getRequiredTables() []*Table {
+	return nil
+}
+
 func (f *featureExternalNodeConnectivity) getRequiredTables() []*Table {
 	return []*Table{
 		ConntrackTable,

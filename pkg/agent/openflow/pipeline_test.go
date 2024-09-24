@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -300,4 +301,95 @@ func getGroupModLen(g *openflow15.GroupMod) uint32 {
 		n += uint32(p.Len())
 	}
 	return n
+}
+
+func TestMatchTransportHeader(t *testing.T) {
+
+	testCases := []struct {
+		name            string
+		packet          *binding.Packet
+		endpointPackets []binding.Packet
+		expectCalls     func(ctrl *gomock.Controller, builder *openflowtest.MockFlowBuilder) *openflowtest.MockFlowBuilder
+	}{
+		{
+			name: "tcp proto",
+			packet: &binding.Packet{
+				IPProto: protocol.Type_TCP,
+			},
+			expectCalls: func(ctrl *gomock.Controller, builder *openflowtest.MockFlowBuilder) *openflowtest.MockFlowBuilder {
+				builder.EXPECT().MatchProtocol(binding.ProtocolTCP)
+				return builder
+
+			},
+		},
+		{
+			name: "udp proto",
+			packet: &binding.Packet{
+				IPProto: protocol.Type_UDP,
+			},
+			expectCalls: func(ctrl *gomock.Controller, builder *openflowtest.MockFlowBuilder) *openflowtest.MockFlowBuilder {
+				builder.EXPECT().MatchProtocol(binding.ProtocolUDP)
+				return builder
+			},
+		},
+		{
+			name: "ipv6-tcp",
+			packet: &binding.Packet{
+				IPProto: protocol.Type_TCP,
+				IsIPv6:  true,
+			},
+			expectCalls: func(ctrl *gomock.Controller, builder *openflowtest.MockFlowBuilder) *openflowtest.MockFlowBuilder {
+				builder.EXPECT().MatchProtocol(binding.ProtocolTCPv6)
+				return builder
+			},
+		},
+		{
+			name: "udp-with-src-and-dst-port",
+			packet: &binding.Packet{
+				IPProto:         protocol.Type_UDP,
+				SourcePort:      1000,
+				DestinationPort: 53,
+			},
+			expectCalls: func(ctrl *gomock.Controller, builder *openflowtest.MockFlowBuilder) *openflowtest.MockFlowBuilder {
+				builder.EXPECT().MatchProtocol(binding.ProtocolUDP).Return(builder).AnyTimes()
+				builder.EXPECT().MatchDstPort(uint16(53), nil).Return(builder).AnyTimes()
+				builder.EXPECT().MatchSrcPort(uint16(1000), nil).Return(builder).AnyTimes()
+				return builder
+			},
+		},
+		{
+			name: "with endpoints packets",
+			packet: &binding.Packet{
+				IPProto:         protocol.Type_TCP,
+				SourcePort:      1000,
+				DestinationPort: 53,
+			},
+			endpointPackets: []binding.Packet{
+				{
+					IPProto:         protocol.Type_TCP,
+					SourcePort:      1000,
+					DestinationPort: 54,
+				},
+			},
+			expectCalls: func(ctrl *gomock.Controller, builder *openflowtest.MockFlowBuilder) *openflowtest.MockFlowBuilder {
+				builder.EXPECT().MatchProtocol(binding.ProtocolTCP).Return(builder).AnyTimes()
+				builder.EXPECT().MatchDstPort(uint16(54), nil).Return(builder).AnyTimes()
+				builder.EXPECT().MatchSrcPort(uint16(1000), nil).Return(builder).AnyTimes()
+				return builder
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			fakeOfTable := openflowtest.NewMockTable(ctrl)
+			ConntrackStateTable.ofTable = fakeOfTable
+			defer func() {
+				ConntrackStateTable.ofTable = nil
+			}()
+			testBuilder := openflowtest.NewMockFlowBuilder(ctrl)
+			tc.expectCalls(ctrl, testBuilder)
+			matchTransportHeader(tc.packet, testBuilder, tc.endpointPackets)
+		})
+	}
 }

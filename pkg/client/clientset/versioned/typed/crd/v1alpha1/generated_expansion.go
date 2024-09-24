@@ -22,4 +22,6 @@ type ExternalNodeExpansion interface{}
 
 type NodeLatencyMonitorExpansion interface{}
 
+type PacketCaptureExpansion interface{}
+
 type SupportBundleCollectionExpansion interface{}

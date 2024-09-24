@@ -234,8 +234,14 @@ type Client interface {
 	// InstallTraceflowFlows installs flows for a Traceflow request.
 	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error
 
+	// InstallPacketCaptureFlows installs flows for a PacketCapture request.
+	InstallPacketCaptureFlows(dataplaneTag uint8, senderOnly bool, receiverOnly bool, packet *binding.Packet, endpointPackets []binding.Packet, ofPort uint32, timeoutSeconds uint16) error
+
 	// UninstallTraceflowFlows uninstalls flows for a Traceflow request.
 	UninstallTraceflowFlows(dataplaneTag uint8) error
+
+	// UninstallPacketCaptureFlows uninstalls flows for a PacketCapture request.
+	UninstallPacketCaptureFlows(dataplaneTag uint8) error
 
 	// GetPolicyInfoFromConjunction returns the following policy information for the provided conjunction ID:
 	// NetworkPolicy reference, OF priority, rule name, label
@@ -943,6 +949,7 @@ func (c *client) generatePipelines() {
 			c.connectUplinkToBridge)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureService)
 		c.traceableFeatures = append(c.traceableFeatures, c.featureService)
+
 	}
 
 	if c.nodeType == config.ExternalNode {
@@ -990,6 +997,11 @@ func (c *client) generatePipelines() {
 	c.featureTraceflow = newFeatureTraceflow()
 	c.activatedFeatures = append(c.activatedFeatures, c.featureTraceflow)
 
+	if c.enablePacketCapture {
+		c.featurePacketCapture = newFeaturePacketCapture(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP, binding.ProtocolIPv6}, c.enableProxy, c.networkConfig, c.nodeConfig)
+		c.activatedFeatures = append(c.activatedFeatures, c.featurePacketCapture)
+	}
+
 	// Pipelines to generate.
 	pipelineIDs := []binding.PipelineID{pipelineRoot, pipelineIP}
 	if c.networkConfig.IPv4Enabled {
@@ -1036,6 +1048,19 @@ func (c *client) generatePipelines() {
 		// generate a pipeline from the required table list.
 		c.pipelines[pipelineID] = generatePipeline(pipelineID, requiredTables)
 	}
+}
+
+func (c *client) InstallPacketCaptureFlows(dataplaneTag uint8, senderOnly, receiverOnly bool, packet *binding.Packet, endpointPackets []binding.Packet, ofPort uint32, timeoutSeconds uint16) error {
+	cacheKey := fmt.Sprintf("%x", dataplaneTag)
+	flows := c.featurePacketCapture.genFlows(dataplaneTag,
+		c.ovsMetersAreSupported,
+		senderOnly,
+		receiverOnly,
+		packet,
+		endpointPackets,
+		ofPort,
+		timeoutSeconds)
+	return c.addFlows(c.featurePacketCapture.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error {
@@ -1253,6 +1278,11 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedO
 func (c *client) UninstallTraceflowFlows(dataplaneTag uint8) error {
 	cacheKey := fmt.Sprintf("%x", dataplaneTag)
 	return c.deleteFlows(c.featureTraceflow.cachedFlows, cacheKey)
+}
+
+func (c *client) UninstallPacketCaptureFlows(dataplaneTag uint8) error {
+	cacheKey := fmt.Sprintf("%x", dataplaneTag)
+	return c.deleteFlows(c.featurePacketCapture.cachedFlows, cacheKey)
 }
 
 // setBasePacketOutBuilder sets base IP properties of a packetOutBuilder which can have more packet data added.
