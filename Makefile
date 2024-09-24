@@ -258,7 +258,7 @@ $(ANTCTL_BINARIES): antctl-%:
 	fi
 
 .PHONY: antctl
-antctl: $(ANTCTL_BINARIES)
+antctl: antctl-release
 
 .PHONY: antctl-release
 antctl-release:
