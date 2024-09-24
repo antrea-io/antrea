@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,25 +36,17 @@ type ResourceImportLister interface {
 
 // resourceImportLister implements the ResourceImportLister interface.
 type resourceImportLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.ResourceImport]
 }
 
 // NewResourceImportLister returns a new ResourceImportLister.
 func NewResourceImportLister(indexer cache.Indexer) ResourceImportLister {
-	return &resourceImportLister{indexer: indexer}
-}
-
-// List lists all ResourceImports in the indexer.
-func (s *resourceImportLister) List(selector labels.Selector) (ret []*v1alpha1.ResourceImport, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ResourceImport))
-	})
-	return ret, err
+	return &resourceImportLister{listers.New[*v1alpha1.ResourceImport](indexer, v1alpha1.Resource("resourceimport"))}
 }
 
 // ResourceImports returns an object that can list and get ResourceImports.
 func (s *resourceImportLister) ResourceImports(namespace string) ResourceImportNamespaceLister {
-	return resourceImportNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return resourceImportNamespaceLister{listers.NewNamespaced[*v1alpha1.ResourceImport](s.ResourceIndexer, namespace)}
 }
 
 // ResourceImportNamespaceLister helps list and get ResourceImports.
@@ -72,26 +64,5 @@ type ResourceImportNamespaceLister interface {
 // resourceImportNamespaceLister implements the ResourceImportNamespaceLister
 // interface.
 type resourceImportNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ResourceImports in the indexer for a given namespace.
-func (s resourceImportNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.ResourceImport, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ResourceImport))
-	})
-	return ret, err
-}
-
-// Get retrieves the ResourceImport from the indexer for a given namespace and name.
-func (s resourceImportNamespaceLister) Get(name string) (*v1alpha1.ResourceImport, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("resourceimport"), name)
-	}
-	return obj.(*v1alpha1.ResourceImport), nil
+	listers.ResourceIndexer[*v1alpha1.ResourceImport]
 }

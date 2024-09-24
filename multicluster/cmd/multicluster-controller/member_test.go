@@ -86,17 +86,18 @@ func TestRunMember(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		mockCtrl := gomock.NewController(t)
-		mockMemberManager := mocks.NewMockManager(mockCtrl)
-		initMockManager(mockMemberManager)
-		setupManagerAndCertControllerFunc = func(isLeader bool, o *Options) (ctrl.Manager, error) {
-			return mockMemberManager, nil
-		}
-		member.ServiceCIDRDiscoverFn = func(ctx context.Context, k8sClient client.Client, namespace string) (string, error) {
-			return "10.101.0.0/16", nil
-		}
-		ctrl.SetupSignalHandler = mockSetupSignalHandler
 		t.Run(tc.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			mockMemberManager := mocks.NewMockManager(mockCtrl)
+			initMockManager(mockMemberManager)
+			setupManagerAndCertControllerFunc = func(isLeader bool, o *Options) (ctrl.Manager, error) {
+				return mockMemberManager, nil
+			}
+			member.ServiceCIDRDiscoverFn = func(ctx context.Context, k8sClient client.Client, namespace string) (string, error) {
+				return "10.101.0.0/16", nil
+			}
+			ctrl.SetupSignalHandler = mockSetupSignalHandler
+
 			err := runMember(tc.options)
 			assert.NoError(t, err, "got error when running runMember")
 		})

@@ -38,20 +38,22 @@ var trafficcontrolsKind = v1alpha2.SchemeGroupVersion.WithKind("TrafficControl")
 
 // Get takes name of the trafficControl, and returns the corresponding trafficControl object, and an error if there is any.
 func (c *FakeTrafficControls) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.TrafficControl, err error) {
+	emptyResult := &v1alpha2.TrafficControl{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(trafficcontrolsResource, name), &v1alpha2.TrafficControl{})
+		Invokes(testing.NewRootGetActionWithOptions(trafficcontrolsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.TrafficControl), err
 }
 
 // List takes label and field selectors, and returns the list of TrafficControls that match those selectors.
 func (c *FakeTrafficControls) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.TrafficControlList, err error) {
+	emptyResult := &v1alpha2.TrafficControlList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(trafficcontrolsResource, trafficcontrolsKind, opts), &v1alpha2.TrafficControlList{})
+		Invokes(testing.NewRootListActionWithOptions(trafficcontrolsResource, trafficcontrolsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -70,25 +72,27 @@ func (c *FakeTrafficControls) List(ctx context.Context, opts v1.ListOptions) (re
 // Watch returns a watch.Interface that watches the requested trafficControls.
 func (c *FakeTrafficControls) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(trafficcontrolsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(trafficcontrolsResource, opts))
 }
 
 // Create takes the representation of a trafficControl and creates it.  Returns the server's representation of the trafficControl, and an error, if there is any.
 func (c *FakeTrafficControls) Create(ctx context.Context, trafficControl *v1alpha2.TrafficControl, opts v1.CreateOptions) (result *v1alpha2.TrafficControl, err error) {
+	emptyResult := &v1alpha2.TrafficControl{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(trafficcontrolsResource, trafficControl), &v1alpha2.TrafficControl{})
+		Invokes(testing.NewRootCreateActionWithOptions(trafficcontrolsResource, trafficControl, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.TrafficControl), err
 }
 
 // Update takes the representation of a trafficControl and updates it. Returns the server's representation of the trafficControl, and an error, if there is any.
 func (c *FakeTrafficControls) Update(ctx context.Context, trafficControl *v1alpha2.TrafficControl, opts v1.UpdateOptions) (result *v1alpha2.TrafficControl, err error) {
+	emptyResult := &v1alpha2.TrafficControl{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(trafficcontrolsResource, trafficControl), &v1alpha2.TrafficControl{})
+		Invokes(testing.NewRootUpdateActionWithOptions(trafficcontrolsResource, trafficControl, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.TrafficControl), err
 }
@@ -102,7 +106,7 @@ func (c *FakeTrafficControls) Delete(ctx context.Context, name string, opts v1.D
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeTrafficControls) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(trafficcontrolsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(trafficcontrolsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha2.TrafficControlList{})
 	return err
@@ -110,10 +114,11 @@ func (c *FakeTrafficControls) DeleteCollection(ctx context.Context, opts v1.Dele
 
 // Patch applies the patch and returns the patched trafficControl.
 func (c *FakeTrafficControls) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.TrafficControl, err error) {
+	emptyResult := &v1alpha2.TrafficControl{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(trafficcontrolsResource, name, pt, data, subresources...), &v1alpha2.TrafficControl{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(trafficcontrolsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.TrafficControl), err
 }

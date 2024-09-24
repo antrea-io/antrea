@@ -31,7 +31,7 @@ type ClusterGroupMembersExpansion interface {
 
 func (c *clusterGroupMembers) PaginatedGet(ctx context.Context, name string, pagination v1beta2.PaginationGetOptions, options v1.GetOptions) (result *v1beta2.ClusterGroupMembers, err error) {
 	result = &v1beta2.ClusterGroupMembers{}
-	err = c.client.Get().
+	err = c.GetClient().Get().
 		Resource("clustergroupmembers").
 		Name(name).
 		Param("limit", fmt.Sprint(pagination.Limit)).

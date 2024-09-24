@@ -114,7 +114,7 @@ type ExternalIPPoolController struct {
 	handlersWaitGroup sync.WaitGroup
 
 	// queue maintains the ExternalIPPool objects that need to be synced.
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 }
 
 // NewExternalIPPoolController returns a new *ExternalIPPoolController.
@@ -123,9 +123,14 @@ func NewExternalIPPoolController(crdClient clientset.Interface, externalIPPoolIn
 		crdClient:                  crdClient,
 		externalIPPoolLister:       externalIPPoolInformer.Lister(),
 		externalIPPoolListerSynced: externalIPPoolInformer.Informer().HasSynced,
-		queue:                      workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "externalIPPool"),
-		ipAllocatorInitialized:     &atomic.Value{},
-		ipAllocatorMap:             make(map[string]ipallocator.MultiIPAllocator),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "externalIPPool",
+			},
+		),
+		ipAllocatorInitialized: &atomic.Value{},
+		ipAllocatorMap:         make(map[string]ipallocator.MultiIPAllocator),
 	}
 	externalIPPoolInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -369,8 +374,7 @@ func (c *ExternalIPPoolController) processNextWorkItem() bool {
 	}
 	defer c.queue.Done(key)
 
-	err := c.updateExternalIPPoolStatus(key.(string))
-	if err != nil {
+	if err := c.updateExternalIPPoolStatus(key); err != nil {
 		// Put the item back in the workqueue to handle any transient errors.
 		c.queue.AddRateLimited(key)
 		klog.ErrorS(err, "Failed to sync ExternalIPPool status", "ExternalIPPool", key)

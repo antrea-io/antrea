@@ -131,7 +131,7 @@ type fqdnController struct {
 	// FQDN names this controller is tracking, with their corresponding dnsMeta.
 	dnsEntryCache map[string]dnsMeta
 	// FQDN names that needs to be re-queried after their respective TTLs.
-	dnsQueryQueue workqueue.RateLimitingInterface
+	dnsQueryQueue workqueue.TypedRateLimitingInterface[string]
 	// idAllocator provides interfaces to allocateForRule and release uint32 id.
 	idAllocator *idAllocator
 
@@ -156,11 +156,16 @@ type fqdnController struct {
 
 func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32) (*fqdnController, error) {
 	controller := &fqdnController{
-		ofClient:               client,
-		dirtyRuleHandler:       dirtyRuleHandler,
-		ruleSyncTracker:        &ruleSyncTracker{updateCh: make(chan ruleRealizationUpdate, 1), ruleToSubscribers: map[string][]*subscriber{}, dirtyRules: sets.New[string]()},
-		idAllocator:            allocator,
-		dnsQueryQueue:          workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "fqdn"),
+		ofClient:         client,
+		dirtyRuleHandler: dirtyRuleHandler,
+		ruleSyncTracker:  &ruleSyncTracker{updateCh: make(chan ruleRealizationUpdate, 1), ruleToSubscribers: map[string][]*subscriber{}, dirtyRules: sets.New[string]()},
+		idAllocator:      allocator,
+		dnsQueryQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "fqdn",
+			},
+		),
 		dnsEntryCache:          map[string]dnsMeta{},
 		fqdnRuleToSelectedPods: map[string]sets.Set[int32]{},
 		fqdnToSelectorItem:     map[string]sets.Set[fqdnSelectorItem]{},
@@ -637,12 +642,12 @@ func (f *fqdnController) processNextWorkItem() bool {
 
 	ctx, cancel := context.WithTimeout(context.Background(), dnsRequestTimeout)
 	defer cancel()
-	err := f.makeDNSRequest(ctx, key.(string))
+	err := f.makeDNSRequest(ctx, key)
 	f.handleErr(err, key)
 	return true
 }
 
-func (f *fqdnController) handleErr(err error, key interface{}) {
+func (f *fqdnController) handleErr(err error, key string) {
 	if err == nil {
 		f.dnsQueryQueue.Forget(key)
 		return

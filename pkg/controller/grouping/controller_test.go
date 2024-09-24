@@ -68,7 +68,7 @@ func TestGroupEntityControllerRun(t *testing.T) {
 				eventChanSize = originalEventChanSize
 			}()
 
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, tt.antreaPolicyEnabled)()
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, tt.antreaPolicyEnabled)
 			var objs []runtime.Object
 			for _, pod := range tt.initialPods {
 				objs = append(objs, pod)

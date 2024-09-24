@@ -38,20 +38,22 @@ var traceflowsKind = v1beta1.SchemeGroupVersion.WithKind("Traceflow")
 
 // Get takes name of the traceflow, and returns the corresponding traceflow object, and an error if there is any.
 func (c *FakeTraceflows) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.Traceflow, err error) {
+	emptyResult := &v1beta1.Traceflow{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(traceflowsResource, name), &v1beta1.Traceflow{})
+		Invokes(testing.NewRootGetActionWithOptions(traceflowsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.Traceflow), err
 }
 
 // List takes label and field selectors, and returns the list of Traceflows that match those selectors.
 func (c *FakeTraceflows) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.TraceflowList, err error) {
+	emptyResult := &v1beta1.TraceflowList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(traceflowsResource, traceflowsKind, opts), &v1beta1.TraceflowList{})
+		Invokes(testing.NewRootListActionWithOptions(traceflowsResource, traceflowsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -70,36 +72,39 @@ func (c *FakeTraceflows) List(ctx context.Context, opts v1.ListOptions) (result 
 // Watch returns a watch.Interface that watches the requested traceflows.
 func (c *FakeTraceflows) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(traceflowsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(traceflowsResource, opts))
 }
 
 // Create takes the representation of a traceflow and creates it.  Returns the server's representation of the traceflow, and an error, if there is any.
 func (c *FakeTraceflows) Create(ctx context.Context, traceflow *v1beta1.Traceflow, opts v1.CreateOptions) (result *v1beta1.Traceflow, err error) {
+	emptyResult := &v1beta1.Traceflow{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(traceflowsResource, traceflow), &v1beta1.Traceflow{})
+		Invokes(testing.NewRootCreateActionWithOptions(traceflowsResource, traceflow, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.Traceflow), err
 }
 
 // Update takes the representation of a traceflow and updates it. Returns the server's representation of the traceflow, and an error, if there is any.
 func (c *FakeTraceflows) Update(ctx context.Context, traceflow *v1beta1.Traceflow, opts v1.UpdateOptions) (result *v1beta1.Traceflow, err error) {
+	emptyResult := &v1beta1.Traceflow{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(traceflowsResource, traceflow), &v1beta1.Traceflow{})
+		Invokes(testing.NewRootUpdateActionWithOptions(traceflowsResource, traceflow, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.Traceflow), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeTraceflows) UpdateStatus(ctx context.Context, traceflow *v1beta1.Traceflow, opts v1.UpdateOptions) (*v1beta1.Traceflow, error) {
+func (c *FakeTraceflows) UpdateStatus(ctx context.Context, traceflow *v1beta1.Traceflow, opts v1.UpdateOptions) (result *v1beta1.Traceflow, err error) {
+	emptyResult := &v1beta1.Traceflow{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(traceflowsResource, "status", traceflow), &v1beta1.Traceflow{})
+		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(traceflowsResource, "status", traceflow, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.Traceflow), err
 }
@@ -113,7 +118,7 @@ func (c *FakeTraceflows) Delete(ctx context.Context, name string, opts v1.Delete
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeTraceflows) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(traceflowsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(traceflowsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1beta1.TraceflowList{})
 	return err
@@ -121,10 +126,11 @@ func (c *FakeTraceflows) DeleteCollection(ctx context.Context, opts v1.DeleteOpt
 
 // Patch applies the patch and returns the patched traceflow.
 func (c *FakeTraceflows) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.Traceflow, err error) {
+	emptyResult := &v1beta1.Traceflow{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(traceflowsResource, name, pt, data, subresources...), &v1beta1.Traceflow{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(traceflowsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.Traceflow), err
 }

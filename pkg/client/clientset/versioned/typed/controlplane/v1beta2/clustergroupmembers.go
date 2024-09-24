@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // ClusterGroupMembersGetter has a method to return a ClusterGroupMembersInterface.
@@ -39,24 +39,17 @@ type ClusterGroupMembersInterface interface {
 
 // clusterGroupMembers implements ClusterGroupMembersInterface
 type clusterGroupMembers struct {
-	client rest.Interface
+	*gentype.Client[*v1beta2.ClusterGroupMembers]
 }
 
 // newClusterGroupMembers returns a ClusterGroupMembers
 func newClusterGroupMembers(c *ControlplaneV1beta2Client) *clusterGroupMembers {
 	return &clusterGroupMembers{
-		client: c.RESTClient(),
+		gentype.NewClient[*v1beta2.ClusterGroupMembers](
+			"clustergroupmembers",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1beta2.ClusterGroupMembers { return &v1beta2.ClusterGroupMembers{} }),
 	}
-}
-
-// Get takes name of the clusterGroupMembers, and returns the corresponding clusterGroupMembers object, and an error if there is any.
-func (c *clusterGroupMembers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.ClusterGroupMembers, err error) {
-	result = &v1beta2.ClusterGroupMembers{}
-	err = c.client.Get().
-		Resource("clustergroupmembers").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
 }

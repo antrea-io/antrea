@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,12 @@ package v1alpha1
 
 import (
 	"context"
-	"time"
 
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // NetworkPolicyStatsGetter has a method to return a NetworkPolicyStatsInterface.
@@ -43,59 +42,18 @@ type NetworkPolicyStatsInterface interface {
 
 // networkPolicyStats implements NetworkPolicyStatsInterface
 type networkPolicyStats struct {
-	client rest.Interface
-	ns     string
+	*gentype.ClientWithList[*v1alpha1.NetworkPolicyStats, *v1alpha1.NetworkPolicyStatsList]
 }
 
 // newNetworkPolicyStats returns a NetworkPolicyStats
 func newNetworkPolicyStats(c *StatsV1alpha1Client, namespace string) *networkPolicyStats {
 	return &networkPolicyStats{
-		client: c.RESTClient(),
-		ns:     namespace,
+		gentype.NewClientWithList[*v1alpha1.NetworkPolicyStats, *v1alpha1.NetworkPolicyStatsList](
+			"networkpolicystats",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			namespace,
+			func() *v1alpha1.NetworkPolicyStats { return &v1alpha1.NetworkPolicyStats{} },
+			func() *v1alpha1.NetworkPolicyStatsList { return &v1alpha1.NetworkPolicyStatsList{} }),
 	}
-}
-
-// Get takes name of the networkPolicyStats, and returns the corresponding networkPolicyStats object, and an error if there is any.
-func (c *networkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.NetworkPolicyStats, err error) {
-	result = &v1alpha1.NetworkPolicyStats{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("networkpolicystats").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of NetworkPolicyStats that match those selectors.
-func (c *networkPolicyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.NetworkPolicyStatsList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1alpha1.NetworkPolicyStatsList{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("networkpolicystats").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested networkPolicyStats.
-func (c *networkPolicyStats) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Namespace(c.ns).
-		Resource("networkpolicystats").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
 }

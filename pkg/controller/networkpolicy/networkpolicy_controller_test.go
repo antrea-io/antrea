@@ -229,12 +229,32 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		appliedToGroupStore:        appliedToGroupStore,
 		internalNetworkPolicyStore: internalNetworkPolicyStore,
 		internalGroupStore:         internalGroupStore,
-		appliedToGroupQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "appliedToGroup"),
-		addressGroupQueue:          workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "addressGroup"),
-		internalNetworkPolicyQueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalNetworkPolicy"),
-		internalGroupQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalGroup"),
-		groupingInterface:          groupEntityIndex,
-		appliedToGroupNotifier:     newNotifier(),
+		appliedToGroupQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "appliedToGroup",
+			},
+		),
+		addressGroupQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "addressGroup",
+			},
+		),
+		internalNetworkPolicyQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[controlplane.NetworkPolicyReference](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[controlplane.NetworkPolicyReference]{
+				Name: "internalNetworkPolicy",
+			},
+		),
+		internalGroupQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "internalGroup",
+			},
+		),
+		groupingInterface:      groupEntityIndex,
+		appliedToGroupNotifier: newNotifier(),
 	}
 	npController.tierInformer.Informer().AddIndexers(tierIndexers)
 	npController.acnpInformer.Informer().AddIndexers(acnpIndexers)
@@ -4108,13 +4128,13 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 	checkResources(expectedPolicy, expectedAppliedToGroup, expectedAddressGroup)
 }
 
-func checkQueueItemExistence(t *testing.T, queue workqueue.RateLimitingInterface, items ...string) {
+func checkQueueItemExistence[T comparable](t *testing.T, queue workqueue.TypedRateLimitingInterface[T], items ...T) {
 	require.Equal(t, len(items), queue.Len())
-	expectedItems := sets.New[string](items...)
-	actualItems := sets.New[string]()
+	expectedItems := sets.New[T](items...)
+	actualItems := sets.New[T]()
 	for i := 0; i < len(expectedItems); i++ {
 		key, _ := queue.Get()
-		actualItems.Insert(key.(string))
+		actualItems.Insert(key)
 		queue.Done(key)
 	}
 	assert.Equal(t, expectedItems, actualItems)

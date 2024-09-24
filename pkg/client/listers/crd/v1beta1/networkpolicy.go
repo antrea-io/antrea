@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1beta1
 
 import (
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,25 +36,17 @@ type NetworkPolicyLister interface {
 
 // networkPolicyLister implements the NetworkPolicyLister interface.
 type networkPolicyLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1beta1.NetworkPolicy]
 }
 
 // NewNetworkPolicyLister returns a new NetworkPolicyLister.
 func NewNetworkPolicyLister(indexer cache.Indexer) NetworkPolicyLister {
-	return &networkPolicyLister{indexer: indexer}
-}
-
-// List lists all NetworkPolicies in the indexer.
-func (s *networkPolicyLister) List(selector labels.Selector) (ret []*v1beta1.NetworkPolicy, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1beta1.NetworkPolicy))
-	})
-	return ret, err
+	return &networkPolicyLister{listers.New[*v1beta1.NetworkPolicy](indexer, v1beta1.Resource("networkpolicy"))}
 }
 
 // NetworkPolicies returns an object that can list and get NetworkPolicies.
 func (s *networkPolicyLister) NetworkPolicies(namespace string) NetworkPolicyNamespaceLister {
-	return networkPolicyNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return networkPolicyNamespaceLister{listers.NewNamespaced[*v1beta1.NetworkPolicy](s.ResourceIndexer, namespace)}
 }
 
 // NetworkPolicyNamespaceLister helps list and get NetworkPolicies.
@@ -72,26 +64,5 @@ type NetworkPolicyNamespaceLister interface {
 // networkPolicyNamespaceLister implements the NetworkPolicyNamespaceLister
 // interface.
 type networkPolicyNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all NetworkPolicies in the indexer for a given namespace.
-func (s networkPolicyNamespaceLister) List(selector labels.Selector) (ret []*v1beta1.NetworkPolicy, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1beta1.NetworkPolicy))
-	})
-	return ret, err
-}
-
-// Get retrieves the NetworkPolicy from the indexer for a given namespace and name.
-func (s networkPolicyNamespaceLister) Get(name string) (*v1beta1.NetworkPolicy, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1beta1.Resource("networkpolicy"), name)
-	}
-	return obj.(*v1beta1.NetworkPolicy), nil
+	listers.ResourceIndexer[*v1beta1.NetworkPolicy]
 }

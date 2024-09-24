@@ -36,7 +36,7 @@ const (
 
 type PodStore struct {
 	pods         cache.Indexer
-	podsToDelete workqueue.DelayingInterface
+	podsToDelete workqueue.TypedDelayingInterface[*corev1.Pod]
 	// Mapping pod.uuid to podTimestamps
 	timestampMap map[types.UID]*podTimestamps
 	clock        clock.Clock
@@ -59,8 +59,11 @@ type Interface interface {
 // which is useful when writing robust unit tests.
 func NewPodStoreWithClock(podInformer cache.SharedIndexInformer, clock clock.WithTicker) *PodStore {
 	s := &PodStore{
-		pods:         cache.NewIndexer(podKeyFunc, cache.Indexers{podIPIndex: podIPIndexFunc}),
-		podsToDelete: workqueue.NewDelayingQueueWithCustomClock(clock, deleteQueueName),
+		pods: cache.NewIndexer(podKeyFunc, cache.Indexers{podIPIndex: podIPIndexFunc}),
+		podsToDelete: workqueue.NewTypedDelayingQueueWithConfig(workqueue.TypedDelayingQueueConfig[*corev1.Pod]{
+			Name:  deleteQueueName,
+			Clock: clock,
+		}),
 		clock:        clock,
 		timestampMap: map[types.UID]*podTimestamps{},
 		mutex:        sync.RWMutex{},
@@ -199,12 +202,12 @@ func (s *PodStore) processDeleteQueueItem() bool {
 	defer s.mutex.Unlock()
 	err := s.pods.Delete(pod)
 	if err != nil {
-		klog.ErrorS(err, "Error when deleting Pod from deletion workqueue", "Pod", klog.KObj(pod.(*corev1.Pod)))
+		klog.ErrorS(err, "Error when deleting Pod from deletion workqueue", "Pod", klog.KObj(pod))
 		return false
 	}
-	delete(s.timestampMap, pod.(*corev1.Pod).UID)
+	delete(s.timestampMap, pod.UID)
 	s.podsToDelete.Done(pod)
-	klog.V(4).InfoS("Removed Pod from Pod Store", "Pod", klog.KObj(pod.(*corev1.Pod)))
+	klog.V(4).InfoS("Removed Pod from Pod Store", "Pod", klog.KObj(pod))
 	return true
 }
 

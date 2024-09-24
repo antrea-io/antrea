@@ -70,7 +70,7 @@ type ExternalNodeController struct {
 
 	syncedExternalNode cache.Store
 	// queue maintains the ExternalNode objects that need to be synced.
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 }
 
 func NewExternalNodeController(crdClient clientset.Interface, externalNodeInformer externalnodeinformers.ExternalNodeInformer,
@@ -87,7 +87,12 @@ func NewExternalNodeController(crdClient clientset.Interface, externalNodeInform
 		externalEntityListerSynced: externalEntityInformer.Informer().HasSynced,
 
 		syncedExternalNode: cache.NewStore(keyFunc),
-		queue:              workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "externalnode"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "externalNode",
+			},
+		),
 	}
 	c.externalNodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -185,17 +190,13 @@ func (c *ExternalNodeController) worker() {
 }
 
 func (c *ExternalNodeController) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	if key, ok := obj.(string); !ok {
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string in ExternalNode work queue but got %#v", obj)
-		return true
-	} else if err := c.syncExternalNode(key); err == nil {
+	if err := c.syncExternalNode(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)

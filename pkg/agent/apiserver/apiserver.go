@@ -15,6 +15,7 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,12 +26,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	k8sversion "k8s.io/apimachinery/pkg/version"
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	apiserverversion "k8s.io/apiserver/pkg/util/version"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/addressgroup"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
@@ -72,8 +73,8 @@ type agentAPIServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
 }
 
-func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
-	return s.GenericAPIServer.PrepareRun().Run(stopCh)
+func (s *agentAPIServer) Run(ctx context.Context) error {
+	return s.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
 
 func (s *agentAPIServer) GetCertData() []byte {
@@ -179,14 +180,7 @@ func newConfig(aq agentquerier.AgentQuerier,
 	if err := os.WriteFile(loopbackClientTokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
 		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
 	}
-	v := antreaversion.GetVersion()
-	serverConfig.Version = &k8sversion.Info{
-		Major:        fmt.Sprint(v.Major),
-		Minor:        fmt.Sprint(v.Minor),
-		GitVersion:   v.String(),
-		GitTreeState: antreaversion.GitTreeState,
-		GitCommit:    antreaversion.GetGitSHA(),
-	}
+	serverConfig.EffectiveVersion = apiserverversion.NewEffectiveVersion(antreaversion.GetFullVersion())
 	serverConfig.EnableMetrics = enableMetrics
 	// Add readiness probe to check the status of watchers.
 	watcherCheck := healthz.NamedCheck("watcher", func(_ *http.Request) error {

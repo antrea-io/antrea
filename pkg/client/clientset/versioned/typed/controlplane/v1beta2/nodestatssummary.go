@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // NodeStatsSummariesGetter has a method to return a NodeStatsSummaryInterface.
@@ -39,24 +39,17 @@ type NodeStatsSummaryInterface interface {
 
 // nodeStatsSummaries implements NodeStatsSummaryInterface
 type nodeStatsSummaries struct {
-	client rest.Interface
+	*gentype.Client[*v1beta2.NodeStatsSummary]
 }
 
 // newNodeStatsSummaries returns a NodeStatsSummaries
 func newNodeStatsSummaries(c *ControlplaneV1beta2Client) *nodeStatsSummaries {
 	return &nodeStatsSummaries{
-		client: c.RESTClient(),
+		gentype.NewClient[*v1beta2.NodeStatsSummary](
+			"nodestatssummaries",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1beta2.NodeStatsSummary { return &v1beta2.NodeStatsSummary{} }),
 	}
-}
-
-// Create takes the representation of a nodeStatsSummary and creates it.  Returns the server's representation of the nodeStatsSummary, and an error, if there is any.
-func (c *nodeStatsSummaries) Create(ctx context.Context, nodeStatsSummary *v1beta2.NodeStatsSummary, opts v1.CreateOptions) (result *v1beta2.NodeStatsSummary, err error) {
-	result = &v1beta2.NodeStatsSummary{}
-	err = c.client.Post().
-		Resource("nodestatssummaries").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(nodeStatsSummary).
-		Do(ctx).
-		Into(result)
-	return
 }

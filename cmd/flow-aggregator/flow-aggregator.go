@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -41,6 +42,11 @@ func run(configFile string) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+	// Generate a context for functions which require one (instead of stopCh).
+	// We cancel the context when the function returns, which in the normal case will be when
+	// stopCh is closed.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	log.StartLogFileNumberMonitor(stopCh)
 
@@ -81,7 +87,7 @@ func run(configFile string) error {
 	if err != nil {
 		return fmt.Errorf("error when creating flow aggregator API server: %v", err)
 	}
-	go apiServer.Run(stopCh)
+	go apiServer.Run(ctx)
 
 	informerFactory.Start(stopCh)
 

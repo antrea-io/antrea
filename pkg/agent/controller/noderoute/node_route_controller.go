@@ -73,7 +73,7 @@ type Controller struct {
 	nodeInformer     coreinformers.NodeInformer
 	nodeLister       corelisters.NodeLister
 	nodeListerSynced cache.InformerSynced
-	queue            workqueue.RateLimitingInterface
+	queue            workqueue.TypedRateLimitingInterface[string]
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the nodeRouteInfo of the Node.
 	// A node will be in the map after its flows and routes are installed successfully.
@@ -107,17 +107,22 @@ func NewNodeRouteController(
 	flowRestoreCompleteWait *utilwait.Group,
 ) *Controller {
 	controller := &Controller{
-		ovsBridgeClient:         ovsBridgeClient,
-		ofClient:                client,
-		ovsCtlClient:            ovsCtlClient,
-		routeClient:             routeClient,
-		interfaceStore:          interfaceStore,
-		networkConfig:           networkConfig,
-		nodeConfig:              nodeConfig,
-		nodeInformer:            nodeInformer,
-		nodeLister:              nodeInformer.Lister(),
-		nodeListerSynced:        nodeInformer.Informer().HasSynced,
-		queue:                   workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
+		ovsBridgeClient:  ovsBridgeClient,
+		ofClient:         client,
+		ovsCtlClient:     ovsCtlClient,
+		routeClient:      routeClient,
+		interfaceStore:   interfaceStore,
+		networkConfig:    networkConfig,
+		nodeConfig:       nodeConfig,
+		nodeInformer:     nodeInformer,
+		nodeLister:       nodeInformer.Lister(),
+		nodeListerSynced: nodeInformer.Informer().HasSynced,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "noderoute",
+			},
+		),
 		installedNodes:          cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc}),
 		wireGuardClient:         wireguardClient,
 		ipsecCertificateManager: ipsecCertificateManager,
@@ -404,7 +409,7 @@ func (c *Controller) worker() {
 // function returns false if and only if the work queue was shutdown (no more items will be
 // processed).
 func (c *Controller) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
@@ -412,18 +417,7 @@ func (c *Controller) processNextWorkItem() bool {
 	// must remember to call Forget if we do not want this work item being re-queued. For
 	// example, we do not call Forget if a transient error occurs, instead the item is put back
 	// on the workqueue and attempted again after a back-off period.
-	defer c.queue.Done(obj)
-
-	// We expect strings (Node name) to come off the workqueue.
-	key, ok := obj.(string)
-	if !ok {
-		// As the item in the workqueue is actually invalid, we call Forget here else we'd
-		// go into a loop of attempting to process a work item that is invalid.
-		// This should not happen: enqueueNode only enqueues strings.
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	}
+	defer c.queue.Done(key)
 
 	// We call Finished unconditionally even if this only matters for the initial list of
 	// Nodes. There is no harm in calling Finished without a corresponding call to Start.

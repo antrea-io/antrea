@@ -18,8 +18,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -37,30 +37,10 @@ type NodeLatencyMonitorLister interface {
 
 // nodeLatencyMonitorLister implements the NodeLatencyMonitorLister interface.
 type nodeLatencyMonitorLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.NodeLatencyMonitor]
 }
 
 // NewNodeLatencyMonitorLister returns a new NodeLatencyMonitorLister.
 func NewNodeLatencyMonitorLister(indexer cache.Indexer) NodeLatencyMonitorLister {
-	return &nodeLatencyMonitorLister{indexer: indexer}
-}
-
-// List lists all NodeLatencyMonitors in the indexer.
-func (s *nodeLatencyMonitorLister) List(selector labels.Selector) (ret []*v1alpha1.NodeLatencyMonitor, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.NodeLatencyMonitor))
-	})
-	return ret, err
-}
-
-// Get retrieves the NodeLatencyMonitor from the index for a given name.
-func (s *nodeLatencyMonitorLister) Get(name string) (*v1alpha1.NodeLatencyMonitor, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("nodelatencymonitor"), name)
-	}
-	return obj.(*v1alpha1.NodeLatencyMonitor), nil
+	return &nodeLatencyMonitorLister{listers.New[*v1alpha1.NodeLatencyMonitor](indexer, v1alpha1.Resource("nodelatencymonitor"))}
 }

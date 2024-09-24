@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG GO_VERSION
-FROM ubuntu:22.04 AS protoc
+FROM ubuntu:24.04 AS protoc
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates unzip
@@ -30,13 +30,11 @@ FROM golang:${GO_VERSION}
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image based on the golang image, which includes codegen tools."
 
-ENV GO111MODULE=on
-
-ARG K8S_VERSION=1.29.2
+ARG K8S_VERSION=1.31.1
 # The k8s.io/kube-openapi repo does not have tag, using a workable commit hash.
 # We use the version that is referenced in the Kubernetes go.mod (for the
 # correct K8s version).
-ARG KUBEOPENAPI_VERSION=v0.0.0-20231010175941-2dd684a91f00
+ARG KUBEOPENAPI_VERSION=v0.0.0-20240228011516-70dd3763d340
 
 RUN go install k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go install k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \

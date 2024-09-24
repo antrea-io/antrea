@@ -79,7 +79,7 @@ type MCDefaultRouteController struct {
 	ciImportInformer     mcinformersv1alpha1.ClusterInfoImportInformer
 	ciImportLister       mclisters.ClusterInfoImportLister
 	ciImportListerSynced cache.InformerSynced
-	queue                workqueue.RateLimitingInterface
+	queue                workqueue.TypedRateLimitingInterface[string]
 	// installedCIImports is for saving ClusterInfos which have been processed
 	// in MCDefaultRouteController. Need to use mutex to protect 'installedCIImports' if
 	// we change the number of 'defaultWorkers'.
@@ -106,18 +106,23 @@ func NewMCDefaultRouteController(
 	multiclusterConfig agent.MulticlusterConfig,
 ) *MCDefaultRouteController {
 	controller := &MCDefaultRouteController{
-		mcClient:                     mcClient,
-		ofClient:                     client,
-		routeClient:                  routeClient,
-		nodeConfig:                   nodeConfig,
-		networkConfig:                networkConfig,
-		gwInformer:                   gwInformer,
-		gwLister:                     gwInformer.Lister(),
-		gwListerSynced:               gwInformer.Informer().HasSynced,
-		ciImportInformer:             ciImportInformer,
-		ciImportLister:               ciImportInformer.Lister(),
-		ciImportListerSynced:         ciImportInformer.Informer().HasSynced,
-		queue:                        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "gatewayroute"),
+		mcClient:             mcClient,
+		ofClient:             client,
+		routeClient:          routeClient,
+		nodeConfig:           nodeConfig,
+		networkConfig:        networkConfig,
+		gwInformer:           gwInformer,
+		gwLister:             gwInformer.Lister(),
+		gwListerSynced:       gwInformer.Informer().HasSynced,
+		ciImportInformer:     ciImportInformer,
+		ciImportLister:       ciImportInformer.Lister(),
+		ciImportListerSynced: ciImportInformer.Informer().HasSynced,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "gatewayroute",
+			},
+		),
 		installedCIImports:           make(map[string]*mcv1alpha1.ClusterInfoImport),
 		installedWireGuardPeers:      make(map[string]*mcv1alpha1.ClusterInfoImport),
 		namespace:                    multiclusterConfig.Namespace,
@@ -241,18 +246,11 @@ func (c *MCDefaultRouteController) worker() {
 }
 
 func (c *MCDefaultRouteController) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
-
-	key, ok := obj.(string)
-	if !ok {
-		c.queue.Forget(obj)
-		klog.InfoS("Expected string in work queue but got", "object", obj)
-		return true
-	}
+	defer c.queue.Done(key)
 
 	syncFn := func() error {
 		if c.wireGuardConfig != nil {

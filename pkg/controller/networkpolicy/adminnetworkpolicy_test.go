@@ -413,7 +413,7 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 			expectedAddressGroups:   0,
 		},
 	}
-	defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AdminNetworkPolicy, true)
+	featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AdminNetworkPolicy, true)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController(nil, nil)
@@ -709,7 +709,7 @@ func TestProcessBaselineAdminNetworkPolicy(t *testing.T) {
 			expectedAddressGroups:   1,
 		},
 	}
-	defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AdminNetworkPolicy, true)
+	featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AdminNetworkPolicy, true)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController(nil, nil)
