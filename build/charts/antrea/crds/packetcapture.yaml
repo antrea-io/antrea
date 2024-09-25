@@ -103,7 +103,7 @@ spec:
                   type: object
                   x-kubernetes-validations:
                     - rule: "(self.ipFamily == 'IPv4' && self.protocol != 'IPv6-ICMP' && self.protocol != 58) || (self.ipFamily == 'IPv6' && self.protocol != 'ICMP' && self.protocol != 1) "
-                      message: "packet.ipFamily is incompatiable with packet.protocol"
+                      message: "packet.ipFamily is incompatible with packet.protocol"
                   properties:
                     ipFamily:
                       type: string

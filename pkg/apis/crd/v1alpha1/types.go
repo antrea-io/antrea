@@ -470,8 +470,8 @@ type PacketCaptureStatus struct {
 	// NumCapturedPackets records how many packets have been captured. If it reaches the target number, the capture
 	// can be considered as finished.
 	NumCapturedPackets *int32 `json:"numCapturedPackets,omitempty"`
-	// PacketsFileName is the file name where the captured packets are temporarily cached. The file will be
-	// removed after the PacketCapture is deleted.
-	PacketsFileName string       `json:"packetsFileName"`
-	StartTime       *metav1.Time `json:"startTime,omitempty"`
+	// PacketsFileName is the file name where the captured packets are temporarily cached, also the file name stored in the configured fileserver. The temporary file in the local cache will be removed after the PacketCapture is deleted.
+	PacketsFileName string `json:"packetsFileName"`
+	// StartTime is the time when this capture sessions starts.
+	StartTime *metav1.Time `json:"startTime,omitempty"`
 }
