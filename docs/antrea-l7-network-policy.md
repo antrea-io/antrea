@@ -329,20 +329,20 @@ Allow ingress from client (10.10.1.9) to web (10.10.1.10/public/*).
 }
 ```
 
-Deny ingress from client (10.10.1.9) to web (10.10.1.10/admin/*)
+Deny ingress from client (10.10.1.4) to web (10.10.1.3/admin/*).
 
 ```json
 {
-  "timestamp": "2024-08-26T22:38:26.019956+0000",
-  "flow_id": 642636870504569,
+  "timestamp": "2024-09-05T22:49:24.788756+0000",
+  "flow_id": 1131530446896560,
   "in_iface": "antrea-l7-tap0",
   "event_type": "alert",
   "vlan": [
     2
   ],
-  "src_ip": "10.10.1.9",
-  "src_port": 37892,
-  "dest_ip": "10.10.1.10",
+  "src_ip": "10.10.1.4",
+  "src_port": 45034,
+  "dest_ip": "10.10.1.3",
   "dest_port": 80,
   "proto": "TCP",
   "pkt_src": "wire/pcap",
@@ -362,36 +362,37 @@ Deny ingress from client (10.10.1.9) to web (10.10.1.10/admin/*)
   "flow": {
     "pkts_toserver": 3,
     "pkts_toclient": 1,
-    "bytes_toserver": 308,
+    "bytes_toserver": 307,
     "bytes_toclient": 78,
-    "start": "2024-08-26T22:38:26.018553+0000",
-    "src_ip": "10.10.1.9",
-    "dest_ip": "10.10.1.10",
-    "src_port": 37892,
+    "start": "2024-09-05T22:49:24.787742+0000",
+    "src_ip": "10.10.1.4",
+    "dest_ip": "10.10.1.3",
+    "src_port": 45034,
     "dest_port": 80
   }
 }
 ```
 
-Additional packet log when `enableLogging` is set
+Additional packet logs are available when `enableLogging` is set, which tracks all
+packets in Suricata matching the dst IP address of the packet generating the alert.
 
 ```json
 {
-  "timestamp": "2024-08-26T22:38:26.025742+0000",
-  "flow_id": 642636870504569,
+  "timestamp": "2024-09-05T22:49:24.788756+0000",
+  "flow_id": 1131530446896560,
   "in_iface": "antrea-l7-tap0",
   "event_type": "packet",
   "vlan": [
     2
   ],
-  "src_ip": "10.10.1.10",
-  "src_port": 80,
-  "dest_ip": "10.10.1.9",
-  "dest_port": 37892,
+  "src_ip": "10.10.1.4",
+  "src_port": 45034,
+  "dest_ip": "10.10.1.3",
+  "dest_port": 80,
   "proto": "TCP",
   "pkt_src": "wire/pcap",
   "tenant_id": 2,
-  "packet": "/hYGSsKknh8fnhcggQAAAggARQAAKN7MAABABoXdCgoBCgoKAQkAUJQE0EfjHLfFVXZQFAH7QroAAA==",
+  "packet": "dtwWezuaHlOhfWpNgQAAAggARQAAjU/0QABABtRcCgoBBAoKAQOv6gBQgOZTvPTauPuAGAH7TZcAAAEBCAouFZzsR8fBM0dFVCAvYWRtaW4vaW5kZXguaHRtbCBIVFRQLzEuMQ0KSG9zdDogMTAuMTAuMS4zDQpVc2VyLUFnZW50OiBjdXJsLzcuNzQuMA0KQWNjZXB0OiAqLyoNCg0K",
   "packet_info": {
     "linktype": 1
   }
