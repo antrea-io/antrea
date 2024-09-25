@@ -113,6 +113,7 @@ type InterfaceConfig struct {
 type InterfaceStore interface {
 	Initialize(interfaces []*InterfaceConfig)
 	AddInterface(interfaceConfig *InterfaceConfig)
+	UpdateInterface(interfaceConfig *InterfaceConfig)
 	ListInterfaces() []*InterfaceConfig
 	DeleteInterface(interfaceConfig *InterfaceConfig)
 	GetInterface(interfaceKey string) (*InterfaceConfig, bool)

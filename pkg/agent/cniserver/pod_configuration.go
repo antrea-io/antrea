@@ -15,16 +15,24 @@
 package cniserver
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
 	"sync"
+	"time"
 
+	"antrea.io/libOpenflow/openflow15"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -59,8 +67,15 @@ const (
 	defaultIFDevName = "eth0"
 )
 
+const (
+	podNotReadyTimeInSeconds = 30
+)
+
 var (
 	getNSPath = util.GetNSPath
+
+	// retryInterval is the interval to re-install Pod OpenFlow entries if any error happened.
+	retryInterval = time.Second * 5
 )
 
 type podConfigurator struct {
@@ -76,9 +91,11 @@ type podConfigurator struct {
 	// isSecondaryNetwork is true if this instance of podConfigurator is used to configure
 	// Pod secondary network interfaces.
 	isSecondaryNetwork bool
+	podIfMonitor       *podIfaceMonitor
 }
 
 func newPodConfigurator(
+	kubeClient clientset.Interface,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
 	routeClient route.Interface,
@@ -93,6 +110,7 @@ func newPodConfigurator(
 	if err != nil {
 		return nil, err
 	}
+	ifMonitor := newPodInterfaceMonitor(kubeClient, ofClient, ifaceStore, podUpdateNotifier)
 	return &podConfigurator{
 		ovsBridgeClient:   ovsBridgeClient,
 		ofClient:          ofClient,
@@ -101,6 +119,7 @@ func newPodConfigurator(
 		gatewayMAC:        gatewayMAC,
 		ifConfigurator:    ifConfigurator,
 		podUpdateNotifier: podUpdateNotifier,
+		podIfMonitor:      ifMonitor,
 	}, nil
 }
 
@@ -166,13 +185,13 @@ func getContainerIPsString(ips []net.IP) string {
 // not created for a Pod interface.
 func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) *interfacestore.InterfaceConfig {
 	if portData.ExternalIDs == nil {
-		klog.V(2).Infof("OVS port %s has no external_ids", portData.Name)
+		klog.V(2).InfoS("OVS port has no external_ids", "port", portData.Name)
 		return nil
 	}
 
 	containerID, found := portData.ExternalIDs[ovsExternalIDContainerID]
 	if !found {
-		klog.V(2).Infof("OVS port %s has no %s in external_ids", portData.Name, ovsExternalIDContainerID)
+		klog.V(2).InfoS("OVS port has no containerID in external_ids", "port", portData.Name)
 		return nil
 	}
 
@@ -187,8 +206,7 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 
 	containerMAC, err := net.ParseMAC(portData.ExternalIDs[ovsExternalIDMAC])
 	if err != nil {
-		klog.Errorf("Failed to parse MAC address from OVS external config %s: %v",
-			portData.ExternalIDs[ovsExternalIDMAC], err)
+		klog.ErrorS(err, "Failed to parse MAC address from OVS external config")
 	}
 	podName, _ := portData.ExternalIDs[ovsExternalIDPodName]
 	podNamespace, _ := portData.ExternalIDs[ovsExternalIDPodNamespace]
@@ -279,7 +297,7 @@ func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[s
 func (pc *podConfigurator) removeInterfaces(containerID string) error {
 	containerConfig, found := pc.ifaceStore.GetContainerInterface(containerID)
 	if !found {
-		klog.V(2).Infof("Did not find the port for container %s in local cache", containerID)
+		klog.V(2).InfoS("Did not find the port for container in local cache", "container", containerID)
 		return nil
 	}
 
@@ -498,7 +516,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 // disconnectInterfaceFromOVS disconnects an existing interface from ovs br-int.
 func (pc *podConfigurator) disconnectInterfaceFromOVS(containerConfig *interfacestore.InterfaceConfig) error {
 	containerID := containerConfig.ContainerID
-	klog.V(2).Infof("Deleting Openflow entries for container %s", containerID)
+	klog.V(2).InfoS("Deleting Openflow entries for container", "container", containerID)
 	if !pc.isSecondaryNetwork {
 		if err := pc.ofClient.UninstallPodFlows(containerConfig.InterfaceName); err != nil {
 			return fmt.Errorf("failed to delete Openflow entries for container %s: %v", containerID, err)
@@ -558,7 +576,7 @@ func (pc *podConfigurator) connectInterceptedInterface(
 func (pc *podConfigurator) disconnectInterceptedInterface(podName, podNamespace, containerID string) error {
 	containerConfig, found := pc.ifaceStore.GetContainerInterface(containerID)
 	if !found {
-		klog.V(2).Infof("Did not find the port for container %s in local cache", containerID)
+		klog.V(2).InfoS("Did not find the port for container in local cache", "container", containerID)
 		return nil
 	}
 	for _, ip := range containerConfig.IPs {
@@ -569,4 +587,176 @@ func (pc *podConfigurator) disconnectInterceptedInterface(podName, podNamespace,
 	}
 	return pc.disconnectInterfaceFromOVS(containerConfig)
 	// TODO recover pre-connect state? repatch vethpair to original bridge etc ?? to make first CNI happy??
+}
+
+type unReadyPodInfo struct {
+	podName       string
+	podNamespace  string
+	flowInstalled bool
+	createTime    time.Time
+}
+
+type podIfaceMonitor struct {
+	kubeClient        clientset.Interface
+	ifaceStore        interfacestore.InterfaceStore
+	ofClient          openflow.Client
+	podUpdateNotifier channel.Notifier
+
+	// unReadyInterfaces is a map to store the OVS ports which is waiting for the PortStatus from OpenFlow switch.
+	// The key in the map is the OVS port name, and its value is unReadyPodInfo.
+	// It is used only on Windows now.
+	unReadyInterfaces map[string]*unReadyPodInfo
+	statusCh          chan *openflow15.PortStatus
+}
+
+func (m *podIfaceMonitor) Run(stopCh <-chan struct{}) {
+	klog.Info("Starting the monitor to wait for new OpenFlow ports")
+	go func() {
+		ticker := time.Tick(time.Second * 5)
+		for {
+			select {
+			case <-stopCh:
+				return
+			case status := <-m.statusCh:
+				klog.V(2).InfoS("Received PortStatus message", "message", status)
+				// Update Pod OpenFlow entries only after the OpenFlow port state is live.
+				if status.Desc.State == openflow15.PS_LIVE {
+					m.updateUnReadyPod(status)
+				}
+			case <-ticker:
+				m.checkUnReadyPods()
+			}
+		}
+	}()
+}
+
+func (m *podIfaceMonitor) updatePodFlows(ifName string, ofPort int32) error {
+	ifConfig, found := m.ifaceStore.GetInterfaceByName(ifName)
+	if !found {
+		return fmt.Errorf("interface config %s is not found in local cache", ifName)
+	}
+
+	// Update interface config with the ofPort.
+	ifConfig.OVSPortConfig.OFPort = ofPort
+	m.ifaceStore.UpdateInterface(ifConfig)
+
+	// Install OpenFlow entries for the Pod.
+	klog.V(2).InfoS("Setting up Openflow entries for OVS port", "port", ifName)
+	if err := m.ofClient.InstallPodFlows(ifName, ifConfig.IPs, ifConfig.MAC, uint32(ofPort), ifConfig.VLANID, nil); err != nil {
+		return fmt.Errorf("failed to add Openflow entries for OVS port %s: %v", ifName, err)
+	}
+
+	// Notify the Pod update event to required components.
+	event := agenttypes.PodUpdate{
+		PodName:      ifConfig.PodName,
+		PodNamespace: ifConfig.PodNamespace,
+		IsAdd:        true,
+		ContainerID:  ifConfig.ContainerID,
+	}
+	m.podUpdateNotifier.Notify(event)
+	return nil
+}
+
+func (m *podIfaceMonitor) updatePodUnreadyAnnotation(ctx context.Context, pod *corev1.Pod, addAnnotation bool) error {
+	podName, podNamespace := pod.Name, pod.Namespace
+	annotated := false
+	if pod.Annotations != nil {
+		_, annotated = pod.Annotations[agenttypes.PodNotReadyAnnotationKey]
+	}
+
+	if addAnnotation && !annotated {
+		// Add the annotation on Pod with '"pod.antrea.io/not-ready": ""'
+		patch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"annotations": map[string]interface{}{agenttypes.PodNotReadyAnnotationKey: ""},
+			},
+		})
+		_, err := m.kubeClient.CoreV1().Pods(podNamespace).Patch(ctx, podName, apitypes.MergePatchType, patch, metav1.PatchOptions{})
+		if err != nil {
+			return err
+		}
+	} else if !addAnnotation && annotated {
+		// Remove the annotation on Pod with '"pod.antrea.io/not-ready": ""'
+		patch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"annotations": map[string]interface{}{agenttypes.PodNotReadyAnnotationKey: nil},
+			},
+		})
+		_, err := m.kubeClient.CoreV1().Pods(podNamespace).Patch(context.Background(), podName, apitypes.MergePatchType, patch, metav1.PatchOptions{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *podIfaceMonitor) updateUnReadyPod(status *openflow15.PortStatus) {
+	ovsPort := string(bytes.Trim(status.Desc.Name, "\x00"))
+	podInfo, found := m.unReadyInterfaces[ovsPort]
+	if !found {
+		klog.InfoS("OVS port is not found", "ovsPort", ovsPort)
+		return
+	}
+
+	ofPort := status.Desc.PortNo
+	if err := m.updatePodFlows(ovsPort, int32(ofPort)); err != nil {
+		klog.ErrorS(err, "Failed to update Pod's OpenFlow entries, requeue the PortStatus message after 10s", "PodName", podInfo.podName, "PodNamespace", podInfo.podNamespace, "OVSPort", ovsPort)
+		m.reQueuePortStatus(status)
+		return
+	}
+
+	podInfo.flowInstalled = true
+}
+
+func (m *podIfaceMonitor) checkUnReadyPods() {
+	for key, podInfo := range m.unReadyInterfaces {
+		ctx := context.Background()
+		pod, err := m.kubeClient.CoreV1().Pods(podInfo.podNamespace).Get(ctx, podInfo.podName, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				delete(m.unReadyInterfaces, key)
+			}
+			klog.ErrorS(err, "Failed to get Pod, retrying", "Namespace", podInfo.podNamespace, "Name", podInfo.podName)
+			return
+		}
+
+		if podInfo.flowInstalled {
+			// Remove "not-ready" annotation from Pod
+			if err = m.updatePodUnreadyAnnotation(ctx, pod, false); err != nil {
+				klog.ErrorS(err, "Failed to patch Pod by removing not-ready annotation", "Namespace", podInfo.podNamespace, "name", podInfo.podName)
+				return
+			}
+			// Remove un-ready pod from local cache.
+			delete(m.unReadyInterfaces, key)
+			return
+		}
+
+		if time.Now().Sub(podInfo.createTime).Seconds() > podNotReadyTimeInSeconds {
+			// Add "not-ready" annotation on Pod if it is not ready within 30s.
+			if err = m.updatePodUnreadyAnnotation(ctx, pod, true); err != nil {
+				klog.ErrorS(err, "Failed to patch Pod by adding not-ready annotation", "Namespace", podInfo.podNamespace, "name", podInfo.podName)
+			}
+			return
+		}
+	}
+}
+
+func (m *podIfaceMonitor) addUnReadyPodInterface(ifConfig *interfacestore.InterfaceConfig) {
+	klog.InfoS("Added OVS port into unready interfaces", "ovsPort", ifConfig.InterfaceName,
+		"podName", ifConfig.PodName, "podNamespace", ifConfig.PodNamespace)
+	m.unReadyInterfaces[ifConfig.InterfaceName] = &unReadyPodInfo{
+		podName:       ifConfig.PodName,
+		podNamespace:  ifConfig.PodNamespace,
+		flowInstalled: false,
+		createTime:    time.Now(),
+	}
+}
+
+func (m *podIfaceMonitor) reQueuePortStatus(status *openflow15.PortStatus) {
+	go func() {
+		select {
+		case <-time.After(retryInterval):
+			m.statusCh <- status
+		}
+	}()
 }

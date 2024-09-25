@@ -22,13 +22,15 @@ import (
 	"testing"
 	"time"
 
+	"antrea.io/libOpenflow/openflow15"
 	"github.com/Microsoft/hcsshim"
 	"github.com/Microsoft/hcsshim/hcn"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	"k8s.io/apimachinery/pkg/util/wait"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -39,10 +41,10 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	winnettest "antrea.io/antrea/pkg/agent/util/winnet/testing"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/channel"
 )
@@ -173,17 +175,15 @@ type hnsTestUtil struct {
 	hnsEndpoint          *hcsshim.HNSEndpoint
 	hcnEndpoint          *hcn.HostComputeEndpoint
 	isDocker             bool
-	isAttached           bool
 	hnsEndpointCreatErr  error
 	endpointAttachErr    error
 }
 
-func newHnsTestUtil(endpointID string, existingHnsEndpoints []hcsshim.HNSEndpoint, isDocker, isAttached bool, hnsEndpointCreatErr, endpointAttachErr error) *hnsTestUtil {
+func newHnsTestUtil(endpointID string, existingHnsEndpoints []hcsshim.HNSEndpoint, isDocker bool, hnsEndpointCreatErr, endpointAttachErr error) *hnsTestUtil {
 	return &hnsTestUtil{
 		endpointID:           endpointID,
 		existingHnsEndpoints: existingHnsEndpoints,
 		isDocker:             isDocker,
-		isAttached:           isAttached,
 		hnsEndpointCreatErr:  hnsEndpointCreatErr,
 		endpointAttachErr:    endpointAttachErr,
 	}
@@ -217,9 +217,6 @@ func (t *hnsTestUtil) deleteHnsEndpoint(endpoint *hcsshim.HNSEndpoint) (*hcsshim
 
 func (t *hnsTestUtil) attachEndpointInNamespace(ep *hcn.HostComputeEndpoint, namespace string) error {
 	t.hcnEndpoint.HostComputeNamespace = namespace
-	if t.endpointAttachErr == nil {
-		t.addHostInterface()
-	}
 	return t.endpointAttachErr
 }
 
@@ -258,6 +255,7 @@ func (t *hnsTestUtil) addHostInterface() {
 }
 
 func newMockCNIServer(t *testing.T, controller *gomock.Controller, podUpdateNotifier *channel.SubscribableChannel) *CNIServer {
+	kubeClient := fakeclientset.NewClientset()
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	mockRoute = routetest.NewMockInterface(controller)
@@ -269,7 +267,8 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, podUpdateNoti
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
 	gateway := &config.GatewayConfig{Name: "", IPv4: gwIPv4, MAC: gwMAC}
 	cniServer.nodeConfig = &config.NodeConfig{Name: "node1", PodIPv4CIDR: nodePodCIDRv4, GatewayConfig: gateway}
-	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, podUpdateNotifier)
+	mockOFClient.EXPECT().SubscribeOFPortStatusMessage(gomock.Any()).AnyTimes()
+	cniServer.podConfigurator, _ = newPodConfigurator(kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, podUpdateNotifier)
 	cniServer.podConfigurator.ifConfigurator.(*ifConfigurator).winnet = mockWinnet
 	return cniServer
 }
@@ -315,7 +314,6 @@ func TestCmdAdd(t *testing.T) {
 		hnsEndpointCreateErr error
 		endpointAttachErr    error
 		ifaceExist           bool
-		isAttached           bool
 		existingHnsEndpoints []hcsshim.HNSEndpoint
 		endpointExists       bool
 		connectOVS           bool
@@ -341,7 +339,6 @@ func TestCmdAdd(t *testing.T) {
 			oriIPAMResult:       oriIPAMResult,
 			connectOVS:          true,
 			containerIfaceExist: true,
-			isAttached:          true,
 		}, {
 			name:              "containerd-attach-failure",
 			podName:           "pod10",
@@ -364,13 +361,21 @@ func TestCmdAdd(t *testing.T) {
 			ipamType := "windows-test"
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
 			ipam.ResetIPAMDriver(ipamType, ipamMock)
+			stopCh := make(chan struct{})
+			defer func() {
+				stopCh <- struct{}{}
+			}()
 
 			isDocker := isDockerContainer(tc.netns)
-			testUtil := newHnsTestUtil(generateUUID(), tc.existingHnsEndpoints, isDocker, tc.isAttached, tc.hnsEndpointCreateErr, tc.endpointAttachErr)
+			testUtil := newHnsTestUtil(generateUUID(), tc.existingHnsEndpoints, isDocker, tc.hnsEndpointCreateErr, tc.endpointAttachErr)
 			testUtil.setFunctions()
 			defer testUtil.restore()
 			waiter := newAsyncWaiter(tc.podName, tc.infraContainerID)
 			server := newMockCNIServer(t, controller, waiter.notifier)
+			server.podConfigurator.podIfMonitor.kubeClient.CoreV1().Pods(testPodNamespace).Create(ctx, &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: tc.podName, Namespace: testPodNamespace}}, metav1.CreateOptions{})
+			server.podConfigurator.podIfMonitor.Run(stopCh)
+
 			requestMsg, ovsPortName := prepareSetup(t, ipamType, tc.podName, tc.containerID, tc.infraContainerID, tc.netns, nil)
 			if tc.endpointExists {
 				server.podConfigurator.ifConfigurator.(*ifConfigurator).addEndpoint(getHnsEndpoint(generateUUID(), ovsPortName))
@@ -389,10 +394,31 @@ func TestCmdAdd(t *testing.T) {
 			}
 			ovsPortID := generateUUID()
 			if tc.connectOVS {
+				ofPortNumber := uint32(100)
+				portStatusCh := server.podConfigurator.podIfMonitor.statusCh
 				mockOVSBridgeClient.EXPECT().CreatePort(ovsPortName, ovsPortName, gomock.Any()).Return(ovsPortID, nil).Times(1)
-				mockOVSBridgeClient.EXPECT().SetInterfaceType(ovsPortName, "internal").Return(nil).Times(1)
-				mockOVSBridgeClient.EXPECT().GetOFPort(ovsPortName, true).Return(int32(100), nil).Times(1)
-				mockOFClient.EXPECT().InstallPodFlows(ovsPortName, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				mockOVSBridgeClient.EXPECT().SetInterfaceType(ovsPortName, "internal").Return(nil).Times(1).Do(
+					func(name, ifType string) ovsconfig.Error {
+						go func() {
+							// Simulate OVS successfully connects to the vNIC, then a PortStatus message is
+							// supposed to receive.
+							select {
+							case <-time.After(time.Millisecond * 50):
+								portStatusCh <- &openflow15.PortStatus{
+									Reason: openflow15.PR_MODIFY,
+									Desc: openflow15.Port{
+										PortNo: ofPortNumber,
+										Length: 72,
+										Name:   []byte(name),
+										State:  openflow15.PS_LIVE,
+									},
+								}
+							}
+						}()
+						return nil
+					},
+				)
+				mockOFClient.EXPECT().InstallPodFlows(ovsPortName, gomock.Any(), gomock.Any(), uint32(ofPortNumber), gomock.Any(), gomock.Any()).Return(nil)
 				mockRoute.EXPECT().AddLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(nil).Times(1)
 			}
 			resp, err := server.CmdAdd(ctx, requestMsg)
@@ -421,17 +447,8 @@ func TestCmdAdd(t *testing.T) {
 			_, exists := ifaceStore.GetContainerInterface(containerID)
 			assert.Equal(t, exists, tc.containerIfaceExist)
 			if tc.connectOVS {
+				testUtil.addHostInterface()
 				waiter.wait()
-				// Wait for the completion of async function "setInterfaceMTUFunc", otherwise it may lead to the
-				// race condition failure.
-				wait.PollUntilContextTimeout(context.Background(), time.Millisecond*10, time.Second, true,
-					func(ctx context.Context) (done bool, err error) {
-						mtuSet, exist := hostIfaces.Load(ovsPortName)
-						if !exist {
-							return false, nil
-						}
-						return mtuSet.(bool), nil
-					})
 			}
 			waiter.close()
 		})
@@ -491,7 +508,7 @@ func TestCmdDel(t *testing.T) {
 			if tc.endpointExists {
 				existingHnsEndpoints = append(existingHnsEndpoints, *hnsEndpoint)
 			}
-			testUtil := newHnsTestUtil(hnsEndpoint.Id, existingHnsEndpoints, isDocker, true, nil, nil)
+			testUtil := newHnsTestUtil(hnsEndpoint.Id, existingHnsEndpoints, isDocker, nil, nil)
 			testUtil.setFunctions()
 			defer testUtil.restore()
 			waiter := newAsyncWaiter(testPodNameA, containerID)
@@ -685,68 +702,37 @@ func TestCmdCheck(t *testing.T) {
 	}
 }
 
-type asyncWaiter struct {
-	podName     string
-	containerID string
-	waitCh      chan struct{}
-	stopCh      chan struct{}
-	notifier    *channel.SubscribableChannel
-}
-
-func (w *asyncWaiter) notify(e interface{}) {
-	podUpdate := e.(agenttypes.PodUpdate)
-	if podUpdate.PodName == w.podName && podUpdate.ContainerID == w.containerID {
-		w.waitCh <- struct{}{}
-	}
-}
-
-func (w *asyncWaiter) wait() {
-	<-w.waitCh
-}
-
-func (w *asyncWaiter) close() {
-	close(w.waitCh)
-	close(w.stopCh)
-}
-
-func newAsyncWaiter(podName, containerID string) *asyncWaiter {
-	waiter := &asyncWaiter{
-		podName:     podName,
-		containerID: containerID,
-		waitCh:      make(chan struct{}),
-		stopCh:      make(chan struct{}),
-		notifier:    channel.NewSubscribableChannel("PodUpdate", 100),
-	}
-	waiter.notifier.Subscribe(waiter.notify)
-	go waiter.notifier.Run(waiter.stopCh)
-	return waiter
-}
-
 func TestReconcile(t *testing.T) {
 	controller := gomock.NewController(t)
+	kubeClient := fakeclientset.NewClientset(pod1, pod2, pod3)
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
+	stopCh := make(chan struct{})
+	defer func() {
+		stopCh <- struct{}{}
+	}()
 
 	defer mockHostInterfaceExists()()
 	defer mockGetHnsNetworkByName()()
 	missingEndpoint := getHnsEndpoint(generateUUID(), "iface4")
-	testUtil := newHnsTestUtil(missingEndpoint.Id, []hcsshim.HNSEndpoint{*missingEndpoint}, false, true, nil, nil)
+	testUtil := newHnsTestUtil(missingEndpoint.Id, []hcsshim.HNSEndpoint{*missingEndpoint}, false, nil, nil)
 	testUtil.createHnsEndpoint(missingEndpoint)
 	testUtil.setFunctions()
 	defer testUtil.restore()
 
+	mockOFClient.EXPECT().SubscribeOFPortStatusMessage(gomock.Any()).AnyTimes()
 	cniServer := newCNIServer(t)
 	cniServer.routeClient = mockRoute
-	kubeClient := fakeclientset.NewSimpleClientset(pod1, pod2, pod3)
 	cniServer.kubeClient = kubeClient
 	for _, containerIface := range []*interfacestore.InterfaceConfig{normalInterface, staleInterface, unconnectedInterface} {
 		ifaceStore.AddInterface(containerIface)
 	}
 	waiter := newAsyncWaiter(unconnectedInterface.PodName, unconnectedInterface.ContainerID)
-	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, waiter.notifier)
+	cniServer.podConfigurator, _ = newPodConfigurator(kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, waiter.notifier)
 	cniServer.nodeConfig = &config.NodeConfig{Name: nodeName}
+	cniServer.podConfigurator.podIfMonitor.Run(stopCh)
 
 	// Re-install Pod1 flows
 	podFlowsInstalled := make(chan string, 2)
@@ -760,8 +746,26 @@ func TestReconcile(t *testing.T) {
 	mockRoute.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(nil).Times(1)
 	// Re-connect to Pod4
 	hostIfaces.Store(fmt.Sprintf("vEthernet (%s)", unconnectedInterface.InterfaceName), true)
-	mockOVSBridgeClient.EXPECT().SetInterfaceType(unconnectedInterface.InterfaceName, "internal").Return(nil).Times(1)
-	mockOVSBridgeClient.EXPECT().GetOFPort(unconnectedInterface.InterfaceName, true).Return(int32(5), nil).Times(1)
+	mockOVSBridgeClient.EXPECT().SetInterfaceType(unconnectedInterface.InterfaceName, "internal").Return(nil).Times(1).Do(
+		func(name, ifType string) ovsconfig.Error {
+			// Simulate OVS successfully connects to the vNIC, then a PortStatus message is
+			// supposed to receive.
+			select {
+			case <-time.After(time.Millisecond * 50):
+				portStatusCh := cniServer.podConfigurator.podIfMonitor.statusCh
+				portStatusCh <- &openflow15.PortStatus{
+					Reason: openflow15.PR_MODIFY,
+					Desc: openflow15.Port{
+						PortNo: uint32(5),
+						Length: 72,
+						Name:   []byte(name),
+						State:  openflow15.PS_LIVE,
+					},
+				}
+			}
+			return nil
+		},
+	)
 	mockOFClient.EXPECT().InstallPodFlows(unconnectedInterface.InterfaceName, unconnectedInterface.IPs, unconnectedInterface.MAC, uint32(5), uint16(0), nil).
 		Do(func(interfaceName string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
 			podFlowsInstalled <- interfaceName

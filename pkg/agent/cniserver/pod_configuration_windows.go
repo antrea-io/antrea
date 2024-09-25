@@ -18,15 +18,16 @@
 package cniserver
 
 import (
-	"fmt"
-
-	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/klog/v2"
+
+	"antrea.io/libOpenflow/openflow15"
+	current "github.com/containernetworking/cni/pkg/types/100"
+	clientset "k8s.io/client-go/kubernetes"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/util/channel"
 )
 
 // connectInterfaceToOVSAsync waits for an interface to be created and connects it to OVS br-int asynchronously
@@ -34,29 +35,15 @@ import (
 // CNI call completes.
 func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) error {
 	ovsPortName := ifConfig.InterfaceName
+	// Add the OVS port into unReadyPorts. This operation is performed before we update OVSDB, otherwise we
+	// need to think about the race condition between the current goroutine with the listener.
+	// Note, we may add OVS port into "unReadyOVSPorts" map even if the update OVSDB operation is failed,
+	// because it is also a case that the Pod's networking is not ready.
+	pc.podIfMonitor.addUnReadyPodInterface(ifConfig)
 	return pc.ifConfigurator.addPostInterfaceCreateHook(ifConfig.ContainerID, ovsPortName, containerAccess, func() error {
 		if err := pc.ovsBridgeClient.SetInterfaceType(ovsPortName, "internal"); err != nil {
 			return err
 		}
-		ofPort, err := pc.ovsBridgeClient.GetOFPort(ovsPortName, true)
-		if err != nil {
-			return err
-		}
-		containerID := ifConfig.ContainerID
-		klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
-		if err := pc.ofClient.InstallPodFlows(ovsPortName, ifConfig.IPs, ifConfig.MAC, uint32(ofPort), ifConfig.VLANID, nil); err != nil {
-			return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
-		}
-		// Update interface config with the ofPort.
-		ifConfig.OVSPortConfig.OFPort = ofPort
-		// Notify the Pod update event to required components.
-		event := types.PodUpdate{
-			PodName:      ifConfig.PodName,
-			PodNamespace: ifConfig.PodNamespace,
-			IsAdd:        true,
-			ContainerID:  ifConfig.ContainerID,
-		}
-		pc.podUpdateNotifier.Notify(event)
 		return nil
 	})
 }
@@ -75,7 +62,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	// Because of this, we need to wait asynchronously for the interface to be created: we create the OVS port
 	// and set the OVS Interface type "" first, and change the OVS Interface type to "internal" to connect to the
 	// container interface after it is created. After OVS connects to the container interface, an OFPort is allocated.
-	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
+	klog.V(2).InfoS("Adding OVS port for container", "port", ovsPortName, "container", containerID)
 	ovsAttachInfo := BuildOVSPortExternalIDs(containerConfig)
 	portUUID, err := pc.createOVSPort(ovsPortName, ovsAttachInfo, containerConfig.VLANID)
 	if err != nil {
@@ -105,7 +92,7 @@ func (pc *podConfigurator) configureInterfaces(
 	// See: https://github.com/kubernetes/kubernetes/issues/57253#issuecomment-358897721.
 	interfaceConfig, found := pc.ifaceStore.GetContainerInterface(containerID)
 	if found {
-		klog.V(2).Infof("Found an existing OVS port for container %s, returning", containerID)
+		klog.V(2).InfoS("Found an existing OVS port for container, returning", "container", containerID)
 		mac := interfaceConfig.MAC.String()
 		hostIface := &current.Interface{
 			Name:    interfaceConfig.InterfaceName,
@@ -128,9 +115,25 @@ func (pc *podConfigurator) configureInterfaces(
 func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) {
 	for i := range ifConfigs {
 		ifaceConfig := ifConfigs[i]
-		pod := k8s.NamespacedName(ifaceConfig.PodNamespace, ifaceConfig.PodName)
 		if err := pc.connectInterfaceToOVSAsync(ifaceConfig, containerAccess); err != nil {
-			klog.Errorf("Failed to reconcile Pod %s: %v", pod, err)
+			klog.ErrorS(err, "Failed to reconcile Pod", "name", ifaceConfig.PodName, "Namespace", ifaceConfig.PodNamespace)
 		}
+	}
+}
+
+func newPodInterfaceMonitor(kubeClient clientset.Interface,
+	ofClient openflow.Client,
+	ifaceStore interfacestore.InterfaceStore,
+	podUpdateNotifier channel.Notifier,
+) *podIfaceMonitor {
+	statusCh := make(chan *openflow15.PortStatus)
+	ofClient.SubscribeOFPortStatusMessage(statusCh)
+	return &podIfaceMonitor{
+		kubeClient:        kubeClient,
+		ofClient:          ofClient,
+		ifaceStore:        ifaceStore,
+		podUpdateNotifier: podUpdateNotifier,
+		unReadyInterfaces: make(map[string]*unReadyPodInfo),
+		statusCh:          statusCh,
 	}
 }
