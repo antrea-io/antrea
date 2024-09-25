@@ -34,7 +34,7 @@ func TestIPAssigner(t *testing.T) {
 	nodeLinkName := nodeIntf.Name
 	require.NotNil(t, nodeLinkName, "Get Node link failed")
 
-	ipAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName, nil)
 	require.NoError(t, err, "Initializing IP assigner failed")
 
 	dummyDevice, err := netlink.LinkByName(dummyDeviceName)
@@ -83,7 +83,7 @@ func TestIPAssigner(t *testing.T) {
 	require.NoError(t, err, "Failed to list IP addresses")
 	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/%d", ip1VLAN30, subnet30.PrefixLength)), actualIPs, "Actual IPs don't match")
 
-	newIPAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName)
+	newIPAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName, nil)
 	require.NoError(t, err, "Initializing new IP assigner failed")
 	assert.Equal(t, map[string]*crdv1b1.SubnetInfo{}, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
 

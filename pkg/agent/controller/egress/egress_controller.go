@@ -44,6 +44,7 @@ import (
 	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/ipassigner"
+	"antrea.io/antrea/pkg/agent/ipassigner/linkdetector"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
@@ -205,6 +206,8 @@ type EgressController struct {
 	tableAllocator *idAllocator
 	// Each subnet has its own route table.
 	egressRouteTables map[crdv1b1.SubnetInfo]*egressRouteTable
+
+	linkDetector linkdetector.Interface
 }
 
 func NewEgressController(
@@ -225,6 +228,7 @@ func NewEgressController(
 	maxEgressIPsPerNode int,
 	trafficShapingEnabled bool,
 	supportSeparateSubnet bool,
+	linkDetector linkdetector.Interface,
 ) (*EgressController, error) {
 	if trafficShapingEnabled && !openflow.OVSMetersAreSupported() {
 		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
@@ -273,6 +277,7 @@ func NewEgressController(
 		externalIPPoolLister:       externalIPPoolInformer.Lister(),
 		externalIPPoolListerSynced: externalIPPoolInformer.Informer().HasSynced,
 		supportSeparateSubnet:      supportSeparateSubnet,
+		linkDetector:               linkDetector,
 	}
 	if supportSeparateSubnet {
 		c.egressRouteTables = map[crdv1b1.SubnetInfo]*egressRouteTable{}
@@ -285,7 +290,7 @@ func NewEgressController(
 			resyncPeriod,
 		)
 	}
-	ipAssigner, err := newIPAssigner(nodeTransportInterface, egressDummyDevice)
+	ipAssigner, err := newIPAssigner(nodeTransportInterface, egressDummyDevice, linkDetector)
 	if err != nil {
 		return nil, fmt.Errorf("initializing egressIP assigner failed: %v", err)
 	}
@@ -505,7 +510,7 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	go c.localIPDetector.Run(stopCh)
 	go c.egressIPScheduler.Run(stopCh)
 	go c.ipAssigner.Run(stopCh)
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.egressListerSynced, c.externalIPPoolListerSynced, c.localIPDetector.HasSynced, c.egressIPScheduler.HasScheduled) {
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.egressListerSynced, c.externalIPPoolListerSynced, c.localIPDetector.HasSynced, c.egressIPScheduler.HasScheduled, c.linkDetector.HasSynced) {
 		return
 	}
 

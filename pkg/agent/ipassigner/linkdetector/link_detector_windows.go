@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipassigner
+package linkdetector
 
-import (
-	"errors"
+type linkDetector struct {
+}
 
-	"antrea.io/antrea/pkg/agent/ipassigner/linkdetector"
-)
+func NewLinkDetector() *linkDetector {
+	return &linkDetector{}
+}
 
-func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkDetector linkdetector.Interface) (IPAssigner, error) {
-	return nil, errors.New("IPAssigner is not implemented on Windows")
+func (d *linkDetector) HasSynced() bool {
+	return false
+}
+
+func (d *linkDetector) AddEventHandler(handler LinkEventHandler, linkName ...string) {
+}
+
+func (d *linkDetector) Run(stopCh <-chan struct{}) {
+}
+
+func (d *linkDetector) LinkExists(name string) bool {
+	return false
 }
