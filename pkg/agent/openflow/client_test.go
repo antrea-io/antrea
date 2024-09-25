@@ -2906,3 +2906,14 @@ func TestCachedFlowIsDrop(t *testing.T) {
 	msg = flows[0].GetMessage().(*openflow15.FlowMod)
 	assert.False(t, isDropFlow(msg))
 }
+
+func TestSubscribeOFPortStatusMessage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ch := make(chan *openflow15.PortStatus)
+	bridge := ovsoftest.NewMockBridge(ctrl)
+	c := client{
+		bridge: bridge,
+	}
+	bridge.EXPECT().SubscribePortStatusConsumer(ch).Times(1)
+	c.SubscribeOFPortStatusMessage(ch)
+}

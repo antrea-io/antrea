@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -112,4 +113,12 @@ func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.Inte
 		ifaceConfig := ifConfigs[i]
 		klog.Warningf("Interface for Pod %s/%s not found in the interface store", ifaceConfig.PodNamespace, ifaceConfig.PodName)
 	}
+}
+
+func (pc *podConfigurator) initPortStatusMonitor(_ cache.SharedIndexInformer) {
+
+}
+
+func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
+	<-stopCh
 }

@@ -600,6 +600,7 @@ func run(o *Options) error {
 			o.config.CNISocket,
 			o.config.HostProcPathPrefix,
 			nodeConfig,
+			localPodInformer.Get(),
 			k8sClient,
 			routeClient,
 			isChaining,

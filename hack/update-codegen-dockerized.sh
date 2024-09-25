@@ -169,7 +169,8 @@ function generate_antrea_client_code {
      "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
      "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
      "${ANTREA_PKG}/pkg/apis/stats" \
-     "${ANTREA_PKG}/pkg/apis/stats/v1alpha1"
+     "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
+     "${ANTREA_PKG}/pkg/agent/interfacestore"
 
   $GOPATH/bin/conversion-gen  \
     --output-file zz_generated.conversion.go \
