@@ -38,6 +38,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/ipassigner"
+	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
 	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
@@ -137,7 +138,7 @@ func (c *fakeSingleNodeCluster) AddClusterEventHandler(handler memberlist.Cluste
 
 func mockNewIPAssigner(ipAssigner ipassigner.IPAssigner) func() {
 	originalNewIPAssigner := newIPAssigner
-	newIPAssigner = func(_, _ string) (ipassigner.IPAssigner, error) {
+	newIPAssigner = func(_, _ string, _ linkmonitor.Interface) (ipassigner.IPAssigner, error) {
 		return ipAssigner, nil
 	}
 	return func() {
@@ -203,6 +204,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		255,
 		true,
 		true,
+		nil,
 	)
 	egressController.localIPDetector = localIPDetector
 	return &fakeController{

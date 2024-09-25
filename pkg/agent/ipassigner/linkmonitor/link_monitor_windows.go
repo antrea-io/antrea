@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipassigner
+package linkmonitor
 
-import (
-	"errors"
+type linkMonitor struct {
+}
 
-	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
-)
+func NewLinkMonitor() *linkMonitor {
+	return &linkMonitor{}
+}
 
-func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface) (IPAssigner, error) {
-	return nil, errors.New("IPAssigner is not implemented on Windows")
+func (d *linkMonitor) HasSynced() bool {
+	return false
+}
+
+func (d *linkMonitor) AddEventHandler(handler LinkEventHandler, linkNames ...string) {
+}
+
+func (d *linkMonitor) Run(stopCh <-chan struct{}) {
+}
+
+func (d *linkMonitor) LinkExists(name string) bool {
+	return false
 }

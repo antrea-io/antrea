@@ -35,7 +35,7 @@ require (
 	github.com/lithammer/dedent v1.1.0
 	github.com/mdlayher/arp v0.0.0-20220221190821-c37aaafac7f9
 	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
-	github.com/mdlayher/ndp v0.8.0
+	github.com/mdlayher/ndp v1.1.0
 	github.com/mdlayher/packet v1.1.2
 	github.com/miekg/dns v1.1.62
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
@@ -214,7 +214,6 @@ require (
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
-	gitlab.com/golang-commonmark/puny v0.0.0-20191124015043-9f83538fa04f // indirect
 	go.etcd.io/etcd/api/v3 v3.5.14 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.14 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.14 // indirect
@@ -251,3 +250,6 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.17.1 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
+
+// remove this when https://github.com/mdlayher/ndp/pull/32 gets merged
+replace github.com/mdlayher/ndp => github.com/antrea-io/ndp v0.0.0-20241107040829-6f35f2e50f4c
