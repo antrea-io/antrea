@@ -17,8 +17,14 @@ package ndp
 import (
 	"fmt"
 	"net"
+	"net/netip"
 
 	"github.com/mdlayher/ndp"
+)
+
+var (
+	// IPv6AllNodes is the IPv6 link-local multicast address for all nodes.
+	IPv6AllNodes = netip.MustParseAddr("ff02::1")
 )
 
 // GratuitousNDPOverIface sends a gratuitous NDP from 'iface' using 'srcIP' as the source IP.
@@ -32,10 +38,10 @@ func GratuitousNDPOverIface(srcIP net.IP, iface *net.Interface) error {
 		return fmt.Errorf("failed to create NDP responder for %q: %s", iface.Name, err)
 	}
 	defer conn.Close()
-
+	target, _ := netip.AddrFromSlice(srcIP)
 	na := &ndp.NeighborAdvertisement{
 		Override:      true,
-		TargetAddress: srcIP,
+		TargetAddress: target,
 		Options: []ndp.Option{
 			&ndp.LinkLayerAddress{
 				Direction: ndp.Target,
@@ -43,5 +49,5 @@ func GratuitousNDPOverIface(srcIP net.IP, iface *net.Interface) error {
 			},
 		},
 	}
-	return conn.WriteTo(na, nil, net.IPv6linklocalallnodes)
+	return conn.WriteTo(na, nil, IPv6AllNodes)
 }
