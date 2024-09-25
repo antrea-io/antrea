@@ -36,7 +36,8 @@ const (
 
 type PodStore struct {
 	pods         cache.Indexer
-	podsToDelete workqueue.TypedDelayingInterface[*corev1.Pod]
+	podsToDelete workqueue.TypedDelayingInterface[types.UID]
+	delayTime    time.Duration
 	// Mapping pod.uuid to podTimestamps
 	timestampMap map[types.UID]*podTimestamps
 	clock        clock.Clock
@@ -60,10 +61,11 @@ type Interface interface {
 func NewPodStoreWithClock(podInformer cache.SharedIndexInformer, clock clock.WithTicker) *PodStore {
 	s := &PodStore{
 		pods: cache.NewIndexer(podKeyFunc, cache.Indexers{podIPIndex: podIPIndexFunc}),
-		podsToDelete: workqueue.NewTypedDelayingQueueWithConfig(workqueue.TypedDelayingQueueConfig[*corev1.Pod]{
+		podsToDelete: workqueue.NewTypedDelayingQueueWithConfig(workqueue.TypedDelayingQueueConfig[types.UID]{
 			Name:  deleteQueueName,
 			Clock: clock,
 		}),
+		delayTime:    delayTime,
 		clock:        clock,
 		timestampMap: map[types.UID]*podTimestamps{},
 		mutex:        sync.RWMutex{},
@@ -137,7 +139,7 @@ func (s *PodStore) onPodDelete(obj interface{}) {
 		return
 	}
 	timestamp.DeletionTimestamp = &timeNow
-	s.podsToDelete.AddAfter(pod, delayTime)
+	s.podsToDelete.AddAfter(pod.UID, s.delayTime)
 	klog.V(4).InfoS("Processed Pod Delete Event", "Pod", klog.KObj(pod))
 }
 
@@ -189,24 +191,29 @@ func (s *PodStore) Run(stopCh <-chan struct{}) {
 // worker runs a worker thread that just dequeues item from deleteQueue and
 // remove the item from prevPod.
 func (s *PodStore) worker() {
-	for s.processDeleteQueueItem() {
+	// Use the same object in each worker to delete from the indexer by key
+	// (UID), as there is no reason to allocate a new object for each call
+	// to processDeleteQueueItem.
+	podDeletionKey := &corev1.Pod{}
+	for s.processDeleteQueueItem(podDeletionKey) {
 	}
 }
 
-func (s *PodStore) processDeleteQueueItem() bool {
-	pod, quit := s.podsToDelete.Get()
+func (s *PodStore) processDeleteQueueItem(podDeletionKey *corev1.Pod) bool {
+	podUID, quit := s.podsToDelete.Get()
 	if quit {
 		return false
 	}
+	defer s.podsToDelete.Done(podUID)
+	pod := podDeletionKey
+	pod.UID = podUID
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	err := s.pods.Delete(pod)
-	if err != nil {
-		klog.ErrorS(err, "Error when deleting Pod from deletion workqueue", "Pod", klog.KObj(pod))
-		return false
+	if err := s.pods.Delete(pod); err != nil {
+		klog.ErrorS(err, "Error when deleting Pod from store", "key", podUID)
+		return true
 	}
 	delete(s.timestampMap, pod.UID)
-	s.podsToDelete.Done(pod)
 	klog.V(4).InfoS("Removed Pod from Pod Store", "Pod", klog.KObj(pod))
 	return true
 }
