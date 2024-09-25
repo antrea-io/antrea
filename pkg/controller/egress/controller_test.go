@@ -584,7 +584,7 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
 
-	// Delete and recreate the ExternalIPPool immediately with a diffenre IP range. We do not
+	// Delete and recreate the ExternalIPPool immediately with a different IP range. We do not
 	// call syncEgressIP in-between, so the Egress controller doesn't have a chance to process
 	// both changes independently.
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eipFoo1.Name, metav1.DeleteOptions{})
