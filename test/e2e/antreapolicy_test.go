@@ -688,7 +688,7 @@ func testACNPDropIPBlockWithExcept(t *testing.T) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("y")}}})
 	podXAIP, _ := podIPs[getPodName("x", "a")]
 	podXBIP, _ := podIPs[getPodName("x", "b")]
-	ipBlocks := genIPBlockWithExceptIPs(append(podXAIP, podXBIP...))
+	ipBlocks := genIPBlockForAllIPsExcept(append(podXAIP, podXBIP...))
 	for i := range ipBlocks {
 		builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, ipBlocks[i], nil, nil, nil, nil, nil, nil, nil, nil,
 			crdv1beta1.RuleActionDrop, "", "egress-drop-"+strconv.Itoa(i), nil)
@@ -713,7 +713,7 @@ func testACNPDropIPBlockWithExcept(t *testing.T) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("y")}}}).
 		AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "a"}, nil, map[string]string{"ns": getNS("x")}, nil, nil, nil, nil, nil,
 			crdv1beta1.RuleActionDrop, "", "egress-drop-xa", nil)
-	// Make sure that the except IPs in the previous policy excluded from the drop rule but not explicitly allowed
+	// Make sure that the except IPs in the previous policy can still be blocked with additional rules.
 	reachability2 := NewReachability(allPods, Connected)
 	reachability2.ExpectAllEgress(getPod("y", "a"), Dropped)
 	reachability2.Expect(getPod("y", "a"), getPod("x", "b"), Connected)
@@ -1093,25 +1093,21 @@ func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 	executeTestsWithData(t, testCase, data)
 }
 
-// There are three situations of a Pod's IP(s):
-// 1. Only one IPv4 address.
-// 2. Only one IPv6 address.
-// 3. One IPv4 and one IPv6 address, and we don't know the order in list.
-// We need to add all IP(s) of Pods as CIDR to IPBlock.
-func genIPBlock(ip string) *crdv1beta1.IPBlock {
+// genIPBlockForIP creates an IPBlock containing only the IP address in the input.
+func genIPBlockForIP(ip string) crdv1beta1.IPBlock {
 	switch IPFamily(ip) {
 	case "v4":
-		return &crdv1beta1.IPBlock{CIDR: ip + "/32"}
+		return crdv1beta1.IPBlock{CIDR: ip + "/32"}
 	case "v6":
-		return &crdv1beta1.IPBlock{CIDR: ip + "/128"}
+		return crdv1beta1.IPBlock{CIDR: ip + "/128"}
 	default:
-		return nil
+		return crdv1beta1.IPBlock{}
 	}
 }
 
-// genIPBlockWithExceptIPs generates ipBlocks which contains all the IP addresses in the
+// genIPBlockForAllIPsExcept generates ipBlocks which contains all the IP addresses in the
 // provided IPs' address family(s), except for the addresses in the input slice.
-func genIPBlockWithExceptIPs(except []string) []*crdv1beta1.IPBlock {
+func genIPBlockForAllIPsExcept(except []string) []*crdv1beta1.IPBlock {
 	var v4Excepts, v6Excepts []string
 	var ipbs []*crdv1beta1.IPBlock
 	for _, e := range except {
@@ -1144,13 +1140,9 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 	var ipBlock1, ipBlock2 []crdv1beta1.IPBlock
 	for i := 0; i < len(podXAIP); i++ {
 		for _, ips := range [][]string{podXAIP, podXBIP, podXCIP} {
-			if ipb := genIPBlock(ips[i]); ipb != nil {
-				ipBlock1 = append(ipBlock1, *ipb)
-			}
+			ipBlock1 = append(ipBlock1, genIPBlockForIP(ips[i]))
 		}
-		if ipbZA := genIPBlock(podZAIP[i]); ipbZA != nil {
-			ipBlock2 = append(ipBlock2, *ipbZA)
-		}
+		ipBlock2 = append(ipBlock2, genIPBlockForIP(podZAIP[i]))
 	}
 	cgName := "cg-ipblocks-pod-in-ns-x"
 	cgBuilder := &ClusterGroupSpecBuilder{}
@@ -1596,9 +1588,7 @@ func testANNPGroupRefRuleIPBlocks(t *testing.T) {
 	var ipBlock []crdv1beta1.IPBlock
 	for i := 0; i < len(podXBIP); i++ {
 		for _, podIP := range []string{podXBIP[i], podXCIP[i]} {
-			if ipb := genIPBlock(podIP); ipb != nil {
-				ipBlock = append(ipBlock, *ipb)
-			}
+			ipBlock = append(ipBlock, genIPBlockForIP(podIP))
 		}
 	}
 
@@ -3114,12 +3104,8 @@ func testACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 	cgParentName := "cg-parent"
 	var ipBlockXA, ipBlockXB []crdv1beta1.IPBlock
 	for i := 0; i < len(podXAIP); i++ {
-		if ipb := genIPBlock(podXAIP[i]); ipb != nil {
-			ipBlockXA = append(ipBlockXA, *ipb)
-		}
-		if ipb := genIPBlock(podXBIP[i]); ipb != nil {
-			ipBlockXB = append(ipBlockXB, *ipb)
-		}
+		ipBlockXA = append(ipBlockXA, genIPBlockForIP(podXAIP[i]))
+		ipBlockXB = append(ipBlockXB, genIPBlockForIP(podXBIP[i]))
 	}
 	cgBuilder1 := &ClusterGroupSpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetIPBlocks(ipBlockXA)
