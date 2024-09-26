@@ -19,11 +19,13 @@ package networkpolicy
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -118,83 +120,89 @@ var (
 // will first attempt to retrieve the Tier by it's name from K8s and if missing,
 // create the CR. InitializeTiers will be called as part of a Post-Start hook
 // of antrea-controller's APIServer.
-func (n *NetworkPolicyController) InitializeTiers() {
+func (n *NetworkPolicyController) InitializeTiers(ctx context.Context) error {
+	if !cache.WaitForCacheSync(ctx.Done(), n.tierListerSynced) {
+		// This happens when Done is closed because we are shutting down.
+		return fmt.Errorf("caches not synced for system Tier initialization")
+	}
 	for _, t := range systemGeneratedTiers {
-		// Check if Tier is already present.
-		oldTier, err := n.tierLister.Get(t.Name)
-		if err == nil {
-			// Tier is already present.
-			klog.V(2).Infof("%s Tier already created", t.Name)
-			// Update Tier Priority if it is not set to desired Priority.
-			expPrio := priorityMap[t.Name]
-			if oldTier.Spec.Priority != expPrio {
+		if err := n.initializeTier(ctx, t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n *NetworkPolicyController) initializeTier(ctx context.Context, t *secv1beta1.Tier) error {
+	// Tier creation or update may fail because antrea APIService is not yet ready to accept
+	// requests for validation. We will keep retrying until it succeeds, using an exponential
+	// backoff (not exceeding 8s), unless the context is cancelled.
+	backoff := wait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   2.0,
+		Jitter:   0.0,
+		Steps:    3, // max duration of 8s
+	}
+	retryAttempt := 1
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if success := func() bool {
+			// Check if Tier is already present.
+			if oldTier, err := n.tierLister.Get(t.Name); err == nil {
+				// Tier is already present.
+				klog.V(2).InfoS("Tier already exists", "tier", klog.KObj(t))
+				// Update Tier Priority if it is not set to desired Priority.
+				expPrio := t.Spec.Priority
+				if oldTier.Spec.Priority == expPrio {
+					return true
+				}
 				tToUpdate := oldTier.DeepCopy()
 				tToUpdate.Spec.Priority = expPrio
-				n.updateTier(tToUpdate)
+				if err := n.updateTier(ctx, tToUpdate); err != nil {
+					klog.InfoS("Failed to update system Tier on init, will retry", "tier", klog.KObj(t), "attempts", retryAttempt, "err", err)
+					return false
+				}
+				return true
 			}
-			continue
+			if err := n.createTier(ctx, t); err != nil {
+				// Error may be that the Tier already exists, in this case, we will
+				// call tierLister.Get again and compare priorities.
+				klog.InfoS("Failed to create system Tier on init, will retry", "tier", klog.KObj(t), "attempts", retryAttempt, "err", err)
+				return false
+			}
+			return true
+		}(); success {
+			break
 		}
-		n.initTier(t)
+		retryAttempt += 1
+		waitBeforeRetry := backoff.Step()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(waitBeforeRetry):
+		}
 	}
+	return nil
 }
 
-// initTier attempts to create system Tiers until they are created using an
-// exponential backoff period from 1 to max of 8secs.
-func (n *NetworkPolicyController) initTier(t *secv1beta1.Tier) {
-	var err error
-	const maxBackoffTime = 8 * time.Second
-	backoff := 1 * time.Second
-	retryAttempt := 1
-	for {
-		klog.V(2).InfoS("Creating system Tier", "tier", t.Name)
-		_, err = n.crdClient.CrdV1beta1().Tiers().Create(context.TODO(), t, metav1.CreateOptions{})
-		// Attempt to recreate Tier after a backoff only if it does not exist.
-		if err != nil {
-			if errors.IsAlreadyExists(err) {
-				klog.InfoS("System Tier already exists", "tier", t.Name)
-				return
-			}
-			klog.InfoS("Failed to create system Tier on init, will retry", "tier", t.Name, "attempts", retryAttempt, "err", err)
-			// Tier creation may fail because antrea APIService is not yet ready
-			// to accept requests for validation. Retry fixed number of times
-			// not exceeding 8s.
-			time.Sleep(backoff)
-			backoff *= 2
-			if backoff > maxBackoffTime {
-				backoff = maxBackoffTime
-			}
-			retryAttempt += 1
-			continue
-		}
-		klog.InfoS("Created system Tier", "tier", t.Name)
-		return
+func (n *NetworkPolicyController) createTier(ctx context.Context, t *secv1beta1.Tier) error {
+	klog.V(2).InfoS("Creating system Tier", "tier", klog.KObj(t))
+	if _, err := n.crdClient.CrdV1beta1().Tiers().Create(ctx, t, metav1.CreateOptions{}); err != nil {
+		return err
 	}
+	klog.InfoS("Created system Tier", "tier", klog.KObj(t))
+	return nil
 }
 
-// updateTier attempts to update Tiers using an
-// exponential backoff period from 1 to max of 8secs.
-func (n *NetworkPolicyController) updateTier(t *secv1beta1.Tier) {
-	var err error
-	const maxBackoffTime = 8 * time.Second
-	backoff := 1 * time.Second
-	retryAttempt := 1
-	for {
-		klog.V(2).Infof("Updating %s Tier", t.Name)
-		_, err = n.crdClient.CrdV1beta1().Tiers().Update(context.TODO(), t, metav1.UpdateOptions{})
-		// Attempt to update Tier after a backoff.
-		if err != nil {
-			klog.Warningf("Failed to update %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
-			// Tier update may fail because antrea APIService is not yet ready
-			// to accept requests for validation. Retry fixed number of times
-			// not exceeding 8s.
-			time.Sleep(backoff)
-			backoff *= 2
-			if backoff > maxBackoffTime {
-				backoff = maxBackoffTime
-			}
-			retryAttempt += 1
-			continue
-		}
-		return
+func (n *NetworkPolicyController) updateTier(ctx context.Context, t *secv1beta1.Tier) error {
+	klog.V(2).InfoS("Updating system Tier", "tier", klog.KObj(t))
+	if _, err := n.crdClient.CrdV1beta1().Tiers().Update(ctx, t, metav1.UpdateOptions{}); err != nil {
+		return err
 	}
+	klog.InfoS("Updated system Tier", "tier", klog.KObj(t))
+	return nil
 }
