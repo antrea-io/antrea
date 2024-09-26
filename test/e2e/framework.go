@@ -140,9 +140,8 @@ const (
 	defaultCHDatabaseURL                = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
 
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
-
-	iperfPort    = 5201
-	iperfSvcPort = 9999
+	iperfPort                       = 5201
+	iperfSvcPort                    = 9999
 )
 
 type ClusterNode struct {
@@ -329,6 +328,16 @@ func (p *PodIPs) AsSlice() []*net.IP {
 		ips = append(ips, p.IPv6)
 	}
 	return ips
+}
+
+func (p *PodIPs) AsStrings() (ipv4, ipv6 string) {
+	if p.IPv4 != nil {
+		ipv4 = p.IPv4.String()
+	}
+	if p.IPv6 != nil {
+		ipv6 = p.IPv6.String()
+	}
+	return
 }
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
@@ -3219,4 +3228,56 @@ func (data *TestData) GetPodLogs(ctx context.Context, namespace, name, container
 		return "", fmt.Errorf("error when copying logs for Pod '%s/%s': %w", namespace, name, err)
 	}
 	return b.String(), nil
+}
+
+func (data *TestData) runDNSQuery(
+	podName string,
+	containerName string,
+	podNamespace string,
+	dstAddr string,
+	useTCP bool,
+	dnsServiceIP string) (net.IP, error) {
+
+	digCmdStr := fmt.Sprintf("dig "+"@"+dnsServiceIP+" +short %s", dstAddr)
+	if useTCP {
+		digCmdStr += " +tcp"
+	}
+
+	digCmd := strings.Fields(digCmdStr)
+	fmt.Printf("Running: kubectl exec %s -c %s -n %s -- %s", podName, containerName, podNamespace, strings.Join(digCmd, " "))
+	stdout, stderr, err := data.RunCommandFromPod(podNamespace, podName, containerName, digCmd)
+	if err != nil {
+		return nil, fmt.Errorf("error when running dig command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
+	}
+
+	ipAddress := net.ParseIP(strings.TrimSpace(stdout))
+	if ipAddress != nil {
+		return ipAddress, nil
+	} else {
+		return nil, fmt.Errorf("invalid IP address found %v", stdout)
+	}
+}
+
+// setPodAnnotation Patches a pod by adding an annotation with a specified key and value.
+func (data *TestData) setPodAnnotation(namespace, podName, annotationKey string, annotationValue string) error {
+	annotations := map[string]string{
+		annotationKey: annotationValue,
+	}
+	annotationPatch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": annotations,
+		},
+	}
+
+	patchData, err := json.Marshal(annotationPatch)
+	if err != nil {
+		return err
+	}
+
+	if _, err := data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), podName, types.MergePatchType, patchData, metav1.PatchOptions{}); err != nil {
+		return err
+	}
+
+	log.Infof("Successfully patched pod %s in namespace %s", podName, namespace)
+	return nil
 }
