@@ -213,8 +213,8 @@ func (s *PodStore) processDeleteQueueItem(podDeletionKey *corev1.Pod) bool {
 		klog.ErrorS(err, "Error when deleting Pod from store", "key", podUID)
 		return true
 	}
-	delete(s.timestampMap, pod.UID)
-	klog.V(4).InfoS("Removed Pod from Pod Store", "Pod", klog.KObj(pod))
+	delete(s.timestampMap, podUID)
+	klog.V(4).InfoS("Removed Pod from Pod Store", "UID", podUID)
 	return true
 }
 
