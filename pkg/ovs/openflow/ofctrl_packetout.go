@@ -16,7 +16,7 @@ package openflow
 
 import (
 	"encoding/binary"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"time"
 

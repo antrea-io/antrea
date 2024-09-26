@@ -16,7 +16,7 @@ package monitortool
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"sync/atomic"
