@@ -1543,9 +1543,15 @@ func (b *PodBuilder) Create(data *TestData) error {
 	if b.MutateFunc != nil {
 		b.MutateFunc(pod)
 	}
-	if _, err := data.clientset.CoreV1().Pods(b.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+
+	podObj, err := data.clientset.CoreV1().Pods(b.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
+	if err != nil {
 		return err
 	}
+	_, err = data.PodWaitFor(10*time.Second, podObj.Name, podObj.Namespace, func(pod2 *corev1.Pod) (bool, error) {
+		return pod2.Status.Phase == corev1.PodRunning, nil
+	})
+
 	return nil
 }
 
@@ -1986,6 +1992,13 @@ func (data *TestData) CreateService(serviceName, namespace string, port, targetP
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	annotation := make(map[string]string)
 	return data.CreateServiceWithAnnotations(serviceName, namespace, port, targetPort, corev1.ProtocolTCP, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
+}
+
+// CreateUDPService creates a service with a UDP port and targetPort.
+func (data *TestData) CreateUDPService(serviceName, namespace string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
+	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	annotation := make(map[string]string)
+	return data.CreateServiceWithAnnotations(serviceName, namespace, port, targetPort, corev1.ProtocolUDP, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
 }
 
 // CreateServiceWithAnnotations creates a service with Annotation

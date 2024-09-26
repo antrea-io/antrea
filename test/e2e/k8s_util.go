@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	v12 "k8s.io/api/rbac/v1"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,6 +104,7 @@ type TestNamespaceMeta struct {
 // GetPodByLabel returns a Pod with the matching Namespace and "pod" label if it's found.
 // If the pod is not found, GetPodByLabel returns "ErrPodNotFound".
 func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
+	//TODO: Query why this is hard coded as "pod"
 	pods, err := k.getPodsUncached(ns, "pod", name)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get Pod in Namespace %s with label pod=%s: %w", ns, name, err)
@@ -331,6 +333,68 @@ func decidePingProbeResult(stdout string, probeNum int) PodConnectivityMark {
 		return Dropped
 	}
 	return Error
+}
+func (k *KubernetesUtils) digDnSCustom(
+	podName string,
+	podNamespace string,
+	dstAddr string,
+	useTCP bool) (string, error) {
+
+	// Get the Pod
+	pod, err := k.clientset.CoreV1().Pods(podNamespace).Get(context.TODO(), podName, metav1.GetOptions{})
+	if err != nil {
+		log.Fatalf("Error getting pod: %v", err)
+	}
+
+	digCmd := fmt.Sprintf("dig %s", dstAddr)
+	if useTCP {
+		digCmd += " +tcp"
+	}
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		digCmd,
+	}
+	fmt.Printf("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, pod.Spec.Containers[0].Name, pod.Namespace, strings.Join(cmd, " "))
+	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, pod.Spec.Containers[0].Name, pod.Namespace, strings.Join(cmd, " "))
+	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, pod.Spec.Containers[0].Name, cmd)
+	fmt.Printf("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstAddr, err, stdout, stderr)
+	log.Tracef("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstAddr, err, stdout, stderr)
+	//========DiG command stdout example========
+	//; <<>> DiG 9.16.6 <<>> github.com +tcp
+	//;; global options: +cmd
+	//;; Got answer:
+	//;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 21816
+	//;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+	//
+	//;; OPT PSEUDOSECTION:
+	//; EDNS: version: 0, flags:; udp: 4096
+	//; COOKIE: 2d7fe493ea37c430 (echoed)
+	//;; QUESTION SECTION:
+	//;github.com.			IN	A
+	//
+	//;; ANSWER SECTION:
+	//github.com.		6	IN	A	140.82.113.3
+	//
+	//;; Query time: 0 msec
+	//;; SERVER: 10.96.0.10#53(10.96.0.10)
+	//;; WHEN: Tue Feb 14 22:34:23 UTC 2023
+	//;; MSG SIZE  rcvd: 77
+	//==========================================
+	answerMarkIdx := strings.Index(stdout, ";; ANSWER SECTION:")
+	if answerMarkIdx == -1 {
+		return "", fmt.Errorf("failed to parse dig response")
+	}
+	splitResp := strings.Split(stdout[answerMarkIdx:], "\n")
+	if len(splitResp) < 2 {
+		return "", fmt.Errorf("failed to parse dig response")
+	}
+	ipLine := splitResp[1]
+	lastTab := strings.LastIndex(ipLine, "\t")
+	if lastTab == -1 {
+		return "", fmt.Errorf("failed to parse dig response")
+	}
+	return ipLine[lastTab:], nil
 }
 
 func (k *KubernetesUtils) digDNS(
@@ -667,6 +731,162 @@ func (data *TestData) UpdateConfigMap(configMap *v1.ConfigMap) error {
 	return err
 }
 
+func (data *TestData) CreateConfigMap(namespace, name string, configData map[string]string, binaryData map[string]byte, immutable bool) (*v1.ConfigMap, error) {
+	configMap := &v1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Immutable:  nil,
+		Data:       configData,
+		BinaryData: nil,
+	}
+
+	configMapObject, err := data.clientset.CoreV1().ConfigMaps(namespace).Create(context.Background(), configMap, metav1.CreateOptions{})
+	return configMapObject, err
+}
+
+func (data *TestData) CreateNginxDeploymentForTest(name, namespace, nginxConfigMapName string, replicas int32, labels map[string]string) (*appsv1.Deployment, error) {
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:alpine",
+							Ports: []v1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "html-volume",
+									MountPath: "/etc/nginx/nginx.conf",
+									SubPath:   "nginx.conf",
+								},
+							},
+							Env: []v1.EnvVar{
+								{
+									Name: "HOSTNAME",
+									ValueFrom: &v1.EnvVarSource{
+										FieldRef: &v1.ObjectFieldSelector{
+											FieldPath: "metadata.name",
+										},
+									},
+								},
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: "html-volume", // This may be given a name here instead of passing as a parameter.
+							VolumeSource: v1.VolumeSource{
+								ConfigMap: &v1.ConfigMapVolumeSource{
+									LocalObjectReference: v1.LocalObjectReference{
+										Name: nginxConfigMapName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	nginxDeploymentObject, err := data.clientset.AppsV1().Deployments(namespace).Create(context.Background(), deployment, metav1.CreateOptions{})
+	return nginxDeploymentObject, err
+
+}
+
+func (data *TestData) CreateCustomDnsDeployment(name, namespace, configMapName, serviceAccountName string, labels map[string]string, replicas int32) (*appsv1.Deployment, error) {
+
+	customDNSdeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Labels:      labels,
+			Annotations: map[string]string{"foo": "bar"},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      labels,
+					Annotations: map[string]string{"foo": "bar"},
+				},
+				Spec: v1.PodSpec{
+					ServiceAccountName: serviceAccountName,
+					Containers: []v1.Container{
+						{
+							Name:    "monitor",
+							Image:   "busybox",
+							Command: []string{"/bin/sh", "-c", "sleep 1d"},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "config-volume",
+									MountPath: "/etc/coredns",
+								},
+							},
+						},
+						{
+							Name:            "coredns",
+							Image:           "coredns/coredns:latest",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Args:            []string{"-conf", "/etc/coredns/Corefile"},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "config-volume",
+									MountPath: "/etc/coredns",
+								},
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: "config-volume", // This may be given a name here instead of passing as a parameter.
+							VolumeSource: v1.VolumeSource{
+								ConfigMap: &v1.ConfigMapVolumeSource{
+									LocalObjectReference: v1.LocalObjectReference{
+										Name: configMapName,
+									},
+									Items: []v1.KeyToPath{
+										{
+											Key:  "Corefile",
+											Path: "Corefile",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	dnsDeploymentObj, err := data.clientset.AppsV1().Deployments(namespace).Create(context.Background(), customDNSdeployment, metav1.CreateOptions{})
+	return dnsDeploymentObj, err
+
+}
+
 // DeleteService is a convenience function for deleting a Service by Namespace and name.
 func (data *TestData) DeleteService(ns, name string) error {
 	log.Infof("Deleting Service %s in ns %s", name, ns)
@@ -703,6 +923,19 @@ func (data *TestData) BuildServiceAccount(name, ns string, labels map[string]str
 		},
 	}
 	return serviceAccount
+}
+
+func (data *TestData) CreateRole(clusterRole *v12.ClusterRole) (*v12.ClusterRole, error) {
+	role, err := data.clientset.RbacV1().ClusterRoles().Create(context.Background(), clusterRole, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return role, nil
+}
+
+func (data *TestData) CreateRoleBinding(roleBinding *v12.ClusterRoleBinding) error {
+	_, err := data.clientset.RbacV1().ClusterRoleBindings().Create(context.Background(), roleBinding, metav1.CreateOptions{})
+	return err
 }
 
 // CreateOrUpdateServiceAccount is a convenience function for updating/creating ServiceAccount.
