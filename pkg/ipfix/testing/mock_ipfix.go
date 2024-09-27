@@ -171,10 +171,10 @@ func (m *MockIPFIXCollectingProcess) EXPECT() *MockIPFIXCollectingProcessMockRec
 }
 
 // GetMsgChan mocks base method.
-func (m *MockIPFIXCollectingProcess) GetMsgChan() chan *entities.Message {
+func (m *MockIPFIXCollectingProcess) GetMsgChan() <-chan *entities.Message {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMsgChan")
-	ret0, _ := ret[0].(chan *entities.Message)
+	ret0, _ := ret[0].(<-chan *entities.Message)
 	return ret0
 }
 

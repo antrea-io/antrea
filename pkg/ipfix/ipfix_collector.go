@@ -22,7 +22,7 @@ import (
 type IPFIXCollectingProcess interface {
 	Start()
 	Stop()
-	GetMsgChan() chan *ipfixentities.Message
+	GetMsgChan() <-chan *ipfixentities.Message
 	GetNumRecordsReceived() int64
 	GetNumConnToCollector() int64
 }
