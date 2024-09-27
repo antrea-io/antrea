@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	v12 "k8s.io/api/rbac/v1"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -334,11 +335,13 @@ func decidePingProbeResult(stdout string, probeNum int) PodConnectivityMark {
 	}
 	return Error
 }
-func (k *KubernetesUtils) digDnSCustom(
+
+func (k *KubernetesUtils) digUsingShort(
 	podName string,
 	podNamespace string,
 	dstAddr string,
-	useTCP bool) (string, error) {
+	useTCP bool,
+	dnsServiceIP string) (string, error) {
 
 	// Get the Pod
 	pod, err := k.clientset.CoreV1().Pods(podNamespace).Get(context.TODO(), podName, metav1.GetOptions{})
@@ -346,7 +349,7 @@ func (k *KubernetesUtils) digDnSCustom(
 		log.Fatalf("Error getting pod: %v", err)
 	}
 
-	digCmd := fmt.Sprintf("dig %s", dstAddr)
+	digCmd := fmt.Sprintf("dig "+"@"+dnsServiceIP+" +short %s", dstAddr)
 	if useTCP {
 		digCmd += " +tcp"
 	}
@@ -356,45 +359,19 @@ func (k *KubernetesUtils) digDnSCustom(
 		digCmd,
 	}
 	fmt.Printf("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, pod.Spec.Containers[0].Name, pod.Namespace, strings.Join(cmd, " "))
-	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, pod.Spec.Containers[0].Name, pod.Namespace, strings.Join(cmd, " "))
 	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, pod.Spec.Containers[0].Name, cmd)
-	fmt.Printf("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstAddr, err, stdout, stderr)
-	log.Tracef("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstAddr, err, stdout, stderr)
-	//========DiG command stdout example========
-	//; <<>> DiG 9.16.6 <<>> github.com +tcp
-	//;; global options: +cmd
-	//;; Got answer:
-	//;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 21816
-	//;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
-	//
-	//;; OPT PSEUDOSECTION:
-	//; EDNS: version: 0, flags:; udp: 4096
-	//; COOKIE: 2d7fe493ea37c430 (echoed)
-	//;; QUESTION SECTION:
-	//;github.com.			IN	A
-	//
-	//;; ANSWER SECTION:
-	//github.com.		6	IN	A	140.82.113.3
-	//
-	//;; Query time: 0 msec
-	//;; SERVER: 10.96.0.10#53(10.96.0.10)
-	//;; WHEN: Tue Feb 14 22:34:23 UTC 2023
-	//;; MSG SIZE  rcvd: 77
-	//==========================================
-	answerMarkIdx := strings.Index(stdout, ";; ANSWER SECTION:")
-	if answerMarkIdx == -1 {
-		return "", fmt.Errorf("failed to parse dig response")
+
+	isValidIPv4 := func(ip string) bool {
+		parsedIP := net.ParseIP(ip)
+		return parsedIP != nil && parsedIP.To4() != nil
 	}
-	splitResp := strings.Split(stdout[answerMarkIdx:], "\n")
-	if len(splitResp) < 2 {
-		return "", fmt.Errorf("failed to parse dig response")
+
+	out := strings.TrimSpace(stdout)
+	if isValidIPv4(out) {
+		return out, nil
 	}
-	ipLine := splitResp[1]
-	lastTab := strings.LastIndex(ipLine, "\t")
-	if lastTab == -1 {
-		return "", fmt.Errorf("failed to parse dig response")
-	}
-	return ipLine[lastTab:], nil
+
+	return "", fmt.Errorf("error running dig command %v", stderr)
 }
 
 func (k *KubernetesUtils) digDNS(
@@ -745,146 +722,6 @@ func (data *TestData) CreateConfigMap(namespace, name string, configData map[str
 
 	configMapObject, err := data.clientset.CoreV1().ConfigMaps(namespace).Create(context.Background(), configMap, metav1.CreateOptions{})
 	return configMapObject, err
-}
-
-func (data *TestData) CreateNginxDeploymentForTest(name, namespace, nginxConfigMapName string, replicas int32, labels map[string]string) (*appsv1.Deployment, error) {
-	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx:alpine",
-							Ports: []v1.ContainerPort{
-								{
-									ContainerPort: 80,
-								},
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      "html-volume",
-									MountPath: "/etc/nginx/nginx.conf",
-									SubPath:   "nginx.conf",
-								},
-							},
-							Env: []v1.EnvVar{
-								{
-									Name: "HOSTNAME",
-									ValueFrom: &v1.EnvVarSource{
-										FieldRef: &v1.ObjectFieldSelector{
-											FieldPath: "metadata.name",
-										},
-									},
-								},
-							},
-						},
-					},
-					Volumes: []v1.Volume{
-						{
-							Name: "html-volume", // This may be given a name here instead of passing as a parameter.
-							VolumeSource: v1.VolumeSource{
-								ConfigMap: &v1.ConfigMapVolumeSource{
-									LocalObjectReference: v1.LocalObjectReference{
-										Name: nginxConfigMapName,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	nginxDeploymentObject, err := data.clientset.AppsV1().Deployments(namespace).Create(context.Background(), deployment, metav1.CreateOptions{})
-	return nginxDeploymentObject, err
-
-}
-
-func (data *TestData) CreateCustomDnsDeployment(name, namespace, configMapName, serviceAccountName string, labels map[string]string, replicas int32) (*appsv1.Deployment, error) {
-
-	customDNSdeployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   namespace,
-			Labels:      labels,
-			Annotations: map[string]string{"foo": "bar"},
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      labels,
-					Annotations: map[string]string{"foo": "bar"},
-				},
-				Spec: v1.PodSpec{
-					ServiceAccountName: serviceAccountName,
-					Containers: []v1.Container{
-						{
-							Name:    "monitor",
-							Image:   "busybox",
-							Command: []string{"/bin/sh", "-c", "sleep 1d"},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      "config-volume",
-									MountPath: "/etc/coredns",
-								},
-							},
-						},
-						{
-							Name:            "coredns",
-							Image:           "coredns/coredns:latest",
-							ImagePullPolicy: v1.PullIfNotPresent,
-							Args:            []string{"-conf", "/etc/coredns/Corefile"},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      "config-volume",
-									MountPath: "/etc/coredns",
-								},
-							},
-						},
-					},
-					Volumes: []v1.Volume{
-						{
-							Name: "config-volume", // This may be given a name here instead of passing as a parameter.
-							VolumeSource: v1.VolumeSource{
-								ConfigMap: &v1.ConfigMapVolumeSource{
-									LocalObjectReference: v1.LocalObjectReference{
-										Name: configMapName,
-									},
-									Items: []v1.KeyToPath{
-										{
-											Key:  "Corefile",
-											Path: "Corefile",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	dnsDeploymentObj, err := data.clientset.AppsV1().Deployments(namespace).Create(context.Background(), customDNSdeployment, metav1.CreateOptions{})
-	return dnsDeploymentObj, err
-
 }
 
 // DeleteService is a convenience function for deleting a Service by Namespace and name.
