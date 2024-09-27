@@ -52,7 +52,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/ti-mo/conntrack v0.5.1
 	github.com/vishvananda/netlink v1.3.0
-	github.com/vmware/go-ipfix v0.9.0
+	github.com/vmware/go-ipfix v0.11.0
 	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.27.0
 	golang.org/x/mod v0.21.0
@@ -78,7 +78,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
 	k8s.io/kubectl v0.31.1
 	k8s.io/kubelet v0.31.1
-	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
+	k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3
 	sigs.k8s.io/controller-runtime v0.19.0
 	sigs.k8s.io/mcs-api v0.1.0
 	sigs.k8s.io/network-policy-api v0.1.1
@@ -191,11 +191,10 @@ require (
 	github.com/paulmach/orb v0.8.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
-	github.com/pierrec/lz4/v4 v4.1.17 // indirect
-	github.com/pion/dtls/v2 v2.2.4 // indirect
+	github.com/pierrec/lz4/v4 v4.1.21 // indirect
+	github.com/pion/dtls/v2 v2.2.12 // indirect
 	github.com/pion/logging v0.2.2 // indirect
-	github.com/pion/transport/v2 v2.0.0 // indirect
-	github.com/pion/udp v0.1.4 // indirect
+	github.com/pion/transport/v2 v2.2.10 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
