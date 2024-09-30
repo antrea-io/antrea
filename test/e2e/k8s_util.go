@@ -18,8 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	v12 "k8s.io/api/rbac/v1"
-	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -334,44 +332,6 @@ func decidePingProbeResult(stdout string, probeNum int) PodConnectivityMark {
 		return Dropped
 	}
 	return Error
-}
-
-func (k *KubernetesUtils) digUsingShort(
-	podName string,
-	podNamespace string,
-	dstAddr string,
-	useTCP bool,
-	dnsServiceIP string) (string, error) {
-
-	// Get the Pod
-	pod, err := k.clientset.CoreV1().Pods(podNamespace).Get(context.TODO(), podName, metav1.GetOptions{})
-	if err != nil {
-		log.Fatalf("Error getting pod: %v", err)
-	}
-
-	digCmd := fmt.Sprintf("dig "+"@"+dnsServiceIP+" +short %s", dstAddr)
-	if useTCP {
-		digCmd += " +tcp"
-	}
-	cmd := []string{
-		"/bin/sh",
-		"-c",
-		digCmd,
-	}
-	fmt.Printf("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, pod.Spec.Containers[0].Name, pod.Namespace, strings.Join(cmd, " "))
-	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, pod.Spec.Containers[0].Name, cmd)
-
-	isValidIPv4 := func(ip string) bool {
-		parsedIP := net.ParseIP(ip)
-		return parsedIP != nil && parsedIP.To4() != nil
-	}
-
-	out := strings.TrimSpace(stdout)
-	if isValidIPv4(out) {
-		return out, nil
-	}
-
-	return "", fmt.Errorf("error running dig command %v", stderr)
 }
 
 func (k *KubernetesUtils) digDNS(
@@ -760,19 +720,6 @@ func (data *TestData) BuildServiceAccount(name, ns string, labels map[string]str
 		},
 	}
 	return serviceAccount
-}
-
-func (data *TestData) CreateRole(clusterRole *v12.ClusterRole) (*v12.ClusterRole, error) {
-	role, err := data.clientset.RbacV1().ClusterRoles().Create(context.Background(), clusterRole, metav1.CreateOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return role, nil
-}
-
-func (data *TestData) CreateRoleBinding(roleBinding *v12.ClusterRoleBinding) error {
-	_, err := data.clientset.RbacV1().ClusterRoleBindings().Create(context.Background(), roleBinding, metav1.CreateOptions{})
-	return err
 }
 
 // CreateOrUpdateServiceAccount is a convenience function for updating/creating ServiceAccount.

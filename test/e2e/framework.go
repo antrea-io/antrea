@@ -3220,3 +3220,35 @@ func (data *TestData) GetPodLogs(ctx context.Context, namespace, name, container
 	}
 	return b.String(), nil
 }
+
+func (data *TestData) runDNSQuery(
+	podName string,
+	containerName string,
+	podNamespace string,
+	dstAddr string,
+	useTCP bool,
+	dnsServiceIP string) (net.IP, error) {
+
+	digCmd := fmt.Sprintf("dig "+"@"+dnsServiceIP+" +short %s", dstAddr)
+	if useTCP {
+		digCmd += " +tcp"
+	}
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		digCmd,
+	}
+	fmt.Printf("Running: kubectl exec %s -c %s -n %s -- %s", podName, containerName, podNamespace, strings.Join(cmd, " "))
+	stdout, stderr, err := data.RunCommandFromPod(podNamespace, podName, containerName, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error when running dig command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
+	}
+
+	ipAddress := net.ParseIP(strings.TrimSpace(stdout))
+	fmt.Printf("---- IP = [%+v]", ipAddress)
+	if ipAddress != nil {
+		return ipAddress, nil
+	} else {
+		return nil, fmt.Errorf("invalid IP adress found %v", stdout)
+	}
+}

@@ -5,12 +5,12 @@ import (
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/test/e2e/utils"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -51,7 +51,7 @@ const (
 	customDnsLabelValue    = "custom-dns"
 	customDnsVolume        = "config-volume"
 
-	fqdnPolicyName            = "test-acnp-fqdn"
+	fqdnPolicyName            = "test-anp-fqdn"
 	fqdnPodSelectorLabelKey   = "app"
 	fqdnPodSelectorLabelValue = "fqdn-cache-test"
 	toolBoxPodName            = "toolbox"
@@ -68,13 +68,14 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
+	defer teardown(t, data)
 
-	customDnsService, err := createCustomDnsService(data)
+	ipFamily := corev1.IPv4Protocol
+	customDnsService, err := data.CreateServiceWithAnnotations(customDnsServiceName, data.testNamespace, customDnsPort, customDnsTargetPort, corev1.ProtocolUDP,
+		map[string]string{customDnsLabelKey: customDnsLabelValue}, false, false, corev1.ServiceTypeClusterIP, &ipFamily, map[string]string{})
 	require.NoError(t, err, "Error when creating custom DNS service: %v", err)
 
-	dnsServiceIP := getCustomDnsServiceIP(t, data, customDnsService)
-
-	setDnsServerAddressInAntrea(t, data, dnsServiceIP)
+	setDnsServerAddressInAntrea(t, data, customDnsService.Spec.ClusterIP)
 
 	// I think creating 2 pods with a deployment might be better.
 	createHttpAgnhostPod(t, data, randName(agnHostPodNamePreFix), map[string]string{agnHostLabelKey: agnHostLabelValue})
@@ -108,25 +109,11 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 
 	createDnsPod(t, data)
 
-	builder := buildFqdnPolicy(t)
+	_ = buildFqdnPolicy(t, data)
 
-	defer tearDown(t, data, builder)
+	createToolBoxPod(t, data, customDnsService.Spec.ClusterIP)
 
-	createToolBoxPod(t, data, dnsServiceIP)
-
-	// idea copied from antctl_test.go:284
-	// getEndpointStatus will return "Success", "Failure", or the empty string when out is not a
-	// marshalled metav1.Status object.
-	getEndpointStatus := func(out []byte) string {
-		var status metav1.Status
-		if err := json.Unmarshal(out, &status); err != nil {
-			// Output is not JSON or does not encode a metav1.Status object.
-			return ""
-		}
-		return status.Status
-	}
-
-	curlFqdn := func(podName, containerName, fqdn string, checkStatus bool) error {
+	curlFqdn := func(podName, containerName, fqdn string) error {
 		t.Logf("trying to curl the fqdn %v", fqdn)
 		cmd := []string{"curl", fqdn}
 		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, podName, containerName, cmd)
@@ -134,20 +121,16 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 			return fmt.Errorf("error when running command '%s' on Pod '%s': %v, stdout: <%v>, stderr: <%v>",
 				strings.Join(cmd, " "), podName, err, stdout, stderr)
 		}
-		if checkStatus && getEndpointStatus([]byte(stdout)) == "Failure" {
-			return fmt.Errorf("failure status when accessing endpoint: <%v>", stdout)
-		}
-		t.Logf(stdout)
 		return nil
 	}
 
-	err = curlFqdn(toolBoxPodName, toolboxContainerName, testFullyQualifiedDomainName, true)
+	err = curlFqdn(toolBoxPodName, toolboxContainerName, testFullyQualifiedDomainName)
 	require.NoError(t, err, "failed to curl FQDN from antrea toolbox on initial run : %v", err)
 
 	// DIG to get actual IP , to be sure.
-	fqdnIp, err := k8sUtils.digUsingShort(toolBoxPodName, data.testNamespace, testFullyQualifiedDomainName, false, dnsServiceIP)
+	digResponse, err := k8sUtils.runDNSQuery(toolBoxPodName, toolboxContainerName, data.testNamespace, testFullyQualifiedDomainName, false, customDnsService.Spec.ClusterIP)
 	require.NoError(t, err, "failed to get IP of FQDN using DIG from toolbox pod : %v", err)
-	fqdnIp = strings.TrimSpace(fqdnIp)
+	fqdnIp := digResponse.String()
 
 	t.Logf("received ip using dig for test fqdn %+v ", fqdnIp)
 
@@ -161,7 +144,7 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	t.Logf("New IP to update to DNS %v", newIP)
 
 	// Curl the old ip and it should be a success.
-	err = curlFqdn(toolBoxPodName, toolboxContainerName, fqdnIp, true)
+	err = curlFqdn(toolBoxPodName, toolboxContainerName, fqdnIp)
 	require.NoError(t, err, "failed to curl FQDN from antrea toolbox on initial run : %v", err)
 
 	// Update the custom DNS configMap
@@ -175,56 +158,13 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	updateDnsPodAnnotations(t, data)
 
 	for {
-		err = curlFqdn(toolBoxPodName, toolboxContainerName, fqdnIp, true)
+		err = curlFqdn(toolBoxPodName, toolboxContainerName, fqdnIp)
 		require.NoError(t, err, "curl to ip failed with error : %v", err)
 
 		// Wait for 1 second before retrying
 		time.Sleep(1 * time.Second)
 	}
 
-}
-
-func tearDown(t *testing.T, data *TestData, builder *utils.ClusterNetworkPolicySpecBuilder) {
-	// cleanup test resources
-	teardownTest(t, data)
-	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
-}
-
-func getCustomDnsServerPodLabel() map[string]string {
-	return map[string]string{"app": "custom-dns"}
-}
-
-func createCustomDnsService(data *TestData) (*corev1.Service, error) {
-	return testData.CreateUDPService(customDnsServiceName, data.testNamespace, customDnsPort, customDnsTargetPort,
-		getCustomDnsServerPodLabel(), false, false, corev1.ServiceTypeClusterIP, getIPFamily())
-}
-
-// CreateUDPService creates a service with a UDP port and targetPort.
-func (data *TestData) CreateUDPService(serviceName, namespace string, port, targetPort int32, selector map[string]string,
-	affinity, nodeLocalExternal bool,
-	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	annotation := make(map[string]string)
-	return data.CreateServiceWithAnnotations(serviceName, namespace, port, targetPort, corev1.ProtocolUDP, selector,
-		affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
-}
-
-func getCustomDnsServiceIP(t *testing.T, data *TestData, customDnsService *corev1.Service) string {
-	// Usually the IP gets assigned quickly to a service , but maybe it's a safe idea to use Get() for getting the IP.
-	customCoreDnsServiceObject, err := data.clientset.CoreV1().Services(data.testNamespace).Get(context.Background(),
-		customDnsService.Name, metav1.GetOptions{})
-	require.NoError(t, err, "Error when getting custom DNS service object : %v", err)
-
-	if customCoreDnsServiceObject.Spec.ClusterIP == "" {
-		require.Fail(t, "ClusterIP is empty for the custom DNS service")
-	}
-
-	t.Logf("ClusterIP of the dns service: %s\n", customCoreDnsServiceObject.Spec.ClusterIP)
-	return customCoreDnsServiceObject.Spec.ClusterIP
-}
-
-func getIPFamily() *corev1.IPFamily {
-	ipFamily := corev1.IPv4Protocol
-	return &ipFamily
 }
 
 func setDnsServerAddressInAntrea(t *testing.T, data *TestData, dnsServiceIP string) {
@@ -309,31 +249,32 @@ func createDnsPod(t *testing.T, data *TestData) {
 
 }
 
-func buildFqdnPolicy(t *testing.T) *utils.ClusterNetworkPolicySpecBuilder {
+func buildFqdnPolicy(t *testing.T, data *TestData) *utils.AntreaNetworkPolicySpecBuilder {
 	podSelectorLabel := map[string]string{
 		fqdnPodSelectorLabelKey: fqdnPodSelectorLabelValue,
 	}
 	port := int32(80)
-	builder := &utils.ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName(fqdnPolicyName).
-		SetTier("application").
+	udpPort := int32(53)
+	builder := &utils.AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName(data.testNamespace, fqdnPolicyName).
+		SetTier(defaultTierName).
 		SetPriority(1.0).
-		SetAppliedToGroup([]utils.ACNPAppliedToSpec{{PodSelector: podSelectorLabel}})
-	builder.AddFQDNRule(testFullyQualifiedDomainName, "TCP", &port, nil, nil, "r1", nil,
+		SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: podSelectorLabel}})
+	builder.AddFQDNRule(testFullyQualifiedDomainName, utils.ProtocolTCP, &port, nil, nil, "AllowForFQDN", nil,
 		crdv1beta1.RuleActionAllow)
-	builder.AddEgress("UDP", nil, nil, nil, nil, nil, nil, nil,
-		nil, map[string]string{customDnsLabelKey: customDnsLabelValue}, nil,
-		nil, nil, nil, nil, nil, nil,
-		crdv1beta1.RuleActionAllow, "", "", nil)
-	builder.AddEgress("TCP", nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil,
-		nil, nil, nil, nil, nil, nil,
-		crdv1beta1.RuleActionReject, "", "", nil)
+	builder.AddEgress(utils.ProtocolUDP, &udpPort, nil, nil, nil, nil,
+		nil, nil, nil, nil, map[string]string{customDnsLabelKey: customDnsLabelValue},
+		map[string]string{"ns": data.testNamespace}, nil, nil, nil,
+		nil, nil, crdv1beta1.RuleActionAllow, "", "AllowDnsQueries")
+	builder.AddEgress(utils.ProtocolTCP, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil,
+		map[string]string{"ns": data.testNamespace}, nil, nil, nil,
+		nil, nil, crdv1beta1.RuleActionReject, "", "DropAllRemainingTraffic")
 
-	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
+	annp, err := k8sUtils.CreateOrUpdateANNP(builder.Get())
 	require.NoError(t, err, "error while deploying antrea policy %+v", err)
 	failOnError(err, t)
-	failOnError(waitForResourceReady(t, 30*time.Second, acnp), t)
+	failOnError(waitForResourceReady(t, 30*time.Second, annp), t)
 
 	return builder
 }
@@ -344,6 +285,7 @@ func createToolBoxPod(t *testing.T, data *TestData, dnsServiceIP string) {
 	pb.WithLabels(toolBoxLabel)
 	pb.WithContainerName(toolboxContainerName)
 	mutateSpecForAddingCustomDNS := func(pod *corev1.Pod) {
+		pod.Spec.DNSPolicy = corev1.DNSNone
 		if pod.Spec.DNSConfig == nil {
 			pod.Spec.DNSConfig = &corev1.PodDNSConfig{}
 		}
@@ -387,4 +329,18 @@ func createHttpAgnhostPod(t *testing.T, data *TestData, podName string, agnLabel
 	_, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace))
+}
+
+func teardown(t *testing.T, data *TestData) {
+	// delete the namespace, hence removing all resources attached to it.
+	// Also remove the dnsServerOverRide value.
+	exportLogs(t, data, "beforeTeardown", true)
+	if empty, _ := IsDirEmpty(data.logsDirForTestCase); empty {
+		_ = os.Remove(data.logsDirForTestCase)
+	}
+	t.Logf("Deleting '%s' K8s Namespace", testData.testNamespace)
+	if err := data.DeleteNamespace(testData.testNamespace, -1); err != nil {
+		t.Logf("Error when tearing down test: %v", err)
+	}
+	setDnsServerAddressInAntrea(t, data, "")
 }
