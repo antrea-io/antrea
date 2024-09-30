@@ -69,9 +69,12 @@ spec:
                       - ip
                   properties:
                     pod:
-                      type: string
-                    namespace:
-                      type: string
+                      type: object
+                      properties:
+                        namespace:
+                          type: string
+                        name:
+                          type: string
                     ip:
                       type: string
                       oneOf:
@@ -89,11 +92,19 @@ spec:
                       - service
                   properties:
                     pod:
-                      type: string
+                      type: object
+                      properties:
+                        namespace:
+                          type: string
+                        name:
+                          type: string
                     service:
-                      type: string
-                    namespace:
-                      type: string
+                      type: object
+                      properties:
+                        namespace:
+                          type: string
+                        name:
+                          type: string
                     ip:
                       type: string
                       oneOf:
@@ -111,7 +122,6 @@ spec:
                       default: IPv4
                     protocol:
                       x-kubernetes-int-or-string: true
-                      enum: [ICMP, TCP, UDP, IPv6-ICMP, 1, 6, 17, 58]
                       default: ICMP
                     transportHeader:
                       type: object
