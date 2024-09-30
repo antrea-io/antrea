@@ -299,6 +299,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
 	// Webhook to mutate Namespace labels and add its metadata.name as a label
 	s.Handler.NonGoRestfulMux.HandleFunc("/mutate/namespace", webhook.HandleMutationLabels())
+
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		// Get new NetworkPolicyMutator
 		m := controllernetworkpolicy.NewNetworkPolicyMutator(c.networkPolicyController)
@@ -333,7 +334,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/egress", webhook.HandlerForValidateFunc(c.egressController.ValidateEgress))
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) || features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/convert/ippool", webhook.HandleCRDConversion(ipam.ConvertIPPool))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/ippool", webhook.HandlerForValidateFunc(ipam.ValidateIPPool))
 	}
