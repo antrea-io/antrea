@@ -1,20 +1,36 @@
+// Copyright 2024 Antrea Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/test/e2e/utils"
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/test/e2e/utils"
 )
 
 /*
@@ -264,11 +280,11 @@ func buildFqdnPolicy(t *testing.T, data *TestData) *utils.AntreaNetworkPolicySpe
 		crdv1beta1.RuleActionAllow)
 	builder.AddEgress(utils.ProtocolUDP, &udpPort, nil, nil, nil, nil,
 		nil, nil, nil, nil, map[string]string{customDnsLabelKey: customDnsLabelValue},
-		map[string]string{"ns": data.testNamespace}, nil, nil, nil,
+		nil, nil, nil, nil,
 		nil, nil, crdv1beta1.RuleActionAllow, "", "AllowDnsQueries")
 	builder.AddEgress(utils.ProtocolTCP, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, nil,
-		map[string]string{"ns": data.testNamespace}, nil, nil, nil,
+		nil, nil, nil, nil,
 		nil, nil, crdv1beta1.RuleActionReject, "", "DropAllRemainingTraffic")
 
 	annp, err := k8sUtils.CreateOrUpdateANNP(builder.Get())

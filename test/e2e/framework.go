@@ -3245,10 +3245,9 @@ func (data *TestData) runDNSQuery(
 	}
 
 	ipAddress := net.ParseIP(strings.TrimSpace(stdout))
-	fmt.Printf("---- IP = [%+v]", ipAddress)
 	if ipAddress != nil {
 		return ipAddress, nil
 	} else {
-		return nil, fmt.Errorf("invalid IP adress found %v", stdout)
+		return nil, fmt.Errorf("invalid IP address found %v", stdout)
 	}
 }
