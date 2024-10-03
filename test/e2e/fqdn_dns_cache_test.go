@@ -249,8 +249,7 @@ func createDnsPod(t *testing.T, data *TestData) {
 	pb.AddVolumeMount(volumeMount)
 
 	require.NoError(t, pb.Create(data))
-	_, err := data.podWaitForIPs(defaultTimeout, customDnsPodName, data.testNamespace)
-	require.NoError(t, err)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, customDnsPodName, data.testNamespace))
 
 }
 
@@ -299,8 +298,7 @@ func createToolBoxPod(t *testing.T, data *TestData, dnsServiceIP string) {
 	}
 	pb.WithMutateFunc(mutateSpecForAddingCustomDNS)
 	require.NoError(t, pb.Create(data))
-	_, err := data.podWaitForIPs(defaultTimeout, toolBoxPodName, data.testNamespace)
-	require.NoError(t, err)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, toolBoxPodName, data.testNamespace))
 }
 
 func updateDnsPodAnnotations(t *testing.T, data *TestData) {
