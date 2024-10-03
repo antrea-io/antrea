@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package exporter
+package flowaggregator
 
 import (
 	"context"
@@ -26,15 +26,18 @@ import (
 	"antrea.io/antrea/pkg/clusteridentity"
 )
 
-// getClusterUUID retrieves the cluster UUID (if available, with a timeout of 10s).
+// GetClusterUUID retrieves the cluster UUID (if available, with a timeout of 10s).
 // Otherwise, it returns an empty cluster UUID and error. The cluster UUID should
 // be available if Antrea is deployed to the cluster ahead of the flow aggregator,
 // which is the expectation since when deploying flow aggregator as a Pod,
 // networking needs to be configured by the CNI plugin.
-func getClusterUUID(k8sClient kubernetes.Interface) (uuid.UUID, error) {
+func GetClusterUUID(ctx context.Context, k8sClient kubernetes.Interface) (uuid.UUID, error) {
 	const retryInterval = time.Second
 	const timeout = 10 * time.Second
 	const defaultAntreaNamespace = "kube-system"
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
 	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
 		defaultAntreaNamespace,
@@ -42,7 +45,7 @@ func getClusterUUID(k8sClient kubernetes.Interface) (uuid.UUID, error) {
 		k8sClient,
 	)
 	var clusterUUID uuid.UUID
-	if err := wait.PollUntilContextTimeout(context.TODO(), retryInterval, timeout, true, func(ctx context.Context) (bool, error) {
+	if err := wait.PollUntilContextCancel(ctx, retryInterval, true, func(ctx context.Context) (bool, error) {
 		clusterIdentity, _, err := clusterIdentityProvider.Get()
 		if err != nil {
 			return false, nil
@@ -50,7 +53,7 @@ func getClusterUUID(k8sClient kubernetes.Interface) (uuid.UUID, error) {
 		clusterUUID = clusterIdentity.UUID
 		return true, nil
 	}); err != nil {
-		return clusterUUID, fmt.Errorf("unable to retrieve cluster UUID from ConfigMap '%s/%s': timeout after %v", defaultAntreaNamespace, clusteridentity.DefaultClusterIdentityConfigMapName, timeout)
+		return clusterUUID, fmt.Errorf("unable to retrieve cluster UUID from ConfigMap '%s/%s': %w", defaultAntreaNamespace, clusteridentity.DefaultClusterIdentityConfigMapName, err)
 	}
 	return clusterUUID, nil
 }

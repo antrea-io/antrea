@@ -19,13 +19,13 @@ import (
 	"net"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"go.uber.org/mock/gomock"
-	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/ptr"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
@@ -295,8 +295,9 @@ func createElementList(isIPv6 bool, mockIPFIXRegistry *ipfixtesting.MockIPFIXReg
 }
 
 func TestInitExportingProcess(t *testing.T) {
+	clusterUUID := uuid.New()
+
 	t.Run("tcp success", func(t *testing.T) {
-		k8sClientset := fake.NewSimpleClientset()
 		ctrl := gomock.NewController(t)
 		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 		opt := &options.Options{}
@@ -308,16 +309,13 @@ func TestInitExportingProcess(t *testing.T) {
 		opt.ExternalFlowCollectorAddr = listener.Addr().String()
 		opt.ExternalFlowCollectorProto = listener.Addr().Network()
 		opt.Config.FlowCollector.RecordFormat = "JSON"
-		obsDomainID := uint32(1)
-		opt.Config.FlowCollector.ObservationDomainID = &obsDomainID
 		createElementList(false, mockIPFIXRegistry)
 		createElementList(true, mockIPFIXRegistry)
-		exp := NewIPFIXExporter(k8sClientset, opt, mockIPFIXRegistry)
+		exp := NewIPFIXExporter(clusterUUID, opt, mockIPFIXRegistry)
 		err = exp.initExportingProcess()
 		assert.NoError(t, err)
 	})
 	t.Run("udp success", func(t *testing.T) {
-		k8sClientset := fake.NewSimpleClientset()
 		ctrl := gomock.NewController(t)
 		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 		opt := &options.Options{}
@@ -331,16 +329,13 @@ func TestInitExportingProcess(t *testing.T) {
 		opt.ExternalFlowCollectorAddr = listener.LocalAddr().String()
 		opt.ExternalFlowCollectorProto = listener.LocalAddr().Network()
 		opt.Config.FlowCollector.RecordFormat = "JSON"
-		obsDomainID := uint32(1)
-		opt.Config.FlowCollector.ObservationDomainID = &obsDomainID
 		createElementList(false, mockIPFIXRegistry)
 		createElementList(true, mockIPFIXRegistry)
-		exp := NewIPFIXExporter(k8sClientset, opt, mockIPFIXRegistry)
+		exp := NewIPFIXExporter(clusterUUID, opt, mockIPFIXRegistry)
 		err = exp.initExportingProcess()
 		assert.NoError(t, err)
 	})
 	t.Run("tcp failure", func(t *testing.T) {
-		k8sClientset := fake.NewSimpleClientset()
 		ctrl := gomock.NewController(t)
 		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 		opt := &options.Options{}
@@ -349,11 +344,34 @@ func TestInitExportingProcess(t *testing.T) {
 		// dialing this address is guaranteed to fail (we use 0 as the port number)
 		opt.ExternalFlowCollectorAddr = "127.0.0.1:0"
 		opt.ExternalFlowCollectorProto = "tcp"
-		// the observation domain should be set, or the test will take 10s to run
-		obsDomainID := uint32(1)
-		opt.Config.FlowCollector.ObservationDomainID = &obsDomainID
-		exp := NewIPFIXExporter(k8sClientset, opt, mockIPFIXRegistry)
+		exp := NewIPFIXExporter(clusterUUID, opt, mockIPFIXRegistry)
 		err := exp.initExportingProcess()
 		assert.ErrorContains(t, err, "got error when initializing IPFIX exporting process: dial tcp 127.0.0.1:0:")
 	})
+}
+
+func TestNewIPFIXExporterObservationDomainID(t *testing.T) {
+	clusterUUID := uuid.New()
+	testCases := []struct {
+		name                        string
+		userObservationDomainID     *uint32
+		expectedObservationDomainID uint32
+	}{
+		{"user-provided", ptr.To[uint32](testObservationDomainID), testObservationDomainID},
+		{"generated from clusterUUID", nil, genObservationDomainID(clusterUUID)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
+			opt := &options.Options{}
+			opt.Config = &flowaggregatorconfig.FlowAggregatorConfig{}
+			flowaggregatorconfig.SetConfigDefaults(opt.Config)
+			opt.Config.FlowCollector.ObservationDomainID = tc.userObservationDomainID
+			exp := NewIPFIXExporter(clusterUUID, opt, mockIPFIXRegistry)
+			assert.Equal(t, clusterUUID, exp.clusterUUID)
+			assert.Equal(t, tc.expectedObservationDomainID, exp.observationDomainID)
+		})
+	}
 }

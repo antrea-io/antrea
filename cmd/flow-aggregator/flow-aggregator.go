@@ -59,8 +59,16 @@ func run(configFile string) error {
 	podInformer := informerFactory.Core().V1().Pods()
 	podStore := podstore.NewPodStore(podInformer.Informer())
 
+	klog.InfoS("Retrieving Antrea cluster UUID")
+	clusterUUID, err := aggregator.GetClusterUUID(ctx, k8sClient)
+	if err != nil {
+		return err
+	}
+	klog.InfoS("Retrieved Antrea cluster UUID", "clusterUUID", clusterUUID)
+
 	flowAggregator, err := aggregator.NewFlowAggregator(
 		k8sClient,
+		clusterUUID,
 		podStore,
 		configFile,
 	)
