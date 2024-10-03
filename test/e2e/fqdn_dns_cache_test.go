@@ -17,14 +17,14 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"os"
+	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/ptr"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -60,7 +60,7 @@ const (
 	customDnsPort        = 53
 	customDnsTargetPort  = 53
 
-	customDnsImage         = "coredns/coredns:latest"
+	customDnsImage         = "coredns/coredns:1.11.3"
 	customDnsPodName       = "custom-dns-server"
 	customDnsContainerName = "coredns"
 	customDnsLabelKey      = "app"
@@ -76,6 +76,8 @@ const (
 	agnHostLabelKey      = "app"
 	agnHostLabelValue    = "agnhost"
 	agnHostPodNamePreFix = "agnhost-"
+
+	eventualWaitTime = 20 * time.Second
 )
 
 func TestFQDNPolicyWithCachedDNS(t *testing.T) {
@@ -84,53 +86,49 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardown(t, data)
+	defer teardownTest(t, data)
 
-	ipFamily := corev1.IPv4Protocol
 	customDnsService, err := data.CreateServiceWithAnnotations(customDnsServiceName, data.testNamespace, customDnsPort, customDnsTargetPort, corev1.ProtocolUDP,
-		map[string]string{customDnsLabelKey: customDnsLabelValue}, false, false, corev1.ServiceTypeClusterIP, &ipFamily, map[string]string{})
+		map[string]string{customDnsLabelKey: customDnsLabelValue}, false, false, corev1.ServiceTypeClusterIP, ptr.To[corev1.IPFamily](corev1.IPv4Protocol), map[string]string{})
 	require.NoError(t, err, "Error when creating custom DNS service: %v", err)
 
 	setDnsServerAddressInAntrea(t, data, customDnsService.Spec.ClusterIP)
 
-	// I think creating 2 pods with a deployment might be better.
-	createHttpAgnhostPod(t, data, randName(agnHostPodNamePreFix), map[string]string{agnHostLabelKey: agnHostLabelValue})
-	createHttpAgnhostPod(t, data, randName(agnHostPodNamePreFix), map[string]string{agnHostLabelKey: agnHostLabelValue})
-
-	k8sUtils, err = NewKubernetesUtils(data)
-	require.NoError(t, err, "error getting k8s utils %+v", err)
-
-	agnHostPods, err := k8sUtils.GetPodsByLabel(data.testNamespace, agnHostLabelKey, agnHostLabelValue)
-	require.NoError(t, err, "error getting Pods by label  %+v", err)
-
+	var agnHostPodIps []*PodIPs
+	podCount := 2
+	for i := 0; i < podCount; i++ {
+		podIp := createHttpAgnhostPod(t, data, randName(agnHostPodNamePreFix), map[string]string{agnHostLabelKey: agnHostLabelValue})
+		agnHostPodIps = append(agnHostPodIps, podIp)
+	}
 	//domainMapping holds whether the IP is mapped to Domain or not.
 	domainMapping := make(map[string]bool)
 
 	// pick an IP to be added in config
 	var ipForDnsConfig string
-	for idx, pod := range agnHostPods {
-		ipStr := strings.TrimSpace(pod.Status.PodIP)
+	for idx, podIp := range agnHostPodIps {
+		ipStr := podIp.IPv4.String()
 		domainMapping[ipStr] = false
 		//pick last IP for config
-		if idx == len(agnHostPods)-1 {
+		if idx == len(agnHostPodIps)-1 {
 			ipForDnsConfig = ipStr
 		}
 	}
 
 	dnsConfigData := createDnsConfig(ipForDnsConfig)
-
 	customDnsConfigMapObject, err := data.CreateConfigMap(data.testNamespace, customDnsConfigName, dnsConfigData, nil, false)
 	require.NoError(t, err, "failed to create custom dns ConfigMap: %v", err)
 	domainMapping[ipForDnsConfig] = true
 
 	createDnsPod(t, data)
 
+	k8sUtils, err = NewKubernetesUtils(data)
+	require.NoError(t, err, "error getting k8s utils %+v", err)
+
 	_ = buildFqdnPolicy(t, data)
 
 	createToolBoxPod(t, data, customDnsService.Spec.ClusterIP)
 
 	curlFqdn := func(podName, containerName, fqdn string) error {
-		t.Logf("trying to curl the fqdn %v", fqdn)
 		cmd := []string{"curl", fqdn}
 		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, podName, containerName, cmd)
 		if err != nil {
@@ -140,8 +138,11 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 		return nil
 	}
 
-	err = curlFqdn(toolBoxPodName, toolboxContainerName, testFullyQualifiedDomainName)
-	require.NoError(t, err, "failed to curl FQDN from antrea toolbox on initial run : %v", err)
+	assert.Eventually(t, func() bool {
+		t.Logf("trying to curl the fqdn %v", testFullyQualifiedDomainName)
+		err = curlFqdn(toolBoxPodName, toolboxContainerName, testFullyQualifiedDomainName)
+		return assert.NoError(t, err)
+	}, 2*time.Second, 100*time.Millisecond)
 
 	// DIG to get actual IP , to be sure.
 	digResponse, err := k8sUtils.runDNSQuery(toolBoxPodName, toolboxContainerName, data.testNamespace, testFullyQualifiedDomainName, false, customDnsService.Spec.ClusterIP)
@@ -159,10 +160,6 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 
 	t.Logf("New IP to update to DNS %v", newIP)
 
-	// Curl the old ip and it should be a success.
-	err = curlFqdn(toolBoxPodName, toolboxContainerName, fqdnIp)
-	require.NoError(t, err, "failed to curl FQDN from antrea toolbox on initial run : %v", err)
-
 	// Update the custom DNS configMap
 	UpdatedCustomDNSconfig := createDnsConfig(newIP)
 
@@ -173,28 +170,21 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 
 	updateDnsPodAnnotations(t, data)
 
-	for {
-		err = curlFqdn(toolBoxPodName, toolboxContainerName, fqdnIp)
-		require.NoError(t, err, "curl to ip failed with error : %v", err)
+	defer setDnsServerAddressInAntrea(t, data, "")
 
-		// Wait for 1 second before retrying
-		time.Sleep(1 * time.Second)
-	}
+	assert.Eventually(t, func() bool {
+		t.Logf("trying to curl the existing cached IP of the domain  %v", fqdnIp)
+		err = curlFqdn(toolBoxPodName, toolboxContainerName, fqdnIp)
+		return assert.Error(t, err)
+	}, eventualWaitTime, 1*time.Second)
 
 }
 
 func setDnsServerAddressInAntrea(t *testing.T, data *TestData, dnsServiceIP string) {
-	var agentConf agentconfig.AgentConfig
-	cm, err := data.GetAntreaConfigMap(antreaNamespace)
-	require.NoError(t, err, "Error when getting antrea configMap : %v", err)
-
-	err = yaml.Unmarshal([]byte(cm.Data["antrea-agent.conf"]), &agentConf)
-	require.NoError(t, err, "failed to unmarshal antrea agent config from ConfigMap: %v", err)
-
 	agentChanges := func(config *agentconfig.AgentConfig) {
 		config.DNSServerOverride = dnsServiceIP
 	}
-	err = data.mutateAntreaConfigMap(nil, agentChanges, false, true)
+	err := data.mutateAntreaConfigMap(nil, agentChanges, false, true)
 	require.NoError(t, err, "Error when setting up customDNS server IP in Antrea configmap : %v", err)
 
 	t.Logf("dns server value set to %+v in antrea \n", dnsServiceIP)
@@ -261,7 +251,6 @@ func createDnsPod(t *testing.T, data *TestData) {
 	require.NoError(t, pb.Create(data))
 	_, err := data.podWaitForIPs(defaultTimeout, customDnsPodName, data.testNamespace)
 	require.NoError(t, err)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, customDnsPodName, data.testNamespace))
 
 }
 
@@ -312,7 +301,6 @@ func createToolBoxPod(t *testing.T, data *TestData, dnsServiceIP string) {
 	require.NoError(t, pb.Create(data))
 	_, err := data.podWaitForIPs(defaultTimeout, toolBoxPodName, data.testNamespace)
 	require.NoError(t, err)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, toolBoxPodName, data.testNamespace))
 }
 
 func updateDnsPodAnnotations(t *testing.T, data *TestData) {
@@ -331,7 +319,7 @@ func updateDnsPodAnnotations(t *testing.T, data *TestData) {
 	t.Logf("updated dns pod annotations %+v\n", updatedPod.Annotations)
 }
 
-func createHttpAgnhostPod(t *testing.T, data *TestData, podName string, agnLabels map[string]string) {
+func createHttpAgnhostPod(t *testing.T, data *TestData, podName string, agnLabels map[string]string) *PodIPs {
 	args := []string{"netexec", "--http-port=" + strconv.Itoa(agnHostPort)}
 	ports := []corev1.ContainerPort{
 		{
@@ -342,21 +330,7 @@ func createHttpAgnhostPod(t *testing.T, data *TestData, podName string, agnLabel
 	}
 
 	require.NoError(t, NewPodBuilder(podName, data.testNamespace, agnhostImage).WithArgs(args).WithPorts(ports).WithLabels(agnLabels).Create(data))
-	_, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
+	podIP, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
 	require.NoError(t, err)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace))
-}
-
-func teardown(t *testing.T, data *TestData) {
-	// delete the namespace, hence removing all resources attached to it.
-	// Also remove the dnsServerOverRide value.
-	exportLogs(t, data, "beforeTeardown", true)
-	if empty, _ := IsDirEmpty(data.logsDirForTestCase); empty {
-		_ = os.Remove(data.logsDirForTestCase)
-	}
-	t.Logf("Deleting '%s' K8s Namespace", testData.testNamespace)
-	if err := data.DeleteNamespace(testData.testNamespace, -1); err != nil {
-		t.Logf("Error when tearing down test: %v", err)
-	}
-	setDnsServerAddressInAntrea(t, data, "")
+	return podIP
 }
