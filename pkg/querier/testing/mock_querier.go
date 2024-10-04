@@ -25,8 +25,10 @@
 package testing
 
 import (
+	context "context"
 	reflect "reflect"
 
+	bgp "antrea.io/antrea/pkg/agent/bgp"
 	interfacestore "antrea.io/antrea/pkg/agent/interfacestore"
 	multicast "antrea.io/antrea/pkg/agent/multicast"
 	types "antrea.io/antrea/pkg/agent/types"
@@ -355,6 +357,21 @@ func NewMockAgentBGPPolicyInfoQuerier(ctrl *gomock.Controller) *MockAgentBGPPoli
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockAgentBGPPolicyInfoQuerier) EXPECT() *MockAgentBGPPolicyInfoQuerierMockRecorder {
 	return m.recorder
+}
+
+// GetBGPPeerStatus mocks base method.
+func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPeerStatus(arg0 context.Context) ([]bgp.PeerStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBGPPeerStatus", arg0)
+	ret0, _ := ret[0].([]bgp.PeerStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBGPPeerStatus indicates an expected call of GetBGPPeerStatus.
+func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPeerStatus(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPPeerStatus", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPPeerStatus), arg0)
 }
 
 // GetBGPPolicyInfo mocks base method.

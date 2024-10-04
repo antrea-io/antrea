@@ -17,6 +17,7 @@ package bgp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"net"
@@ -72,6 +73,10 @@ const (
 )
 
 const dummyKey = "dummyKey"
+
+var (
+	ErrBGPPolicyNotFound = errors.New("BGPPolicy not found")
+)
 
 type bgpPolicyState struct {
 	// The local BGP server.
@@ -963,4 +968,26 @@ func (c *Controller) GetBGPPolicyInfo() (string, string, int32, int32) {
 		listenPort = c.bgpPolicyState.listenPort
 	}
 	return name, routerID, localASN, listenPort
+}
+
+// GetBGPPeerStatus returns current status of all BGP Peers of effective BGP Policy applied on the Node.
+func (c *Controller) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error) {
+	getBgpServer := func() bgp.Interface {
+		c.bgpPolicyStateMutex.RLock()
+		defer c.bgpPolicyStateMutex.RUnlock()
+		if c.bgpPolicyState == nil {
+			return nil
+		}
+		return c.bgpPolicyState.bgpServer
+	}
+
+	bgpServer := getBgpServer()
+	if bgpServer == nil {
+		return nil, ErrBGPPolicyNotFound
+	}
+	peers, err := bgpServer.GetPeers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bgp peers: %w", err)
+	}
+	return peers, nil
 }
