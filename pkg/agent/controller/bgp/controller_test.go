@@ -2161,3 +2161,72 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestGetBGPPeerStatus(t *testing.T) {
+	ctx := context.Background()
+	testCases := []struct {
+		name                  string
+		existingState         *bgpPolicyState
+		expectedCalls         func(mockBGPServer *bgptest.MockInterfaceMockRecorder)
+		expectedBgpPeerStatus []bgp.PeerStatus
+		expectedErr           error
+	}{
+		{
+			name:          "bgpPolicyState exists",
+			existingState: &bgpPolicyState{},
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				mockBGPServer.GetPeers(ctx).Return([]bgp.PeerStatus{
+					{
+						Address:      "192.168.77.200",
+						ASN:          65001,
+						SessionState: bgp.SessionEstablished,
+					},
+					{
+						Address:      "192.168.77.201",
+						ASN:          65002,
+						SessionState: bgp.SessionActive,
+					},
+				}, nil)
+			},
+			expectedBgpPeerStatus: []bgp.PeerStatus{
+				{
+					Address:      "192.168.77.200",
+					ASN:          65001,
+					SessionState: bgp.SessionEstablished,
+				},
+				{
+					Address:      "192.168.77.201",
+					ASN:          65002,
+					SessionState: bgp.SessionActive,
+				},
+			},
+		},
+		{
+			name:        "bgpPolicyState does not exist",
+			expectedErr: ErrBGPPolicyNotFound,
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newFakeController(t, nil, nil, true, false)
+
+			// Fake the BGPPolicy state.
+			c.bgpPolicyState = tt.existingState
+			if c.bgpPolicyState != nil {
+				c.bgpPolicyState.bgpServer = c.mockBGPServer
+			}
+
+			if tt.expectedCalls != nil {
+				tt.expectedCalls(c.mockBGPServer.EXPECT())
+			}
+
+			actualBgpPeerStatus, err := c.GetBGPPeerStatus(ctx)
+			if tt.expectedErr != nil {
+				assert.ErrorIs(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.ElementsMatch(t, actualBgpPeerStatus, tt.expectedBgpPeerStatus)
+			}
+		})
+	}
+}
