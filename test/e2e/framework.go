@@ -140,6 +140,7 @@ const (
 	defaultCHDatabaseURL                = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
 
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
+	randomPatchAnnotationKey        = "test.antrea.io/random-value"
 
 	iperfPort    = 5201
 	iperfSvcPort = 9999
@@ -3250,4 +3251,44 @@ func (data *TestData) runDNSQuery(
 	} else {
 		return nil, fmt.Errorf("invalid IP address found %v", stdout)
 	}
+}
+
+// patchPodAnnotation Patches an annotation for a given pod in a given namespace. If no annotation is
+// provided as a parameter then it generates a random string value for a predefined key and adds it as annotation.
+// The patchType used is MergePatchType since we intend to make updates to annotations in pods instead of updating fields in complex k8s
+// resources like deployments.
+func (data *TestData) patchPodAnnotation(namespace, podName string, annotation map[string]string) error {
+	numberOfRunes := 8
+	annotationPatch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": make(map[string]string),
+		},
+	}
+
+	if annotation == nil {
+		annotationPatch["metadata"].(map[string]interface{})["annotations"].(map[string]string)[randomPatchAnnotationKey] = randSeq(numberOfRunes)
+	} else {
+		for key, value := range annotation {
+			if key == randomPatchAnnotationKey {
+				annotationPatch["metadata"].(map[string]interface{})["annotations"].(map[string]string)[key] = randSeq(numberOfRunes)
+			} else {
+				annotationPatch["metadata"].(map[string]interface{})["annotations"].(map[string]string)[key] = value
+			}
+		}
+	}
+
+	patchData, err := json.Marshal(annotationPatch)
+	if err != nil {
+		log.Infof("Error marshalling annotation: %+v", err)
+		return err
+	}
+
+	_, err = data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), podName, types.MergePatchType, patchData, metav1.PatchOptions{})
+	if err != nil {
+		log.Infof("Error patching pod %s in namespace %s with annotations. Error: %+v", podName, namespace, err)
+		return err
+	}
+
+	log.Infof("Successfully patched pod %s in namespace %s with provided annotation", podName, namespace)
+	return nil
 }

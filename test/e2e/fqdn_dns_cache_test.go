@@ -15,18 +15,16 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"k8s.io/utils/ptr"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
@@ -168,7 +166,7 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	require.NoError(t, err, "failed to update configmap with new IP : %v", err)
 	t.Logf("successfully updated dns configMap with new IP : %+v", newIP)
 
-	updateDnsPodAnnotations(t, data)
+	require.NoError(t, data.patchPodAnnotation(data.testNamespace, customDnsPodName, nil), "failed to update custom dns pod annotation.")
 
 	defer setDnsServerAddressInAntrea(t, data, "")
 
@@ -242,7 +240,6 @@ func createDnsPod(t *testing.T, data *TestData) {
 	label := map[string]string{customDnsLabelKey: customDnsLabelValue}
 	pb := NewPodBuilder(customDnsPodName, data.testNamespace, customDnsImage)
 	pb.WithLabels(label)
-	pb.WithAnnotations(map[string]string{"Foo": "Bar"})
 	pb.WithContainerName(customDnsContainerName)
 	pb.WithArgs([]string{"-conf", "/etc/coredns/Corefile"})
 	pb.AddVolume(volume)
@@ -250,6 +247,7 @@ func createDnsPod(t *testing.T, data *TestData) {
 
 	require.NoError(t, pb.Create(data))
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, customDnsPodName, data.testNamespace))
+	require.NoError(t, data.patchPodAnnotation(data.testNamespace, customDnsPodName, nil), "failed to annotate the custom dns pod.")
 
 }
 
@@ -299,22 +297,6 @@ func createToolBoxPod(t *testing.T, data *TestData, dnsServiceIP string) {
 	pb.WithMutateFunc(mutateSpecForAddingCustomDNS)
 	require.NoError(t, pb.Create(data))
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, toolBoxPodName, data.testNamespace))
-}
-
-func updateDnsPodAnnotations(t *testing.T, data *TestData) {
-	dnsPod, err := data.clientset.CoreV1().Pods(data.testNamespace).Get(context.TODO(), customDnsPodName, metav1.GetOptions{})
-	require.NoError(t, err, "Error getting DNS pod for annotation update.")
-
-	if dnsPod.Annotations == nil {
-		dnsPod.Annotations = make(map[string]string)
-	}
-	dnsPod.Annotations["Bar"] = "Foo"
-	delete(dnsPod.Annotations, "Foo")
-
-	updatedPod, err := data.clientset.CoreV1().Pods(data.testNamespace).Update(context.TODO(), dnsPod, metav1.UpdateOptions{})
-	require.NoError(t, err, "error updating dns pod annotations.")
-
-	t.Logf("updated dns pod annotations %+v\n", updatedPod.Annotations)
 }
 
 func createHttpAgnhostPod(t *testing.T, data *TestData, podName string, agnLabels map[string]string) *PodIPs {
