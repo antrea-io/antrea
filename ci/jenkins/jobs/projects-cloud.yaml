@@ -1571,3 +1571,40 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+            test_name: kind-flexible-ipam-e2e
+            node: 'kind-flexible-ipam-testbed'
+            description: 'This is the {test_name} test for {name}.'
+            branches:
+            - ${{sha1}}      
+            builders:
+              - builder-kind-flexible-ipam-e2e:
+                  kind_cluster_name: '{test_name}'
+            trigger_phrase: ^(?!Thanks for your PR).*/test-kind-flexible-ipam-e2e.*
+            white_list_target_branches: []
+            allow_whitelist_orgs_as_admins: true
+            admin_list: '{antrea_admin_list}'
+            org_list: '{antrea_org_list}'
+            white_list: '{antrea_white_list}'
+            only_trigger_phrase: true
+            trigger_permit_all: true
+            status_context: jenkins-kind-flexible-ipam-e2e
+            status_url: null
+            success_status: Build finished.
+            failure_status: Failed. Add comment /test-kind-flexible-ipam-e2e to re-trigger.
+            error_status: Failed. Add comment /test-kind-flexible-ipam-e2e to re-trigger.
+            triggered_status: null
+            started_status: null
+            wrappers:
+            - timeout:
+                fail: true
+                timeout: 135
+                type: absolute
+            publishers:
+            - archive:
+                allow-empty: true
+                artifacts: 'antrea-test-logs.tar.gz'
+                case-sensitive: true
+                default-excludes: true
+                fingerprint: false
+                only-if-success: false
