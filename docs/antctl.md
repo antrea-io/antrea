@@ -781,6 +781,34 @@ PEER               ASN   STATE
 192.168.77.201:179 65002 Active
 ```
 
+`antctl` agent command `get bgproutes` prints the advertised BGP routes on the local Node.
+For more information about route advertisement, please refer to [Advertisements](./bgp-policy.md#advertisements).
+
+```bash
+# Get the list of all advertised bgp routes
+$ antctl get bgproutes
+
+ROUTE
+10.96.10.10/32
+192.168.77.100/32
+fec0::10:96:10:10/128
+fec0::192:168:77:100/128
+
+# Get the list of advertised IPv4 bgp routes
+$ antctl get bgproutes --ipv4-only
+
+ROUTE
+10.96.10.10/32
+192.168.77.100/32
+
+# Get the list of advertised IPv6 bgp routes
+$ antctl get bgproutes --ipv6-only
+
+ROUTE
+fec0::10:96:10:10/128
+fec0::192:168:77:100/128
+```
+
 ### Upgrade existing objects of CRDs
 
 antctl supports upgrading existing objects of Antrea CRDs to the storage version.
