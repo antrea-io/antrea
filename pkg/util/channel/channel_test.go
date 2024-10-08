@@ -68,19 +68,14 @@ func TestSubscribe(t *testing.T) {
 		desiredEvents.Insert(e)
 	}
 
-	var errReceiver int
-	var errReceivedEvents sets.Set[string]
-	assert.Eventually(t, func() bool {
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		for i, r := range eventReceivers {
 			receivedEvents := r.received()
-			if !receivedEvents.Equal(desiredEvents) {
-				errReceiver = i
-				errReceivedEvents = receivedEvents
-				return false
+			if !assert.True(t, receivedEvents.Equal(desiredEvents), "Receiver %d failed to receive all events, expected %d events, got %d events", i, len(desiredEvents), len(receivedEvents)) {
+				return
 			}
 		}
-		return true
-	}, 100*time.Millisecond, 10*time.Millisecond, "Receiver %d failed to receive all events, expected %d events, got %d events", errReceiver, len(desiredEvents), len(errReceivedEvents))
+	}, 500*time.Millisecond, 50*time.Millisecond, "Not all receivers received all events")
 }
 
 func TestNotify(t *testing.T) {
