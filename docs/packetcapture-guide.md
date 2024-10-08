@@ -8,7 +8,7 @@ packet capture on the target traffic flow.
 ## Prerequisites
 
 The PacketCapture feature is disabled by default. If you
-want to enable this feature, you need to set PacketCapture feature gate to true in
+want to enable this feature, you need to set PacketCapture feature gate to `true` in
 the `antrea-config` ConfigMap for `antrea-agent`.
 
 ```yaml
@@ -16,23 +16,22 @@ the `antrea-config` ConfigMap for `antrea-agent`.
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
     # Enable PacketCapture feature which provides packets capture feature to diagnose network issue.
-      PacketCapture: false
+      PacketCapture: true
 ```
 
 ## Start a new PacketCapture
 
 When starting a new packet capture, you can provide the following information to identify
-the target flow:
+the target traffic flow:
 
 * Source Pod
 * Destination Pod, Service or IP address
 * Transport protocol (TCP/UDP/ICMP)
 * Transport ports
 
-You can start a new packet capture by creating a PacketCapture CR using
-`kubectl`. Before that, a `Secret` named `antrea-packetcapture-fileserver-auth` located in `kube-system` namespace
-must exist and carry the auth information for the target file server. You can also create the secret using
-`kubectl`:
+You can start a new packet capture by creating a PacketCapture CR. Before that, a Secret named `antrea-packetcapture-fileserver-auth`
+located in the `kube-system` namespace must exist and carry the auth information for the target file server.
+You can also create the Secret using following `kubectl` command:
 
 ```bash
 kubectl create secret generic antrea-packetcapture-fileserver-auth -n kube-system --from-literal=username='<username>'  --from-literal=password='<password>'
@@ -67,8 +66,8 @@ spec:
         dstPort: 8080 # Destination port needs to be set when the protocol is TCP/UDP.
 ```
 
-The CRD above starts a new packet capture from a Pod named `frontend`
+The CR above starts a new packet capture of TCP flows from a Pod named `frontend`
 to the port 8080 of a Pod named `backend` using TCP protocol. It will capture the first 5 packets
-that meet this criterion and upload them to the specified file server. Users can download the
-packet file from the ftp server and analyze its contents with network diagnose tools
-like Wireshark or `tcpdump`.
+that meet this criterion and upload them to the specified sftp server. Users can download the
+packet file from the sftp server and analyze its contents with network diagnose tools
+like Wireshark or tcpdump.

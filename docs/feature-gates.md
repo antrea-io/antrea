@@ -535,5 +535,5 @@ experienced by Pod traffic.
 
 ### PacketCapture
 
-`PacketCapture` allows user to capture live traffic packets from specified flow for further analyze.
+`PacketCapture` allows user to capture live traffic packets from specified flow for further analysis.
 Refer to this [document](packetcapture-guide.md) for more information.
