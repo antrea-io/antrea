@@ -15,8 +15,8 @@
 package exporter
 
 import (
+	"github.com/google/uuid"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/flowaggregator/options"
@@ -35,13 +35,9 @@ func buildS3Input(opt *options.Options) s3uploader.S3Input {
 	}
 }
 
-func NewS3Exporter(k8sClient kubernetes.Interface, opt *options.Options) (*S3Exporter, error) {
+func NewS3Exporter(clusterUUID uuid.UUID, opt *options.Options) (*S3Exporter, error) {
 	s3Input := buildS3Input(opt)
 	klog.InfoS("S3Uploader configuration", "bucketName", s3Input.Config.BucketName, "bucketPrefix", s3Input.Config.BucketPrefix, "region", s3Input.Config.Region, "recordFormat", s3Input.Config.RecordFormat, "compress", *s3Input.Config.Compress, "maxRecordsPerFile", s3Input.Config.MaxRecordsPerFile, "uploadInterval", s3Input.UploadInterval)
-	clusterUUID, err := getClusterUUID(k8sClient)
-	if err != nil {
-		return nil, err
-	}
 	s3UploadProcess, err := s3uploader.NewS3UploadProcess(s3Input, clusterUUID.String())
 	if err != nil {
 		return nil, err

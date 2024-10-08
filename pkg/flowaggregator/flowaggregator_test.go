@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
@@ -273,8 +274,17 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 	wg.Wait()
 }
 
-func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
-	ctrl := gomock.NewController(t)
+// mockExporters creates mocks for all supported exporters and returns them. It also modifies the
+// global functions used by the FlowAggregator to instantiate the exporters, so that the mocks are
+// returned. The functions will be automatically restored at the end of the test. If
+// expectedClusterUUID is not nil, the functions will assert that the correct UUID is provided by
+// the FlowAggregator when instantiating an exporter, if applicable.
+func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *uuid.UUID) (
+	*exportertesting.MockInterface,
+	*exportertesting.MockInterface,
+	*exportertesting.MockInterface,
+	*exportertesting.MockInterface,
+) {
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
@@ -284,24 +294,41 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 	newClickHouseExporterSaved := newClickHouseExporter
 	newS3ExporterSaved := newS3Exporter
 	newLogExporterSaved := newLogExporter
-	defer func() {
+	t.Cleanup(func() {
 		newIPFIXExporter = newIPFIXExporterSaved
 		newClickHouseExporter = newClickHouseExporterSaved
 		newS3Exporter = newS3ExporterSaved
 		newLogExporter = newLogExporterSaved
-	}()
-	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
+	})
+	newIPFIXExporter = func(clusterUUID uuid.UUID, opts *options.Options, registry ipfix.IPFIXRegistry) exporter.Interface {
+		if expectedClusterUUID != nil {
+			assert.Equal(t, *expectedClusterUUID, clusterUUID)
+		}
 		return mockIPFIXExporter
 	}
-	newClickHouseExporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
+	newClickHouseExporter = func(clusterUUID uuid.UUID, opts *options.Options) (exporter.Interface, error) {
+		if expectedClusterUUID != nil {
+			assert.Equal(t, *expectedClusterUUID, clusterUUID)
+		}
 		return mockClickHouseExporter, nil
 	}
-	newS3Exporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
+	newS3Exporter = func(clusterUUID uuid.UUID, opts *options.Options) (exporter.Interface, error) {
+		if expectedClusterUUID != nil {
+			assert.Equal(t, *expectedClusterUUID, clusterUUID)
+		}
 		return mockS3Exporter, nil
 	}
 	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
 		return mockLogExporter, nil
 	}
+
+	return mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter
+}
+
+func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil)
 
 	t.Run("updateIPFIX", func(t *testing.T) {
 		flowAggregator := &flowAggregator{
@@ -490,35 +517,9 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 func TestFlowAggregator_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
-	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
-	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
-	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
-	mockLogExporter := exportertesting.NewMockInterface(ctrl)
+	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil)
 	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
 	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
-
-	newIPFIXExporterSaved := newIPFIXExporter
-	newClickHouseExporterSaved := newClickHouseExporter
-	newS3ExporterSaved := newS3Exporter
-	newLogExporterSaved := newLogExporter
-	defer func() {
-		newIPFIXExporter = newIPFIXExporterSaved
-		newClickHouseExporter = newClickHouseExporterSaved
-		newS3Exporter = newS3ExporterSaved
-		newLogExporter = newLogExporterSaved
-	}()
-	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
-		return mockIPFIXExporter
-	}
-	newClickHouseExporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
-		return mockClickHouseExporter, nil
-	}
-	newS3Exporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
-		return mockS3Exporter, nil
-	}
-	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
-		return mockLogExporter, nil
-	}
 
 	// create dummy watcher: we will not add any files or directory to it.
 	configWatcher, err := fsnotify.NewWatcher()
@@ -927,4 +928,48 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 	mockPodStore.EXPECT().GetPodByIPAndTime("192.168.1.3", gomock.Any()).Return(dstPod, true)
 
 	fa.fillK8sMetadata(ipv4Key, mockRecord, time.Now())
+}
+
+func TestNewFlowAggregator(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := fake.NewSimpleClientset()
+	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	// fsnotify does not seem to work when using the default tempdir on MacOS, which is why we
+	// use the current working directory.
+	f, err := os.CreateTemp(wd, "test_*.config")
+	require.NoError(t, err, "Failed to create test config file")
+	fileName := f.Name()
+	defer os.Remove(fileName)
+
+	clusterUUID := uuid.New()
+	// This will validate that the correct UUID is provided by the FlowAggregator when
+	// instantiating exporters.
+	mockExporters(t, ctrl, &clusterUUID)
+
+	config := &flowaggregatorconfig.FlowAggregatorConfig{
+		FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+			Enable:  true,
+			Address: "10.10.10.10:155",
+		},
+		ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+			Enable: true,
+		},
+		S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+			Enable:     true,
+			BucketName: "test-bucket-name",
+		},
+		FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+			Enable: true,
+			Path:   "/tmp/antrea-flows.log",
+		},
+	}
+	b, err := yaml.Marshal(config)
+	require.NoError(t, err)
+	_, err = f.Write(b)
+	require.NoError(t, err)
+	fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, fileName)
+	require.NoError(t, err)
+	assert.Equal(t, clusterUUID, fa.clusterUUID)
 }
