@@ -15,9 +15,12 @@
 package networkpolicy
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,61 +30,124 @@ import (
 	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
 )
 
-func TestInitTier(t *testing.T) {
-	testTier := &secv1beta1.Tier{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test",
-		},
-		Spec: secv1beta1.TierSpec{
-			Priority: 10,
-		},
+func TestInitializeTier(t *testing.T) {
+	makeTestTier := func(priority int32) *secv1beta1.Tier {
+		return &secv1beta1.Tier{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test",
+			},
+			Spec: secv1beta1.TierSpec{
+				Priority: priority,
+			},
+		}
 	}
+	testTier := makeTestTier(10)
+
 	tests := []struct {
-		name           string
-		reactor        k8stesting.ReactionFunc
-		expectedCalled int
+		name                string
+		createReactor       k8stesting.ReactionFunc
+		updateReactor       k8stesting.ReactionFunc
+		existingTier        *secv1beta1.Tier
+		createExpectedCalls int
+		updateExpectedCalls int
 	}{
 		{
-			name:           "create successfully",
-			expectedCalled: 1,
+			name:                "create successful",
+			createExpectedCalls: 1,
 		},
 		{
-			name: "tier already exists",
-			reactor: func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-				return true, nil, errors.NewAlreadyExists(action.GetResource().GroupResource(), testTier.Name)
-			},
-			expectedCalled: 1,
-		},
-		{
-			name: "transient error",
-			reactor: func() k8stesting.ReactionFunc {
+			name: "create error",
+			createReactor: func() k8stesting.ReactionFunc {
 				curFailureCount := 0
-				maxFailureCount := 1
 				return func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					if curFailureCount < maxFailureCount {
+					if curFailureCount < 1 {
 						curFailureCount += 1
 						return true, nil, errors.NewServiceUnavailable("unknown reason")
 					}
 					return false, nil, nil
 				}
 			}(),
-			expectedCalled: 2,
+			createExpectedCalls: 2,
+		},
+		{
+			name:                "update successful",
+			existingTier:        makeTestTier(5),
+			updateExpectedCalls: 1,
+		},
+		{
+			name: "update error",
+			updateReactor: func() k8stesting.ReactionFunc {
+				curFailureCount := 0
+				return func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					if curFailureCount < 1 {
+						curFailureCount += 1
+						return true, nil, errors.NewServiceUnavailable("unknown reason")
+					}
+					return false, nil, nil
+				}
+			}(),
+			existingTier:        makeTestTier(5),
+			updateExpectedCalls: 2,
+		},
+		{
+			name:         "no change needed",
+			existingTier: makeTestTier(10),
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, c := newController(nil, nil)
-			if tc.reactor != nil {
-				c.crdClient.(*fake.Clientset).PrependReactor("create", "tiers", tc.reactor)
+			ctx := context.Background()
+			crdObjects := []runtime.Object{}
+			if tc.existingTier != nil {
+				crdObjects = append(crdObjects, tc.existingTier)
 			}
-			createCalled := 0
+			_, c := newController(nil, crdObjects)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.crdInformerFactory.Start(stopCh)
+			c.crdInformerFactory.WaitForCacheSync(stopCh)
+
+			if tc.createReactor != nil {
+				c.crdClient.(*fake.Clientset).PrependReactor("create", "tiers", tc.createReactor)
+			}
+			if tc.updateReactor != nil {
+				c.crdClient.(*fake.Clientset).PrependReactor("update", "tiers", tc.updateReactor)
+			}
+			createCalls := 0
 			c.crdClient.(*fake.Clientset).PrependReactor("create", "tiers", func(action k8stesting.Action) (bool, runtime.Object, error) {
-				createCalled += 1
+				createCalls += 1
 				return false, nil, nil
 			})
-			c.initTier(testTier)
-			assert.Equal(t, tc.expectedCalled, createCalled)
+			updateCalls := 0
+			c.crdClient.(*fake.Clientset).PrependReactor("update", "tiers", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				updateCalls += 1
+				return false, nil, nil
+			})
+			// Prevent test from hanging in case of issue.
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			require.NoError(t, c.initializeTier(ctx, testTier))
+			assert.Equal(t, tc.createExpectedCalls, createCalls)
+			assert.Equal(t, tc.updateExpectedCalls, updateCalls)
 		})
 	}
 
+}
+
+func TestInitializeTiers(t *testing.T) {
+	ctx := context.Background()
+
+	_, c := newController(nil, nil)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+
+	// All system Tiers should be created on the first try, so we can use a small timeout.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	require.NoError(t, c.InitializeTiers(ctx))
+	tiers, err := c.crdClient.CrdV1beta1().Tiers().List(ctx, metav1.ListOptions{})
+	require.NoError(t, err)
+	assert.Len(t, tiers.Items, len(systemGeneratedTiers))
 }
