@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 
@@ -121,11 +122,14 @@ var (
 type fakeClock struct {
 	*clocktesting.FakeClock
 	tickersAdded atomic.Int32
+	t            *testing.T
 }
 
-func newFakeClock(t time.Time) *fakeClock {
+func newFakeClock(t *testing.T, clockT time.Time) *fakeClock {
+	t.Logf("Creating fake clock, now=%v", clockT)
 	return &fakeClock{
-		FakeClock: clocktesting.NewFakeClock(t),
+		FakeClock: clocktesting.NewFakeClock(clockT),
+		t:         t,
 	}
 }
 
@@ -134,6 +138,9 @@ func (c *fakeClock) TickersAdded() int32 {
 }
 
 func (c *fakeClock) NewTicker(d time.Duration) clock.Ticker {
+	defer func() {
+		c.t.Logf("Ticker created, now=%v, tick=%v", c.Now(), d)
+	}()
 	defer c.tickersAdded.Add(1)
 	return c.FakeClock.NewTicker(d)
 }
@@ -195,7 +202,7 @@ func newTestMonitor(
 	nlmInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
 	antreaClientProvider := &antreaClientGetter{crdClientset}
 	m := NewNodeLatencyMonitor(antreaClientProvider, nodeInformer, nlmInformer, nodeConfig, trafficEncapMode)
-	fakeClock := newFakeClock(clockT)
+	fakeClock := newFakeClock(t, clockT)
 	m.clock = fakeClock
 	mockListener := monitortesting.NewMockPacketListener(ctrl)
 	m.listener = mockListener
@@ -241,7 +248,7 @@ func TestEnableMonitor(t *testing.T) {
 // can be called to collect received packets. It is useful to write assertions in tests that
 // validate the list of received packets. collectProbePackets starts a goroutine in the background,
 // which exists when either the input channel or the stop channel is closed.
-func collectProbePackets(ch <-chan *nettest.Packet, stopCh <-chan struct{}) func([]*nettest.Packet) []*nettest.Packet {
+func collectProbePackets(t *testing.T, ch <-chan *nettest.Packet, stopCh <-chan struct{}) func([]*nettest.Packet) []*nettest.Packet {
 	var m sync.Mutex
 	newPackets := make([]*nettest.Packet, 0)
 	go func() {
@@ -253,8 +260,10 @@ func collectProbePackets(ch <-chan *nettest.Packet, stopCh <-chan struct{}) func
 				return
 			case p, ok := <-ch:
 				if !ok {
+					t.Logf("Packet channel has been closed")
 					return
 				}
+				t.Logf("Packet received on channel")
 				func() {
 					m.Lock()
 					defer m.Unlock()
@@ -311,6 +320,11 @@ func TestDisableMonitor(t *testing.T) {
 func TestUpdateMonitorPingInterval(t *testing.T) {
 	ctx := context.Background()
 
+	// While investigating test flakiness in CI, we enabled verbose logging.
+	var level klog.Level
+	level.Set("4")
+	defer level.Set("0")
+
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	m := newTestMonitor(t, nodeConfigIPv4, config.TrafficEncapModeEncap, time.Now(), []runtime.Object{node1, node2, node3}, []runtime.Object{nlm})
@@ -321,7 +335,7 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 	fakeClock := m.clock
 
 	outCh := make(chan *nettest.Packet, 10)
-	collect := collectProbePackets(outCh, stopCh)
+	collect := collectProbePackets(t, outCh, stopCh)
 	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, outCh)
 	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
 
@@ -368,7 +382,6 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 		packets = collect(packets)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
 	}, 2*time.Second, 10*time.Millisecond)
-
 }
 
 func TestSendPing(t *testing.T) {
@@ -655,7 +668,9 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 			defer close(stopCh)
 			// We start with node1 (the current Node) only, and it should be ignored.
 			m := newTestMonitor(t, nodeConfigIPv4, tc.encapMode, time.Now(), []runtime.Object{node1}, nil)
+			m.crdInformerFactory.Start(stopCh)
 			m.informerFactory.Start(stopCh)
+			m.crdInformerFactory.WaitForCacheSync(stopCh)
 			m.informerFactory.WaitForCacheSync(stopCh)
 			go m.Run(stopCh)
 
@@ -703,7 +718,7 @@ func TestMonitorLoop(t *testing.T) {
 	in4Ch := make(chan *nettest.Packet, 10)
 	in6Ch := make(chan *nettest.Packet, 10)
 	outCh := make(chan *nettest.Packet, 10)
-	collect := collectProbePackets(outCh, stopCh)
+	collect := collectProbePackets(t, outCh, stopCh)
 	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, in4Ch, outCh)
 	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
 	pConnIPv6 := nettest.NewPacketConn(testAddrIPv6, in6Ch, outCh)
