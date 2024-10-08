@@ -321,7 +321,12 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
-			go c.networkPolicyController.InitializeTiers()
+			go func() {
+				// context gets cancelled when the server stops.
+				if err := c.networkPolicyController.InitializeTiers(context); err != nil {
+					klog.ErrorS(err, "Failed to initialize system Tiers")
+				}
+			}()
 			return nil
 		})
 	}
