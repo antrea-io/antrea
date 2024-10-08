@@ -152,6 +152,8 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 			go wait.Until(monitor.externalNodeWorker, time.Second, stopCh)
 		}
 	}
+
+	<-stopCh
 }
 
 func (monitor *controllerMonitor) syncControllerCRD() {
