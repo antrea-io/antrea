@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"net"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -131,12 +133,44 @@ func toAntreaIPBlockForCRD(ipBlock *crdv1beta1.IPBlock) (*controlplane.IPBlock, 
 	if err != nil {
 		return nil, err
 	}
+	var exceptNets []controlplane.IPNet
+	for _, exc := range ipBlock.Except {
+		// Convert the except IPBlock to networkpolicy.IPNet.
+		exceptNet, err := cidrStrToIPNet(exc)
+		if err != nil {
+			return nil, err
+		}
+		exceptNets = append(exceptNets, *exceptNet)
+	}
 	antreaIPBlock := &controlplane.IPBlock{
-		CIDR: *ipNet,
-		// secv1alpha.IPBlock does not have the Except slices.
-		Except: []controlplane.IPNet{},
+		CIDR:   *ipNet,
+		Except: exceptNets,
 	}
 	return antreaIPBlock, nil
+}
+
+// computeEffectiveIPNetForIPBlocks calculates the list of net.IPNet CIDRs after the
+// "except" CIDRs are subtracted from each corresponding ipBlock.
+func computeEffectiveIPNetForIPBlocks(ipBlocks []crdv1beta1.IPBlock) []*net.IPNet {
+	var ipNets []*net.IPNet
+	for i := range ipBlocks {
+		// CIDR format is already validated by the webhook
+		_, ipNet, _ := net.ParseCIDR(ipBlocks[i].CIDR)
+		var exceptIPNets []*net.IPNet
+		for j := range ipBlocks[i].Except {
+			_, exceptNet, _ := net.ParseCIDR(ipBlocks[i].Except[j])
+			exceptIPNets = append(exceptIPNets, exceptNet)
+		}
+		diffCIDRs, err := ip.DiffFromCIDRs(ipNet, exceptIPNets)
+		if err != nil {
+			// This should not happen theoretically since the except CIDRs are all validated
+			// to be a subnet of the ipBlock.CIDR
+			klog.ErrorS(err, "Error when computing effective CIDRs by removing except IPNets from IPBlock")
+			continue
+		}
+		ipNets = append(ipNets, diffCIDRs...)
+	}
+	return ip.MergeCIDRs(ipNets)
 }
 
 // toAntreaPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1beta1 NetworkPolicyPeer.

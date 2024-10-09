@@ -129,7 +129,7 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 
 func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
 	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32,
-	groupAddress, cidr *string, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
+	groupAddress *string, ipBlock *crdv1beta1.IPBlock, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nodeSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, namespaces *crdv1beta1.PeerNamespaces,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1beta1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
 
@@ -158,12 +158,6 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol
 		nsSel = &metav1.LabelSelector{
 			MatchLabels:      nsSelector,
 			MatchExpressions: nsSelectorMatchExp,
-		}
-	}
-	var ipBlock *crdv1beta1.IPBlock
-	if cidr != nil {
-		ipBlock = &crdv1beta1.IPBlock{
-			CIDR: *cidr,
 		}
 	}
 	for _, at := range ruleAppliedToSpecs {
@@ -207,7 +201,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol
 //	all conflicting PRs are merged.
 func (b *ClusterNetworkPolicySpecBuilder) AddIngressForSrcPort(protoc AntreaPolicyProtocol,
 	port, endPort, srcPort, endSrcPort, icmpType, icmpCode, igmpType *int32,
-	groupAddress, cidr *string, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
+	groupAddress *string, ipBlock *crdv1beta1.IPBlock, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nodeSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1beta1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
 
@@ -243,12 +237,6 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngressForSrcPort(protoc AntreaPoli
 	if selfNS == true {
 		ns = &crdv1beta1.PeerNamespaces{
 			Match: matchSelf,
-		}
-	}
-	var ipBlock *crdv1beta1.IPBlock
-	if cidr != nil {
-		ipBlock = &crdv1beta1.IPBlock{
-			CIDR: *cidr,
 		}
 	}
 	for _, at := range ruleAppliedToSpecs {
@@ -289,14 +277,14 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngressForSrcPort(protoc AntreaPoli
 
 func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
 	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32,
-	groupAddress, cidr *string, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
+	groupAddress *string, ipBlock *crdv1beta1.IPBlock, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nodeSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, namespaces *crdv1beta1.PeerNamespaces,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1beta1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &ClusterNetworkPolicySpecBuilder{}
-	c.AddIngress(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, groupAddress, cidr, podSelector, nodeSelector, nsSelector,
+	c.AddIngress(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, groupAddress, ipBlock, podSelector, nodeSelector, nsSelector,
 		podSelectorMatchExp, nodeSelectorMatchExp, nsSelectorMatchExp, namespaces, ruleAppliedToSpecs, action, ruleClusterGroup, name, serviceAccount)
 	theRule := c.Get().Spec.Ingress[0]
 

@@ -691,7 +691,7 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*controlplane.IPBlock, erro
 	if err != nil {
 		return nil, err
 	}
-	exceptNets := []controlplane.IPNet{}
+	var exceptNets []controlplane.IPNet
 	for _, exc := range ipBlock.Except {
 		// Convert the except IPBlock to networkpolicy.IPNet.
 		exceptNet, err := cidrStrToIPNet(exc)

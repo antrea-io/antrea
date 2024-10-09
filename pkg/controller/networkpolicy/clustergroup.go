@@ -131,10 +131,8 @@ func (c *NetworkPolicyController) processClusterGroup(cg *crdv1beta1.ClusterGrou
 		for i := range cg.Spec.IPBlocks {
 			ipb, _ := toAntreaIPBlockForCRD(&cg.Spec.IPBlocks[i])
 			internalGroup.IPBlocks = append(internalGroup.IPBlocks, *ipb)
-			// CIDR format is already validated by the webhook
-			_, ipNet, _ := net.ParseCIDR(cg.Spec.IPBlocks[i].CIDR)
-			internalGroup.IPNets = append(internalGroup.IPNets, *ipNet)
 		}
+		internalGroup.IPNets = computeEffectiveIPNetForIPBlocks(cg.Spec.IPBlocks)
 		return &internalGroup
 	}
 	svcSelector := cg.Spec.ServiceReference
@@ -438,9 +436,8 @@ func (c *NetworkPolicyController) GetAssociatedIPBlockGroups(ip net.IP) []antrea
 	var matchedGroups []antreatypes.Group
 	for _, obj := range ipBlockGroupObjs {
 		group := obj.(*antreatypes.Group)
-		for idx := range group.IPNets {
-			ipNet := &group.IPNets[idx]
-			if ipNet.Contains(ip) {
+		for _, ipNet := range group.IPNets {
+			if ipNet != nil && ipNet.Contains(ip) {
 				matchedGroups = append(matchedGroups, *group)
 				// Append all parent groups to matchedGroups
 				parentGroups := c.getParentGroups(group.SourceReference.ToGroupName())
