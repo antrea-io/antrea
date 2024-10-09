@@ -15,10 +15,12 @@
 package e2e
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -92,30 +94,17 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 
 	setDnsServerAddressInAntrea(t, data, customDnsService.Spec.ClusterIP)
 
-	var agnHostPodIps []*PodIPs
 	podCount := 2
+	agnHostPodIps := make([]*PodIPs, podCount)
 	for i := 0; i < podCount; i++ {
-		podIp := createHttpAgnhostPod(t, data, randName(agnHostPodNamePreFix), map[string]string{agnHostLabelKey: agnHostLabelValue})
-		agnHostPodIps = append(agnHostPodIps, podIp)
-	}
-	//domainMapping holds whether the IP is mapped to Domain or not.
-	domainMapping := make(map[string]bool)
-
-	// pick an IP to be added in config
-	var ipForDnsConfig string
-	for idx, podIp := range agnHostPodIps {
-		ipStr := podIp.IPv4.String()
-		domainMapping[ipStr] = false
-		//pick last IP for config
-		if idx == len(agnHostPodIps)-1 {
-			ipForDnsConfig = ipStr
-		}
+		agnHostPodIps[i] = createHttpAgnhostPod(t, data, randName(agnHostPodNamePreFix), map[string]string{agnHostLabelKey: agnHostLabelValue})
 	}
 
-	dnsConfigData := createDnsConfig(ipForDnsConfig)
+	ipv4, ipv6 := extractIPs(agnHostPodIps[0])
+
+	dnsConfigData := createDnsConfig(t, ipv4, ipv6)
 	customDnsConfigMapObject, err := data.CreateConfigMap(data.testNamespace, customDnsConfigName, dnsConfigData, nil, false)
 	require.NoError(t, err, "failed to create custom dns ConfigMap: %v", err)
-	domainMapping[ipForDnsConfig] = true
 
 	createDnsPod(t, data)
 
@@ -149,30 +138,35 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 
 	t.Logf("received ip using dig for test fqdn %+v ", fqdnIp)
 
-	var newIP string
-	for ip, mapped := range domainMapping {
-		if ip != fqdnIp && mapped == false {
-			newIP = ip
-		}
+	ipv4, ipv6 = extractIPs(agnHostPodIps[1])
+	if ipv6 != "" {
+		t.Logf("New IPs to update to DNS | ipv4 : %v, ipv6 : %+v", ipv4, ipv6)
+	} else {
+		t.Logf("New IPs to update to DNS | ipv4 : %v", ipv4)
 	}
 
-	t.Logf("New IP to update to DNS %v", newIP)
-
 	// Update the custom DNS configMap
-	UpdatedCustomDNSconfig := createDnsConfig(newIP)
+	UpdatedCustomDNSconfig := createDnsConfig(t, ipv4, ipv6)
 
 	customDnsConfigMapObject.Data = UpdatedCustomDNSconfig
 	err = data.UpdateConfigMap(customDnsConfigMapObject)
 	require.NoError(t, err, "failed to update configmap with new IP : %v", err)
-	t.Logf("successfully updated dns configMap with new IP : %+v", newIP)
+	if ipv6 != "" {
+		t.Logf("successfully updated dns configMap with new IPs | ipv4 : %+v, ipv6 :%+v", ipv4, ipv6)
+	} else {
+		t.Logf("successfully updated dns configMap with new IPs | ipv4 : %+v", ipv4)
+	}
 
-	require.NoError(t, data.patchPodAnnotation(data.testNamespace, customDnsPodName, nil), "failed to update custom dns pod annotation.")
+	require.NoError(t, data.setPodAnnotationToRandomValue(data.testNamespace, customDnsPodName, randomPatchAnnotationKey), "failed to update custom dns pod annotation.")
 
 	defer setDnsServerAddressInAntrea(t, data, "")
 
 	assert.Eventually(t, func() bool {
 		t.Logf("trying to curl the existing cached IP of the domain  %v", fqdnIp)
 		err = curlFqdn(toolBoxPodName, toolboxContainerName, fqdnIp)
+		if err != nil {
+			t.Logf("The test failed because of error  %+v", err)
+		}
 		return assert.Error(t, err)
 	}, eventualWaitTime, 1*time.Second)
 
@@ -185,29 +179,57 @@ func setDnsServerAddressInAntrea(t *testing.T, data *TestData, dnsServiceIP stri
 	err := data.mutateAntreaConfigMap(nil, agentChanges, false, true)
 	require.NoError(t, err, "Error when setting up customDNS server IP in Antrea configmap : %v", err)
 
-	t.Logf("dns server value set to %+v in antrea \n", dnsServiceIP)
+	if dnsServiceIP == "" {
+		t.Logf("removing dns server IP from antrea agent as part of teardown")
+	} else {
+		t.Logf("dns server value set to %+v in antrea \n", dnsServiceIP)
+	}
 
 }
 
-func createDnsConfig(ipForConfig string) map[string]string {
-	config := fmt.Sprintf(`lfx.test:53 {
-    errors
-    health
-    hosts {
-        %s %s
-        no_reverse
-        pods verified
-        ttl 10
-    }
-    loop
-    reload
-}`, ipForConfig, testFullyQualifiedDomainName)
-
+func createDnsConfig(t *testing.T, ipv4Address, ipv6Address string) map[string]string {
+	configMapData, _ := generateCoreFile(t, ipv4Address, ipv6Address)
 	configData := map[string]string{
-		"Corefile": config,
+		"Corefile": configMapData,
 	}
 
 	return configData
+}
+
+func generateCoreFile(t *testing.T, ipv4Address, ipv6Address string) (string, error) {
+	const coreFileTemplate = `lfx.test:53 {
+        errors
+        log
+        health
+        hosts {
+            {{ if .IPv4 }}{{ .IPv4 }} {{ $.FQDN }}{{ end }}
+            {{ if .IPv6 }}{{ .IPv6 }} {{ $.FQDN }}{{ end }}
+            no_reverse
+            pods verified
+            ttl 10
+        }
+        loop
+        reload
+    }`
+
+	data := struct {
+		IPv4 string
+		IPv6 string
+		FQDN string
+	}{
+		IPv4: ipv4Address,
+		IPv6: ipv6Address,
+		FQDN: testFullyQualifiedDomainName,
+	}
+
+	tmpl, err := template.New("configMapData").Parse(coreFileTemplate)
+	require.NoError(t, err, "error while creating template ", err)
+
+	var output bytes.Buffer
+	err = tmpl.Execute(&output, data)
+	require.NoError(t, err, "error while executing config map template", err)
+
+	return strings.TrimSpace(output.String()), nil
 }
 
 func createDnsPod(t *testing.T, data *TestData) {
@@ -247,7 +269,7 @@ func createDnsPod(t *testing.T, data *TestData) {
 
 	require.NoError(t, pb.Create(data))
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, customDnsPodName, data.testNamespace))
-	require.NoError(t, data.patchPodAnnotation(data.testNamespace, customDnsPodName, nil), "failed to annotate the custom dns pod.")
+	require.NoError(t, data.setPodAnnotationToRandomValue(data.testNamespace, customDnsPodName, randomPatchAnnotationKey), "failed to annotate the custom dns pod.")
 
 }
 
@@ -310,7 +332,19 @@ func createHttpAgnhostPod(t *testing.T, data *TestData, podName string, agnLabel
 	}
 
 	require.NoError(t, NewPodBuilder(podName, data.testNamespace, agnhostImage).WithArgs(args).WithPorts(ports).WithLabels(agnLabels).Create(data))
-	podIP, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
+	podIPs, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
 	require.NoError(t, err)
-	return podIP
+	return podIPs
+}
+
+func extractIPs(podIPs *PodIPs) (string, string) {
+	var ipv4, ipv6 string
+	res := podIPs.AsSlice()
+	if len(res) > 0 {
+		ipv4 = res[0].String()
+		if len(res) == 2 {
+			ipv6 = res[1].String()
+		}
+	}
+	return ipv4, ipv6
 }

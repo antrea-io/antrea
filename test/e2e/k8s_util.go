@@ -103,7 +103,6 @@ type TestNamespaceMeta struct {
 // GetPodByLabel returns a Pod with the matching Namespace and "pod" label if it's found.
 // If the pod is not found, GetPodByLabel returns "ErrPodNotFound".
 func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
-	//TODO: Query why this is hard coded as "pod"
 	pods, err := k.getPodsUncached(ns, "pod", name)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get Pod in Namespace %s with label pod=%s: %w", ns, name, err)
@@ -668,20 +667,24 @@ func (data *TestData) UpdateConfigMap(configMap *v1.ConfigMap) error {
 	return err
 }
 
-func (data *TestData) CreateConfigMap(namespace, name string, configData map[string]string, binaryData map[string]byte, immutable bool) (*v1.ConfigMap, error) {
+func (data *TestData) CreateConfigMap(namespace, name string, configData map[string]string, binaryData map[string][]byte, immutable bool) (*v1.ConfigMap, error) {
 	configMap := &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Immutable:  nil,
+		Immutable:  &immutable,
 		Data:       configData,
-		BinaryData: nil,
+		BinaryData: binaryData,
 	}
 
-	configMapObject, err := data.clientset.CoreV1().ConfigMaps(namespace).Create(context.Background(), configMap, metav1.CreateOptions{})
-	return configMapObject, err
+	configMapObject, err := data.clientset.CoreV1().ConfigMaps(namespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	if err != nil {
+		log.Infof("Unable to create configMap : %s", err)
+		return nil, err
+	}
+	return configMapObject, nil
 }
 
 // DeleteService is a convenience function for deleting a Service by Namespace and name.
