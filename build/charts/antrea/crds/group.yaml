@@ -96,6 +96,11 @@ spec:
                       cidr:
                         type: string
                         format: cidr
+                      except:
+                        type: array
+                        items:
+                          type: string
+                          format: cidr
                 serviceReference:
                   type: object
                   properties:

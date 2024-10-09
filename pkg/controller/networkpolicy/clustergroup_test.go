@@ -39,7 +39,10 @@ func TestProcessClusterGroup(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
 	cidr := "10.0.0.0/24"
+	exceptCIDR := "10.0.0.0/25"
 	controlplaneIPNet, _ := cidrStrToIPNet(cidr)
+	controlplaneIPNetExcept, _ := cidrStrToIPNet(exceptCIDR)
+	_, controlplaneIPNetDiff, _ := net.ParseCIDR("10.0.0.128/25")
 	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
@@ -118,11 +121,10 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *controlplaneIPNet,
-						Except: []controlplane.IPNet{},
+						CIDR: *controlplaneIPNet,
 					},
 				},
-				IPNets: []net.IPNet{*ipNet},
+				IPNets: []*net.IPNet{ipNet},
 			},
 		},
 		{
@@ -165,6 +167,34 @@ func TestProcessClusterGroup(t *testing.T) {
 				ChildGroups: []string{"cgA", "cgB"},
 			},
 		},
+		{
+			name: "cg-with-ip-block-except",
+			inputGroup: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgG", UID: "uidG"},
+				Spec: crdv1beta1.GroupSpec{
+					IPBlocks: []crdv1beta1.IPBlock{
+						{
+							CIDR:   cidr,
+							Except: []string{exceptCIDR},
+						},
+					},
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID: "uidG",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgG",
+					UID:  "uidG",
+				},
+				IPBlocks: []controlplane.IPBlock{
+					{
+						CIDR:   *controlplaneIPNet,
+						Except: []controlplane.IPNet{*controlplaneIPNetExcept},
+					},
+				},
+				IPNets: []*net.IPNet{controlplaneIPNetDiff},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -181,7 +211,11 @@ func TestAddClusterGroup(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
 	cidr := "10.0.0.0/24"
+	exceptCIDR1, exceptCIDR2 := "10.0.0.0/25", "10.0.0.128/26"
 	controlplaneIPNet, _ := cidrStrToIPNet(cidr)
+	controlplaneIPNetExcept1, _ := cidrStrToIPNet(exceptCIDR1)
+	controlplaneIPNetExcept2, _ := cidrStrToIPNet(exceptCIDR2)
+	_, controlplaneIPNetDiff, _ := net.ParseCIDR("10.0.0.192/26")
 	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
@@ -260,11 +294,38 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *controlplaneIPNet,
-						Except: []controlplane.IPNet{},
+						CIDR: *controlplaneIPNet,
 					},
 				},
-				IPNets: []net.IPNet{*ipNet},
+				IPNets: []*net.IPNet{ipNet},
+			},
+		},
+		{
+			name: "cg-with-ip-block-except",
+			inputGroup: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
+				Spec: crdv1beta1.GroupSpec{
+					IPBlocks: []crdv1beta1.IPBlock{
+						{
+							CIDR:   cidr,
+							Except: []string{exceptCIDR1, exceptCIDR2},
+						},
+					},
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID: "uidE",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgE",
+					UID:  "uidE",
+				},
+				IPBlocks: []controlplane.IPBlock{
+					{
+						CIDR:   *controlplaneIPNet,
+						Except: []controlplane.IPNet{*controlplaneIPNetExcept1, *controlplaneIPNetExcept2},
+					},
+				},
+				IPNets: []*net.IPNet{controlplaneIPNetDiff},
 			},
 		},
 	}
@@ -371,11 +432,10 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *controlplaneIPNet,
-						Except: []controlplane.IPNet{},
+						CIDR: *controlplaneIPNet,
 					},
 				},
-				IPNets: []net.IPNet{*ipNet},
+				IPNets: []*net.IPNet{ipNet},
 			},
 		},
 		{
@@ -1150,19 +1210,41 @@ func TestGetAssociatedIPBlockGroups(t *testing.T) {
 			},
 		},
 	}
+	cgExceptIPv4 := &crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "ipBlockExceptV4", UID: "UID4"},
+		Spec: crdv1beta1.GroupSpec{
+			IPBlocks: []crdv1beta1.IPBlock{
+				{
+					CIDR: "192.168.0.0/16",
+					Except: []string{
+						"192.168.3.0/24", "192.168.4.0/24",
+					},
+				},
+			},
+		},
+	}
+	cgExceptIPv6 := &crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "ipBlockExceptV6", UID: "UID5"},
+		Spec: crdv1beta1.GroupSpec{
+			IPBlocks: []crdv1beta1.IPBlock{
+				{
+					CIDR:   "fd00:192:168::/48",
+					Except: []string{"fd00:192:168:3::/64", "fd00:192:168:4::/64"},
+				},
+			},
+		},
+	}
 
-	_, npc := newControllerWithoutEventHandler(nil, []runtime.Object{cg1, cg2, cg2Parent})
+	_, npc := newControllerWithoutEventHandler(nil, []runtime.Object{cg1, cg2, cg2Parent, cgExceptIPv4, cgExceptIPv6})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	npc.crdInformerFactory.Start(stopCh)
 	npc.crdInformerFactory.WaitForCacheSync(stopCh)
 
-	npc.addClusterGroup(cg1)
-	npc.syncInternalGroup(internalGroupKeyFunc(cg1))
-	npc.addClusterGroup(cg2)
-	npc.syncInternalGroup(internalGroupKeyFunc(cg2))
-	npc.addClusterGroup(cg2Parent)
-	npc.syncInternalGroup(internalGroupKeyFunc(cg2Parent))
+	for _, cg := range []*crdv1beta1.ClusterGroup{cg1, cg2, cg2Parent, cgExceptIPv4, cgExceptIPv6} {
+		npc.addClusterGroup(cg)
+		npc.syncInternalGroup(internalGroupKeyFunc(cg))
+	}
 
 	tests := []struct {
 		name           string
@@ -1182,6 +1264,26 @@ func TestGetAssociatedIPBlockGroups(t *testing.T) {
 		{
 			name:           "no-group-association",
 			ipQuery:        net.ParseIP("172.160.0.1"),
+			expectedGroups: []string{},
+		},
+		{
+			name:           "group-association-ipv4-group-except",
+			ipQuery:        net.ParseIP("192.168.8.1"),
+			expectedGroups: []string{"ipBlockExceptV4"},
+		},
+		{
+			name:           "no-group-association-ipv4-group-except",
+			ipQuery:        net.ParseIP("192.168.3.1"),
+			expectedGroups: []string{},
+		},
+		{
+			name:           "group-association-ipv6-group-except",
+			ipQuery:        net.ParseIP("fd00:192:168:0::1"),
+			expectedGroups: []string{"ipBlockExceptV6"},
+		},
+		{
+			name:           "no-group-association-ipv6-group-except",
+			ipQuery:        net.ParseIP("fd00:192:168:3:abcd:1234:5678:9abc:def0"),
 			expectedGroups: []string{},
 		},
 	}

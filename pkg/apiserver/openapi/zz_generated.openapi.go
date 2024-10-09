@@ -4401,15 +4401,30 @@ func schema_pkg_apis_crd_v1beta1_IPBlock(ref common.ReferenceCallback) common.Op
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPBlock describes a particular CIDR (Ex. \"192.168.1.1/24\") that is allowed or denied to/from the workloads matched by a Spec.AppliedTo.",
+				Description: "IPBlock describes a particular CIDR (Ex. \"192.168.1.0/24\") that is allowed or denied to/from the workloads matched by a Spec.AppliedTo.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CIDR is a string representing the IP Block Valid examples are \"192.168.1.1/24\".",
+							Description: "CIDR is a string representing the IP Block Valid examples are \"192.168.1.0/24\".",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"except": {
+						SchemaProps: spec.SchemaProps{
+							Description: "except is a slice of CIDRs that should not be included within an IPBlock Valid examples are \"192.168.1.0/28\" or \"2001:db8::/64\" Except values will be rejected if they are outside the cidr range",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
 						},
 					},
 				},

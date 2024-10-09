@@ -46,7 +46,7 @@ func (ips DualStackIPs) Equal(x DualStackIPs) bool {
 // can be changed.
 func DiffFromCIDRs(allowCIDR *net.IPNet, exceptCIDRs []*net.IPNet) ([]*net.IPNet, error) {
 	// Remove the redundant CIDRs
-	exceptCIDRs = mergeCIDRs(exceptCIDRs)
+	exceptCIDRs = MergeCIDRs(exceptCIDRs)
 	newCIDRs := []*net.IPNet{allowCIDR}
 	for _, exceptCIDR := range exceptCIDRs {
 	beginLoop:
@@ -119,7 +119,7 @@ func flipSingleBit(ip *net.IP, bitIndex int) net.IP {
 
 // This function is to check for redundant CIDRs in the list that are
 // covered by other CIDRs and remove them. Input array can be modified.
-func mergeCIDRs(cidrBlocks []*net.IPNet) []*net.IPNet {
+func MergeCIDRs(cidrBlocks []*net.IPNet) []*net.IPNet {
 	// Sort the list by netmask in ascending order
 	sort.Slice(cidrBlocks, func(i, j int) bool {
 		return bytes.Compare(cidrBlocks[i].Mask, cidrBlocks[j].Mask) < 0

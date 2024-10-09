@@ -72,11 +72,12 @@ const (
 	// Verification of deleting/creating resources timed out.
 	timeout = 10 * time.Second
 	// audit log directory on Antrea Agent
-	logDir              = "/var/log/antrea/networkpolicy/"
-	logfileName         = "np.log"
-	npEvaluationPodName = "antctl"
-	defaultTierName     = "application"
-	defaultDenyKNPName  = "default-deny-namespace"
+	logDir             = "/var/log/antrea/networkpolicy/"
+	logfileName        = "np.log"
+	defaultTierName    = "application"
+	defaultDenyKNPName = "default-deny-namespace"
+	anyIPv4            = "0.0.0.0/0"
+	anyIPv6            = "::/0"
 )
 
 func failOnError(err error, t *testing.T) {
@@ -680,6 +681,59 @@ func testACNPDropIngressInSelectedNamespace(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+func testACNPDropIPBlockWithExcept(t *testing.T) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-drop-all-egress-from-ya-except-xa-xb-ip").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("y")}}})
+	podXAIP, _ := podIPs[getPodName("x", "a")]
+	podXBIP, _ := podIPs[getPodName("x", "b")]
+	ipBlocks := genIPBlockForAllIPsExcept(append(podXAIP, podXBIP...))
+	for i := range ipBlocks {
+		builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, ipBlocks[i], nil, nil, nil, nil, nil, nil, nil, nil,
+			crdv1beta1.RuleActionDrop, "", "egress-drop-"+strconv.Itoa(i), nil)
+	}
+	reachability := NewReachability(allPods, Connected)
+	reachability.ExpectAllEgress(getPod("y", "a"), Dropped)
+	reachability.Expect(getPod("y", "a"), getPod("x", "a"), Connected)
+	reachability.Expect(getPod("y", "a"), getPod("x", "b"), Connected)
+	reachability.Expect(getPod("y", "a"), getPod("y", "a"), Connected)
+	testStep := []*TestStep{
+		{
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
+		},
+	}
+	builder2 := &ClusterNetworkPolicySpecBuilder{}
+	builder2 = builder2.SetName("acnp-drop-egress-from-ya-to-xa").
+		SetPriority(2.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("y")}}}).
+		AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "a"}, nil, map[string]string{"ns": getNS("x")}, nil, nil, nil, nil, nil,
+			crdv1beta1.RuleActionDrop, "", "egress-drop-xa", nil)
+	// Make sure that the except IPs in the previous policy can still be blocked with additional rules.
+	reachability2 := NewReachability(allPods, Connected)
+	reachability2.ExpectAllEgress(getPod("y", "a"), Dropped)
+	reachability2.Expect(getPod("y", "a"), getPod("x", "b"), Connected)
+	reachability2.Expect(getPod("y", "a"), getPod("y", "a"), Connected)
+	testStep2 := []*TestStep{
+		{
+			Name:          "Port 80",
+			Reachability:  reachability2,
+			TestResources: []metav1.Object{builder.Get(), builder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
+		},
+	}
+	testCase := []*TestCase{
+		{"ACNP Drop rule with a ipBlock that has except clause", testStep},
+		{"ACNP Drop rule with a ipBlock that has except clause and underlying Drop rules", testStep2},
+	}
+	executeTests(t, testCase)
+}
+
 // testACNPNoEffectOnOtherProtocols tests that an ACNP which drops TCP traffic won't affect other protocols (e.g. UDP).
 func testACNPNoEffectOnOtherProtocols(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -1039,30 +1093,57 @@ func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 	executeTestsWithData(t, testCase, data)
 }
 
+// genIPBlockForIP creates an IPBlock containing only the IP address in the input.
+func genIPBlockForIP(ip string) crdv1beta1.IPBlock {
+	switch IPFamily(ip) {
+	case "v4":
+		return crdv1beta1.IPBlock{CIDR: ip + "/32"}
+	case "v6":
+		return crdv1beta1.IPBlock{CIDR: ip + "/128"}
+	default:
+		return crdv1beta1.IPBlock{}
+	}
+}
+
+// genIPBlockForAllIPsExcept generates ipBlocks which contains all the IP addresses in the
+// provided IPs' address family(s), except for the addresses in the input slice.
+func genIPBlockForAllIPsExcept(except []string) []*crdv1beta1.IPBlock {
+	var v4Excepts, v6Excepts []string
+	var ipbs []*crdv1beta1.IPBlock
+	for _, e := range except {
+		if IPFamily(e) == "v4" {
+			v4Excepts = append(v4Excepts, e+"/32")
+		} else if IPFamily(e) == "v6" {
+			v6Excepts = append(v6Excepts, e+"/128")
+		}
+	}
+	if len(v4Excepts) > 0 {
+		ipbs = append(ipbs, &crdv1beta1.IPBlock{
+			CIDR:   anyIPv4,
+			Except: v4Excepts,
+		})
+	}
+	if len(v6Excepts) > 0 {
+		ipbs = append(ipbs, &crdv1beta1.IPBlock{
+			CIDR:   anyIPv6,
+			Except: v6Excepts,
+		})
+	}
+	return ipbs
+}
+
 func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 	podXAIP, _ := podIPs[getPodName("x", "a")]
 	podXBIP, _ := podIPs[getPodName("x", "b")]
 	podXCIP, _ := podIPs[getPodName("x", "c")]
 	podZAIP, _ := podIPs[getPodName("z", "a")]
-	// There are three situations of a Pod's IP(s):
-	// 1. Only one IPv4 address.
-	// 2. Only one IPv6 address.
-	// 3. One IPv4 and one IPv6 address, and we don't know the order in list.
-	// We need to add all IP(s) of Pods as CIDR to IPBlock.
-	genCIDR := func(ip string) string {
-		if strings.Contains(ip, ".") {
-			return ip + "/32"
-		}
-		return ip + "/128"
-	}
 	var ipBlock1, ipBlock2 []crdv1beta1.IPBlock
 	for i := 0; i < len(podXAIP); i++ {
-		ipBlock1 = append(ipBlock1, crdv1beta1.IPBlock{CIDR: genCIDR(podXAIP[i])})
-		ipBlock1 = append(ipBlock1, crdv1beta1.IPBlock{CIDR: genCIDR(podXBIP[i])})
-		ipBlock1 = append(ipBlock1, crdv1beta1.IPBlock{CIDR: genCIDR(podXCIP[i])})
-		ipBlock2 = append(ipBlock2, crdv1beta1.IPBlock{CIDR: genCIDR(podZAIP[i])})
+		for _, ips := range [][]string{podXAIP, podXBIP, podXCIP} {
+			ipBlock1 = append(ipBlock1, genIPBlockForIP(ips[i]))
+		}
+		ipBlock2 = append(ipBlock2, genIPBlockForIP(podZAIP[i]))
 	}
-
 	cgName := "cg-ipblocks-pod-in-ns-x"
 	cgBuilder := &ClusterGroupSpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName).
@@ -1504,21 +1585,11 @@ func testANNPGroupServiceRefCreateAndUpdate(t *testing.T) {
 func testANNPGroupRefRuleIPBlocks(t *testing.T) {
 	podXBIP, _ := podIPs[getPodName("x", "b")]
 	podXCIP, _ := podIPs[getPodName("x", "c")]
-	// There are three situations of a Pod's IP(s):
-	// 1. Only one IPv4 address.
-	// 2. Only one IPv6 address.
-	// 3. One IPv4 and one IPv6 address, and we don't know the order in list.
-	// We need to add all IP(s) of Pods as CIDR to IPBlock.
-	genCIDR := func(ip string) string {
-		if strings.Contains(ip, ".") {
-			return ip + "/32"
-		}
-		return ip + "/128"
-	}
 	var ipBlock []crdv1beta1.IPBlock
 	for i := 0; i < len(podXBIP); i++ {
-		ipBlock = append(ipBlock, crdv1beta1.IPBlock{CIDR: genCIDR(podXBIP[i])})
-		ipBlock = append(ipBlock, crdv1beta1.IPBlock{CIDR: genCIDR(podXCIP[i])})
+		for _, podIP := range []string{podXBIP[i], podXCIP[i]} {
+			ipBlock = append(ipBlock, genIPBlockForIP(podIP))
+		}
 	}
 
 	grpName := "grp-ipblocks-pod-xb-xc"
@@ -3029,22 +3100,12 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 func testACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 	podXAIP, _ := podIPs[getPodName("x", "a")]
 	podXBIP, _ := podIPs[getPodName("x", "b")]
-	genCIDR := func(ip string) string {
-		switch IPFamily(ip) {
-		case "v4":
-			return ip + "/32"
-		case "v6":
-			return ip + "/128"
-		default:
-			return ""
-		}
-	}
 	cg1Name, cg2Name, cg3Name := "cg-x-a-ipb", "cg-x-b-ipb", "cg-select-x-c"
 	cgParentName := "cg-parent"
 	var ipBlockXA, ipBlockXB []crdv1beta1.IPBlock
 	for i := 0; i < len(podXAIP); i++ {
-		ipBlockXA = append(ipBlockXA, crdv1beta1.IPBlock{CIDR: genCIDR(podXAIP[i])})
-		ipBlockXB = append(ipBlockXB, crdv1beta1.IPBlock{CIDR: genCIDR(podXBIP[i])})
+		ipBlockXA = append(ipBlockXA, genIPBlockForIP(podXAIP[i]))
+		ipBlockXB = append(ipBlockXB, genIPBlockForIP(podXBIP[i]))
 	}
 	cgBuilder1 := &ClusterGroupSpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetIPBlocks(ipBlockXA)
@@ -3937,7 +3998,7 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 		failOnError(err, t)
 	}
 
-	cidr := "1.1.1.1/24"
+	ipb := &crdv1beta1.IPBlock{CIDR: "1.1.1.1/24"}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-nodeport-svc").
 		SetPriority(1.0).
@@ -3949,7 +4010,7 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 				},
 			},
 		})
-	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, &cidr, nil, nil, nil,
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, ipb, nil, nil, nil,
 		nil, nil, nil, nil, nil, crdv1beta1.RuleActionReject, "", "", nil)
 
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
@@ -4122,7 +4183,8 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	builder = builder.SetName(acnpName).SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": label}}})
 	cidr := mc.group.String() + "/32"
-	builder.AddEgress(ProtocolUDP, nil, nil, nil, nil, nil, nil, nil, &cidr, nil, nil, nil,
+	ipb := &crdv1beta1.IPBlock{CIDR: cidr}
+	builder.AddEgress(ProtocolUDP, nil, nil, nil, nil, nil, nil, nil, ipb, nil, nil, nil,
 		nil, nil, nil, nil, nil, action, "", "", nil)
 	acnp := builder.Get()
 	_, err = k8sUtils.CreateOrUpdateACNP(acnp)
@@ -4529,6 +4591,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPDropEgressUDP", func(t *testing.T) { testACNPDropEgress(t, ProtocolUDP) })
 		t.Run("Case=ACNPDropEgressSCTP", func(t *testing.T) { testACNPDropEgress(t, ProtocolSCTP) })
 		t.Run("Case=ACNPDropIngressInNamespace", func(t *testing.T) { testACNPDropIngressInSelectedNamespace(t) })
+		t.Run("Case=ACNPDropIPBlockWithExcept", func(t *testing.T) { testACNPDropIPBlockWithExcept(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
 		t.Run("Case=ACNPSourcePort", func(t *testing.T) { testACNPSourcePort(t) })
 		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t, data) }) // Includes evaluation.

@@ -129,7 +129,7 @@ type Group struct {
 	// IPNets stores net.IPNet objects for each CIDR defined in the IPBlocks field.
 	// It is used for IP association query tests, so that for IP membership tests
 	// we do not need to instantiate an IPNet object each time.
-	IPNets []net.IPNet
+	IPNets []*net.IPNet
 	// ServiceReference is reference to a v1.Service, which this Group keeps in sync
 	// and updates Selector based on the Service's selector.
 	ServiceReference *controlplane.ServiceReference
