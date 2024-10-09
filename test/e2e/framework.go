@@ -140,9 +140,10 @@ const (
 	defaultCHDatabaseURL                = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
 
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
-
-	iperfPort    = 5201
-	iperfSvcPort = 9999
+	randomPatchAnnotationKey        = "test.antrea.io/random-value"
+	annotationValueLen              = 8
+	iperfPort                       = 5201
+	iperfSvcPort                    = 9999
 )
 
 type ClusterNode struct {
@@ -3219,4 +3220,91 @@ func (data *TestData) GetPodLogs(ctx context.Context, namespace, name, container
 		return "", fmt.Errorf("error when copying logs for Pod '%s/%s': %w", namespace, name, err)
 	}
 	return b.String(), nil
+}
+
+func (data *TestData) runDNSQuery(
+	podName string,
+	containerName string,
+	podNamespace string,
+	dstAddr string,
+	useTCP bool,
+	dnsServiceIP string) (net.IP, error) {
+
+	digCmdStr := fmt.Sprintf("dig "+"@"+dnsServiceIP+" +short %s", dstAddr)
+	if useTCP {
+		digCmdStr += " +tcp"
+	}
+
+	digCmd := strings.Fields(digCmdStr)
+	fmt.Printf("Running: kubectl exec %s -c %s -n %s -- %s", podName, containerName, podNamespace, strings.Join(digCmd, " "))
+	stdout, stderr, err := data.RunCommandFromPod(podNamespace, podName, containerName, digCmd)
+	if err != nil {
+		return nil, fmt.Errorf("error when running dig command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
+	}
+
+	ipAddress := net.ParseIP(strings.TrimSpace(stdout))
+	if ipAddress != nil {
+		return ipAddress, nil
+	} else {
+		return nil, fmt.Errorf("invalid IP address found %v", stdout)
+	}
+}
+
+// patchPodAnnotation Patches a pod with given map of keys and values.
+func (data *TestData) patchPodAnnotation(namespace, podName string, annotation map[string]string) error {
+	annotationPatch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": make(map[string]string),
+		},
+	}
+
+	if annotation == nil {
+		return fmt.Errorf("no annotations were provided")
+	} else {
+		for key, value := range annotation {
+			annotationPatch["metadata"].(map[string]interface{})["annotations"].(map[string]string)[key] = value
+		}
+	}
+
+	patchData, err := json.Marshal(annotationPatch)
+	if err != nil {
+		log.Infof("Error marshalling annotation: %+v", err)
+		return err
+	}
+
+	_, err = data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), podName, types.MergePatchType, patchData, metav1.PatchOptions{})
+	if err != nil {
+		log.Infof("Error patching pod %s in namespace %s with annotations. Error: %+v", podName, namespace, err)
+		return err
+	}
+
+	log.Infof("Successfully patched pod %s in namespace %s with provided annotation", podName, namespace)
+	return nil
+}
+
+// setPodAnnotationToRandomValue Patches a pod by adding an annotation with a specified key and a randomly generated string as the value.
+func (data *TestData) setPodAnnotationToRandomValue(namespace, podName, annotationKey string) error {
+	annotationPatch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": make(map[string]string),
+		},
+	}
+
+	annotationPatch["metadata"].(map[string]interface{})["annotations"].(map[string]string)[annotationKey] = randSeq(annotationValueLen)
+
+	patchData, err := json.Marshal(annotationPatch)
+	if err != nil {
+		log.Infof("Error marshalling annotation: %+v", err)
+		return err
+	}
+
+	_, err = data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), podName, types.MergePatchType, patchData, metav1.PatchOptions{})
+	if err != nil {
+		log.Infof("Error patching pod %s in namespace %s with annotations. Error: %+v", podName, namespace, err)
+		return err
+	}
+
+	log.Infof("Successfully patched pod %s in namespace %s with a random value annotation", podName, namespace)
+	return nil
+
 }

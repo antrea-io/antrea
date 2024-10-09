@@ -667,6 +667,26 @@ func (data *TestData) UpdateConfigMap(configMap *v1.ConfigMap) error {
 	return err
 }
 
+func (data *TestData) CreateConfigMap(namespace, name string, configData map[string]string, binaryData map[string][]byte, immutable bool) (*v1.ConfigMap, error) {
+	configMap := &v1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Immutable:  &immutable,
+		Data:       configData,
+		BinaryData: binaryData,
+	}
+
+	configMapObject, err := data.clientset.CoreV1().ConfigMaps(namespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	if err != nil {
+		log.Infof("Unable to create configMap : %s", err)
+		return nil, err
+	}
+	return configMapObject, nil
+}
+
 // DeleteService is a convenience function for deleting a Service by Namespace and name.
 func (data *TestData) DeleteService(ns, name string) error {
 	log.Infof("Deleting Service %s in ns %s", name, ns)
