@@ -19,8 +19,10 @@ import (
 	"os"
 	"syscall"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRawSockAddrTranslation(t *testing.T) {
@@ -202,18 +204,108 @@ func TestIPForwardEntryOperations(t *testing.T) {
 	}
 }
 
-func TestListIPForwardRows(t *testing.T) {
+func TestListIPForwardRowsFailure(t *testing.T) {
 	wantErr := os.NewSyscallError("iphlpapi.GetIpForwardTable", syscall.Errno(22))
 	testNetIO := NewTestNetIO(22)
 	// Skipping no error case because converting uintptr back to Pointer is not valid in general.
-	gotRow, gotErr := testNetIO.ListIPForwardRows(AF_INET)
-	assert.Nil(t, gotRow)
+	gotRows, gotErr := testNetIO.ListIPForwardRows(AF_INET)
+	assert.Nil(t, gotRows)
 	assert.Equal(t, wantErr, gotErr)
 }
 
-func NewTestNetIO(wantR1 uintptr) NetIOInterface {
+func TestListIPForwardRowsSuccess(t *testing.T) {
+	// The table contains two rows. Its memory address will be assigned to ipForwardTable when getIPForwardTableFn is called.
+	table := struct {
+		NumEntries uint32
+		Table      [2]MibIPForwardRow
+	}{
+		NumEntries: 2,
+		Table: [2]MibIPForwardRow{
+			{
+				Luid:  10,
+				Index: 11,
+				DestinationPrefix: AddressPrefix{
+					Prefix: RawSockAddrInet{
+						Family: AF_INET,
+						data:   [26]byte{10, 10, 10, 0},
+					},
+					prefixLength: 24,
+				},
+				NextHop: RawSockAddrInet{
+					Family: AF_INET,
+					data:   [26]byte{11, 11, 11, 11},
+				},
+			},
+			{
+				Luid:  20,
+				Index: 21,
+				DestinationPrefix: AddressPrefix{
+					Prefix: RawSockAddrInet{
+						Family: AF_INET,
+						data:   [26]byte{20, 20, 20, 0},
+					},
+					prefixLength: 24,
+				},
+				NextHop: RawSockAddrInet{
+					Family: AF_INET,
+					data:   [26]byte{21, 21, 21, 21},
+				},
+			},
+		},
+	}
+	testNetIO := NewTestNetIO(0)
+	testNetIO.getIPForwardTableFn = func(family uint16, ipForwardTable **MibIPForwardTable) (errcode error) {
+		*ipForwardTable = (*MibIPForwardTable)(unsafe.Pointer(&table))
+		return nil
+	}
+
+	gotRows, gotErr := testNetIO.ListIPForwardRows(AF_INET)
+	require.Nil(t, gotErr)
+
+	// It verifies that the returned rows are independent copies, not referencing to the original table's memory, by
+	// asserting they retain the exact same content as the original table after it has been set.
+	table.Table[0] = MibIPForwardRow{}
+	table.Table[1] = MibIPForwardRow{}
+	expectedRows := []MibIPForwardRow{
+		{
+			Luid:  10,
+			Index: 11,
+			DestinationPrefix: AddressPrefix{
+				Prefix: RawSockAddrInet{
+					Family: AF_INET,
+					data:   [26]byte{10, 10, 10, 0},
+				},
+				prefixLength: 24,
+			},
+			NextHop: RawSockAddrInet{
+				Family: AF_INET,
+				data:   [26]byte{11, 11, 11, 11},
+			},
+		},
+		{
+			Luid:  20,
+			Index: 21,
+			DestinationPrefix: AddressPrefix{
+				Prefix: RawSockAddrInet{
+					Family: AF_INET,
+					data:   [26]byte{20, 20, 20, 0},
+				},
+				prefixLength: 24,
+			},
+			NextHop: RawSockAddrInet{
+				Family: AF_INET,
+				data:   [26]byte{21, 21, 21, 21},
+			},
+		},
+	}
+	assert.Equal(t, expectedRows, gotRows)
+}
+
+func NewTestNetIO(wantR1 uintptr) *netIO {
 	mockSyscallN := func(trap uintptr, args ...uintptr) (r1, r2 uintptr, err syscall.Errno) {
 		return wantR1, 0, 0
 	}
-	return &netIO{syscallN: mockSyscallN}
+	io := &netIO{syscallN: mockSyscallN}
+	io.getIPForwardTableFn = io.getIPForwardTable
+	return io
 }
