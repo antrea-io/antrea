@@ -242,17 +242,11 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (IPAss
 			return nil, err
 		}
 		if dummyDeviceName == "" || arpIgnore > 0 {
-			a.defaultAssignee.arpResponder, err = responder.NewARPResponder(externalInterface)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create ARP responder for link %s: %v", externalInterface.Name, err)
-			}
+			a.defaultAssignee.arpResponder = responder.NewARPResponder(externalInterface.Name)
 		}
 	}
 	if ipv6 != nil {
-		a.defaultAssignee.ndpResponder, err = responder.NewNDPResponder(externalInterface)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create NDP responder for link %s: %v", externalInterface.Name, err)
-		}
+		a.defaultAssignee.ndpResponder = responder.NewNDPResponder(externalInterface.Name)
 	}
 	if dummyDeviceName != "" {
 		a.defaultAssignee.link, err = ensureDummyDevice(dummyDeviceName)
