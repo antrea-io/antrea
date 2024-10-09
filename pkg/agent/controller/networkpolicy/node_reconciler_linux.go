@@ -297,13 +297,13 @@ func (r *nodeReconciler) Forget(ruleID string) error {
 		if err := r.deleteCoreIPTRule(ruleID, coreIPTChain, isIPv6); err != nil {
 			return err
 		}
-		if lastRealized.ipsets[ipProtocol] != "" {
-			if err := r.routeClient.DeleteNodeNetworkPolicyIPSet(lastRealized.ipsets[ipProtocol], isIPv6); err != nil {
+		if lastRealized.serviceIPTChain != "" {
+			if err := r.routeClient.DeleteNodeNetworkPolicyIPTables([]string{lastRealized.serviceIPTChain}, isIPv6); err != nil {
 				return err
 			}
 		}
-		if lastRealized.serviceIPTChain != "" {
-			if err := r.routeClient.DeleteNodeNetworkPolicyIPTables([]string{lastRealized.serviceIPTChain}, isIPv6); err != nil {
+		if lastRealized.ipsets[ipProtocol] != "" {
+			if err := r.routeClient.DeleteNodeNetworkPolicyIPSet(lastRealized.ipsets[ipProtocol], isIPv6); err != nil {
 				return err
 			}
 		}
@@ -440,18 +440,39 @@ func (r *nodeReconciler) update(lastRealized *nodePolicyLastRealized, newRule *C
 		prevIPSet := lastRealized.ipsets[ipProtocol]
 		ipset := newLastRealized.ipsets[ipProtocol]
 
+		// Core iptables rules should be updated in the following cases:
+		// - Single IP change: A -> B (prevIPSet = "", ipset = "", prevIPNet = A, ipnet = B).
+		// - Transition from multiple addresses to a single IP: {A, B} -> A (prevIPSet = "ipset name", ipset = "", prevIPNet = "", ipnet = A).
+		// - Transition from a single IP to multiple addresses: A -> {A, B} (prevIPNet = A, ipnet = "", prevIPSet = "", ipset = "ipset name").
+		shouldUpdateCoreIPTRules := prevIPSet != ipset || prevIPNet != ipnet
+		// The name of ipset for a rule will never change during updates.
 		if ipset != "" {
+			// If the current rule uses an ipset, sync the ipset first, then sync the core iptables rule that
+			// references it.
 			if err := r.routeClient.AddOrUpdateNodeNetworkPolicyIPSet(iptRule.IPSet, iptRule.IPSetMembers, iptRule.IsIPv6); err != nil {
 				return err
 			}
+			if shouldUpdateCoreIPTRules {
+				if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRule}); err != nil {
+					return err
+				}
+			}
 		} else if prevIPSet != "" {
+			// If the previous rule used an ipset, sync the new core iptables rule first to remove its reference, then
+			// delete the unused ipset.
+			if shouldUpdateCoreIPTRules {
+				if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRule}); err != nil {
+					return err
+				}
+			}
 			if err := r.routeClient.DeleteNodeNetworkPolicyIPSet(lastRealized.ipsets[ipProtocol], iptRule.IsIPv6); err != nil {
 				return err
 			}
-		}
-		if prevIPSet != ipset || prevIPNet != ipnet {
-			if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRule}); err != nil {
-				return err
+		} else {
+			if shouldUpdateCoreIPTRules {
+				if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRule}); err != nil {
+					return err
+				}
 			}
 		}
 	}
