@@ -374,12 +374,11 @@ func TestFlowExporter_initFlowExporter(t *testing.T) {
 	defer conn2.Close()
 
 	for _, tc := range []struct {
-		protocol               string
-		address                string
-		expectedTempRefTimeout uint32
+		protocol string
+		address  string
 	}{
-		{conn1.LocalAddr().Network(), conn1.LocalAddr().String(), uint32(1800)},
-		{conn2.Addr().Network(), conn2.Addr().String(), uint32(0)},
+		{conn1.LocalAddr().Network(), conn1.LocalAddr().String()},
+		{conn2.Addr().Network(), conn2.Addr().String()},
 	} {
 		exp := &FlowExporter{
 			collectorAddr: tc.address,
@@ -391,7 +390,8 @@ func TestFlowExporter_initFlowExporter(t *testing.T) {
 		err = exp.initFlowExporter(context.Background())
 		require.NoError(t, err)
 		assert.Equal(t, tc.address, exp.exporterInput.CollectorAddress)
-		assert.Equal(t, tc.expectedTempRefTimeout, exp.exporterInput.TempRefTimeout)
+		// exporter should use the default value as per the go-ipfix library.
+		assert.Equal(t, uint32(0), exp.exporterInput.TempRefTimeout)
 		checkTotalReconnectionsMetric(t)
 		metrics.ReconnectionsToFlowCollector.Dec()
 	}

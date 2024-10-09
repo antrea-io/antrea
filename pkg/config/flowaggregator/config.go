@@ -88,6 +88,10 @@ type FlowCollectorConfig struct {
 	// Provide format for records sent to the configured flow collector. Supported formats are IPFIX and JSON.
 	// Defaults to "IPFIX"
 	RecordFormat string `yaml:"recordFormat,omitempty"`
+	// Template retransmission interval when using the udp protocol to export records.
+	// The value must be provided as a duration string. Defaults to 600s.
+	// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+	TemplateRefreshTimeout string `yaml:"templateRefreshTimeout,omitempty"`
 }
 
 type ClickHouseConfig struct {

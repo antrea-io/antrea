@@ -37,6 +37,8 @@ type Options struct {
 	ExternalFlowCollectorAddr string
 	// IPFIX flow collector transport protocol
 	ExternalFlowCollectorProto string
+	//  Template retransmission interval when using the UDP protocol to export records.
+	TemplateRefreshTimeout time.Duration
 	// clickHouseCommitInterval flow records batch commit interval to clickhouse in the flow aggregator
 	ClickHouseCommitInterval time.Duration
 	// Flow records batch upload interval from flow aggregator to S3 bucket
@@ -86,6 +88,14 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 
 		if opt.Config.FlowCollector.RecordFormat != "IPFIX" && opt.Config.FlowCollector.RecordFormat != "JSON" {
 			return nil, fmt.Errorf("record format %s is not supported", opt.Config.FlowCollector.RecordFormat)
+		}
+
+		opt.TemplateRefreshTimeout, err = time.ParseDuration(opt.Config.FlowCollector.TemplateRefreshTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("templateRefreshTimeout is not a valid duration: %w", err)
+		}
+		if opt.TemplateRefreshTimeout < 0 {
+			return nil, fmt.Errorf("templateRefreshTimeout cannot be a negative duration")
 		}
 	}
 	// Validate clickhouse specific parameters

@@ -234,7 +234,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			Address:       collectorAddress,
 			Protocol:      tcpTransport,
 			MaxBufferSize: 65535,
-			TemplateTTL:   0,
+			TemplateTTL:   0, // use default value from go-ipfix library
 			IsEncrypted:   true,
 			CACert:        caCert,
 			ServerKey:     serverKey,
@@ -245,7 +245,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			Address:       collectorAddress,
 			Protocol:      tcpTransport,
 			MaxBufferSize: 65535,
-			TemplateTTL:   0,
+			TemplateTTL:   0, // use default value from go-ipfix library
 			IsEncrypted:   false,
 		}
 	} else {
@@ -253,7 +253,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			Address:       collectorAddress,
 			Protocol:      udpTransport,
 			MaxBufferSize: 1024,
-			TemplateTTL:   0,
+			TemplateTTL:   0, // use default value from go-ipfix library
 			IsEncrypted:   false,
 		}
 	}
