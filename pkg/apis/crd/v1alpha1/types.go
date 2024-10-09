@@ -411,9 +411,8 @@ type TCPHeader struct {
 // Packet includes header info.
 type Packet struct {
 	// IPFamily is the filter's IP family. Default to `IPv4`.
-	IPFamily v1.IPFamily `json:"ipFamily"`
-	// Protocol represents the transport protocol. default to ICMP(1). Other
-	// possible choices are: TCP(6), UDP(17).
+	IPFamily v1.IPFamily `json:"ipFamily,omitempty"`
+	// Protocol represents the transport protocol. default is not filter on protocol
 	Protocol        *intstr.IntOrString `json:"protocol,omitempty"`
 	TransportHeader TransportHeader     `json:"transportHeader"`
 }
