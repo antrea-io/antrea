@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
@@ -323,7 +324,14 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
-			go c.networkPolicyController.InitializeTiers()
+			go func() {
+				ctx, cancel := wait.ContextForChannel(context.StopCh)
+				defer cancel()
+				// context gets cancelled when the server stops.
+				if err := c.networkPolicyController.InitializeTiers(ctx); err != nil {
+					klog.ErrorS(err, "Failed to initialize system Tiers")
+				}
+			}()
 			return nil
 		})
 	}
