@@ -402,10 +402,10 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 			},
 			existingDNSCache: map[string]dnsMeta{
 				"test.antrea.io": {
-					responseIPs: map[string]net.IP{
-						"127.0.0.1":    net.ParseIP("127.0.0.1"),
-						"192.155.12.1": net.ParseIP("192.155.12.1"),
-						"192.158.1.38": net.ParseIP("192.158.1.38"),
+					responseIPs: map[string]ipWithTTL{
+						"127.0.0.1":    {net.ParseIP("127.0.0.1"), time.Now()},
+						"192.155.12.1": {net.ParseIP("192.155.12.1"), time.Now()},
+						"192.158.1.38": {net.ParseIP("192.158.1.38"), time.Now()},
 					},
 				},
 			},

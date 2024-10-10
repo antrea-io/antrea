@@ -76,11 +76,16 @@ func (fs *fqdnSelectorItem) matches(fqdn string) bool {
 // expirationTime of the records, which is the DNS response
 // receiving time plus lowest applicable TTL.
 type dnsMeta struct {
-	expirationTime time.Time
+	//expirationTime time.Time
 	// Key for responseIPs is the string representation of the IP.
 	// It helps to quickly identify IP address updates when a
 	// new DNS response is received.
-	responseIPs map[string]net.IP
+	responseIPs map[string]ipWithTTL
+}
+
+type ipWithTTL struct {
+	ip  net.IP
+	ttl time.Time
 }
 
 // subscriber is a entity that subsribes for datapath rule realization
@@ -253,8 +258,8 @@ func (f *fqdnController) getIPsForFQDNSelectors(fqdns []string) []net.IP {
 		}
 		for fqdn := range fqdnsMatched {
 			if dnsMeta, ok := f.dnsEntryCache[fqdn]; ok {
-				for _, ip := range dnsMeta.responseIPs {
-					matchedIPs = append(matchedIPs, ip)
+				for _, ipWithMetaData := range dnsMeta.responseIPs {
+					matchedIPs = append(matchedIPs, ipWithMetaData.ip)
 				}
 			}
 		}
@@ -416,54 +421,75 @@ func (f *fqdnController) onDNSResponse(
 		}
 		return
 	}
-	// mustCacheResponse is only true if the FQDN is already tracked by this
-	// controller, or it matches at least one fqdnSelectorItem from the policy rules.
-	// addressUpdate is only true if there has been an update in IP addresses
-	// corresponded with the FQDN.
-	mustCacheResponse, addressUpdate := false, false
-	recordTTL := time.Now().Add(time.Duration(lowestTTL) * time.Second)
 
+	addressUpdate := false
 	f.fqdnSelectorMutex.Lock()
 	defer f.fqdnSelectorMutex.Unlock()
 	oldDNSMeta, exist := f.dnsEntryCache[fqdn]
+	ipMetaDataHolder := make(map[string]ipWithTTL)
+
 	if exist {
-		mustCacheResponse = true
-		for ipStr := range responseIPs {
-			if _, ok := oldDNSMeta.responseIPs[ipStr]; !ok {
-				addressUpdate = true
-				break
+		// Data related to this domain exists in the cache.
+		// Besides presence of existing IPs, two scenarios : 1) May get New IPs 2) Some old IPs may be absent.
+
+		// check for new IPs and these new IPs need to be added with its new TTL value as received in response.
+		for ipStr, ip := range responseIPs {
+			if _, exist := oldDNSMeta.responseIPs[ipStr]; !exist {
+				ipMetaDataHolder[ipStr] = ipWithTTL{
+					ip:  ip,
+					ttl: time.Now().Add(time.Duration(lowestTTL) * time.Second),
+				}
 			}
 		}
-		for oldIPStr, oldIP := range oldDNSMeta.responseIPs {
-			if _, ok := responseIPs[oldIPStr]; !ok {
-				if oldDNSMeta.expirationTime.Before(time.Now()) {
-					// This IP entry has already expired and not seen in the latest DNS response.
-					// It should be removed from the cache.
+
+		for ipStr, ipMetaData := range oldDNSMeta.responseIPs {
+			if _, exist := responseIPs[ipStr]; !exist {
+				if ipMetaData.ttl.Before(time.Now()) {
+					// this ip is expired and stale, remove it by not including it.
 					addressUpdate = true
 				} else {
-					// Add the unexpired IP entry to responseIP and update the lowest applicable TTL if needed.
-					responseIPs[oldIPStr] = oldIP
-					if oldDNSMeta.expirationTime.Before(recordTTL) {
-						recordTTL = oldDNSMeta.expirationTime
+					// It hasn't expired yet, so just retain it with its existing ttl.
+					ipMetaDataHolder[ipStr] = ipWithTTL{
+						ip:  ipMetaData.ip,
+						ttl: ipMetaData.ttl,
+					}
+				}
+			} else {
+				// This old IP also exists in current response, so update it with new received TTl.
+				ipMetaDataHolder[ipStr] = ipWithTTL{
+					ip:  ipMetaData.ip,
+					ttl: time.Now().Add(time.Duration(lowestTTL) * time.Second),
+				}
+			}
+		}
+
+	} else {
+		// First time seeing this domain.
+		// check if this needs to be tracked, by checking its presence in the rules.
+		// If a FQDN policy had been applied then there must be rule records but because it's
+		// not in cache hence its FQDN:SelectorItem mapping may not be present.
+		for selectorItem := range f.selectorItemToRuleIDs {
+			// Only track the FQDN if there is at least one fqdnSelectorItem matching it.
+			if selectorItem.matches(fqdn) {
+				f.setFQDNMatchSelector(fqdn, selectorItem)
+				for ipStr, ip := range responseIPs {
+					ipMetaDataHolder[ipStr] = ipWithTTL{
+						ip:  ip,
+						ttl: time.Now().Add(time.Duration(lowestTTL) * time.Second),
 					}
 				}
 			}
 		}
-	} else {
-		for selectorItem := range f.selectorItemToRuleIDs {
-			// Only track the FQDN if there is at least one fqdnSelectorItem matching it.
-			if selectorItem.matches(fqdn) {
-				mustCacheResponse, addressUpdate = true, true
-				f.setFQDNMatchSelector(fqdn, selectorItem)
-			}
-		}
 	}
-	if mustCacheResponse {
+
+	if len(ipMetaDataHolder) != 0 {
+		addressUpdate = true
 		f.dnsEntryCache[fqdn] = dnsMeta{
-			expirationTime: recordTTL,
-			responseIPs:    responseIPs,
+			responseIPs: ipMetaDataHolder,
 		}
-		f.dnsQueryQueue.AddAfter(fqdn, recordTTL.Sub(time.Now()))
+		// The FQDN will be added to the queue only after `lowestTTL` value which
+		// would already have been derived using the minTTL logic.
+		f.dnsQueryQueue.AddAfter(fqdn, time.Duration(lowestTTL)*time.Second)
 	}
 	f.syncDirtyRules(fqdn, waitCh, addressUpdate)
 }
