@@ -69,6 +69,15 @@ func (b *iptablesRuleBuilder) MatchCIDRDst(cidr string) IPTablesRuleBuilder {
 	return b
 }
 
+func (b *iptablesRuleBuilder) SetLogPrefix(prefix string) IPTablesRuleBuilder {
+	if prefix == "" {
+		return b
+	}
+	matchStr := fmt.Sprintf("--log-prefix \"%s\"", prefix)
+	b.writeSpec(matchStr)
+	return b
+}
+
 func (b *iptablesRuleBuilder) MatchIPSetSrc(ipsetName string, ipsetType ipset.SetType) IPTablesRuleBuilder {
 	if ipsetName == "" {
 		return b
