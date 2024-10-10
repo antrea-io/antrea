@@ -104,6 +104,18 @@ func TestBuilders(t *testing.T) {
 			expected: `-A FORWARD -i eth0 -p icmp --icmp-type 0/0 -j ACCEPT`,
 		},
 		{
+			name:  "Accept ICMP IPv4 with logging",
+			chain: ForwardChain,
+			buildFunc: func(builder IPTablesRuleBuilder) IPTablesRule {
+				return builder.MatchInputInterface(eth0).
+					MatchICMP(&icmpType0, &icmpCode0, ProtocolIPv4).
+					SetTarget(LOGTarget).
+					SetLogPrefix("Accept ICMP IPv4").
+					Done()
+			},
+			expected: `-A FORWARD -i eth0 -p icmp --icmp-type 0/0 -j LOG --log-prefix "Accept ICMP IPv4"`,
+		},
+		{
 			name:  "Accept ICMP IPv6",
 			chain: ForwardChain,
 			buildFunc: func(builder IPTablesRuleBuilder) IPTablesRule {

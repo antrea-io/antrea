@@ -41,11 +41,12 @@ var (
 
 func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 	tests := []struct {
-		name           string
-		featureGates   map[featuregate.Feature]bool
-		policy         *crdv1beta1.ClusterNetworkPolicy
-		operation      admv1.Operation
-		expectedReason string
+		name             string
+		featureGates     map[featuregate.Feature]bool
+		policy           *crdv1beta1.ClusterNetworkPolicy
+		operation        admv1.Operation
+		expectedReason   string
+		expectedWarnings []string
 	}{
 		{
 			name: "acnp-non-existent-tier",
@@ -526,10 +527,10 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 			expectedReason: "",
 		},
 		{
-			name: "acnp-appliedto-node-with-logging",
+			name: "acnp-appliedto-node-with-loglabel",
 			policy: &crdv1beta1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "acnp-appliedto-node-with-logging",
+					Name: "acnp-appliedto-node-alone",
 				},
 				Spec: crdv1beta1.ClusterNetworkPolicySpec{
 					AppliedTo: []crdv1beta1.AppliedTo{
@@ -541,6 +542,7 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 					},
 					Ingress: []crdv1beta1.Rule{
 						{
+							Name:   "rule0",
 							Action: &allowAction,
 							From: []crdv1beta1.NetworkPolicyPeer{
 								{
@@ -550,12 +552,28 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 								},
 							},
 							EnableLogging: true,
+							LogLabel:      "long-long-long-label",
+						},
+						{
+							Name:   "rule1",
+							Action: &allowAction,
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									NodeSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo1": "bar1"},
+									},
+								},
+							},
+							EnableLogging: true,
+							LogLabel:      "short-label",
 						},
 					},
 				},
 			},
-			operation:      admv1.Create,
-			expectedReason: "traffic logging for NodeNetworkPolicy is not supported",
+			operation: admv1.Create,
+			expectedWarnings: []string{
+				`LogLabels for Node NetworkPolicies are limited to 12 characters, but the label "long-long-long-label" for policy rule "rule0" exceeds the limit and will be truncated in kernel logs`,
+			},
 		},
 		{
 			name: "acnp-rule-group-set-with-psel",
@@ -1935,8 +1953,9 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 			}
 			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
+			warnings, actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
+			assert.Equal(t, tt.expectedWarnings, warnings)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
 			} else {
@@ -2042,7 +2061,7 @@ func TestValidateAntreaNetworkPolicy(t *testing.T) {
 			}
 			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
+			_, actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -2348,7 +2367,7 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 				controller.addClusterGroup(tt.existGroup)
 			}
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			actualReason, allowed := validator.validateAntreaGroup(tt.curCG, tt.oldCG, tt.operation, authenticationv1.UserInfo{})
+			_, actualReason, allowed := validator.validateAntreaGroup(tt.curCG, tt.oldCG, tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -2623,7 +2642,7 @@ func TestValidateAntreaGroup(t *testing.T) {
 				controller.addGroup(tt.existGroup)
 			}
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			actualReason, allowed := validator.validateAntreaGroup(tt.curGroup, tt.oldGroup, tt.operation, authenticationv1.UserInfo{})
+			_, actualReason, allowed := validator.validateAntreaGroup(tt.curGroup, tt.oldGroup, tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -2843,7 +2862,7 @@ func TestValidateTier(t *testing.T) {
 				controller.annpStore.Add(tt.existANNP)
 			}
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			actualReason, allowed := validator.validateTier(tt.curTier, tt.oldTier, tt.operation, tt.user)
+			_, actualReason, allowed := validator.validateTier(tt.curTier, tt.oldTier, tt.operation, tt.user)
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -3049,7 +3068,7 @@ func TestValidateAdminNetworkPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			actualReason, allowed := validator.validateAdminNetworkPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
+			_, actualReason, allowed := validator.validateAdminNetworkPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)

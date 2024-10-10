@@ -15,12 +15,18 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
+	"net"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/config"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -114,6 +120,7 @@ func TestAntreaNodeNetworkPolicy(t *testing.T) {
 	t.Run("Case=ACNPTierOverride", func(t *testing.T) { testNodeACNPTierOverride(t) })
 	t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testNodeACNPCustomTiers(t) })
 	t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testNodeACNPPriorityConflictingRule(t) })
+	t.Run("Case=ACNPAuditLogging", func(t *testing.T) { testNodeACNPAuditLogging(t, data) })
 
 	k8sUtils.Cleanup(namespaces)
 
@@ -890,4 +897,103 @@ func testNodeACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 		{"ACNP Drop Ingress From Node x to Pod y/a and z/a with nested ClusterGroup with ipBlocks", []*TestStep{testStep, testStep2}},
 	}
 	executeTests(t, testCase)
+}
+
+func testNodeACNPAuditLogging(t *testing.T, data *TestData) {
+	// In a Kind cluster, each Kubernetes Node runs as a Docker container. The iptables LOG target doesn't generate
+	// kernel logs inside containers unless /proc/sys/net/netfilter/nf_log_all_netns is set to 1. However, this setting
+	// cannot be modified in GitHub Actions.
+	skipIfProviderIs(t, "kind", "The iptables LOG action doesn't generate log in container")
+
+	randomLogLabel := randSeq(12) // Generate a random logLabel with 12 characters long.
+	toBeTruncated := "thisPartShouldBeTruncated"
+	logLabel := randomLogLabel + toBeTruncated // Append the suffix to the logLabel.
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-drop-x-to-y-egress").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
+	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{labelNodeHostname: nodes["y"]}, nil,
+		nil, nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "", nil)
+	builder.AddEgressLogging(logLabel)
+
+	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
+	require.NoError(t, err)
+	require.NoError(t, data.waitForACNPRealized(t, acnp.Name, policyRealizedTimeout))
+
+	antreaPodName, err := data.getAntreaPodOnNode(nodes["x"])
+	require.NoError(t, err)
+
+	expectedLogPrefix := fmt.Sprintf("Antrea:O:Drop:%s:", randomLogLabel)
+
+	// Before generating some traffic, there should be no corresponding kernel log on hostNetwork Pod x/a, and the kernel
+	// logs should not contain the generated random logLabel.
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, []string{"sh", "-c", "dmesg | tail -n 200"})
+	if err != nil || stderr != "" {
+		t.Fatalf("Got error: %v, %v", err, stderr)
+	}
+	require.NotContains(t, stdout, expectedLogPrefix)
+
+	// Generate some traffic that will be dropped by acnp-drop-x-to-y-egress. In this test, the target IP is the Antrea
+	// gateway IP of Node y.
+	_, err = k8sUtils.Probe(getNS("x"), "a", getNS("y"), "a", p80, ProtocolTCP, nil, nil)
+	require.NoError(t, err)
+
+	ipv4Enabled, ipv6Enabled := isIPv4Enabled(), isIPv6Enabled()
+
+	getNodeIPs := func(nodeName string) (string, string) {
+		nodeInfo := getNodeByName(nodeName)
+		require.NotNil(t, nodeInfo)
+		ip4, ip6 := nodeGatewayIPs(nodeInfo.idx)
+		if ipv4Enabled {
+			require.NotEmpty(t, ip4)
+		}
+		if ipv6Enabled {
+			require.NotEmpty(t, ip6)
+			ip6 = expandIPv6(ip6)
+		}
+		return ip4, ip6
+	}
+	srcIP4, srcIP6 := getNodeIPs(nodes["x"])
+	dstIP4, dstIP6 := getNodeIPs(nodes["y"])
+
+	// Add (?s) to match \n.
+	re4 := regexp.MustCompile(fmt.Sprintf(`(?s)%s.*SRC=%s DST=%s`, expectedLogPrefix, srcIP4, dstIP4))
+	re6 := regexp.MustCompile(fmt.Sprintf(`(?s)%s.*SRC=%s DST=%s`, expectedLogPrefix, srcIP6, dstIP6))
+
+	// TODO: Replace wait.PollUntilContextTimeout with assert.EventuallyWithT after the fix for
+	//  https://github.com/stretchr/testify/issues/1396 is included in the latest release.
+	assert.NoError(t, wait.PollUntilContextTimeout(context.Background(), time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		// After generating some traffic, there should be corresponding kernel logs on hostNetwork Pod x/a, and the kernel
+		// logs should contain the generated random logLabel and not contain the part that should be truncated.
+		stdout, stderr, err = data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, []string{"sh", "-c", "dmesg | tail -n 200"})
+		require.NoError(t, err)
+		require.Empty(t, stderr)
+
+		if ipv4Enabled {
+			assert.Regexp(t, re4, stdout, "Expected IPv4 log entry not found")
+			assert.NotContains(t, stdout, toBeTruncated)
+		}
+		if ipv6Enabled {
+			assert.Regexp(t, re6, stdout, "Expected IPv6 log entry not found")
+			assert.NotContains(t, stdout, toBeTruncated)
+		}
+		return true, nil
+	}))
+}
+
+func expandIPv6(ipv6 string) string {
+	// Parse the IPv6 address
+	parsedIP := net.ParseIP(ipv6)
+
+	// Get the IPv6 portion from the parsed IP (the last 16 bytes)
+	ipv6Bytes := parsedIP.To16()
+
+	// Format each 2-byte segment as a four-digit hex value
+	var segments []string
+	for i := 0; i < len(ipv6Bytes); i += 2 {
+		segments = append(segments, fmt.Sprintf("%04x", int(ipv6Bytes[i])<<8|int(ipv6Bytes[i+1])))
+	}
+
+	// Join the segments with ":" to form the expanded address
+	return strings.Join(segments, ":")
 }

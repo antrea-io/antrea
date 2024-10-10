@@ -43,6 +43,10 @@ const (
 	ipv6Any = "::/0"
 )
 
+// The logging of Node NetworkPolicy is implemented by iptables target LOG, which turns on kernel logging of matching
+// packets. The label is useful for distinguishing Node NetworkPolicy logs from other kernel logs.
+const logLabelPrefix = "Antrea"
+
 var ipsetTypeHashIP = ipset.HashIP
 
 /*
@@ -124,7 +128,7 @@ directly.
 type coreIPTRule struct {
 	ruleID   string
 	priority *types.Priority
-	ruleStr  string
+	ruleStrs []string
 }
 
 type chainKey struct {
@@ -256,7 +260,7 @@ func (r *nodeReconciler) batchAdd(rules []*CompletedRule) error {
 			}
 
 			// Collect all core iptables rules.
-			coreIPTRule := &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRule}
+			coreIPTRule := &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRules}
 			if rule.Direction == v1beta2.DirectionIn {
 				ingressCoreIPTRules[ipProtocol] = append(ingressCoreIPTRules[ipProtocol], coreIPTRule)
 			} else {
@@ -322,6 +326,11 @@ func (r *nodeReconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, 
 
 func (r *nodeReconciler) computeIPTRules(rule *CompletedRule) (map[iptables.Protocol]*types.NodePolicyRule, *nodePolicyLastRealized) {
 	ruleID := rule.ID
+	enableLogging := rule.EnableLogging
+	var logLabel string
+	if enableLogging {
+		logLabel = generateLogLabel(rule)
+	}
 	lastRealized := newNodePolicyLastRealized()
 	priority := &types.Priority{
 		TierPriority:   *rule.TierPriority,
@@ -362,7 +371,12 @@ func (r *nodeReconciler) computeIPTRules(rule *CompletedRule) (map[iptables.Prot
 
 		var serviceIPTRules []string
 		if serviceIPTChain != "" {
-			serviceIPTRules = buildServiceIPTRules(ipProtocol, rule.Services, serviceIPTChain, serviceIPTRuleTarget)
+			serviceIPTRules = buildServiceIPTRules(ipProtocol,
+				rule.Services,
+				serviceIPTChain,
+				serviceIPTRuleTarget,
+				enableLogging,
+				logLabel)
 		}
 
 		ipnets := getIPNetsFromRule(rule, isIPv6)
@@ -383,14 +397,19 @@ func (r *nodeReconciler) computeIPTRules(rule *CompletedRule) (map[iptables.Prot
 			lastRealized.ipnets[ipProtocol] = ipnet
 		}
 
-		coreIPTRule := buildCoreIPTRule(ipProtocol,
+		coreIPTRules := buildCoreIPTRules(ipProtocol,
 			coreIPTChain,
 			ipset,
 			ipnet,
 			coreIPTRuleTarget,
 			coreIPTRuleComment,
 			service,
-			rule.Direction == v1beta2.DirectionIn)
+			rule.Direction == v1beta2.DirectionIn,
+			// If the target of a core iptables rule is not a service chain, the iptables rule for logging should be
+			// generated along with the core iptables rule. Otherwise, the iptables rules for logging should be generated
+			// along with the service iptables rules.
+			enableLogging && serviceIPTChain == "",
+			logLabel)
 
 		nodePolicyRules[ipProtocol] = &types.NodePolicyRule{
 			IPSet:           ipset,
@@ -399,7 +418,7 @@ func (r *nodeReconciler) computeIPTRules(rule *CompletedRule) (map[iptables.Prot
 			ServiceIPTChain: serviceIPTChain,
 			ServiceIPTRules: serviceIPTRules,
 			CoreIPTChain:    coreIPTChain,
-			CoreIPTRule:     coreIPTRule,
+			CoreIPTRules:    coreIPTRules,
 			IsIPv6:          isIPv6,
 		}
 	}
@@ -422,7 +441,7 @@ func (r *nodeReconciler) add(rule *CompletedRule) error {
 				return err
 			}
 		}
-		if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, false, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRule}); err != nil {
+		if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, false, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRules}); err != nil {
 			return err
 		}
 	}
@@ -456,7 +475,7 @@ func (r *nodeReconciler) update(lastRealized *nodePolicyLastRealized, newRule *C
 				return err
 			}
 			if shouldUpdateCoreIPTRules {
-				if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRule}); err != nil {
+				if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRules}); err != nil {
 					return err
 				}
 			}
@@ -464,7 +483,7 @@ func (r *nodeReconciler) update(lastRealized *nodePolicyLastRealized, newRule *C
 			// If the previous rule used an ipset, sync the new core iptables rule first to remove its reference, then
 			// delete the unused ipset.
 			if shouldUpdateCoreIPTRules {
-				if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRule}); err != nil {
+				if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRules}); err != nil {
 					return err
 				}
 			}
@@ -473,7 +492,7 @@ func (r *nodeReconciler) update(lastRealized *nodePolicyLastRealized, newRule *C
 			}
 		} else {
 			if shouldUpdateCoreIPTRules {
-				if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRule}); err != nil {
+				if err := r.addOrUpdateCoreIPTRules(iptRule.CoreIPTChain, iptRule.IsIPv6, true, &coreIPTRule{ruleID, iptRule.Priority, iptRule.CoreIPTRules}); err != nil {
 					return err
 				}
 			}
@@ -517,9 +536,7 @@ func (r *nodeReconciler) addOrUpdateCoreIPTRules(chain string, isIPv6 bool, isUp
 	// Get all iptables rules and synchronize them.
 	var ruleStrs []string
 	for _, rule := range rules {
-		if rule.ruleStr != "" {
-			ruleStrs = append(ruleStrs, rule.ruleStr)
-		}
+		ruleStrs = append(ruleStrs, rule.ruleStrs...)
 	}
 	if err := r.routeClient.AddOrUpdateNodeNetworkPolicyIPTables([]string{chain}, [][]string{ruleStrs}, isIPv6); err != nil {
 		return err
@@ -554,7 +571,7 @@ func (r *nodeReconciler) deleteCoreIPTRule(ruleID string, iptChain string, isIPv
 	// Get all the iptables rules and synchronize them.
 	var ruleStrs []string
 	for _, r := range rules {
-		ruleStrs = append(ruleStrs, r.ruleStr)
+		ruleStrs = append(ruleStrs, r.ruleStrs...)
 	}
 	if err := r.routeClient.AddOrUpdateNodeNetworkPolicyIPTables([]string{iptChain}, [][]string{ruleStrs}, isIPv6); err != nil {
 		return err
@@ -636,23 +653,26 @@ func getIPNetsFromRule(rule *CompletedRule, isIPv6 bool) sets.Set[string] {
 	return set
 }
 
-func buildCoreIPTRule(ipProtocol iptables.Protocol,
+func buildCoreIPTRules(ipProtocol iptables.Protocol,
 	iptChain string,
 	ipset string,
 	ipnet string,
 	iptRuleTarget string,
 	iptRuleComment string,
 	service *v1beta2.Service,
-	isIngress bool) string {
+	isIngress bool,
+	enableLogging bool,
+	logLabel string) []string {
 	builder := iptables.NewRuleBuilder(iptChain)
+	var rules []string
 	if isIngress {
 		if ipset != "" {
 			builder = builder.MatchIPSetSrc(ipset, ipsetTypeHashIP)
 		} else if ipnet != "" {
 			builder = builder.MatchCIDRSrc(ipnet)
 		} else {
-			// If no source IP address is matched, return an empty string since the core iptables will never be matched.
-			return ""
+			// If no source IP address is matched, return an empty slice since the core iptables will never be matched.
+			return rules
 		}
 	} else {
 		if ipset != "" {
@@ -660,8 +680,8 @@ func buildCoreIPTRule(ipProtocol iptables.Protocol,
 		} else if ipnet != "" {
 			builder = builder.MatchCIDRDst(ipnet)
 		} else {
-			// If no destination IP address is matched, return an empty string since the core iptables will never be matched.
-			return ""
+			// If no destination IP address is matched, return an empty slice since the core iptables will never be matched.
+			return rules
 		}
 	}
 	if service != nil {
@@ -679,13 +699,26 @@ func buildCoreIPTRule(ipProtocol iptables.Protocol,
 			builder = builder.MatchICMP(service.ICMPType, service.ICMPCode, ipProtocol)
 		}
 	}
-	return builder.SetTarget(iptRuleTarget).
+	if enableLogging {
+		rules = append(rules, builder.CopyBuilder().
+			SetTarget(iptables.LOGTarget).
+			SetLogPrefix(logLabel).
+			Done().
+			GetRule())
+	}
+	rules = append(rules, builder.SetTarget(iptRuleTarget).
 		SetComment(iptRuleComment).
 		Done().
-		GetRule()
+		GetRule())
+	return rules
 }
 
-func buildServiceIPTRules(ipProtocol iptables.Protocol, services []v1beta2.Service, chain string, ruleTarget string) []string {
+func buildServiceIPTRules(ipProtocol iptables.Protocol,
+	services []v1beta2.Service,
+	chain string,
+	ruleTarget string,
+	enableLogging bool,
+	logLabel string) []string {
 	var rules []string
 	builder := iptables.NewRuleBuilder(chain)
 	for _, svc := range services {
@@ -702,6 +735,13 @@ func buildServiceIPTRules(ipProtocol iptables.Protocol, services []v1beta2.Servi
 				MatchPortDst(svc.Port, svc.EndPort)
 		case "icmp":
 			copiedBuilder = copiedBuilder.MatchICMP(svc.ICMPType, svc.ICMPCode, ipProtocol)
+		}
+		if enableLogging {
+			rules = append(rules, copiedBuilder.CopyBuilder().
+				SetTarget(iptables.LOGTarget).
+				SetLogPrefix(logLabel).
+				Done().
+				GetRule())
 		}
 		rules = append(rules, copiedBuilder.SetTarget(ruleTarget).
 			Done().
@@ -728,4 +768,25 @@ func getServiceTransProtocol(protocol *v1beta2.Protocol) string {
 		return "tcp"
 	}
 	return strings.ToLower(string(*protocol))
+}
+
+func generateLogLabel(rule *CompletedRule) string {
+	// Construct the log label used as iptables log prefix. According to https://ipset.netfilter.org/iptables-extensions.man.html,
+	// the log prefix is up to 29 letters long. The log label should include essential information to help filter the
+	// generated iptables kernel log. As a result, the user-provided log label is limited to 12 characters.
+	// The log label format:
+	// |Antrea|:|I|:|Reject|:|user-provided label|:|
+	// |6     |1|1|1|4-6   |1|1-12               |1|
+	logLabel := fmt.Sprintf("%s:%s:%s", logLabelPrefix, rule.Direction[:1], *rule.Action)
+	if rule.LogLabel != "" {
+		ruleLogLabel := rule.LogLabel
+		// Truncate the user-provided log label if it exceeds 12 characters.
+		if len(ruleLogLabel) > 12 {
+			klog.InfoS("The rule log label that exceeds 12 characters will be truncated", "rule.LogLabel", rule.LogLabel)
+			ruleLogLabel = ruleLogLabel[:12]
+		}
+		logLabel = fmt.Sprintf("%s:%s", logLabel, ruleLogLabel)
+	}
+	logLabel += ":"
+	return logLabel
 }
