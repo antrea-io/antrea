@@ -142,6 +142,8 @@ function deliver_antrea {
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
+    export NO_PULL=1
+    export DOCKER_BUILDKIT=1
     make flow-aggregator-image
 
     # Enable verbose log for troubleshooting.
@@ -153,14 +155,14 @@ function deliver_antrea {
     control_plane_ip="$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o wide --no-headers=true | awk '{print $6}')"
 
     cp -f build/yamls/*.yml $WORKDIR
-    scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" build/yamls/*.yml ubuntu@[${control_plane_ip}]:~/
+    scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" build/yamls/*.yml ubuntu@${control_plane_ip}:~/
 
     echo "====== Delivering Antrea to all the Nodes ======"
     docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
     docker save -o flow-aggregator.tar antrea/flow-aggregator:latest
     kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar ubuntu@[${IP}]:~/antrea-ubuntu.tar
-        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar ubuntu@[${IP}]:~/flow-aggregator.tar
+        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar ubuntu@${IP}:~/antrea-ubuntu.tar
+        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar ubuntu@${IP}:~/flow-aggregator.tar
         ssh -o StrictHostKeyChecking=no -n ubuntu@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ~/antrea-ubuntu.tar; docker load -i ~/flow-aggregator.tar" || true
     done
 }
@@ -236,9 +238,9 @@ function run_conformance {
 
     set +e
     if [[ "$TESTCASE" =~ "conformance" ]]; then
-        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log
+        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" --rancher-testbed > ${WORKSPACE}/test-result.log
     else
-        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log
+        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" --rancher-testbed > ${WORKSPACE}/test-result.log
     fi
 
     TEST_SCRIPT_RC=$?
