@@ -86,6 +86,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority1,
 			SourceRef:      &cnp1,
+			EnableLogging:  true,
+			LogLabel:       "",
 		},
 		FromAddresses: dualAddressGroup1,
 		ToAddresses:   nil,
@@ -102,6 +104,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority2,
 			SourceRef:      &cnp1,
+			EnableLogging:  false,
+			LogLabel:       "ingress2",
 		},
 		FromAddresses: dualAddressGroup1,
 		ToAddresses:   nil,
@@ -119,6 +123,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority2,
 			SourceRef:      &cnp1,
+			EnableLogging:  true,
+			LogLabel:       "ingress3",
 		},
 		FromAddresses: nil,
 		ToAddresses:   nil,
@@ -136,6 +142,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority2,
 			SourceRef:      &cnp1,
+			EnableLogging:  true,
+			LogLabel:       "ingress3",
 		},
 		FromAddresses: addressGroup1,
 		ToAddresses:   nil,
@@ -152,6 +160,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority2,
 			SourceRef:      &cnp1,
+			EnableLogging:  true,
+			LogLabel:       "ingress3",
 		},
 		FromAddresses: addressGroup2,
 		ToAddresses:   nil,
@@ -168,6 +178,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority2,
 			SourceRef:      &cnp1,
+			EnableLogging:  true,
+			LogLabel:       "ingress3",
 		},
 		FromAddresses: addressGroup2.Union(addressGroup1),
 		ToAddresses:   nil,
@@ -184,6 +196,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority2,
 			SourceRef:      &cnp1,
+			EnableLogging:  true,
+			LogLabel:       "ingress3",
 		},
 		FromAddresses: addressGroup2.Union(v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.3"))),
 		ToAddresses:   nil,
@@ -200,6 +214,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority2,
 			SourceRef:      &cnp1,
+			EnableLogging:  true,
+			LogLabel:       "ingress3",
 		},
 		FromAddresses: nil,
 		ToAddresses:   nil,
@@ -216,6 +232,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority1,
 			SourceRef:      &cnp1,
+			EnableLogging:  true,
+			LogLabel:       "egress1",
 		},
 		ToAddresses:   dualAddressGroup1,
 		FromAddresses: nil,
@@ -232,6 +250,8 @@ var (
 			PolicyPriority: &policyPriority1,
 			TierPriority:   &tierPriority2,
 			SourceRef:      &cnp1,
+			EnableLogging:  true,
+			LogLabel:       "egress2:test_log_label",
 		},
 		ToAddresses:   dualAddressGroup1,
 		FromAddresses: nil,
@@ -252,14 +272,16 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 		expectedCalls func(mockRouteClient *routetest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:        "IPv4, add an ingress rule, then forget it",
+			name:        "IPv4, add an ingress rule, update it, then forget it",
 			ipv4Enabled: true,
 			ipv6Enabled: false,
 			expectedCalls: func(mockRouteClient *routetest.MockInterfaceMockRecorder) {
 				serviceRules := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				coreRules := [][]string{
@@ -290,8 +312,10 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 			expectedCalls: func(mockRouteClient *routetest.MockInterfaceMockRecorder) {
 				serviceRules := [][]string{
 					{
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				coreRules := [][]string{
@@ -320,8 +344,10 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 			expectedCalls: func(mockRouteClient *routetest.MockInterfaceMockRecorder) {
 				serviceRules := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				coreRulesIPv4 := [][]string{
@@ -365,8 +391,10 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 			expectedCalls: func(mockRouteClient *routetest.MockInterfaceMockRecorder) {
 				serviceRules1 := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				coreRules1 := [][]string{
@@ -384,6 +412,7 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 					{
 						`-A ANTREA-POL-INGRESS-RULES -m set --match-set ANTREA-POL-INGRESSRULE1-4 src -j ANTREA-POL-INGRESSRULE1 -m comment --comment "Antrea: for rule ingress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
 						`-A ANTREA-POL-INGRESS-RULES -s 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -426,25 +455,30 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 			expectedCalls: func(mockRouteClient *routetest.MockInterfaceMockRecorder) {
 				coreRules3 := [][]string{
 					{
+						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
 				coreRules2 := [][]string{
 					{
 						`-A ANTREA-POL-INGRESS-RULES -s 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
 				serviceRules1 := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				coreRules1 := [][]string{
 					{
 						`-A ANTREA-POL-INGRESS-RULES -m set --match-set ANTREA-POL-INGRESSRULE1-4 src -j ANTREA-POL-INGRESSRULE1 -m comment --comment "Antrea: for rule ingress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
 						`-A ANTREA-POL-INGRESS-RULES -s 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -493,8 +527,10 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 				}
 				serviceRules1 := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				coreRules1 := [][]string{
@@ -507,17 +543,20 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 					{
 						`-A ANTREA-POL-INGRESS-RULES -m set --match-set ANTREA-POL-INGRESSRULE1-4 src -j ANTREA-POL-INGRESSRULE1 -m comment --comment "Antrea: for rule ingress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
 						`-A ANTREA-POL-INGRESS-RULES -s 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
 				coreRulesDelete2 := [][]string{
 					{
 						`-A ANTREA-POL-INGRESS-RULES -m set --match-set ANTREA-POL-INGRESSRULE1-4 src -j ANTREA-POL-INGRESSRULE1 -m comment --comment "Antrea: for rule ingress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
 				coreRulesDelete1 := [][]string{
 					{
+						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -550,21 +589,25 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 			expectedCalls: func(mockRouteClient *routetest.MockInterfaceMockRecorder) {
 				coreRules1 := [][]string{
 					{
+						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
 				coreRules2 := [][]string{
 					{
+						`-A ANTREA-POL-INGRESS-RULES -s 1.1.1.1/32 -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -s 1.1.1.1/32 -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
 				coreRules3 := [][]string{
 					{
+						`-A ANTREA-POL-INGRESS-RULES -s 1.1.1.2/32 -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -s 1.1.1.2/32 -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
 				coreRules4 := [][]string{
 					{
+						`-A ANTREA-POL-INGRESS-RULES -m set --match-set ANTREA-POL-INGRESSRULE3-4 src -p tcp --dport 8080 -j LOG --log-prefix "Antrea:I:Allow:ingress3:"`,
 						`-A ANTREA-POL-INGRESS-RULES -m set --match-set ANTREA-POL-INGRESSRULE3-4 src -p tcp --dport 8080 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-03, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -670,8 +713,10 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				svcRules := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				updatedCoreRules := [][]string{
@@ -714,8 +759,10 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				svcRules := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				updatedCoreRules := [][]string{
@@ -763,8 +810,10 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				ipv4SvcRules := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				ipv6SvcRules := ipv4SvcRules
@@ -814,6 +863,7 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				coreRules := [][]string{
 					{
 						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -j ANTREA-POL-EGRESSRULE1 -m comment --comment "Antrea: for rule egress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -822,12 +872,15 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				svcRules := [][]string{
 					{
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				updatedCoreRules := [][]string{
 					{
+						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -856,6 +909,7 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				coreRules := [][]string{
 					{
 						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -j ANTREA-POL-EGRESSRULE1 -m comment --comment "Antrea: for rule egress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -864,12 +918,15 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				svcRules := [][]string{
 					{
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				updatedCoreRules := [][]string{
 					{
+						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -899,12 +956,14 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				ipv4CoreRules := [][]string{
 					{
 						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -j ANTREA-POL-EGRESSRULE1 -m comment --comment "Antrea: for rule egress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
 				ipv6CoreRules := [][]string{
 					{
 						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -j ANTREA-POL-EGRESSRULE1 -m comment --comment "Antrea: for rule egress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -913,18 +972,22 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				ipv4SvcRules := [][]string{
 					{
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				ipv6SvcRules := ipv4SvcRules
 				updatedIPv4CoreRules := [][]string{
 					{
+						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
 				updatedIPv6CoreRules := [][]string{
 					{
+						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -961,12 +1024,16 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				svcRules := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 					{
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				ingressCoreChains := []string{"ANTREA-POL-INGRESS-RULES"}
@@ -980,6 +1047,7 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				egressCoreRules := [][]string{
 					{
 						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -j ANTREA-POL-EGRESSRULE1 -m comment --comment "Antrea: for rule egress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -990,6 +1058,7 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				updatedEgressCoreRules := [][]string{
 					{
+						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 1.1.1.1/32 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -1027,12 +1096,16 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				svcRules := [][]string{
 					{
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:I:Allow:"`,
+						`-A ANTREA-POL-INGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 					{
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT",
-						"-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT",
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 80 -j ACCEPT`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress1:"`,
+						`-A ANTREA-POL-EGRESSRULE1 -p tcp --dport 443 -j ACCEPT`,
 					},
 				}
 				ingressCoreChains := []string{"ANTREA-POL-INGRESS-RULES"}
@@ -1046,6 +1119,7 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				egressCoreRules := [][]string{
 					{
 						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -j ANTREA-POL-EGRESSRULE1 -m comment --comment "Antrea: for rule egress-rule-01, policy AntreaClusterNetworkPolicy:name1"`,
+						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
@@ -1056,6 +1130,7 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 				}
 				updatedEgressCoreRules := [][]string{
 					{
+						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j LOG --log-prefix "Antrea:O:Allow:egress2:test:"`,
 						`-A ANTREA-POL-EGRESS-RULES -d 2002:1a23:fb44::1/128 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule egress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}

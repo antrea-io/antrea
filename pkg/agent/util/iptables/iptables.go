@@ -49,6 +49,7 @@ const (
 	DNATTarget       = "DNAT"
 	RejectTarget     = "REJECT"
 	NotrackTarget    = "NOTRACK"
+	LOGTarget        = "LOG"
 
 	PreRoutingChain  = "PREROUTING"
 	InputChain       = "INPUT"
@@ -133,6 +134,7 @@ type IPTablesRuleBuilder interface {
 	MatchEstablishedOrRelated() IPTablesRuleBuilder
 	MatchInputInterface(interfaceName string) IPTablesRuleBuilder
 	MatchOutputInterface(interfaceName string) IPTablesRuleBuilder
+	SetLogPrefix(prefix string) IPTablesRuleBuilder
 	SetTarget(target string) IPTablesRuleBuilder
 	SetTargetDNATToDst(dnatIP string, dnatPort *int32) IPTablesRuleBuilder
 	SetComment(comment string) IPTablesRuleBuilder
