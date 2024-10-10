@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
@@ -226,7 +227,7 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 
 	var err error
 	if antreaPolicyEnabled {
-		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled, gwPort); err != nil {
+		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled, gwPort, clock.RealClock{}); err != nil {
 			return nil, err
 		}
 
