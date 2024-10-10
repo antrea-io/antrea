@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/workqueue"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"antrea.io/antrea/pkg/agent/config"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
@@ -402,10 +404,10 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 			},
 			existingDNSCache: map[string]dnsMeta{
 				"test.antrea.io": {
-					responseIPs: map[string]net.IP{
-						"127.0.0.1":    net.ParseIP("127.0.0.1"),
-						"192.155.12.1": net.ParseIP("192.155.12.1"),
-						"192.158.1.38": net.ParseIP("192.158.1.38"),
+					responseIPs: map[string]ipWithExpiration{
+						"127.0.0.1":    {net.ParseIP("127.0.0.1"), time.Now()},
+						"192.155.12.1": {net.ParseIP("192.155.12.1"), time.Now()},
+						"192.158.1.38": {net.ParseIP("192.158.1.38"), time.Now()},
 					},
 				},
 			},
@@ -581,6 +583,174 @@ func TestSyncDirtyRules(t *testing.T) {
 				}
 			}
 			assert.Equal(t, tc.expectedDirtyRulesRemaining, f.ruleSyncTracker.getDirtyRules())
+		})
+	}
+}
+
+func TestOnDNSResponse(t *testing.T) {
+	testFQDN := "fqdn-test-pod.lfx.test"
+	selectorItem1 := fqdnSelectorItem{
+		matchName: testFQDN,
+	}
+	selectorItem2 := fqdnSelectorItem{
+		matchName: "random-domain.com",
+	}
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	currentTime := fakeClock.Now()
+
+	tests := []struct {
+		name                  string
+		existingDNSCache      map[string]dnsMeta
+		dnsResponseIPs        map[string]ipWithExpiration
+		expectedIPs           map[string]ipWithExpiration
+		expectedItem          string
+		mockSelectorToRuleIDs map[fqdnSelectorItem]sets.Set[string]
+	}{
+		{
+			name: "new IP added",
+			existingDNSCache: map[string]dnsMeta{
+				testFQDN: {
+					responseIPs: map[string]ipWithExpiration{
+						"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+						"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(6 * time.Second)},
+					},
+				},
+			},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(10 * time.Second)},
+			},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(6 * time.Second)},
+				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(10 * time.Second)},
+			},
+			expectedItem: testFQDN,
+		},
+		{
+			name: "existing DNS cache not impacted",
+			existingDNSCache: map[string]dnsMeta{
+				"fqdn-test-pod.lfx.test": {
+					responseIPs: map[string]ipWithExpiration{
+						"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+						"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(6 * time.Second)},
+					},
+				},
+			},
+			dnsResponseIPs: map[string]ipWithExpiration{},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(6 * time.Second)},
+			},
+		},
+		{
+			name: "old IP resent in DNS response is retained with an updated TTL fetched from response",
+			existingDNSCache: map[string]dnsMeta{
+				"fqdn-test-pod.lfx.test": {
+					responseIPs: map[string]ipWithExpiration{
+						"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+					},
+				},
+			},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(10 * time.Second)},
+			},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(10 * time.Second)},
+			},
+		},
+		{
+			name: "stale IP with expired TTL is evicted",
+			existingDNSCache: map[string]dnsMeta{
+				"fqdn-test-pod.lfx.test": {
+					responseIPs: map[string]ipWithExpiration{
+						"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(-1 * time.Second)},
+					},
+				},
+			},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedItem: testFQDN,
+		},
+		{
+			name: "stale IP with unexpired TTL are retained",
+			existingDNSCache: map[string]dnsMeta{
+				"fqdn-test-pod.lfx.test": {
+					responseIPs: map[string]ipWithExpiration{
+						"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(5 * time.Second)},
+					},
+				},
+			},
+			dnsResponseIPs: map[string]ipWithExpiration{},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+		},
+		{
+			name:             "existingDNSCache is empty, the new response matches a selector.",
+			existingDNSCache: map[string]dnsMeta{},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedItem: testFQDN,
+			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem1: sets.New[string]("mockRule1"),
+			},
+		},
+		{
+			name:             "existingDNSCache is empty, the new response doesn't match any selector",
+			existingDNSCache: map[string]dnsMeta{},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem2: sets.New[string]("mockRule2"),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			f, _ := newMockFQDNController(t, controller, nil)
+			mockDNSQueryQueue := workqueue.NewTypedRateLimitingQueueWithConfig(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+				workqueue.TypedRateLimitingQueueConfig[string]{
+					Name:  "fqdn-test",
+					Clock: fakeClock,
+				},
+			)
+			f.dnsQueryQueue = mockDNSQueryQueue
+			f.dnsEntryCache = tc.existingDNSCache
+			if tc.mockSelectorToRuleIDs != nil {
+				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
+			}
+
+			f.onDNSResponse(testFQDN, tc.dnsResponseIPs, nil)
+
+			cachedDnsMetaData, _ := f.dnsEntryCache[testFQDN]
+
+			if _, exists := f.selectorItemToRuleIDs[selectorItem2]; !exists {
+				assert.Equal(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "Expected %+v in cache, got %+v", tc.expectedIPs, cachedDnsMetaData.responseIPs)
+			} else {
+				assert.NotEqual(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "Did not Expect %+v in cache, got %+v", tc.expectedIPs, cachedDnsMetaData.responseIPs)
+			}
+
+			if tc.expectedItem != "" {
+				fakeClock.Step(5 * time.Second)
+				actualItem, _ := f.dnsQueryQueue.Get()
+				f.dnsQueryQueue.Done(actualItem)
+				assert.Equal(t, tc.expectedItem, actualItem)
+			}
 		})
 	}
 }
