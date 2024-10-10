@@ -368,7 +368,16 @@ func (n *netIO) ListIPForwardRows(family uint16) ([]MibIPForwardRow, error) {
 	if err != nil {
 		return nil, os.NewSyscallError("iphlpapi.GetIpForwardTable", err)
 	}
-	return unsafe.Slice(&table.Table[0], table.NumEntries), nil
+	rows := make([]MibIPForwardRow, table.NumEntries, table.NumEntries)
+
+	pFirstRow := uintptr(unsafe.Pointer(&table.Table[0]))
+	rowSize := unsafe.Sizeof(table.Table[0])
+
+	for i := uint32(0); i < table.NumEntries; i++ {
+		row := *(*MibIPForwardRow)(unsafe.Pointer(pFirstRow + rowSize*uintptr(i)))
+		rows[i] = row
+	}
+	return rows, nil
 }
 
 func NewIPForwardRow() *MibIPForwardRow {
