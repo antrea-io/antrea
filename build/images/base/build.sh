@@ -92,10 +92,8 @@ if $PUSH && ! check_docker_build_driver "docker-container"; then
     exit 1
 fi
 
-if [ "$PLATFORM" != "" ] && $PUSH; then
-    echoerr "Cannot use --platform with --push"
-    exit 1
-fi
+TARGETARCH=$(set -e; get_target_arch "$PLATFORM" "$THIS_DIR/../.targetarch")
+echo "Target arch: $TARGETARCH"
 
 PLATFORM_ARG=""
 if [ "$PLATFORM" != "" ]; then
@@ -118,24 +116,23 @@ if [[ $BUILD_TAG == "" ]]; then
     BUILD_TAG=$BUILD_CACHE_TAG
 fi
 
+ANTREA_OPENVSWITCH_IMAGE=""
+if [ "$DISTRO" == "ubuntu" ]; then
+    ANTREA_OPENVSWITCH_IMAGE="antrea/openvswitch-$TARGETARCH:$BUILD_TAG"
+elif [ "$DISTRO" == "ubi" ]; then
+    ANTREA_OPENVSWITCH_IMAGE="antrea/openvswitch-ubi-$TARGETARCH:$BUILD_TAG"
+fi
+
 if $PULL; then
     # The ubuntu image is also used for the UBI build (for the cni-binaries intermediate image).
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
         docker pull $PLATFORM_ARG ubuntu:24.04
     else
-        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:24.04
+        docker pull $PLATFORM_ARG ${DOCKER_REGISTRY}/antrea/ubuntu:24.04
         docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:24.04 ubuntu:24.04
     fi
 
-    if [ "$DISTRO" == "ubuntu" ]; then
-        IMAGES_LIST=(
-            "antrea/openvswitch:$BUILD_TAG"
-        )
-    elif [ "$DISTRO" == "ubi" ]; then
-        IMAGES_LIST=(
-            "antrea/openvswitch-ubi:$BUILD_TAG"
-        )
-    fi
+    IMAGES_LIST=("$ANTREA_OPENVSWITCH_IMAGE")
     for image in "${IMAGES_LIST[@]}"; do
         if [[ ${DOCKER_REGISTRY} == "" ]]; then
             docker pull $PLATFORM_ARG "${image}" || true
@@ -152,7 +149,8 @@ fi
 function docker_build_and_push() {
     local image="$1"
     local dockerfile="$2"
-    local build_args="--build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION --build-arg BUILD_TAG=$BUILD_TAG"
+    local build_args="--build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION"
+    local build_context="--build-context antrea-openvswitch=docker-image://$ANTREA_OPENVSWITCH_IMAGE"
     local cache_args=""
     if $PUSH; then
         cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
@@ -162,7 +160,7 @@ function docker_build_and_push() {
     else
         cache_args="$cache_args --cache-from type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
     fi
-    docker buildx build $PLATFORM_ARG -o type=docker -t $image:$BUILD_TAG $cache_args $build_args -f $dockerfile .
+    docker buildx build $PLATFORM_ARG -o type=docker -t $image:$BUILD_TAG $cache_args $build_args $build_context -f $dockerfile .
 
     if $PUSH; then
         docker push $image:$BUILD_TAG
@@ -171,9 +169,9 @@ function docker_build_and_push() {
 
 
 if [ "$DISTRO" == "ubuntu" ]; then
-    docker_build_and_push "antrea/base-ubuntu" Dockerfile
+    docker_build_and_push "antrea/base-ubuntu-$TARGETARCH" Dockerfile
 elif [ "$DISTRO" == "ubi" ]; then
-    docker_build_and_push "antrea/base-ubi" Dockerfile.ubi
+    docker_build_and_push "antrea/base-ubi-$TARGETARCH" Dockerfile.ubi
 fi
 
 popd > /dev/null
