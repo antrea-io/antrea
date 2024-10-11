@@ -901,13 +901,10 @@ If you dump the flows of this table, you may see the following:
 
 ```text
 1. table=PreRoutingClassifier, priority=200,ip actions=resubmit(,NodePortMark),resubmit(,SessionAffinity),resubmit(,ServiceLB)
-2. table=PreRoutingClassifier, priority=0 actions=goto_table:NodePortMark
 ```
 
 Flow 1 sequentially resubmits packets to tables [NodePortMark], [SessionAffinity], and [ServiceLB]. Note that packets
 are ultimately forwarded to table [ServiceLB]. In tables [NodePortMark] and [SessionAffinity], only reg marks are loaded.
-
-Flow 2 is the table-miss flow that should remain unused.
 
 ### NodePortMark
 
@@ -919,7 +916,6 @@ If you dump the flows of this table, you may see the following:
 ```text
 1. table=NodePortMark, priority=200,ip,nw_dst=192.168.77.102 actions=set_field:0x80000/0x80000->reg4
 2. table=NodePortMark, priority=200,ip,nw_dst=169.254.0.252 actions=set_field:0x80000/0x80000->reg4
-3. table=NodePortMark, priority=0 actions=goto_table:SessionAffinity
 ```
 
 Flow 1 matches packets destined for the local Node from local Pods. `NodePortRegMark` is loaded, indicating that the
@@ -931,11 +927,9 @@ IP address.
 Flow 2 match packets destined for the *Virtual NodePort DNAT IP*. Packets destined for NodePort Services from the local
 Node or the external network is DNAT'd to the *Virtual NodePort DNAT IP* by iptables before entering the pipeline.
 
-Flow 3 is the table-miss flow.
-
 Note that packets of NodePort Services have not been identified in this table by matching destination IP address. The
 identification of NodePort Services will be done finally in table [ServiceLB] by matching `NodePortRegMark` and the
-the specific destination port of a NodePort.
+specific destination port of a NodePort.
 
 ### SessionAffinity
 

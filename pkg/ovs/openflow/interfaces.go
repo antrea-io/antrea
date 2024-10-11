@@ -53,7 +53,8 @@ const (
 )
 
 const (
-	TableMissActionNone MissActionType = iota
+	TableMissActionNotSet MissActionType = iota
+	TableMissActionNone
 	TableMissActionDrop
 	TableMissActionNormal
 	TableMissActionNext
