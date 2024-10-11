@@ -53,12 +53,8 @@ import (
 */
 
 const (
-	testFullyQualifiedDomainName = "fqdn-test-pod.lfx.test"
-
 	customDnsServiceName = "custom-dns-service"
 	customDnsConfigName  = "custom-dns-config"
-	customDnsPort        = 53
-	customDnsTargetPort  = 53
 
 	customDnsImage         = "coredns/coredns:1.11.3"
 	customDnsPodName       = "custom-dns-server"
@@ -76,11 +72,12 @@ const (
 	agnHostLabelKey      = "app"
 	agnHostLabelValue    = "agnhost"
 	agnHostPodNamePreFix = "agnhost-"
-
-	eventualWaitTime = 20 * time.Second
 )
 
 func TestFQDNPolicyWithCachedDNS(t *testing.T) {
+	const testFullyQualifiedDomainName = "fqdn-test-pod.lfx.test"
+	const eventualWaitTime = 60 * time.Second
+	const dnsPort = 53
 	skipIfAntreaPolicyDisabled(t)
 	data, err := setupTest(t)
 	if err != nil {
@@ -88,11 +85,12 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	customDnsService, err := data.CreateServiceWithAnnotations(customDnsServiceName, data.testNamespace, customDnsPort, customDnsTargetPort, corev1.ProtocolUDP,
+	customDnsService, err := data.CreateServiceWithAnnotations(customDnsServiceName, data.testNamespace, dnsPort, dnsPort, corev1.ProtocolUDP,
 		map[string]string{customDnsLabelKey: customDnsLabelValue}, false, false, corev1.ServiceTypeClusterIP, ptr.To[corev1.IPFamily](corev1.IPv4Protocol), map[string]string{})
 	require.NoError(t, err, "Error when creating custom DNS service: %v", err)
 
 	setDnsServerAddressInAntrea(t, data, customDnsService.Spec.ClusterIP)
+	defer setDnsServerAddressInAntrea(t, data, "")
 
 	podCount := 2
 	agnHostPodIps := make([]*PodIPs, podCount)
@@ -102,7 +100,7 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 
 	ipv4, ipv6 := extractIPs(agnHostPodIps[0])
 
-	dnsConfigData := createDnsConfig(t, ipv4, ipv6)
+	dnsConfigData := createDnsConfig(t, ipv4, ipv6, testFullyQualifiedDomainName)
 	customDnsConfigMapObject, err := data.CreateConfigMap(data.testNamespace, customDnsConfigName, dnsConfigData, nil, false)
 	require.NoError(t, err, "failed to create custom dns ConfigMap: %v", err)
 
@@ -111,11 +109,11 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	k8sUtils, err = NewKubernetesUtils(data)
 	require.NoError(t, err, "error getting k8s utils %+v", err)
 
-	_ = buildFqdnPolicy(t, data)
+	createFqdnPolicyInNamespace(t, data, testFullyQualifiedDomainName)
 
 	createToolBoxPod(t, data, customDnsService.Spec.ClusterIP)
 
-	curlFqdn := func(podName, containerName, fqdn string) error {
+	curlTarget := func(podName, containerName, fqdn string) error {
 		cmd := []string{"curl", fqdn}
 		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, podName, containerName, cmd)
 		if err != nil {
@@ -125,18 +123,23 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 		return nil
 	}
 
-	assert.Eventually(t, func() bool {
-		t.Logf("trying to curl the fqdn %v", testFullyQualifiedDomainName)
-		err = curlFqdn(toolBoxPodName, toolboxContainerName, testFullyQualifiedDomainName)
-		return assert.NoError(t, err)
-	}, 2*time.Second, 100*time.Millisecond)
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		err = curlTarget(toolBoxPodName, toolboxContainerName, testFullyQualifiedDomainName)
+		assert.NoError(t, err)
+	}, 2*time.Second, 100*time.Millisecond, "trying to curl the fqdn : ", testFullyQualifiedDomainName)
 
 	// DIG to get actual IP , to be sure.
 	digResponse, err := k8sUtils.runDNSQuery(toolBoxPodName, toolboxContainerName, data.testNamespace, testFullyQualifiedDomainName, false, customDnsService.Spec.ClusterIP)
 	require.NoError(t, err, "failed to get IP of FQDN using DIG from toolbox pod : %v", err)
-	fqdnIp := digResponse.String()
 
-	t.Logf("received ip using dig for test fqdn %+v ", fqdnIp)
+	// Use an assertion to check if the received IPs are same.
+	fqdnIp := digResponse.String()
+	if digResponse.To4() == nil {
+		require.Equalf(t, ipv6, fqdnIp, "The IP set against the FQDN in the DNS server should be the same, but got %+v instead of %+v", fqdnIp, ipv6)
+	} else {
+		require.Equalf(t, ipv4, fqdnIp, "The IP set against the FQDN in the DNS server should be the same, but got %+v instead of %+v", fqdnIp, ipv4)
+	}
+	t.Logf("Successfully received the expected IP %+v using the dig command against the FQDN", fqdnIp)
 
 	ipv4, ipv6 = extractIPs(agnHostPodIps[1])
 	if ipv6 != "" {
@@ -146,7 +149,7 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	}
 
 	// Update the custom DNS configMap
-	UpdatedCustomDNSconfig := createDnsConfig(t, ipv4, ipv6)
+	UpdatedCustomDNSconfig := createDnsConfig(t, ipv4, ipv6, testFullyQualifiedDomainName)
 
 	customDnsConfigMapObject.Data = UpdatedCustomDNSconfig
 	err = data.UpdateConfigMap(customDnsConfigMapObject)
@@ -157,13 +160,11 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 		t.Logf("successfully updated dns configMap with new IPs | ipv4 : %+v", ipv4)
 	}
 
-	require.NoError(t, data.setPodAnnotationToRandomValue(data.testNamespace, customDnsPodName, randomPatchAnnotationKey), "failed to update custom dns pod annotation.")
-
-	defer setDnsServerAddressInAntrea(t, data, "")
+	require.NoError(t, data.setPodAnnotation(data.testNamespace, customDnsPodName, randomPatchAnnotationKey, randSeq(annotationValueLen)), "failed to update custom dns pod annotation.")
 
 	assert.Eventually(t, func() bool {
 		t.Logf("trying to curl the existing cached IP of the domain  %v", fqdnIp)
-		err = curlFqdn(toolBoxPodName, toolboxContainerName, fqdnIp)
+		err = curlTarget(toolBoxPodName, toolboxContainerName, fqdnIp)
 		if err != nil {
 			t.Logf("The test failed because of error  %+v", err)
 		}
@@ -187,16 +188,7 @@ func setDnsServerAddressInAntrea(t *testing.T, data *TestData, dnsServiceIP stri
 
 }
 
-func createDnsConfig(t *testing.T, ipv4Address, ipv6Address string) map[string]string {
-	configMapData, _ := generateCoreFile(t, ipv4Address, ipv6Address)
-	configData := map[string]string{
-		"Corefile": configMapData,
-	}
-
-	return configData
-}
-
-func generateCoreFile(t *testing.T, ipv4Address, ipv6Address string) (string, error) {
+func createDnsConfig(t *testing.T, ipv4Address, ipv6Address, domainName string) map[string]string {
 	const coreFileTemplate = `lfx.test:53 {
         errors
         log
@@ -212,24 +204,36 @@ func generateCoreFile(t *testing.T, ipv4Address, ipv6Address string) (string, er
         reload
     }`
 
-	data := struct {
-		IPv4 string
-		IPv6 string
-		FQDN string
-	}{
-		IPv4: ipv4Address,
-		IPv6: ipv6Address,
-		FQDN: testFullyQualifiedDomainName,
+	generateConfigData := func() (string, error) {
+		data := struct {
+			IPv4 string
+			IPv6 string
+			FQDN string
+		}{
+			IPv4: ipv4Address,
+			IPv6: ipv6Address,
+			FQDN: domainName,
+		}
+
+		tmpl, err := template.New("configMapData").Parse(coreFileTemplate)
+		if err != nil {
+			return "", err
+		}
+		var output bytes.Buffer
+		err = tmpl.Execute(&output, data)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(output.String()), nil
 	}
 
-	tmpl, err := template.New("configMapData").Parse(coreFileTemplate)
-	require.NoError(t, err, "error while creating template ", err)
+	configMapData, err := generateConfigData()
+	require.NoError(t, err, "error processing configData template for DNS, ", err)
+	configData := map[string]string{
+		"Corefile": configMapData,
+	}
 
-	var output bytes.Buffer
-	err = tmpl.Execute(&output, data)
-	require.NoError(t, err, "error while executing config map template", err)
-
-	return strings.TrimSpace(output.String()), nil
+	return configData
 }
 
 func createDnsPod(t *testing.T, data *TestData) {
@@ -269,11 +273,11 @@ func createDnsPod(t *testing.T, data *TestData) {
 
 	require.NoError(t, pb.Create(data))
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, customDnsPodName, data.testNamespace))
-	require.NoError(t, data.setPodAnnotationToRandomValue(data.testNamespace, customDnsPodName, randomPatchAnnotationKey), "failed to annotate the custom dns pod.")
+	require.NoError(t, data.setPodAnnotation(data.testNamespace, customDnsPodName, randomPatchAnnotationKey, randSeq(annotationValueLen)), "failed to annotate the custom dns pod.")
 
 }
 
-func buildFqdnPolicy(t *testing.T, data *TestData) *utils.AntreaNetworkPolicySpecBuilder {
+func createFqdnPolicyInNamespace(t *testing.T, data *TestData, domainName string) {
 	podSelectorLabel := map[string]string{
 		fqdnPodSelectorLabelKey: fqdnPodSelectorLabelValue,
 	}
@@ -284,7 +288,7 @@ func buildFqdnPolicy(t *testing.T, data *TestData) *utils.AntreaNetworkPolicySpe
 		SetTier(defaultTierName).
 		SetPriority(1.0).
 		SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: podSelectorLabel}})
-	builder.AddFQDNRule(testFullyQualifiedDomainName, utils.ProtocolTCP, &port, nil, nil, "AllowForFQDN", nil,
+	builder.AddFQDNRule(domainName, utils.ProtocolTCP, &port, nil, nil, "AllowForFQDN", nil,
 		crdv1beta1.RuleActionAllow)
 	builder.AddEgress(utils.ProtocolUDP, &udpPort, nil, nil, nil, nil,
 		nil, nil, nil, nil, map[string]string{customDnsLabelKey: customDnsLabelValue},
@@ -299,8 +303,6 @@ func buildFqdnPolicy(t *testing.T, data *TestData) *utils.AntreaNetworkPolicySpe
 	require.NoError(t, err, "error while deploying antrea policy %+v", err)
 	failOnError(err, t)
 	failOnError(waitForResourceReady(t, 30*time.Second, annp), t)
-
-	return builder
 }
 
 func createToolBoxPod(t *testing.T, data *TestData, dnsServiceIP string) {

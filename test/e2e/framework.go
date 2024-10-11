@@ -3250,47 +3250,15 @@ func (data *TestData) runDNSQuery(
 	}
 }
 
-// patchPodAnnotation Patches a pod with given map of keys and values.
-func (data *TestData) patchPodAnnotation(namespace, podName string, annotation map[string]string) error {
+// setPodAnnotation Patches a pod by adding an annotation with a specified key and a randomly generated string as the value.
+func (data *TestData) setPodAnnotation(namespace, podName, annotationKey string, annotationValue string) error {
 	annotationPatch := map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"annotations": make(map[string]string),
 		},
 	}
 
-	if annotation == nil {
-		return fmt.Errorf("no annotations were provided")
-	} else {
-		for key, value := range annotation {
-			annotationPatch["metadata"].(map[string]interface{})["annotations"].(map[string]string)[key] = value
-		}
-	}
-
-	patchData, err := json.Marshal(annotationPatch)
-	if err != nil {
-		log.Infof("Error marshalling annotation: %+v", err)
-		return err
-	}
-
-	_, err = data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), podName, types.MergePatchType, patchData, metav1.PatchOptions{})
-	if err != nil {
-		log.Infof("Error patching pod %s in namespace %s with annotations. Error: %+v", podName, namespace, err)
-		return err
-	}
-
-	log.Infof("Successfully patched pod %s in namespace %s with provided annotation", podName, namespace)
-	return nil
-}
-
-// setPodAnnotationToRandomValue Patches a pod by adding an annotation with a specified key and a randomly generated string as the value.
-func (data *TestData) setPodAnnotationToRandomValue(namespace, podName, annotationKey string) error {
-	annotationPatch := map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"annotations": make(map[string]string),
-		},
-	}
-
-	annotationPatch["metadata"].(map[string]interface{})["annotations"].(map[string]string)[annotationKey] = randSeq(annotationValueLen)
+	annotationPatch["metadata"].(map[string]interface{})["annotations"].(map[string]string)[annotationKey] = annotationValue
 
 	patchData, err := json.Marshal(annotationPatch)
 	if err != nil {
