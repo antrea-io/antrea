@@ -24,6 +24,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 
 COPY . /antrea
 
+RUN chown -R root:root /antrea
+
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
     cd multicluster && make bin

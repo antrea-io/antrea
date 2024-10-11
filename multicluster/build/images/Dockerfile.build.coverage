@@ -23,6 +23,8 @@ RUN go mod download
 
 COPY . /antrea
 
+RUN chown -R root:root /antrea
+
 RUN cd multicluster && make antrea-mc-instr-binary
 
 FROM ubuntu:24.04

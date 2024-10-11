@@ -24,6 +24,8 @@ RUN go mod download
 
 COPY . /antrea
 
+RUN chown -R root:root /antrea
+
 RUN make antctl-instr-binary
 
 RUN make antrea-controller-instr-binary

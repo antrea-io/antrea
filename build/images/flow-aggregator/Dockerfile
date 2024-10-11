@@ -24,6 +24,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 
 COPY . /antrea
 
+RUN chown -R root:root /antrea
+
 # Build antctl first in order to share an extra layer with other Antrea Docker images.
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \

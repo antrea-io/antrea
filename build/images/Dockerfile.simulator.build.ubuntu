@@ -23,6 +23,8 @@ RUN go mod download
 
 COPY . /antrea
 
+RUN chown -R root:root /antrea
+
 RUN make antrea-agent-simulator
 
 
