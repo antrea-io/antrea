@@ -216,6 +216,11 @@ data:
       # Supported formats are IPFIX and JSON.
       recordFormat: "IPFIX"
 
+      # Template retransmission interval when using the udp protocol to export records.
+      # The value must be provided as a duration string.
+      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      templateRefreshTimeout: "600s"
+
     # clickHouse contains ClickHouse related configuration options.
     clickHouse:
       # Enable is the switch to enable exporting flow records to ClickHouse.
