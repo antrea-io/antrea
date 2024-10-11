@@ -16,7 +16,7 @@ package monitortool
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -40,7 +40,7 @@ import (
 )
 
 // #nosec G404: random number generator not used for security purposes.
-var icmpEchoID = rand.Int31n(1 << 16)
+var icmpEchoID = rand.IntN(1 << 16)
 
 const (
 	ipv4ProtocolICMPRaw = "ip4:icmp"

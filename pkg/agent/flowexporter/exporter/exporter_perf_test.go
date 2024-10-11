@@ -24,7 +24,6 @@ import (
 	"flag"
 	"fmt"
 	"math"
-	"math/big"
 	"net"
 	"net/netip"
 	"testing"
@@ -332,8 +331,9 @@ func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueu
 }
 
 func getRandomNum(value int64) uint64 {
-	number, _ := rand.Int(rand.Reader, big.NewInt(value))
-	return number.Uint64()
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano())) // Create a new source of randomness
+	return uint64(rnd.IntN(value))                         // Use IntN to generate a random number
+
 }
 
 func disableLogToStderr() {

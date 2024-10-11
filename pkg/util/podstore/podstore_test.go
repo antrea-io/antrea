@@ -471,7 +471,7 @@ func BenchmarkGetPodByIPAndTime(b *testing.B) {
 		b.Run(fmt.Sprintf("input_size_%d", v.input), func(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				randomPod := podArray[rand.Intn(v.input)]
+				randomPod := podArray[rand.IntN(v.input)]
 				creationTime := podStore.timestampMap[randomPod.UID].CreationTimestamp
 				_, ok := podStore.GetPodByIPAndTime(randomPod.Status.PodIPs[0].IP, creationTime.Add(time.Millisecond))
 				total++
@@ -519,7 +519,7 @@ func addPods(number int, k8sClient kubernetes.Interface) ([]*v1.Pod, error) {
 func generatePod() *v1.Pod {
 	ip := getRandomIP()
 	uid := uuid.New().String()
-	startTime := rand.Intn(360000000)
+	startTime := rand.IntN(360000000)
 	creationTime := refTime.Add(time.Duration(startTime))
 	deletionTime := creationTime.Add(time.Hour)
 	pod := &v1.Pod{
@@ -542,5 +542,5 @@ func generatePod() *v1.Pod {
 }
 
 func getRandomIP() string {
-	return fmt.Sprintf("%d.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
+	return fmt.Sprintf("%d.%d.%d.%d", rand.IntN(256), rand.IntN(256), rand.IntN(256), rand.IntN(256))
 }

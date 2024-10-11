@@ -364,11 +364,11 @@ func statMaxMemAlloc(maxAlloc *uint64, interval time.Duration, stopCh chan struc
 }
 
 func getRandomIP() string {
-	return fmt.Sprintf("%d.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
+	return fmt.Sprintf("%d.%d.%d.%d", rand.IntN(256), rand.IntN(256), rand.IntN(256), rand.IntN(256))
 }
 
 func getRandomNodeName() string {
-	return fmt.Sprintf("Node-%d", rand.Intn(1000))
+	return fmt.Sprintf("Node-%d", rand.IntN(1000))
 }
 
 // getXObjects calls the provided getObjectsFunc x times and aggregate the objects.

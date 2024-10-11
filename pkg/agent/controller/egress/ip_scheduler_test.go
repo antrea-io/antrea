@@ -213,13 +213,15 @@ func TestSchedule(t *testing.T) {
 }
 
 func BenchmarkSchedule(b *testing.B) {
-	var egresses []runtime.Object
-	for i := 0; i < 1000; i++ {
-		egresses = append(egresses, &crdv1b1.Egress{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("egress-%d", i), UID: types.UID(fmt.Sprintf("uid-%d", i)), CreationTimestamp: metav1.NewTime(time.Unix(int64(i), 0))},
-			Spec:       crdv1b1.EgressSpec{EgressIP: fmt.Sprintf("1.1.%d.%d", rand.Intn(256), rand.Intn(256)), ExternalIPPool: "pool1"},
-		})
-	}
+    rnd := rand.New(rand.NewSource(time.Now().UnixNano())) // Create a new source of randomness
+    var egresses []runtime.Object
+    for i := 0; i < 1000; i++ {
+        egresses = append(egresses, &crdv1b1.Egress{
+            ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("egress-%d", i), UID: types.UID(fmt.Sprintf("uid-%d", i)), CreationTimestamp: metav1.NewTime(time.Unix(int64(i), 0))},
+            Spec:       crdv1b1.EgressSpec{EgressIP: fmt.Sprintf("1.1.%d.%d", rnd.Intn(256), rnd.Intn(256)), ExternalIPPool: "pool1"},
+        })
+    }
+}
 	var nodes []string
 	for i := 0; i < 1000; i++ {
 		nodes = append(nodes, fmt.Sprintf("node-%d", i))
