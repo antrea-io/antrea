@@ -431,7 +431,7 @@ function deliver_antrea_linux {
     echo "===== Pull necessary images on Control-Plane node ====="
     harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
     antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
-    common_images=("registry.k8s.io/e2e-test-images/agnhost:2.29")
+    common_images=("registry.k8s.io/e2e-test-images/agnhost:2.29" "registry.k8s.io/e2e-test-images/agnhost:2.40")
     k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
     conformance_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
     e2e_images=("toolbox:1.3-0" "nginx:1.21.6-alpine")
@@ -491,10 +491,10 @@ function deliver_antrea_windows {
         # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
         # Use e2eteam/agnhost:2.13 instead
         harbor_images=("agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
-        antrea_images=("e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "registry.k8s.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
-        k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2" "registry.k8s.io/pause:3.8")
-        conformance_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2" "k8sprow.azurecr.io/kubernetes-e2e-test-images/pause:3.8")
-        e2e_images=("toolbox:1.3-0")
+        antrea_images=("e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
+        k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.52" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2" "registry.k8s.io/pause:3.10")
+        conformance_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.52" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2" "registry.k8s.io/e2e-test-images/pause:3.10")
+        e2e_images=("${DOCKER_REGISTRY}/antrea/toolbox:1.4-0" "registry.k8s.io/e2e-test-images/agnhost:2.40")
         # Pull necessary images in advance to avoid transient error
         for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && ctr -n k8s.io images tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
@@ -503,7 +503,7 @@ function deliver_antrea_windows {
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${k8s_images[i]} && ctr -n k8s.io images tag ${k8s_images[i]} ${conformance_images[i]}" || true
         done
         for image in "${e2e_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${DOCKER_REGISTRY}/antrea/${image}" || true
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${image}" || true
         done
 
         for i in `seq 2`; do
