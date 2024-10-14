@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"slices"
+
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -53,16 +55,12 @@ func (r *ResourceExport) Default() {
 	if kindLabelVal, exists := r.Labels[constants.SourceKind]; !exists || kindLabelVal != constants.AntreaClusterNetworkPolicyKind {
 		r.Labels[constants.SourceKind] = constants.AntreaClusterNetworkPolicyKind
 	}
-	if r.DeletionTimestamp.IsZero() && !stringExistsInSlice(r.Finalizers, constants.ResourceExportFinalizer) {
+	// Add domain qualified finalizer for ResourceExports to avoid Kubernetes from reporting errors:
+	//  "prefer a domain-qualified finalizer name to avoid accidental conflicts with other finalizer writers"
+	// https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#finalizers
+	// Note for ResourceExports created before Antrea v2.2, LegacyResourceExportFinalizer may still be present
+	// and needs to be removed before a ResourceExport is deleted.
+	if r.DeletionTimestamp.IsZero() && !slices.Contains(r.Finalizers, constants.ResourceExportFinalizer) {
 		r.Finalizers = append(r.Finalizers, constants.ResourceExportFinalizer)
 	}
-}
-
-func stringExistsInSlice(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
