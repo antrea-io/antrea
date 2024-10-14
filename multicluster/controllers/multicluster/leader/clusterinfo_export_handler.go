@@ -24,12 +24,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 func (r *ResourceExportReconciler) handleClusterInfo(ctx context.Context, req ctrl.Request, resExport mcsv1alpha1.ResourceExport) (ctrl.Result, error) {
@@ -41,7 +41,7 @@ func (r *ResourceExportReconciler) handleClusterInfo(ctx context.Context, req ct
 	}
 
 	if !resExport.DeletionTimestamp.IsZero() {
-		if common.StringExistsInSlice(resExport.Finalizers, constants.ResourceExportFinalizer) {
+		if slices.Contains(resExport.Finalizers, constants.LegacyResourceExportFinalizer) || slices.Contains(resExport.Finalizers, constants.ResourceExportFinalizer) {
 			err := r.Client.Delete(ctx, resImport, &client.DeleteOptions{})
 			if err == nil || apierrors.IsNotFound(err) {
 				return r.deleteResourceExport(&resExport)

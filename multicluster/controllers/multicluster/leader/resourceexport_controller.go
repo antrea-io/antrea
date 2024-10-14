@@ -19,6 +19,7 @@ package leader
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -101,7 +102,7 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// clean up any replicated resources like ResourceImport.
 	// For more details about using Finalizers, please refer to https://book.kubebuilder.io/reference/using-finalizers.html.
 	if !resExport.DeletionTimestamp.IsZero() {
-		if common.StringExistsInSlice(resExport.Finalizers, constants.ResourceExportFinalizer) {
+		if slices.Contains(resExport.Finalizers, constants.LegacyResourceExportFinalizer) || slices.Contains(resExport.Finalizers, constants.ResourceExportFinalizer) {
 			err := r.handleDeleteEvent(ctx, &resExport)
 			if err != nil {
 				return ctrl.Result{}, err
@@ -461,7 +462,10 @@ func (r *ResourceExportReconciler) updateResourceExportStatus(resExport *mcsv1al
 
 // deleteResourceExport removes ResourceExport finalizer string and updates it, so Kubernetes can complete deletion.
 func (r *ResourceExportReconciler) deleteResourceExport(resExport *mcsv1alpha1.ResourceExport) (ctrl.Result, error) {
-	resExport.SetFinalizers(common.RemoveStringFromSlice(resExport.Finalizers, constants.ResourceExportFinalizer))
+	finalizers := slices.DeleteFunc(slices.Clone(resExport.Finalizers), func(s string) bool {
+		return s == constants.LegacyResourceExportFinalizer || s == constants.ResourceExportFinalizer
+	})
+	resExport.SetFinalizers(finalizers)
 	if err := r.Client.Update(context.Background(), resExport, &client.UpdateOptions{}); err != nil {
 		return ctrl.Result{}, err
 	}
