@@ -38,20 +38,22 @@ var clustergroupsKind = v1beta1.SchemeGroupVersion.WithKind("ClusterGroup")
 
 // Get takes name of the clusterGroup, and returns the corresponding clusterGroup object, and an error if there is any.
 func (c *FakeClusterGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.ClusterGroup, err error) {
+	emptyResult := &v1beta1.ClusterGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(clustergroupsResource, name), &v1beta1.ClusterGroup{})
+		Invokes(testing.NewRootGetActionWithOptions(clustergroupsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.ClusterGroup), err
 }
 
 // List takes label and field selectors, and returns the list of ClusterGroups that match those selectors.
 func (c *FakeClusterGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.ClusterGroupList, err error) {
+	emptyResult := &v1beta1.ClusterGroupList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(clustergroupsResource, clustergroupsKind, opts), &v1beta1.ClusterGroupList{})
+		Invokes(testing.NewRootListActionWithOptions(clustergroupsResource, clustergroupsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -70,36 +72,39 @@ func (c *FakeClusterGroups) List(ctx context.Context, opts v1.ListOptions) (resu
 // Watch returns a watch.Interface that watches the requested clusterGroups.
 func (c *FakeClusterGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(clustergroupsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(clustergroupsResource, opts))
 }
 
 // Create takes the representation of a clusterGroup and creates it.  Returns the server's representation of the clusterGroup, and an error, if there is any.
 func (c *FakeClusterGroups) Create(ctx context.Context, clusterGroup *v1beta1.ClusterGroup, opts v1.CreateOptions) (result *v1beta1.ClusterGroup, err error) {
+	emptyResult := &v1beta1.ClusterGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(clustergroupsResource, clusterGroup), &v1beta1.ClusterGroup{})
+		Invokes(testing.NewRootCreateActionWithOptions(clustergroupsResource, clusterGroup, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.ClusterGroup), err
 }
 
 // Update takes the representation of a clusterGroup and updates it. Returns the server's representation of the clusterGroup, and an error, if there is any.
 func (c *FakeClusterGroups) Update(ctx context.Context, clusterGroup *v1beta1.ClusterGroup, opts v1.UpdateOptions) (result *v1beta1.ClusterGroup, err error) {
+	emptyResult := &v1beta1.ClusterGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(clustergroupsResource, clusterGroup), &v1beta1.ClusterGroup{})
+		Invokes(testing.NewRootUpdateActionWithOptions(clustergroupsResource, clusterGroup, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.ClusterGroup), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeClusterGroups) UpdateStatus(ctx context.Context, clusterGroup *v1beta1.ClusterGroup, opts v1.UpdateOptions) (*v1beta1.ClusterGroup, error) {
+func (c *FakeClusterGroups) UpdateStatus(ctx context.Context, clusterGroup *v1beta1.ClusterGroup, opts v1.UpdateOptions) (result *v1beta1.ClusterGroup, err error) {
+	emptyResult := &v1beta1.ClusterGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(clustergroupsResource, "status", clusterGroup), &v1beta1.ClusterGroup{})
+		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(clustergroupsResource, "status", clusterGroup, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.ClusterGroup), err
 }
@@ -113,7 +118,7 @@ func (c *FakeClusterGroups) Delete(ctx context.Context, name string, opts v1.Del
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeClusterGroups) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(clustergroupsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(clustergroupsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1beta1.ClusterGroupList{})
 	return err
@@ -121,10 +126,11 @@ func (c *FakeClusterGroups) DeleteCollection(ctx context.Context, opts v1.Delete
 
 // Patch applies the patch and returns the patched clusterGroup.
 func (c *FakeClusterGroups) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.ClusterGroup, err error) {
+	emptyResult := &v1beta1.ClusterGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(clustergroupsResource, name, pt, data, subresources...), &v1beta1.ClusterGroup{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(clustergroupsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.ClusterGroup), err
 }

@@ -79,7 +79,7 @@ type ServiceExternalIPController struct {
 	serviceLister       corelisters.ServiceLister
 	serviceListerSynced cache.InformerSynced
 	// queue maintains the Service objects that need to be synced.
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[apimachinerytypes.NamespacedName]
 }
 
 func NewServiceExternalIPController(
@@ -88,8 +88,13 @@ func NewServiceExternalIPController(
 	externalIPAllocator externalippool.ExternalIPAllocator,
 ) *ServiceExternalIPController {
 	c := &ServiceExternalIPController{
-		client:              client,
-		queue:               workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "serviceExternalIP"),
+		client: client,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[apimachinerytypes.NamespacedName](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[apimachinerytypes.NamespacedName]{
+				Name: "serviceExternalIP",
+			},
+		),
 		serviceInformer:     serviceInformer.Informer(),
 		serviceLister:       serviceInformer.Lister(),
 		serviceListerSynced: serviceInformer.Informer().HasSynced,
@@ -293,16 +298,12 @@ func (c *ServiceExternalIPController) worker() {
 }
 
 func (c *ServiceExternalIPController) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
-	if key, ok := obj.(apimachinerytypes.NamespacedName); !ok {
-		c.queue.Forget(obj)
-		klog.Errorf("Expected NamespacedName in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncService(key); err == nil {
+	defer c.queue.Done(key)
+	if err := c.syncService(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)

@@ -216,7 +216,7 @@ type Client interface {
 	// flows for a NetworkPolicy. Flows are grouped by policy rules, and duplicated
 	// entries can be added due to conjunctive match flows shared by multiple
 	// rules.
-	GetNetworkPolicyFlowKeys(npName, npNamespace string) []string
+	GetNetworkPolicyFlowKeys(npName, npNamespace string, npType v1beta2.NetworkPolicyType) []string
 
 	// ReassignFlowPriorities takes a list of priority updates, and update the actionFlows to replace
 	// the old priority with the desired one, for each priority update on that table.
@@ -445,7 +445,7 @@ func (c *client) addFlowsWithMultipleKeys(cache *flowCategoryCache, keyToFlows m
 		for _, flow := range flows {
 			msg := getFlowModMessage(flow, binding.AddMessage)
 			allMessages = append(allMessages, msg)
-			fCache[getFlowKey(msg)] = msg
+			fCache[getFlowModKey(msg)] = msg
 		}
 		flowCacheMap[flowCacheKey] = fCache
 	}
@@ -473,7 +473,7 @@ func (c *client) modifyFlows(cache *flowCategoryCache, flowCacheKey string, flow
 		for _, flow := range flows {
 			msg := getFlowModMessage(flow, binding.AddMessage)
 			messages = append(messages, msg)
-			fCache[getFlowKey(msg)] = msg
+			fCache[getFlowModKey(msg)] = msg
 		}
 		err = c.ofEntryOperations.AddAll(messages)
 	} else {
@@ -695,7 +695,7 @@ func (c *client) getFlowKeysFromCache(cache *flowCategoryCache, cacheKey string)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	for _, flow := range fCache {
-		flowKeys = append(flowKeys, getFlowKey(flow))
+		flowKeys = append(flowKeys, getFlowModKey(flow))
 	}
 	return flowKeys
 }

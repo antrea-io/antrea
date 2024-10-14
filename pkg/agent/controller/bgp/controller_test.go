@@ -263,7 +263,8 @@ func TestBGPPolicyAdd(t *testing.T) {
 				ipv4ClusterIP1Eps,
 				node,
 			},
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(clusterIPv4)},
@@ -294,7 +295,8 @@ func TestBGPPolicyAdd(t *testing.T) {
 				ipv6ClusterIP1Eps,
 				node,
 			},
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(externalIPv6)},
@@ -328,7 +330,8 @@ func TestBGPPolicyAdd(t *testing.T) {
 				ipv6LoadBalancerEps,
 				node,
 			},
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(loadBalancerIPv4), ipStrToPrefix(loadBalancerIPv6)},
@@ -361,7 +364,8 @@ func TestBGPPolicyAdd(t *testing.T) {
 				ipv4Egress1,
 				ipv4Egress2,
 			},
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(ipv4EgressIP1)},
@@ -388,7 +392,8 @@ func TestBGPPolicyAdd(t *testing.T) {
 				true,
 				[]v1alpha1.BGPPeer{ipv6Peer1})},
 			objects: []runtime.Object{node},
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{podIPv6CIDR.String()},
@@ -422,7 +427,8 @@ func TestBGPPolicyAdd(t *testing.T) {
 				ipv6ClusterIP2Eps,
 				node,
 			},
-			expectedState: generateBGPPolicyState(1179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				1179,
 				65001,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				nil,
@@ -460,13 +466,15 @@ func TestBGPPolicyAdd(t *testing.T) {
 					false,
 					[]v1alpha1.BGPPeer{ipv4Peer1})},
 			objects: []runtime.Object{ipv4ClusterIP1, ipv4ClusterIP1Eps, node},
-			existingState: generateBGPPolicyState(179,
+			existingState: generateBGPPolicyState(bgpPolicyName2,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(clusterIPv4)},
 				[]bgp.PeerConfig{ipv4Peer1Config},
 			),
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName2,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(clusterIPv4)},
@@ -523,7 +531,8 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			ipv6Peer1,
 			ipv6Peer2,
 		})
-	effectivePolicyState := generateBGPPolicyState(179,
+	effectivePolicyState := generateBGPPolicyState(bgpPolicyName1,
+		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{ipStrToPrefix(clusterIPv4),
@@ -627,7 +636,8 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv4CIDR.String()}})
 				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
 			},
-			expectedState: generateBGPPolicyState(1179,
+			expectedState: generateBGPPolicyState(bgpPolicyName2,
+				1179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(clusterIPv4),
@@ -684,7 +694,8 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv6Peer1,
 					ipv6Peer2,
 				}),
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(externalIPv4),
@@ -729,7 +740,8 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv6Peer1,
 					ipv6Peer2,
 				}),
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65001,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(externalIPv4),
@@ -773,7 +785,8 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv6Peer1,
 					ipv6Peer2,
 				}),
-			expectedState: generateBGPPolicyState(1179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				1179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(clusterIPv4),
@@ -820,7 +833,8 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					updatedIPv6Peer2,
 					ipv4Peer3,
 					ipv6Peer3}),
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{ipStrToPrefix(clusterIPv4),
@@ -943,7 +957,8 @@ func TestBGPPolicyDelete(t *testing.T) {
 			ipv4Peer1,
 			ipv6Peer1,
 		})
-	policy1State := generateBGPPolicyState(179,
+	policy1State := generateBGPPolicyState(bgpPolicyName1,
+		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{
@@ -969,7 +984,8 @@ func TestBGPPolicyDelete(t *testing.T) {
 			ipv4Peer2,
 			ipv6Peer2,
 		})
-	policy2State := generateBGPPolicyState(179,
+	policy2State := generateBGPPolicyState(bgpPolicyName2,
+		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{
@@ -994,7 +1010,8 @@ func TestBGPPolicyDelete(t *testing.T) {
 			ipv4Peer2,
 			ipv6Peer2,
 		})
-	policy3State := generateBGPPolicyState(1179,
+	policy3State := generateBGPPolicyState(bgpPolicyName3,
+		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{
@@ -1117,7 +1134,8 @@ func TestNodeUpdate(t *testing.T) {
 		false,
 		true,
 		[]v1alpha1.BGPPeer{ipv4Peer1, ipv6Peer1})
-	policy1State := generateBGPPolicyState(179,
+	policy1State := generateBGPPolicyState(bgpPolicyName1,
+		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{podIPv4CIDR.String(), podIPv6CIDR.String()},
@@ -1133,7 +1151,8 @@ func TestNodeUpdate(t *testing.T) {
 		false,
 		true,
 		[]v1alpha1.BGPPeer{ipv4Peer1, ipv6Peer1})
-	policy2State := generateBGPPolicyState(1179,
+	policy2State := generateBGPPolicyState(bgpPolicyName2,
+		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{podIPv4CIDR.String(), podIPv6CIDR.String()},
@@ -1217,7 +1236,8 @@ func TestNodeUpdate(t *testing.T) {
 			node:          generateNode(localNodeName, nodeLabels1, nodeAnnotations1),
 			updatedNode:   generateNode(localNodeName, nodeLabels1, nodeAnnotations2),
 			existingState: deepCopyBGPPolicyState(policy1State),
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations2[types.NodeBGPRouterIDAnnotationKey],
 				[]string{podIPv4CIDR.String(), podIPv6CIDR.String()},
@@ -1238,7 +1258,8 @@ func TestNodeUpdate(t *testing.T) {
 			node:          generateNode(localNodeName, nodeLabels1, nodeAnnotations1),
 			updatedNode:   generateNode(localNodeName, nodeLabels1, nil),
 			existingState: deepCopyBGPPolicyState(policy1State),
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeIPv4Addr.IP.String(),
 				[]string{podIPv4CIDR.String(), podIPv6CIDR.String()},
@@ -1257,12 +1278,14 @@ func TestNodeUpdate(t *testing.T) {
 			ipv6Enabled: true,
 			node:        generateNode(localNodeName, nodeLabels1, nodeAnnotations1),
 			updatedNode: generateNode(localNodeName, nodeLabels1, nodeAnnotations2),
-			existingState: generateBGPPolicyState(179,
+			existingState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{podIPv6CIDR.String()},
 				[]bgp.PeerConfig{ipv6Peer1Config}),
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations2[types.NodeBGPRouterIDAnnotationKey],
 				[]string{podIPv6CIDR.String()},
@@ -1279,12 +1302,14 @@ func TestNodeUpdate(t *testing.T) {
 			ipv6Enabled: true,
 			node:        generateNode(localNodeName, nodeLabels1, nodeAnnotations1),
 			updatedNode: generateNode(localNodeName, nodeLabels1, nil),
-			existingState: generateBGPPolicyState(179,
+			existingState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]string{podIPv6CIDR.String()},
 				[]bgp.PeerConfig{ipv6Peer1Config}),
-			expectedState: generateBGPPolicyState(179,
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				"156.67.103.8",
 				[]string{podIPv6CIDR.String()},
@@ -1727,7 +1752,8 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
 
-	checkBGPPolicyState(t, generateBGPPolicyState(179,
+	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName1,
+		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{ipStrToPrefix(loadBalancerIPv4)},
@@ -1743,7 +1769,8 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 	// Mock that failing in stopping the current BGP server.
 	mockBGPServer.EXPECT().Stop(gomock.Any()).Return(fmt.Errorf("failed reason"))
 	require.EqualError(t, c.syncBGPPolicy(ctx), "failed to stop current BGP server: failed reason")
-	checkBGPPolicyState(t, generateBGPPolicyState(179,
+	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName1,
+		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{ipStrToPrefix(loadBalancerIPv4)},
@@ -1760,7 +1787,8 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 	mockBGPServer.EXPECT().Start(gomock.Any())
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config).Return(fmt.Errorf("failed to add BGP peer"))
 	require.EqualError(t, c.syncBGPPolicy(ctx), "failed to add BGP peer")
-	checkBGPPolicyState(t, generateBGPPolicyState(1179,
+	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName2,
+		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{},
@@ -1773,7 +1801,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 	require.EqualError(t, c.syncBGPPolicy(ctx), "failed to advertise routes")
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
-	checkBGPPolicyState(t, generateBGPPolicyState(
+	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName2,
 		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
@@ -1792,7 +1820,8 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-	checkBGPPolicyState(t, generateBGPPolicyState(1179,
+	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName3,
+		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{ipStrToPrefix(externalIPv4)},
@@ -1810,7 +1839,8 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-	checkBGPPolicyState(t, generateBGPPolicyState(1179,
+	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName4,
+		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]string{ipStrToPrefix(loadBalancerIPv4)},
@@ -1818,7 +1848,8 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		c.bgpPolicyState)
 }
 
-func generateBGPPolicyState(listenPort int32,
+func generateBGPPolicyState(bgpPolicyName string,
+	listenPort int32,
 	localASN int32,
 	routerID string,
 	prefixes []string,
@@ -1833,11 +1864,12 @@ func generateBGPPolicyState(listenPort int32,
 		peerConfigMap[peerKey] = peerConfig
 	}
 	return &bgpPolicyState{
-		listenPort:  listenPort,
-		localASN:    localASN,
-		routerID:    routerID,
-		routes:      routes,
-		peerConfigs: peerConfigMap,
+		bgpPolicyName: bgpPolicyName,
+		listenPort:    listenPort,
+		localASN:      localASN,
+		routerID:      routerID,
+		routes:        routes,
+		peerConfigs:   peerConfigMap,
 	}
 }
 
@@ -1849,17 +1881,19 @@ func deepCopyBGPPolicyState(in *bgpPolicyState) *bgpPolicyState {
 	}
 
 	return &bgpPolicyState{
-		listenPort:  in.listenPort,
-		localASN:    in.localASN,
-		routerID:    in.routerID,
-		routes:      in.routes.Union(nil),
-		peerConfigs: peerConfigMap,
+		bgpPolicyName: in.bgpPolicyName,
+		listenPort:    in.listenPort,
+		localASN:      in.localASN,
+		routerID:      in.routerID,
+		routes:        in.routes.Union(nil),
+		peerConfigs:   peerConfigMap,
 	}
 }
 
 func checkBGPPolicyState(t *testing.T, expected, got *bgpPolicyState) {
 	require.Equal(t, expected != nil, got != nil)
 	if expected != nil {
+		assert.Equal(t, expected.bgpPolicyName, got.bgpPolicyName)
 		assert.Equal(t, expected.listenPort, got.listenPort)
 		assert.Equal(t, expected.localASN, got.localASN)
 		assert.Equal(t, expected.routerID, got.routerID)
@@ -2082,4 +2116,117 @@ func waitAndGetDummyEvent(t *testing.T, c *fakeController) {
 }
 func doneDummyEvent(t *testing.T, c *fakeController) {
 	c.queue.Done(dummyKey)
+}
+
+func TestGetBGPPolicyInfo(t *testing.T) {
+	testCases := []struct {
+		name                  string
+		existingState         *bgpPolicyState
+		expectedBgpPolicyName string
+		expectedASN           int32
+		expectedRouterID      string
+		expectedListenPort    int32
+	}{
+		{
+			name: "bgpPolicyState exists",
+			existingState: generateBGPPolicyState(bgpPolicyName1,
+				179,
+				65000,
+				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				nil,
+				nil,
+			),
+			expectedBgpPolicyName: bgpPolicyName1,
+			expectedASN:           int32(65000),
+			expectedRouterID:      nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+			expectedListenPort:    int32(179),
+		},
+		{
+			name:          "bgpPolicyState does not exist",
+			existingState: nil,
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newFakeController(t, nil, nil, true, false)
+
+			// Fake the BGPPolicy state.
+			c.bgpPolicyState = tt.existingState
+
+			actualBgpPolicyName, actualRouterID, actualASN, actualListenPort := c.GetBGPPolicyInfo()
+			assert.Equal(t, tt.expectedBgpPolicyName, actualBgpPolicyName)
+			assert.Equal(t, tt.expectedRouterID, actualRouterID)
+			assert.Equal(t, tt.expectedASN, actualASN)
+			assert.Equal(t, tt.expectedListenPort, actualListenPort)
+		})
+	}
+}
+
+func TestGetBGPPeerStatus(t *testing.T) {
+	ctx := context.Background()
+	testCases := []struct {
+		name                  string
+		existingState         *bgpPolicyState
+		expectedCalls         func(mockBGPServer *bgptest.MockInterfaceMockRecorder)
+		expectedBgpPeerStatus []bgp.PeerStatus
+		expectedErr           error
+	}{
+		{
+			name:          "bgpPolicyState exists",
+			existingState: &bgpPolicyState{},
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				mockBGPServer.GetPeers(ctx).Return([]bgp.PeerStatus{
+					{
+						Address:      "192.168.77.200",
+						ASN:          65001,
+						SessionState: bgp.SessionEstablished,
+					},
+					{
+						Address:      "192.168.77.201",
+						ASN:          65002,
+						SessionState: bgp.SessionActive,
+					},
+				}, nil)
+			},
+			expectedBgpPeerStatus: []bgp.PeerStatus{
+				{
+					Address:      "192.168.77.200",
+					ASN:          65001,
+					SessionState: bgp.SessionEstablished,
+				},
+				{
+					Address:      "192.168.77.201",
+					ASN:          65002,
+					SessionState: bgp.SessionActive,
+				},
+			},
+		},
+		{
+			name:        "bgpPolicyState does not exist",
+			expectedErr: ErrBGPPolicyNotFound,
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newFakeController(t, nil, nil, true, false)
+
+			// Fake the BGPPolicy state.
+			c.bgpPolicyState = tt.existingState
+			if c.bgpPolicyState != nil {
+				c.bgpPolicyState.bgpServer = c.mockBGPServer
+			}
+
+			if tt.expectedCalls != nil {
+				tt.expectedCalls(c.mockBGPServer.EXPECT())
+			}
+
+			actualBgpPeerStatus, err := c.GetBGPPeerStatus(ctx)
+			if tt.expectedErr != nil {
+				assert.ErrorIs(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.ElementsMatch(t, actualBgpPeerStatus, tt.expectedBgpPeerStatus)
+			}
+		})
+	}
 }

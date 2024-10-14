@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -501,9 +501,8 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 // Reconcile loop. Once the fakeManager is run, all ResourceImports in the queue will be added
 // into the fakeRemoteClient's cache, and all these events will be reconciled.
 type fakeManager struct {
-	remoteClient client.Client
-	reconciler   *LabelIdentityResourceImportReconciler
-	queue        workqueue.RateLimitingInterface
+	reconciler *LabelIdentityResourceImportReconciler
+	queue      workqueue.TypedRateLimitingInterface[types.NamespacedName]
 }
 
 func (fm *fakeManager) Run(stopCh <-chan struct{}) {
@@ -520,24 +519,18 @@ func (fm *fakeManager) worker() {
 }
 
 func (fm *fakeManager) syncNextItemInQueue() bool {
-	resImpObj, quit := fm.queue.Get()
+	key, quit := fm.queue.Get()
 	if quit {
 		return false
 	}
-	defer fm.queue.Done(resImpObj)
-	resImp := resImpObj.(*mcv1alpha1.ResourceImport)
-	err := fm.remoteClient.Create(ctx, resImp)
-	if err != nil {
-		fm.queue.AddRateLimited(resImp)
-		return true
-	}
+	defer fm.queue.Done(key)
 	// Simulate ResourceImport create event and have LabelIdentityResourceImportReconciler reconcile it.
-	req := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: resImp.Namespace, Name: resImp.Name}}
-	if _, err = fm.reconciler.Reconcile(ctx, req); err != nil {
-		fm.queue.AddRateLimited(resImp)
+	req := ctrl.Request{NamespacedName: key}
+	if _, err := fm.reconciler.Reconcile(ctx, req); err != nil {
+		fm.queue.AddRateLimited(key)
 		return true
 	}
-	fm.queue.Forget(resImp)
+	fm.queue.Forget(key)
 	return true
 }
 
@@ -561,10 +554,11 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-	q := workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter())
+	q := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedItemBasedRateLimiter[types.NamespacedName]())
 	const numInitialResImp = 50
+	resImps := make([]*mcv1alpha1.ResourceImport, 0, numInitialResImp)
 	for i := uint32(1); i <= numInitialResImp; i++ {
-		resImp := &mcv1alpha1.ResourceImport{
+		resImps = append(resImps, &mcv1alpha1.ResourceImport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("label-identity-%d", i),
 				Namespace: "antrea-mcs",
@@ -575,13 +569,18 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 					ID:    i,
 				},
 			},
-		}
-		q.Add(resImp)
+		})
+	}
+	for _, resImp := range resImps {
+		require.NoError(t, fakeRemoteClient.Create(ctx, resImp))
+	}
+	// Create a burst of events
+	for _, resImp := range resImps {
+		q.Add(types.NamespacedName{Namespace: resImp.Namespace, Name: resImp.Name})
 	}
 	mgr := fakeManager{
-		reconciler:   r,
-		remoteClient: fakeRemoteClient,
-		queue:        q,
+		reconciler: r,
+		queue:      q,
 	}
 	// Give the fakeManager a head start. LabelIdentityResourceImportReconciler should be busy
 	// reconciling all new ResourceImport events.
@@ -592,7 +591,7 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	actLabelIdentities := &mcv1alpha1.LabelIdentityList{}
 	err := fakeClient.List(ctx, actLabelIdentities)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// Verify that no LabelIdentities are deleted as part of the cleanup.
-	assert.Equal(t, numInitialResImp, len(actLabelIdentities.Items))
+	assert.Len(t, actLabelIdentities.Items, numInitialResImp)
 }

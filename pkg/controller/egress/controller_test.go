@@ -546,6 +546,63 @@ func TestUpdateEgress(t *testing.T) {
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 0)
 }
 
+// TestRecreateExternalIPPoolWithNewRange tests the case where an ExternalIPPool is deleted, then
+// immediately recreated with a different IP range. Specifically we test the scenario where
+// syncEgress / syncEgressIP are called only once because the DELETE and CREATE events are merged in
+// the workqueue. Ideally, the behavior observed by the user should be the same irrespective of
+// whether the events are merged or not.
+// Note that in an actual cluster, it is very unlikely that both events would be merged.
+func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	eipFoo1 := newExternalIPPool("pool1", "1.1.1.0/24", "", "")
+	egress := &v1beta1.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+		Spec: v1beta1.EgressSpec{
+			AppliedTo: v1beta1.AppliedTo{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": "foo"},
+				},
+			},
+			EgressIP:       "",
+			ExternalIPPool: eipFoo1.Name,
+		},
+	}
+
+	controller := newController(nil, []runtime.Object{eipFoo1, egress})
+	controller.informerFactory.Start(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.informerFactory.WaitForCacheSync(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.externalIPAllocator.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+	controller.restoreIPAllocations([]*v1beta1.Egress{egress})
+
+	require.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
+	getEgressIP, egress, err := controller.syncEgressIP(egress)
+	require.NoError(t, err)
+	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
+
+	// Delete and recreate the ExternalIPPool immediately with a different IP range. We do not
+	// call syncEgressIP in-between, so the Egress controller doesn't have a chance to process
+	// both changes independently.
+	controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eipFoo1.Name, metav1.DeleteOptions{})
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
+		assert.False(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
+	}, 1*time.Second, 10*time.Millisecond)
+
+	eipFoo1 = newExternalIPPool("pool1", "1.1.2.0/24", "", "")
+	controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eipFoo1, metav1.CreateOptions{})
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
+		assert.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
+	}, 1*time.Second, 10*time.Millisecond)
+
+	getEgressIP, _, err = controller.syncEgressIP(egress)
+	require.NoError(t, err)
+	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
+}
+
 func TestSyncEgressIP(t *testing.T) {
 	tests := []struct {
 		name                       string

@@ -35,20 +35,22 @@ var supportbundlesKind = v1beta1.SchemeGroupVersion.WithKind("SupportBundle")
 
 // Get takes name of the supportBundle, and returns the corresponding supportBundle object, and an error if there is any.
 func (c *FakeSupportBundles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.SupportBundle, err error) {
+	emptyResult := &v1beta1.SupportBundle{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(supportbundlesResource, name), &v1beta1.SupportBundle{})
+		Invokes(testing.NewRootGetActionWithOptions(supportbundlesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.SupportBundle), err
 }
 
 // Create takes the representation of a supportBundle and creates it.  Returns the server's representation of the supportBundle, and an error, if there is any.
 func (c *FakeSupportBundles) Create(ctx context.Context, supportBundle *v1beta1.SupportBundle, opts v1.CreateOptions) (result *v1beta1.SupportBundle, err error) {
+	emptyResult := &v1beta1.SupportBundle{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(supportbundlesResource, supportBundle), &v1beta1.SupportBundle{})
+		Invokes(testing.NewRootCreateActionWithOptions(supportbundlesResource, supportBundle, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta1.SupportBundle), err
 }

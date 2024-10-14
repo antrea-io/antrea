@@ -2,7 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.16.3
   labels:
     app: antrea
   name: clustersets.multicluster.crd.antrea.io
@@ -355,7 +355,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.16.3
   labels:
     app: antrea
   name: memberclusterannounces.multicluster.crd.antrea.io
@@ -421,7 +421,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.16.3
   labels:
     app: antrea
   name: resourceexports.multicluster.crd.antrea.io
@@ -560,11 +560,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -615,11 +617,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -661,11 +665,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -709,11 +715,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -808,11 +816,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -864,11 +874,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -911,11 +923,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -960,11 +974,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1049,11 +1065,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1088,8 +1106,16 @@ spec:
                                   cidr:
                                     description: |-
                                       CIDR is a string representing the IP Block
-                                      Valid examples are "192.168.1.1/24".
+                                      Valid examples are "192.168.1.0/24".
                                     type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/28" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
                                 required:
                                 - cidr
                                 type: object
@@ -1128,11 +1154,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1197,11 +1225,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1246,11 +1276,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1355,7 +1387,6 @@ spec:
                                   matches all port names and numbers.
                                 x-kubernetes-int-or-string: true
                               protocol:
-                                default: TCP
                                 description: |-
                                   The protocol (TCP, UDP, or SCTP) which traffic must match.
                                   If not specified, this field defaults to TCP.
@@ -1458,11 +1489,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1497,8 +1530,16 @@ spec:
                                   cidr:
                                     description: |-
                                       CIDR is a string representing the IP Block
-                                      Valid examples are "192.168.1.1/24".
+                                      Valid examples are "192.168.1.0/24".
                                     type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/28" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
                                 required:
                                 - cidr
                                 type: object
@@ -1537,11 +1578,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1606,11 +1649,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1655,11 +1700,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1774,11 +1821,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1830,11 +1879,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1877,11 +1928,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -1926,11 +1979,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -2015,11 +2070,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -2054,8 +2111,16 @@ spec:
                                   cidr:
                                     description: |-
                                       CIDR is a string representing the IP Block
-                                      Valid examples are "192.168.1.1/24".
+                                      Valid examples are "192.168.1.0/24".
                                     type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/28" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
                                 required:
                                 - cidr
                                 type: object
@@ -2094,11 +2159,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -2163,11 +2230,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -2212,11 +2281,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -2321,7 +2392,6 @@ spec:
                                   matches all port names and numbers.
                                 x-kubernetes-int-or-string: true
                               protocol:
-                                default: TCP
                                 description: |-
                                   The protocol (TCP, UDP, or SCTP) which traffic must match.
                                   If not specified, this field defaults to TCP.
@@ -2424,11 +2494,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -2463,8 +2535,16 @@ spec:
                                   cidr:
                                     description: |-
                                       CIDR is a string representing the IP Block
-                                      Valid examples are "192.168.1.1/24".
+                                      Valid examples are "192.168.1.0/24".
                                     type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/28" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
                                 required:
                                 - cidr
                                 type: object
@@ -2503,11 +2583,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -2572,11 +2654,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -2621,11 +2705,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -2705,11 +2791,11 @@ spec:
                     items:
                       description: "EndpointSubset is a group of addresses with a
                         common set of ports. The\nexpanded set of endpoints is the
-                        Cartesian product of Addresses x Ports.\nFor example, given:\n\n\n\t{\n\t
+                        Cartesian product of Addresses x Ports.\nFor example, given:\n\n\t{\n\t
                         \ Addresses: [{\"ip\": \"10.10.1.1\"}, {\"ip\": \"10.10.2.2\"}],\n\t
                         \ Ports:     [{\"name\": \"a\", \"port\": 8675}, {\"name\":
-                        \"b\", \"port\": 309}]\n\t}\n\n\nThe resulting set of endpoints
-                        can be viewed as:\n\n\n\ta: [ 10.10.1.1:8675, 10.10.2.2:8675
+                        \"b\", \"port\": 309}]\n\t}\n\nThe resulting set of endpoints
+                        can be viewed as:\n\n\ta: [ 10.10.1.1:8675, 10.10.2.2:8675
                         ],\n\tb: [ 10.10.1.1:309, 10.10.2.2:309 ]"
                       properties:
                         addresses:
@@ -2749,7 +2835,6 @@ spec:
                                       the event) or if no container name is specified "spec.containers[2]" (container with
                                       index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                       referencing a part of an object.
-                                      TODO: this design is not final and this field is subject to change in the future.
                                     type: string
                                   kind:
                                     description: |-
@@ -2783,6 +2868,7 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                           type: array
+                          x-kubernetes-list-type: atomic
                         notReadyAddresses:
                           description: |-
                             IP addresses which offer the related ports but are not currently marked as ready
@@ -2821,7 +2907,6 @@ spec:
                                       the event) or if no container name is specified "spec.containers[2]" (container with
                                       index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                       referencing a part of an object.
-                                      TODO: this design is not final and this field is subject to change in the future.
                                     type: string
                                   kind:
                                     description: |-
@@ -2855,6 +2940,7 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                           type: array
+                          x-kubernetes-list-type: atomic
                         ports:
                           description: Port numbers available on the related IP addresses.
                           items:
@@ -2868,16 +2954,13 @@ spec:
                                   This field follows standard Kubernetes label syntax.
                                   Valid values are either:
 
-
                                   * Un-prefixed protocol names - reserved for IANA standard service names (as per
                                   RFC-6335 and https://www.iana.org/assignments/service-names).
-
 
                                   * Kubernetes-defined prefixed names:
                                     * 'kubernetes.io/h2c' - HTTP/2 prior knowledge over cleartext as described in https://www.rfc-editor.org/rfc/rfc9113.html#name-starting-http-2-with-prior-
                                     * 'kubernetes.io/ws'  - WebSocket over cleartext as described in https://www.rfc-editor.org/rfc/rfc6455
                                     * 'kubernetes.io/wss' - WebSocket over TLS as described in https://www.rfc-editor.org/rfc/rfc6455
-
 
                                   * Other protocols should use implementation-defined prefixed names such as
                                   mycompany.com/my-custom-protocol.
@@ -2894,7 +2977,6 @@ spec:
                                 format: int32
                                 type: integer
                               protocol:
-                                default: TCP
                                 description: |-
                                   The IP protocol for this port.
                                   Must be UDP, TCP, or SCTP.
@@ -2905,6 +2987,7 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                           type: array
+                          x-kubernetes-list-type: atomic
                       type: object
                     type: array
                 type: object
@@ -2950,7 +3033,6 @@ spec:
                               format: int32
                               type: integer
                             protocol:
-                              default: TCP
                               description: |-
                                 The protocol (TCP, UDP, or SCTP) which traffic must match.
                                 If not specified, this field defaults to TCP.
@@ -3037,7 +3119,6 @@ spec:
                           clients must ensure that clusterIPs[0] and clusterIP have the same
                           value.
 
-
                           This field may hold a maximum of two entries (dual-stack IPs, in either order).
                           These IPs must correspond to the values of the ipFamilies field. Both
                           clusterIPs and ipFamilies are governed by the ipFamilyPolicy field.
@@ -3056,6 +3137,7 @@ spec:
                         items:
                           type: string
                         type: array
+                        x-kubernetes-list-type: atomic
                       externalName:
                         description: |-
                           externalName is the external reference that discovery mechanisms will
@@ -3116,7 +3198,6 @@ spec:
                           NodePort, and LoadBalancer, and does apply to "headless" services.
                           This field will be wiped when updating a Service to type ExternalName.
 
-
                           This field may hold a maximum of two entries (dual-stack families, in
                           either order).  These families must correspond to the values of the
                           clusterIPs field, if specified. Both clusterIPs and ipFamilies are
@@ -3171,6 +3252,7 @@ spec:
                         items:
                           type: string
                         type: array
+                        x-kubernetes-list-type: atomic
                       ports:
                         description: |-
                           The list of ports that are exposed by this service.
@@ -3186,16 +3268,13 @@ spec:
                                 This field follows standard Kubernetes label syntax.
                                 Valid values are either:
 
-
                                 * Un-prefixed protocol names - reserved for IANA standard service names (as per
                                 RFC-6335 and https://www.iana.org/assignments/service-names).
-
 
                                 * Kubernetes-defined prefixed names:
                                   * 'kubernetes.io/h2c' - HTTP/2 prior knowledge over cleartext as described in https://www.rfc-editor.org/rfc/rfc9113.html#name-starting-http-2-with-prior-
                                   * 'kubernetes.io/ws'  - WebSocket over cleartext as described in https://www.rfc-editor.org/rfc/rfc6455
                                   * 'kubernetes.io/wss' - WebSocket over TLS as described in https://www.rfc-editor.org/rfc/rfc6455
-
 
                                 * Other protocols should use implementation-defined prefixed names such as
                                 mycompany.com/my-custom-protocol.
@@ -3301,6 +3380,16 @@ spec:
                                 type: integer
                             type: object
                         type: object
+                      trafficDistribution:
+                        description: |-
+                          TrafficDistribution offers a way to express preferences for how traffic is
+                          distributed to Service endpoints. Implementations can use this field as a
+                          hint, but are not required to guarantee strict adherence. If the field is
+                          not set, the implementation will apply its default routing strategy. If set
+                          to "PreferClose", implementations should prioritize endpoints that are
+                          topologically close (e.g., same zone).
+                          This is an alpha field and requires enabling ServiceTrafficDistribution feature.
+                        type: string
                       type:
                         description: |-
                           type determines how the Service is exposed. Defaults to ClusterIP. Valid
@@ -3362,7 +3451,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.16.3
   labels:
     app: antrea
   name: resourceimports.multicluster.crd.antrea.io
@@ -3500,11 +3589,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -3555,11 +3646,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -3601,11 +3694,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -3649,11 +3744,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -3748,11 +3845,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -3804,11 +3903,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -3851,11 +3952,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -3900,11 +4003,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -3989,11 +4094,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4028,8 +4135,16 @@ spec:
                                   cidr:
                                     description: |-
                                       CIDR is a string representing the IP Block
-                                      Valid examples are "192.168.1.1/24".
+                                      Valid examples are "192.168.1.0/24".
                                     type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/28" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
                                 required:
                                 - cidr
                                 type: object
@@ -4068,11 +4183,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4137,11 +4254,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4186,11 +4305,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4295,7 +4416,6 @@ spec:
                                   matches all port names and numbers.
                                 x-kubernetes-int-or-string: true
                               protocol:
-                                default: TCP
                                 description: |-
                                   The protocol (TCP, UDP, or SCTP) which traffic must match.
                                   If not specified, this field defaults to TCP.
@@ -4398,11 +4518,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4437,8 +4559,16 @@ spec:
                                   cidr:
                                     description: |-
                                       CIDR is a string representing the IP Block
-                                      Valid examples are "192.168.1.1/24".
+                                      Valid examples are "192.168.1.0/24".
                                     type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/28" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
                                 required:
                                 - cidr
                                 type: object
@@ -4477,11 +4607,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4546,11 +4678,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4595,11 +4729,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4714,11 +4850,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4770,11 +4908,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4817,11 +4957,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4866,11 +5008,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4955,11 +5099,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -4994,8 +5140,16 @@ spec:
                                   cidr:
                                     description: |-
                                       CIDR is a string representing the IP Block
-                                      Valid examples are "192.168.1.1/24".
+                                      Valid examples are "192.168.1.0/24".
                                     type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/28" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
                                 required:
                                 - cidr
                                 type: object
@@ -5034,11 +5188,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -5103,11 +5259,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -5152,11 +5310,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -5261,7 +5421,6 @@ spec:
                                   matches all port names and numbers.
                                 x-kubernetes-int-or-string: true
                               protocol:
-                                default: TCP
                                 description: |-
                                   The protocol (TCP, UDP, or SCTP) which traffic must match.
                                   If not specified, this field defaults to TCP.
@@ -5364,11 +5523,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -5403,8 +5564,16 @@ spec:
                                   cidr:
                                     description: |-
                                       CIDR is a string representing the IP Block
-                                      Valid examples are "192.168.1.1/24".
+                                      Valid examples are "192.168.1.0/24".
                                     type: string
+                                  except:
+                                    description: |-
+                                      except is a slice of CIDRs that should not be included within an IPBlock
+                                      Valid examples are "192.168.1.0/28" or "2001:db8::/64"
+                                      Except values will be rejected if they are outside the cidr range
+                                    items:
+                                      type: string
+                                    type: array
                                 required:
                                 - cidr
                                 type: object
@@ -5443,11 +5612,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -5512,11 +5683,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -5561,11 +5734,13 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                       required:
                                       - key
                                       - operator
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   matchLabels:
                                     additionalProperties:
                                       type: string
@@ -5645,11 +5820,11 @@ spec:
                     items:
                       description: "EndpointSubset is a group of addresses with a
                         common set of ports. The\nexpanded set of endpoints is the
-                        Cartesian product of Addresses x Ports.\nFor example, given:\n\n\n\t{\n\t
+                        Cartesian product of Addresses x Ports.\nFor example, given:\n\n\t{\n\t
                         \ Addresses: [{\"ip\": \"10.10.1.1\"}, {\"ip\": \"10.10.2.2\"}],\n\t
                         \ Ports:     [{\"name\": \"a\", \"port\": 8675}, {\"name\":
-                        \"b\", \"port\": 309}]\n\t}\n\n\nThe resulting set of endpoints
-                        can be viewed as:\n\n\n\ta: [ 10.10.1.1:8675, 10.10.2.2:8675
+                        \"b\", \"port\": 309}]\n\t}\n\nThe resulting set of endpoints
+                        can be viewed as:\n\n\ta: [ 10.10.1.1:8675, 10.10.2.2:8675
                         ],\n\tb: [ 10.10.1.1:309, 10.10.2.2:309 ]"
                       properties:
                         addresses:
@@ -5689,7 +5864,6 @@ spec:
                                       the event) or if no container name is specified "spec.containers[2]" (container with
                                       index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                       referencing a part of an object.
-                                      TODO: this design is not final and this field is subject to change in the future.
                                     type: string
                                   kind:
                                     description: |-
@@ -5723,6 +5897,7 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                           type: array
+                          x-kubernetes-list-type: atomic
                         notReadyAddresses:
                           description: |-
                             IP addresses which offer the related ports but are not currently marked as ready
@@ -5761,7 +5936,6 @@ spec:
                                       the event) or if no container name is specified "spec.containers[2]" (container with
                                       index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                       referencing a part of an object.
-                                      TODO: this design is not final and this field is subject to change in the future.
                                     type: string
                                   kind:
                                     description: |-
@@ -5795,6 +5969,7 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                           type: array
+                          x-kubernetes-list-type: atomic
                         ports:
                           description: Port numbers available on the related IP addresses.
                           items:
@@ -5808,16 +5983,13 @@ spec:
                                   This field follows standard Kubernetes label syntax.
                                   Valid values are either:
 
-
                                   * Un-prefixed protocol names - reserved for IANA standard service names (as per
                                   RFC-6335 and https://www.iana.org/assignments/service-names).
-
 
                                   * Kubernetes-defined prefixed names:
                                     * 'kubernetes.io/h2c' - HTTP/2 prior knowledge over cleartext as described in https://www.rfc-editor.org/rfc/rfc9113.html#name-starting-http-2-with-prior-
                                     * 'kubernetes.io/ws'  - WebSocket over cleartext as described in https://www.rfc-editor.org/rfc/rfc6455
                                     * 'kubernetes.io/wss' - WebSocket over TLS as described in https://www.rfc-editor.org/rfc/rfc6455
-
 
                                   * Other protocols should use implementation-defined prefixed names such as
                                   mycompany.com/my-custom-protocol.
@@ -5834,7 +6006,6 @@ spec:
                                 format: int32
                                 type: integer
                               protocol:
-                                default: TCP
                                 description: |-
                                   The IP protocol for this port.
                                   Must be UDP, TCP, or SCTP.
@@ -5845,6 +6016,7 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                           type: array
+                          x-kubernetes-list-type: atomic
                       type: object
                     type: array
                 type: object
@@ -5890,7 +6062,6 @@ spec:
                               format: int32
                               type: integer
                             protocol:
-                              default: TCP
                               description: |-
                                 The protocol (TCP, UDP, or SCTP) which traffic must match.
                                 If not specified, this field defaults to TCP.
@@ -5988,7 +6159,6 @@ spec:
                               format: int32
                               type: integer
                             protocol:
-                              default: TCP
                               description: |-
                                 The IP protocol for this port. Supports "TCP", "UDP", and "SCTP".
                                 Default is TCP.

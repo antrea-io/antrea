@@ -120,7 +120,7 @@ func TestRESTList(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, tt.multicastEnabled)()
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, tt.multicastEnabled)
 
 			r := &REST{
 				statsProvider: &fakeStatsProvider{groups: tt.stats},
@@ -178,7 +178,7 @@ func TestRESTGet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, tt.multicastEnabled)()
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, tt.multicastEnabled)
 
 			r := &REST{
 				statsProvider: &fakeStatsProvider{groups: tt.groups},

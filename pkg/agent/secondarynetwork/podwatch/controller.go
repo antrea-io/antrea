@@ -85,7 +85,7 @@ type podCNIInfo struct {
 type PodController struct {
 	kubeClient            clientset.Interface
 	netAttachDefClient    netdefclient.K8sCniCncfIoV1Interface
-	queue                 workqueue.RateLimitingInterface
+	queue                 workqueue.TypedRateLimitingInterface[string]
 	podInformer           cache.SharedIndexInformer
 	podUpdateSubscriber   channel.Subscriber
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
@@ -112,8 +112,12 @@ func NewPodController(
 	pc := PodController{
 		kubeClient:         kubeClient,
 		netAttachDefClient: netAttachDefClient,
-		queue: workqueue.NewNamedRateLimitingQueue(
-			workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "podcontroller"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "podcontroller",
+			},
+		),
 		podInformer:           podInformer,
 		podUpdateSubscriber:   podUpdateSubscriber,
 		ovsBridgeClient:       ovsBridgeClient,
@@ -303,14 +307,12 @@ func (pc *PodController) Worker() {
 }
 
 func (pc *PodController) processNextWorkItem() bool {
-	obj, quit := pc.queue.Get()
+	key, quit := pc.queue.Get()
 	if quit {
 		return false
 	}
-	defer pc.queue.Done(obj)
-	if key, ok := obj.(string); !ok {
-		pc.queue.Forget(obj)
-	} else if err := pc.syncPod(key); err == nil {
+	defer pc.queue.Done(key)
+	if err := pc.syncPod(key); err == nil {
 		pc.queue.Forget(key)
 	} else {
 		pc.queue.AddRateLimited(key)

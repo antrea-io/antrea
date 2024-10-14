@@ -1720,7 +1720,6 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 										IP:           controlplane.IPAddress(net.ParseIP(ipA)),
 										PrefixLength: 32,
 									},
-									Except: []controlplane.IPNet{},
 								},
 							},
 						},
@@ -1989,7 +1988,9 @@ func TestGetTierPriority(t *testing.T) {
 func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cidr := "10.0.0.0/24"
+	exceptCIDR := "10.0.0.0/25"
 	cidrIPNet, _ := cidrStrToIPNet(cidr)
+	exceptCIDRIPNet, _ := cidrStrToIPNet(exceptCIDR)
 	// cgA with selector present in cache
 	cgA := crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
@@ -2045,6 +2046,18 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 			},
 		},
 	}
+	// gC with an except IPBlock present in cache
+	gC := crdv1beta1.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsC", Name: "gC", UID: "uidGC"},
+		Spec: crdv1beta1.GroupSpec{
+			IPBlocks: []crdv1beta1.IPBlock{
+				{
+					CIDR:   cidr,
+					Except: []string{exceptCIDR},
+				},
+			},
+		},
+	}
 	_, npc := newController(nil, nil)
 	npc.addClusterGroup(&cgA)
 	npc.addClusterGroup(&cgB)
@@ -2056,8 +2069,10 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 	npc.cgStore.Add(&cgNested2)
 	npc.addGroup(&gA)
 	npc.addGroup(&gB)
+	npc.addGroup(&gC)
 	npc.gStore.Add(&gA)
 	npc.gStore.Add(&gB)
+	npc.gStore.Add(&gC)
 	tests := []struct {
 		name           string
 		inputNamespace string
@@ -2093,8 +2108,7 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 			expectedAG:     nil,
 			expectedIPB: []controlplane.IPBlock{
 				{
-					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{},
+					CIDR: *cidrIPNet,
 				},
 			},
 		},
@@ -2104,8 +2118,7 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 			expectedAG:     nil,
 			expectedIPB: []controlplane.IPBlock{
 				{
-					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{},
+					CIDR: *cidrIPNet,
 				},
 			},
 		},
@@ -2119,8 +2132,7 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 			},
 			expectedIPB: []controlplane.IPBlock{
 				{
-					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{},
+					CIDR: *cidrIPNet,
 				},
 			},
 		},
@@ -2156,8 +2168,19 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 			expectedAG:     nil,
 			expectedIPB: []controlplane.IPBlock{
 				{
+					CIDR: *cidrIPNet,
+				},
+			},
+		},
+		{
+			name:           "g-with-ipblock-except",
+			inputNamespace: gC.Namespace,
+			inputGroupName: gC.Name,
+			expectedAG:     nil,
+			expectedIPB: []controlplane.IPBlock{
+				{
 					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{},
+					Except: []controlplane.IPNet{*exceptCIDRIPNet},
 				},
 			},
 		},

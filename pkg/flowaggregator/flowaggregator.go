@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/google/uuid"
 	"github.com/vmware/go-ipfix/pkg/collector"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
@@ -85,14 +86,14 @@ const (
 
 // these are used for unit testing
 var (
-	newIPFIXExporter = func(k8sClient kubernetes.Interface, opt *options.Options, registry ipfix.IPFIXRegistry) exporter.Interface {
-		return exporter.NewIPFIXExporter(k8sClient, opt, registry)
+	newIPFIXExporter = func(clusterUUID uuid.UUID, opt *options.Options, registry ipfix.IPFIXRegistry) exporter.Interface {
+		return exporter.NewIPFIXExporter(clusterUUID, opt, registry)
 	}
-	newClickHouseExporter = func(k8sClient kubernetes.Interface, opt *options.Options) (exporter.Interface, error) {
-		return exporter.NewClickHouseExporter(k8sClient, opt)
+	newClickHouseExporter = func(clusterUUID uuid.UUID, opt *options.Options) (exporter.Interface, error) {
+		return exporter.NewClickHouseExporter(clusterUUID, opt)
 	}
-	newS3Exporter = func(k8sClient kubernetes.Interface, opt *options.Options) (exporter.Interface, error) {
-		return exporter.NewS3Exporter(k8sClient, opt)
+	newS3Exporter = func(clusterUUID uuid.UUID, opt *options.Options) (exporter.Interface, error) {
+		return exporter.NewS3Exporter(clusterUUID, opt)
 	}
 	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
 		return exporter.NewLogExporter(opt)
@@ -100,6 +101,7 @@ var (
 )
 
 type flowAggregator struct {
+	clusterUUID                 uuid.UUID
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
 	aggregationProcess          ipfix.IPFIXAggregationProcess
@@ -125,6 +127,7 @@ type flowAggregator struct {
 
 func NewFlowAggregator(
 	k8sClient kubernetes.Interface,
+	clusterUUID uuid.UUID,
 	podStore podstore.Interface,
 	configFile string,
 ) (*flowAggregator, error) {
@@ -156,6 +159,7 @@ func NewFlowAggregator(
 	}
 
 	fa := &flowAggregator{
+		clusterUUID:                 clusterUUID,
 		aggregatorTransportProtocol: opt.AggregatorTransportProtocol,
 		activeFlowRecordTimeout:     opt.ActiveFlowRecordTimeout,
 		inactiveFlowRecordTimeout:   opt.InactiveFlowRecordTimeout,
@@ -181,14 +185,14 @@ func NewFlowAggregator(
 	}
 	if opt.Config.ClickHouse.Enable {
 		var err error
-		fa.clickHouseExporter, err = newClickHouseExporter(k8sClient, opt)
+		fa.clickHouseExporter, err = newClickHouseExporter(clusterUUID, opt)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating ClickHouse export process: %v", err)
 		}
 	}
 	if opt.Config.S3Uploader.Enable {
 		var err error
-		fa.s3Exporter, err = newS3Exporter(k8sClient, opt)
+		fa.s3Exporter, err = newS3Exporter(clusterUUID, opt)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating S3 export process: %v", err)
 		}
@@ -201,7 +205,7 @@ func NewFlowAggregator(
 		}
 	}
 	if opt.Config.FlowCollector.Enable {
-		fa.ipfixExporter = newIPFIXExporter(k8sClient, opt, registry)
+		fa.ipfixExporter = newIPFIXExporter(clusterUUID, opt, registry)
 	}
 	return fa, nil
 }
@@ -626,7 +630,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 	if opt.Config.FlowCollector.Enable {
 		if fa.ipfixExporter == nil {
 			klog.InfoS("Enabling Flow-Collector")
-			fa.ipfixExporter = newIPFIXExporter(fa.k8sClient, opt, fa.registry)
+			fa.ipfixExporter = newIPFIXExporter(fa.clusterUUID, opt, fa.registry)
 			fa.ipfixExporter.Start()
 			klog.InfoS("Enabled Flow-Collector")
 		} else {
@@ -644,7 +648,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 		if fa.clickHouseExporter == nil {
 			klog.InfoS("Enabling ClickHouse")
 			var err error
-			fa.clickHouseExporter, err = newClickHouseExporter(fa.k8sClient, opt)
+			fa.clickHouseExporter, err = newClickHouseExporter(fa.clusterUUID, opt)
 			if err != nil {
 				klog.ErrorS(err, "Error when creating ClickHouse export process")
 				return
@@ -666,7 +670,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 		if fa.s3Exporter == nil {
 			klog.InfoS("Enabling S3Uploader")
 			var err error
-			fa.s3Exporter, err = newS3Exporter(fa.k8sClient, opt)
+			fa.s3Exporter, err = newS3Exporter(fa.clusterUUID, opt)
 			if err != nil {
 				klog.ErrorS(err, "Error when creating S3 export process")
 				return

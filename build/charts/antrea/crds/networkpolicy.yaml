@@ -321,6 +321,11 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                                except:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: cidr
                             nodeSelector:
                               type: object
                               properties:
@@ -570,6 +575,11 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                                except:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: cidr
                             fqdn:
                               type: string
                             nodeSelector:

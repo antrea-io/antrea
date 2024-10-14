@@ -145,8 +145,13 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
 		serviceCIDR:           serviceCIDRNet,
-		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "traceflow"),
-		runningTraceflows:     make(map[int8]*traceflowState),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "traceflow",
+			},
+		),
+		runningTraceflows: make(map[int8]*traceflowState),
 	}
 
 	return &fakeTraceflowController{

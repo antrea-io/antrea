@@ -401,6 +401,11 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                                except:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: cidr
                             group:
                               type: string
                             serviceAccount:
@@ -683,6 +688,11 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                                except:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: cidr
                             group:
                               type: string
                             fqdn:

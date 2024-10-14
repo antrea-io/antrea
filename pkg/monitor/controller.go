@@ -66,8 +66,8 @@ type controllerMonitor struct {
 
 	externalNodeEnabled bool
 
-	nodeQueue         workqueue.RateLimitingInterface
-	externalNodeQueue workqueue.RateLimitingInterface
+	nodeQueue         workqueue.TypedRateLimitingInterface[string]
+	externalNodeQueue workqueue.TypedRateLimitingInterface[string]
 
 	querier controllerquerier.ControllerQuerier
 	// controllerCRD is the desired state of controller monitoring CRD which controllerMonitor expects.
@@ -83,11 +83,16 @@ func NewControllerMonitor(
 	externalNodeEnabled bool,
 ) *controllerMonitor {
 	m := &controllerMonitor{
-		client:              client,
-		nodeInformer:        nodeInformer,
-		nodeLister:          nodeInformer.Lister(),
-		nodeListerSynced:    nodeInformer.Informer().HasSynced,
-		nodeQueue:           workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "node"),
+		client:           client,
+		nodeInformer:     nodeInformer,
+		nodeLister:       nodeInformer.Lister(),
+		nodeListerSynced: nodeInformer.Informer().HasSynced,
+		nodeQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "node",
+			},
+		),
 		querier:             querier,
 		controllerCRD:       nil,
 		externalNodeEnabled: externalNodeEnabled,
@@ -102,7 +107,12 @@ func NewControllerMonitor(
 		m.externalNodeInformer = externalNodeInformer
 		m.externalNodeLister = externalNodeInformer.Lister()
 		m.externalNodeListerSynced = externalNodeInformer.Informer().HasSynced
-		m.externalNodeQueue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "externalNode")
+		m.externalNodeQueue = workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "externalNode",
+			},
+		)
 		externalNodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    m.enqueueExternalNode,
 			UpdateFunc: nil,
@@ -142,6 +152,8 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 			go wait.Until(monitor.externalNodeWorker, time.Second, stopCh)
 		}
 	}
+
+	<-stopCh
 }
 
 func (monitor *controllerMonitor) syncControllerCRD() {
@@ -260,17 +272,13 @@ func (n *controllerMonitor) externalNodeWorker() {
 }
 
 func (c *controllerMonitor) processNextNodeWorkItem() bool {
-	obj, quit := c.nodeQueue.Get()
+	key, quit := c.nodeQueue.Get()
 	if quit {
 		return false
 	}
-	defer c.nodeQueue.Done(obj)
+	defer c.nodeQueue.Done(key)
 
-	if key, ok := obj.(string); !ok {
-		c.nodeQueue.Forget(obj)
-		klog.Errorf("Expected string in Node work queue but got %#v", obj)
-		return true
-	} else if err := c.syncNode(key); err == nil {
+	if err := c.syncNode(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.nodeQueue.Forget(key)
@@ -283,17 +291,13 @@ func (c *controllerMonitor) processNextNodeWorkItem() bool {
 }
 
 func (c *controllerMonitor) processNextExternalNodeWorkItem() bool {
-	obj, quit := c.externalNodeQueue.Get()
+	key, quit := c.externalNodeQueue.Get()
 	if quit {
 		return false
 	}
-	defer c.externalNodeQueue.Done(obj)
+	defer c.externalNodeQueue.Done(key)
 
-	if key, ok := obj.(string); !ok {
-		c.externalNodeQueue.Forget(obj)
-		klog.Errorf("Expected string in ExternalNode work queue but got %#v", obj)
-		return true
-	} else if err := c.syncExternalNode(key); err == nil {
+	if err := c.syncExternalNode(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.externalNodeQueue.Forget(key)

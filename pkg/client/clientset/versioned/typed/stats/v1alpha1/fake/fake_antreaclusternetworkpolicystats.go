@@ -37,20 +37,22 @@ var antreaclusternetworkpolicystatsKind = v1alpha1.SchemeGroupVersion.WithKind("
 
 // Get takes name of the antreaClusterNetworkPolicyStats, and returns the corresponding antreaClusterNetworkPolicyStats object, and an error if there is any.
 func (c *FakeAntreaClusterNetworkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.AntreaClusterNetworkPolicyStats, err error) {
+	emptyResult := &v1alpha1.AntreaClusterNetworkPolicyStats{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(antreaclusternetworkpolicystatsResource, name), &v1alpha1.AntreaClusterNetworkPolicyStats{})
+		Invokes(testing.NewRootGetActionWithOptions(antreaclusternetworkpolicystatsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.AntreaClusterNetworkPolicyStats), err
 }
 
 // List takes label and field selectors, and returns the list of AntreaClusterNetworkPolicyStats that match those selectors.
 func (c *FakeAntreaClusterNetworkPolicyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.AntreaClusterNetworkPolicyStatsList, err error) {
+	emptyResult := &v1alpha1.AntreaClusterNetworkPolicyStatsList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(antreaclusternetworkpolicystatsResource, antreaclusternetworkpolicystatsKind, opts), &v1alpha1.AntreaClusterNetworkPolicyStatsList{})
+		Invokes(testing.NewRootListActionWithOptions(antreaclusternetworkpolicystatsResource, antreaclusternetworkpolicystatsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -69,5 +71,5 @@ func (c *FakeAntreaClusterNetworkPolicyStats) List(ctx context.Context, opts v1.
 // Watch returns a watch.Interface that watches the requested antreaClusterNetworkPolicyStats.
 func (c *FakeAntreaClusterNetworkPolicyStats) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(antreaclusternetworkpolicystatsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(antreaclusternetworkpolicystatsResource, opts))
 }

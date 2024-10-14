@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,12 @@ package v1beta2
 
 import (
 	"context"
-	"time"
 
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // SupportBundleCollectionsGetter has a method to return a SupportBundleCollectionInterface.
@@ -43,54 +42,18 @@ type SupportBundleCollectionInterface interface {
 
 // supportBundleCollections implements SupportBundleCollectionInterface
 type supportBundleCollections struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1beta2.SupportBundleCollection, *v1beta2.SupportBundleCollectionList]
 }
 
 // newSupportBundleCollections returns a SupportBundleCollections
 func newSupportBundleCollections(c *ControlplaneV1beta2Client) *supportBundleCollections {
 	return &supportBundleCollections{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1beta2.SupportBundleCollection, *v1beta2.SupportBundleCollectionList](
+			"supportbundlecollections",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1beta2.SupportBundleCollection { return &v1beta2.SupportBundleCollection{} },
+			func() *v1beta2.SupportBundleCollectionList { return &v1beta2.SupportBundleCollectionList{} }),
 	}
-}
-
-// Get takes name of the supportBundleCollection, and returns the corresponding supportBundleCollection object, and an error if there is any.
-func (c *supportBundleCollections) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.SupportBundleCollection, err error) {
-	result = &v1beta2.SupportBundleCollection{}
-	err = c.client.Get().
-		Resource("supportbundlecollections").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of SupportBundleCollections that match those selectors.
-func (c *supportBundleCollections) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.SupportBundleCollectionList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1beta2.SupportBundleCollectionList{}
-	err = c.client.Get().
-		Resource("supportbundlecollections").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested supportBundleCollections.
-func (c *supportBundleCollections) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("supportbundlecollections").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
 }

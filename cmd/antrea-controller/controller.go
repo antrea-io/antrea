@@ -28,6 +28,7 @@ import (
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	apiserverversion "k8s.io/apiserver/pkg/util/version"
 	"k8s.io/client-go/informers"
 	csrinformers "k8s.io/client-go/informers/certificates/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -547,6 +548,7 @@ func createAPIServerConfig(kubeconfig string,
 		openapi.GetOpenAPIDefinitions,
 		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
+	serverConfig.EffectiveVersion = apiserverversion.NewEffectiveVersion(version.GetFullVersion())
 	serverConfig.EnableMetrics = enableMetrics
 	serverConfig.MinRequestTimeout = int(serverMinWatchTimeout.Seconds())
 	serverConfig.SecureServing.CipherSuites = cipherSuites

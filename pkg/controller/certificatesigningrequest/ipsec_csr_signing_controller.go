@@ -75,8 +75,8 @@ type IPsecCSRSigningController struct {
 	// saved CertificateAuthority
 	certificateAuthority atomic.Value
 
-	queue         workqueue.RateLimitingInterface
-	fixturesQueue workqueue.RateLimitingInterface
+	queue         workqueue.TypedRateLimitingInterface[string]
+	fixturesQueue workqueue.TypedRateLimitingInterface[string]
 }
 
 // certificateAuthority implements a certificate authority and used by the signing controller.
@@ -126,8 +126,18 @@ func NewIPsecCSRSigningController(client clientset.Interface, csrInformer cache.
 		configMapLister:       configMapLister,
 		configMapListerSynced: caConfigMapInformer.HasSynced,
 		selfSignedCA:          selfSignedCA,
-		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "certificateSigningRequest"),
-		fixturesQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "certificateSigningRequest"),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "certificateSigningRequest",
+			},
+		),
+		fixturesQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "certificateSigningRequestFixtures",
+			},
+		),
 	}
 
 	csrInformer.AddEventHandlerWithResyncPeriod(
@@ -422,8 +432,7 @@ func (c *IPsecCSRSigningController) processNextWorkItem() bool {
 		return false
 	}
 	defer c.queue.Done(key)
-	err := c.syncCSR(key.(string))
-	if err != nil {
+	if err := c.syncCSR(key); err != nil {
 		c.queue.AddRateLimited(key)
 		klog.ErrorS(err, "Failed to sync CertificateSigningRequest", "CertificateSigningRequest", key)
 		return true

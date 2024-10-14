@@ -536,6 +536,11 @@ spec:
                       cidr:
                         type: string
                         format: cidr
+                      except:
+                        type: array
+                        items:
+                          type: string
+                          format: cidr
                 serviceReference:
                   type: object
                   properties:
@@ -970,6 +975,11 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                                except:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: cidr
                             group:
                               type: string
                             serviceAccount:
@@ -1252,6 +1262,11 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                                except:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: cidr
                             group:
                               type: string
                             fqdn:
@@ -1842,6 +1857,11 @@ spec:
                       cidr:
                         type: string
                         format: cidr
+                      except:
+                        type: array
+                        items:
+                          type: string
+                          format: cidr
                 serviceReference:
                   type: object
                   properties:
@@ -2454,6 +2474,11 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                                except:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: cidr
                             nodeSelector:
                               type: object
                               properties:
@@ -2703,6 +2728,11 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                                except:
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: cidr
                             fqdn:
                               type: string
                             nodeSelector:

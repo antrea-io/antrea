@@ -43,7 +43,7 @@ type CACertController struct {
 	// caContentProvider provides the very latest content of the ca bundle.
 	caContentProvider dynamiccertificates.CAContentProvider
 	// queue only ever has one item, but it has nice error handling backoff/retry semantics
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 
 	client             kubernetes.Interface
 	aggregatorClient   clientset.Interface
@@ -64,8 +64,13 @@ func newCACertController(caContentProvider dynamiccertificates.CAContentProvider
 	caConfig *CAConfig,
 ) *CACertController {
 	c := &CACertController{
-		caContentProvider:  caContentProvider,
-		queue:              workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "CACertController"),
+		caContentProvider: caContentProvider,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "CACertController",
+			},
+		),
 		client:             client,
 		aggregatorClient:   aggregatorClient,
 		apiExtensionClient: apiExtensionClient,

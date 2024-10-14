@@ -118,6 +118,7 @@ func (r *MemberClusterAnnounceReconciler) SetupWithManager(mgr ctrl.Manager) err
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcv1alpha1.MemberClusterAnnounce{}).
+		Named("memberclusterannounce").
 		Complete(r)
 }
 

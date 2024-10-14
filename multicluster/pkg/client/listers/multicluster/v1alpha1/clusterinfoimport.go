@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,25 +36,17 @@ type ClusterInfoImportLister interface {
 
 // clusterInfoImportLister implements the ClusterInfoImportLister interface.
 type clusterInfoImportLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.ClusterInfoImport]
 }
 
 // NewClusterInfoImportLister returns a new ClusterInfoImportLister.
 func NewClusterInfoImportLister(indexer cache.Indexer) ClusterInfoImportLister {
-	return &clusterInfoImportLister{indexer: indexer}
-}
-
-// List lists all ClusterInfoImports in the indexer.
-func (s *clusterInfoImportLister) List(selector labels.Selector) (ret []*v1alpha1.ClusterInfoImport, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ClusterInfoImport))
-	})
-	return ret, err
+	return &clusterInfoImportLister{listers.New[*v1alpha1.ClusterInfoImport](indexer, v1alpha1.Resource("clusterinfoimport"))}
 }
 
 // ClusterInfoImports returns an object that can list and get ClusterInfoImports.
 func (s *clusterInfoImportLister) ClusterInfoImports(namespace string) ClusterInfoImportNamespaceLister {
-	return clusterInfoImportNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return clusterInfoImportNamespaceLister{listers.NewNamespaced[*v1alpha1.ClusterInfoImport](s.ResourceIndexer, namespace)}
 }
 
 // ClusterInfoImportNamespaceLister helps list and get ClusterInfoImports.
@@ -72,26 +64,5 @@ type ClusterInfoImportNamespaceLister interface {
 // clusterInfoImportNamespaceLister implements the ClusterInfoImportNamespaceLister
 // interface.
 type clusterInfoImportNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ClusterInfoImports in the indexer for a given namespace.
-func (s clusterInfoImportNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.ClusterInfoImport, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ClusterInfoImport))
-	})
-	return ret, err
-}
-
-// Get retrieves the ClusterInfoImport from the indexer for a given namespace and name.
-func (s clusterInfoImportNamespaceLister) Get(name string) (*v1alpha1.ClusterInfoImport, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("clusterinfoimport"), name)
-	}
-	return obj.(*v1alpha1.ClusterInfoImport), nil
+	listers.ResourceIndexer[*v1alpha1.ClusterInfoImport]
 }

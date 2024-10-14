@@ -329,13 +329,17 @@ func Test_GetPodByIPAndTime(t *testing.T) {
 func Test_processDeleteQueueItem(t *testing.T) {
 	fakeClock := clock.NewFakeClock(time.Now())
 	podStore := &PodStore{
-		pods:         cache.NewIndexer(podKeyFunc, cache.Indexers{podIPIndex: podIPIndexFunc}),
-		podsToDelete: workqueue.NewDelayingQueueWithCustomClock(fakeClock, deleteQueueName),
+		pods: cache.NewIndexer(podKeyFunc, cache.Indexers{podIPIndex: podIPIndexFunc}),
+		podsToDelete: workqueue.NewTypedDelayingQueueWithConfig(workqueue.TypedDelayingQueueConfig[types.UID]{
+			Name:  deleteQueueName,
+			Clock: fakeClock,
+		}),
+		clock:        fakeClock,
 		timestampMap: map[types.UID]*podTimestamps{"pod1": {}},
 	}
 	require.NoError(t, podStore.pods.Add(pod1))
-	podStore.podsToDelete.Add(pod1)
-	result := podStore.processDeleteQueueItem()
+	podStore.podsToDelete.Add(pod1.UID)
+	result := podStore.processDeleteQueueItem(&v1.Pod{})
 	require.Equal(t, true, result)
 	assert.Equal(t, 0, podStore.podsToDelete.Len())
 	assert.Len(t, podStore.pods.List(), 0)

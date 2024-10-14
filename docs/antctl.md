@@ -40,6 +40,7 @@ running in three different modes:
   - [Multi-cluster commands](#multi-cluster-commands)
   - [Multicast commands](#multicast-commands)
   - [Showing memberlist state](#showing-memberlist-state)
+  - [BGP commands](#bgp-commands)
   - [Upgrade existing objects of CRDs](#upgrade-existing-objects-of-crds)
 <!-- /toc -->
 
@@ -251,7 +252,7 @@ output format. The `NAME` of a control plane NetworkPolicy is the UID of its sou
 NetworkPolicy.
 
 ```bash
-antctl get networkpolicy [NAME] [-n NAMESPACE] [-o yaml]
+antctl get networkpolicy [NAME] [-n NAMESPACE] [-T K8sNP|ACNP|ANNP|ANP|BANP] [-o yaml]
 antctl get appliedtogroup [NAME] [-o yaml]
 antctl get addressgroup [NAME] [-o yaml]
 ```
@@ -350,7 +351,7 @@ in the specified OVS flow tables, or all or the specified OVS groups.
 antctl get ovsflows
 antctl get ovsflows -p POD -n NAMESPACE
 antctl get ovsflows -S SERVICE -n NAMESPACE
-antctl get ovsflows -N NETWORKPOLICY -n NAMESPACE
+antctl get ovsflows [-n NAMESPACE] -N NETWORKPOLICY --type NETWORKPOLICY_TYPE
 antctl get ovsflows -T TABLE_A,TABLE_B
 antctl get ovsflows -T TABLE_A,TABLE_B_NUM
 antctl get ovsflows -G all
@@ -381,13 +382,22 @@ kube-system kube-dns 160ea6d7-0234-5d1d-8ea0-b703d0aa3b46 1
 # Dump OVS flows of NetworkPolicy "kube-dns"
 $ antctl get of -N kube-dns -n kube-system
 FLOW
-table=90, n_packets=0, n_bytes=0, priority=190,conj_id=1,ip actions=resubmit(,105)
-table=90, n_packets=0, n_bytes=0, priority=200,ip actions=conjunction(1,1/3)
-table=90, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=conjunction(2,2/3),conjunction(1,2/3)
-table=90, n_packets=0, n_bytes=0, priority=200,udp,tp_dst=53 actions=conjunction(1,3/3)
-table=90, n_packets=0, n_bytes=0, priority=200,tcp,tp_dst=53 actions=conjunction(1,3/3)
-table=90, n_packets=0, n_bytes=0, priority=200,tcp,tp_dst=9153 actions=conjunction(1,3/3)
-table=100, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=drop
+table=IngressRule, n_packets=0, n_bytes=0, priority=190,conj_id=1,ip actions=set_field:0x1->reg5,ct(commit,table=IngressMetric,zone=65520,exec(set_field:0x1/0xffffffff->ct_label))
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,ip actions=conjunction(1,1/3)
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=conjunction(2,2/3),conjunction(1,2/3)
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,udp,tp_dst=53 actions=conjunction(1,3/3)
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,tcp,tp_dst=53 actions=conjunction(1,3/3)
+table=IngressRule, n_packets=0, n_bytes=0, priority=200,tcp,tp_dst=9153 actions=conjunction(1,3/3)
+table=IngressDefaultRule, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=drop
+
+# Dump OVS flows of AntreaNetworkPolicy "test-annp"
+$ antctl get ovsflows -N test-annp -n default --type ANNP
+FLOW
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,conj_id=6 actions=set_field:0x6->reg3,set_field:0x400/0x400->reg0,goto_table:IngressMetric
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,ip,nw_src=10.20.1.8 actions=conjunction(6,1/3)
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,ip,nw_src=10.20.2.8 actions=conjunction(6,1/3)
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,reg1=0x3 actions=conjunction(6,2/3)
+table=AntreaPolicyIngressRule, n_packets=0, n_bytes=0, priority=14900,tcp,tp_dst=443 actions=conjunction(6,3/3)
 ```
 
 ### OVS packet tracing
@@ -745,6 +755,30 @@ NODE    IP         STATUS
 worker1 172.18.0.4 Alive 
 worker2 172.18.0.3 Alive 
 worker3 172.18.0.2 Dead
+```
+
+### BGP commands
+
+`antctl` agent command `get bgppolicy` prints the effective BGP policy applied on the local Node.
+It includes the name, local ASN, router ID and listen port of the effective BGP policy.
+
+```bash
+$ antctl get bgppolicy
+
+NAME               ROUTER-ID  LOCAL-ASN LISTEN-PORT
+example-bgp-policy 172.18.0.2 64512     179
+```
+
+`antctl` agent command `get bgppeers` print the current status of all BGP peers
+of effective BGP policy applied on the local Node. It includes Peer IP address with port,
+ASN, and State of the BGP Peers.
+
+```bash
+$ antctl get bgppeers
+
+PEER               ASN   STATE
+192.168.77.200:179 65001 Established
+192.168.77.201:179 65002 Active
 ```
 
 ### Upgrade existing objects of CRDs

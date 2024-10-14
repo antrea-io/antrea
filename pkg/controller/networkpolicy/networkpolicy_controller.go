@@ -235,16 +235,16 @@ type NetworkPolicyController struct {
 
 	// appliedToGroupQueue maintains the networkpolicy.AppliedToGroup objects that
 	// need to be synced.
-	appliedToGroupQueue workqueue.RateLimitingInterface
+	appliedToGroupQueue workqueue.TypedRateLimitingInterface[string]
 	// addressGroupQueue maintains the networkpolicy.AddressGroup objects that
 	// need to be synced.
-	addressGroupQueue workqueue.RateLimitingInterface
+	addressGroupQueue workqueue.TypedRateLimitingInterface[string]
 	// internalNetworkPolicyQueue maintains the networkpolicy.NetworkPolicy objects that
 	// need to be synced.
-	internalNetworkPolicyQueue workqueue.RateLimitingInterface
+	internalNetworkPolicyQueue workqueue.TypedRateLimitingInterface[controlplane.NetworkPolicyReference]
 	// internalGroupQueue maintains the networkpolicy.Group objects that needs to be
 	// synced.
-	internalGroupQueue workqueue.RateLimitingInterface
+	internalGroupQueue workqueue.TypedRateLimitingInterface[string]
 
 	// internalNetworkPolicyMutex prevents concurrent processing of internal networkpolicies who refer
 	// to the same addressgroups/appliedtogroups.
@@ -435,15 +435,35 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		appliedToGroupStore:            appliedToGroupStore,
 		internalNetworkPolicyStore:     internalNetworkPolicyStore,
 		internalGroupStore:             internalGroupStore,
-		appliedToGroupQueue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "appliedToGroup"),
-		addressGroupQueue:              workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "addressGroup"),
-		internalNetworkPolicyQueue:     workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalNetworkPolicy"),
-		internalGroupQueue:             workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalGroup"),
-		groupingInterface:              groupingInterface,
-		groupingInterfaceSynced:        groupingInterface.HasSynced,
-		labelIdentityInterface:         labelIdentityInterface,
-		stretchNPEnabled:               stretchedNPEnabled,
-		appliedToGroupNotifier:         newNotifier(),
+		appliedToGroupQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "appliedToGroup",
+			},
+		),
+		addressGroupQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "addressGroup",
+			},
+		),
+		internalNetworkPolicyQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[controlplane.NetworkPolicyReference](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[controlplane.NetworkPolicyReference]{
+				Name: "internalNetworkPolicy",
+			},
+		),
+		internalGroupQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "internalGroup",
+			},
+		),
+		groupingInterface:       groupingInterface,
+		groupingInterfaceSynced: groupingInterface.HasSynced,
+		labelIdentityInterface:  labelIdentityInterface,
+		stretchNPEnabled:        stretchedNPEnabled,
+		appliedToGroupNotifier:  newNotifier(),
 	}
 	n.groupingInterface.AddEventHandler(appliedToGroupType, n.enqueueAppliedToGroup)
 	n.groupingInterface.AddEventHandler(addressGroupType, n.enqueueAddressGroup)
@@ -671,7 +691,7 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*controlplane.IPBlock, erro
 	if err != nil {
 		return nil, err
 	}
-	exceptNets := []controlplane.IPNet{}
+	var exceptNets []controlplane.IPNet
 	for _, exc := range ipBlock.Except {
 		// Convert the except IPBlock to networkpolicy.IPNet.
 		exceptNet, err := cidrStrToIPNet(exc)
@@ -996,7 +1016,7 @@ func (n *NetworkPolicyController) internalNetworkPolicyWorker() {
 // be processed).
 func (n *NetworkPolicyController) processNextInternalNetworkPolicyWorkItem() bool {
 	defer n.heartbeat("processNextInternalNetworkPolicyWorkItem")
-	key, quit := n.internalNetworkPolicyQueue.Get()
+	networkPolicyRef, quit := n.internalNetworkPolicyQueue.Get()
 	if quit {
 		return false
 	}
@@ -1004,19 +1024,17 @@ func (n *NetworkPolicyController) processNextInternalNetworkPolicyWorkItem() boo
 	// must remember to call Forget if we do not want this work item being re-queued. For
 	// example, we do not call Forget if a transient error occurs, instead the item is put back
 	// on the workqueue and attempted again after a back-off period.
-	defer n.internalNetworkPolicyQueue.Done(key)
+	defer n.internalNetworkPolicyQueue.Done(networkPolicyRef)
 
-	networkPolicyRef := key.(controlplane.NetworkPolicyReference)
-	err := n.syncInternalNetworkPolicy(&networkPolicyRef)
-	if err != nil {
+	if err := n.syncInternalNetworkPolicy(&networkPolicyRef); err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
-		n.internalNetworkPolicyQueue.AddRateLimited(key)
-		klog.Errorf("Failed to sync internal NetworkPolicy %s: %v", key, err)
+		n.internalNetworkPolicyQueue.AddRateLimited(networkPolicyRef)
+		klog.Errorf("Failed to sync internal NetworkPolicy %s: %v", networkPolicyRef, err)
 		return true
 	}
 	// If no error occurs we Forget this item so it does not get queued again until
 	// another change happens.
-	n.internalNetworkPolicyQueue.Forget(key)
+	n.internalNetworkPolicyQueue.Forget(networkPolicyRef)
 	return true
 }
 
@@ -1035,7 +1053,7 @@ func (n *NetworkPolicyController) processNextAddressGroupWorkItem() bool {
 	}
 	defer n.addressGroupQueue.Done(key)
 
-	err := n.syncAddressGroup(key.(string))
+	err := n.syncAddressGroup(key)
 	if err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		n.addressGroupQueue.AddRateLimited(key)
@@ -1063,7 +1081,7 @@ func (n *NetworkPolicyController) processNextAppliedToGroupWorkItem() bool {
 	}
 	defer n.appliedToGroupQueue.Done(key)
 
-	err := n.syncAppliedToGroup(key.(string))
+	err := n.syncAppliedToGroup(key)
 	if err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		n.appliedToGroupQueue.AddRateLimited(key)

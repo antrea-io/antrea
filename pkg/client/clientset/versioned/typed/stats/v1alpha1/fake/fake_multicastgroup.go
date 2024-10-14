@@ -37,20 +37,22 @@ var multicastgroupsKind = v1alpha1.SchemeGroupVersion.WithKind("MulticastGroup")
 
 // Get takes name of the multicastGroup, and returns the corresponding multicastGroup object, and an error if there is any.
 func (c *FakeMulticastGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.MulticastGroup, err error) {
+	emptyResult := &v1alpha1.MulticastGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(multicastgroupsResource, name), &v1alpha1.MulticastGroup{})
+		Invokes(testing.NewRootGetActionWithOptions(multicastgroupsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.MulticastGroup), err
 }
 
 // List takes label and field selectors, and returns the list of MulticastGroups that match those selectors.
 func (c *FakeMulticastGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.MulticastGroupList, err error) {
+	emptyResult := &v1alpha1.MulticastGroupList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(multicastgroupsResource, multicastgroupsKind, opts), &v1alpha1.MulticastGroupList{})
+		Invokes(testing.NewRootListActionWithOptions(multicastgroupsResource, multicastgroupsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -69,5 +71,5 @@ func (c *FakeMulticastGroups) List(ctx context.Context, opts v1.ListOptions) (re
 // Watch returns a watch.Interface that watches the requested multicastGroups.
 func (c *FakeMulticastGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(multicastgroupsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(multicastgroupsResource, opts))
 }

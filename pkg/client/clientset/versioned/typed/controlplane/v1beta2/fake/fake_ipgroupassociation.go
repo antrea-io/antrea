@@ -35,10 +35,11 @@ var ipgroupassociationsKind = v1beta2.SchemeGroupVersion.WithKind("IPGroupAssoci
 
 // Get takes name of the iPGroupAssociation, and returns the corresponding iPGroupAssociation object, and an error if there is any.
 func (c *FakeIPGroupAssociations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.IPGroupAssociation, err error) {
+	emptyResult := &v1beta2.IPGroupAssociation{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(ipgroupassociationsResource, name), &v1beta2.IPGroupAssociation{})
+		Invokes(testing.NewRootGetActionWithOptions(ipgroupassociationsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta2.IPGroupAssociation), err
 }

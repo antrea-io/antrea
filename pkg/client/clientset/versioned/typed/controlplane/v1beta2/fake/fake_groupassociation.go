@@ -36,11 +36,12 @@ var groupassociationsKind = v1beta2.SchemeGroupVersion.WithKind("GroupAssociatio
 
 // Get takes name of the groupAssociation, and returns the corresponding groupAssociation object, and an error if there is any.
 func (c *FakeGroupAssociations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.GroupAssociation, err error) {
+	emptyResult := &v1beta2.GroupAssociation{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(groupassociationsResource, c.ns, name), &v1beta2.GroupAssociation{})
+		Invokes(testing.NewGetActionWithOptions(groupassociationsResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta2.GroupAssociation), err
 }

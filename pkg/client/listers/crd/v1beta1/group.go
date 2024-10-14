@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package v1beta1
 
 import (
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,25 +36,17 @@ type GroupLister interface {
 
 // groupLister implements the GroupLister interface.
 type groupLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1beta1.Group]
 }
 
 // NewGroupLister returns a new GroupLister.
 func NewGroupLister(indexer cache.Indexer) GroupLister {
-	return &groupLister{indexer: indexer}
-}
-
-// List lists all Groups in the indexer.
-func (s *groupLister) List(selector labels.Selector) (ret []*v1beta1.Group, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1beta1.Group))
-	})
-	return ret, err
+	return &groupLister{listers.New[*v1beta1.Group](indexer, v1beta1.Resource("group"))}
 }
 
 // Groups returns an object that can list and get Groups.
 func (s *groupLister) Groups(namespace string) GroupNamespaceLister {
-	return groupNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return groupNamespaceLister{listers.NewNamespaced[*v1beta1.Group](s.ResourceIndexer, namespace)}
 }
 
 // GroupNamespaceLister helps list and get Groups.
@@ -72,26 +64,5 @@ type GroupNamespaceLister interface {
 // groupNamespaceLister implements the GroupNamespaceLister
 // interface.
 type groupNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all Groups in the indexer for a given namespace.
-func (s groupNamespaceLister) List(selector labels.Selector) (ret []*v1beta1.Group, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1beta1.Group))
-	})
-	return ret, err
-}
-
-// Get retrieves the Group from the indexer for a given namespace and name.
-func (s groupNamespaceLister) Get(name string) (*v1beta1.Group, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1beta1.Resource("group"), name)
-	}
-	return obj.(*v1beta1.Group), nil
+	listers.ResourceIndexer[*v1beta1.Group]
 }

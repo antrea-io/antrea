@@ -29,9 +29,8 @@ SERVICE_CIDR=""
 IP_FAMILY="ipv4"
 NUM_WORKERS=2
 SUBNETS=""
+VLAN_SUBNETS=()
 EXTRA_NETWORKS=""
-VLAN_SUBNETS=""
-VLAN_ID=""
 ENCAP_MODE=""
 PROXY=true
 KUBE_PROXY_MODE="iptables"
@@ -40,6 +39,7 @@ K8S_VERSION=""
 KUBE_NODE_IPAM=true
 DEPLOY_EXTERNAL_AGNHOST=false
 DEPLOY_EXTERNAL_FRR=false
+FLEXIBLE_IPAM=false
 positional_args=()
 options=()
 
@@ -70,11 +70,10 @@ where:
   --subnets: a subnet creates a separate Docker bridge network (named 'antrea-<idx>') with the assigned subnet. A worker
     Node will be connected to one of those network. Default is empty: all worker Nodes connected to the default Docker
     bridge network created by kind.
-  --vlan-subnets: specify the subnets of the VLAN to which all Nodes will be connected, in addition to the primary network.
-    The IP expression of the subnet will be used as the gateway IP. For example, '--vlan-subnets 10.100.100.1/24' means
-    that a VLAN sub-interface will be created on the primary Docker bridge, and it will be assigned the 10.100.100.1/24 address.
-  --vlan-id: specify the ID of the VLAN to which all Nodes will be connected, in addition to the primary network. Note,
-    '--vlan-subnets' and '--vlan-id' must be specified together.
+  --vlan-subnets: specify the id and subnets of the VLAN to which all Nodes will be connected, in addition to the primary network.
+    The IP expression of the subnet will be used as the gateway IP. For example, '--vlan-subnets 10=172.100.10.1/24,fd00:172:100:10::1/96,' means
+    that a VLAN sub-interface will be created on the primary Docker bridge, and it will be assigned the 10.100.100.1/24 and fd00:172:100:10::1/96 addresses
+    and vlan-id 10. This option can be specified multiple times.
   --extra-networks: an extra network creates a separate Docker bridge network (named 'antrea-<idx>') with the assigned
     subnet. All worker Nodes will be connected to all the extra networks, in addition to the default Docker bridge
     network. Note, '--extra-networks' and '--subnets' cannot be specified together.
@@ -244,25 +243,52 @@ function configure_extra_networks {
   done
 }
 
+# update_kind_ipam_routes add and del routes for non-ipam test-pods.
+function update_kind_ipam_routes {
+  local operation="$1"
+  if [[ "$operation" == "del" ]]; then
+    echo "Deleting routes"
+  else  
+    echo "Adding routes"
+  fi
+
+  node_data=$(kubectl get nodes -o jsonpath='{range .items[*]}{.spec.podCIDR}{" "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' 2>/dev/null || true)
+  if [[ -z $node_data ]]; then
+    return
+  fi
+  echo "$node_data"| while read pod_cidr node_ip; do
+    docker_run_with_host_net ip route "$operation" "$pod_cidr" via "$node_ip" >/dev/null 2>&1 || true
+  done
+}
+
 function configure_vlan_subnets {
-  if [[ -z $VLAN_SUBNETS || -z $VLAN_ID ]]; then
+  if [[ ${#VLAN_SUBNETS[@]} -eq 0 ]]; then
     return
   fi
   echo "Configuring VLAN subnets"
 
   bridge_id=$(docker network inspect kind -f {{.ID}})
   bridge_interface="br-${bridge_id:0:12}"
-  vlan_interface="br-${bridge_id:0:7}.$VLAN_ID"
+  
+  for vlan_subnet in "${VLAN_SUBNETS[@]}"; do
+    # Extract VLAN ID and subnets
+    vlan_id=$(echo $vlan_subnet | cut -d= -f1)
+    subnets=$(echo $vlan_subnet | cut -d= -f2)
+    
+    vlan_interface="br-${bridge_id:0:7}.$vlan_id"
 
-  docker_run_with_host_net ip link add link $bridge_interface name $vlan_interface type vlan id $VLAN_ID
-  docker_run_with_host_net ip link set $vlan_interface up
-  IFS=',' read -r -a vlan_subnets <<< "$VLAN_SUBNETS"
-  for s in "${vlan_subnets[@]}" ; do
-    echo "Configuring extra IP $s to vlan interface $vlan_interface"
-    docker_run_with_host_net ip addr add dev $vlan_interface $s
+    docker_run_with_host_net ip link add link $bridge_interface name $vlan_interface type vlan id $vlan_id
+    docker_run_with_host_net ip link set $vlan_interface up
+    
+    IFS=',' read -r -a subnet_array <<< "$subnets"
+    for subnet in "${subnet_array[@]}" ; do
+      echo "Configuring extra IP $subnet to VLAN interface $vlan_interface"
+      docker_run_with_host_net ip addr add dev $vlan_interface $subnet
+    done
+
+    docker_run_with_host_net iptables -t filter -A FORWARD -i $bridge_interface -o $vlan_interface -j ACCEPT
+    docker_run_with_host_net iptables -t filter -A FORWARD -o $bridge_interface -i $vlan_interface -j ACCEPT
   done
-  docker_run_with_host_net iptables -t filter -A FORWARD -i $bridge_interface -o $vlan_interface -j ACCEPT
-  docker_run_with_host_net iptables -t filter -A FORWARD -o $bridge_interface -i $vlan_interface -j ACCEPT
 }
 
 function delete_vlan_subnets {
@@ -415,6 +441,9 @@ EOF
   configure_vlan_subnets
   setup_external_servers
   load_images
+  if [[ $FLEXIBLE_IPAM == true ]]; then
+      update_kind_ipam_routes "add"
+  fi
 
   if [[ $ANTREA_CNI == true ]]; then
     cmd=$(dirname $0)
@@ -438,6 +467,7 @@ EOF
 }
 
 function destroy {
+  update_kind_ipam_routes "del"
   if [[ $UNTIL_TIME_IN_MINS != "" ]]; then
       clean_kind
   else
@@ -573,14 +603,14 @@ while [[ $# -gt 0 ]]
       ;;
     --vlan-subnets)
       add_option "--vlan-subnets" "create"
-      VLAN_SUBNETS="$2"
+      VLAN_SUBNETS+=("$2")
       shift 2
       ;;
-    --vlan-id)
-      add_option "--vlan-id" "create"
-      VLAN_ID="$2"
-      shift 2
-      ;;
+    --flexible-ipam)
+      add_option "--flexible-ipam" "create"
+      FLEXIBLE_IPAM=true
+      shift
+      ;; 
     --images)
       add_option "--image" "create"
       IMAGES="$2"
@@ -670,12 +700,6 @@ if [[ $ACTION == "destroy" ]]; then
       exit
 fi
 
-if [[ -n "$VLAN_SUBNETS" || -n "$VLAN_ID" ]]; then
-  if [[ -z "$VLAN_SUBNETS" || -z "$VLAN_ID" ]]; then
-    echoerr "'--vlan-subnets' and '--vlan-id' must be specified together"
-    exit 1
-  fi
-fi
 
 kind_version=$(kind version | awk  '{print $2}')
 kind_version=${kind_version:1} # strip leading 'v'

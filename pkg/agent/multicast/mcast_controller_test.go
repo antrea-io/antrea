@@ -39,7 +39,6 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -100,9 +99,7 @@ func TestAddGroupMemberStatus(t *testing.T) {
 	mctrl.addGroupMemberStatus(event)
 	groupCache := mctrl.groupCache
 	compareGroupStatus(t, groupCache, event)
-	obj, _ := mctrl.queue.Get()
-	key, ok := obj.(string)
-	assert.True(t, ok)
+	key, _ := mctrl.queue.Get()
 	assert.Equal(t, mgroup.String(), key)
 	mockIfaceStore.EXPECT().GetInterfaceByName(if1.InterfaceName).Return(if1, true)
 	mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any())
@@ -110,7 +107,7 @@ func TestAddGroupMemberStatus(t *testing.T) {
 	mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(mgroup.To4(), nodeIf1IP.To4(), if1.InterfaceName).Times(1)
 	err = mctrl.syncGroup(key)
 	assert.NoError(t, err)
-	mctrl.queue.Forget(obj)
+	mctrl.queue.Forget(key)
 }
 
 func TestUpdateGroupMemberStatus(t *testing.T) {
@@ -180,10 +177,6 @@ func TestUpdateGroupMemberStatus(t *testing.T) {
 }
 
 func TestCheckNodeUpdate(t *testing.T) {
-	mockController := newMockMulticastController(t, false, false)
-	err := mockController.initialize()
-	require.NoError(t, err)
-
 	for _, tc := range []struct {
 		name        string
 		oldNode     *corev1.Node
@@ -244,7 +237,11 @@ func TestCheckNodeUpdate(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mockController.nodeUpdateQueue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "nodeUpdate")
+			// This test assumes encap mode.
+			mockController := newMockMulticastController(t, true, false)
+			err := mockController.initialize()
+			require.NoError(t, err)
+
 			mockController.checkNodeUpdate(tc.oldNode, tc.curNode)
 			if tc.nodeUpdated {
 				assert.Equal(t, 1, mockController.nodeUpdateQueue.Len())
@@ -291,9 +288,7 @@ func TestCheckLastMember(t *testing.T) {
 			mctrl.addOrUpdateGroupEvent(ev)
 		}
 		wg.Wait()
-		obj, _ := mctrl.queue.Get()
-		key, ok := obj.(string)
-		assert.True(t, ok)
+		key, _ := mctrl.queue.Get()
 		assert.Equal(t, status.group.String(), key)
 		err := mctrl.syncGroup(key)
 		assert.NoError(t, err)
@@ -304,7 +299,7 @@ func TestCheckLastMember(t *testing.T) {
 		if _, ok, _ := mctrl.groupCache.GetByKey(key); ok {
 			_ = mctrl.groupCache.Delete(status)
 		}
-		mctrl.queue.Forget(obj)
+		mctrl.queue.Forget(key)
 	}
 	mockIfaceStore.EXPECT().GetInterfaceByName(if1.InterfaceName).Return(if1, true).Times(1)
 	mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
@@ -1171,21 +1166,20 @@ func testRemoteReport(t *testing.T, mockController *Controller, groups []net.IP,
 
 	processNextItem := func(stopStr string) {
 		for {
-			obj, quit := mockController.queue.Get()
+			key, quit := mockController.queue.Get()
 			if quit {
 				return
 			}
-			key := obj.(string)
 			if key == stopStr {
 				mockController.queue.Forget(key)
-				mockController.queue.Done(obj)
+				mockController.queue.Done(key)
 				return
 			}
 			if err := mockController.syncGroup(key); err != nil {
 				t.Errorf("Failed to process %s: %v", key, err)
 			}
 			mockController.queue.Forget(key)
-			mockController.queue.Done(obj)
+			mockController.queue.Done(key)
 		}
 	}
 

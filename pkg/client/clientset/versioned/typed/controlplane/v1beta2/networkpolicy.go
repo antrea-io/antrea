@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,12 @@ package v1beta2
 
 import (
 	"context"
-	"time"
 
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // NetworkPoliciesGetter has a method to return a NetworkPolicyInterface.
@@ -43,54 +42,18 @@ type NetworkPolicyInterface interface {
 
 // networkPolicies implements NetworkPolicyInterface
 type networkPolicies struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1beta2.NetworkPolicy, *v1beta2.NetworkPolicyList]
 }
 
 // newNetworkPolicies returns a NetworkPolicies
 func newNetworkPolicies(c *ControlplaneV1beta2Client) *networkPolicies {
 	return &networkPolicies{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1beta2.NetworkPolicy, *v1beta2.NetworkPolicyList](
+			"networkpolicies",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1beta2.NetworkPolicy { return &v1beta2.NetworkPolicy{} },
+			func() *v1beta2.NetworkPolicyList { return &v1beta2.NetworkPolicyList{} }),
 	}
-}
-
-// Get takes name of the networkPolicy, and returns the corresponding networkPolicy object, and an error if there is any.
-func (c *networkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.NetworkPolicy, err error) {
-	result = &v1beta2.NetworkPolicy{}
-	err = c.client.Get().
-		Resource("networkpolicies").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of NetworkPolicies that match those selectors.
-func (c *networkPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.NetworkPolicyList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1beta2.NetworkPolicyList{}
-	err = c.client.Get().
-		Resource("networkpolicies").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested networkPolicies.
-func (c *networkPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("networkpolicies").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
 }

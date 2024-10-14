@@ -238,11 +238,11 @@ type Controller struct {
 	igmpSnooper      *IGMPSnooper
 	groupEventCh     chan *mcastGroupEvent
 	groupCache       cache.Indexer
-	queue            workqueue.RateLimitingInterface
+	queue            workqueue.TypedRateLimitingInterface[string]
 	nodeInformer     coreinformers.NodeInformer
 	nodeLister       corelisters.NodeLister
 	nodeListerSynced cache.InformerSynced
-	nodeUpdateQueue  workqueue.RateLimitingInterface
+	nodeUpdateQueue  workqueue.TypedRateLimitingInterface[string]
 	// installedGroups saves the groups which are configured on OVS.
 	// With encap mode, the entries in installedGroups include all multicast groups identified in the cluster.
 	installedGroups      sets.Set[string]
@@ -304,15 +304,20 @@ func NewMulticastController(ofClient openflow.Client,
 		groupCache:           groupCache,
 		installedGroups:      sets.New[string](),
 		installedLocalGroups: sets.New[string](),
-		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "multicastgroup"),
-		mRouteClient:         multicastRouteClient,
-		queryInterval:        igmpQueryInterval,
-		mcastGroupTimeout:    igmpQueryInterval * 3,
-		queryGroupId:         v4GroupAllocator.Allocate(),
-		encapEnabled:         isEncap,
-		flexibleIPAMEnabled:  enableFlexibleIPAM,
-		ipv4Enabled:          ipv4Enabled,
-		ipv6Enabled:          ipv6Enabled,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "multicastgroup",
+			},
+		),
+		mRouteClient:        multicastRouteClient,
+		queryInterval:       igmpQueryInterval,
+		mcastGroupTimeout:   igmpQueryInterval * 3,
+		queryGroupId:        v4GroupAllocator.Allocate(),
+		encapEnabled:        isEncap,
+		flexibleIPAMEnabled: enableFlexibleIPAM,
+		ipv4Enabled:         ipv4Enabled,
+		ipv6Enabled:         ipv6Enabled,
 	}
 	if isEncap {
 		c.nodeGroupID = v4GroupAllocator.Allocate()
@@ -320,7 +325,12 @@ func NewMulticastController(ofClient openflow.Client,
 		c.nodeInformer = nodeInformer
 		c.nodeLister = c.nodeInformer.Lister()
 		c.nodeListerSynced = c.nodeInformer.Informer().HasSynced
-		c.nodeUpdateQueue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "nodeUpdate")
+		c.nodeUpdateQueue = workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "nodeUpdate",
+			},
+		)
 		c.nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc: func(cur interface{}) {
@@ -414,21 +424,13 @@ func (c *Controller) getGroupMemberStatusesByPod(podInterface string) []*GroupMe
 }
 
 func (c *Controller) processNextWorkItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
+	defer c.queue.Done(key)
 
-	// We expect string (multicast group) to come off the workqueue.
-	if key, ok := obj.(string); !ok {
-		// As the item in the workqueue is actually invalid, we call Forget here else we'd
-		// go into a loop of attempting to process a work item that is invalid.
-		// This should not happen.
-		c.queue.Forget(obj)
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncGroup(key); err == nil {
+	if err := c.syncGroup(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)
@@ -841,7 +843,7 @@ func (c *Controller) nodeWorker() {
 }
 
 func (c *Controller) processNextNodeItem() bool {
-	obj, quit := c.nodeUpdateQueue.Get()
+	key, quit := c.nodeUpdateQueue.Get()
 	if quit {
 		return false
 	}
@@ -849,17 +851,9 @@ func (c *Controller) processNextNodeItem() bool {
 	// must remember to call Forget if we do not want this work item being re-queued. For
 	// example, we do not call Forget if a transient error occurs, instead the item is put back
 	// on the workqueue and attempted again after a back-off period.
-	defer c.nodeUpdateQueue.Done(obj)
+	defer c.nodeUpdateQueue.Done(key)
 
-	// We expect strings (Node name) to come off the workqueue.
-	if key, ok := obj.(string); !ok {
-		// As the item in the workqueue is actually invalid, we call Forget here else we'd
-		// go into a loop of attempting to process a work item that is invalid.
-		// This should not happen: only a constant string enqueues nodeUpdateQueue.
-		c.nodeUpdateQueue.Forget(obj)
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	} else if err := c.syncNodes(); err == nil {
+	if err := c.syncNodes(); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.nodeUpdateQueue.Forget(key)

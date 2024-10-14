@@ -178,17 +178,17 @@ func (mr *MockClientMockRecorder) GetFlowTableStatus() *gomock.Call {
 }
 
 // GetNetworkPolicyFlowKeys mocks base method.
-func (m *MockClient) GetNetworkPolicyFlowKeys(arg0, arg1 string) []string {
+func (m *MockClient) GetNetworkPolicyFlowKeys(arg0, arg1 string, arg2 v1beta2.NetworkPolicyType) []string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNetworkPolicyFlowKeys", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetNetworkPolicyFlowKeys", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]string)
 	return ret0
 }
 
 // GetNetworkPolicyFlowKeys indicates an expected call of GetNetworkPolicyFlowKeys.
-func (mr *MockClientMockRecorder) GetNetworkPolicyFlowKeys(arg0, arg1 any) *gomock.Call {
+func (mr *MockClientMockRecorder) GetNetworkPolicyFlowKeys(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyFlowKeys", reflect.TypeOf((*MockClient)(nil).GetNetworkPolicyFlowKeys), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyFlowKeys", reflect.TypeOf((*MockClient)(nil).GetNetworkPolicyFlowKeys), arg0, arg1, arg2)
 }
 
 // GetPodFlowKeys mocks base method.

@@ -72,7 +72,7 @@ const (
 )
 
 type L7RuleReconciler interface {
-	AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta2.L7Protocol, enableLogging bool) error
+	AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta2.L7Protocol) error
 	DeleteRule(ruleID string, vlanID uint32) error
 }
 
@@ -125,7 +125,7 @@ type Controller struct {
 	// after the existing watches expire.
 	antreaClientProvider client.AntreaClientProvider
 	// queue maintains the NetworkPolicy ruleIDs that need to be synced.
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[string]
 	// ruleCache maintains the desired state of NetworkPolicy rules.
 	ruleCache *ruleCache
 	// podReconciler provides interfaces to reconcile the desired state of
@@ -198,8 +198,13 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 	l7Reconciler *l7engine.Reconciler) (*Controller, error) {
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
-		antreaClientProvider:     antreaClientGetter,
-		queue:                    workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
+		antreaClientProvider: antreaClientGetter,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "networkpolicyrule",
+			},
+		),
 		ofClient:                 ofClient,
 		nodeType:                 nodeType,
 		antreaPolicyEnabled:      antreaPolicyEnabled,
@@ -721,7 +726,7 @@ func (c *Controller) processNextWorkItem() bool {
 	}
 	defer c.queue.Done(key)
 
-	err := c.syncRule(key.(string))
+	err := c.syncRule(key)
 	c.handleErr(err, key)
 
 	return true
@@ -734,7 +739,7 @@ func (c *Controller) processAllItemsInQueue() {
 	batchSyncRuleKeys := make([]string, numRules)
 	for i := 0; i < numRules; i++ {
 		ruleKey, _ := c.queue.Get()
-		batchSyncRuleKeys[i] = ruleKey.(string)
+		batchSyncRuleKeys[i] = ruleKey
 		// set key to done to prevent missing watched updates between here and fullSync finish.
 		c.queue.Done(ruleKey)
 	}
@@ -797,7 +802,7 @@ func (c *Controller) syncRule(key string) error {
 		vlanID := c.l7VlanIDAllocator.allocate(key)
 		rule.L7RuleVlanID = &vlanID
 
-		if err := c.l7RuleReconciler.AddRule(key, rule.SourceRef.ToString(), vlanID, rule.L7Protocols, rule.EnableLogging); err != nil {
+		if err := c.l7RuleReconciler.AddRule(key, rule.SourceRef.ToString(), vlanID, rule.L7Protocols); err != nil {
 			return err
 		}
 	}
@@ -852,7 +857,7 @@ func (c *Controller) syncRules(keys []string) error {
 				vlanID := c.l7VlanIDAllocator.allocate(key)
 				rule.L7RuleVlanID = &vlanID
 
-				if err := c.l7RuleReconciler.AddRule(key, rule.SourceRef.ToString(), vlanID, rule.L7Protocols, rule.EnableLogging); err != nil {
+				if err := c.l7RuleReconciler.AddRule(key, rule.SourceRef.ToString(), vlanID, rule.L7Protocols); err != nil {
 					return err
 				}
 			}
@@ -888,7 +893,7 @@ func (c *Controller) syncRules(keys []string) error {
 	return nil
 }
 
-func (c *Controller) handleErr(err error, key interface{}) {
+func (c *Controller) handleErr(err error, key string) {
 	if err == nil {
 		c.queue.Forget(key)
 		return

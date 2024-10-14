@@ -143,7 +143,7 @@ func TestFlowModToString(t *testing.T) {
 			newFb := *(basicFB.CopyToBuilder(basicFB.FlowPriority(), false).(*ofFlowBuilder))
 			f := tt.flowFunc(&newFb)
 			messages, err := f.GetBundleMessages(AddMessage)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.Equal(t, 1, len(messages))
 			fm, ok := messages[0].GetMessage().(*openflow15.FlowMod)
 			assert.True(t, ok)
@@ -303,11 +303,86 @@ func TestFlowModMatchString(t *testing.T) {
 			newFb := *(basicFB.CopyToBuilder(basicFB.FlowPriority(), false).(*ofFlowBuilder))
 			f := tt.flowFunc(&newFb)
 			messages, err := f.GetBundleMessages(AddMessage)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.Equal(t, 1, len(messages))
 			fm, ok := messages[0].GetMessage().(*openflow15.FlowMod)
 			assert.True(t, ok)
 			fmStr := FlowModMatchString(fm)
+			assert.Equal(t, tt.expectedMatch, fmStr)
+		})
+	}
+}
+
+func TestFlowModStringForDumpCommand(t *testing.T) {
+	rm := &RegMark{field: NewRegField(0, 0, 3), value: 2}
+	table := &ofTable{Table: &ofctrl.Table{TableId: 1}}
+	basicFB := table.BuildFlow(100).(*ofFlowBuilder)
+	basicFB.Cookie(0x12345678).MatchInPort(3)
+	for _, tt := range []struct {
+		name          string
+		flowFunc      func(fb *ofFlowBuilder) Flow
+		expectedMatch string
+	}{
+		{
+			name: "reg mark flow",
+			flowFunc: func(fb *ofFlowBuilder) Flow {
+				return fb.MatchRegMark(rm).
+					MatchXXReg(1, ip6Dst).
+					Done()
+			},
+			expectedMatch: "table=1,reg0=0x2/0xf,xxreg1=0xfe000000000000000000000ca80a03,in_port=3",
+		},
+		{
+			name: "IPv4 flow",
+			flowFunc: func(fb *ofFlowBuilder) Flow {
+				return fb.MatchDstMAC(ethDst).MatchSrcMAC(ethSrc).MatchDstIP(ipDst).MatchSrcIP(ipSrc).Done()
+			},
+			expectedMatch: "table=1,in_port=3,dl_src=10:1a:1b:1c:1d:1f,dl_dst=20:2a:2b:2c:2d:2f,nw_src=192.168.10.2,nw_dst=192.168.20.3",
+		},
+		{
+			name: "IPv4 net flow",
+			flowFunc: func(fb *ofFlowBuilder) Flow {
+				return fb.MatchSrcIPNet(*ipSrcNet).MatchDstIPNet(*ipDstNet).Done()
+			},
+			expectedMatch: "table=1,in_port=3,nw_src=192.168.10.0/24,nw_dst=192.168.20.0/24",
+		},
+		{
+			name: "IPv6 flow",
+			flowFunc: func(fb *ofFlowBuilder) Flow {
+				return fb.MatchDstIP(ip6Dst).MatchSrcIP(ip6Src).Done()
+			},
+			expectedMatch: "table=1,in_port=3,ipv6_src=fe::ca8:a02,ipv6_dst=fe::ca8:a03",
+		},
+		{
+			name: "IPv4 UDP flow",
+			flowFunc: func(fb *ofFlowBuilder) Flow {
+				return fb.MatchIPProtocolValue(false, 17).MatchDstPort(8080, nil).Done()
+			},
+			expectedMatch: "table=1,udp,in_port=3,tp_dst=8080",
+		}, {
+			name: "IPv4 ICMP flow",
+			flowFunc: func(fb *ofFlowBuilder) Flow {
+				return fb.MatchProtocol(ProtocolICMP).MatchICMPCode(0).MatchICMPType(8).Done()
+			},
+			expectedMatch: "table=1,icmp,in_port=3,icmp_type=8,icmp_code=0",
+		},
+		{
+			name: "conjunction flow",
+			flowFunc: func(fb *ofFlowBuilder) Flow {
+				return fb.MatchProtocol(ProtocolIP).MatchConjID(101).Done()
+			},
+			expectedMatch: "table=1,conj_id=101,ip,in_port=3",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			newFb := *(basicFB.CopyToBuilder(basicFB.FlowPriority(), false).(*ofFlowBuilder))
+			f := tt.flowFunc(&newFb)
+			messages, err := f.GetBundleMessages(AddMessage)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(messages))
+			fm, ok := messages[0].GetMessage().(*openflow15.FlowMod)
+			assert.True(t, ok)
+			fmStr := FlowModMatchString(fm, "priority")
 			assert.Equal(t, tt.expectedMatch, fmStr)
 		})
 	}

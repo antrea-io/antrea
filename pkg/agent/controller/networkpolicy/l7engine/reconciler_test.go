@@ -189,7 +189,7 @@ func TestRuleLifecycle(t *testing.T) {
 			fe.startSuricataFn = fs.startSuricataFn
 
 			// Test add a L7 NetworkPolicy.
-			assert.NoError(t, fe.AddRule(ruleID, policyName, vlanID, tc.l7Protocols, false))
+			assert.NoError(t, fe.AddRule(ruleID, policyName, vlanID, tc.l7Protocols))
 
 			rulesPath := generateTenantRulesPath(vlanID)
 			ok, err := afero.FileContainsBytes(defaultFS, rulesPath, []byte(tc.expectedRules))
@@ -206,7 +206,7 @@ func TestRuleLifecycle(t *testing.T) {
 			assert.Equal(t, expectedScCommands, fs.calledScCommands)
 
 			// Update the added L7 NetworkPolicy.
-			assert.NoError(t, fe.AddRule(ruleID, policyName, vlanID, tc.updatedL7Protocols, false))
+			assert.NoError(t, fe.AddRule(ruleID, policyName, vlanID, tc.updatedL7Protocols))
 			expectedScCommands.Insert("reload-tenant 1 /etc/suricata/antrea-tenant-1.yaml")
 			assert.Equal(t, expectedScCommands, fs.calledScCommands)
 

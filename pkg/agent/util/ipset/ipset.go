@@ -56,11 +56,11 @@ func NewClient() *Client {
 
 func (c *Client) DestroyIPSet(name string) error {
 	cmd := exec.Command("ipset", "destroy", name)
-	if err := cmd.Run(); err != nil {
+	if output, err := cmd.CombinedOutput(); err != nil {
 		if strings.Contains(err.Error(), "The set with the given name does not exist") {
 			return nil
 		}
-		return fmt.Errorf("error destroying ipset %s: %v", name, err)
+		return fmt.Errorf("error destroying ipset %s, err: %w, output: %s", name, err, output)
 	}
 	return nil
 }
@@ -75,8 +75,8 @@ func (c *Client) CreateIPSet(name string, setType SetType, isIPv6 bool) error {
 		// #nosec G204 -- inputs are not controlled by users
 		cmd = exec.Command("ipset", "create", name, string(setType), "-exist")
 	}
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error creating ipset %s: %v", name, err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("error creating ipset %s, err: %w, output: %s", name, err, output)
 	}
 	return nil
 }
@@ -84,8 +84,8 @@ func (c *Client) CreateIPSet(name string, setType SetType, isIPv6 bool) error {
 // AddEntry adds a new entry to the set, it will ignore error when the entry already exists.
 func (c *Client) AddEntry(name string, entry string) error {
 	cmd := exec.Command("ipset", "add", name, entry, "-exist")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error adding entry %s to ipset %s: %v", entry, name, err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("error adding entry %s to ipset %s, err: %w, output: %s", entry, name, err, output)
 	}
 	return nil
 }
@@ -93,8 +93,8 @@ func (c *Client) AddEntry(name string, entry string) error {
 // DelEntry deletes the entry from the set, it will ignore error when the entry doesn't exist.
 func (c *Client) DelEntry(name string, entry string) error {
 	cmd := exec.Command("ipset", "del", name, entry, "-exist")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error deleting entry %s from ipset %s: %v", entry, name, err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("error deleting entry %s from ipset %s, err: %w, output: %s", entry, name, err, output)
 	}
 	return nil
 }
@@ -104,7 +104,7 @@ func (c *Client) ListEntries(name string) ([]string, error) {
 	cmd := exec.Command("ipset", "list", name)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("error listing ipset %s: %v", name, err)
+		return nil, fmt.Errorf("error listing ipset %s, err: %w, output: %s", name, err, output)
 	}
 	memberStr := memberPattern.ReplaceAllString(string(output), "")
 	lines := strings.Split(memberStr, "\n")

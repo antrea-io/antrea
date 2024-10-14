@@ -22,7 +22,7 @@ import (
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // NetworkPolicyEvaluationsGetter has a method to return a NetworkPolicyEvaluationInterface.
@@ -39,24 +39,17 @@ type NetworkPolicyEvaluationInterface interface {
 
 // networkPolicyEvaluations implements NetworkPolicyEvaluationInterface
 type networkPolicyEvaluations struct {
-	client rest.Interface
+	*gentype.Client[*v1beta2.NetworkPolicyEvaluation]
 }
 
 // newNetworkPolicyEvaluations returns a NetworkPolicyEvaluations
 func newNetworkPolicyEvaluations(c *ControlplaneV1beta2Client) *networkPolicyEvaluations {
 	return &networkPolicyEvaluations{
-		client: c.RESTClient(),
+		gentype.NewClient[*v1beta2.NetworkPolicyEvaluation](
+			"networkpolicyevaluations",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1beta2.NetworkPolicyEvaluation { return &v1beta2.NetworkPolicyEvaluation{} }),
 	}
-}
-
-// Create takes the representation of a networkPolicyEvaluation and creates it.  Returns the server's representation of the networkPolicyEvaluation, and an error, if there is any.
-func (c *networkPolicyEvaluations) Create(ctx context.Context, networkPolicyEvaluation *v1beta2.NetworkPolicyEvaluation, opts v1.CreateOptions) (result *v1beta2.NetworkPolicyEvaluation, err error) {
-	result = &v1beta2.NetworkPolicyEvaluation{}
-	err = c.client.Post().
-		Resource("networkpolicyevaluations").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(networkPolicyEvaluation).
-		Do(ctx).
-		Into(result)
-	return
 }

@@ -35,7 +35,10 @@ func TestProcessGroup(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
 	cidr := "10.0.0.0/24"
+	exceptCIDR := "10.0.0.0/25"
 	controlplaneIPNet, _ := cidrStrToIPNet(cidr)
+	controlplaneIPNetExcept, _ := cidrStrToIPNet(exceptCIDR)
+	_, controlplaneIPNetDiff, _ := net.ParseCIDR("10.0.0.128/25")
 	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
@@ -118,11 +121,10 @@ func TestProcessGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *controlplaneIPNet,
-						Except: []controlplane.IPNet{},
+						CIDR: *controlplaneIPNet,
 					},
 				},
-				IPNets: []net.IPNet{*ipNet},
+				IPNets: []*net.IPNet{ipNet},
 			},
 		},
 		{
@@ -165,6 +167,35 @@ func TestProcessGroup(t *testing.T) {
 					UID:       "uidF",
 				},
 				ChildGroups: []string{"gA", "gB"},
+			},
+		},
+		{
+			name: "g-with-ip-block-except",
+			inputGroup: &crdv1beta1.Group{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsG", Name: "gG", UID: "uidG"},
+				Spec: crdv1beta1.GroupSpec{
+					IPBlocks: []crdv1beta1.IPBlock{
+						{
+							CIDR:   cidr,
+							Except: []string{exceptCIDR},
+						},
+					},
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID: "uidG",
+				SourceReference: &controlplane.GroupReference{
+					Name:      "gG",
+					Namespace: "nsG",
+					UID:       "uidG",
+				},
+				IPBlocks: []controlplane.IPBlock{
+					{
+						CIDR:   *controlplaneIPNet,
+						Except: []controlplane.IPNet{*controlplaneIPNetExcept},
+					},
+				},
+				IPNets: []*net.IPNet{controlplaneIPNetDiff},
 			},
 		},
 	}
@@ -266,11 +297,10 @@ func TestAddGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *controlplaneIPNet,
-						Except: []controlplane.IPNet{},
+						CIDR: *controlplaneIPNet,
 					},
 				},
-				IPNets: []net.IPNet{*ipNet},
+				IPNets: []*net.IPNet{ipNet},
 			},
 		},
 	}
@@ -381,11 +411,10 @@ func TestUpdateGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *controlplaneIPNet,
-						Except: []controlplane.IPNet{},
+						CIDR: *controlplaneIPNet,
 					},
 				},
-				IPNets: []net.IPNet{*ipNet},
+				IPNets: []*net.IPNet{ipNet},
 			},
 		},
 		{

@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,14 +18,13 @@ package v1alpha2
 
 import (
 	"context"
-	"time"
 
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // TrafficControlsGetter has a method to return a TrafficControlInterface.
@@ -49,118 +48,18 @@ type TrafficControlInterface interface {
 
 // trafficControls implements TrafficControlInterface
 type trafficControls struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1alpha2.TrafficControl, *v1alpha2.TrafficControlList]
 }
 
 // newTrafficControls returns a TrafficControls
 func newTrafficControls(c *CrdV1alpha2Client) *trafficControls {
 	return &trafficControls{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1alpha2.TrafficControl, *v1alpha2.TrafficControlList](
+			"trafficcontrols",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1alpha2.TrafficControl { return &v1alpha2.TrafficControl{} },
+			func() *v1alpha2.TrafficControlList { return &v1alpha2.TrafficControlList{} }),
 	}
-}
-
-// Get takes name of the trafficControl, and returns the corresponding trafficControl object, and an error if there is any.
-func (c *trafficControls) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.TrafficControl, err error) {
-	result = &v1alpha2.TrafficControl{}
-	err = c.client.Get().
-		Resource("trafficcontrols").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of TrafficControls that match those selectors.
-func (c *trafficControls) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.TrafficControlList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1alpha2.TrafficControlList{}
-	err = c.client.Get().
-		Resource("trafficcontrols").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested trafficControls.
-func (c *trafficControls) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("trafficcontrols").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a trafficControl and creates it.  Returns the server's representation of the trafficControl, and an error, if there is any.
-func (c *trafficControls) Create(ctx context.Context, trafficControl *v1alpha2.TrafficControl, opts v1.CreateOptions) (result *v1alpha2.TrafficControl, err error) {
-	result = &v1alpha2.TrafficControl{}
-	err = c.client.Post().
-		Resource("trafficcontrols").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(trafficControl).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a trafficControl and updates it. Returns the server's representation of the trafficControl, and an error, if there is any.
-func (c *trafficControls) Update(ctx context.Context, trafficControl *v1alpha2.TrafficControl, opts v1.UpdateOptions) (result *v1alpha2.TrafficControl, err error) {
-	result = &v1alpha2.TrafficControl{}
-	err = c.client.Put().
-		Resource("trafficcontrols").
-		Name(trafficControl.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(trafficControl).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the trafficControl and deletes it. Returns an error if one occurs.
-func (c *trafficControls) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	return c.client.Delete().
-		Resource("trafficcontrols").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *trafficControls) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Resource("trafficcontrols").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched trafficControl.
-func (c *trafficControls) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.TrafficControl, err error) {
-	result = &v1alpha2.TrafficControl{}
-	err = c.client.Patch(pt).
-		Resource("trafficcontrols").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

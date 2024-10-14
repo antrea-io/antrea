@@ -38,22 +38,24 @@ var networkpolicystatsKind = v1alpha1.SchemeGroupVersion.WithKind("NetworkPolicy
 
 // Get takes name of the networkPolicyStats, and returns the corresponding networkPolicyStats object, and an error if there is any.
 func (c *FakeNetworkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.NetworkPolicyStats, err error) {
+	emptyResult := &v1alpha1.NetworkPolicyStats{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(networkpolicystatsResource, c.ns, name), &v1alpha1.NetworkPolicyStats{})
+		Invokes(testing.NewGetActionWithOptions(networkpolicystatsResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.NetworkPolicyStats), err
 }
 
 // List takes label and field selectors, and returns the list of NetworkPolicyStats that match those selectors.
 func (c *FakeNetworkPolicyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.NetworkPolicyStatsList, err error) {
+	emptyResult := &v1alpha1.NetworkPolicyStatsList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(networkpolicystatsResource, networkpolicystatsKind, c.ns, opts), &v1alpha1.NetworkPolicyStatsList{})
+		Invokes(testing.NewListActionWithOptions(networkpolicystatsResource, networkpolicystatsKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -72,6 +74,6 @@ func (c *FakeNetworkPolicyStats) List(ctx context.Context, opts v1.ListOptions) 
 // Watch returns a watch.Interface that watches the requested networkPolicyStats.
 func (c *FakeNetworkPolicyStats) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(networkpolicystatsResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(networkpolicystatsResource, c.ns, opts))
 
 }

@@ -35,6 +35,14 @@ import (
 	"antrea.io/antrea/pkg/features"
 )
 
+const (
+	microTimestampFormat = "2006-01-02 15:04:05.000000"
+
+	// Provide enough time for Services to be realized or deleted.
+	// It should not be less than the minInterval of the proxy's runner (1s).
+	serviceDelay = 2 * time.Second
+)
+
 type expectTableFlows struct {
 	tableName string
 	flows     []string
@@ -577,7 +585,7 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 	}
 
 	// Hold on to make sure that the Service is realized, then test the NodePort on each Node.
-	time.Sleep(2 * time.Second)
+	time.Sleep(serviceDelay)
 	testNodePortClusterFromRemote(t, data, nodes, reverseStrs(urls))
 
 	// Update the NodePort Service's externalTrafficPolicy from Cluster to Local.
@@ -585,7 +593,7 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 	require.NoError(t, err)
 
 	// Hold on to make sure that the update of Service is realized, then test the NodePort on each Node.
-	time.Sleep(2 * time.Second)
+	time.Sleep(serviceDelay)
 	testNodePortLocalFromRemote(t, data, nodes, reverseStrs(urls), nodeIPs, reverseStrs(podNames))
 }
 
@@ -617,7 +625,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	}
 
 	// Hold on to make sure that the Service is realized.
-	time.Sleep(3 * time.Second)
+	time.Sleep(serviceDelay)
 
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
@@ -894,7 +902,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	require.NoError(t, err)
 
 	// Hold on to make sure that the Service is realized.
-	time.Sleep(3 * time.Second)
+	time.Sleep(serviceDelay)
 
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
@@ -931,7 +939,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	require.NoError(t, data.DeletePodAndWait(defaultTimeout, nginx, data.testNamespace))
 
 	// Wait for one second to make sure the pipeline to be updated.
-	time.Sleep(time.Second)
+	time.Sleep(serviceDelay)
 
 	for tableName, keyword := range keywords {
 		tableOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableName)})
@@ -1001,7 +1009,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	require.NoError(t, err)
 
 	// Hold on to make sure that the Service is realized.
-	time.Sleep(3 * time.Second)
+	time.Sleep(serviceDelay)
 
 	var svcLBflows []string
 	if *ipFamily == corev1.IPv6Protocol {
@@ -1055,7 +1063,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	require.NoError(t, data.deleteService(data.testNamespace, nginxLBService))
 
 	// Hold on to make sure that the Service is realized.
-	time.Sleep(3 * time.Second)
+	time.Sleep(serviceDelay)
 
 	groupOutput, _, err = data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
@@ -1163,6 +1171,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 			service, err := data.createAgnhostLoadBalancerService(serviceName, tc.withSessionAffinity, false, []string{lbIP}, &ipProtocol, annotations)
 			require.NoError(t, err)
 			defer data.deleteServiceAndWait(defaultTimeout, serviceName, data.testNamespace)
+			time.Sleep(serviceDelay)
 
 			curlServiceWithPath := func(clientPod, clientNetns, path string) string {
 				testURL := getHTTPURLFromIPPort(lbIP, service.Spec.Ports[0].Port, path)
@@ -1184,7 +1193,10 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 				hostNames := sets.New[string]()
 				for i := 0; i < 10; i++ {
 					hostName := curlServiceWithPath(clientPod, clientNetns, "hostname")
-					t.Logf("Request #%d from %s got hostname: %s", i, clientPod, hostName)
+					// We add a microsecond timestamp to the log message, which can be compared to the timestamp of the
+					// AntreaProxy messages in the Antrea Agent's logs. This is useful for troubleshooting test
+					// failures, in case there is a race condition with Service realization.
+					t.Logf("[%s] Request #%d from %s got hostname: %s", time.Now().Format(microTimestampFormat), i, clientPod, hostName)
 					hostNames.Insert(hostName)
 					// Session affinity can only be guaranteed after the learned flow is realized in the datapath, which
 					// currently has a delay of 200ms, as set by start_ovs via other_config:max-revalidator.
@@ -1211,6 +1223,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 				service.Annotations[types.ServiceLoadBalancerModeAnnotationKey] = "nat"
 			})
 			require.NoError(t, err)
+			time.Sleep(serviceDelay)
 			clientIPResponse := curlServiceWithPath(externalClient, externalNetns, "clientip")
 			gotClientIP, _, err := net.SplitHostPort(clientIPResponse)
 			require.NoError(t, err, "Failed to got client IP from stdout: %s", clientIPResponse)

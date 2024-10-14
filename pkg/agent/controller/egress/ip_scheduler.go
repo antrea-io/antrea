@@ -61,7 +61,7 @@ type egressIPScheduler struct {
 
 	// queue is used to trigger scheduling. Triggering multiple times before the item is consumed will only cause one
 	// execution of scheduling.
-	queue workqueue.Interface
+	queue workqueue.TypedInterface[string]
 
 	// mutex is used to protect scheduleResults.
 	mutex           sync.RWMutex
@@ -89,7 +89,7 @@ func NewEgressIPScheduler(cluster memberlist.Interface, egressInformer crdinform
 		scheduledOnce:       &atomic.Bool{},
 		maxEgressIPsPerNode: maxEgressIPsPerNode,
 		nodeToMaxEgressIPs:  map[string]int{},
-		queue:               workqueue.New(),
+		queue:               workqueue.NewTyped[string](),
 	}
 	egressInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{

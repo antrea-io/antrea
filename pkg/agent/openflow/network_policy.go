@@ -1515,13 +1515,12 @@ func (c *policyRuleConjunction) calculateChangesForRuleDeletion() []*conjMatchFl
 	return ctxChanges
 }
 
-// getAllFlowKeys returns the matching strings of actions flows of
-// policyRuleConjunction, as well as matching flows of all its clauses.
+// getAllFlowKeys returns the match strings used in ovs-ofctl dump-flows command, including
+// actions flows of policyRuleConjunction, as well as matching flows of all its clauses.
 func (c *policyRuleConjunction) getAllFlowKeys() []string {
-	flowKeys := []string{}
-	dropFlowKeys := []string{}
+	var flowKeys, dropFlowKeys []string
 	for _, flow := range c.actionFlows {
-		flowKeys = append(flowKeys, getFlowKey(flow))
+		flowKeys = append(flowKeys, getFlowDumpKey(flow))
 	}
 
 	addClauseFlowKeys := func(clause *clause) {
@@ -1530,10 +1529,10 @@ func (c *policyRuleConjunction) getAllFlowKeys() []string {
 		}
 		for _, ctx := range clause.matches {
 			if ctx.flow != nil {
-				flowKeys = append(flowKeys, getFlowKey(ctx.flow))
+				flowKeys = append(flowKeys, getFlowDumpKey(ctx.flow))
 			}
 			if ctx.dropFlow != nil {
-				dropFlowKeys = append(dropFlowKeys, getFlowKey(ctx.dropFlow))
+				dropFlowKeys = append(dropFlowKeys, getFlowDumpKey(ctx.dropFlow))
 			}
 		}
 	}
@@ -1710,8 +1709,8 @@ func (c *client) DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressTy
 	return c.featureNetworkPolicy.applyConjunctiveMatchFlows(changes)
 }
 
-func (c *client) GetNetworkPolicyFlowKeys(npName, npNamespace string) []string {
-	flowKeys := []string{}
+func (c *client) GetNetworkPolicyFlowKeys(npName, npNamespace string, npType v1beta2.NetworkPolicyType) []string {
+	var flowKeys []string
 	// Hold replayMutex write lock to protect flows from being modified by
 	// NetworkPolicy updates and replayFlows. This is more for logic
 	// cleanliness, as: for now flow updates do not impact the matching string
@@ -1727,7 +1726,7 @@ func (c *client) GetNetworkPolicyFlowKeys(npName, npNamespace string) []string {
 		if conj.npRef == nil {
 			continue
 		}
-		if conj.npRef.Name == npName && conj.npRef.Namespace == npNamespace {
+		if conj.npRef.Name == npName && conj.npRef.Namespace == npNamespace && conj.npRef.Type == npType {
 			// There can be duplicated flows added due to conjunctive matches
 			// shared by multiple policy rules (clauses).
 			flowKeys = append(flowKeys, conj.getAllFlowKeys()...)

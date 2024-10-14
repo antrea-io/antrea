@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,12 @@ package v1alpha1
 
 import (
 	"context"
-	"time"
 
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // AntreaClusterNetworkPolicyStatsGetter has a method to return a AntreaClusterNetworkPolicyStatsInterface.
@@ -43,54 +42,20 @@ type AntreaClusterNetworkPolicyStatsInterface interface {
 
 // antreaClusterNetworkPolicyStats implements AntreaClusterNetworkPolicyStatsInterface
 type antreaClusterNetworkPolicyStats struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1alpha1.AntreaClusterNetworkPolicyStats, *v1alpha1.AntreaClusterNetworkPolicyStatsList]
 }
 
 // newAntreaClusterNetworkPolicyStats returns a AntreaClusterNetworkPolicyStats
 func newAntreaClusterNetworkPolicyStats(c *StatsV1alpha1Client) *antreaClusterNetworkPolicyStats {
 	return &antreaClusterNetworkPolicyStats{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1alpha1.AntreaClusterNetworkPolicyStats, *v1alpha1.AntreaClusterNetworkPolicyStatsList](
+			"antreaclusternetworkpolicystats",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1alpha1.AntreaClusterNetworkPolicyStats { return &v1alpha1.AntreaClusterNetworkPolicyStats{} },
+			func() *v1alpha1.AntreaClusterNetworkPolicyStatsList {
+				return &v1alpha1.AntreaClusterNetworkPolicyStatsList{}
+			}),
 	}
-}
-
-// Get takes name of the antreaClusterNetworkPolicyStats, and returns the corresponding antreaClusterNetworkPolicyStats object, and an error if there is any.
-func (c *antreaClusterNetworkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.AntreaClusterNetworkPolicyStats, err error) {
-	result = &v1alpha1.AntreaClusterNetworkPolicyStats{}
-	err = c.client.Get().
-		Resource("antreaclusternetworkpolicystats").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of AntreaClusterNetworkPolicyStats that match those selectors.
-func (c *antreaClusterNetworkPolicyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.AntreaClusterNetworkPolicyStatsList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1alpha1.AntreaClusterNetworkPolicyStatsList{}
-	err = c.client.Get().
-		Resource("antreaclusternetworkpolicystats").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested antreaClusterNetworkPolicyStats.
-func (c *antreaClusterNetworkPolicyStats) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("antreaclusternetworkpolicystats").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
 }

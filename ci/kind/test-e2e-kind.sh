@@ -253,7 +253,7 @@ COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
                     "antrea/nginx:1.21.6-alpine" \
                     "antrea/toolbox:1.3-0")
 
-FLOW_VISIBILITY_IMAGE_LIST=("antrea/ipfix-collector:v0.9.0" \
+FLOW_VISIBILITY_IMAGE_LIST=("antrea/ipfix-collector:v0.11.0" \
                             "antrea/clickhouse-operator:0.21.0" \
                             "antrea/metrics-exporter:0.21.0" \
                             "antrea/clickhouse-server:23.4")
@@ -293,13 +293,12 @@ printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 
 vlan_args=""
 if $extra_vlan; then
-  vlan_args="$vlan_args --vlan-id 10"
   if [[ "$ipfamily" == "v4" ]]; then
-    vlan_args="$vlan_args --vlan-subnets 172.100.10.1/24"
+    vlan_args="$vlan_args --vlan-subnets 10=172.100.10.1/24"
   elif [[ "$ipfamily" == "v6" ]]; then
-    vlan_args="$vlan_args --vlan-subnets fd00:172:100:10::1/96"
+    vlan_args="$vlan_args --vlan-subnets 10=fd00:172:100:10::1/96"
   elif [[ "$ipfamily" == "dual" ]]; then
-    vlan_args="$vlan_args --vlan-subnets 172.100.10.1/24,fd00:172:100:10::1/96"
+    vlan_args="$vlan_args --vlan-subnets 10=172.100.10.1/24,fd00:172:100:10::1/96"
   fi
 fi
 

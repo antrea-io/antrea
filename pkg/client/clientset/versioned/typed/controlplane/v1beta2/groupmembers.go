@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // GroupMembersGetter has a method to return a GroupMembersInterface.
@@ -39,27 +39,17 @@ type GroupMembersInterface interface {
 
 // groupMembers implements GroupMembersInterface
 type groupMembers struct {
-	client rest.Interface
-	ns     string
+	*gentype.Client[*v1beta2.GroupMembers]
 }
 
 // newGroupMembers returns a GroupMembers
 func newGroupMembers(c *ControlplaneV1beta2Client, namespace string) *groupMembers {
 	return &groupMembers{
-		client: c.RESTClient(),
-		ns:     namespace,
+		gentype.NewClient[*v1beta2.GroupMembers](
+			"groupmembers",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			namespace,
+			func() *v1beta2.GroupMembers { return &v1beta2.GroupMembers{} }),
 	}
-}
-
-// Get takes name of the groupMembers, and returns the corresponding groupMembers object, and an error if there is any.
-func (c *groupMembers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.GroupMembers, err error) {
-	result = &v1beta2.GroupMembers{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("groupmembers").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
 }

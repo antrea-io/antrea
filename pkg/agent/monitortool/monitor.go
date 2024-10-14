@@ -452,6 +452,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		case <-stopCh:
 			return
 		case latencyConfig := <-m.latencyConfigChanged:
+			klog.InfoS("NodeLatencyMonitor configuration has changed", "enabled", latencyConfig.Enable, "interval", latencyConfig.Interval)
 			// Start or stop the pingAll goroutine based on the latencyConfig
 			if latencyConfig.Enable {
 				// latencyConfig changed

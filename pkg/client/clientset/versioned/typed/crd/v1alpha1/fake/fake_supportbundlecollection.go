@@ -38,20 +38,22 @@ var supportbundlecollectionsKind = v1alpha1.SchemeGroupVersion.WithKind("Support
 
 // Get takes name of the supportBundleCollection, and returns the corresponding supportBundleCollection object, and an error if there is any.
 func (c *FakeSupportBundleCollections) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.SupportBundleCollection, err error) {
+	emptyResult := &v1alpha1.SupportBundleCollection{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(supportbundlecollectionsResource, name), &v1alpha1.SupportBundleCollection{})
+		Invokes(testing.NewRootGetActionWithOptions(supportbundlecollectionsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.SupportBundleCollection), err
 }
 
 // List takes label and field selectors, and returns the list of SupportBundleCollections that match those selectors.
 func (c *FakeSupportBundleCollections) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.SupportBundleCollectionList, err error) {
+	emptyResult := &v1alpha1.SupportBundleCollectionList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(supportbundlecollectionsResource, supportbundlecollectionsKind, opts), &v1alpha1.SupportBundleCollectionList{})
+		Invokes(testing.NewRootListActionWithOptions(supportbundlecollectionsResource, supportbundlecollectionsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -70,36 +72,39 @@ func (c *FakeSupportBundleCollections) List(ctx context.Context, opts v1.ListOpt
 // Watch returns a watch.Interface that watches the requested supportBundleCollections.
 func (c *FakeSupportBundleCollections) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(supportbundlecollectionsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(supportbundlecollectionsResource, opts))
 }
 
 // Create takes the representation of a supportBundleCollection and creates it.  Returns the server's representation of the supportBundleCollection, and an error, if there is any.
 func (c *FakeSupportBundleCollections) Create(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.CreateOptions) (result *v1alpha1.SupportBundleCollection, err error) {
+	emptyResult := &v1alpha1.SupportBundleCollection{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(supportbundlecollectionsResource, supportBundleCollection), &v1alpha1.SupportBundleCollection{})
+		Invokes(testing.NewRootCreateActionWithOptions(supportbundlecollectionsResource, supportBundleCollection, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.SupportBundleCollection), err
 }
 
 // Update takes the representation of a supportBundleCollection and updates it. Returns the server's representation of the supportBundleCollection, and an error, if there is any.
 func (c *FakeSupportBundleCollections) Update(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.UpdateOptions) (result *v1alpha1.SupportBundleCollection, err error) {
+	emptyResult := &v1alpha1.SupportBundleCollection{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(supportbundlecollectionsResource, supportBundleCollection), &v1alpha1.SupportBundleCollection{})
+		Invokes(testing.NewRootUpdateActionWithOptions(supportbundlecollectionsResource, supportBundleCollection, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.SupportBundleCollection), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeSupportBundleCollections) UpdateStatus(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.UpdateOptions) (*v1alpha1.SupportBundleCollection, error) {
+func (c *FakeSupportBundleCollections) UpdateStatus(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.UpdateOptions) (result *v1alpha1.SupportBundleCollection, err error) {
+	emptyResult := &v1alpha1.SupportBundleCollection{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(supportbundlecollectionsResource, "status", supportBundleCollection), &v1alpha1.SupportBundleCollection{})
+		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(supportbundlecollectionsResource, "status", supportBundleCollection, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.SupportBundleCollection), err
 }
@@ -113,7 +118,7 @@ func (c *FakeSupportBundleCollections) Delete(ctx context.Context, name string, 
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeSupportBundleCollections) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(supportbundlecollectionsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(supportbundlecollectionsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.SupportBundleCollectionList{})
 	return err
@@ -121,10 +126,11 @@ func (c *FakeSupportBundleCollections) DeleteCollection(ctx context.Context, opt
 
 // Patch applies the patch and returns the patched supportBundleCollection.
 func (c *FakeSupportBundleCollections) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.SupportBundleCollection, err error) {
+	emptyResult := &v1alpha1.SupportBundleCollection{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(supportbundlecollectionsResource, name, pt, data, subresources...), &v1alpha1.SupportBundleCollection{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(supportbundlecollectionsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.SupportBundleCollection), err
 }

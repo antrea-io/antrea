@@ -139,7 +139,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, tt.enabledDSR)()
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, tt.enabledDSR)
 
 			o := &Options{config: &agentconfig.AgentConfig{
 				AntreaProxy: tt.antreaProxyConfig,
@@ -199,7 +199,7 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Egress, tt.featureGateValue)()
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Egress, tt.featureGateValue)
 
 			o := &Options{config: &agentconfig.AgentConfig{
 				Egress: tt.egressConfig,
@@ -261,7 +261,7 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, true)()
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, true)
 			o := &Options{config: &agentconfig.AgentConfig{
 				Multicast: agentconfig.MulticastConfig{
 					Enable:            true,
@@ -325,7 +325,7 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.SecondaryNetwork, tc.featureGateValue)()
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.SecondaryNetwork, tc.featureGateValue)
 
 			o := &Options{config: &agentconfig.AgentConfig{}}
 			for _, brName := range tc.ovsBridges {

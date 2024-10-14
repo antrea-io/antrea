@@ -215,9 +215,10 @@ $ antctl get podmulticaststats pod -n namespace`,
 							shorthand: "p",
 						},
 						{
-							name:      "type",
-							usage:     "Get NetworkPolicies with specific type. Type means the type of its source NetworkPolicy: K8sNP, ACNP, ANNP",
-							shorthand: "T",
+							name:            "type",
+							usage:           "Get NetworkPolicies with specific type. Type refers to the type of its source NetworkPolicy: K8sNP, ACNP, ANNP, BANP or ANP",
+							shorthand:       "T",
+							supportedValues: []string{"K8sNP", "ACNP", "ANNP", "BANP", "ANP"},
 						},
 					}, getSortByFlag()),
 					outputType: multiple,
@@ -371,7 +372,7 @@ $ antctl get podmulticaststats pod -n namespace`,
   Dump OVS flows of a Service
   $ antctl get ovsflows -S svc1 -n ns1
   Dump OVS flows of a NetworkPolicy
-  $ antctl get ovsflows -N np1 -n ns1
+  $ antctl get ovsflows -N np1 -n ns1 --type K8sNP
   Dump OVS flows of a flow Table
   $ antctl get ovsflows -T IngressRule
   Dump OVS groups
@@ -399,8 +400,13 @@ $ antctl get podmulticaststats pod -n namespace`,
 						},
 						{
 							name:      "networkpolicy",
-							usage:     "NetworkPolicy name. If present, Namespace must be provided.",
+							usage:     "NetworkPolicy name. Namespace must be provided for non-cluster-scoped policy types if a type is specified.",
 							shorthand: "N",
+						},
+						{
+							name:            "type",
+							usage:           "NetworkPolicy type. Valid types are K8sNP, ACNP, ANNP, BANP or ANP.",
+							supportedValues: []string{"K8sNP", "ACNP", "ANNP", "BANP", "ANP"},
 						},
 						{
 							name:      "table",
@@ -632,6 +638,36 @@ $ antctl get podmulticaststats pod -n namespace`,
 				},
 			},
 			transformedResponse: reflect.TypeOf(agentapis.MemberlistResponse{}),
+		},
+		{
+			use:   "bgppolicy",
+			short: "Print effective bgppolicy information",
+			long:  "Print effective bgppolicy information including name, local ASN, router ID and listen port",
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:       "/bgppolicy",
+					outputType: single,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(agentapis.BGPPolicyResponse{}),
+		},
+		{
+			use:     "bgppeers",
+			aliases: []string{"bgppeer"},
+			short:   "Print the current status of all bgp peers of effective bgppolicy",
+			long:    "Print the current status of all bgp peers of effective bgppolicy which includes peer IP address with port, asn and state",
+			example: `  Get the list of bgppeers with their current status
+  $ antctl get bgppeers
+`,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:       "/bgppeers",
+					outputType: multiple,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(agentapis.BGPPeerResponse{}),
 		},
 	},
 	rawCommands: []rawCommand{

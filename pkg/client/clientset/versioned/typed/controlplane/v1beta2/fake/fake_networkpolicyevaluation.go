@@ -35,10 +35,11 @@ var networkpolicyevaluationsKind = v1beta2.SchemeGroupVersion.WithKind("NetworkP
 
 // Create takes the representation of a networkPolicyEvaluation and creates it.  Returns the server's representation of the networkPolicyEvaluation, and an error, if there is any.
 func (c *FakeNetworkPolicyEvaluations) Create(ctx context.Context, networkPolicyEvaluation *v1beta2.NetworkPolicyEvaluation, opts v1.CreateOptions) (result *v1beta2.NetworkPolicyEvaluation, err error) {
+	emptyResult := &v1beta2.NetworkPolicyEvaluation{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(networkpolicyevaluationsResource, networkPolicyEvaluation), &v1beta2.NetworkPolicyEvaluation{})
+		Invokes(testing.NewRootCreateActionWithOptions(networkpolicyevaluationsResource, networkPolicyEvaluation, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1beta2.NetworkPolicyEvaluation), err
 }

@@ -23,7 +23,6 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
@@ -50,19 +49,12 @@ type IPFIXExporter struct {
 	templateIDv6               uint16
 	registry                   ipfix.IPFIXRegistry
 	set                        ipfixentities.Set
-	k8sClient                  kubernetes.Interface
+	clusterUUID                uuid.UUID
 }
 
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
-// user through the flow aggregator configuration. It will first try to generate one
-// deterministically based on the cluster UUID (if available, with a timeout of 10s). Otherwise, it
-// will generate a random one.
-func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
-	clusterUUID, err := getClusterUUID(k8sClient)
-	if err != nil {
-		klog.ErrorS(err, "Error when retrieving cluster UUID; will generate a random observation domain ID")
-		clusterUUID = uuid.New()
-	}
+// user through the flow aggregator configuration. It is generated as a hash of the cluster UUID.
+func genObservationDomainID(clusterUUID uuid.UUID) uint32 {
 	h := fnv.New32()
 	h.Write(clusterUUID[:])
 	observationDomainID := h.Sum32()
@@ -70,7 +62,7 @@ func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
 }
 
 func NewIPFIXExporter(
-	k8sClient kubernetes.Interface,
+	clusterUUID uuid.UUID,
 	opt *options.Options,
 	registry ipfix.IPFIXRegistry,
 ) *IPFIXExporter {
@@ -85,7 +77,7 @@ func NewIPFIXExporter(
 	if opt.Config.FlowCollector.ObservationDomainID != nil {
 		observationDomainID = *opt.Config.FlowCollector.ObservationDomainID
 	} else {
-		observationDomainID = genObservationDomainID(k8sClient)
+		observationDomainID = genObservationDomainID(clusterUUID)
 	}
 	klog.InfoS("Flow aggregator Observation Domain ID", "domainID", observationDomainID)
 
@@ -97,7 +89,7 @@ func NewIPFIXExporter(
 		observationDomainID:        observationDomainID,
 		registry:                   registry,
 		set:                        ipfixentities.NewSet(false),
-		k8sClient:                  k8sClient,
+		clusterUUID:                clusterUUID,
 	}
 
 	return exporter
@@ -144,7 +136,7 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	if opt.Config.FlowCollector.ObservationDomainID != nil {
 		e.observationDomainID = *opt.Config.FlowCollector.ObservationDomainID
 	} else {
-		e.observationDomainID = genObservationDomainID(e.k8sClient)
+		e.observationDomainID = genObservationDomainID(e.clusterUUID)
 	}
 	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID)
 

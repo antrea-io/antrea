@@ -39,22 +39,24 @@ var externalentitiesKind = v1alpha2.SchemeGroupVersion.WithKind("ExternalEntity"
 
 // Get takes name of the externalEntity, and returns the corresponding externalEntity object, and an error if there is any.
 func (c *FakeExternalEntities) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.ExternalEntity, err error) {
+	emptyResult := &v1alpha2.ExternalEntity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(externalentitiesResource, c.ns, name), &v1alpha2.ExternalEntity{})
+		Invokes(testing.NewGetActionWithOptions(externalentitiesResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.ExternalEntity), err
 }
 
 // List takes label and field selectors, and returns the list of ExternalEntities that match those selectors.
 func (c *FakeExternalEntities) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.ExternalEntityList, err error) {
+	emptyResult := &v1alpha2.ExternalEntityList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(externalentitiesResource, externalentitiesKind, c.ns, opts), &v1alpha2.ExternalEntityList{})
+		Invokes(testing.NewListActionWithOptions(externalentitiesResource, externalentitiesKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -73,28 +75,30 @@ func (c *FakeExternalEntities) List(ctx context.Context, opts v1.ListOptions) (r
 // Watch returns a watch.Interface that watches the requested externalEntities.
 func (c *FakeExternalEntities) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(externalentitiesResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(externalentitiesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a externalEntity and creates it.  Returns the server's representation of the externalEntity, and an error, if there is any.
 func (c *FakeExternalEntities) Create(ctx context.Context, externalEntity *v1alpha2.ExternalEntity, opts v1.CreateOptions) (result *v1alpha2.ExternalEntity, err error) {
+	emptyResult := &v1alpha2.ExternalEntity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(externalentitiesResource, c.ns, externalEntity), &v1alpha2.ExternalEntity{})
+		Invokes(testing.NewCreateActionWithOptions(externalentitiesResource, c.ns, externalEntity, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.ExternalEntity), err
 }
 
 // Update takes the representation of a externalEntity and updates it. Returns the server's representation of the externalEntity, and an error, if there is any.
 func (c *FakeExternalEntities) Update(ctx context.Context, externalEntity *v1alpha2.ExternalEntity, opts v1.UpdateOptions) (result *v1alpha2.ExternalEntity, err error) {
+	emptyResult := &v1alpha2.ExternalEntity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(externalentitiesResource, c.ns, externalEntity), &v1alpha2.ExternalEntity{})
+		Invokes(testing.NewUpdateActionWithOptions(externalentitiesResource, c.ns, externalEntity, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.ExternalEntity), err
 }
@@ -109,7 +113,7 @@ func (c *FakeExternalEntities) Delete(ctx context.Context, name string, opts v1.
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeExternalEntities) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(externalentitiesResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(externalentitiesResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha2.ExternalEntityList{})
 	return err
@@ -117,11 +121,12 @@ func (c *FakeExternalEntities) DeleteCollection(ctx context.Context, opts v1.Del
 
 // Patch applies the patch and returns the patched externalEntity.
 func (c *FakeExternalEntities) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.ExternalEntity, err error) {
+	emptyResult := &v1alpha2.ExternalEntity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(externalentitiesResource, c.ns, name, pt, data, subresources...), &v1alpha2.ExternalEntity{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(externalentitiesResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha2.ExternalEntity), err
 }

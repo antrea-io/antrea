@@ -84,7 +84,7 @@ type NodePolicyRule struct {
 	ServiceIPTChain string
 	ServiceIPTRules []string
 	CoreIPTChain    string
-	CoreIPTRule     string
+	CoreIPTRules    []string
 	IsIPv6          bool
 }
 

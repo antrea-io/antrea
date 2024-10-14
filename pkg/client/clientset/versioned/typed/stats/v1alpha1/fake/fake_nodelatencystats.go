@@ -36,20 +36,22 @@ var nodelatencystatsKind = v1alpha1.SchemeGroupVersion.WithKind("NodeLatencyStat
 
 // Get takes name of the nodeLatencyStats, and returns the corresponding nodeLatencyStats object, and an error if there is any.
 func (c *FakeNodeLatencyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.NodeLatencyStats, err error) {
+	emptyResult := &v1alpha1.NodeLatencyStats{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(nodelatencystatsResource, name), &v1alpha1.NodeLatencyStats{})
+		Invokes(testing.NewRootGetActionWithOptions(nodelatencystatsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.NodeLatencyStats), err
 }
 
 // List takes label and field selectors, and returns the list of NodeLatencyStats that match those selectors.
 func (c *FakeNodeLatencyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.NodeLatencyStatsList, err error) {
+	emptyResult := &v1alpha1.NodeLatencyStatsList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(nodelatencystatsResource, nodelatencystatsKind, opts), &v1alpha1.NodeLatencyStatsList{})
+		Invokes(testing.NewRootListActionWithOptions(nodelatencystatsResource, nodelatencystatsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -67,10 +69,11 @@ func (c *FakeNodeLatencyStats) List(ctx context.Context, opts v1.ListOptions) (r
 
 // Create takes the representation of a nodeLatencyStats and creates it.  Returns the server's representation of the nodeLatencyStats, and an error, if there is any.
 func (c *FakeNodeLatencyStats) Create(ctx context.Context, nodeLatencyStats *v1alpha1.NodeLatencyStats, opts v1.CreateOptions) (result *v1alpha1.NodeLatencyStats, err error) {
+	emptyResult := &v1alpha1.NodeLatencyStats{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(nodelatencystatsResource, nodeLatencyStats), &v1alpha1.NodeLatencyStats{})
+		Invokes(testing.NewRootCreateActionWithOptions(nodelatencystatsResource, nodeLatencyStats, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.NodeLatencyStats), err
 }

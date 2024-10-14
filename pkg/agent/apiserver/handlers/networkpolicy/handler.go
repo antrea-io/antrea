@@ -57,15 +57,6 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	}
 }
 
-// From user shorthand input to cpv1beta1.NetworkPolicyType
-var mapToNetworkPolicyType = map[string]cpv1beta.NetworkPolicyType{
-	"NP":    cpv1beta.K8sNetworkPolicy,
-	"K8SNP": cpv1beta.K8sNetworkPolicy,
-	"ACNP":  cpv1beta.AntreaClusterNetworkPolicy,
-	"ANNP":  cpv1beta.AntreaNetworkPolicy,
-	"ANP":   cpv1beta.AntreaNetworkPolicy,
-}
-
 // Create a Network Policy Filter from URL Query
 func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter, string, error) {
 	namespace, pod := query.Get("namespace"), query.Get("pod")
@@ -77,9 +68,13 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 		}
 	}
 	strSourceType := strings.ToUpper(query.Get("type"))
-	npSourceType, ok := mapToNetworkPolicyType[strSourceType]
-	if strSourceType != "" && !ok {
-		return nil, "", fmt.Errorf("invalid policy source type. Valid values are K8sNP, ACNP, ANNP and ANP (deprecated)")
+	var policyType cpv1beta.NetworkPolicyType
+	if strSourceType != "" {
+		npSourceType, ok := querier.NetworkPolicyTypeMap[strSourceType]
+		if !ok {
+			return nil, "", fmt.Errorf("unknown policy type. Valid types are %v", querier.GetNetworkPolicyTypeShorthands())
+		}
+		policyType = npSourceType
 	}
 	source := query.Get("source")
 	name := query.Get("name")
@@ -90,6 +85,6 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 		Name:       name,
 		SourceName: source,
 		Namespace:  namespace,
-		SourceType: npSourceType,
+		SourceType: policyType,
 	}, pod, nil
 }

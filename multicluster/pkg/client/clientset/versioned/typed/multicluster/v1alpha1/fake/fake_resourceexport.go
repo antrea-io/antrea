@@ -39,22 +39,24 @@ var resourceexportsKind = v1alpha1.SchemeGroupVersion.WithKind("ResourceExport")
 
 // Get takes name of the resourceExport, and returns the corresponding resourceExport object, and an error if there is any.
 func (c *FakeResourceExports) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ResourceExport, err error) {
+	emptyResult := &v1alpha1.ResourceExport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(resourceexportsResource, c.ns, name), &v1alpha1.ResourceExport{})
+		Invokes(testing.NewGetActionWithOptions(resourceexportsResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceExport), err
 }
 
 // List takes label and field selectors, and returns the list of ResourceExports that match those selectors.
 func (c *FakeResourceExports) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ResourceExportList, err error) {
+	emptyResult := &v1alpha1.ResourceExportList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(resourceexportsResource, resourceexportsKind, c.ns, opts), &v1alpha1.ResourceExportList{})
+		Invokes(testing.NewListActionWithOptions(resourceexportsResource, resourceexportsKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -73,40 +75,43 @@ func (c *FakeResourceExports) List(ctx context.Context, opts v1.ListOptions) (re
 // Watch returns a watch.Interface that watches the requested resourceExports.
 func (c *FakeResourceExports) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(resourceexportsResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(resourceexportsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a resourceExport and creates it.  Returns the server's representation of the resourceExport, and an error, if there is any.
 func (c *FakeResourceExports) Create(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.CreateOptions) (result *v1alpha1.ResourceExport, err error) {
+	emptyResult := &v1alpha1.ResourceExport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(resourceexportsResource, c.ns, resourceExport), &v1alpha1.ResourceExport{})
+		Invokes(testing.NewCreateActionWithOptions(resourceexportsResource, c.ns, resourceExport, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceExport), err
 }
 
 // Update takes the representation of a resourceExport and updates it. Returns the server's representation of the resourceExport, and an error, if there is any.
 func (c *FakeResourceExports) Update(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.UpdateOptions) (result *v1alpha1.ResourceExport, err error) {
+	emptyResult := &v1alpha1.ResourceExport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(resourceexportsResource, c.ns, resourceExport), &v1alpha1.ResourceExport{})
+		Invokes(testing.NewUpdateActionWithOptions(resourceexportsResource, c.ns, resourceExport, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceExport), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeResourceExports) UpdateStatus(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.UpdateOptions) (*v1alpha1.ResourceExport, error) {
+func (c *FakeResourceExports) UpdateStatus(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.UpdateOptions) (result *v1alpha1.ResourceExport, err error) {
+	emptyResult := &v1alpha1.ResourceExport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(resourceexportsResource, "status", c.ns, resourceExport), &v1alpha1.ResourceExport{})
+		Invokes(testing.NewUpdateSubresourceActionWithOptions(resourceexportsResource, "status", c.ns, resourceExport, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceExport), err
 }
@@ -121,7 +126,7 @@ func (c *FakeResourceExports) Delete(ctx context.Context, name string, opts v1.D
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeResourceExports) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(resourceexportsResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(resourceexportsResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ResourceExportList{})
 	return err
@@ -129,11 +134,12 @@ func (c *FakeResourceExports) DeleteCollection(ctx context.Context, opts v1.Dele
 
 // Patch applies the patch and returns the patched resourceExport.
 func (c *FakeResourceExports) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ResourceExport, err error) {
+	emptyResult := &v1alpha1.ResourceExport{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(resourceexportsResource, c.ns, name, pt, data, subresources...), &v1alpha1.ResourceExport{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(resourceexportsResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.ResourceExport), err
 }

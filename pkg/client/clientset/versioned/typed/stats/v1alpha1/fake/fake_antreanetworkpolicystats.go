@@ -38,22 +38,24 @@ var antreanetworkpolicystatsKind = v1alpha1.SchemeGroupVersion.WithKind("AntreaN
 
 // Get takes name of the antreaNetworkPolicyStats, and returns the corresponding antreaNetworkPolicyStats object, and an error if there is any.
 func (c *FakeAntreaNetworkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.AntreaNetworkPolicyStats, err error) {
+	emptyResult := &v1alpha1.AntreaNetworkPolicyStats{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(antreanetworkpolicystatsResource, c.ns, name), &v1alpha1.AntreaNetworkPolicyStats{})
+		Invokes(testing.NewGetActionWithOptions(antreanetworkpolicystatsResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.AntreaNetworkPolicyStats), err
 }
 
 // List takes label and field selectors, and returns the list of AntreaNetworkPolicyStats that match those selectors.
 func (c *FakeAntreaNetworkPolicyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.AntreaNetworkPolicyStatsList, err error) {
+	emptyResult := &v1alpha1.AntreaNetworkPolicyStatsList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(antreanetworkpolicystatsResource, antreanetworkpolicystatsKind, c.ns, opts), &v1alpha1.AntreaNetworkPolicyStatsList{})
+		Invokes(testing.NewListActionWithOptions(antreanetworkpolicystatsResource, antreanetworkpolicystatsKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -72,6 +74,6 @@ func (c *FakeAntreaNetworkPolicyStats) List(ctx context.Context, opts v1.ListOpt
 // Watch returns a watch.Interface that watches the requested antreaNetworkPolicyStats.
 func (c *FakeAntreaNetworkPolicyStats) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(antreanetworkpolicystatsResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(antreanetworkpolicystatsResource, c.ns, opts))
 
 }

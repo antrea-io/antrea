@@ -16,6 +16,7 @@
 - [Example Usage](#example-usage)
   - [Combined Advertisements of Service, Pod, and Egress IPs](#combined-advertisements-of-service-pod-and-egress-ips)
   - [Advertise Egress IPs to external BGP peers with more than one hop](#advertise-egress-ips-to-external-bgp-peers-with-more-than-one-hop)
+- [Using antctl](#using-antctl)
 - [Limitations](#limitations)
 <!-- /toc -->
 
@@ -213,6 +214,10 @@ spec:
       port: 179
       multihopTTL: 2
 ```
+
+## Using antctl
+
+Please refer to the corresponding [antctl page](antctl.md#bgp-commands).
 
 ## Limitations
 

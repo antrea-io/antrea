@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,12 @@ package v1alpha1
 
 import (
 	"context"
-	"time"
 
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // MulticastGroupsGetter has a method to return a MulticastGroupInterface.
@@ -43,54 +42,18 @@ type MulticastGroupInterface interface {
 
 // multicastGroups implements MulticastGroupInterface
 type multicastGroups struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1alpha1.MulticastGroup, *v1alpha1.MulticastGroupList]
 }
 
 // newMulticastGroups returns a MulticastGroups
 func newMulticastGroups(c *StatsV1alpha1Client) *multicastGroups {
 	return &multicastGroups{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1alpha1.MulticastGroup, *v1alpha1.MulticastGroupList](
+			"multicastgroups",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1alpha1.MulticastGroup { return &v1alpha1.MulticastGroup{} },
+			func() *v1alpha1.MulticastGroupList { return &v1alpha1.MulticastGroupList{} }),
 	}
-}
-
-// Get takes name of the multicastGroup, and returns the corresponding multicastGroup object, and an error if there is any.
-func (c *multicastGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.MulticastGroup, err error) {
-	result = &v1alpha1.MulticastGroup{}
-	err = c.client.Get().
-		Resource("multicastgroups").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of MulticastGroups that match those selectors.
-func (c *multicastGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.MulticastGroupList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1alpha1.MulticastGroupList{}
-	err = c.client.Get().
-		Resource("multicastgroups").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested multicastGroups.
-func (c *multicastGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("multicastgroups").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
 }

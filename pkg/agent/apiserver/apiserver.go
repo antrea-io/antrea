@@ -15,6 +15,7 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,16 +26,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	k8sversion "k8s.io/apimachinery/pkg/version"
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	apiserverversion "k8s.io/apiserver/pkg/util/version"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/addressgroup"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgppeer"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgppolicy"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
@@ -71,8 +74,8 @@ type agentAPIServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
 }
 
-func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
-	return s.GenericAPIServer.PrepareRun().Run(stopCh)
+func (s *agentAPIServer) Run(ctx context.Context) error {
+	return s.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
 
 func (s *agentAPIServer) GetCertData() []byte {
@@ -84,7 +87,7 @@ func (s *agentAPIServer) GetCertData() []byte {
 	return cert
 }
 
-func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier, s *genericapiserver.GenericAPIServer) {
+func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier, s *genericapiserver.GenericAPIServer, bgpq querier.AgentBGPPolicyInfoQuerier) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/podmulticaststats", multicast.HandleFunc(mq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/featuregates", featuregates.HandleFunc())
@@ -97,6 +100,8 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovstracing", ovstracing.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/serviceexternalip", serviceexternalip.HandleFunc(seipq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/memberlist", memberlist.HandleFunc(aq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/bgppolicy", bgppolicy.HandleFunc(bgpq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/bgppeers", bgppeer.HandleFunc(bgpq))
 }
 
 func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool) error {
@@ -114,6 +119,7 @@ func New(aq agentquerier.AgentQuerier,
 	npq querier.AgentNetworkPolicyInfoQuerier,
 	mq querier.AgentMulticastInfoQuerier,
 	seipq querier.ServiceExternalIPStatusQuerier,
+	bgpq querier.AgentBGPPolicyInfoQuerier,
 	secureServing *genericoptions.SecureServingOptionsWithLoopback,
 	authentication *genericoptions.DelegatingAuthenticationOptions,
 	authorization *genericoptions.DelegatingAuthorizationOptions,
@@ -134,7 +140,7 @@ func New(aq agentquerier.AgentQuerier,
 	if err := installAPIGroup(s, aq, npq, v4Enabled, v6Enabled); err != nil {
 		return nil, err
 	}
-	installHandlers(aq, npq, mq, seipq, s)
+	installHandlers(aq, npq, mq, seipq, s, bgpq)
 	return &agentAPIServer{GenericAPIServer: s}, nil
 }
 
@@ -176,14 +182,7 @@ func newConfig(aq agentquerier.AgentQuerier,
 	if err := os.WriteFile(loopbackClientTokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
 		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
 	}
-	v := antreaversion.GetVersion()
-	serverConfig.Version = &k8sversion.Info{
-		Major:        fmt.Sprint(v.Major),
-		Minor:        fmt.Sprint(v.Minor),
-		GitVersion:   v.String(),
-		GitTreeState: antreaversion.GitTreeState,
-		GitCommit:    antreaversion.GetGitSHA(),
-	}
+	serverConfig.EffectiveVersion = apiserverversion.NewEffectiveVersion(antreaversion.GetFullVersion())
 	serverConfig.EnableMetrics = enableMetrics
 	// Add readiness probe to check the status of watchers.
 	watcherCheck := healthz.NamedCheck("watcher", func(_ *http.Request) error {
