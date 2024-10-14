@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -144,18 +145,22 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 
 	const newAddr = "newAddr"
 	const newProto = "newProto"
+	const newTemplateRefreshTimeout = 1200 * time.Second
 	config.FlowCollector.Address = fmt.Sprintf("%s:%s", newAddr, newProto)
 	config.FlowCollector.RecordFormat = "JSON"
+	config.FlowCollector.TemplateRefreshTimeout = newTemplateRefreshTimeout.String()
 
 	ipfixExporter.UpdateOptions(&options.Options{
 		Config:                     config,
 		ExternalFlowCollectorAddr:  newAddr,
 		ExternalFlowCollectorProto: newProto,
+		TemplateRefreshTimeout:     newTemplateRefreshTimeout,
 	})
 
 	assert.Equal(t, newAddr, ipfixExporter.externalFlowCollectorAddr)
 	assert.Equal(t, newProto, ipfixExporter.externalFlowCollectorProto)
 	assert.True(t, ipfixExporter.sendJSONRecord)
+	assert.Equal(t, newTemplateRefreshTimeout, ipfixExporter.templateRefreshTimeout)
 
 	require.NoError(t, ipfixExporter.AddRecord(mockRecord, false))
 	assert.Equal(t, 2, setCount, "Invalid number of flow sets sent by exporter")

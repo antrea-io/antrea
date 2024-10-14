@@ -419,12 +419,12 @@ func PrepareHostInterfaceConnection(
 	// If the port already exists, just return.
 	if ofPort, err := bridge.GetOFPort(bridgedName, false); err == nil {
 		klog.InfoS("Port already exists, skip the configuration", "port", bridgedName, "ofPort", ofPort)
-		return "", true, nil
+		return bridgedName, true, nil
 	}
 
 	iface, ifaceIPs, ifaceRoutes, err := GetInterfaceConfig(ifaceName)
 	if err != nil {
-		return "", false, nil
+		return "", false, err
 	}
 
 	if err = RenameInterface(ifaceName, bridgedName); err != nil {
