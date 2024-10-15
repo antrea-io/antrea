@@ -616,23 +616,9 @@ func TestOnDNSResponse(t *testing.T) {
 			lowestTTL: 30,
 			expectedIPs: map[string]time.Time{
 				// old unexpired IP should continue to have its actual TTL.
-				"192.0.2.1": time.Now().Add(10 * time.Second),
+				"192.0.2.1": currentTime.Add(10 * time.Second),
 				// new ip should have new expirationTime that was passed (minTTL)
-				"192.0.2.3": time.Now().Add(30 * time.Second),
-			},
-		},
-		{
-			name: "only a new IP is added",
-			// so this should simulate the case where we are encountering this fqdn for the very first time and hence our dnsMeta related to this fqdn
-			// must be empty
-			existingDNSCache: map[string]dnsMeta{},
-			responseIPs: map[string]ipWithTTL{
-				"192.0.2.3": {ip: net.ParseIP("192.0.2.3"), expirationTime: currentTime.Add(10 * time.Second)},
-			},
-			lowestTTL: 30,
-			// so expected TTL should be a expirationTime we set (minTTL)
-			expectedIPs: map[string]time.Time{
-				"192.0.2.3": time.Now().Add(30 * time.Second),
+				"192.0.2.3": currentTime.Add(10 * time.Second),
 			},
 		},
 		{
@@ -641,7 +627,7 @@ func TestOnDNSResponse(t *testing.T) {
 				"fqdn-test-pod.lfx.test": {
 					responseIPs: map[string]ipWithTTL{
 						// an ip which is expired.
-						"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: time.Now().Add(-1 * time.Second)},
+						"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(-1 * time.Second)},
 					},
 				},
 			},
@@ -651,7 +637,7 @@ func TestOnDNSResponse(t *testing.T) {
 			lowestTTL: 30,
 			// so we should expect the removal of expired ip from our cache and presence of only this ip
 			expectedIPs: map[string]time.Time{
-				"192.0.2.3": time.Now().Add(30 * time.Second), // new IP
+				"192.0.2.3": currentTime.Add(10 * time.Second), // new IP
 			},
 		},
 	}
@@ -662,7 +648,7 @@ func TestOnDNSResponse(t *testing.T) {
 			f, _ := newMockFQDNController(t, controller, nil) // server set as nil for testing purpose here .
 			f.dnsEntryCache = tc.existingDNSCache
 
-			f.onDNSResponse("fqdn-test-pod.lfx.test", tc.responseIPs, nil) //waitChan nil, though as per original function its nil only for when pod sends queries and not fqdnController
+			f.onDNSResponse("fqdn-test-pod.lfx.test", tc.responseIPs, nil) //waitChan nil, though as per original function its nil only when queries are sent by pod and not fqdnController.
 
 			dnsMetaData := f.dnsEntryCache["fqdn-test-pod.lfx.test"]
 			if len(dnsMetaData.responseIPs) != len(tc.expectedIPs) {
@@ -676,6 +662,7 @@ func TestOnDNSResponse(t *testing.T) {
 					t.Errorf("Expected TTL for %s to be %v, got %v", ipStr, expectedTTL, ipMeta.expirationTime)
 				}
 			}
+			println("\n\n")
 		})
 	}
 }

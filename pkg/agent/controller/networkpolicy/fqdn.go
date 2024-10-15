@@ -427,7 +427,14 @@ func (f *fqdnController) onDNSResponse(
 	defer f.fqdnSelectorMutex.Unlock()
 	oldDNSMeta, exist := f.dnsEntryCache[fqdn]
 	ipMetaDataHolder := make(map[string]ipWithTTL)
-	var maxTimeToReQuery time.Time
+	minTimeToReQuery := time.Unix(1<<63-62135596801, 999999999)
+
+	minTime := func(t1, t2 time.Time) time.Time {
+		if t1.Before(t2) {
+			return t1
+		}
+		return t2
+	}
 
 	maxTime := func(t1, t2 time.Time) time.Time {
 		if t1.After(t2) {
@@ -447,7 +454,7 @@ func (f *fqdnController) onDNSResponse(
 					ip:             ipMeta.ip,
 					expirationTime: ipMeta.expirationTime,
 				}
-				maxTimeToReQuery = maxTime(ipMeta.expirationTime, maxTimeToReQuery)
+				minTimeToReQuery = minTime(ipMeta.expirationTime, minTimeToReQuery)
 			}
 		}
 
@@ -458,18 +465,17 @@ func (f *fqdnController) onDNSResponse(
 					addressUpdate = true
 				} else {
 					// It hasn't expired yet, so just retain it with its existing expirationTime.
-					ipMetaDataHolder[ipStr] = ipWithTTL{
-						ip:             ipMeta.ip,
-						expirationTime: ipMeta.expirationTime,
-					}
-					maxTimeToReQuery = maxTime(ipMeta.expirationTime, maxTimeToReQuery)
+					ipMetaDataHolder[ipStr] = ipMeta
+					minTimeToReQuery = minTime(ipMeta.expirationTime, minTimeToReQuery)
 				}
 			} else {
-				// This old IP also exists in current response, so update it with new received TTl.
+				// This old IP also exists in current response, so update it with max time between received time and its old cached time.
+				expTime := maxTime(responseIPs[ipStr].expirationTime, oldDNSMeta.responseIPs[ipStr].expirationTime)
 				ipMetaDataHolder[ipStr] = ipWithTTL{
 					ip:             ipMeta.ip,
-					expirationTime: maxTime(responseIPs[ipStr].expirationTime, oldDNSMeta.responseIPs[ipStr].expirationTime),
+					expirationTime: expTime,
 				}
+				minTimeToReQuery = minTime(expTime, minTimeToReQuery)
 			}
 		}
 
@@ -487,7 +493,7 @@ func (f *fqdnController) onDNSResponse(
 						ip:             ipMeta.ip,
 						expirationTime: ipMeta.expirationTime,
 					}
-					maxTimeToReQuery = maxTime(ipMeta.expirationTime, maxTimeToReQuery)
+					minTimeToReQuery = minTime(ipMeta.expirationTime, minTimeToReQuery)
 				}
 			}
 		}
@@ -500,7 +506,7 @@ func (f *fqdnController) onDNSResponse(
 		}
 		// The FQDN will be added to the queue only after `lowestTTL` value which
 		// would already have been derived using the minTTL logic.
-		f.dnsQueryQueue.AddAfter(fqdn, maxTimeToReQuery.Sub(currentTime))
+		f.dnsQueryQueue.AddAfter(fqdn, minTimeToReQuery.Sub(currentTime))
 	}
 	f.syncDirtyRules(fqdn, waitCh, addressUpdate)
 }
@@ -647,9 +653,9 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 				// So, using case 1 above , we may not make below comparison and just assign the max value as expirationTime ; ignoring the incoming dns ttl.
 				var expirationTime uint32
 				if r.Header().Ttl < maxConfiguredTTL {
-					expirationTime = r.Header().Ttl
-				} else {
 					expirationTime = maxConfiguredTTL
+				} else {
+					expirationTime = r.Header().Ttl
 				}
 				responseIPs[r.A.String()] = ipWithTTL{
 					ip:             r.A,
@@ -661,9 +667,9 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 			if f.ipv6Enabled {
 				var expirationTime uint32
 				if r.Header().Ttl < maxConfiguredTTL {
-					expirationTime = r.Header().Ttl
-				} else {
 					expirationTime = maxConfiguredTTL
+				} else {
+					expirationTime = r.Header().Ttl
 				}
 				responseIPs[r.AAAA.String()] = ipWithTTL{
 					ip:             r.AAAA,
