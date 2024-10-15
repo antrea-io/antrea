@@ -357,13 +357,13 @@ type BGPPeer struct {
 }
 
 type PodReference struct {
-	Namespace string `json:"namespace,omitempty"`
-	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
 }
 
 type ServiceReference struct {
-	Namespace string `json:"namespace,omitempty"`
-	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
 }
 
 // Source describes the source spec of the packetcapture.
@@ -458,6 +458,13 @@ type CaptureConfig struct {
 	FirstN *PacketCaptureFirstNConfig `json:"firstN,omitempty"`
 }
 
+// PacketCaptureFileServer specifies the PacketCapture file server information.
+type PacketCaptureFileServer struct {
+	// The URL of the file server. It is set with format: scheme://host[:port][/path],
+	// e.g, https://api.example.com:8443/v1/supportbundles/. If scheme is not set, https is used by default.
+	URL string `json:"url"`
+}
+
 type PacketCaptureSpec struct {
 	Timeout       *uint16       `json:"timeout,omitempty"`
 	CaptureConfig CaptureConfig `json:"captureConfig"`
@@ -465,7 +472,7 @@ type PacketCaptureSpec struct {
 	Destination   Destination   `json:"destination"`
 	Packet        *Packet       `json:"packet,omitempty"`
 	// FileServer specifies the sftp url config for a file server. If present, captured packets will be uploaded to this server.
-	FileServer *BundleFileServer `json:"fileServer,omitempty"`
+	FileServer *PacketCaptureFileServer `json:"fileServer,omitempty"`
 }
 
 type PacketCaptureStatus struct {
@@ -476,7 +483,8 @@ type PacketCaptureStatus struct {
 	// can be considered as finished.
 	NumCapturedPackets *int32 `json:"numCapturedPackets,omitempty"`
 	// PacketsFilePath is the file path where the captured packets are stored. The format is: "<antrea-agent-pod-name>:<path>".
-	// If `.spec.FileServer` is present, this file will also be uploaded to the targeted location.
+	// If `.spec.FileServer` is present, this file will also be uploaded to the targeted location. This file
+	// will be removed after the PacketCapture CR is deleted.
 	PacketsFilePath string `json:"packetsFilePath"`
 	// StartTime is the time when this capture session starts.
 	StartTime *metav1.Time `json:"startTime,omitempty"`

@@ -68,9 +68,12 @@ spec:
                   properties:
                     pod:
                       type: object
+                      required:
+                        - name
                       properties:
                         namespace:
                           type: string
+                          default: default
                         name:
                           type: string
                     ip:
@@ -90,16 +93,22 @@ spec:
                   properties:
                     pod:
                       type: object
+                      required:
+                        - name
                       properties:
                         namespace:
                           type: string
+                          default: default
                         name:
                           type: string
                     service:
                       type: object
+                      required:
+                        - name
                       properties:
                         namespace:
                           type: string
+                          default: default
                         name:
                           type: string
                     ip:

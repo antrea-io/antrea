@@ -2917,7 +2917,6 @@ spec:
             spec:
               type: object
               required:
-                - fileServer
                 - source
                 - captureConfig
                 - destination
@@ -2931,11 +2930,22 @@ spec:
               properties:
                 source:
                   type: object
+                  oneOf:
+                    - required:
+                      - pod
+                    - required:
+                      - ip
                   properties:
                     pod:
-                      type: string
-                    namespace:
-                      type: string
+                      type: object
+                      required:
+                        - name
+                      properties:
+                        namespace:
+                          type: string
+                          default: default
+                        name:
+                          type: string
                     ip:
                       type: string
                       oneOf:
@@ -2943,13 +2953,34 @@ spec:
                         - format: ipv6
                 destination:
                   type: object
+                  oneOf:
+                    - required:
+                      - pod
+                    - required:
+                      - ip
+                    - required:
+                      - service
                   properties:
                     pod:
-                      type: string
+                      type: object
+                      required:
+                        - name
+                      properties:
+                        namespace:
+                          type: string
+                          default: default
+                        name:
+                          type: string
                     service:
-                      type: string
-                    namespace:
-                      type: string
+                      type: object
+                      required:
+                        - name
+                      properties:
+                        namespace:
+                          type: string
+                          default: default
+                        name:
+                          type: string
                     ip:
                       type: string
                       oneOf:
@@ -2958,20 +2989,12 @@ spec:
                 packet:
                   type: object
                   properties:
-                    ipHeader:
-                      type: object
-                      properties:
-                        protocol:
-                          type: integer
-                          minimum: 0
-                          maximum: 255
-                    ipv6Header:
-                      type: object
-                      properties:
-                        nextHeader:
-                          type: integer
-                          minimum: 0
-                          maximum: 65535
+                    ipFamily:
+                      type: string
+                      enum: [IPv4, IPv6]
+                      default: IPv4
+                    protocol:
+                      x-kubernetes-int-or-string: true
                     transportHeader:
                       type: object
                       properties:
@@ -3005,6 +3028,7 @@ spec:
                   type: integer
                   minimum: 1
                   maximum: 300
+                  default: 60
                 captureConfig:
                   type: object
                   anyOf:
@@ -3035,9 +3059,8 @@ spec:
                   type: string
                 numCapturedPackets:
                   type: integer
-                packetsFileName:
+                packetsFilePath:
                   type: string
-
       subresources:
         status: {}
   scope: Cluster
@@ -3046,7 +3069,7 @@ spec:
     singular: packetcapture
     kind: PacketCapture
     shortNames:
-      - pcp
+      - pcap
 
 ---
 # Source: antrea/crds/supportbundlecollection.yaml
