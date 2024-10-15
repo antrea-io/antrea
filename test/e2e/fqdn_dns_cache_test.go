@@ -107,40 +107,23 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	createFqdnPolicyInNamespace(t, data, testFullyQualifiedDomainName)
 
 	t.Logf("Creating Toolbox pod...")
-	require.NoError(t, data.createToolboxPodOnNode(toolboxPodName, data.testNamespace, "", false), "Error creating toolbox pod")
-	_, err = data.PodWaitFor(defaultTimeout, toolboxPodName, data.testNamespace, func(pod *corev1.Pod) (bool, error) {
-		return pod.Status.Phase == corev1.PodRunning, nil
-	})
-	require.NoError(t, err, "Error while waiting for Toolbox Pod to be in Running state")
+	createToolBoxPod(t, data, customDnsService.Spec.ClusterIP)
 
-	curlTarget := func(podName, containerName, fqdn string) error {
+	curlTarget := func(podName, containerName, fqdn string) (string, error) {
 		cmd := []string{"curl", fqdn}
 		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, podName, containerName, cmd)
 		if err != nil {
-			return fmt.Errorf("error when running command '%s' on Pod '%s': %v, stdout: <%v>, stderr: <%v>",
+			return "", fmt.Errorf("error when running command '%s' on Pod '%s': %v, stdout: <%v>, stderr: <%v>",
 				strings.Join(cmd, " "), podName, err, stdout, stderr)
 		}
-		return nil
+		return stdout, nil
 	}
-
-	//curl does not seem to support --dns-server flag unless we provide DNS IP in resolv.conf, same with --resolve flag.
-	setDnsInPod := func(podName, containerName, fqdn string) error {
-		cmd := []string{"bash", "-c", "echo 'nameserver " + customDnsService.Spec.ClusterIP + "' > /etc/resolv.conf"}
-		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, podName, containerName, cmd)
-		if err != nil {
-			return fmt.Errorf("error when running command '%s' on Pod '%s': %v, stdout: <%v>, stderr: <%v>",
-				strings.Join(cmd, " "), podName, err, stdout, stderr)
-		}
-		return nil
-	}
-
-	t.Logf("Setting custom DNS IP in resolv.conf of Toolbox pod...")
-	require.NoError(t, setDnsInPod(toolboxPodName, toolboxContainerName, testFullyQualifiedDomainName), "Error setting custom DNS in toolbox")
 
 	t.Logf("Trying to curl FQDN ...")
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		err = curlTarget(toolboxPodName, toolboxContainerName, testFullyQualifiedDomainName)
+		stdout, err := curlTarget(toolboxPodName, toolboxContainerName, testFullyQualifiedDomainName)
 		assert.NoError(t, err)
+		t.Logf("response of curl to FQDN - %+v", stdout)
 	}, 2*time.Second, 100*time.Millisecond, "trying to curl the fqdn : ", testFullyQualifiedDomainName)
 
 	t.Logf("Trying to DIG the FQDN to simulate caching the current IP inside Toolbox pod...")
@@ -178,10 +161,12 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	require.NoError(t, data.setPodAnnotation(data.testNamespace, customDnsPodName, randomPatchAnnotationKey, randSeq(annotationValueLen)), "failed to update custom dns pod annotation.")
 
 	assert.Eventually(t, func() bool {
-		t.Logf("trying to curl the existing cached IP of the domain  %v", fqdnIp)
-		err = curlTarget(toolboxPodName, toolboxContainerName, fqdnIp)
+		t.Logf("Trying to curl the existing cached IP of the domain - %v", fqdnIp)
+		stdout, err := curlTarget(toolboxPodName, toolboxContainerName, fqdnIp)
 		if err != nil {
-			t.Logf("The test failed because of error  %+v", err)
+			t.Logf("The test failed because of error :  %+v", err)
+		} else {
+			t.Logf("response of curl to cached IP - %+v", stdout)
 		}
 		return assert.Error(t, err)
 	}, 15*time.Second, 1*time.Second)
@@ -324,6 +309,24 @@ func createFqdnPolicyInNamespace(t *testing.T, data *TestData, domainName string
 	require.NoError(t, err, "error while deploying antrea policy %+v", err)
 	failOnError(err, t)
 	failOnError(waitForResourceReady(t, 30*time.Second, annp), t)
+}
+
+func createToolBoxPod(t *testing.T, data *TestData, dnsServiceIP string) {
+	toolBoxLabel := map[string]string{fqdnPodSelectorLabelKey: fqdnPodSelectorLabelValue}
+	pb := NewPodBuilder(toolboxPodName, data.testNamespace, ToolboxImage)
+	pb.WithLabels(toolBoxLabel)
+	pb.WithContainerName(toolboxContainerName)
+	mutateSpecForAddingCustomDNS := func(pod *corev1.Pod) {
+		pod.Spec.DNSPolicy = corev1.DNSNone
+		if pod.Spec.DNSConfig == nil {
+			pod.Spec.DNSConfig = &corev1.PodDNSConfig{}
+		}
+		pod.Spec.DNSConfig.Nameservers = []string{dnsServiceIP}
+
+	}
+	pb.WithMutateFunc(mutateSpecForAddingCustomDNS)
+	require.NoError(t, pb.Create(data))
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, toolboxPodName, data.testNamespace))
 }
 
 func createHttpAgnhostPod(t *testing.T, data *TestData, podName string, agnLabels map[string]string) *PodIPs {
