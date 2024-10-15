@@ -368,7 +368,7 @@ type ServiceReference struct {
 
 // Source describes the source spec of the packetcapture.
 type Source struct {
-	// Pod is the source pod,
+	// Pod is the source Pod.
 	Pod *PodReference `json:"pod,omitempty"`
 	// IP is the source IPv4 or IPv6 address.
 	IP *string `json:"ip,omitempty"`
@@ -464,7 +464,7 @@ type PacketCaptureSpec struct {
 	Source        Source        `json:"source"`
 	Destination   Destination   `json:"destination"`
 	Packet        *Packet       `json:"packet,omitempty"`
-	// FileServer specifies the sftp url config for the fileServer. Captured packets will be uploaded to this server.
+	// FileServer specifies the sftp url config for a file server. If present, captured packets will be uploaded to this server.
 	FileServer *BundleFileServer `json:"fileServer,omitempty"`
 }
 
@@ -478,6 +478,6 @@ type PacketCaptureStatus struct {
 	// PacketsFilePath is the file path where the captured packets are stored. The format is: "<antrea-agent-pod-name>:<path>".
 	// If `.spec.FileServer` is present, this file will also be uploaded to the targeted location.
 	PacketsFilePath string `json:"packetsFilePath"`
-	// StartTime is the time when this capture sessions starts.
+	// StartTime is the time when this capture session starts.
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 }
