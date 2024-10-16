@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -96,7 +97,14 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	ipv4, ipv6 := extractIPs(agnHostPodIps[0])
 
 	dnsConfigData := createDnsConfig(t, ipv4, ipv6, testFullyQualifiedDomainName)
-	customDnsConfigMapObject, err := data.CreateConfigMap(data.testNamespace, customDnsConfigName, dnsConfigData, nil, false)
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      customDnsConfigName,
+			Namespace: data.testNamespace,
+		},
+		Data: dnsConfigData,
+	}
+	customDnsConfigMapObject, err := data.CreateConfigMap(configMap)
 	require.NoError(t, err, "failed to create custom dns ConfigMap: %v", err)
 
 	createDnsPod(t, data)
@@ -268,18 +276,8 @@ func createDnsPod(t *testing.T, data *TestData) {
 		},
 	}
 
-	label := map[string]string{customDnsLabelKey: customDnsLabelValue}
-	pb := NewPodBuilder(customDnsPodName, data.testNamespace, customDnsImage)
-	pb.WithLabels(label)
-	pb.WithContainerName(customDnsContainerName)
-	pb.WithArgs([]string{"-conf", "/etc/coredns/Corefile"})
-	pb.AddVolume(volume)
-	pb.AddVolumeMount(volumeMount)
-
-	require.NoError(t, pb.Create(data))
+	require.NoError(t, NewPodBuilder(customDnsPodName, data.testNamespace, customDnsImage).WithLabels(map[string]string{customDnsLabelKey: customDnsLabelValue}).WithContainerName(customDnsContainerName).WithArgs([]string{"-conf", "/etc/coredns/Corefile"}).AddVolume(volume).AddVolumeMount(volumeMount).WithAnnotations(map[string]string{randomPatchAnnotationKey: randSeq(annotationValueLen)}).Create(data))
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, customDnsPodName, data.testNamespace))
-	require.NoError(t, data.setPodAnnotation(data.testNamespace, customDnsPodName, randomPatchAnnotationKey, randSeq(annotationValueLen)), "failed to annotate the custom dns pod.")
-
 }
 
 func createFqdnPolicyInNamespace(t *testing.T, data *TestData, domainName string) {
@@ -307,15 +305,11 @@ func createFqdnPolicyInNamespace(t *testing.T, data *TestData, domainName string
 
 	annp, err := k8sUtils.CreateOrUpdateANNP(builder.Get())
 	require.NoError(t, err, "error while deploying antrea policy %+v", err)
-	failOnError(err, t)
-	failOnError(waitForResourceReady(t, 30*time.Second, annp), t)
+	require.NoError(t, waitForResourceReady(t, 30*time.Second, annp))
 }
 
 func createToolBoxPod(t *testing.T, data *TestData, dnsServiceIP string) {
 	toolBoxLabel := map[string]string{fqdnPodSelectorLabelKey: fqdnPodSelectorLabelValue}
-	pb := NewPodBuilder(toolboxPodName, data.testNamespace, ToolboxImage)
-	pb.WithLabels(toolBoxLabel)
-	pb.WithContainerName(toolboxContainerName)
 	mutateSpecForAddingCustomDNS := func(pod *corev1.Pod) {
 		pod.Spec.DNSPolicy = corev1.DNSNone
 		if pod.Spec.DNSConfig == nil {
@@ -324,8 +318,7 @@ func createToolBoxPod(t *testing.T, data *TestData, dnsServiceIP string) {
 		pod.Spec.DNSConfig.Nameservers = []string{dnsServiceIP}
 
 	}
-	pb.WithMutateFunc(mutateSpecForAddingCustomDNS)
-	require.NoError(t, pb.Create(data))
+	require.NoError(t, NewPodBuilder(toolboxPodName, data.testNamespace, ToolboxImage).WithLabels(toolBoxLabel).WithContainerName(toolboxContainerName).WithMutateFunc(mutateSpecForAddingCustomDNS).Create(data))
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, toolboxPodName, data.testNamespace))
 }
 

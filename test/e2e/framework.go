@@ -3250,29 +3250,27 @@ func (data *TestData) runDNSQuery(
 	}
 }
 
-// setPodAnnotation Patches a pod by adding an annotation with a specified key and a randomly generated string as the value.
+// setPodAnnotation Patches a pod by adding an annotation with a specified key and value.
 func (data *TestData) setPodAnnotation(namespace, podName, annotationKey string, annotationValue string) error {
+	annotations := map[string]string{
+		annotationKey: annotationValue,
+	}
 	annotationPatch := map[string]interface{}{
 		"metadata": map[string]interface{}{
-			"annotations": make(map[string]string),
+			"annotations": annotations,
 		},
 	}
 
-	annotationPatch["metadata"].(map[string]interface{})["annotations"].(map[string]string)[annotationKey] = annotationValue
-
 	patchData, err := json.Marshal(annotationPatch)
 	if err != nil {
-		log.Infof("Error marshalling annotation: %+v", err)
 		return err
 	}
 
 	_, err = data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), podName, types.MergePatchType, patchData, metav1.PatchOptions{})
 	if err != nil {
-		log.Infof("Error patching pod %s in namespace %s with annotations. Error: %+v", podName, namespace, err)
 		return err
 	}
 
-	log.Infof("Successfully patched pod %s in namespace %s with a random value annotation", podName, namespace)
+	log.Infof("Successfully patched pod %s in namespace %s", podName, namespace)
 	return nil
-
 }
