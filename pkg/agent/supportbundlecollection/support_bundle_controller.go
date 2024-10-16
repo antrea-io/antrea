@@ -90,12 +90,12 @@ func NewSupportBundleController(nodeName string,
 		queue: workqueue.NewTypedWithConfig(workqueue.TypedQueueConfig[string]{
 			Name: "supportbundle",
 		}),
-		ovsCtlClient:          ovsCtlClient,
-		aq:                    aq,
-		npq:                   npq,
-		v4Enabled:             v4Enabled,
-		v6Enabled:             v6Enabled,
-		sftpUploader:          &ftp.SftpUploader{},
+		ovsCtlClient: ovsCtlClient,
+		aq:           aq,
+		npq:          npq,
+		v4Enabled:    v4Enabled,
+		v6Enabled:    v6Enabled,
+		sftpUploader: &ftp.SftpUploader{},
 	}
 	return c
 }

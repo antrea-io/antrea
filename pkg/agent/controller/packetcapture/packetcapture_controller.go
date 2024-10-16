@@ -131,7 +131,7 @@ type Controller struct {
 	ofClient                   openflow.Client
 	interfaceStore             interfacestore.InterfaceStore
 	nodeConfig                 *config.NodeConfig
-	queue                      workqueue.RateLimitingInterface
+	queue                      workqueue.TypedRateLimitingInterface[string]
 	runningPacketCapturesMutex sync.RWMutex
 	runningPacketCaptures      map[uint8]*packetCaptureState
 	sftpUploader               ftp.Uploader
@@ -156,8 +156,10 @@ func NewPacketCaptureController(
 		ofClient:              client,
 		interfaceStore:        interfaceStore,
 		nodeConfig:            nodeConfig,
-		queue: workqueue.NewRateLimitingQueueWithConfig(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay),
-			workqueue.RateLimitingQueueConfig{Name: "packetcapture"}),
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "packetcapture"},
+		),
 		runningPacketCaptures: make(map[uint8]*packetCaptureState),
 		sftpUploader:          &ftp.SftpUploader{},
 	}
@@ -255,17 +257,12 @@ func (c *Controller) worker() {
 }
 
 func (c *Controller) processPacketCaptureItem() bool {
-	obj, quit := c.queue.Get()
+	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-
-	defer c.queue.Done(obj)
-	if key, ok := obj.(string); !ok {
-		c.queue.Forget(obj)
-		klog.ErrorS(nil, "Expected string in work queue but got non-string object", "obj", obj)
-		return true
-	} else if err := c.syncPacketCapture(key); err == nil {
+	defer c.queue.Done(key)
+	if err := c.syncPacketCapture(key); err == nil {
 		c.queue.Forget(key)
 	} else {
 		klog.ErrorS(err, "Error syncing PacketCapture, exiting", "key", key)
