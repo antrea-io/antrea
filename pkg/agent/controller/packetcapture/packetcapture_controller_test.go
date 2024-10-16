@@ -206,6 +206,15 @@ func TestErrPacketCaptureCRD(t *testing.T) {
 					Name:      pod2.Name,
 				},
 			},
+			CaptureConfig: crdv1alpha1.CaptureConfig{
+				FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
+					Number: 12,
+				},
+			},
+			Packet: &crdv1alpha1.Packet{
+				IPFamily: v1.IPv4Protocol,
+				Protocol: &icmpProto,
+			},
 		},
 		Status: crdv1alpha1.PacketCaptureStatus{
 			Phase: crdv1alpha1.PacketCaptureRunning,
@@ -796,6 +805,9 @@ func TestStartPacketCapture(t *testing.T) {
 							Number: 5,
 						},
 					},
+					Packet: &crdv1alpha1.Packet{
+						IPFamily: v1.IPv4Protocol,
+					},
 				},
 
 				Status: crdv1alpha1.PacketCaptureStatus{
@@ -840,6 +852,9 @@ func TestStartPacketCapture(t *testing.T) {
 						FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
 							Number: 5,
 						},
+					},
+					Packet: &crdv1alpha1.Packet{
+						IPFamily: v1.IPv4Protocol,
 					},
 				},
 				Status: crdv1alpha1.PacketCaptureStatus{
