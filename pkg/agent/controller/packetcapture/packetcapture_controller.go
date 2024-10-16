@@ -526,7 +526,11 @@ func (c *Controller) preparePacket(pc *crdv1alpha1.PacketCapture, intf *interfac
 func parseTargetProto(packet *crdv1alpha1.Packet) uint8 {
 	inputProto := packet.Protocol
 	if inputProto == nil {
-		return protocol.Type_ICMP
+		if packet.IPFamily == v1.IPv4Protocol {
+			return protocol.Type_ICMP
+		} else {
+			return protocol.Type_IPv6ICMP
+		}
 	}
 	if inputProto.Type == intstr.Int {
 		return uint8(inputProto.IntVal)
@@ -629,7 +633,7 @@ func (c *Controller) uploadPackets(pc *crdv1alpha1.PacketCapture, outputFile afe
 	authConfig := getDefaultFileServerAuth()
 	serverAuth, err := ftp.ParseBundleAuth(*authConfig, c.kubeClient)
 	if err != nil {
-		klog.ErrorS(err, "Failed to get authentication defined in the PacketCapture CR", "name", pc.Name, "authentication", authConfig)
+		klog.ErrorS(err, "Failed to get authentication for the fileServer", "name", pc.Name, "authentication", authConfig)
 		return err
 	}
 	cfg := ftp.GenSSHClientConfig(serverAuth.BasicAuthentication.Username, serverAuth.BasicAuthentication.Password)

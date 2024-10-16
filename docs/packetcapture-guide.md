@@ -80,3 +80,5 @@ to the port 8080 of a Pod named `backend` using TCP protocol. It will capture th
 that meet this criterion and upload them to the specified sftp server. Users can download the
 packet file from the sftp server(or from local antrea-agent pod) and analyze its contents with network diagnose tools
 like Wireshark or tcpdump.
+
+Currently we support max to `15` concurrrent PacketCapture session running at the same time.
