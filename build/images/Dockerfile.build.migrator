@@ -21,7 +21,7 @@ USER root
 
 COPY build/images/scripts/migrate_cni /usr/local/bin/
 
-ENV CRICTL_VERSION="v1.27.0"
+ENV CRICTL_VERSION="v1.31.1"
 RUN apt update \
     && apt install -y jq ca-certificates wget \
     && rm -rf /var/cache/apt/* /var/lib/apt/lists/* \
