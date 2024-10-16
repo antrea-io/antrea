@@ -690,6 +690,10 @@ func (o *Options) setExternalNodeDefaultOptions() {
 	if o.config.ExternalNode.ExternalNodeNamespace == "" {
 		o.config.ExternalNode.ExternalNodeNamespace = "default"
 	}
+	// Regardless of whether the egress feature is enabled, o.config.Egress.SNATFullyRandomPorts should not be nil to prevent a crash in NewClient().
+	if o.config.Egress.SNATFullyRandomPorts == nil {
+		o.config.Egress.SNATFullyRandomPorts = ptr.To(o.config.SNATFullyRandomPorts)
+	}
 }
 
 func (o *Options) setMulticlusterDefaultOptions() {
