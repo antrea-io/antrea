@@ -21,7 +21,6 @@ import (
 	"net/netip"
 	"time"
 
-	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
@@ -91,18 +90,6 @@ func getMatch(matchers *ofctrl.Matchers, tableID uint8, disposition uint32) *ofc
 	return nil
 }
 
-// getInfoInReg unloads and returns data stored in the match field.
-func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32, error) {
-	regValue, ok := regMatch.GetValue().(*ofctrl.NXRegister)
-	if !ok {
-		return 0, errors.New("register value cannot be retrieved")
-	}
-	if rng != nil {
-		return ofctrl.GetUint32ValueWithRange(regValue.Data, rng), nil
-	}
-	return regValue.Data, nil
-}
-
 func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	packet, err := binding.ParsePacketIn(pktIn)
 	if err != nil {
@@ -147,7 +134,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	tableID := getPacketInTableID(pktIn)
 	// Get disposition Allow, Drop or Reject
 	match = getMatchRegField(matchers, openflow.APDispositionField)
-	id, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
+	id, err := openflow.GetInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
 	if err != nil {
 		return fmt.Errorf("error when getting disposition from reg: %v", err)
 	}
@@ -156,7 +143,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	// Set match to corresponding ingress/egress reg according to disposition
 	match = getMatch(matchers, tableID, id)
 	if match != nil {
-		ruleID, err := getInfoInReg(match, nil)
+		ruleID, err := openflow.GetInfoInReg(match, nil)
 		if err != nil {
 			return fmt.Errorf("error when obtaining rule id from reg: %v", err)
 		}
@@ -223,7 +210,7 @@ func getPacketInTableID(pktIn *ofctrl.PacketIn) uint8 {
 	tableID := pktIn.TableId
 	matchers := pktIn.GetMatches()
 	if match := getMatchRegField(matchers, openflow.PacketInTableField); match != nil {
-		tableVal, err := getInfoInReg(match, openflow.PacketInTableField.GetRange().ToNXRange())
+		tableVal, err := openflow.GetInfoInReg(match, openflow.PacketInTableField.GetRange().ToNXRange())
 		if err == nil {
 			return uint8(tableVal)
 		} else {

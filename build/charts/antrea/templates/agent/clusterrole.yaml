@@ -42,6 +42,14 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - secrets
+    resourceNames:
+      - antrea-packetcapture-fileserver-auth
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
       - endpoints
       - services
       - namespaces
@@ -160,6 +168,20 @@ rules:
       - patch
       - create
       - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - packetcaptures
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - packetcaptures/status
+    verbs:
+      - patch
   - apiGroups:
       - crd.antrea.io
     resources:

@@ -406,6 +406,7 @@ type client struct {
 	enableL7FlowExporter       bool
 	enableMulticluster         bool
 	enablePrometheusMetrics    bool
+	enablePacketCapture        bool
 	connectUplinkToBridge      bool
 	nodeType                   config.NodeType
 	roundInfo                  types.RoundInfo
@@ -424,6 +425,8 @@ type client struct {
 
 	featureTraceflow  *featureTraceflow
 	traceableFeatures []traceableFeature
+
+	featurePacketCapture *featurePacketCapture
 
 	pipelines map[binding.PipelineID]binding.Pipeline
 
@@ -940,14 +943,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		default:
 			flowBuilder = flowBuilder.MatchIPProtocolValue(packet.IsIPv6, packet.IPProto)
 		}
-		if packet.IPProto == protocol.Type_TCP || packet.IPProto == protocol.Type_UDP {
-			if packet.DestinationPort != 0 {
-				flowBuilder = flowBuilder.MatchDstPort(packet.DestinationPort, nil)
-			}
-			if packet.SourcePort != 0 {
-				flowBuilder = flowBuilder.MatchSrcPort(packet.SourcePort, nil)
-			}
-		}
+
 		flows = append(flows, flowBuilder.Done())
 	}
 
@@ -2838,6 +2834,7 @@ func NewClient(bridgeName string,
 	enableMulticluster bool,
 	groupIDAllocator GroupAllocator,
 	enablePrometheusMetrics bool,
+	enablePacketCapture bool,
 	packetInRate int,
 ) *client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
@@ -2857,6 +2854,7 @@ func NewClient(bridgeName string,
 		enableL7FlowExporter:       enableL7FlowExporter,
 		enableMulticluster:         enableMulticluster,
 		enablePrometheusMetrics:    enablePrometheusMetrics,
+		enablePacketCapture:        enablePacketCapture,
 		connectUplinkToBridge:      connectUplinkToBridge,
 		pipelines:                  make(map[binding.PipelineID]binding.Pipeline),
 		packetInHandlers:           map[uint8]PacketInHandler{},

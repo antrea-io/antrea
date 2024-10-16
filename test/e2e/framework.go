@@ -682,7 +682,7 @@ func (data *TestData) collectClusterInfo() error {
 	podCIDRs, err := retrieveCIDRs("kubectl cluster-info dump | grep cluster-cidr", `cluster-cidr=([^"]+)`)
 	if err != nil {
 		// Retrieve cluster CIDRs for Rancher clusters.
-		podCIDRs, err = retrieveCIDRs("ps aux | grep kube-controller | grep cluster-cidr", `cluster-cidr=([^\s]+)`)
+		podCIDRs, err = retrieveCIDRs("pc aux | grep kube-controller | grep cluster-cidr", `cluster-cidr=([^\s]+)`)
 		if err != nil {
 			return err
 		}
@@ -694,7 +694,7 @@ func (data *TestData) collectClusterInfo() error {
 	svcCIDRs, err := retrieveCIDRs("kubectl cluster-info dump | grep service-cluster-ip-range", `service-cluster-ip-range=([^"]+)`)
 	if err != nil {
 		// Retrieve service CIDRs for Rancher clusters.
-		svcCIDRs, err = retrieveCIDRs("ps aux | grep kube-controller | grep service-cluster-ip-range", `service-cluster-ip-range=([^\s]+)`)
+		svcCIDRs, err = retrieveCIDRs("pc aux | grep kube-controller | grep service-cluster-ip-range", `service-cluster-ip-range=([^\s]+)`)
 		if err != nil {
 			return err
 		}

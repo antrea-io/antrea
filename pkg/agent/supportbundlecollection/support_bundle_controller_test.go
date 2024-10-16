@@ -16,7 +16,6 @@ package supportbundlecollection
 
 import (
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/spf13/afero"
@@ -37,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/support"
+	"antrea.io/antrea/pkg/util/ftp"
 )
 
 type fakeController struct {
@@ -69,7 +69,7 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 		supportBundleCollection *cpv1b2.SupportBundleCollection
 		expectedCompleted       bool
 		agentDumper             *mockAgentDumper
-		uploader                uploader
+		uploader                ftp.Uploader
 	}{
 		{
 			name:                    "Add SupportBundleCollection",
@@ -90,7 +90,7 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 			supportBundleCollection: generateSupportbundleCollection("supportBundle3", "https://10.220.175.92:22/root/supportbundle"),
 			expectedCompleted:       false,
 			agentDumper:             &mockAgentDumper{},
-			uploader:                &testUploader{},
+			uploader:                &testFailedUploader{},
 		},
 		{
 			name:                    "Add SupportBundleCollection with retry logics",
@@ -198,7 +198,7 @@ func TestSupportBundleCollectionDelete(t *testing.T) {
 type testUploader struct {
 }
 
-func (uploader *testUploader) upload(address string, path string, config *ssh.ClientConfig, tarGzFile io.Reader) error {
+func (uploader *testUploader) Upload(url string, fileName string, config *ssh.ClientConfig, outputFile afero.File) error {
 	klog.Info("Called test uploader")
 	return nil
 }
@@ -206,7 +206,7 @@ func (uploader *testUploader) upload(address string, path string, config *ssh.Cl
 type testFailedUploader struct {
 }
 
-func (uploader *testFailedUploader) upload(address string, path string, config *ssh.ClientConfig, tarGzFile io.Reader) error {
+func (uploader *testFailedUploader) Upload(url string, fileName string, config *ssh.ClientConfig, outputFile afero.File) error {
 	klog.Info("Called test uploader for failed case")
 	return fmt.Errorf("uploader failed")
 }

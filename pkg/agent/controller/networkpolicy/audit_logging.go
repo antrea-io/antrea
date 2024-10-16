@@ -233,7 +233,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 
 	// Get disposition Allow or Drop.
 	match = getMatchRegField(matchers, openflow.APDispositionField)
-	disposition, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
+	disposition, err := openflow.GetInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
 	if err != nil {
 		return fmt.Errorf("received error while unloading disposition from reg: %v", err)
 	}
@@ -241,7 +241,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 
 	// Get layer 7 NetworkPolicy redirect action, if traffic is redirected, disposition log should be overwritten.
 	if match = getMatchRegField(matchers, openflow.L7NPRegField); match != nil {
-		l7NPRegVal, err := getInfoInReg(match, openflow.L7NPRegField.GetRange().ToNXRange())
+		l7NPRegVal, err := openflow.GetInfoInReg(match, openflow.L7NPRegField.GetRange().ToNXRange())
 		if err != nil {
 			return fmt.Errorf("received error while unloading l7 NP redirect value from reg: %v", err)
 		}
@@ -252,7 +252,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 
 	// Get K8s default deny action, if traffic is default deny, no conjunction could be matched.
 	if match = getMatchRegField(matchers, openflow.APDenyRegMark.GetField()); match != nil {
-		apDenyRegVal, err := getInfoInReg(match, openflow.APDenyRegMark.GetField().GetRange().ToNXRange())
+		apDenyRegVal, err := openflow.GetInfoInReg(match, openflow.APDenyRegMark.GetField().GetRange().ToNXRange())
 		if err != nil {
 			return fmt.Errorf("received error while unloading deny mark from reg: %v", err)
 		}
@@ -269,7 +269,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 	match = getMatch(matchers, tableID, disposition)
 
 	// Get NetworkPolicy full name and OF priority of the conjunction.
-	conjID, err := getInfoInReg(match, nil)
+	conjID, err := openflow.GetInfoInReg(match, nil)
 	if err != nil {
 		return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
 	}

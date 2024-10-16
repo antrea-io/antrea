@@ -150,6 +150,9 @@ var (
 	// reg4[28]: Mark to indicate that whether the traffic's source is a local Pod or the Node.
 	FromLocalRegMark = binding.NewOneBitRegMark(4, 28)
 
+	// reg4[28..31]: Field mark the flow for packet capture case.
+	PacketCaptureMark = binding.NewRegField(4, 28, 31)
+
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.
 	TFEgressConjIDField = binding.NewRegField(5, 0, 31)
