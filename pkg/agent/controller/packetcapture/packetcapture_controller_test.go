@@ -226,6 +226,10 @@ func TestErrPacketCaptureCRD(t *testing.T) {
 	expectedPC.Status.Reason = reason
 
 	pcc := newFakePacketCaptureController(t, nil, []runtime.Object{pc}, nil)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	pcc.crdInformerFactory.Start(stopCh)
+	pcc.crdInformerFactory.WaitForCacheSync(stopCh)
 
 	err := pcc.updatePacketCaptureStatus(pc, crdv1alpha1.PacketCaptureFailed, reason, 0)
 	require.NoError(t, err)
