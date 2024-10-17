@@ -308,10 +308,17 @@ type NetIOInterface interface {
 
 type netIO struct {
 	syscallN func(trap uintptr, args ...uintptr) (r1, r2 uintptr, err syscall.Errno)
+	// It needs be declared as a variable and replaced during unit tests because the real getIPForwardTable function
+	// converts a Pointer to a uintptr as an argument of syscallN, while converting a uintptr back to a Pointer in the
+	// fake syscallN is not valid.
+	getIPForwardTable func(family uint16, ipForwardTable **MibIPForwardTable) (errcode error)
 }
 
 func NewNetIO() NetIOInterface {
-	return &netIO{syscallN: syscall.SyscallN}
+	return &netIO{
+		syscallN:          syscall.SyscallN,
+		getIPForwardTable: getIPForwardTable,
+	}
 }
 
 func (n *netIO) GetIPInterfaceEntry(ipInterfaceRow *MibIPInterfaceRow) (errcode error) {
@@ -351,8 +358,8 @@ func (n *netIO) freeMibTable(table unsafe.Pointer) {
 	return
 }
 
-func (n *netIO) getIPForwardTable(family uint16, ipForwardTable **MibIPForwardTable) (errcode error) {
-	r0, _, _ := n.syscallN(procGetIPForwardTable.Addr(), uintptr(family), uintptr(unsafe.Pointer(ipForwardTable)))
+func getIPForwardTable(family uint16, ipForwardTable **MibIPForwardTable) (errcode error) {
+	r0, _, _ := syscall.SyscallN(procGetIPForwardTable.Addr(), uintptr(family), uintptr(unsafe.Pointer(ipForwardTable)))
 	if r0 != 0 {
 		errcode = syscall.Errno(r0)
 	}
@@ -362,21 +369,15 @@ func (n *netIO) getIPForwardTable(family uint16, ipForwardTable **MibIPForwardTa
 func (n *netIO) ListIPForwardRows(family uint16) ([]MibIPForwardRow, error) {
 	var table *MibIPForwardTable
 	err := n.getIPForwardTable(family, &table)
-	if table != nil {
-		defer n.freeMibTable(unsafe.Pointer(table))
-	}
 	if err != nil {
 		return nil, os.NewSyscallError("iphlpapi.GetIpForwardTable", err)
 	}
-	rows := make([]MibIPForwardRow, table.NumEntries, table.NumEntries)
+	defer n.freeMibTable(unsafe.Pointer(table))
 
-	pFirstRow := uintptr(unsafe.Pointer(&table.Table[0]))
-	rowSize := unsafe.Sizeof(table.Table[0])
-
-	for i := uint32(0); i < table.NumEntries; i++ {
-		row := *(*MibIPForwardRow)(unsafe.Pointer(pFirstRow + rowSize*uintptr(i)))
-		rows[i] = row
-	}
+	// Copy the rows from the table into a new slice as the table's memory will be freed.
+	// Since MibIPForwardRow contains only value data (no references), the operation performs a deep copy.
+	rows := make([]MibIPForwardRow, 0, table.NumEntries)
+	rows = append(rows, unsafe.Slice(&table.Table[0], table.NumEntries)...)
 	return rows, nil
 }
 
