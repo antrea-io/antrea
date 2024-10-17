@@ -28,7 +28,6 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/util/yaml"
 )
 
 type Options struct {
@@ -123,25 +122,24 @@ func (o *Options) setDefaults() {
 	}
 }
 
-func (o *Options) loadConfigFromFile(multiclusterConfig *mcsv1alpha1.MultiClusterConfig) error {
-	data, err := os.ReadFile(o.configFile)
-	if err != nil {
-		return err
-	}
+func (o *Options) loadConfig(data []byte, multiclusterConfig *mcsv1alpha1.MultiClusterConfig) error {
 	codecs := serializer.NewCodecFactory(scheme)
-	if err := yaml.UnmarshalLenient(data, multiclusterConfig); err != nil {
+	if err := runtime.DecodeInto(codecs.UniversalDecoder(), data, multiclusterConfig); err != nil {
 		return err
 	}
-	if err = runtime.DecodeInto(codecs.UniversalDecoder(), data, multiclusterConfig); err != nil {
-		return err
-	}
-
 	if multiclusterConfig.Metrics.BindAddress != "" {
 		o.options.Metrics.BindAddress = multiclusterConfig.Metrics.BindAddress
 	}
 	if multiclusterConfig.Health.HealthProbeBindAddress != "" {
 		o.options.HealthProbeBindAddress = multiclusterConfig.Health.HealthProbeBindAddress
 	}
-
 	return nil
+}
+
+func (o *Options) loadConfigFromFile(multiclusterConfig *mcsv1alpha1.MultiClusterConfig) error {
+	data, err := os.ReadFile(o.configFile)
+	if err != nil {
+		return err
+	}
+	return o.loadConfig(data, multiclusterConfig)
 }

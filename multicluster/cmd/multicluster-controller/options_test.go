@@ -19,6 +19,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/util/yaml"
+
+	"antrea.io/antrea/multicluster"
+	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 )
 
 func TestComplete(t *testing.T) {
@@ -84,4 +88,20 @@ func TestComplete(t *testing.T) {
 			assert.Equal(t, tt.exceptdErr, err)
 		})
 	}
+}
+
+func TestUnmarshalDefaultConfig(t *testing.T) {
+	configBytes := multicluster.DefaultControllerManagerConfigBytes
+	var multiclusterConfig mcsv1alpha1.MultiClusterConfig
+	// Note that we use UnmarshalStrict from k8s.io/apimachinery/pkg/util/yaml, which will first
+	// convert the YAML data to JSON. The mcsv1alpha1.MultiClusterConfig struct definition does
+	// not have yaml tags.
+	assert.NoError(t, yaml.UnmarshalStrict(configBytes, &multiclusterConfig), "Default config should unmarshal correctly")
+}
+
+func TestLoadConfig(t *testing.T) {
+	configBytes := multicluster.DefaultControllerManagerConfigBytes
+	var multiclusterConfig mcsv1alpha1.MultiClusterConfig
+	o := newOptions()
+	assert.NoError(t, o.loadConfig(configBytes, &multiclusterConfig))
 }
