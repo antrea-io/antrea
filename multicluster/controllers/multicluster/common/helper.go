@@ -42,15 +42,6 @@ func ToMCResourceName(originalResourceName string) string {
 	return AntreaMCSPrefix + originalResourceName
 }
 
-func StringExistsInSlice(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
 func RemoveStringFromSlice(slice []string, s string) (result []string) {
 	for _, item := range slice {
 		if item == s {
