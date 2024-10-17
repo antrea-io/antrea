@@ -92,8 +92,9 @@ func TestDestroyIPSet(t *testing.T) {
 			name: "Destroy set successfully",
 		},
 		{
-			name: "Destroy non-existent set, no error",
-			err:  errors.New("The set with the given name does not exist"),
+			name:   "Destroy non-existent set, no error",
+			output: "The set with the given name does not exist",
+			err:    errors.New("exit status 1"),
 		},
 		{
 			name:              "Destroy set with error",

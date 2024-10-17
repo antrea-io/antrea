@@ -62,7 +62,7 @@ func NewClient() *Client {
 func (c *Client) DestroyIPSet(name string) error {
 	cmd := c.exec.Command("ipset", "destroy", name)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		if strings.Contains(err.Error(), "The set with the given name does not exist") {
+		if strings.Contains(string(output), "The set with the given name does not exist") {
 			return nil
 		}
 		return fmt.Errorf("error destroying ipset %s, err: %w, output: %s", name, err, output)
