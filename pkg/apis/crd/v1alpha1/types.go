@@ -466,12 +466,19 @@ type PacketCaptureFileServer struct {
 }
 
 type PacketCaptureSpec struct {
+	// Timeout is the timeout for this capture session. If not specified, default to 60s.
 	Timeout       *uint16       `json:"timeout,omitempty"`
 	CaptureConfig CaptureConfig `json:"captureConfig"`
-	Source        Source        `json:"source"`
-	Destination   Destination   `json:"destination"`
-	Packet        *Packet       `json:"packet,omitempty"`
+	// Source is the traffic source we want to perform capture on. Both `Source` and `Destination` is reuqired
+	// for a capture session, and at least one `Pod` should present either in the source or the destination.
+	Source      Source      `json:"source"`
+	Destination Destination `json:"destination"`
+	// Packet defines what kind of traffic we want to capture between the source and desination. If not spicified,
+	// all kinds of traffic will count.
+	Packet *Packet `json:"packet,omitempty"`
 	// FileServer specifies the sftp url config for a file server. If present, captured packets will be uploaded to this server.
+	// If not, packets file will only be present in the antrea-agent pod.
+	// When capture finished, the path information will be shown in `.status.PacketsFilePath`.
 	FileServer *PacketCaptureFileServer `json:"fileServer,omitempty"`
 }
 
@@ -481,7 +488,7 @@ type PacketCaptureStatus struct {
 	Reason string `json:"reason"`
 	// NumCapturedPackets records how many packets have been captured. If it reaches the target number, the capture
 	// can be considered as finished.
-	NumCapturedPackets *int32 `json:"numCapturedPackets,omitempty"`
+	NumCapturedPackets int32 `json:"numCapturedPackets,omitempty"`
 	// PacketsFilePath is the file path where the captured packets are stored. The format is: "<antrea-agent-pod-name>:<path>".
 	// If `.spec.FileServer` is present, this file will also be uploaded to the targeted location. This file
 	// will be removed after the PacketCapture CR is deleted.
