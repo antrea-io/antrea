@@ -53,6 +53,8 @@ const (
 	// PacketInCategorySvcReject is used to process the Service packets not matching any
 	// Endpoints within packetIn message.
 	PacketInCategorySvcReject
+	// PacketInCategoryPacketCapture is used for packetIn messages related to capture.
+	PacketInCategoryPacketCapture
 
 	// PacketIn operations below are used to decide which operation(s) should be
 	// executed by a handler. It(they) should be loaded in the second byte of the
