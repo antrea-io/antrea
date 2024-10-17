@@ -88,6 +88,7 @@ type clientOptions struct {
 	enableEgressTrafficShaping bool
 	proxyAll                   bool
 	enableDSR                  bool
+	proxyLoadBalancerIPs       bool
 	connectUplinkToBridge      bool
 	enableMulticast            bool
 	enableTrafficControl       bool
@@ -127,6 +128,10 @@ func disableProxy(o *clientOptions) {
 
 func disableEgress(o *clientOptions) {
 	o.enableEgress = false
+}
+
+func disableProxyLoadBalancerIPs(o *clientOptions) {
+	o.proxyLoadBalancerIPs = false
 }
 
 func enableEgressTrafficShaping(o *clientOptions) {
@@ -393,9 +398,10 @@ func newFakeClientWithBridge(
 ) *client {
 	// default options
 	o := &clientOptions{
-		enableProxy:        true,
-		enableAntreaPolicy: true,
-		enableEgress:       true,
+		enableProxy:          true,
+		enableAntreaPolicy:   true,
+		enableEgress:         true,
+		proxyLoadBalancerIPs: true,
 	}
 	for _, fn := range options {
 		fn(o)
@@ -412,6 +418,7 @@ func newFakeClientWithBridge(
 		false,
 		o.proxyAll,
 		o.enableDSR,
+		o.proxyLoadBalancerIPs,
 		o.connectUplinkToBridge,
 		o.enableMulticast,
 		o.enableTrafficControl,
@@ -1017,8 +1024,8 @@ func Test_client_GetPodFlowKeys(t *testing.T) {
 		"table=1,priority=200,arp,in_port=11,arp_spa=10.10.0.11,arp_sha=00:00:10:10:00:11",
 		"table=3,priority=190,in_port=11",
 		"table=4,priority=200,ip,in_port=11,dl_src=00:00:10:10:00:11,nw_src=10.10.0.11",
-		"table=17,priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.11",
-		"table=22,priority=200,dl_dst=00:00:10:10:00:11",
+		"table=18,priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.11",
+		"table=23,priority=200,dl_dst=00:00:10:10:00:11",
 	}
 	assert.ElementsMatch(t, expectedFlowKeys, flowKeys)
 }
@@ -1254,17 +1261,18 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 	port := uint16(80)
 
 	testCases := []struct {
-		name               string
-		trafficPolicyLocal bool
-		protocol           binding.Protocol
-		svcIP              net.IP
-		affinityTimeout    uint16
-		isExternal         bool
-		isNodePort         bool
-		isNested           bool
-		isDSR              bool
-		enableMulticluster bool
-		expectedFlows      []string
+		name                     string
+		trafficPolicyLocal       bool
+		protocol                 binding.Protocol
+		svcIP                    net.IP
+		affinityTimeout          uint16
+		isExternal               bool
+		isNodePort               bool
+		isNested                 bool
+		isDSR                    bool
+		enableMulticluster       bool
+		loadBalancerSourceRanges []string
+		expectedFlows            []string
 	}{
 		{
 			name:     "Service ClusterIP",
@@ -1449,6 +1457,38 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 				"cookie=0x1030000000064, table=DSRServiceMark, priority=200,tcp6,reg4=0xc000000/0xe000000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,idle_timeout=160,fin_idle_timeout=5,priority=210,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x6,OXM_OF_TCP_SRC[],OXM_OF_TCP_DST[],NXM_NX_IPV6_SRC[],NXM_NX_IPV6_DST[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG4[25],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[]),set_field:0x2000000/0x2000000->reg4,goto_table:EndpointDNAT",
 			},
 		},
+		{
+			name:                     "Service LoadBalancer,LoadBalancerSourceRanges,SessionAffinity,Short-circuiting",
+			protocol:                 binding.ProtocolSCTP,
+			svcIP:                    svcIPv4,
+			affinityTimeout:          uint16(100),
+			isExternal:               true,
+			trafficPolicyLocal:       true,
+			loadBalancerSourceRanges: []string{"192.168.1.0/24", "192.168.2.0/24"},
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceMark, priority=200,sctp,nw_src=192.168.1.0/24,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x20000000/0x60000000->reg4",
+				"cookie=0x1030000000000, table=ServiceMark, priority=200,sctp,nw_src=192.168.2.0/24,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x20000000/0x60000000->reg4",
+				"cookie=0x1030000000000, table=ServiceMark, priority=190,sctp,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x40000000/0x60000000->reg4",
+				"cookie=0x1030000000000, table=ServiceLB, priority=210,sctp,reg4=0x30010000/0x70070000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,sctp,reg4=0x20010000/0x60070000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
+				"cookie=0x1030000000065, table=ServiceLB, priority=190,sctp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000065,eth_type=0x800,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+			},
+		},
+		{
+			name:                     "Service LoadBalancer,LoadBalancerSourceRanges,IPv6,SessionAffinity",
+			protocol:                 binding.ProtocolSCTPv6,
+			svcIP:                    svcIPv6,
+			affinityTimeout:          uint16(100),
+			isExternal:               true,
+			loadBalancerSourceRanges: []string{"fec0:192:168:1::/64", "fec0:192:168:2::/64"},
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceMark, priority=200,sctp6,ipv6_src=fec0:192:168:1::/64,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x20000000/0x60000000->reg4",
+				"cookie=0x1030000000000, table=ServiceMark, priority=200,sctp6,ipv6_src=fec0:192:168:2::/64,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x20000000/0x60000000->reg4",
+				"cookie=0x1030000000000, table=ServiceMark, priority=190,sctp6,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x40000000/0x60000000->reg4",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,sctp6,reg4=0x20010000/0x60070000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,sctp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1471,17 +1511,18 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			cacheKey := generateServicePortFlowCacheKey(tc.svcIP, port, tc.protocol)
 
 			assert.NoError(t, fc.InstallServiceFlows(&types.ServiceConfig{
-				ServiceIP:          tc.svcIP,
-				ServicePort:        port,
-				Protocol:           tc.protocol,
-				TrafficPolicyLocal: tc.trafficPolicyLocal,
-				LocalGroupID:       localGroupID,
-				ClusterGroupID:     clusterGroupID,
-				AffinityTimeout:    tc.affinityTimeout,
-				IsExternal:         tc.isExternal,
-				IsNodePort:         tc.isNodePort,
-				IsNested:           tc.isNested,
-				IsDSR:              tc.isDSR,
+				ServiceIP:                tc.svcIP,
+				ServicePort:              port,
+				Protocol:                 tc.protocol,
+				TrafficPolicyLocal:       tc.trafficPolicyLocal,
+				LocalGroupID:             localGroupID,
+				ClusterGroupID:           clusterGroupID,
+				AffinityTimeout:          tc.affinityTimeout,
+				IsExternal:               tc.isExternal,
+				IsNodePort:               tc.isNodePort,
+				IsNested:                 tc.isNested,
+				IsDSR:                    tc.isDSR,
+				LoadBalancerSourceRanges: tc.loadBalancerSourceRanges,
 			}))
 			fCacheI, ok := fc.featureService.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
@@ -1527,11 +1568,11 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 	assert.NoError(t, fc.InstallEndpointFlows(bindingProtocol, endpoints))
 	flowKeys := fc.GetServiceFlowKeys(svcIP, svcPort, bindingProtocol, endpoints)
 	expectedFlowKeys := []string{
-		"table=11,priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.224,tp_dst=80",
-		"table=11,priority=190,tcp,reg4=0x30000/0x70000,nw_dst=10.96.0.224,tp_dst=80",
-		"table=12,priority=200,tcp,reg3=0xa0a000b,reg4=0x20050/0x7ffff",
-		"table=12,priority=200,tcp,reg3=0xa0a000c,reg4=0x20050/0x7ffff",
-		"table=20,priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.12,nw_dst=10.10.0.12",
+		"table=12,priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.224,tp_dst=80",
+		"table=12,priority=190,tcp,reg4=0x30000/0x70000,nw_dst=10.96.0.224,tp_dst=80",
+		"table=13,priority=200,tcp,reg3=0xa0a000b,reg4=0x20050/0x7ffff",
+		"table=13,priority=200,tcp,reg3=0xa0a000c,reg4=0x20050/0x7ffff",
+		"table=21,priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.12,nw_dst=10.10.0.12",
 	}
 	assert.ElementsMatch(t, expectedFlowKeys, flowKeys)
 }
@@ -2031,7 +2072,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, false, false, nil, false, defaultPacketInRate)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, true, false, false, false, false, nil, false, defaultPacketInRate)
 	m := ovsoftest.NewMockBridge(ctrl)
 	ofClient.bridge = m
 	bridge := binding.OFBridge{}
@@ -2721,7 +2762,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
 	expectedFlows = append(expectedFlows, networkPolicyInitFlows(true, false, false)...)
 	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeNone, false, true, true, true)...)
-	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
+	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false, true)...)
 
 	addFlowInCache := func(cache *flowCategoryCache, cacheKey string, flows []binding.Flow) {
 		fCache := flowMessageCache{}
@@ -2787,8 +2828,8 @@ func Test_client_ReplayFlows(t *testing.T) {
 		"cookie=0x1020000000000, table=IngressMetric, priority=200,reg0=0x400/0x400,reg3=0xf actions=drop",
 	)
 	replayedFlows = append(replayedFlows,
-		"cookie=0x1020000000000, table=IngressRule, priority=200,conj_id=15 actions=set_field:0xf->reg3,set_field:0x400/0x400->reg0,set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x1b/0xff->reg2,group:4",
-		"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x64 actions=set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x400000/0x600000->reg0,set_field:0x1c/0xff->reg2,goto_table:Output",
+		"cookie=0x1020000000000, table=IngressRule, priority=200,conj_id=15 actions=set_field:0xf->reg3,set_field:0x400/0x400->reg0,set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x1c/0xff->reg2,group:4",
+		"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x64 actions=set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x400000/0x600000->reg0,set_field:0x1d/0xff->reg2,goto_table:Output",
 	)
 
 	// Feature Pod connectivity replays flows.
