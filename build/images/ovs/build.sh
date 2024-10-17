@@ -92,15 +92,13 @@ if $PUSH && [ "$DISTRO" != "windows" ] && ! check_docker_build_driver "docker-co
     exit 1
 fi
 
-if [ "$PLATFORM" != "" ] && $PUSH; then
-    echoerr "Cannot use --platform with --push"
-    exit 1
-fi
-
 if [ "$DISTRO" != "ubuntu" ] && [ "$DISTRO" != "ubi" ] && [ "$DISTRO" != "windows" ]; then
     echoerr "Invalid distribution $DISTRO"
     exit 1
 fi
+
+TARGETARCH=$(set -e; get_target_arch "$PLATFORM" "$THIS_DIR/../.targetarch")
+echo "Target arch: $TARGETARCH"
 
 OVS_VERSION_FILE="../deps/ovs-version"
 if [ "$DISTRO" == "windows" ]; then
@@ -127,7 +125,7 @@ if $PULL; then
         if [[ ${DOCKER_REGISTRY} == "" ]]; then
             docker pull $PLATFORM_ARG ubuntu:24.04
         else
-            docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:24.04
+            docker pull $PLATFORM_ARG ${DOCKER_REGISTRY}/antrea/ubuntu:24.04
             docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:24.04 ubuntu:24.04
         fi
     elif [ "$DISTRO" == "ubi" ]; then
@@ -159,9 +157,9 @@ function docker_build_and_push() {
 }
 
 if [ "$DISTRO" == "ubuntu" ]; then
-    docker_build_and_push "antrea/openvswitch" "Dockerfile"
+    docker_build_and_push "antrea/openvswitch-$TARGETARCH" "Dockerfile"
 elif [ "$DISTRO" == "ubi" ]; then
-    docker_build_and_push "antrea/openvswitch-ubi" "Dockerfile.ubi"
+    docker_build_and_push "antrea/openvswitch-ubi-$TARGETARCH" "Dockerfile.ubi"
 elif [ "$DISTRO" == "windows" ]; then
     image="antrea/windows-ovs"
     build_args="--build-arg OVS_VERSION=$OVS_VERSION"
