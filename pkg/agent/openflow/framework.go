@@ -140,6 +140,10 @@ var defaultDrop = func(table *Table) {
 	table.missAction = binding.TableMissActionDrop
 }
 
+var defaultNone = func(table *Table) {
+	table.missAction = binding.TableMissActionNone
+}
+
 // newTable is used to declare a Table. A table should belong to a stage and pipeline defined in current file.
 func newTable(tableName string, stage binding.StageID, pipeline binding.PipelineID, options ...Option) *Table {
 	table := &Table{
