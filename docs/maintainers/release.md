@@ -41,6 +41,13 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
      branch as `ANTREA_GIT_REVISION`. Test starting times need to be staggered:
      if multiple jobs run at the same time, the Jenkins worker may run
      out-of-memory.
+   - Kubernetes compatibility tests need to be triggered manually through
+     [the workflow](https://github.com/antrea-io/antrea/actions/workflows/conformance.yml)
+     to ensure the release is compatible with all [active K8s releases](https://kubernetes.io/releases/)
+     at the time of release. Click on `Run workflow`, enter the Antrea release
+     to test (e.g. `release-1.12`), enter the K8s versions to test (e.g.
+     `v1.27.2, v1.26.4, v1.25.9, v1.24.13`). You typically do not need to
+     specify the Antrea Chart values and change the test suite to run.
 
 4. Request a review from the other maintainers, and anyone else who may need to
    review the release notes. In case of feedback, you may want to consider
@@ -84,10 +91,14 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
    contents of the PR and merge it (no need to run the tests, use admin
    privileges).
 
-8. *For a minor release* Finally, open a PR against the main branch with a
-   single commit, to update [VERSION](../../VERSION) to the next minor version
-   (with `-dev` suffix). For example, if the release was for `v1.4.0`, the
-   VERSION file should be updated to `v1.5.0-dev`. Before committing, ensure
-   that you run `make -C build/charts/ helm-docs` and include the changes. Note
-   that after a patch release, the VERSION file in the main branch is never
-   updated, so no additional commit is needed.
+8. Finally, open a PR against the main branch with a single commit, to update
+   the following:
+   - *For a minor release* update [VERSION](../../VERSION) to the next minor
+     version (with `-dev` suffix). For example, if the release was for `v1.4.0`,
+     the VERSION file should be updated to `v1.5.0-dev`. Ensure that you run
+     `make -C build/charts/ helm-docs` and include the changes. Note that after
+     a patch release, the VERSION file in the main branch is never updated, so
+     this step is not needed.
+   - update [Kubernetes Compatibility](../../README.md#kubernetes-compatibility)
+     and [Supported K8s versions](../versioning.md#supported-k8s-versions) with
+     the K8s versions that have been validated.
