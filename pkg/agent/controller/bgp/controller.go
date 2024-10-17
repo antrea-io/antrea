@@ -991,3 +991,37 @@ func (c *Controller) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, er
 	}
 	return peers, nil
 }
+
+// GetBGPRoutes returns the advertised BGP routes.
+func (c *Controller) GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) (sets.Set[string], error) {
+	bgpRoutes := make(sets.Set[string])
+	bgpRoutesAdvertised := c.getBgpRoutesAdvertised()
+	if bgpRoutesAdvertised == nil {
+		return nil, ErrBGPPolicyNotFound
+	}
+	if ipv4Routes { // insert IPv4 advertised routes
+		for route := range bgpRoutesAdvertised {
+			if utilnet.IsIPv4CIDRString(route.Prefix) {
+				bgpRoutes.Insert(route.Prefix)
+			}
+		}
+	}
+	if ipv6Routes { // insert IPv6 advertised routes
+		for route := range bgpRoutesAdvertised {
+			if utilnet.IsIPv6CIDRString(route.Prefix) {
+				bgpRoutes.Insert(route.Prefix)
+			}
+		}
+	}
+	return bgpRoutes, nil
+}
+
+func (c *Controller) getBgpRoutesAdvertised() sets.Set[bgp.Route] {
+	c.bgpPolicyStateMutex.RLock()
+	defer c.bgpPolicyStateMutex.RUnlock()
+
+	if c.bgpPolicyState == nil {
+		return nil
+	}
+	return c.bgpPolicyState.routes
+}

@@ -36,6 +36,7 @@ import (
 	querier "antrea.io/antrea/pkg/querier"
 	gomock "go.uber.org/mock/gomock"
 	types0 "k8s.io/apimachinery/pkg/types"
+	sets "k8s.io/apimachinery/pkg/util/sets"
 )
 
 // MockAgentNetworkPolicyInfoQuerier is a mock of AgentNetworkPolicyInfoQuerier interface.
@@ -389,4 +390,19 @@ func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPolicyInfo() (string, string, int3
 func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPolicyInfo() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPPolicyInfo", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPPolicyInfo))
+}
+
+// GetBGPRoutes mocks base method.
+func (m *MockAgentBGPPolicyInfoQuerier) GetBGPRoutes(arg0 context.Context, arg1, arg2 bool) (sets.Set[string], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBGPRoutes", arg0, arg1, arg2)
+	ret0, _ := ret[0].(sets.Set[string])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBGPRoutes indicates an expected call of GetBGPRoutes.
+func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPRoutes(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPRoutes", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPRoutes), arg0, arg1, arg2)
 }
