@@ -800,10 +800,6 @@ func run(o *Options) error {
 		go memberlistCluster.Run(stopCh)
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
-		go externalIPController.Run(stopCh)
-	}
-
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go traceflowController.Run(stopCh)
 	}
@@ -827,9 +823,6 @@ func run(o *Options) error {
 	}
 
 	go networkPolicyController.Run(stopCh)
-	if o.enableEgress {
-		go egressController.Run(stopCh)
-	}
 
 	var mcastController *multicast.Controller
 	if multicastEnabled {
@@ -997,6 +990,14 @@ func run(o *Options) error {
 	// Start the node latency monitor if applicable.
 	if nodeLatencyMonitor != nil {
 		go nodeLatencyMonitor.Run(stopCh)
+	}
+
+	if egressController != nil {
+		go egressController.Run(stopCh)
+	}
+
+	if externalIPController != nil {
+		go externalIPController.Run(stopCh)
 	}
 
 	<-stopCh

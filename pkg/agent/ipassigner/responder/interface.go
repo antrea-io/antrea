@@ -14,7 +14,9 @@
 
 package responder
 
-import "net"
+import (
+	"net"
+)
 
 // Responder is an interface to handle ARP (IPv4)/NS (IPv6) queries using raw sockets.
 type Responder interface {
