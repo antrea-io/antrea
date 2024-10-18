@@ -51,6 +51,10 @@ function docker_run() {
   docker pull ${IMAGE_NAME}
   set -x
   ANTREA_SRC_PATH="/mnt/antrea"
+  # The .git directory in ANTREA_SRC_PATH must be marked as "safe".
+  # Starting with git v2.39.4, the directory ownership checks that were
+  # previously introduced in v2.30.3 were extended to cover cloning local
+  # repositories, which is what we do in update-codegen-dockerized.sh.
   docker run --rm \
 		-e GOPROXY=${GOPROXY} \
 		-e HTTP_PROXY=${HTTP_PROXY} \
@@ -59,7 +63,7 @@ function docker_run() {
                 --mount type=bind,source=${ANTREA_ROOT},target=${ANTREA_SRC_PATH} \
                 --mount type=volume,source=antrea-codegen-gopkgmod,target=/go/pkg/mod \
                 --mount type=volume,source=antrea-codegen-gocache,target=/root/.cache/go-build \
-		"${IMAGE_NAME}" bash -c "$@"
+		"${IMAGE_NAME}" bash -c "git config --global --add safe.directory ${ANTREA_SRC_PATH}/.git && $@"
 }
 
 # Combine hack/update-codegen-dockerized.sh and the arguments to the script as a
