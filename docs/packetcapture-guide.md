@@ -72,7 +72,8 @@ spec:
         flags: tcp[tcpflags] == tcp-syn # only capture TCP SYN packets 
 status:
   numCapturedPackets: 5
-  # path format: <pod-name>:<filepath>. If this file was uploaded to the target file server, filename format is <name>.pcapng
+  # The path of the packets file that is uploaded to the target file server, in the format of: <antrea-agent-pod-name>:<path>.
+  # The PacketCapture CR Name is used as the file name
   packetsFilePath: antrea-agent-z4zgw:/tmp/antrea/packetcapture/packets/pc-test.pcapng
 ```
 
