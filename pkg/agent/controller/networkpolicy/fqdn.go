@@ -410,11 +410,10 @@ func (f *fqdnController) deleteRuleSelectedPods(ruleID string) error {
 
 func (f *fqdnController) onDNSResponse(
 	fqdn string,
-	responseIPs map[string]ipWithTTL,
+	newDNSresponseIPs map[string]ipWithTTL,
 	waitCh chan error,
 ) {
-	currentTime := time.Now()
-	if len(responseIPs) == 0 {
+	if len(newDNSresponseIPs) == 0 {
 		klog.V(4).InfoS("FQDN was not resolved to any addresses, skip updating DNS cache", "fqdn", fqdn)
 		if waitCh != nil {
 			waitCh <- nil
@@ -422,60 +421,47 @@ func (f *fqdnController) onDNSResponse(
 		return
 	}
 
+	currentTime := time.Now()
+	ipWithTTLMap := make(map[string]ipWithTTL)
+	minTimeToReQuery := time.Unix(1<<63-62135596801, 999999999)
 	addressUpdate := false
+
+	ipMapFiller := func(ip string, ipMeta ipWithTTL, minTime *time.Time) {
+		ipWithTTLMap[ip] = ipMeta
+		*minTime = earlierOf(ipMeta.expirationTime, *minTime)
+	}
+
 	f.fqdnSelectorMutex.Lock()
 	defer f.fqdnSelectorMutex.Unlock()
-	oldDNSMeta, exist := f.dnsEntryCache[fqdn]
-	ipMetaDataHolder := make(map[string]ipWithTTL)
-	minTimeToReQuery := time.Unix(1<<63-62135596801, 999999999)
 
-	minTime := func(t1, t2 time.Time) time.Time {
-		if t1.Before(t2) {
-			return t1
-		}
-		return t2
-	}
-
-	maxTime := func(t1, t2 time.Time) time.Time {
-		if t1.After(t2) {
-			return t1
-		}
-		return t2
-	}
-
+	cachedDNSMeta, exist := f.dnsEntryCache[fqdn]
 	if exist {
 		// Data related to this domain exists in the cache.
 		// Besides presence of existing IPs, two scenarios : 1) May get New IPs 2) Some old IPs may be absent.
 
 		// check for new IPs and these new IPs need to be added with its new TTL value as received in response.
-		for ipStr, ipMeta := range responseIPs {
-			if _, exist := oldDNSMeta.responseIPs[ipStr]; !exist {
-				ipMetaDataHolder[ipStr] = ipWithTTL{
-					ip:             ipMeta.ip,
-					expirationTime: ipMeta.expirationTime,
-				}
-				minTimeToReQuery = minTime(ipMeta.expirationTime, minTimeToReQuery)
+		for ipStr, ipMeta := range newDNSresponseIPs {
+			if _, exist := cachedDNSMeta.responseIPs[ipStr]; !exist {
+				ipMapFiller(ipStr, ipMeta, &minTimeToReQuery)
 			}
 		}
 
-		for ipStr, ipMeta := range oldDNSMeta.responseIPs {
-			if _, exist := responseIPs[ipStr]; !exist {
-				if ipMeta.expirationTime.Before(currentTime) {
+		for cachedIpStr, cachedIpMeta := range cachedDNSMeta.responseIPs {
+			if _, exist := newDNSresponseIPs[cachedIpStr]; !exist {
+				if cachedIpMeta.expirationTime.Before(currentTime) {
 					// this ip is expired and stale, remove it by not including it.
 					addressUpdate = true
 				} else {
 					// It hasn't expired yet, so just retain it with its existing expirationTime.
-					ipMetaDataHolder[ipStr] = ipMeta
-					minTimeToReQuery = minTime(ipMeta.expirationTime, minTimeToReQuery)
+					ipMapFiller(cachedIpStr, cachedIpMeta, &minTimeToReQuery)
 				}
 			} else {
 				// This old IP also exists in current response, so update it with max time between received time and its old cached time.
-				expTime := maxTime(responseIPs[ipStr].expirationTime, oldDNSMeta.responseIPs[ipStr].expirationTime)
-				ipMetaDataHolder[ipStr] = ipWithTTL{
-					ip:             ipMeta.ip,
+				expTime := laterOf(newDNSresponseIPs[cachedIpStr].expirationTime, cachedIpMeta.expirationTime)
+				ipMapFiller(cachedIpStr, ipWithTTL{
+					ip:             cachedIpMeta.ip,
 					expirationTime: expTime,
-				}
-				minTimeToReQuery = minTime(expTime, minTimeToReQuery)
+				}, &minTimeToReQuery)
 			}
 		}
 
@@ -488,21 +474,17 @@ func (f *fqdnController) onDNSResponse(
 			// Only track the FQDN if there is at least one fqdnSelectorItem matching it.
 			if selectorItem.matches(fqdn) {
 				f.setFQDNMatchSelector(fqdn, selectorItem)
-				for ipStr, ipMeta := range responseIPs {
-					ipMetaDataHolder[ipStr] = ipWithTTL{
-						ip:             ipMeta.ip,
-						expirationTime: ipMeta.expirationTime,
-					}
-					minTimeToReQuery = minTime(ipMeta.expirationTime, minTimeToReQuery)
+				for ipStr, ipMeta := range newDNSresponseIPs {
+					ipMapFiller(ipStr, ipMeta, &minTimeToReQuery)
 				}
 			}
 		}
 	}
 
-	if len(ipMetaDataHolder) != 0 {
+	if len(ipWithTTLMap) > 0 {
 		addressUpdate = true
 		f.dnsEntryCache[fqdn] = dnsMeta{
-			responseIPs: ipMetaDataHolder,
+			responseIPs: ipWithTTLMap,
 		}
 		// The FQDN will be added to the queue only after `lowestTTL` value which
 		// would already have been derived using the minTTL logic.
@@ -642,20 +624,18 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 		return "", nil, fmt.Errorf("invalid DNS message")
 	}
 	fqdn := strings.ToLower(msg.Question[0].Name)
-	// Case 1: In the upcoming patch an admin would set this to a  maximum value, which will be read from the configuration.
 	maxConfiguredTTL := uint32(math.MaxUint32) // a TTL must exist in the RRs
 	responseIPs := map[string]ipWithTTL{}
 	currentTime := time.Now()
+	var expirationTime uint32
 	for _, ans := range msg.Answer {
 		switch r := ans.(type) {
 		case *dns.A:
 			if f.ipv4Enabled {
-				// So, using case 1 above , we may not make below comparison and just assign the max value as expirationTime ; ignoring the incoming dns ttl.
-				var expirationTime uint32
 				if r.Header().Ttl < maxConfiguredTTL {
-					expirationTime = maxConfiguredTTL
-				} else {
 					expirationTime = r.Header().Ttl
+				} else {
+					expirationTime = maxConfiguredTTL
 				}
 				responseIPs[r.A.String()] = ipWithTTL{
 					ip:             r.A,
@@ -665,11 +645,10 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 			}
 		case *dns.AAAA:
 			if f.ipv6Enabled {
-				var expirationTime uint32
 				if r.Header().Ttl < maxConfiguredTTL {
-					expirationTime = maxConfiguredTTL
-				} else {
 					expirationTime = r.Header().Ttl
+				} else {
+					expirationTime = maxConfiguredTTL
 				}
 				responseIPs[r.AAAA.String()] = ipWithTTL{
 					ip:             r.AAAA,
@@ -879,4 +858,20 @@ func (f *fqdnController) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		klog.V(2).InfoS("Rule sync is successful or not needed or a non-DNS response packet was received, forwarding the packet to Pod")
 		return f.ofClient.ResumePausePacket(pktIn)
 	}
+}
+
+// earlierOf returns the earlier of the two given time.Time values.
+func earlierOf(t1, t2 time.Time) time.Time {
+	if t1.Before(t2) {
+		return t1
+	}
+	return t2
+}
+
+// laterOf returns the later of the two given time.Time values.
+func laterOf(t1, t2 time.Time) time.Time {
+	if t1.After(t2) {
+		return t1
+	}
+	return t2
 }
