@@ -73,6 +73,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "NodeLatencyMonitor", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NodeNetworkPolicy", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NodePortLocal", Status: "Enabled", Version: "GA"},
+				{Component: "agent", Name: "PacketCapture", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "SecondaryNetwork", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "ServiceTrafficDistribution", Status: "Enabled", Version: "BETA"},

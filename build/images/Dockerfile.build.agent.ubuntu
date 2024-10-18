@@ -29,6 +29,9 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
     make antctl-linux && mv bin/antctl-linux bin/antctl
 
+
+RUN apt-get update && apt-get install -y libpcap-dev && apt-get autoremove -y && rm -rf /var/cache/apt/* /var/lib/apt/lists/*
+
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
     make antrea-agent antrea-cni
