@@ -140,9 +140,10 @@ const (
 	defaultCHDatabaseURL                = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
 
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
-
-	iperfPort    = 5201
-	iperfSvcPort = 9999
+	randomPatchAnnotationKey        = "test.antrea.io/random-value"
+	annotationValueLen              = 8
+	iperfPort                       = 5201
+	iperfSvcPort                    = 9999
 )
 
 type ClusterNode struct {
