@@ -37,6 +37,7 @@ import (
 type MockIPAMDriver struct {
 	ctrl     *gomock.Controller
 	recorder *MockIPAMDriverMockRecorder
+	isgomock struct{}
 }
 
 // MockIPAMDriverMockRecorder is the mock recorder for MockIPAMDriver.
@@ -57,9 +58,9 @@ func (m *MockIPAMDriver) EXPECT() *MockIPAMDriverMockRecorder {
 }
 
 // Add mocks base method.
-func (m *MockIPAMDriver) Add(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) (bool, *ipam.IPAMResult, error) {
+func (m *MockIPAMDriver) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, *ipam.IPAMResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Add", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Add", args, k8sArgs, networkConfig)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(*ipam.IPAMResult)
 	ret2, _ := ret[2].(error)
@@ -67,37 +68,37 @@ func (m *MockIPAMDriver) Add(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte
 }
 
 // Add indicates an expected call of Add.
-func (mr *MockIPAMDriverMockRecorder) Add(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockIPAMDriverMockRecorder) Add(args, k8sArgs, networkConfig any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockIPAMDriver)(nil).Add), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockIPAMDriver)(nil).Add), args, k8sArgs, networkConfig)
 }
 
 // Check mocks base method.
-func (m *MockIPAMDriver) Check(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) (bool, error) {
+func (m *MockIPAMDriver) Check(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Check", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Check", args, k8sArgs, networkConfig)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Check indicates an expected call of Check.
-func (mr *MockIPAMDriverMockRecorder) Check(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockIPAMDriverMockRecorder) Check(args, k8sArgs, networkConfig any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockIPAMDriver)(nil).Check), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockIPAMDriver)(nil).Check), args, k8sArgs, networkConfig)
 }
 
 // Del mocks base method.
-func (m *MockIPAMDriver) Del(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) (bool, error) {
+func (m *MockIPAMDriver) Del(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Del", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Del", args, k8sArgs, networkConfig)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Del indicates an expected call of Del.
-func (mr *MockIPAMDriverMockRecorder) Del(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockIPAMDriverMockRecorder) Del(args, k8sArgs, networkConfig any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Del", reflect.TypeOf((*MockIPAMDriver)(nil).Del), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Del", reflect.TypeOf((*MockIPAMDriver)(nil).Del), args, k8sArgs, networkConfig)
 }

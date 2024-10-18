@@ -34,6 +34,7 @@ import (
 type MockOVSOfctlRunner struct {
 	ctrl     *gomock.Controller
 	recorder *MockOVSOfctlRunnerMockRecorder
+	isgomock struct{}
 }
 
 // MockOVSOfctlRunnerMockRecorder is the mock recorder for MockOVSOfctlRunner.
@@ -54,10 +55,10 @@ func (m *MockOVSOfctlRunner) EXPECT() *MockOVSOfctlRunnerMockRecorder {
 }
 
 // RunOfctlCmd mocks base method.
-func (m *MockOVSOfctlRunner) RunOfctlCmd(arg0 string, arg1 ...string) ([]byte, error) {
+func (m *MockOVSOfctlRunner) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{cmd}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "RunOfctlCmd", varargs...)
@@ -67,9 +68,9 @@ func (m *MockOVSOfctlRunner) RunOfctlCmd(arg0 string, arg1 ...string) ([]byte, e
 }
 
 // RunOfctlCmd indicates an expected call of RunOfctlCmd.
-func (mr *MockOVSOfctlRunnerMockRecorder) RunOfctlCmd(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockOVSOfctlRunnerMockRecorder) RunOfctlCmd(cmd any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{cmd}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunOfctlCmd", reflect.TypeOf((*MockOVSOfctlRunner)(nil).RunOfctlCmd), varargs...)
 }
 
@@ -77,6 +78,7 @@ func (mr *MockOVSOfctlRunnerMockRecorder) RunOfctlCmd(arg0 any, arg1 ...any) *go
 type MockOVSAppctlRunner struct {
 	ctrl     *gomock.Controller
 	recorder *MockOVSAppctlRunnerMockRecorder
+	isgomock struct{}
 }
 
 // MockOVSAppctlRunnerMockRecorder is the mock recorder for MockOVSAppctlRunner.
@@ -97,10 +99,10 @@ func (m *MockOVSAppctlRunner) EXPECT() *MockOVSAppctlRunnerMockRecorder {
 }
 
 // RunAppctlCmd mocks base method.
-func (m *MockOVSAppctlRunner) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) ([]byte, error) {
+func (m *MockOVSAppctlRunner) RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{cmd, needsBridge}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "RunAppctlCmd", varargs...)
@@ -110,8 +112,8 @@ func (m *MockOVSAppctlRunner) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...strin
 }
 
 // RunAppctlCmd indicates an expected call of RunAppctlCmd.
-func (mr *MockOVSAppctlRunnerMockRecorder) RunAppctlCmd(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockOVSAppctlRunnerMockRecorder) RunAppctlCmd(cmd, needsBridge any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{cmd, needsBridge}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunAppctlCmd", reflect.TypeOf((*MockOVSAppctlRunner)(nil).RunAppctlCmd), varargs...)
 }

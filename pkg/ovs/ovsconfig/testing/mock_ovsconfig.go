@@ -37,6 +37,7 @@ import (
 type MockOVSBridgeClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockOVSBridgeClientMockRecorder
+	isgomock struct{}
 }
 
 // MockOVSBridgeClientMockRecorder is the mock recorder for MockOVSBridgeClient.
@@ -57,31 +58,31 @@ func (m *MockOVSBridgeClient) EXPECT() *MockOVSBridgeClientMockRecorder {
 }
 
 // AddBridgeOtherConfig mocks base method.
-func (m *MockOVSBridgeClient) AddBridgeOtherConfig(arg0 map[string]any) ovsconfig.Error {
+func (m *MockOVSBridgeClient) AddBridgeOtherConfig(configs map[string]any) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddBridgeOtherConfig", arg0)
+	ret := m.ctrl.Call(m, "AddBridgeOtherConfig", configs)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // AddBridgeOtherConfig indicates an expected call of AddBridgeOtherConfig.
-func (mr *MockOVSBridgeClientMockRecorder) AddBridgeOtherConfig(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) AddBridgeOtherConfig(configs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBridgeOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).AddBridgeOtherConfig), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBridgeOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).AddBridgeOtherConfig), configs)
 }
 
 // AddOVSOtherConfig mocks base method.
-func (m *MockOVSBridgeClient) AddOVSOtherConfig(arg0 map[string]any) ovsconfig.Error {
+func (m *MockOVSBridgeClient) AddOVSOtherConfig(configs map[string]any) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddOVSOtherConfig", arg0)
+	ret := m.ctrl.Call(m, "AddOVSOtherConfig", configs)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // AddOVSOtherConfig indicates an expected call of AddOVSOtherConfig.
-func (mr *MockOVSBridgeClientMockRecorder) AddOVSOtherConfig(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) AddOVSOtherConfig(configs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).AddOVSOtherConfig), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).AddOVSOtherConfig), configs)
 }
 
 // Create mocks base method.
@@ -99,93 +100,93 @@ func (mr *MockOVSBridgeClientMockRecorder) Create() *gomock.Call {
 }
 
 // CreateAccessPort mocks base method.
-func (m *MockOVSBridgeClient) CreateAccessPort(arg0, arg1 string, arg2 map[string]any, arg3 uint16) (string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) CreateAccessPort(name, ifDev string, externalIDs map[string]any, vlanID uint16) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateAccessPort", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "CreateAccessPort", name, ifDev, externalIDs, vlanID)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // CreateAccessPort indicates an expected call of CreateAccessPort.
-func (mr *MockOVSBridgeClientMockRecorder) CreateAccessPort(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) CreateAccessPort(name, ifDev, externalIDs, vlanID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccessPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateAccessPort), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccessPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateAccessPort), name, ifDev, externalIDs, vlanID)
 }
 
 // CreateInternalPort mocks base method.
-func (m *MockOVSBridgeClient) CreateInternalPort(arg0 string, arg1 int32, arg2 string, arg3 map[string]any) (string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) CreateInternalPort(name string, ofPortRequest int32, mac string, externalIDs map[string]any) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateInternalPort", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "CreateInternalPort", name, ofPortRequest, mac, externalIDs)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // CreateInternalPort indicates an expected call of CreateInternalPort.
-func (mr *MockOVSBridgeClientMockRecorder) CreateInternalPort(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) CreateInternalPort(name, ofPortRequest, mac, externalIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInternalPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateInternalPort), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInternalPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateInternalPort), name, ofPortRequest, mac, externalIDs)
 }
 
 // CreatePort mocks base method.
-func (m *MockOVSBridgeClient) CreatePort(arg0, arg1 string, arg2 map[string]any) (string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) CreatePort(name, ifDev string, externalIDs map[string]any) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreatePort", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreatePort", name, ifDev, externalIDs)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // CreatePort indicates an expected call of CreatePort.
-func (mr *MockOVSBridgeClientMockRecorder) CreatePort(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) CreatePort(name, ifDev, externalIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreatePort), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreatePort), name, ifDev, externalIDs)
 }
 
 // CreateTunnelPort mocks base method.
-func (m *MockOVSBridgeClient) CreateTunnelPort(arg0 string, arg1 ovsconfig.TunnelType, arg2 int32) (string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) CreateTunnelPort(name string, tunnelType ovsconfig.TunnelType, ofPortRequest int32) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTunnelPort", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateTunnelPort", name, tunnelType, ofPortRequest)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // CreateTunnelPort indicates an expected call of CreateTunnelPort.
-func (mr *MockOVSBridgeClientMockRecorder) CreateTunnelPort(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) CreateTunnelPort(name, tunnelType, ofPortRequest any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTunnelPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateTunnelPort), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTunnelPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateTunnelPort), name, tunnelType, ofPortRequest)
 }
 
 // CreateTunnelPortExt mocks base method.
-func (m *MockOVSBridgeClient) CreateTunnelPortExt(arg0 string, arg1 ovsconfig.TunnelType, arg2 int32, arg3 bool, arg4, arg5, arg6, arg7 string, arg8, arg9 map[string]any) (string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) CreateTunnelPortExt(name string, tunnelType ovsconfig.TunnelType, ofPortRequest int32, csum bool, localIP, remoteIP, remoteName, psk string, extraOptions, externalIDs map[string]any) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTunnelPortExt", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+	ret := m.ctrl.Call(m, "CreateTunnelPortExt", name, tunnelType, ofPortRequest, csum, localIP, remoteIP, remoteName, psk, extraOptions, externalIDs)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // CreateTunnelPortExt indicates an expected call of CreateTunnelPortExt.
-func (mr *MockOVSBridgeClientMockRecorder) CreateTunnelPortExt(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) CreateTunnelPortExt(name, tunnelType, ofPortRequest, csum, localIP, remoteIP, remoteName, psk, extraOptions, externalIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTunnelPortExt", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateTunnelPortExt), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTunnelPortExt", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateTunnelPortExt), name, tunnelType, ofPortRequest, csum, localIP, remoteIP, remoteName, psk, extraOptions, externalIDs)
 }
 
 // CreateUplinkPort mocks base method.
-func (m *MockOVSBridgeClient) CreateUplinkPort(arg0 string, arg1 int32, arg2 map[string]any) (string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]any) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateUplinkPort", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateUplinkPort", name, ofPortRequest, externalIDs)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // CreateUplinkPort indicates an expected call of CreateUplinkPort.
-func (mr *MockOVSBridgeClientMockRecorder) CreateUplinkPort(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) CreateUplinkPort(name, ofPortRequest, externalIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUplinkPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateUplinkPort), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUplinkPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateUplinkPort), name, ofPortRequest, externalIDs)
 }
 
 // Delete mocks base method.
@@ -203,45 +204,45 @@ func (mr *MockOVSBridgeClientMockRecorder) Delete() *gomock.Call {
 }
 
 // DeleteOVSOtherConfig mocks base method.
-func (m *MockOVSBridgeClient) DeleteOVSOtherConfig(arg0 map[string]any) ovsconfig.Error {
+func (m *MockOVSBridgeClient) DeleteOVSOtherConfig(configs map[string]any) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteOVSOtherConfig", arg0)
+	ret := m.ctrl.Call(m, "DeleteOVSOtherConfig", configs)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // DeleteOVSOtherConfig indicates an expected call of DeleteOVSOtherConfig.
-func (mr *MockOVSBridgeClientMockRecorder) DeleteOVSOtherConfig(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) DeleteOVSOtherConfig(configs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeleteOVSOtherConfig), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeleteOVSOtherConfig), configs)
 }
 
 // DeletePort mocks base method.
-func (m *MockOVSBridgeClient) DeletePort(arg0 string) ovsconfig.Error {
+func (m *MockOVSBridgeClient) DeletePort(portUUID string) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeletePort", arg0)
+	ret := m.ctrl.Call(m, "DeletePort", portUUID)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // DeletePort indicates an expected call of DeletePort.
-func (mr *MockOVSBridgeClientMockRecorder) DeletePort(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) DeletePort(portUUID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePort", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeletePort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePort", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeletePort), portUUID)
 }
 
 // DeletePorts mocks base method.
-func (m *MockOVSBridgeClient) DeletePorts(arg0 []string) ovsconfig.Error {
+func (m *MockOVSBridgeClient) DeletePorts(portUUIDList []string) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeletePorts", arg0)
+	ret := m.ctrl.Call(m, "DeletePorts", portUUIDList)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // DeletePorts indicates an expected call of DeletePorts.
-func (mr *MockOVSBridgeClientMockRecorder) DeletePorts(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) DeletePorts(portUUIDList any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePorts", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeletePorts), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePorts", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeletePorts), portUUIDList)
 }
 
 // GetBridgeName mocks base method.
@@ -289,33 +290,33 @@ func (mr *MockOVSBridgeClientMockRecorder) GetExternalIDs() *gomock.Call {
 }
 
 // GetInterfaceOptions mocks base method.
-func (m *MockOVSBridgeClient) GetInterfaceOptions(arg0 string) (map[string]string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) GetInterfaceOptions(name string) (map[string]string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetInterfaceOptions", arg0)
+	ret := m.ctrl.Call(m, "GetInterfaceOptions", name)
 	ret0, _ := ret[0].(map[string]string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // GetInterfaceOptions indicates an expected call of GetInterfaceOptions.
-func (mr *MockOVSBridgeClientMockRecorder) GetInterfaceOptions(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) GetInterfaceOptions(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceOptions", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetInterfaceOptions), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceOptions", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetInterfaceOptions), name)
 }
 
 // GetOFPort mocks base method.
-func (m *MockOVSBridgeClient) GetOFPort(arg0 string, arg1 bool) (int32, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) GetOFPort(ifName string, waitUntilValid bool) (int32, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOFPort", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetOFPort", ifName, waitUntilValid)
 	ret0, _ := ret[0].(int32)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // GetOFPort indicates an expected call of GetOFPort.
-func (mr *MockOVSBridgeClientMockRecorder) GetOFPort(arg0, arg1 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) GetOFPort(ifName, waitUntilValid any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOFPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOFPort), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOFPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOFPort), ifName, waitUntilValid)
 }
 
 // GetOVSDatapathType mocks base method.
@@ -363,33 +364,33 @@ func (mr *MockOVSBridgeClientMockRecorder) GetOVSVersion() *gomock.Call {
 }
 
 // GetPortData mocks base method.
-func (m *MockOVSBridgeClient) GetPortData(arg0, arg1 string) (*ovsconfig.OVSPortData, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) GetPortData(portUUID, ifName string) (*ovsconfig.OVSPortData, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPortData", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetPortData", portUUID, ifName)
 	ret0, _ := ret[0].(*ovsconfig.OVSPortData)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // GetPortData indicates an expected call of GetPortData.
-func (mr *MockOVSBridgeClientMockRecorder) GetPortData(arg0, arg1 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) GetPortData(portUUID, ifName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPortData", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetPortData), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPortData", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetPortData), portUUID, ifName)
 }
 
 // GetPortExternalIDs mocks base method.
-func (m *MockOVSBridgeClient) GetPortExternalIDs(arg0 string) (map[string]string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) GetPortExternalIDs(portName string) (map[string]string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPortExternalIDs", arg0)
+	ret := m.ctrl.Call(m, "GetPortExternalIDs", portName)
 	ret0, _ := ret[0].(map[string]string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // GetPortExternalIDs indicates an expected call of GetPortExternalIDs.
-func (mr *MockOVSBridgeClientMockRecorder) GetPortExternalIDs(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) GetPortExternalIDs(portName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPortExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetPortExternalIDs), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPortExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetPortExternalIDs), portName)
 }
 
 // GetPortList mocks base method.
@@ -422,128 +423,128 @@ func (mr *MockOVSBridgeClientMockRecorder) IsHardwareOffloadEnabled() *gomock.Ca
 }
 
 // SetDatapathID mocks base method.
-func (m *MockOVSBridgeClient) SetDatapathID(arg0 string) ovsconfig.Error {
+func (m *MockOVSBridgeClient) SetDatapathID(datapathID string) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetDatapathID", arg0)
+	ret := m.ctrl.Call(m, "SetDatapathID", datapathID)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // SetDatapathID indicates an expected call of SetDatapathID.
-func (mr *MockOVSBridgeClientMockRecorder) SetDatapathID(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) SetDatapathID(datapathID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDatapathID", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetDatapathID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDatapathID", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetDatapathID), datapathID)
 }
 
 // SetExternalIDs mocks base method.
-func (m *MockOVSBridgeClient) SetExternalIDs(arg0 map[string]any) ovsconfig.Error {
+func (m *MockOVSBridgeClient) SetExternalIDs(externalIDs map[string]any) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetExternalIDs", arg0)
+	ret := m.ctrl.Call(m, "SetExternalIDs", externalIDs)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // SetExternalIDs indicates an expected call of SetExternalIDs.
-func (mr *MockOVSBridgeClientMockRecorder) SetExternalIDs(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) SetExternalIDs(externalIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetExternalIDs), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetExternalIDs), externalIDs)
 }
 
 // SetInterfaceMAC mocks base method.
-func (m *MockOVSBridgeClient) SetInterfaceMAC(arg0 string, arg1 net.HardwareAddr) ovsconfig.Error {
+func (m *MockOVSBridgeClient) SetInterfaceMAC(name string, mac net.HardwareAddr) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetInterfaceMAC", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetInterfaceMAC", name, mac)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // SetInterfaceMAC indicates an expected call of SetInterfaceMAC.
-func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceMAC(arg0, arg1 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceMAC(name, mac any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceMAC", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceMAC), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceMAC", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceMAC), name, mac)
 }
 
 // SetInterfaceMTU mocks base method.
-func (m *MockOVSBridgeClient) SetInterfaceMTU(arg0 string, arg1 int) error {
+func (m *MockOVSBridgeClient) SetInterfaceMTU(name string, MTU int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetInterfaceMTU", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetInterfaceMTU", name, MTU)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetInterfaceMTU indicates an expected call of SetInterfaceMTU.
-func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceMTU(arg0, arg1 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceMTU(name, MTU any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceMTU", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceMTU), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceMTU", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceMTU), name, MTU)
 }
 
 // SetInterfaceOptions mocks base method.
-func (m *MockOVSBridgeClient) SetInterfaceOptions(arg0 string, arg1 map[string]any) ovsconfig.Error {
+func (m *MockOVSBridgeClient) SetInterfaceOptions(name string, options map[string]any) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetInterfaceOptions", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetInterfaceOptions", name, options)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // SetInterfaceOptions indicates an expected call of SetInterfaceOptions.
-func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceOptions(arg0, arg1 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceOptions(name, options any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceOptions", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceOptions), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceOptions", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceOptions), name, options)
 }
 
 // SetInterfaceType mocks base method.
-func (m *MockOVSBridgeClient) SetInterfaceType(arg0, arg1 string) ovsconfig.Error {
+func (m *MockOVSBridgeClient) SetInterfaceType(name, ifType string) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetInterfaceType", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetInterfaceType", name, ifType)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // SetInterfaceType indicates an expected call of SetInterfaceType.
-func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceType(arg0, arg1 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceType(name, ifType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceType", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceType), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceType", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceType), name, ifType)
 }
 
 // SetPortExternalIDs mocks base method.
-func (m *MockOVSBridgeClient) SetPortExternalIDs(arg0 string, arg1 map[string]any) ovsconfig.Error {
+func (m *MockOVSBridgeClient) SetPortExternalIDs(portName string, externalIDs map[string]any) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetPortExternalIDs", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetPortExternalIDs", portName, externalIDs)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // SetPortExternalIDs indicates an expected call of SetPortExternalIDs.
-func (mr *MockOVSBridgeClientMockRecorder) SetPortExternalIDs(arg0, arg1 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) SetPortExternalIDs(portName, externalIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPortExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetPortExternalIDs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPortExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetPortExternalIDs), portName, externalIDs)
 }
 
 // UpdateOVSOtherConfig mocks base method.
-func (m *MockOVSBridgeClient) UpdateOVSOtherConfig(arg0 map[string]any) ovsconfig.Error {
+func (m *MockOVSBridgeClient) UpdateOVSOtherConfig(configs map[string]any) ovsconfig.Error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateOVSOtherConfig", arg0)
+	ret := m.ctrl.Call(m, "UpdateOVSOtherConfig", configs)
 	ret0, _ := ret[0].(ovsconfig.Error)
 	return ret0
 }
 
 // UpdateOVSOtherConfig indicates an expected call of UpdateOVSOtherConfig.
-func (mr *MockOVSBridgeClientMockRecorder) UpdateOVSOtherConfig(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) UpdateOVSOtherConfig(configs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).UpdateOVSOtherConfig), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).UpdateOVSOtherConfig), configs)
 }
 
 // WaitForDatapathID mocks base method.
-func (m *MockOVSBridgeClient) WaitForDatapathID(arg0 time.Duration) (string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) WaitForDatapathID(timeout time.Duration) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForDatapathID", arg0)
+	ret := m.ctrl.Call(m, "WaitForDatapathID", timeout)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // WaitForDatapathID indicates an expected call of WaitForDatapathID.
-func (mr *MockOVSBridgeClientMockRecorder) WaitForDatapathID(arg0 any) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) WaitForDatapathID(timeout any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForDatapathID", reflect.TypeOf((*MockOVSBridgeClient)(nil).WaitForDatapathID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForDatapathID", reflect.TypeOf((*MockOVSBridgeClient)(nil).WaitForDatapathID), timeout)
 }

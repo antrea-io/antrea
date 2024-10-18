@@ -35,6 +35,7 @@ import (
 type MockPacketListener struct {
 	ctrl     *gomock.Controller
 	recorder *MockPacketListenerMockRecorder
+	isgomock struct{}
 }
 
 // MockPacketListenerMockRecorder is the mock recorder for MockPacketListener.
@@ -55,16 +56,16 @@ func (m *MockPacketListener) EXPECT() *MockPacketListenerMockRecorder {
 }
 
 // ListenPacket mocks base method.
-func (m *MockPacketListener) ListenPacket(arg0, arg1 string) (net.PacketConn, error) {
+func (m *MockPacketListener) ListenPacket(network, address string) (net.PacketConn, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListenPacket", arg0, arg1)
+	ret := m.ctrl.Call(m, "ListenPacket", network, address)
 	ret0, _ := ret[0].(net.PacketConn)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListenPacket indicates an expected call of ListenPacket.
-func (mr *MockPacketListenerMockRecorder) ListenPacket(arg0, arg1 any) *gomock.Call {
+func (mr *MockPacketListenerMockRecorder) ListenPacket(network, address any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenPacket", reflect.TypeOf((*MockPacketListener)(nil).ListenPacket), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenPacket", reflect.TypeOf((*MockPacketListener)(nil).ListenPacket), network, address)
 }

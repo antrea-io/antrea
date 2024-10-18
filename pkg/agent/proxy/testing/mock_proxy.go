@@ -36,6 +36,7 @@ import (
 type MockProxier struct {
 	ctrl     *gomock.Controller
 	recorder *MockProxierMockRecorder
+	isgomock struct{}
 }
 
 // MockProxierMockRecorder is the mock recorder for MockProxier.
@@ -70,24 +71,24 @@ func (mr *MockProxierMockRecorder) GetProxyProvider() *gomock.Call {
 }
 
 // GetServiceByIP mocks base method.
-func (m *MockProxier) GetServiceByIP(arg0 string) (proxy.ServicePortName, bool) {
+func (m *MockProxier) GetServiceByIP(serviceStr string) (proxy.ServicePortName, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetServiceByIP", arg0)
+	ret := m.ctrl.Call(m, "GetServiceByIP", serviceStr)
 	ret0, _ := ret[0].(proxy.ServicePortName)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
 // GetServiceByIP indicates an expected call of GetServiceByIP.
-func (mr *MockProxierMockRecorder) GetServiceByIP(arg0 any) *gomock.Call {
+func (mr *MockProxierMockRecorder) GetServiceByIP(serviceStr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceByIP", reflect.TypeOf((*MockProxier)(nil).GetServiceByIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceByIP", reflect.TypeOf((*MockProxier)(nil).GetServiceByIP), serviceStr)
 }
 
 // GetServiceFlowKeys mocks base method.
-func (m *MockProxier) GetServiceFlowKeys(arg0, arg1 string) ([]string, []openflow.GroupIDType, bool) {
+func (m *MockProxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, []openflow.GroupIDType, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetServiceFlowKeys", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetServiceFlowKeys", serviceName, namespace)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].([]openflow.GroupIDType)
 	ret2, _ := ret[2].(bool)
@@ -95,7 +96,7 @@ func (m *MockProxier) GetServiceFlowKeys(arg0, arg1 string) ([]string, []openflo
 }
 
 // GetServiceFlowKeys indicates an expected call of GetServiceFlowKeys.
-func (mr *MockProxierMockRecorder) GetServiceFlowKeys(arg0, arg1 any) *gomock.Call {
+func (mr *MockProxierMockRecorder) GetServiceFlowKeys(serviceName, namespace any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceFlowKeys", reflect.TypeOf((*MockProxier)(nil).GetServiceFlowKeys), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceFlowKeys", reflect.TypeOf((*MockProxier)(nil).GetServiceFlowKeys), serviceName, namespace)
 }

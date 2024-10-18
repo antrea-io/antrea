@@ -35,6 +35,7 @@ import (
 type MockMemberClusterStatusManager struct {
 	ctrl     *gomock.Controller
 	recorder *MockMemberClusterStatusManagerMockRecorder
+	isgomock struct{}
 }
 
 // MockMemberClusterStatusManagerMockRecorder is the mock recorder for MockMemberClusterStatusManager.

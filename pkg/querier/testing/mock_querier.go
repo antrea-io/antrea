@@ -42,6 +42,7 @@ import (
 type MockAgentNetworkPolicyInfoQuerier struct {
 	ctrl     *gomock.Controller
 	recorder *MockAgentNetworkPolicyInfoQuerierMockRecorder
+	isgomock struct{}
 }
 
 // MockAgentNetworkPolicyInfoQuerierMockRecorder is the mock recorder for MockAgentNetworkPolicyInfoQuerier.
@@ -90,17 +91,17 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetAddressGroups() *gom
 }
 
 // GetAppliedNetworkPolicies mocks base method.
-func (m *MockAgentNetworkPolicyInfoQuerier) GetAppliedNetworkPolicies(arg0, arg1 string, arg2 *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAppliedNetworkPolicies", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetAppliedNetworkPolicies", pod, namespace, npFilter)
 	ret0, _ := ret[0].([]v1beta2.NetworkPolicy)
 	return ret0
 }
 
 // GetAppliedNetworkPolicies indicates an expected call of GetAppliedNetworkPolicies.
-func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetAppliedNetworkPolicies(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetAppliedNetworkPolicies(pod, namespace, npFilter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAppliedNetworkPolicies", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetAppliedNetworkPolicies), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAppliedNetworkPolicies", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetAppliedNetworkPolicies), pod, namespace, npFilter)
 }
 
 // GetAppliedToGroupNum mocks base method.
@@ -146,31 +147,31 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetControllerConnection
 }
 
 // GetNetworkPolicies mocks base method.
-func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicies(arg0 *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNetworkPolicies", arg0)
+	ret := m.ctrl.Call(m, "GetNetworkPolicies", npFilter)
 	ret0, _ := ret[0].([]v1beta2.NetworkPolicy)
 	return ret0
 }
 
 // GetNetworkPolicies indicates an expected call of GetNetworkPolicies.
-func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicies(arg0 any) *gomock.Call {
+func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicies(npFilter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicies", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetNetworkPolicies), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicies", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetNetworkPolicies), npFilter)
 }
 
 // GetNetworkPolicyByRuleFlowID mocks base method.
-func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicyByRuleFlowID(arg0 uint32) *v1beta2.NetworkPolicyReference {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *v1beta2.NetworkPolicyReference {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNetworkPolicyByRuleFlowID", arg0)
+	ret := m.ctrl.Call(m, "GetNetworkPolicyByRuleFlowID", ruleFlowID)
 	ret0, _ := ret[0].(*v1beta2.NetworkPolicyReference)
 	return ret0
 }
 
 // GetNetworkPolicyByRuleFlowID indicates an expected call of GetNetworkPolicyByRuleFlowID.
-func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicyByRuleFlowID(arg0 any) *gomock.Call {
+func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicyByRuleFlowID(ruleFlowID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyByRuleFlowID", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetNetworkPolicyByRuleFlowID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyByRuleFlowID", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetNetworkPolicyByRuleFlowID), ruleFlowID)
 }
 
 // GetNetworkPolicyNum mocks base method.
@@ -188,23 +189,24 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicyNum() *
 }
 
 // GetRuleByFlowID mocks base method.
-func (m *MockAgentNetworkPolicyInfoQuerier) GetRuleByFlowID(arg0 uint32) *types.PolicyRule {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetRuleByFlowID(ruleFlowID uint32) *types.PolicyRule {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRuleByFlowID", arg0)
+	ret := m.ctrl.Call(m, "GetRuleByFlowID", ruleFlowID)
 	ret0, _ := ret[0].(*types.PolicyRule)
 	return ret0
 }
 
 // GetRuleByFlowID indicates an expected call of GetRuleByFlowID.
-func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetRuleByFlowID(arg0 any) *gomock.Call {
+func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetRuleByFlowID(ruleFlowID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRuleByFlowID", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetRuleByFlowID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRuleByFlowID", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetRuleByFlowID), ruleFlowID)
 }
 
 // MockAgentMulticastInfoQuerier is a mock of AgentMulticastInfoQuerier interface.
 type MockAgentMulticastInfoQuerier struct {
 	ctrl     *gomock.Controller
 	recorder *MockAgentMulticastInfoQuerierMockRecorder
+	isgomock struct{}
 }
 
 // MockAgentMulticastInfoQuerierMockRecorder is the mock recorder for MockAgentMulticastInfoQuerier.
@@ -268,23 +270,24 @@ func (mr *MockAgentMulticastInfoQuerierMockRecorder) GetGroupPods() *gomock.Call
 }
 
 // GetPodStats mocks base method.
-func (m *MockAgentMulticastInfoQuerier) GetPodStats(arg0, arg1 string) *multicast.PodTrafficStats {
+func (m *MockAgentMulticastInfoQuerier) GetPodStats(podName, podNamespace string) *multicast.PodTrafficStats {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPodStats", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetPodStats", podName, podNamespace)
 	ret0, _ := ret[0].(*multicast.PodTrafficStats)
 	return ret0
 }
 
 // GetPodStats indicates an expected call of GetPodStats.
-func (mr *MockAgentMulticastInfoQuerierMockRecorder) GetPodStats(arg0, arg1 any) *gomock.Call {
+func (mr *MockAgentMulticastInfoQuerierMockRecorder) GetPodStats(podName, podNamespace any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPodStats", reflect.TypeOf((*MockAgentMulticastInfoQuerier)(nil).GetPodStats), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPodStats", reflect.TypeOf((*MockAgentMulticastInfoQuerier)(nil).GetPodStats), podName, podNamespace)
 }
 
 // MockEgressQuerier is a mock of EgressQuerier interface.
 type MockEgressQuerier struct {
 	ctrl     *gomock.Controller
 	recorder *MockEgressQuerierMockRecorder
+	isgomock struct{}
 }
 
 // MockEgressQuerierMockRecorder is the mock recorder for MockEgressQuerier.
@@ -305,9 +308,9 @@ func (m *MockEgressQuerier) EXPECT() *MockEgressQuerierMockRecorder {
 }
 
 // GetEgress mocks base method.
-func (m *MockEgressQuerier) GetEgress(arg0, arg1 string) (string, string, string, error) {
+func (m *MockEgressQuerier) GetEgress(podNamespace, podName string) (string, string, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEgress", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetEgress", podNamespace, podName)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(string)
@@ -316,30 +319,31 @@ func (m *MockEgressQuerier) GetEgress(arg0, arg1 string) (string, string, string
 }
 
 // GetEgress indicates an expected call of GetEgress.
-func (mr *MockEgressQuerierMockRecorder) GetEgress(arg0, arg1 any) *gomock.Call {
+func (mr *MockEgressQuerierMockRecorder) GetEgress(podNamespace, podName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEgress", reflect.TypeOf((*MockEgressQuerier)(nil).GetEgress), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEgress", reflect.TypeOf((*MockEgressQuerier)(nil).GetEgress), podNamespace, podName)
 }
 
 // GetEgressIPByMark mocks base method.
-func (m *MockEgressQuerier) GetEgressIPByMark(arg0 uint32) (string, error) {
+func (m *MockEgressQuerier) GetEgressIPByMark(mark uint32) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEgressIPByMark", arg0)
+	ret := m.ctrl.Call(m, "GetEgressIPByMark", mark)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetEgressIPByMark indicates an expected call of GetEgressIPByMark.
-func (mr *MockEgressQuerierMockRecorder) GetEgressIPByMark(arg0 any) *gomock.Call {
+func (mr *MockEgressQuerierMockRecorder) GetEgressIPByMark(mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEgressIPByMark", reflect.TypeOf((*MockEgressQuerier)(nil).GetEgressIPByMark), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEgressIPByMark", reflect.TypeOf((*MockEgressQuerier)(nil).GetEgressIPByMark), mark)
 }
 
 // MockAgentBGPPolicyInfoQuerier is a mock of AgentBGPPolicyInfoQuerier interface.
 type MockAgentBGPPolicyInfoQuerier struct {
 	ctrl     *gomock.Controller
 	recorder *MockAgentBGPPolicyInfoQuerierMockRecorder
+	isgomock struct{}
 }
 
 // MockAgentBGPPolicyInfoQuerierMockRecorder is the mock recorder for MockAgentBGPPolicyInfoQuerier.
@@ -360,18 +364,18 @@ func (m *MockAgentBGPPolicyInfoQuerier) EXPECT() *MockAgentBGPPolicyInfoQuerierM
 }
 
 // GetBGPPeerStatus mocks base method.
-func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPeerStatus(arg0 context.Context) ([]bgp.PeerStatus, error) {
+func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBGPPeerStatus", arg0)
+	ret := m.ctrl.Call(m, "GetBGPPeerStatus", ctx)
 	ret0, _ := ret[0].([]bgp.PeerStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBGPPeerStatus indicates an expected call of GetBGPPeerStatus.
-func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPeerStatus(arg0 any) *gomock.Call {
+func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPeerStatus(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPPeerStatus", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPPeerStatus), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPPeerStatus", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPPeerStatus), ctx)
 }
 
 // GetBGPPolicyInfo mocks base method.

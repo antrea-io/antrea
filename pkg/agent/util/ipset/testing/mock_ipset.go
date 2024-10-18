@@ -35,6 +35,7 @@ import (
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockInterfaceMockRecorder is the mock recorder for MockInterface.
@@ -55,72 +56,72 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AddEntry mocks base method.
-func (m *MockInterface) AddEntry(arg0, arg1 string) error {
+func (m *MockInterface) AddEntry(name, entry string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddEntry", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddEntry", name, entry)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddEntry indicates an expected call of AddEntry.
-func (mr *MockInterfaceMockRecorder) AddEntry(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddEntry(name, entry any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEntry", reflect.TypeOf((*MockInterface)(nil).AddEntry), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEntry", reflect.TypeOf((*MockInterface)(nil).AddEntry), name, entry)
 }
 
 // CreateIPSet mocks base method.
-func (m *MockInterface) CreateIPSet(arg0 string, arg1 ipset.SetType, arg2 bool) error {
+func (m *MockInterface) CreateIPSet(name string, setType ipset.SetType, isIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateIPSet", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateIPSet", name, setType, isIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateIPSet indicates an expected call of CreateIPSet.
-func (mr *MockInterfaceMockRecorder) CreateIPSet(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) CreateIPSet(name, setType, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIPSet", reflect.TypeOf((*MockInterface)(nil).CreateIPSet), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIPSet", reflect.TypeOf((*MockInterface)(nil).CreateIPSet), name, setType, isIPv6)
 }
 
 // DelEntry mocks base method.
-func (m *MockInterface) DelEntry(arg0, arg1 string) error {
+func (m *MockInterface) DelEntry(name, entry string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DelEntry", arg0, arg1)
+	ret := m.ctrl.Call(m, "DelEntry", name, entry)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DelEntry indicates an expected call of DelEntry.
-func (mr *MockInterfaceMockRecorder) DelEntry(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DelEntry(name, entry any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DelEntry", reflect.TypeOf((*MockInterface)(nil).DelEntry), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DelEntry", reflect.TypeOf((*MockInterface)(nil).DelEntry), name, entry)
 }
 
 // DestroyIPSet mocks base method.
-func (m *MockInterface) DestroyIPSet(arg0 string) error {
+func (m *MockInterface) DestroyIPSet(name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DestroyIPSet", arg0)
+	ret := m.ctrl.Call(m, "DestroyIPSet", name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DestroyIPSet indicates an expected call of DestroyIPSet.
-func (mr *MockInterfaceMockRecorder) DestroyIPSet(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DestroyIPSet(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DestroyIPSet", reflect.TypeOf((*MockInterface)(nil).DestroyIPSet), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DestroyIPSet", reflect.TypeOf((*MockInterface)(nil).DestroyIPSet), name)
 }
 
 // ListEntries mocks base method.
-func (m *MockInterface) ListEntries(arg0 string) ([]string, error) {
+func (m *MockInterface) ListEntries(name string) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListEntries", arg0)
+	ret := m.ctrl.Call(m, "ListEntries", name)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListEntries indicates an expected call of ListEntries.
-func (mr *MockInterfaceMockRecorder) ListEntries(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ListEntries(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEntries", reflect.TypeOf((*MockInterface)(nil).ListEntries), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEntries", reflect.TypeOf((*MockInterface)(nil).ListEntries), name)
 }

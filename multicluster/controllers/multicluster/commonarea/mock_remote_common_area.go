@@ -43,6 +43,7 @@ import (
 type MockCommonArea struct {
 	ctrl     *gomock.Controller
 	recorder *MockCommonAreaMockRecorder
+	isgomock struct{}
 }
 
 // MockCommonAreaMockRecorder is the mock recorder for MockCommonArea.
@@ -63,10 +64,10 @@ func (m *MockCommonArea) EXPECT() *MockCommonAreaMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockCommonArea) Create(arg0 context.Context, arg1 client.Object, arg2 ...client.CreateOption) error {
+func (m *MockCommonArea) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Create", varargs...)
@@ -75,17 +76,17 @@ func (m *MockCommonArea) Create(arg0 context.Context, arg1 client.Object, arg2 .
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockCommonAreaMockRecorder) Create(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) Create(ctx, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockCommonArea)(nil).Create), varargs...)
 }
 
 // Delete mocks base method.
-func (m *MockCommonArea) Delete(arg0 context.Context, arg1 client.Object, arg2 ...client.DeleteOption) error {
+func (m *MockCommonArea) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Delete", varargs...)
@@ -94,17 +95,17 @@ func (m *MockCommonArea) Delete(arg0 context.Context, arg1 client.Object, arg2 .
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockCommonAreaMockRecorder) Delete(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) Delete(ctx, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockCommonArea)(nil).Delete), varargs...)
 }
 
 // DeleteAllOf mocks base method.
-func (m *MockCommonArea) DeleteAllOf(arg0 context.Context, arg1 client.Object, arg2 ...client.DeleteAllOfOption) error {
+func (m *MockCommonArea) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "DeleteAllOf", varargs...)
@@ -113,17 +114,17 @@ func (m *MockCommonArea) DeleteAllOf(arg0 context.Context, arg1 client.Object, a
 }
 
 // DeleteAllOf indicates an expected call of DeleteAllOf.
-func (mr *MockCommonAreaMockRecorder) DeleteAllOf(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) DeleteAllOf(ctx, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAllOf", reflect.TypeOf((*MockCommonArea)(nil).DeleteAllOf), varargs...)
 }
 
 // Get mocks base method.
-func (m *MockCommonArea) Get(arg0 context.Context, arg1 types.NamespacedName, arg2 client.Object, arg3 ...client.GetOption) error {
+func (m *MockCommonArea) Get(ctx context.Context, key types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, key, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Get", varargs...)
@@ -132,9 +133,9 @@ func (m *MockCommonArea) Get(arg0 context.Context, arg1 types.NamespacedName, ar
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockCommonAreaMockRecorder) Get(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) Get(ctx, key, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, key, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCommonArea)(nil).Get), varargs...)
 }
 
@@ -167,40 +168,40 @@ func (mr *MockCommonAreaMockRecorder) GetNamespace() *gomock.Call {
 }
 
 // GroupVersionKindFor mocks base method.
-func (m *MockCommonArea) GroupVersionKindFor(arg0 runtime.Object) (schema.GroupVersionKind, error) {
+func (m *MockCommonArea) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GroupVersionKindFor", arg0)
+	ret := m.ctrl.Call(m, "GroupVersionKindFor", obj)
 	ret0, _ := ret[0].(schema.GroupVersionKind)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GroupVersionKindFor indicates an expected call of GroupVersionKindFor.
-func (mr *MockCommonAreaMockRecorder) GroupVersionKindFor(arg0 any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) GroupVersionKindFor(obj any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GroupVersionKindFor", reflect.TypeOf((*MockCommonArea)(nil).GroupVersionKindFor), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GroupVersionKindFor", reflect.TypeOf((*MockCommonArea)(nil).GroupVersionKindFor), obj)
 }
 
 // IsObjectNamespaced mocks base method.
-func (m *MockCommonArea) IsObjectNamespaced(arg0 runtime.Object) (bool, error) {
+func (m *MockCommonArea) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsObjectNamespaced", arg0)
+	ret := m.ctrl.Call(m, "IsObjectNamespaced", obj)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsObjectNamespaced indicates an expected call of IsObjectNamespaced.
-func (mr *MockCommonAreaMockRecorder) IsObjectNamespaced(arg0 any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) IsObjectNamespaced(obj any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsObjectNamespaced", reflect.TypeOf((*MockCommonArea)(nil).IsObjectNamespaced), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsObjectNamespaced", reflect.TypeOf((*MockCommonArea)(nil).IsObjectNamespaced), obj)
 }
 
 // List mocks base method.
-func (m *MockCommonArea) List(arg0 context.Context, arg1 client.ObjectList, arg2 ...client.ListOption) error {
+func (m *MockCommonArea) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, list}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "List", varargs...)
@@ -209,17 +210,17 @@ func (m *MockCommonArea) List(arg0 context.Context, arg1 client.ObjectList, arg2
 }
 
 // List indicates an expected call of List.
-func (mr *MockCommonAreaMockRecorder) List(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) List(ctx, list any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, list}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockCommonArea)(nil).List), varargs...)
 }
 
 // Patch mocks base method.
-func (m *MockCommonArea) Patch(arg0 context.Context, arg1 client.Object, arg2 client.Patch, arg3 ...client.PatchOption) error {
+func (m *MockCommonArea) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, obj, patch}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Patch", varargs...)
@@ -228,9 +229,9 @@ func (m *MockCommonArea) Patch(arg0 context.Context, arg1 client.Object, arg2 cl
 }
 
 // Patch indicates an expected call of Patch.
-func (mr *MockCommonAreaMockRecorder) Patch(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) Patch(ctx, obj, patch any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, obj, patch}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Patch", reflect.TypeOf((*MockCommonArea)(nil).Patch), varargs...)
 }
 
@@ -277,24 +278,24 @@ func (mr *MockCommonAreaMockRecorder) Status() *gomock.Call {
 }
 
 // SubResource mocks base method.
-func (m *MockCommonArea) SubResource(arg0 string) client.SubResourceClient {
+func (m *MockCommonArea) SubResource(subResource string) client.SubResourceClient {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubResource", arg0)
+	ret := m.ctrl.Call(m, "SubResource", subResource)
 	ret0, _ := ret[0].(client.SubResourceClient)
 	return ret0
 }
 
 // SubResource indicates an expected call of SubResource.
-func (mr *MockCommonAreaMockRecorder) SubResource(arg0 any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) SubResource(subResource any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubResource", reflect.TypeOf((*MockCommonArea)(nil).SubResource), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubResource", reflect.TypeOf((*MockCommonArea)(nil).SubResource), subResource)
 }
 
 // Update mocks base method.
-func (m *MockCommonArea) Update(arg0 context.Context, arg1 client.Object, arg2 ...client.UpdateOption) error {
+func (m *MockCommonArea) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Update", varargs...)
@@ -303,9 +304,9 @@ func (m *MockCommonArea) Update(arg0 context.Context, arg1 client.Object, arg2 .
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockCommonAreaMockRecorder) Update(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockCommonAreaMockRecorder) Update(ctx, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockCommonArea)(nil).Update), varargs...)
 }
 
@@ -313,6 +314,7 @@ func (mr *MockCommonAreaMockRecorder) Update(arg0, arg1 any, arg2 ...any) *gomoc
 type MockRemoteCommonArea struct {
 	ctrl     *gomock.Controller
 	recorder *MockRemoteCommonAreaMockRecorder
+	isgomock struct{}
 }
 
 // MockRemoteCommonAreaMockRecorder is the mock recorder for MockRemoteCommonArea.
@@ -333,22 +335,22 @@ func (m *MockRemoteCommonArea) EXPECT() *MockRemoteCommonAreaMockRecorder {
 }
 
 // AddImportReconciler mocks base method.
-func (m *MockRemoteCommonArea) AddImportReconciler(arg0 ImportReconciler) {
+func (m *MockRemoteCommonArea) AddImportReconciler(reconciler ImportReconciler) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddImportReconciler", arg0)
+	m.ctrl.Call(m, "AddImportReconciler", reconciler)
 }
 
 // AddImportReconciler indicates an expected call of AddImportReconciler.
-func (mr *MockRemoteCommonAreaMockRecorder) AddImportReconciler(arg0 any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) AddImportReconciler(reconciler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddImportReconciler", reflect.TypeOf((*MockRemoteCommonArea)(nil).AddImportReconciler), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddImportReconciler", reflect.TypeOf((*MockRemoteCommonArea)(nil).AddImportReconciler), reconciler)
 }
 
 // Create mocks base method.
-func (m *MockRemoteCommonArea) Create(arg0 context.Context, arg1 client.Object, arg2 ...client.CreateOption) error {
+func (m *MockRemoteCommonArea) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Create", varargs...)
@@ -357,17 +359,17 @@ func (m *MockRemoteCommonArea) Create(arg0 context.Context, arg1 client.Object, 
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockRemoteCommonAreaMockRecorder) Create(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) Create(ctx, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockRemoteCommonArea)(nil).Create), varargs...)
 }
 
 // Delete mocks base method.
-func (m *MockRemoteCommonArea) Delete(arg0 context.Context, arg1 client.Object, arg2 ...client.DeleteOption) error {
+func (m *MockRemoteCommonArea) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Delete", varargs...)
@@ -376,17 +378,17 @@ func (m *MockRemoteCommonArea) Delete(arg0 context.Context, arg1 client.Object, 
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockRemoteCommonAreaMockRecorder) Delete(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) Delete(ctx, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockRemoteCommonArea)(nil).Delete), varargs...)
 }
 
 // DeleteAllOf mocks base method.
-func (m *MockRemoteCommonArea) DeleteAllOf(arg0 context.Context, arg1 client.Object, arg2 ...client.DeleteAllOfOption) error {
+func (m *MockRemoteCommonArea) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "DeleteAllOf", varargs...)
@@ -395,17 +397,17 @@ func (m *MockRemoteCommonArea) DeleteAllOf(arg0 context.Context, arg1 client.Obj
 }
 
 // DeleteAllOf indicates an expected call of DeleteAllOf.
-func (mr *MockRemoteCommonAreaMockRecorder) DeleteAllOf(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) DeleteAllOf(ctx, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAllOf", reflect.TypeOf((*MockRemoteCommonArea)(nil).DeleteAllOf), varargs...)
 }
 
 // Get mocks base method.
-func (m *MockRemoteCommonArea) Get(arg0 context.Context, arg1 types.NamespacedName, arg2 client.Object, arg3 ...client.GetOption) error {
+func (m *MockRemoteCommonArea) Get(ctx context.Context, key types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, key, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Get", varargs...)
@@ -414,9 +416,9 @@ func (m *MockRemoteCommonArea) Get(arg0 context.Context, arg1 types.NamespacedNa
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockRemoteCommonAreaMockRecorder) Get(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) Get(ctx, key, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, key, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockRemoteCommonArea)(nil).Get), varargs...)
 }
 
@@ -477,18 +479,18 @@ func (mr *MockRemoteCommonAreaMockRecorder) GetStatus() *gomock.Call {
 }
 
 // GroupVersionKindFor mocks base method.
-func (m *MockRemoteCommonArea) GroupVersionKindFor(arg0 runtime.Object) (schema.GroupVersionKind, error) {
+func (m *MockRemoteCommonArea) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GroupVersionKindFor", arg0)
+	ret := m.ctrl.Call(m, "GroupVersionKindFor", obj)
 	ret0, _ := ret[0].(schema.GroupVersionKind)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GroupVersionKindFor indicates an expected call of GroupVersionKindFor.
-func (mr *MockRemoteCommonAreaMockRecorder) GroupVersionKindFor(arg0 any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) GroupVersionKindFor(obj any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GroupVersionKindFor", reflect.TypeOf((*MockRemoteCommonArea)(nil).GroupVersionKindFor), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GroupVersionKindFor", reflect.TypeOf((*MockRemoteCommonArea)(nil).GroupVersionKindFor), obj)
 }
 
 // IsConnected mocks base method.
@@ -506,25 +508,25 @@ func (mr *MockRemoteCommonAreaMockRecorder) IsConnected() *gomock.Call {
 }
 
 // IsObjectNamespaced mocks base method.
-func (m *MockRemoteCommonArea) IsObjectNamespaced(arg0 runtime.Object) (bool, error) {
+func (m *MockRemoteCommonArea) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsObjectNamespaced", arg0)
+	ret := m.ctrl.Call(m, "IsObjectNamespaced", obj)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsObjectNamespaced indicates an expected call of IsObjectNamespaced.
-func (mr *MockRemoteCommonAreaMockRecorder) IsObjectNamespaced(arg0 any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) IsObjectNamespaced(obj any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsObjectNamespaced", reflect.TypeOf((*MockRemoteCommonArea)(nil).IsObjectNamespaced), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsObjectNamespaced", reflect.TypeOf((*MockRemoteCommonArea)(nil).IsObjectNamespaced), obj)
 }
 
 // List mocks base method.
-func (m *MockRemoteCommonArea) List(arg0 context.Context, arg1 client.ObjectList, arg2 ...client.ListOption) error {
+func (m *MockRemoteCommonArea) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, list}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "List", varargs...)
@@ -533,17 +535,17 @@ func (m *MockRemoteCommonArea) List(arg0 context.Context, arg1 client.ObjectList
 }
 
 // List indicates an expected call of List.
-func (mr *MockRemoteCommonAreaMockRecorder) List(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) List(ctx, list any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, list}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockRemoteCommonArea)(nil).List), varargs...)
 }
 
 // Patch mocks base method.
-func (m *MockRemoteCommonArea) Patch(arg0 context.Context, arg1 client.Object, arg2 client.Patch, arg3 ...client.PatchOption) error {
+func (m *MockRemoteCommonArea) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, obj, patch}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Patch", varargs...)
@@ -552,9 +554,9 @@ func (m *MockRemoteCommonArea) Patch(arg0 context.Context, arg1 client.Object, a
 }
 
 // Patch indicates an expected call of Patch.
-func (mr *MockRemoteCommonAreaMockRecorder) Patch(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) Patch(ctx, obj, patch any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, obj, patch}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Patch", reflect.TypeOf((*MockRemoteCommonArea)(nil).Patch), varargs...)
 }
 
@@ -653,24 +655,24 @@ func (mr *MockRemoteCommonAreaMockRecorder) StopWatching() *gomock.Call {
 }
 
 // SubResource mocks base method.
-func (m *MockRemoteCommonArea) SubResource(arg0 string) client.SubResourceClient {
+func (m *MockRemoteCommonArea) SubResource(subResource string) client.SubResourceClient {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubResource", arg0)
+	ret := m.ctrl.Call(m, "SubResource", subResource)
 	ret0, _ := ret[0].(client.SubResourceClient)
 	return ret0
 }
 
 // SubResource indicates an expected call of SubResource.
-func (mr *MockRemoteCommonAreaMockRecorder) SubResource(arg0 any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) SubResource(subResource any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubResource", reflect.TypeOf((*MockRemoteCommonArea)(nil).SubResource), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubResource", reflect.TypeOf((*MockRemoteCommonArea)(nil).SubResource), subResource)
 }
 
 // Update mocks base method.
-func (m *MockRemoteCommonArea) Update(arg0 context.Context, arg1 client.Object, arg2 ...client.UpdateOption) error {
+func (m *MockRemoteCommonArea) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Update", varargs...)
@@ -679,9 +681,9 @@ func (m *MockRemoteCommonArea) Update(arg0 context.Context, arg1 client.Object, 
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockRemoteCommonAreaMockRecorder) Update(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockRemoteCommonAreaMockRecorder) Update(ctx, obj any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, obj}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockRemoteCommonArea)(nil).Update), varargs...)
 }
 
@@ -689,6 +691,7 @@ func (mr *MockRemoteCommonAreaMockRecorder) Update(arg0, arg1 any, arg2 ...any) 
 type MockImportReconciler struct {
 	ctrl     *gomock.Controller
 	recorder *MockImportReconcilerMockRecorder
+	isgomock struct{}
 }
 
 // MockImportReconcilerMockRecorder is the mock recorder for MockImportReconciler.
@@ -709,23 +712,24 @@ func (m *MockImportReconciler) EXPECT() *MockImportReconcilerMockRecorder {
 }
 
 // SetupWithManager mocks base method.
-func (m *MockImportReconciler) SetupWithManager(arg0 manager.Manager) error {
+func (m *MockImportReconciler) SetupWithManager(mgr manager.Manager) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetupWithManager", arg0)
+	ret := m.ctrl.Call(m, "SetupWithManager", mgr)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetupWithManager indicates an expected call of SetupWithManager.
-func (mr *MockImportReconcilerMockRecorder) SetupWithManager(arg0 any) *gomock.Call {
+func (mr *MockImportReconcilerMockRecorder) SetupWithManager(mgr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetupWithManager", reflect.TypeOf((*MockImportReconciler)(nil).SetupWithManager), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetupWithManager", reflect.TypeOf((*MockImportReconciler)(nil).SetupWithManager), mgr)
 }
 
 // MockRemoteCommonAreaGetter is a mock of RemoteCommonAreaGetter interface.
 type MockRemoteCommonAreaGetter struct {
 	ctrl     *gomock.Controller
 	recorder *MockRemoteCommonAreaGetterMockRecorder
+	isgomock struct{}
 }
 
 // MockRemoteCommonAreaGetterMockRecorder is the mock recorder for MockRemoteCommonAreaGetter.

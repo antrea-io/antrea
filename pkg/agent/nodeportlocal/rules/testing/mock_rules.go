@@ -35,6 +35,7 @@ import (
 type MockPodPortRules struct {
 	ctrl     *gomock.Controller
 	recorder *MockPodPortRulesMockRecorder
+	isgomock struct{}
 }
 
 // MockPodPortRulesMockRecorder is the mock recorder for MockPodPortRules.
@@ -55,31 +56,31 @@ func (m *MockPodPortRules) EXPECT() *MockPodPortRulesMockRecorder {
 }
 
 // AddAllRules mocks base method.
-func (m *MockPodPortRules) AddAllRules(arg0 []rules.PodNodePort) error {
+func (m *MockPodPortRules) AddAllRules(nplList []rules.PodNodePort) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddAllRules", arg0)
+	ret := m.ctrl.Call(m, "AddAllRules", nplList)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddAllRules indicates an expected call of AddAllRules.
-func (mr *MockPodPortRulesMockRecorder) AddAllRules(arg0 any) *gomock.Call {
+func (mr *MockPodPortRulesMockRecorder) AddAllRules(nplList any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAllRules", reflect.TypeOf((*MockPodPortRules)(nil).AddAllRules), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAllRules", reflect.TypeOf((*MockPodPortRules)(nil).AddAllRules), nplList)
 }
 
 // AddRule mocks base method.
-func (m *MockPodPortRules) AddRule(arg0 int, arg1 string, arg2 int, arg3 string) error {
+func (m *MockPodPortRules) AddRule(nodePort int, podIP string, podPort int, protocol string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddRule", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "AddRule", nodePort, podIP, podPort, protocol)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddRule indicates an expected call of AddRule.
-func (mr *MockPodPortRulesMockRecorder) AddRule(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockPodPortRulesMockRecorder) AddRule(nodePort, podIP, podPort, protocol any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRule", reflect.TypeOf((*MockPodPortRules)(nil).AddRule), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRule", reflect.TypeOf((*MockPodPortRules)(nil).AddRule), nodePort, podIP, podPort, protocol)
 }
 
 // DeleteAllRules mocks base method.
@@ -97,17 +98,17 @@ func (mr *MockPodPortRulesMockRecorder) DeleteAllRules() *gomock.Call {
 }
 
 // DeleteRule mocks base method.
-func (m *MockPodPortRules) DeleteRule(arg0 int, arg1 string, arg2 int, arg3 string) error {
+func (m *MockPodPortRules) DeleteRule(nodePort int, podIP string, podPort int, protocol string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRule", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "DeleteRule", nodePort, podIP, podPort, protocol)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteRule indicates an expected call of DeleteRule.
-func (mr *MockPodPortRulesMockRecorder) DeleteRule(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockPodPortRulesMockRecorder) DeleteRule(nodePort, podIP, podPort, protocol any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRule", reflect.TypeOf((*MockPodPortRules)(nil).DeleteRule), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRule", reflect.TypeOf((*MockPodPortRules)(nil).DeleteRule), nodePort, podIP, podPort, protocol)
 }
 
 // Init mocks base method.

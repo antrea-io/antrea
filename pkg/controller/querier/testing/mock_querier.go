@@ -35,6 +35,7 @@ import (
 type MockControllerQuerier struct {
 	ctrl     *gomock.Controller
 	recorder *MockControllerQuerierMockRecorder
+	isgomock struct{}
 }
 
 // MockControllerQuerierMockRecorder is the mock recorder for MockControllerQuerier.
@@ -55,13 +56,13 @@ func (m *MockControllerQuerier) EXPECT() *MockControllerQuerierMockRecorder {
 }
 
 // GetControllerInfo mocks base method.
-func (m *MockControllerQuerier) GetControllerInfo(arg0 *v1beta1.AntreaControllerInfo, arg1 bool) {
+func (m *MockControllerQuerier) GetControllerInfo(controllerInfo *v1beta1.AntreaControllerInfo, partial bool) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "GetControllerInfo", arg0, arg1)
+	m.ctrl.Call(m, "GetControllerInfo", controllerInfo, partial)
 }
 
 // GetControllerInfo indicates an expected call of GetControllerInfo.
-func (mr *MockControllerQuerierMockRecorder) GetControllerInfo(arg0, arg1 any) *gomock.Call {
+func (mr *MockControllerQuerierMockRecorder) GetControllerInfo(controllerInfo, partial any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControllerInfo", reflect.TypeOf((*MockControllerQuerier)(nil).GetControllerInfo), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControllerInfo", reflect.TypeOf((*MockControllerQuerier)(nil).GetControllerInfo), controllerInfo, partial)
 }

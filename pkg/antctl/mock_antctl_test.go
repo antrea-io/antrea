@@ -35,6 +35,7 @@ import (
 type MockAntctlClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockAntctlClientMockRecorder
+	isgomock struct{}
 }
 
 // MockAntctlClientMockRecorder is the mock recorder for MockAntctlClient.
@@ -55,16 +56,16 @@ func (m *MockAntctlClient) EXPECT() *MockAntctlClientMockRecorder {
 }
 
 // request mocks base method.
-func (m *MockAntctlClient) request(arg0 *requestOption) (io.Reader, error) {
+func (m *MockAntctlClient) request(opt *requestOption) (io.Reader, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "request", arg0)
+	ret := m.ctrl.Call(m, "request", opt)
 	ret0, _ := ret[0].(io.Reader)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // request indicates an expected call of request.
-func (mr *MockAntctlClientMockRecorder) request(arg0 any) *gomock.Call {
+func (mr *MockAntctlClientMockRecorder) request(opt any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "request", reflect.TypeOf((*MockAntctlClient)(nil).request), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "request", reflect.TypeOf((*MockAntctlClient)(nil).request), opt)
 }
