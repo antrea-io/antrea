@@ -361,11 +361,6 @@ type PodReference struct {
 	Name      string `json:"name"`
 }
 
-type ServiceReference struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-}
-
 // Source describes the source spec of the packetcapture.
 type Source struct {
 	// Pod is the source Pod.
@@ -378,8 +373,6 @@ type Source struct {
 type Destination struct {
 	// Pod is the destination Pod, exclusive with destination Service.
 	Pod *PodReference `json:"pod,omitempty"`
-	// Service is the destination Service, exclusive with destination Pod.
-	Service *ServiceReference `json:"service,omitempty"`
 	// IP is the destination IPv4 or IPv6 address.
 	IP *string `json:"ip,omitempty"`
 }
@@ -404,8 +397,8 @@ type TCPHeader struct {
 	SrcPort *int32 `json:"srcPort,omitempty"`
 	// DstPort is the destination port.
 	DstPort *int32 `json:"dstPort,omitempty"`
-	// Flags are flags in the header.
-	Flags *int32 `json:"flags,omitempty"`
+	// Flags are tcp flags filter in BPF format. eg: 'tcp[13] & 16!=0' or 'tcp[tcpflags] == tcp-ack'
+	Flags *string `json:"flags,omitempty"`
 }
 
 // Packet includes header info.
@@ -455,6 +448,7 @@ type PacketCapture struct {
 }
 
 type CaptureConfig struct {
+	// FirstN means we only capture first N packets from the target traffic.
 	FirstN *PacketCaptureFirstNConfig `json:"firstN,omitempty"`
 }
 
@@ -466,7 +460,7 @@ type PacketCaptureFileServer struct {
 }
 
 type PacketCaptureSpec struct {
-	// Timeout is the timeout for this capture session. If not specified, default to 60s.
+	// Timeout is the timeout for this capture session. If not specified, defaults to 60s.
 	Timeout       *uint16       `json:"timeout,omitempty"`
 	CaptureConfig CaptureConfig `json:"captureConfig"`
 	// Source is the traffic source we want to perform capture on. Both `Source` and `Destination` is reuqired

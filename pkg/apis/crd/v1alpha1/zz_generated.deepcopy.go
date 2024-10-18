@@ -997,7 +997,7 @@ func (in *TCPHeader) DeepCopyInto(out *TCPHeader) {
 	}
 	if in.Flags != nil {
 		in, out := &in.Flags, &out.Flags
-		*out = new(int32)
+		*out = new(string)
 		**out = **in
 	}
 	return

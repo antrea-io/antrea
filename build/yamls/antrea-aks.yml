@@ -2958,20 +2958,8 @@ spec:
                       - pod
                     - required:
                       - ip
-                    - required:
-                      - service
                   properties:
                     pod:
-                      type: object
-                      required:
-                        - name
-                      properties:
-                        namespace:
-                          type: string
-                          default: default
-                        name:
-                          type: string
-                    service:
                       type: object
                       required:
                         - name
@@ -3021,9 +3009,7 @@ spec:
                               minimum: 1
                               maximum: 65535
                             flags:
-                              type: integer
-                              minimum: 0
-                              maximum: 255
+                              type: string
                 timeout:
                   type: integer
                   minimum: 1
@@ -3031,13 +3017,14 @@ spec:
                   default: 60
                 captureConfig:
                   type: object
-                  anyOf:
-                    - properties:
-                        firstN:
-                          required: [number]
+                  oneOf:
+                    - required:
+                      - firstN
                   properties:
                     firstN:
                       type: object
+                      required:
+                        - number
                       properties:
                         number:
                           type: integer
