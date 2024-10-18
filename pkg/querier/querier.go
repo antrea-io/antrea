@@ -145,6 +145,6 @@ type ServiceExternalIPStatusQuerier interface {
 type AgentBGPPolicyInfoQuerier interface {
 	// GetBGPPolicyInfo returns Name, RouterID, LocalASN and ListenPort of effective BGP Policy applied on the Node.
 	GetBGPPolicyInfo() (string, string, int32, int32)
-	// GetBGPPeerStatus returns current status of all BGP Peers of effective BGP Policy applied on the Node.
-	GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error)
+	// GetBGPPeerStatus returns current status of BGP Peers of effective BGP Policy applied on the Node.
+	GetBGPPeerStatus(ctx context.Context, ipv4Peers, ipv6Peers bool) ([]bgp.PeerStatus, error)
 }
