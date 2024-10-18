@@ -38,7 +38,28 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			return
 		}
 
-		peers, err := bq.GetBGPPeerStatus(r.Context())
+		values := r.URL.Query()
+		var ipv4Only, ipv6Only bool
+		if values.Has("ipv4-only") {
+			if values.Get("ipv4-only") != "" {
+				http.Error(w, "invalid query", http.StatusBadRequest)
+				return
+			}
+			ipv4Only = true
+		}
+		if values.Has("ipv6-only") {
+			if values.Get("ipv6-only") != "" {
+				http.Error(w, "invalid query", http.StatusBadRequest)
+				return
+			}
+			ipv6Only = true
+		}
+		if ipv4Only && ipv6Only {
+			http.Error(w, "invalid query", http.StatusBadRequest)
+			return
+		}
+
+		peers, err := bq.GetBGPPeerStatus(r.Context(), !ipv6Only, !ipv4Only)
 		if err != nil {
 			if errors.Is(err, bgp.ErrBGPPolicyNotFound) {
 				http.Error(w, "there is no effective bgp policy applied to the Node", http.StatusNotFound)
