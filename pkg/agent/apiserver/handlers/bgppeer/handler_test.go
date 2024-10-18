@@ -33,27 +33,31 @@ import (
 
 func TestBGPPeerQuery(t *testing.T) {
 	tests := []struct {
-		name              string
-		fakeBGPPeerStatus []bgp.PeerStatus
-		expectedStatus    int
-		expectedResponse  []apis.BGPPeerResponse
-		fakeErr           error
+		name             string
+		url              string
+		expectedCalls    func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier)
+		expectedStatus   int
+		expectedResponse []apis.BGPPeerResponse
 	}{
 		{
-			name: "bgpPolicyState exists",
-			fakeBGPPeerStatus: []bgp.PeerStatus{
-				{
-					Address:      "192.168.77.200",
-					Port:         179,
-					ASN:          65001,
-					SessionState: bgp.SessionEstablished,
-				},
-				{
-					Address:      "192.168.77.201",
-					Port:         179,
-					ASN:          65002,
-					SessionState: bgp.SessionActive,
-				},
+			name: "get ipv4 bgp peers",
+			url:  "?ipv4=true",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPPeerStatus(context.Background(), true, false).Return(
+					[]bgp.PeerStatus{
+						{
+							Address:      "192.168.77.200",
+							Port:         179,
+							ASN:          65001,
+							SessionState: bgp.SessionEstablished,
+						},
+						{
+							Address:      "192.168.77.201",
+							Port:         179,
+							ASN:          65002,
+							SessionState: bgp.SessionActive,
+						},
+					}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedResponse: []apis.BGPPeerResponse{
@@ -70,10 +74,78 @@ func TestBGPPeerQuery(t *testing.T) {
 			},
 		},
 		{
-			name:              "bgpPolicyState does not exist",
-			fakeBGPPeerStatus: nil,
-			expectedStatus:    http.StatusNotFound,
-			fakeErr:           bgpcontroller.ErrBGPPolicyNotFound,
+			name: "get ipv6 bgp peers",
+			url:  "?ipv6=true",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPPeerStatus(context.Background(), false, true).Return(
+					[]bgp.PeerStatus{
+						{
+							Address:      "fec0::196:168:77:251",
+							Port:         179,
+							ASN:          65001,
+							SessionState: bgp.SessionEstablished,
+						},
+						{
+							Address:      "fec0::196:168:77:252",
+							Port:         179,
+							ASN:          65002,
+							SessionState: bgp.SessionActive,
+						},
+					}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: []apis.BGPPeerResponse{
+				{
+					Peer:  "[fec0::196:168:77:251]:179",
+					ASN:   65001,
+					State: "Established",
+				},
+				{
+					Peer:  "[fec0::196:168:77:252]:179",
+					ASN:   65002,
+					State: "Active",
+				},
+			},
+		},
+		{
+			name: "get all bgp peers",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPPeerStatus(context.Background(), true, true).Return(
+					[]bgp.PeerStatus{
+						{
+							Address:      "192.168.77.200",
+							Port:         179,
+							ASN:          65001,
+							SessionState: bgp.SessionEstablished,
+						},
+						{
+							Address:      "fec0::196:168:77:251",
+							Port:         179,
+							ASN:          65002,
+							SessionState: bgp.SessionActive,
+						},
+					}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: []apis.BGPPeerResponse{
+				{
+					Peer:  "192.168.77.200:179",
+					ASN:   65001,
+					State: "Established",
+				},
+				{
+					Peer:  "[fec0::196:168:77:251]:179",
+					ASN:   65002,
+					State: "Active",
+				},
+			},
+		},
+		{
+			name: "bgpPolicyState does not exist",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPPeerStatus(context.Background(), true, true).Return(nil, bgpcontroller.ErrBGPPolicyNotFound)
+			},
+			expectedStatus: http.StatusNotFound,
 		},
 	}
 
@@ -81,10 +153,12 @@ func TestBGPPeerQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			q := queriertest.NewMockAgentBGPPolicyInfoQuerier(ctrl)
-			q.EXPECT().GetBGPPeerStatus(context.Background()).Return(tt.fakeBGPPeerStatus, tt.fakeErr)
+			if tt.expectedCalls != nil {
+				tt.expectedCalls(q)
+			}
 			handler := HandleFunc(q)
 
-			req, err := http.NewRequest(http.MethodGet, "", nil)
+			req, err := http.NewRequest(http.MethodGet, tt.url, nil)
 			require.NoError(t, err)
 
 			recorder := httptest.NewRecorder()
@@ -95,7 +169,7 @@ func TestBGPPeerQuery(t *testing.T) {
 				var received []apis.BGPPeerResponse
 				err = json.Unmarshal(recorder.Body.Bytes(), &received)
 				require.NoError(t, err)
-				assert.ElementsMatch(t, tt.expectedResponse, received)
+				assert.Equal(t, tt.expectedResponse, received)
 			}
 		})
 	}
