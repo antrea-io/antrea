@@ -410,7 +410,7 @@ type TCPHeader struct {
 
 // Packet includes header info.
 type Packet struct {
-	// IPFamily is the filter's IP family. Default to `IPv4`.
+	// IPFamily is the filter's IP family. Defaults to IPv4.
 	IPFamily v1.IPFamily `json:"ipFamily,omitempty"`
 	// Protocol represents the transport protocol. Default is to not filter on protocol.
 	Protocol        *intstr.IntOrString `json:"protocol,omitempty"`
