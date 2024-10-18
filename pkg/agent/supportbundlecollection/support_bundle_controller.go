@@ -17,16 +17,11 @@ package supportbundlecollection
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/url"
-	"path"
 	"reflect"
 	"sync"
 	"time"
 
-	"github.com/pkg/sftp"
 	"github.com/spf13/afero"
-	"golang.org/x/crypto/ssh"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -43,18 +38,15 @@ import (
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/support"
 	"antrea.io/antrea/pkg/util/compress"
+	"antrea.io/antrea/pkg/util/ftp"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
 type ProtocolType string
 
 const (
-	sftpProtocol ProtocolType = "sftp"
-
-	controllerName = "SupportBundleCollectionController"
-
-	uploadToFileServerTries      = 5
-	uploadToFileServerRetryDelay = 5 * time.Second
+	sftpProtocol   ProtocolType = "sftp"
+	controllerName string       = "SupportBundleCollectionController"
 )
 
 var (
@@ -78,7 +70,7 @@ type SupportBundleController struct {
 	npq                          querier.AgentNetworkPolicyInfoQuerier
 	v4Enabled                    bool
 	v6Enabled                    bool
-	sftpUploader                 uploader
+	sftpUploader                 ftp.Uploader
 }
 
 func NewSupportBundleController(nodeName string,
@@ -103,7 +95,7 @@ func NewSupportBundleController(nodeName string,
 		npq:          npq,
 		v4Enabled:    v4Enabled,
 		v6Enabled:    v6Enabled,
-		sftpUploader: &sftpUploader{},
+		sftpUploader: &ftp.SftpUploader{},
 	}
 	return c
 }
@@ -301,98 +293,18 @@ func (c *SupportBundleController) uploadSupportBundle(supportBundle *cpv1b2.Supp
 	if err != nil {
 		return fmt.Errorf("failed to upload support bundle while getting uploader: %v", err)
 	}
-	if _, err := outputFile.Seek(0, 0); err != nil {
-		return fmt.Errorf("failed to upload support bundle to file server while setting offset: %v", err)
-	}
-	// fileServer.URL should be like: 10.92.23.154:22/path or sftp://10.92.23.154:22/path
-	parsedURL, err := parseUploadUrl(supportBundle.FileServer.URL)
-	if err != nil {
-		return fmt.Errorf("failed to upload support bundle while parsing upload URL: %v", err)
-	}
-	triesLeft := uploadToFileServerTries
-	var uploadErr error
-	for triesLeft > 0 {
-		if uploadErr = c.uploadToFileServer(uploader, supportBundle.Name, parsedURL, &supportBundle.Authentication, outputFile); uploadErr == nil {
-			return nil
-		}
-		triesLeft--
-		if triesLeft == 0 {
-			return fmt.Errorf("failed to upload support bundle after %d attempts", uploadToFileServerTries)
-		}
-		klog.InfoS("Failed to upload support bundle", "UploadError", uploadErr, "TriesLeft", triesLeft)
-		time.Sleep(uploadToFileServerRetryDelay)
-	}
-	return nil
+
+	fileName := c.nodeName + "_" + supportBundle.Name + ".tar.gz"
+	serverAuth := supportBundle.Authentication.BasicAuthentication
+	cfg := ftp.GenSSHClientConfig(serverAuth.Username, serverAuth.Password)
+	return uploader.Upload(supportBundle.FileServer.URL, fileName, cfg, outputFile)
 }
 
-func parseUploadUrl(uploadUrl string) (*url.URL, error) {
-	parsedURL, err := url.Parse(uploadUrl)
-	if err != nil {
-		parsedURL, err = url.Parse("sftp://" + uploadUrl)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if parsedURL.Scheme != "sftp" {
-		return nil, fmt.Errorf("not sftp protocol")
-	}
-	return parsedURL, nil
-}
-
-func (c *SupportBundleController) uploadToFileServer(up uploader, bundleName string, parsedURL *url.URL, serverAuth *cpv1b2.BundleServerAuthConfiguration, tarGzFile io.Reader) error {
-	joinedPath := path.Join(parsedURL.Path, c.nodeName+"_"+bundleName+".tar.gz")
-	cfg := &ssh.ClientConfig{
-		User: serverAuth.BasicAuthentication.Username,
-		Auth: []ssh.AuthMethod{ssh.Password(serverAuth.BasicAuthentication.Password)},
-		// #nosec G106: skip host key check here and users can specify their own checks if needed
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         time.Second,
-	}
-	return up.upload(parsedURL.Host, joinedPath, cfg, tarGzFile)
-}
-
-func (c *SupportBundleController) getUploaderByProtocol(protocol ProtocolType) (uploader, error) {
+func (c *SupportBundleController) getUploaderByProtocol(protocol ProtocolType) (ftp.Uploader, error) {
 	if protocol == sftpProtocol {
 		return c.sftpUploader, nil
 	}
 	return nil, fmt.Errorf("unsupported protocol %s", protocol)
-}
-
-type uploader interface {
-	upload(addr string, path string, config *ssh.ClientConfig, tarGzFile io.Reader) error
-}
-
-type sftpUploader struct {
-}
-
-func (uploader *sftpUploader) upload(address string, path string, config *ssh.ClientConfig, tarGzFile io.Reader) error {
-	conn, err := ssh.Dial("tcp", address, config)
-	if err != nil {
-		return fmt.Errorf("error when connecting to fs server: %w", err)
-	}
-	sftpClient, err := sftp.NewClient(conn)
-	if err != nil {
-		return fmt.Errorf("error when setting up sftp client: %w", err)
-	}
-	defer func() {
-		if err := sftpClient.Close(); err != nil {
-			klog.ErrorS(err, "Error when closing sftp client")
-		}
-	}()
-	targetFile, err := sftpClient.Create(path)
-	if err != nil {
-		return fmt.Errorf("error when creating target file on remote: %v", err)
-	}
-	defer func() {
-		if err := targetFile.Close(); err != nil {
-			klog.ErrorS(err, "Error when closing target file on remote")
-		}
-	}()
-	if written, err := io.Copy(targetFile, tarGzFile); err != nil {
-		return fmt.Errorf("error when copying target file: %v, written: %d", err, written)
-	}
-	klog.InfoS("Successfully upload file to path", "filePath", path)
-	return nil
 }
 
 func (c *SupportBundleController) updateSupportBundleCollectionStatus(key string, complete bool, genErr error) error {

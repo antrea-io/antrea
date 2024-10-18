@@ -45,6 +45,7 @@ import (
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/controller/packetcapture"
 	"antrea.io/antrea/pkg/agent/controller/serviceexternalip"
 	"antrea.io/antrea/pkg/agent/controller/traceflow"
 	"antrea.io/antrea/pkg/agent/controller/trafficcontrol"
@@ -117,6 +118,7 @@ func run(o *Options) error {
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClient, informerDefaultResync, informers.WithTransform(k8s.NewTrimmer(k8s.TrimNode)))
 	crdInformerFactory := crdinformers.NewSharedInformerFactoryWithOptions(crdClient, informerDefaultResync, crdinformers.WithTransform(k8s.NewTrimmer()))
 	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
+	packetCaptureInformer := crdInformerFactory.Crd().V1alpha1().PacketCaptures()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	trafficControlInformer := crdInformerFactory.Crd().V1alpha2().TrafficControls()
@@ -650,6 +652,17 @@ func run(o *Options) error {
 			o.enableAntreaProxy)
 	}
 
+	var packetCaptureController *packetcapture.Controller
+	if features.DefaultFeatureGate.Enabled(features.PacketCapture) {
+		packetCaptureController = packetcapture.NewPacketCaptureController(
+			k8sClient,
+			crdClient,
+			packetCaptureInformer,
+			ifaceStore,
+			nodeConfig,
+		)
+	}
+
 	if err := antreaClientProvider.RunOnce(); err != nil {
 		return err
 	}
@@ -806,6 +819,10 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go traceflowController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.PacketCapture) {
+		go packetCaptureController.Run(stopCh)
 	}
 
 	if o.enableAntreaProxy {

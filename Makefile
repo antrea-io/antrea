@@ -106,7 +106,7 @@ trivy-scan: .trivy-bin check-TRIVY_TARGET_IMAGE
 .PHONY: antrea-agent
 antrea-agent:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
+	GOOS=linux CGO_ENABLED=1 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
 
 .PHONY: antrea-agent-release
 antrea-agent-release:

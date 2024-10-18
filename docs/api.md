@@ -40,6 +40,7 @@ These are the CRDs currently available in `crd.antrea.io`.
 | `Group` | v1beta1 | v1.13.0 | N/A | N/A |
 | `NetworkPolicy` | v1beta1 | v1.13.0 | N/A | N/A |
 | `NodeLatencyMonitor` | v1alpha1 | v2.1.0 | N/A | N/A |
+| `PacketCapture` | v1alpha1 | v2.2 | N/A | N/A |
 | `SupportBundleCollection` | v1alpha1 | v1.10.0 | N/A | N/A |
 | `Tier` | v1beta1 | v1.13.0 | N/A | N/A |
 | `Traceflow` | v1beta1 | v1.13.0 | N/A | N/A |
