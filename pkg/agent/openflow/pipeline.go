@@ -138,8 +138,8 @@ var (
 
 	// Tables in stagePreRouting:
 	// When proxy is enabled.
-	PreRoutingClassifierTable = newTable("PreRoutingClassifier", stagePreRouting, pipelineIP)
-	NodePortMarkTable         = newTable("NodePortMark", stagePreRouting, pipelineIP)
+	PreRoutingClassifierTable = newTable("PreRoutingClassifier", stagePreRouting, pipelineIP, defaultNone)
+	NodePortMarkTable         = newTable("NodePortMark", stagePreRouting, pipelineIP, defaultNone)
 	SessionAffinityTable      = newTable("SessionAffinity", stagePreRouting, pipelineIP)
 	ServiceLBTable            = newTable("ServiceLB", stagePreRouting, pipelineIP)
 	DSRServiceMarkTable       = newTable("DSRServiceMark", stagePreRouting, pipelineIP)
@@ -487,6 +487,8 @@ func (c *client) defaultFlows() []*openflow15.FlowMod {
 			case binding.TableMissActionDrop:
 				flowBuilder = flowBuilder.Action().Drop()
 			case binding.TableMissActionNone:
+				fallthrough
+			case binding.TableMissActionNotSet:
 				fallthrough
 			default:
 				continue
@@ -2724,8 +2726,8 @@ func (c *client) realizePipelines() {
 			} else {
 				nextID = tables[i+1].GetID()
 				// For a table (not the last one) in a pipeline, set the next ID to the next table ID. If the miss action
-				// of the table is TableMissActionNone, set the miss action to TableMissActionNext.
-				if tables[i].GetMissAction() != binding.TableMissActionNone {
+				// of the table is TableMissActionNotSet, set the miss action to TableMissActionNext.
+				if tables[i].GetMissAction() != binding.TableMissActionNotSet {
 					missAction = tables[i].GetMissAction()
 				} else {
 					missAction = binding.TableMissActionNext
