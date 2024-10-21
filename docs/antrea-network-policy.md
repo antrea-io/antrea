@@ -259,6 +259,8 @@ spec:
 
 #### ACNP with ClusterGroup reference
 
+Refer to the [ClusterGroup section](#clustergroup) for more information regarding the ClusterGroup resource.
+
 ```yaml
 apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
@@ -902,25 +904,40 @@ an `appliedTo` must resolve to. More information on ClusterGroups can be found i
 **serviceAccount**: This selects all the Pods which have been assigned a specific ServiceAccount.
 For more information on its usage, refer to [this section](#serviceaccount-based-selection).
 
-**ipBlock**: This selects particular IP CIDR ranges to allow as `ingress`
-"sources" or `egress` "destinations". These should be cluster-external IPs,
-since Pod IPs are ephemeral and unpredictable.
+**ipBlock**: This selects particular IP CIDR ranges to allow as `ingress` "sources"
+or `egress` "destinations". These should be cluster-external IPs, since Pod IPs are
+ephemeral and unpredictable.
 
-**fqdn**: This selector is applicable only to the `to` section in an `egress` block. It is used to
-select Fully Qualified Domain Names (FQDNs), specified either by exact name or wildcard
+Starting with Antrea v2.2, Antrea-native policies now support an `except` field under
+`ipBlock`, which can be used to exclude specific CIDRs in the base IP range:
+
+```yaml
+ipBlock:
+  cidr: 10.168.0.0/16
+  except: 
+    - 10.168.128.0/24
+```
+
+Note that at the time of policy creation, the CIDRs in the `except` list will be validated
+to be strictly within the base CIDR range. Policy creation will fail otherwise.
+Policy rules that select ipBlocks with `except` fields will simply not match traffic whose
+addresses are included in the `except` fields. Those packets are subject to further policy
+evaluations for lower priority rules.
+
+**fqdn**: This selector is applicable only to the `to` section in an `egress` block. It is
+used to select Fully Qualified Domain Names (FQDNs), specified either by exact name or wildcard
 expressions, when defining `egress` rules. For more information on its usage, refer to
 [this section](#fqdn-based-filtering).
 
 ### Key differences from K8s NetworkPolicy
 
-- ClusterNetworkPolicy is at the cluster scope, hence a `podSelector` without
-  any `namespaceSelector` selects Pods from all Namespaces.
-- There is no automatic isolation of Pods on being selected in appliedTo.
-- Ingress/Egress rules in ClusterNetworkPolicy has an `action` field which
-  specifies whether the matched rule allows or drops the traffic.
-- IPBlock field in the ClusterNetworkPolicy rules do not have the `except`
-  field. A higher priority rule can be written to deny the specific CIDR range
-  to simulate the behavior of IPBlock field with `cidr` and `except` set.
+- Antrea ClusterNetworkPolicy is at the cluster scope, hence a `podSelector`
+  without any `namespaceSelector` selects Pods from all Namespaces.
+- Unlike K8s NetworkPolicy, Antrea ClusterNetworkPolicy does not automatically
+  isolate Pods selected in appliedTo. Instead, explicit rules need to be
+  created for that purpose.
+- Ingress/Egress rules in Antrea ClusterNetworkPolicy have an `action` field,
+  which specifies whether the matched rule allows or drops the traffic.
 - Rules assume the priority in which they are written. i.e. rule set at top
   takes precedence over a rule set below it.
 
@@ -1765,6 +1782,20 @@ cluster-wide group.
   A ClusterGroup with `ipBlocks` referenced in an ACNP's `appliedTo` field will be
   ignored, and the policy will have no effect.
   For a same ClusterGroup, `ipBlock` and `ipBlocks` cannot be set concurrently.
+
+  Starting from Antrea v2.2, Antrea-native policies now support an `except` field under
+  `ipBlocks`, which can be used to exclude specific CIDRs in the base IP range:
+
+  ```yaml
+  ipBlocks:
+  - cidr: 10.168.0.0/16
+    except: 
+      - 10.168.128.0/24
+  ```
+
+  Note that at the time of group creation, the CIDRs in the `except` list will be
+  validated to be strictly within the base CIDR range. Group creation will fail
+  otherwise.
 
 - **serviceReference**: Pods that serve as the backend for the specified Service
   will be grouped. Services without selectors are currently not supported, and will
