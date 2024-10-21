@@ -357,18 +357,13 @@ type BGPPeer struct {
 }
 
 type PodReference struct {
-	Namespace string
-	Name      string
-}
-
-type ServiceReference struct {
-	Namespace string
-	Name      string
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
 }
 
 // Source describes the source spec of the packetcapture.
 type Source struct {
-	// Pod is the source pod,
+	// Pod is the source Pod.
 	Pod *PodReference `json:"pod,omitempty"`
 	// IP is the source IPv4 or IPv6 address.
 	IP *string `json:"ip,omitempty"`
@@ -378,8 +373,6 @@ type Source struct {
 type Destination struct {
 	// Pod is the destination Pod, exclusive with destination Service.
 	Pod *PodReference `json:"pod,omitempty"`
-	// Service is the destination Service, exclusive with destination Pod.
-	Service *ServiceReference `json:"service,omitempty"`
 	// IP is the destination IPv4 or IPv6 address.
 	IP *string `json:"ip,omitempty"`
 }
@@ -404,13 +397,13 @@ type TCPHeader struct {
 	SrcPort *int32 `json:"srcPort,omitempty"`
 	// DstPort is the destination port.
 	DstPort *int32 `json:"dstPort,omitempty"`
-	// Flags are flags in the header.
-	Flags *int32 `json:"flags,omitempty"`
+	// Flags are tcp flags filter in BPF format. eg: 'tcp[13] & 16!=0' or 'tcp[tcpflags] == tcp-ack'
+	Flags string `json:"flags"`
 }
 
 // Packet includes header info.
 type Packet struct {
-	// IPFamily is the filter's IP family. Default to `IPv4`.
+	// IPFamily is the filter's IP family. Defaults to IPv4.
 	IPFamily v1.IPFamily `json:"ipFamily,omitempty"`
 	// Protocol represents the transport protocol. Default is to not filter on protocol.
 	Protocol        *intstr.IntOrString `json:"protocol,omitempty"`
@@ -455,17 +448,33 @@ type PacketCapture struct {
 }
 
 type CaptureConfig struct {
+	// FirstN means we only capture first N packets from the target traffic.
+	// At the moment this is the only supported configuration and it is required for every capture.
 	FirstN *PacketCaptureFirstNConfig `json:"firstN,omitempty"`
 }
 
+// PacketCaptureFileServer specifies the PacketCapture file server information.
+type PacketCaptureFileServer struct {
+	// The URL of the file server. It is set with format: scheme://host[:port][/path],
+	// e.g, https://api.example.com:8443/v1/supportbundles/. If scheme is not set, https is used by default.
+	URL string `json:"url"`
+}
+
 type PacketCaptureSpec struct {
+	// Timeout is the timeout for this capture session. If not specified, defaults to 60s.
 	Timeout       *uint16       `json:"timeout,omitempty"`
 	CaptureConfig CaptureConfig `json:"captureConfig"`
-	Source        Source        `json:"source"`
-	Destination   Destination   `json:"destination"`
-	Packet        *Packet       `json:"packet,omitempty"`
-	// FileServer specifies the sftp url config for the fileServer. Captured packets will be uploaded to this server.
-	FileServer BundleFileServer `json:"fileServer"`
+	// Source is the traffic source we want to perform capture on. Both `Source` and `Destination` is reuqired
+	// for a capture session, and at least one `Pod` should present either in the source or the destination.
+	Source      Source      `json:"source"`
+	Destination Destination `json:"destination"`
+	// Packet defines what kind of traffic we want to capture between the source and desination. If not spicified,
+	// all kinds of traffic will count.
+	Packet *Packet `json:"packet,omitempty"`
+	// FileServer specifies the sftp url config for a file server. If present, captured packets will be uploaded to this server.
+	// If not, packets file will only be present in the antrea-agent pod.
+	// When capture finished, the path information will be shown in `.status.PacketsFilePath`.
+	FileServer *PacketCaptureFileServer `json:"fileServer,omitempty"`
 }
 
 type PacketCaptureStatus struct {
@@ -474,9 +483,11 @@ type PacketCaptureStatus struct {
 	Reason string `json:"reason"`
 	// NumCapturedPackets records how many packets have been captured. If it reaches the target number, the capture
 	// can be considered as finished.
-	NumCapturedPackets *int32 `json:"numCapturedPackets,omitempty"`
-	// PacketsFileName is the file name where the captured packets are temporarily cached, also the file name stored in the configured fileserver. The temporary file in the local cache will be removed after the PacketCapture is deleted.
-	PacketsFileName string `json:"packetsFileName"`
-	// StartTime is the time when this capture sessions starts.
+	NumCapturedPackets int32 `json:"numCapturedPackets,omitempty"`
+	// PacketsFilePath is the file path where the captured packets are stored. The format is: "<antrea-agent-pod-name>:<path>".
+	// If `.spec.FileServer` is present, this file will also be uploaded to the targeted location. This file
+	// will be removed after the PacketCapture CR is deleted.
+	PacketsFilePath string `json:"packetsFilePath"`
+	// StartTime is the time when this capture session starts.
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 }
