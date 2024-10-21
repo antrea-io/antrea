@@ -143,6 +143,21 @@ also supports K8s 1.16).
 In addition, we strive to support the K8s versions used by default in
 cloud-managed K8s services ([EKS], [AKS] and [GKE] regular channel).
 
+The table lists the compatibility of Antrea with different K8s releases that
+we ever tested. In practice Antrea may work on releases that are not listed in
+the table, but we did not test them. We recommend that you run a comprehensive
+test (e.g. with [sonobuoy](https://github.com/vmware-tanzu/sonobuoy)) first
+before using a combination not listed here.
+
+| Antrea Release | Antrea Latest Patch Version                                         | Supported Kubernetes Releases        |
+|----------------|---------------------------------------------------------------------|--------------------------------------|
+| 1.12           | [v1.12.0](https://github.com/antrea-io/antrea/releases/tag/v1.12.0) | 1.27[^1], 1.26[^1], 1.25, 1.24       |
+| 1.11           | [v1.11.2](https://github.com/antrea-io/antrea/releases/tag/v1.11.2) | 1.27[^1], 1.26[^1], 1.25, 1.24, 1.23 |
+| 1.10 (EOL)     | [v1.10.1](https://github.com/antrea-io/antrea/releases/tag/v1.10.1) | 1.26[^1], 1.25, 1.24, 1.23, 1.22     |
+| 1.9 (EOL)      | [v1.9.1](https://github.com/antrea-io/antrea/releases/tag/v1.9.1)   | 1.26[^1], 1.25, 1.24, 1.23, 1.22     |
+
+[^1]: antrea-agent on Windows Node was deployed with `antreaProxy.proxyAll` due to [the removal of kube-proxy userspace modes](https://kubernetes.io/blog/2022/11/18/upcoming-changes-in-kubernetes-1-26/#removal-of-kube-proxy-userspace-modes).
+
 ## Deprecation policies
 
 ### Prometheus metrics deprecation policy
