@@ -36,7 +36,6 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	listers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	annotation "antrea.io/antrea/pkg/ipam"
-	"antrea.io/antrea/pkg/ipam/poolallocator"
 )
 
 type fakeAntreaIPAMController struct {
@@ -122,9 +121,8 @@ func initTestObjects(annotateNamespace bool, annotateStatefulSet bool, replicas 
 	return namespace, pool, statefulSet
 }
 
-func verifyPoolAllocatedSize(t *testing.T, poolName string, poolLister listers.IPPoolLister, size int) {
-
-	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 1*time.Second, true,
+func verifyPoolAllocatedSize(ctx context.Context, t *testing.T, poolName string, poolLister listers.IPPoolLister, size int) {
+	err := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 1*time.Second, true,
 		func(ctx context.Context) (bool, error) {
 			pool, err := poolLister.Get(poolName)
 			if err != nil {
@@ -141,7 +139,6 @@ func verifyPoolAllocatedSize(t *testing.T, poolName string, poolLister listers.I
 }
 
 func TestStatefulSetLifecycle(t *testing.T) {
-
 	tests := []struct {
 		name                string
 		dedicatedPool       bool
@@ -176,6 +173,7 @@ func TestStatefulSetLifecycle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
@@ -183,31 +181,19 @@ func TestStatefulSetLifecycle(t *testing.T) {
 			controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
 			controller.informerFactory.Start(stopCh)
 			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
 
 			go controller.Run(stopCh)
 
-			var allocator *poolallocator.IPPoolAllocator
-			var err error
-			// Wait until pool propagates to the informer
-			pollErr := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 3*time.Second, true,
-				func(ctx context.Context) (bool, error) {
-					allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, controller.crdClient, controller.poolLister)
-					if err != nil {
-						return false, nil
-					}
-					return true, nil
-				})
-			require.NoError(t, pollErr)
-			defer allocator.ReleaseStatefulSet(statefulSet.Namespace, statefulSet.Name)
-
 			// Verify create event was handled by the controller
-			verifyPoolAllocatedSize(t, pool.Name, controller.poolLister, tt.expectAllocatedSize)
+			verifyPoolAllocatedSize(ctx, t, pool.Name, controller.poolLister, tt.expectAllocatedSize)
 
 			// Delete StatefulSet
-			controller.fakeK8sClient.AppsV1().StatefulSets(namespace.Name).Delete(context.TODO(), statefulSet.Name, metav1.DeleteOptions{})
+			controller.fakeK8sClient.AppsV1().StatefulSets(namespace.Name).Delete(ctx, statefulSet.Name, metav1.DeleteOptions{})
 
 			// Verify Delete event was processed
-			verifyPoolAllocatedSize(t, pool.Name, controller.poolLister, 0)
+			verifyPoolAllocatedSize(ctx, t, pool.Name, controller.poolLister, 0)
 		})
 	}
 }
@@ -259,6 +245,8 @@ func TestReleaseStaleAddresses(t *testing.T) {
 	controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
 	controller.informerFactory.Start(stopCh)
 	controller.crdInformerFactory.Start(stopCh)
+	controller.informerFactory.WaitForCacheSync(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
 
 	go controller.Run(stopCh)
 
@@ -333,6 +321,8 @@ func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 			controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
 			controller.informerFactory.Start(stopCh)
 			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
 
 			got, got1 := controller.getIPPoolsForStatefulSet(statefulSet)
 			var want []string
