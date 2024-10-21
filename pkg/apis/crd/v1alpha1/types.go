@@ -398,7 +398,7 @@ type TCPHeader struct {
 	// DstPort is the destination port.
 	DstPort *int32 `json:"dstPort,omitempty"`
 	// Flags are tcp flags filter in BPF format. eg: 'tcp[13] & 16!=0' or 'tcp[tcpflags] == tcp-ack'
-	Flags string `json:"flags"`
+	Flags *string `json:"flags,omitempty"`
 }
 
 // Packet includes header info.
