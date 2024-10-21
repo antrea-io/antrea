@@ -76,7 +76,6 @@ func (fs *fqdnSelectorItem) matches(fqdn string) bool {
 // expirationTime of the records, which is the DNS response
 // receiving time plus lowest applicable TTL.
 type dnsMeta struct {
-	//expirationTime time.Time
 	// Key for responseIPs is the string representation of the IP.
 	// It helps to quickly identify IP address updates when a
 	// new DNS response is received.
@@ -258,8 +257,8 @@ func (f *fqdnController) getIPsForFQDNSelectors(fqdns []string) []net.IP {
 		}
 		for fqdn := range fqdnsMatched {
 			if dnsMeta, ok := f.dnsEntryCache[fqdn]; ok {
-				for _, ipWithMetaData := range dnsMeta.responseIPs {
-					matchedIPs = append(matchedIPs, ipWithMetaData.ip)
+				for _, ipData := range dnsMeta.responseIPs {
+					matchedIPs = append(matchedIPs, ipData.ip)
 				}
 			}
 		}
@@ -423,12 +422,14 @@ func (f *fqdnController) onDNSResponse(
 
 	currentTime := time.Now()
 	ipWithTTLMap := make(map[string]ipWithTTL)
-	minTimeToReQuery := time.Unix(1<<63-62135596801, 999999999)
+
+	//minTimeToReQuery Establishes a maximum reference time for tracking the minimum re-query time to DNS, as IPs expire.
+	minTimeToReQuery := time.Now().Add(24 * time.Hour)
 	addressUpdate := false
 
-	ipMapFiller := func(ip string, ipMeta ipWithTTL, minTime *time.Time) {
+	addIPToCache := func(ip string, ipMeta ipWithTTL) {
 		ipWithTTLMap[ip] = ipMeta
-		*minTime = earlierOf(ipMeta.expirationTime, *minTime)
+		minTimeToReQuery = earlierOf(ipMeta.expirationTime, minTimeToReQuery)
 	}
 
 	f.fqdnSelectorMutex.Lock()
@@ -442,7 +443,7 @@ func (f *fqdnController) onDNSResponse(
 		// check for new IPs and these new IPs need to be added with its new TTL value as received in response.
 		for ipStr, ipMeta := range newDNSresponseIPs {
 			if _, exist := cachedDNSMeta.responseIPs[ipStr]; !exist {
-				ipMapFiller(ipStr, ipMeta, &minTimeToReQuery)
+				addIPToCache(ipStr, ipMeta)
 			}
 		}
 
@@ -453,15 +454,15 @@ func (f *fqdnController) onDNSResponse(
 					addressUpdate = true
 				} else {
 					// It hasn't expired yet, so just retain it with its existing expirationTime.
-					ipMapFiller(cachedIpStr, cachedIpMeta, &minTimeToReQuery)
+					addIPToCache(cachedIpStr, cachedIpMeta)
 				}
 			} else {
 				// This old IP also exists in current response, so update it with max time between received time and its old cached time.
 				expTime := laterOf(newDNSresponseIPs[cachedIpStr].expirationTime, cachedIpMeta.expirationTime)
-				ipMapFiller(cachedIpStr, ipWithTTL{
+				addIPToCache(cachedIpStr, ipWithTTL{
 					ip:             cachedIpMeta.ip,
 					expirationTime: expTime,
-				}, &minTimeToReQuery)
+				})
 			}
 		}
 
@@ -475,7 +476,7 @@ func (f *fqdnController) onDNSResponse(
 			if selectorItem.matches(fqdn) {
 				f.setFQDNMatchSelector(fqdn, selectorItem)
 				for ipStr, ipMeta := range newDNSresponseIPs {
-					ipMapFiller(ipStr, ipMeta, &minTimeToReQuery)
+					addIPToCache(ipStr, ipMeta)
 				}
 			}
 		}

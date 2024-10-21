@@ -591,53 +591,52 @@ func TestOnDNSResponse(t *testing.T) {
 		name             string
 		existingDNSCache map[string]dnsMeta
 		responseIPs      map[string]ipWithTTL
-		lowestTTL        uint32
 		expectedIPs      map[string]time.Time
 	}{
 		{
-			name: "new IP added and old IP retained",
+			name: "new IP added",
 			existingDNSCache: map[string]dnsMeta{
 				"fqdn-test-pod.lfx.test": {
-					responseIPs: map[string]ipWithTTL{
-						// sample IP with some TTL
-						"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(10 * time.Second)},
-						// sample IP with time simulating expired time, i thought that using negative time will
-						// simulate expired time as it will always equate  to before when compared to any time.
-						"192.0.2.2": {ip: net.ParseIP("192.0.2.2"), expirationTime: currentTime.Add(-1 * time.Second)},
-					},
+					responseIPs: map[string]ipWithTTL{},
 				},
 			},
 			responseIPs: map[string]ipWithTTL{
-				// we get new IP
-				"192.0.2.3": {ip: net.ParseIP("192.0.2.3"), expirationTime: currentTime.Add(10 * time.Second)},
-				// and an exisiting IP
 				"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(10 * time.Second)},
 			},
-			lowestTTL: 30,
 			expectedIPs: map[string]time.Time{
-				// old unexpired IP should continue to have its actual TTL.
 				"192.0.2.1": currentTime.Add(10 * time.Second),
-				// new ip should have new expirationTime that was passed (minTTL)
-				"192.0.2.3": currentTime.Add(10 * time.Second),
 			},
 		},
 		{
-			name: "old IP expired",
+			name: "old IP retained but with a shorter new TTl",
 			existingDNSCache: map[string]dnsMeta{
 				"fqdn-test-pod.lfx.test": {
 					responseIPs: map[string]ipWithTTL{
-						// an ip which is expired.
-						"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(-1 * time.Second)},
+						"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(10 * time.Second)},
 					},
 				},
 			},
 			responseIPs: map[string]ipWithTTL{
-				"192.0.2.3": {ip: net.ParseIP("192.0.2.3"), expirationTime: currentTime.Add(10 * time.Second)},
+				"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(5 * time.Second)},
 			},
-			lowestTTL: 30,
-			// so we should expect the removal of expired ip from our cache and presence of only this ip
 			expectedIPs: map[string]time.Time{
-				"192.0.2.3": currentTime.Add(10 * time.Second), // new IP
+				"192.0.2.1": currentTime.Add(10 * time.Second),
+			},
+		},
+		{
+			name: "old IP retained but with a larger new TTl",
+			existingDNSCache: map[string]dnsMeta{
+				"fqdn-test-pod.lfx.test": {
+					responseIPs: map[string]ipWithTTL{
+						"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(10 * time.Second)},
+					},
+				},
+			},
+			responseIPs: map[string]ipWithTTL{
+				"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(20 * time.Second)},
+			},
+			expectedIPs: map[string]time.Time{
+				"192.0.2.1": currentTime.Add(20 * time.Second),
 			},
 		},
 	}
@@ -645,10 +644,10 @@ func TestOnDNSResponse(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			f, _ := newMockFQDNController(t, controller, nil) // server set as nil for testing purpose here .
+			f, _ := newMockFQDNController(t, controller, nil)
 			f.dnsEntryCache = tc.existingDNSCache
 
-			f.onDNSResponse("fqdn-test-pod.lfx.test", tc.responseIPs, nil) //waitChan nil, though as per original function its nil only when queries are sent by pod and not fqdnController.
+			f.onDNSResponse("fqdn-test-pod.lfx.test", tc.responseIPs, nil)
 
 			dnsMetaData := f.dnsEntryCache["fqdn-test-pod.lfx.test"]
 			if len(dnsMetaData.responseIPs) != len(tc.expectedIPs) {
@@ -662,7 +661,6 @@ func TestOnDNSResponse(t *testing.T) {
 					t.Errorf("Expected TTL for %s to be %v, got %v", ipStr, expectedTTL, ipMeta.expirationTime)
 				}
 			}
-			println("\n\n")
 		})
 	}
 }
