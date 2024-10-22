@@ -36,6 +36,7 @@ import (
 type MockEndpointQuerier struct {
 	ctrl     *gomock.Controller
 	recorder *MockEndpointQuerierMockRecorder
+	isgomock struct{}
 }
 
 // MockEndpointQuerierMockRecorder is the mock recorder for MockEndpointQuerier.
@@ -56,24 +57,25 @@ func (m *MockEndpointQuerier) EXPECT() *MockEndpointQuerierMockRecorder {
 }
 
 // QueryNetworkPolicyRules mocks base method.
-func (m *MockEndpointQuerier) QueryNetworkPolicyRules(arg0, arg1 string) (*types.EndpointNetworkPolicyRules, error) {
+func (m *MockEndpointQuerier) QueryNetworkPolicyRules(namespace, podName string) (*types.EndpointNetworkPolicyRules, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryNetworkPolicyRules", arg0, arg1)
+	ret := m.ctrl.Call(m, "QueryNetworkPolicyRules", namespace, podName)
 	ret0, _ := ret[0].(*types.EndpointNetworkPolicyRules)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryNetworkPolicyRules indicates an expected call of QueryNetworkPolicyRules.
-func (mr *MockEndpointQuerierMockRecorder) QueryNetworkPolicyRules(arg0, arg1 any) *gomock.Call {
+func (mr *MockEndpointQuerierMockRecorder) QueryNetworkPolicyRules(namespace, podName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryNetworkPolicyRules", reflect.TypeOf((*MockEndpointQuerier)(nil).QueryNetworkPolicyRules), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryNetworkPolicyRules", reflect.TypeOf((*MockEndpointQuerier)(nil).QueryNetworkPolicyRules), namespace, podName)
 }
 
 // MockPolicyRuleQuerier is a mock of PolicyRuleQuerier interface.
 type MockPolicyRuleQuerier struct {
 	ctrl     *gomock.Controller
 	recorder *MockPolicyRuleQuerierMockRecorder
+	isgomock struct{}
 }
 
 // MockPolicyRuleQuerierMockRecorder is the mock recorder for MockPolicyRuleQuerier.
@@ -94,16 +96,16 @@ func (m *MockPolicyRuleQuerier) EXPECT() *MockPolicyRuleQuerierMockRecorder {
 }
 
 // QueryNetworkPolicyEvaluation mocks base method.
-func (m *MockPolicyRuleQuerier) QueryNetworkPolicyEvaluation(arg0 *controlplane.NetworkPolicyEvaluationRequest) (*controlplane.NetworkPolicyEvaluationResponse, error) {
+func (m *MockPolicyRuleQuerier) QueryNetworkPolicyEvaluation(entities *controlplane.NetworkPolicyEvaluationRequest) (*controlplane.NetworkPolicyEvaluationResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryNetworkPolicyEvaluation", arg0)
+	ret := m.ctrl.Call(m, "QueryNetworkPolicyEvaluation", entities)
 	ret0, _ := ret[0].(*controlplane.NetworkPolicyEvaluationResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryNetworkPolicyEvaluation indicates an expected call of QueryNetworkPolicyEvaluation.
-func (mr *MockPolicyRuleQuerierMockRecorder) QueryNetworkPolicyEvaluation(arg0 any) *gomock.Call {
+func (mr *MockPolicyRuleQuerierMockRecorder) QueryNetworkPolicyEvaluation(entities any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryNetworkPolicyEvaluation", reflect.TypeOf((*MockPolicyRuleQuerier)(nil).QueryNetworkPolicyEvaluation), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryNetworkPolicyEvaluation", reflect.TypeOf((*MockPolicyRuleQuerier)(nil).QueryNetworkPolicyEvaluation), entities)
 }

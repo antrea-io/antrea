@@ -37,6 +37,7 @@ import (
 type MockS3UploaderAPI struct {
 	ctrl     *gomock.Controller
 	recorder *MockS3UploaderAPIMockRecorder
+	isgomock struct{}
 }
 
 // MockS3UploaderAPIMockRecorder is the mock recorder for MockS3UploaderAPI.
@@ -57,10 +58,10 @@ func (m *MockS3UploaderAPI) EXPECT() *MockS3UploaderAPIMockRecorder {
 }
 
 // Upload mocks base method.
-func (m *MockS3UploaderAPI) Upload(arg0 context.Context, arg1 *s3.PutObjectInput, arg2 *manager.Uploader, arg3 ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
+func (m *MockS3UploaderAPI) Upload(ctx context.Context, input *s3.PutObjectInput, awsS3Uploader *manager.Uploader, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, input, awsS3Uploader}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Upload", varargs...)
@@ -70,8 +71,8 @@ func (m *MockS3UploaderAPI) Upload(arg0 context.Context, arg1 *s3.PutObjectInput
 }
 
 // Upload indicates an expected call of Upload.
-func (mr *MockS3UploaderAPIMockRecorder) Upload(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockS3UploaderAPIMockRecorder) Upload(ctx, input, awsS3Uploader any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, input, awsS3Uploader}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upload", reflect.TypeOf((*MockS3UploaderAPI)(nil).Upload), varargs...)
 }

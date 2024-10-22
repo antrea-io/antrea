@@ -39,6 +39,7 @@ import (
 type MockInterfaceConfigurator struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceConfiguratorMockRecorder
+	isgomock struct{}
 }
 
 // MockInterfaceConfiguratorMockRecorder is the mock recorder for MockInterfaceConfigurator.
@@ -59,65 +60,66 @@ func (m *MockInterfaceConfigurator) EXPECT() *MockInterfaceConfiguratorMockRecor
 }
 
 // ConfigureSriovSecondaryInterface mocks base method.
-func (m *MockInterfaceConfigurator) ConfigureSriovSecondaryInterface(arg0, arg1, arg2, arg3, arg4 string, arg5 int, arg6 string, arg7 *types100.Result) error {
+func (m *MockInterfaceConfigurator) ConfigureSriovSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, podSriovVFDeviceID string, result *types100.Result) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfigureSriovSecondaryInterface", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+	ret := m.ctrl.Call(m, "ConfigureSriovSecondaryInterface", podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, podSriovVFDeviceID, result)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ConfigureSriovSecondaryInterface indicates an expected call of ConfigureSriovSecondaryInterface.
-func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureSriovSecondaryInterface(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 any) *gomock.Call {
+func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureSriovSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, podSriovVFDeviceID, result any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureSriovSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).ConfigureSriovSecondaryInterface), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureSriovSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).ConfigureSriovSecondaryInterface), podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, podSriovVFDeviceID, result)
 }
 
 // ConfigureVLANSecondaryInterface mocks base method.
-func (m *MockInterfaceConfigurator) ConfigureVLANSecondaryInterface(arg0, arg1, arg2, arg3, arg4 string, arg5 int, arg6 *ipam.IPAMResult) error {
+func (m *MockInterfaceConfigurator) ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfigureVLANSecondaryInterface", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret := m.ctrl.Call(m, "ConfigureVLANSecondaryInterface", podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ConfigureVLANSecondaryInterface indicates an expected call of ConfigureVLANSecondaryInterface.
-func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureVLANSecondaryInterface(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *gomock.Call {
+func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).ConfigureVLANSecondaryInterface), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).ConfigureVLANSecondaryInterface), podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult)
 }
 
 // DeleteSriovSecondaryInterface mocks base method.
-func (m *MockInterfaceConfigurator) DeleteSriovSecondaryInterface(arg0 *interfacestore.InterfaceConfig) error {
+func (m *MockInterfaceConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSriovSecondaryInterface", arg0)
+	ret := m.ctrl.Call(m, "DeleteSriovSecondaryInterface", interfaceConfig)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteSriovSecondaryInterface indicates an expected call of DeleteSriovSecondaryInterface.
-func (mr *MockInterfaceConfiguratorMockRecorder) DeleteSriovSecondaryInterface(arg0 any) *gomock.Call {
+func (mr *MockInterfaceConfiguratorMockRecorder) DeleteSriovSecondaryInterface(interfaceConfig any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSriovSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).DeleteSriovSecondaryInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSriovSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).DeleteSriovSecondaryInterface), interfaceConfig)
 }
 
 // DeleteVLANSecondaryInterface mocks base method.
-func (m *MockInterfaceConfigurator) DeleteVLANSecondaryInterface(arg0 *interfacestore.InterfaceConfig) error {
+func (m *MockInterfaceConfigurator) DeleteVLANSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteVLANSecondaryInterface", arg0)
+	ret := m.ctrl.Call(m, "DeleteVLANSecondaryInterface", interfaceConfig)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteVLANSecondaryInterface indicates an expected call of DeleteVLANSecondaryInterface.
-func (mr *MockInterfaceConfiguratorMockRecorder) DeleteVLANSecondaryInterface(arg0 any) *gomock.Call {
+func (mr *MockInterfaceConfiguratorMockRecorder) DeleteVLANSecondaryInterface(interfaceConfig any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).DeleteVLANSecondaryInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).DeleteVLANSecondaryInterface), interfaceConfig)
 }
 
 // MockIPAMAllocator is a mock of IPAMAllocator interface.
 type MockIPAMAllocator struct {
 	ctrl     *gomock.Controller
 	recorder *MockIPAMAllocatorMockRecorder
+	isgomock struct{}
 }
 
 // MockIPAMAllocatorMockRecorder is the mock recorder for MockIPAMAllocator.
@@ -138,30 +140,30 @@ func (m *MockIPAMAllocator) EXPECT() *MockIPAMAllocatorMockRecorder {
 }
 
 // SecondaryNetworkAllocate mocks base method.
-func (m *MockIPAMAllocator) SecondaryNetworkAllocate(arg0 *v1beta1.PodOwner, arg1 *types.NetworkConfig) (*ipam.IPAMResult, error) {
+func (m *MockIPAMAllocator) SecondaryNetworkAllocate(podOwner *v1beta1.PodOwner, networkConfig *types.NetworkConfig) (*ipam.IPAMResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SecondaryNetworkAllocate", arg0, arg1)
+	ret := m.ctrl.Call(m, "SecondaryNetworkAllocate", podOwner, networkConfig)
 	ret0, _ := ret[0].(*ipam.IPAMResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SecondaryNetworkAllocate indicates an expected call of SecondaryNetworkAllocate.
-func (mr *MockIPAMAllocatorMockRecorder) SecondaryNetworkAllocate(arg0, arg1 any) *gomock.Call {
+func (mr *MockIPAMAllocatorMockRecorder) SecondaryNetworkAllocate(podOwner, networkConfig any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SecondaryNetworkAllocate", reflect.TypeOf((*MockIPAMAllocator)(nil).SecondaryNetworkAllocate), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SecondaryNetworkAllocate", reflect.TypeOf((*MockIPAMAllocator)(nil).SecondaryNetworkAllocate), podOwner, networkConfig)
 }
 
 // SecondaryNetworkRelease mocks base method.
-func (m *MockIPAMAllocator) SecondaryNetworkRelease(arg0 *v1beta1.PodOwner) error {
+func (m *MockIPAMAllocator) SecondaryNetworkRelease(podOwner *v1beta1.PodOwner) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SecondaryNetworkRelease", arg0)
+	ret := m.ctrl.Call(m, "SecondaryNetworkRelease", podOwner)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SecondaryNetworkRelease indicates an expected call of SecondaryNetworkRelease.
-func (mr *MockIPAMAllocatorMockRecorder) SecondaryNetworkRelease(arg0 any) *gomock.Call {
+func (mr *MockIPAMAllocatorMockRecorder) SecondaryNetworkRelease(podOwner any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SecondaryNetworkRelease", reflect.TypeOf((*MockIPAMAllocator)(nil).SecondaryNetworkRelease), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SecondaryNetworkRelease", reflect.TypeOf((*MockIPAMAllocator)(nil).SecondaryNetworkRelease), podOwner)
 }

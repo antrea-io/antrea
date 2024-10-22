@@ -35,6 +35,7 @@ import (
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockInterfaceMockRecorder is the mock recorder for MockInterface.
@@ -69,58 +70,58 @@ func (mr *MockInterfaceMockRecorder) CleanUp() *gomock.Call {
 }
 
 // DeletePeer mocks base method.
-func (m *MockInterface) DeletePeer(arg0 string) error {
+func (m *MockInterface) DeletePeer(nodeName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeletePeer", arg0)
+	ret := m.ctrl.Call(m, "DeletePeer", nodeName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeletePeer indicates an expected call of DeletePeer.
-func (mr *MockInterfaceMockRecorder) DeletePeer(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeletePeer(nodeName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePeer", reflect.TypeOf((*MockInterface)(nil).DeletePeer), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePeer", reflect.TypeOf((*MockInterface)(nil).DeletePeer), nodeName)
 }
 
 // Init mocks base method.
-func (m *MockInterface) Init(arg0, arg1 net.IP) (string, error) {
+func (m *MockInterface) Init(ipv4, ipv6 net.IP) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Init", arg0, arg1)
+	ret := m.ctrl.Call(m, "Init", ipv4, ipv6)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Init indicates an expected call of Init.
-func (mr *MockInterfaceMockRecorder) Init(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Init(ipv4, ipv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockInterface)(nil).Init), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockInterface)(nil).Init), ipv4, ipv6)
 }
 
 // RemoveStalePeers mocks base method.
-func (m *MockInterface) RemoveStalePeers(arg0 map[string]string) error {
+func (m *MockInterface) RemoveStalePeers(currentPeerPublickeys map[string]string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveStalePeers", arg0)
+	ret := m.ctrl.Call(m, "RemoveStalePeers", currentPeerPublickeys)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveStalePeers indicates an expected call of RemoveStalePeers.
-func (mr *MockInterfaceMockRecorder) RemoveStalePeers(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RemoveStalePeers(currentPeerPublickeys any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveStalePeers", reflect.TypeOf((*MockInterface)(nil).RemoveStalePeers), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveStalePeers", reflect.TypeOf((*MockInterface)(nil).RemoveStalePeers), currentPeerPublickeys)
 }
 
 // UpdatePeer mocks base method.
-func (m *MockInterface) UpdatePeer(arg0, arg1 string, arg2 net.IP, arg3 []*net.IPNet) error {
+func (m *MockInterface) UpdatePeer(nodeName, publicKeyString string, peerNodeIP net.IP, allowedIPs []*net.IPNet) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdatePeer", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "UpdatePeer", nodeName, publicKeyString, peerNodeIP, allowedIPs)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdatePeer indicates an expected call of UpdatePeer.
-func (mr *MockInterfaceMockRecorder) UpdatePeer(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) UpdatePeer(nodeName, publicKeyString, peerNodeIP, allowedIPs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePeer", reflect.TypeOf((*MockInterface)(nil).UpdatePeer), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePeer", reflect.TypeOf((*MockInterface)(nil).UpdatePeer), nodeName, publicKeyString, peerNodeIP, allowedIPs)
 }

@@ -36,6 +36,7 @@ import (
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockInterfaceMockRecorder is the mock recorder for MockInterface.
@@ -56,15 +57,15 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AddEventHandler mocks base method.
-func (m *MockInterface) AddEventHandler(arg0 servicecidr.EventHandler) {
+func (m *MockInterface) AddEventHandler(handler servicecidr.EventHandler) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddEventHandler", arg0)
+	m.ctrl.Call(m, "AddEventHandler", handler)
 }
 
 // AddEventHandler indicates an expected call of AddEventHandler.
-func (mr *MockInterfaceMockRecorder) AddEventHandler(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddEventHandler(handler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEventHandler", reflect.TypeOf((*MockInterface)(nil).AddEventHandler), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEventHandler", reflect.TypeOf((*MockInterface)(nil).AddEventHandler), handler)
 }
 
 // GetServiceCIDRs mocks base method.

@@ -36,6 +36,7 @@ import (
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockInterfaceMockRecorder is the mock recorder for MockInterface.
@@ -56,129 +57,129 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AddPeer mocks base method.
-func (m *MockInterface) AddPeer(arg0 context.Context, arg1 bgp.PeerConfig) error {
+func (m *MockInterface) AddPeer(ctx context.Context, peerConf bgp.PeerConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddPeer", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddPeer", ctx, peerConf)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddPeer indicates an expected call of AddPeer.
-func (mr *MockInterfaceMockRecorder) AddPeer(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddPeer(ctx, peerConf any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeer", reflect.TypeOf((*MockInterface)(nil).AddPeer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPeer", reflect.TypeOf((*MockInterface)(nil).AddPeer), ctx, peerConf)
 }
 
 // AdvertiseRoutes mocks base method.
-func (m *MockInterface) AdvertiseRoutes(arg0 context.Context, arg1 []bgp.Route) error {
+func (m *MockInterface) AdvertiseRoutes(ctx context.Context, routes []bgp.Route) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AdvertiseRoutes", arg0, arg1)
+	ret := m.ctrl.Call(m, "AdvertiseRoutes", ctx, routes)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AdvertiseRoutes indicates an expected call of AdvertiseRoutes.
-func (mr *MockInterfaceMockRecorder) AdvertiseRoutes(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AdvertiseRoutes(ctx, routes any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdvertiseRoutes", reflect.TypeOf((*MockInterface)(nil).AdvertiseRoutes), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdvertiseRoutes", reflect.TypeOf((*MockInterface)(nil).AdvertiseRoutes), ctx, routes)
 }
 
 // GetPeers mocks base method.
-func (m *MockInterface) GetPeers(arg0 context.Context) ([]bgp.PeerStatus, error) {
+func (m *MockInterface) GetPeers(ctx context.Context) ([]bgp.PeerStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPeers", arg0)
+	ret := m.ctrl.Call(m, "GetPeers", ctx)
 	ret0, _ := ret[0].([]bgp.PeerStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPeers indicates an expected call of GetPeers.
-func (mr *MockInterfaceMockRecorder) GetPeers(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) GetPeers(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*MockInterface)(nil).GetPeers), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*MockInterface)(nil).GetPeers), ctx)
 }
 
 // GetRoutes mocks base method.
-func (m *MockInterface) GetRoutes(arg0 context.Context, arg1 bgp.RouteType, arg2 string) ([]bgp.Route, error) {
+func (m *MockInterface) GetRoutes(ctx context.Context, routeType bgp.RouteType, peerAddress string) ([]bgp.Route, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRoutes", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetRoutes", ctx, routeType, peerAddress)
 	ret0, _ := ret[0].([]bgp.Route)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetRoutes indicates an expected call of GetRoutes.
-func (mr *MockInterfaceMockRecorder) GetRoutes(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) GetRoutes(ctx, routeType, peerAddress any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoutes", reflect.TypeOf((*MockInterface)(nil).GetRoutes), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoutes", reflect.TypeOf((*MockInterface)(nil).GetRoutes), ctx, routeType, peerAddress)
 }
 
 // RemovePeer mocks base method.
-func (m *MockInterface) RemovePeer(arg0 context.Context, arg1 bgp.PeerConfig) error {
+func (m *MockInterface) RemovePeer(ctx context.Context, peerConf bgp.PeerConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemovePeer", arg0, arg1)
+	ret := m.ctrl.Call(m, "RemovePeer", ctx, peerConf)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemovePeer indicates an expected call of RemovePeer.
-func (mr *MockInterfaceMockRecorder) RemovePeer(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RemovePeer(ctx, peerConf any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePeer", reflect.TypeOf((*MockInterface)(nil).RemovePeer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePeer", reflect.TypeOf((*MockInterface)(nil).RemovePeer), ctx, peerConf)
 }
 
 // Start mocks base method.
-func (m *MockInterface) Start(arg0 context.Context) error {
+func (m *MockInterface) Start(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start", arg0)
+	ret := m.ctrl.Call(m, "Start", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockInterfaceMockRecorder) Start(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Start(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockInterface)(nil).Start), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockInterface)(nil).Start), ctx)
 }
 
 // Stop mocks base method.
-func (m *MockInterface) Stop(arg0 context.Context) error {
+func (m *MockInterface) Stop(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stop", arg0)
+	ret := m.ctrl.Call(m, "Stop", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Stop indicates an expected call of Stop.
-func (mr *MockInterfaceMockRecorder) Stop(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Stop(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockInterface)(nil).Stop), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockInterface)(nil).Stop), ctx)
 }
 
 // UpdatePeer mocks base method.
-func (m *MockInterface) UpdatePeer(arg0 context.Context, arg1 bgp.PeerConfig) error {
+func (m *MockInterface) UpdatePeer(ctx context.Context, peerConf bgp.PeerConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdatePeer", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdatePeer", ctx, peerConf)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdatePeer indicates an expected call of UpdatePeer.
-func (mr *MockInterfaceMockRecorder) UpdatePeer(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) UpdatePeer(ctx, peerConf any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePeer", reflect.TypeOf((*MockInterface)(nil).UpdatePeer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePeer", reflect.TypeOf((*MockInterface)(nil).UpdatePeer), ctx, peerConf)
 }
 
 // WithdrawRoutes mocks base method.
-func (m *MockInterface) WithdrawRoutes(arg0 context.Context, arg1 []bgp.Route) error {
+func (m *MockInterface) WithdrawRoutes(ctx context.Context, routes []bgp.Route) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithdrawRoutes", arg0, arg1)
+	ret := m.ctrl.Call(m, "WithdrawRoutes", ctx, routes)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WithdrawRoutes indicates an expected call of WithdrawRoutes.
-func (mr *MockInterfaceMockRecorder) WithdrawRoutes(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) WithdrawRoutes(ctx, routes any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithdrawRoutes", reflect.TypeOf((*MockInterface)(nil).WithdrawRoutes), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithdrawRoutes", reflect.TypeOf((*MockInterface)(nil).WithdrawRoutes), ctx, routes)
 }

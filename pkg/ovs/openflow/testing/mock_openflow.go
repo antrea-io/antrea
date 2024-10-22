@@ -40,6 +40,7 @@ import (
 type MockBridge struct {
 	ctrl     *gomock.Controller
 	recorder *MockBridgeMockRecorder
+	isgomock struct{}
 }
 
 // MockBridgeMockRecorder is the mock recorder for MockBridge.
@@ -60,31 +61,31 @@ func (m *MockBridge) EXPECT() *MockBridgeMockRecorder {
 }
 
 // AddFlowsInBundle mocks base method.
-func (m *MockBridge) AddFlowsInBundle(arg0, arg1, arg2 []*openflow15.FlowMod) error {
+func (m *MockBridge) AddFlowsInBundle(addflows, modFlows, delFlows []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddFlowsInBundle", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddFlowsInBundle", addflows, modFlows, delFlows)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddFlowsInBundle indicates an expected call of AddFlowsInBundle.
-func (mr *MockBridgeMockRecorder) AddFlowsInBundle(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) AddFlowsInBundle(addflows, modFlows, delFlows any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddFlowsInBundle", reflect.TypeOf((*MockBridge)(nil).AddFlowsInBundle), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddFlowsInBundle", reflect.TypeOf((*MockBridge)(nil).AddFlowsInBundle), addflows, modFlows, delFlows)
 }
 
 // AddOFEntriesInBundle mocks base method.
-func (m *MockBridge) AddOFEntriesInBundle(arg0, arg1, arg2 []openflow.OFEntry) error {
+func (m *MockBridge) AddOFEntriesInBundle(addEntries, modEntries, delEntries []openflow.OFEntry) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddOFEntriesInBundle", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddOFEntriesInBundle", addEntries, modEntries, delEntries)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddOFEntriesInBundle indicates an expected call of AddOFEntriesInBundle.
-func (mr *MockBridgeMockRecorder) AddOFEntriesInBundle(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) AddOFEntriesInBundle(addEntries, modEntries, delEntries any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOFEntriesInBundle", reflect.TypeOf((*MockBridge)(nil).AddOFEntriesInBundle), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOFEntriesInBundle", reflect.TypeOf((*MockBridge)(nil).AddOFEntriesInBundle), addEntries, modEntries, delEntries)
 }
 
 // BuildPacketOut mocks base method.
@@ -102,31 +103,31 @@ func (mr *MockBridgeMockRecorder) BuildPacketOut() *gomock.Call {
 }
 
 // Connect mocks base method.
-func (m *MockBridge) Connect(arg0 int, arg1 chan struct{}) error {
+func (m *MockBridge) Connect(maxRetrySec int, connectCh chan struct{}) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Connect", arg0, arg1)
+	ret := m.ctrl.Call(m, "Connect", maxRetrySec, connectCh)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockBridgeMockRecorder) Connect(arg0, arg1 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) Connect(maxRetrySec, connectCh any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockBridge)(nil).Connect), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockBridge)(nil).Connect), maxRetrySec, connectCh)
 }
 
 // DeleteFlowsByCookie mocks base method.
-func (m *MockBridge) DeleteFlowsByCookie(arg0, arg1 uint64) error {
+func (m *MockBridge) DeleteFlowsByCookie(cookieID, cookieMask uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteFlowsByCookie", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteFlowsByCookie", cookieID, cookieMask)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteFlowsByCookie indicates an expected call of DeleteFlowsByCookie.
-func (mr *MockBridgeMockRecorder) DeleteFlowsByCookie(arg0, arg1 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) DeleteFlowsByCookie(cookieID, cookieMask any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFlowsByCookie", reflect.TypeOf((*MockBridge)(nil).DeleteFlowsByCookie), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFlowsByCookie", reflect.TypeOf((*MockBridge)(nil).DeleteFlowsByCookie), cookieID, cookieMask)
 }
 
 // DeleteGroupAll mocks base method.
@@ -172,18 +173,18 @@ func (mr *MockBridgeMockRecorder) Disconnect() *gomock.Call {
 }
 
 // DumpFlows mocks base method.
-func (m *MockBridge) DumpFlows(arg0, arg1 uint64) (map[uint64]*openflow.FlowStates, error) {
+func (m *MockBridge) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*openflow.FlowStates, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "DumpFlows", cookieID, cookieMask)
 	ret0, _ := ret[0].(map[uint64]*openflow.FlowStates)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DumpFlows indicates an expected call of DumpFlows.
-func (mr *MockBridgeMockRecorder) DumpFlows(arg0, arg1 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) DumpFlows(cookieID, cookieMask any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockBridge)(nil).DumpFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockBridge)(nil).DumpFlows), cookieID, cookieMask)
 }
 
 // DumpTableStatus mocks base method.
@@ -201,32 +202,32 @@ func (mr *MockBridgeMockRecorder) DumpTableStatus() *gomock.Call {
 }
 
 // GetMeterStats mocks base method.
-func (m *MockBridge) GetMeterStats(arg0 func(int, int64)) error {
+func (m *MockBridge) GetMeterStats(handleMeterStatsReply func(int, int64)) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMeterStats", arg0)
+	ret := m.ctrl.Call(m, "GetMeterStats", handleMeterStatsReply)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetMeterStats indicates an expected call of GetMeterStats.
-func (mr *MockBridgeMockRecorder) GetMeterStats(arg0 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) GetMeterStats(handleMeterStatsReply any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeterStats", reflect.TypeOf((*MockBridge)(nil).GetMeterStats), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeterStats", reflect.TypeOf((*MockBridge)(nil).GetMeterStats), handleMeterStatsReply)
 }
 
 // GetTableByID mocks base method.
-func (m *MockBridge) GetTableByID(arg0 byte) (openflow.Table, error) {
+func (m *MockBridge) GetTableByID(id uint8) (openflow.Table, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTableByID", arg0)
+	ret := m.ctrl.Call(m, "GetTableByID", id)
 	ret0, _ := ret[0].(openflow.Table)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetTableByID indicates an expected call of GetTableByID.
-func (mr *MockBridgeMockRecorder) GetTableByID(arg0 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) GetTableByID(id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTableByID", reflect.TypeOf((*MockBridge)(nil).GetTableByID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTableByID", reflect.TypeOf((*MockBridge)(nil).GetTableByID), id)
 }
 
 // IsConnected mocks base method.
@@ -244,107 +245,108 @@ func (mr *MockBridgeMockRecorder) IsConnected() *gomock.Call {
 }
 
 // NewGroup mocks base method.
-func (m *MockBridge) NewGroup(arg0 openflow.GroupIDType) openflow.Group {
+func (m *MockBridge) NewGroup(id openflow.GroupIDType) openflow.Group {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewGroup", arg0)
+	ret := m.ctrl.Call(m, "NewGroup", id)
 	ret0, _ := ret[0].(openflow.Group)
 	return ret0
 }
 
 // NewGroup indicates an expected call of NewGroup.
-func (mr *MockBridgeMockRecorder) NewGroup(arg0 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) NewGroup(id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewGroup", reflect.TypeOf((*MockBridge)(nil).NewGroup), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewGroup", reflect.TypeOf((*MockBridge)(nil).NewGroup), id)
 }
 
 // NewGroupTypeAll mocks base method.
-func (m *MockBridge) NewGroupTypeAll(arg0 openflow.GroupIDType) openflow.Group {
+func (m *MockBridge) NewGroupTypeAll(id openflow.GroupIDType) openflow.Group {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewGroupTypeAll", arg0)
+	ret := m.ctrl.Call(m, "NewGroupTypeAll", id)
 	ret0, _ := ret[0].(openflow.Group)
 	return ret0
 }
 
 // NewGroupTypeAll indicates an expected call of NewGroupTypeAll.
-func (mr *MockBridgeMockRecorder) NewGroupTypeAll(arg0 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) NewGroupTypeAll(id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewGroupTypeAll", reflect.TypeOf((*MockBridge)(nil).NewGroupTypeAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewGroupTypeAll", reflect.TypeOf((*MockBridge)(nil).NewGroupTypeAll), id)
 }
 
 // NewMeter mocks base method.
-func (m *MockBridge) NewMeter(arg0 openflow.MeterIDType, arg1 ofctrl.MeterFlag) openflow.Meter {
+func (m *MockBridge) NewMeter(id openflow.MeterIDType, flags ofctrl.MeterFlag) openflow.Meter {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewMeter", arg0, arg1)
+	ret := m.ctrl.Call(m, "NewMeter", id, flags)
 	ret0, _ := ret[0].(openflow.Meter)
 	return ret0
 }
 
 // NewMeter indicates an expected call of NewMeter.
-func (mr *MockBridgeMockRecorder) NewMeter(arg0, arg1 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) NewMeter(id, flags any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewMeter", reflect.TypeOf((*MockBridge)(nil).NewMeter), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewMeter", reflect.TypeOf((*MockBridge)(nil).NewMeter), id, flags)
 }
 
 // NewTable mocks base method.
-func (m *MockBridge) NewTable(arg0 openflow.Table, arg1 byte, arg2 openflow.MissActionType) openflow.Table {
+func (m *MockBridge) NewTable(table openflow.Table, next uint8, missAction openflow.MissActionType) openflow.Table {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewTable", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "NewTable", table, next, missAction)
 	ret0, _ := ret[0].(openflow.Table)
 	return ret0
 }
 
 // NewTable indicates an expected call of NewTable.
-func (mr *MockBridgeMockRecorder) NewTable(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) NewTable(table, next, missAction any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTable", reflect.TypeOf((*MockBridge)(nil).NewTable), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTable", reflect.TypeOf((*MockBridge)(nil).NewTable), table, next, missAction)
 }
 
 // ResumePacket mocks base method.
-func (m *MockBridge) ResumePacket(arg0 *ofctrl.PacketIn) error {
+func (m *MockBridge) ResumePacket(packetIn *ofctrl.PacketIn) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResumePacket", arg0)
+	ret := m.ctrl.Call(m, "ResumePacket", packetIn)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ResumePacket indicates an expected call of ResumePacket.
-func (mr *MockBridgeMockRecorder) ResumePacket(arg0 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) ResumePacket(packetIn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumePacket", reflect.TypeOf((*MockBridge)(nil).ResumePacket), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumePacket", reflect.TypeOf((*MockBridge)(nil).ResumePacket), packetIn)
 }
 
 // SendPacketOut mocks base method.
-func (m *MockBridge) SendPacketOut(arg0 *ofctrl.PacketOut) error {
+func (m *MockBridge) SendPacketOut(packetOut *ofctrl.PacketOut) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendPacketOut", arg0)
+	ret := m.ctrl.Call(m, "SendPacketOut", packetOut)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendPacketOut indicates an expected call of SendPacketOut.
-func (mr *MockBridgeMockRecorder) SendPacketOut(arg0 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) SendPacketOut(packetOut any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendPacketOut", reflect.TypeOf((*MockBridge)(nil).SendPacketOut), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendPacketOut", reflect.TypeOf((*MockBridge)(nil).SendPacketOut), packetOut)
 }
 
 // SubscribePacketIn mocks base method.
-func (m *MockBridge) SubscribePacketIn(arg0 byte, arg1 *openflow.PacketInQueue) error {
+func (m *MockBridge) SubscribePacketIn(category uint8, pktInQueue *openflow.PacketInQueue) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribePacketIn", arg0, arg1)
+	ret := m.ctrl.Call(m, "SubscribePacketIn", category, pktInQueue)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SubscribePacketIn indicates an expected call of SubscribePacketIn.
-func (mr *MockBridgeMockRecorder) SubscribePacketIn(arg0, arg1 any) *gomock.Call {
+func (mr *MockBridgeMockRecorder) SubscribePacketIn(category, pktInQueue any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePacketIn", reflect.TypeOf((*MockBridge)(nil).SubscribePacketIn), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePacketIn", reflect.TypeOf((*MockBridge)(nil).SubscribePacketIn), category, pktInQueue)
 }
 
 // MockTable is a mock of Table interface.
 type MockTable struct {
 	ctrl     *gomock.Controller
 	recorder *MockTableMockRecorder
+	isgomock struct{}
 }
 
 // MockTableMockRecorder is the mock recorder for MockTable.
@@ -365,24 +367,24 @@ func (m *MockTable) EXPECT() *MockTableMockRecorder {
 }
 
 // BuildFlow mocks base method.
-func (m *MockTable) BuildFlow(arg0 uint16) openflow.FlowBuilder {
+func (m *MockTable) BuildFlow(priority uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildFlow", arg0)
+	ret := m.ctrl.Call(m, "BuildFlow", priority)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // BuildFlow indicates an expected call of BuildFlow.
-func (mr *MockTableMockRecorder) BuildFlow(arg0 any) *gomock.Call {
+func (mr *MockTableMockRecorder) BuildFlow(priority any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildFlow", reflect.TypeOf((*MockTable)(nil).BuildFlow), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildFlow", reflect.TypeOf((*MockTable)(nil).BuildFlow), priority)
 }
 
 // GetID mocks base method.
-func (m *MockTable) GetID() byte {
+func (m *MockTable) GetID() uint8 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetID")
-	ret0, _ := ret[0].(byte)
+	ret0, _ := ret[0].(uint8)
 	return ret0
 }
 
@@ -421,10 +423,10 @@ func (mr *MockTableMockRecorder) GetName() *gomock.Call {
 }
 
 // GetNext mocks base method.
-func (m *MockTable) GetNext() byte {
+func (m *MockTable) GetNext() uint8 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNext")
-	ret0, _ := ret[0].(byte)
+	ret0, _ := ret[0].(uint8)
 	return ret0
 }
 
@@ -449,27 +451,27 @@ func (mr *MockTableMockRecorder) GetStageID() *gomock.Call {
 }
 
 // SetMissAction mocks base method.
-func (m *MockTable) SetMissAction(arg0 openflow.MissActionType) {
+func (m *MockTable) SetMissAction(action openflow.MissActionType) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetMissAction", arg0)
+	m.ctrl.Call(m, "SetMissAction", action)
 }
 
 // SetMissAction indicates an expected call of SetMissAction.
-func (mr *MockTableMockRecorder) SetMissAction(arg0 any) *gomock.Call {
+func (mr *MockTableMockRecorder) SetMissAction(action any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMissAction", reflect.TypeOf((*MockTable)(nil).SetMissAction), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMissAction", reflect.TypeOf((*MockTable)(nil).SetMissAction), action)
 }
 
 // SetNext mocks base method.
-func (m *MockTable) SetNext(arg0 byte) {
+func (m *MockTable) SetNext(next uint8) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetNext", arg0)
+	m.ctrl.Call(m, "SetNext", next)
 }
 
 // SetNext indicates an expected call of SetNext.
-func (mr *MockTableMockRecorder) SetNext(arg0 any) *gomock.Call {
+func (mr *MockTableMockRecorder) SetNext(next any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNext", reflect.TypeOf((*MockTable)(nil).SetNext), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNext", reflect.TypeOf((*MockTable)(nil).SetNext), next)
 }
 
 // SetTable mocks base method.
@@ -502,6 +504,7 @@ func (mr *MockTableMockRecorder) Status() *gomock.Call {
 type MockFlow struct {
 	ctrl     *gomock.Controller
 	recorder *MockFlowMockRecorder
+	isgomock struct{}
 }
 
 // MockFlowMockRecorder is the mock recorder for MockFlow.
@@ -536,17 +539,17 @@ func (mr *MockFlowMockRecorder) Add() *gomock.Call {
 }
 
 // CopyToBuilder mocks base method.
-func (m *MockFlow) CopyToBuilder(arg0 uint16, arg1 bool) openflow.FlowBuilder {
+func (m *MockFlow) CopyToBuilder(priority uint16, copyActions bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CopyToBuilder", arg0, arg1)
+	ret := m.ctrl.Call(m, "CopyToBuilder", priority, copyActions)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // CopyToBuilder indicates an expected call of CopyToBuilder.
-func (mr *MockFlowMockRecorder) CopyToBuilder(arg0, arg1 any) *gomock.Call {
+func (mr *MockFlowMockRecorder) CopyToBuilder(priority, copyActions any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyToBuilder", reflect.TypeOf((*MockFlow)(nil).CopyToBuilder), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyToBuilder", reflect.TypeOf((*MockFlow)(nil).CopyToBuilder), priority, copyActions)
 }
 
 // Delete mocks base method.
@@ -592,18 +595,18 @@ func (mr *MockFlowMockRecorder) FlowProtocol() *gomock.Call {
 }
 
 // GetBundleMessages mocks base method.
-func (m *MockFlow) GetBundleMessages(arg0 openflow.OFOperation) ([]ofctrl.OpenFlowModMessage, error) {
+func (m *MockFlow) GetBundleMessages(operation openflow.OFOperation) ([]ofctrl.OpenFlowModMessage, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBundleMessages", arg0)
+	ret := m.ctrl.Call(m, "GetBundleMessages", operation)
 	ret0, _ := ret[0].([]ofctrl.OpenFlowModMessage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBundleMessages indicates an expected call of GetBundleMessages.
-func (mr *MockFlowMockRecorder) GetBundleMessages(arg0 any) *gomock.Call {
+func (mr *MockFlowMockRecorder) GetBundleMessages(operation any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockFlow)(nil).GetBundleMessages), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockFlow)(nil).GetBundleMessages), operation)
 }
 
 // MatchString mocks base method.
@@ -664,6 +667,7 @@ func (mr *MockFlowMockRecorder) Type() *gomock.Call {
 type MockAction struct {
 	ctrl     *gomock.Controller
 	recorder *MockActionMockRecorder
+	isgomock struct{}
 }
 
 // MockActionMockRecorder is the mock recorder for MockAction.
@@ -684,31 +688,31 @@ func (m *MockAction) EXPECT() *MockActionMockRecorder {
 }
 
 // CT mocks base method.
-func (m *MockAction) CT(arg0 bool, arg1 byte, arg2 int, arg3 *openflow.RegField) openflow.CTAction {
+func (m *MockAction) CT(commit bool, tableID uint8, zone int, zoneSrcField *openflow.RegField) openflow.CTAction {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CT", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "CT", commit, tableID, zone, zoneSrcField)
 	ret0, _ := ret[0].(openflow.CTAction)
 	return ret0
 }
 
 // CT indicates an expected call of CT.
-func (mr *MockActionMockRecorder) CT(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockActionMockRecorder) CT(commit, tableID, zone, zoneSrcField any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CT", reflect.TypeOf((*MockAction)(nil).CT), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CT", reflect.TypeOf((*MockAction)(nil).CT), commit, tableID, zone, zoneSrcField)
 }
 
 // Conjunction mocks base method.
-func (m *MockAction) Conjunction(arg0 uint32, arg1, arg2 byte) openflow.FlowBuilder {
+func (m *MockAction) Conjunction(conjID uint32, clauseID, nClause uint8) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Conjunction", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Conjunction", conjID, clauseID, nClause)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // Conjunction indicates an expected call of Conjunction.
-func (mr *MockActionMockRecorder) Conjunction(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockActionMockRecorder) Conjunction(conjID, clauseID, nClause any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Conjunction", reflect.TypeOf((*MockAction)(nil).Conjunction), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Conjunction", reflect.TypeOf((*MockAction)(nil).Conjunction), conjID, clauseID, nClause)
 }
 
 // DecTTL mocks base method.
@@ -740,108 +744,108 @@ func (mr *MockActionMockRecorder) Drop() *gomock.Call {
 }
 
 // GotoStage mocks base method.
-func (m *MockAction) GotoStage(arg0 openflow.StageID) openflow.FlowBuilder {
+func (m *MockAction) GotoStage(stage openflow.StageID) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GotoStage", arg0)
+	ret := m.ctrl.Call(m, "GotoStage", stage)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // GotoStage indicates an expected call of GotoStage.
-func (mr *MockActionMockRecorder) GotoStage(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) GotoStage(stage any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GotoStage", reflect.TypeOf((*MockAction)(nil).GotoStage), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GotoStage", reflect.TypeOf((*MockAction)(nil).GotoStage), stage)
 }
 
 // GotoTable mocks base method.
-func (m *MockAction) GotoTable(arg0 byte) openflow.FlowBuilder {
+func (m *MockAction) GotoTable(table uint8) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GotoTable", arg0)
+	ret := m.ctrl.Call(m, "GotoTable", table)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // GotoTable indicates an expected call of GotoTable.
-func (mr *MockActionMockRecorder) GotoTable(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) GotoTable(table any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GotoTable", reflect.TypeOf((*MockAction)(nil).GotoTable), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GotoTable", reflect.TypeOf((*MockAction)(nil).GotoTable), table)
 }
 
 // Group mocks base method.
-func (m *MockAction) Group(arg0 openflow.GroupIDType) openflow.FlowBuilder {
+func (m *MockAction) Group(id openflow.GroupIDType) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Group", arg0)
+	ret := m.ctrl.Call(m, "Group", id)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // Group indicates an expected call of Group.
-func (mr *MockActionMockRecorder) Group(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) Group(id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Group", reflect.TypeOf((*MockAction)(nil).Group), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Group", reflect.TypeOf((*MockAction)(nil).Group), id)
 }
 
 // Learn mocks base method.
-func (m *MockAction) Learn(arg0 byte, arg1, arg2, arg3, arg4, arg5 uint16, arg6 uint64) openflow.LearnAction {
+func (m *MockAction) Learn(id uint8, priority, idleTimeout, hardTimeout, finIdleTimeout, finHardTimeout uint16, cookieID uint64) openflow.LearnAction {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Learn", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret := m.ctrl.Call(m, "Learn", id, priority, idleTimeout, hardTimeout, finIdleTimeout, finHardTimeout, cookieID)
 	ret0, _ := ret[0].(openflow.LearnAction)
 	return ret0
 }
 
 // Learn indicates an expected call of Learn.
-func (mr *MockActionMockRecorder) Learn(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *gomock.Call {
+func (mr *MockActionMockRecorder) Learn(id, priority, idleTimeout, hardTimeout, finIdleTimeout, finHardTimeout, cookieID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Learn", reflect.TypeOf((*MockAction)(nil).Learn), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Learn", reflect.TypeOf((*MockAction)(nil).Learn), id, priority, idleTimeout, hardTimeout, finIdleTimeout, finHardTimeout, cookieID)
 }
 
 // LoadARPOperation mocks base method.
-func (m *MockAction) LoadARPOperation(arg0 uint16) openflow.FlowBuilder {
+func (m *MockAction) LoadARPOperation(value uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadARPOperation", arg0)
+	ret := m.ctrl.Call(m, "LoadARPOperation", value)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // LoadARPOperation indicates an expected call of LoadARPOperation.
-func (mr *MockActionMockRecorder) LoadARPOperation(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) LoadARPOperation(value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadARPOperation", reflect.TypeOf((*MockAction)(nil).LoadARPOperation), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadARPOperation", reflect.TypeOf((*MockAction)(nil).LoadARPOperation), value)
 }
 
 // LoadIPDSCP mocks base method.
-func (m *MockAction) LoadIPDSCP(arg0 byte) openflow.FlowBuilder {
+func (m *MockAction) LoadIPDSCP(value uint8) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadIPDSCP", arg0)
+	ret := m.ctrl.Call(m, "LoadIPDSCP", value)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // LoadIPDSCP indicates an expected call of LoadIPDSCP.
-func (mr *MockActionMockRecorder) LoadIPDSCP(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) LoadIPDSCP(value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadIPDSCP", reflect.TypeOf((*MockAction)(nil).LoadIPDSCP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadIPDSCP", reflect.TypeOf((*MockAction)(nil).LoadIPDSCP), value)
 }
 
 // LoadPktMarkRange mocks base method.
-func (m *MockAction) LoadPktMarkRange(arg0 uint32, arg1 *openflow.Range) openflow.FlowBuilder {
+func (m *MockAction) LoadPktMarkRange(value uint32, to *openflow.Range) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadPktMarkRange", arg0, arg1)
+	ret := m.ctrl.Call(m, "LoadPktMarkRange", value, to)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // LoadPktMarkRange indicates an expected call of LoadPktMarkRange.
-func (mr *MockActionMockRecorder) LoadPktMarkRange(arg0, arg1 any) *gomock.Call {
+func (mr *MockActionMockRecorder) LoadPktMarkRange(value, to any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadPktMarkRange", reflect.TypeOf((*MockAction)(nil).LoadPktMarkRange), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadPktMarkRange", reflect.TypeOf((*MockAction)(nil).LoadPktMarkRange), value, to)
 }
 
 // LoadRegMark mocks base method.
-func (m *MockAction) LoadRegMark(arg0 ...*openflow.RegMark) openflow.FlowBuilder {
+func (m *MockAction) LoadRegMark(marks ...*openflow.RegMark) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range marks {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "LoadRegMark", varargs...)
@@ -850,65 +854,65 @@ func (m *MockAction) LoadRegMark(arg0 ...*openflow.RegMark) openflow.FlowBuilder
 }
 
 // LoadRegMark indicates an expected call of LoadRegMark.
-func (mr *MockActionMockRecorder) LoadRegMark(arg0 ...any) *gomock.Call {
+func (mr *MockActionMockRecorder) LoadRegMark(marks ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRegMark", reflect.TypeOf((*MockAction)(nil).LoadRegMark), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRegMark", reflect.TypeOf((*MockAction)(nil).LoadRegMark), marks...)
 }
 
 // LoadToRegField mocks base method.
-func (m *MockAction) LoadToRegField(arg0 *openflow.RegField, arg1 uint32) openflow.FlowBuilder {
+func (m *MockAction) LoadToRegField(field *openflow.RegField, value uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadToRegField", arg0, arg1)
+	ret := m.ctrl.Call(m, "LoadToRegField", field, value)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // LoadToRegField indicates an expected call of LoadToRegField.
-func (mr *MockActionMockRecorder) LoadToRegField(arg0, arg1 any) *gomock.Call {
+func (mr *MockActionMockRecorder) LoadToRegField(field, value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToRegField", reflect.TypeOf((*MockAction)(nil).LoadToRegField), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToRegField", reflect.TypeOf((*MockAction)(nil).LoadToRegField), field, value)
 }
 
 // Meter mocks base method.
-func (m *MockAction) Meter(arg0 uint32) openflow.FlowBuilder {
+func (m *MockAction) Meter(meterID uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Meter", arg0)
+	ret := m.ctrl.Call(m, "Meter", meterID)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // Meter indicates an expected call of Meter.
-func (mr *MockActionMockRecorder) Meter(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) Meter(meterID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Meter", reflect.TypeOf((*MockAction)(nil).Meter), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Meter", reflect.TypeOf((*MockAction)(nil).Meter), meterID)
 }
 
 // Move mocks base method.
-func (m *MockAction) Move(arg0, arg1 string) openflow.FlowBuilder {
+func (m *MockAction) Move(from, to string) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Move", arg0, arg1)
+	ret := m.ctrl.Call(m, "Move", from, to)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // Move indicates an expected call of Move.
-func (mr *MockActionMockRecorder) Move(arg0, arg1 any) *gomock.Call {
+func (mr *MockActionMockRecorder) Move(from, to any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Move", reflect.TypeOf((*MockAction)(nil).Move), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Move", reflect.TypeOf((*MockAction)(nil).Move), from, to)
 }
 
 // MoveRange mocks base method.
-func (m *MockAction) MoveRange(arg0, arg1 string, arg2, arg3 openflow.Range) openflow.FlowBuilder {
+func (m *MockAction) MoveRange(fromName, toName string, from, to openflow.Range) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MoveRange", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "MoveRange", fromName, toName, from, to)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MoveRange indicates an expected call of MoveRange.
-func (mr *MockActionMockRecorder) MoveRange(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockActionMockRecorder) MoveRange(fromName, toName, from, to any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveRange", reflect.TypeOf((*MockAction)(nil).MoveRange), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveRange", reflect.TypeOf((*MockAction)(nil).MoveRange), fromName, toName, from, to)
 }
 
 // NextTable mocks base method.
@@ -940,45 +944,45 @@ func (mr *MockActionMockRecorder) Normal() *gomock.Call {
 }
 
 // Note mocks base method.
-func (m *MockAction) Note(arg0 string) openflow.FlowBuilder {
+func (m *MockAction) Note(notes string) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Note", arg0)
+	ret := m.ctrl.Call(m, "Note", notes)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // Note indicates an expected call of Note.
-func (mr *MockActionMockRecorder) Note(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) Note(notes any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Note", reflect.TypeOf((*MockAction)(nil).Note), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Note", reflect.TypeOf((*MockAction)(nil).Note), notes)
 }
 
 // Output mocks base method.
-func (m *MockAction) Output(arg0 uint32) openflow.FlowBuilder {
+func (m *MockAction) Output(port uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Output", arg0)
+	ret := m.ctrl.Call(m, "Output", port)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // Output indicates an expected call of Output.
-func (mr *MockActionMockRecorder) Output(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) Output(port any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Output", reflect.TypeOf((*MockAction)(nil).Output), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Output", reflect.TypeOf((*MockAction)(nil).Output), port)
 }
 
 // OutputFieldRange mocks base method.
-func (m *MockAction) OutputFieldRange(arg0 string, arg1 *openflow.Range) openflow.FlowBuilder {
+func (m *MockAction) OutputFieldRange(from string, rng *openflow.Range) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OutputFieldRange", arg0, arg1)
+	ret := m.ctrl.Call(m, "OutputFieldRange", from, rng)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // OutputFieldRange indicates an expected call of OutputFieldRange.
-func (mr *MockActionMockRecorder) OutputFieldRange(arg0, arg1 any) *gomock.Call {
+func (mr *MockActionMockRecorder) OutputFieldRange(from, rng any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutputFieldRange", reflect.TypeOf((*MockAction)(nil).OutputFieldRange), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutputFieldRange", reflect.TypeOf((*MockAction)(nil).OutputFieldRange), from, rng)
 }
 
 // OutputInPort mocks base method.
@@ -996,17 +1000,17 @@ func (mr *MockActionMockRecorder) OutputInPort() *gomock.Call {
 }
 
 // OutputToRegField mocks base method.
-func (m *MockAction) OutputToRegField(arg0 *openflow.RegField) openflow.FlowBuilder {
+func (m *MockAction) OutputToRegField(field *openflow.RegField) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OutputToRegField", arg0)
+	ret := m.ctrl.Call(m, "OutputToRegField", field)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // OutputToRegField indicates an expected call of OutputToRegField.
-func (mr *MockActionMockRecorder) OutputToRegField(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) OutputToRegField(field any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutputToRegField", reflect.TypeOf((*MockAction)(nil).OutputToRegField), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutputToRegField", reflect.TypeOf((*MockAction)(nil).OutputToRegField), field)
 }
 
 // PopVLAN mocks base method.
@@ -1024,24 +1028,24 @@ func (mr *MockActionMockRecorder) PopVLAN() *gomock.Call {
 }
 
 // PushVLAN mocks base method.
-func (m *MockAction) PushVLAN(arg0 uint16) openflow.FlowBuilder {
+func (m *MockAction) PushVLAN(etherType uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PushVLAN", arg0)
+	ret := m.ctrl.Call(m, "PushVLAN", etherType)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // PushVLAN indicates an expected call of PushVLAN.
-func (mr *MockActionMockRecorder) PushVLAN(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) PushVLAN(etherType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushVLAN", reflect.TypeOf((*MockAction)(nil).PushVLAN), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushVLAN", reflect.TypeOf((*MockAction)(nil).PushVLAN), etherType)
 }
 
 // ResubmitToTables mocks base method.
-func (m *MockAction) ResubmitToTables(arg0 ...byte) openflow.FlowBuilder {
+func (m *MockAction) ResubmitToTables(tables ...uint8) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range tables {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ResubmitToTables", varargs...)
@@ -1050,183 +1054,184 @@ func (m *MockAction) ResubmitToTables(arg0 ...byte) openflow.FlowBuilder {
 }
 
 // ResubmitToTables indicates an expected call of ResubmitToTables.
-func (mr *MockActionMockRecorder) ResubmitToTables(arg0 ...any) *gomock.Call {
+func (mr *MockActionMockRecorder) ResubmitToTables(tables ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResubmitToTables", reflect.TypeOf((*MockAction)(nil).ResubmitToTables), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResubmitToTables", reflect.TypeOf((*MockAction)(nil).ResubmitToTables), tables...)
 }
 
 // SendToController mocks base method.
-func (m *MockAction) SendToController(arg0 []byte, arg1 bool) openflow.FlowBuilder {
+func (m *MockAction) SendToController(userdata []byte, pause bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendToController", arg0, arg1)
+	ret := m.ctrl.Call(m, "SendToController", userdata, pause)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SendToController indicates an expected call of SendToController.
-func (mr *MockActionMockRecorder) SendToController(arg0, arg1 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SendToController(userdata, pause any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToController", reflect.TypeOf((*MockAction)(nil).SendToController), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToController", reflect.TypeOf((*MockAction)(nil).SendToController), userdata, pause)
 }
 
 // SetARPSha mocks base method.
-func (m *MockAction) SetARPSha(arg0 net.HardwareAddr) openflow.FlowBuilder {
+func (m *MockAction) SetARPSha(addr net.HardwareAddr) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetARPSha", arg0)
+	ret := m.ctrl.Call(m, "SetARPSha", addr)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetARPSha indicates an expected call of SetARPSha.
-func (mr *MockActionMockRecorder) SetARPSha(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetARPSha(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetARPSha", reflect.TypeOf((*MockAction)(nil).SetARPSha), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetARPSha", reflect.TypeOf((*MockAction)(nil).SetARPSha), addr)
 }
 
 // SetARPSpa mocks base method.
-func (m *MockAction) SetARPSpa(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockAction) SetARPSpa(addr net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetARPSpa", arg0)
+	ret := m.ctrl.Call(m, "SetARPSpa", addr)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetARPSpa indicates an expected call of SetARPSpa.
-func (mr *MockActionMockRecorder) SetARPSpa(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetARPSpa(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetARPSpa", reflect.TypeOf((*MockAction)(nil).SetARPSpa), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetARPSpa", reflect.TypeOf((*MockAction)(nil).SetARPSpa), addr)
 }
 
 // SetARPTha mocks base method.
-func (m *MockAction) SetARPTha(arg0 net.HardwareAddr) openflow.FlowBuilder {
+func (m *MockAction) SetARPTha(addr net.HardwareAddr) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetARPTha", arg0)
+	ret := m.ctrl.Call(m, "SetARPTha", addr)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetARPTha indicates an expected call of SetARPTha.
-func (mr *MockActionMockRecorder) SetARPTha(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetARPTha(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetARPTha", reflect.TypeOf((*MockAction)(nil).SetARPTha), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetARPTha", reflect.TypeOf((*MockAction)(nil).SetARPTha), addr)
 }
 
 // SetARPTpa mocks base method.
-func (m *MockAction) SetARPTpa(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockAction) SetARPTpa(addr net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetARPTpa", arg0)
+	ret := m.ctrl.Call(m, "SetARPTpa", addr)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetARPTpa indicates an expected call of SetARPTpa.
-func (mr *MockActionMockRecorder) SetARPTpa(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetARPTpa(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetARPTpa", reflect.TypeOf((*MockAction)(nil).SetARPTpa), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetARPTpa", reflect.TypeOf((*MockAction)(nil).SetARPTpa), addr)
 }
 
 // SetDstIP mocks base method.
-func (m *MockAction) SetDstIP(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockAction) SetDstIP(addr net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetDstIP", arg0)
+	ret := m.ctrl.Call(m, "SetDstIP", addr)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetDstIP indicates an expected call of SetDstIP.
-func (mr *MockActionMockRecorder) SetDstIP(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetDstIP(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDstIP", reflect.TypeOf((*MockAction)(nil).SetDstIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDstIP", reflect.TypeOf((*MockAction)(nil).SetDstIP), addr)
 }
 
 // SetDstMAC mocks base method.
-func (m *MockAction) SetDstMAC(arg0 net.HardwareAddr) openflow.FlowBuilder {
+func (m *MockAction) SetDstMAC(addr net.HardwareAddr) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetDstMAC", arg0)
+	ret := m.ctrl.Call(m, "SetDstMAC", addr)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetDstMAC indicates an expected call of SetDstMAC.
-func (mr *MockActionMockRecorder) SetDstMAC(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetDstMAC(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDstMAC", reflect.TypeOf((*MockAction)(nil).SetDstMAC), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDstMAC", reflect.TypeOf((*MockAction)(nil).SetDstMAC), addr)
 }
 
 // SetSrcIP mocks base method.
-func (m *MockAction) SetSrcIP(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockAction) SetSrcIP(addr net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetSrcIP", arg0)
+	ret := m.ctrl.Call(m, "SetSrcIP", addr)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetSrcIP indicates an expected call of SetSrcIP.
-func (mr *MockActionMockRecorder) SetSrcIP(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetSrcIP(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSrcIP", reflect.TypeOf((*MockAction)(nil).SetSrcIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSrcIP", reflect.TypeOf((*MockAction)(nil).SetSrcIP), addr)
 }
 
 // SetSrcMAC mocks base method.
-func (m *MockAction) SetSrcMAC(arg0 net.HardwareAddr) openflow.FlowBuilder {
+func (m *MockAction) SetSrcMAC(addr net.HardwareAddr) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetSrcMAC", arg0)
+	ret := m.ctrl.Call(m, "SetSrcMAC", addr)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetSrcMAC indicates an expected call of SetSrcMAC.
-func (mr *MockActionMockRecorder) SetSrcMAC(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetSrcMAC(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSrcMAC", reflect.TypeOf((*MockAction)(nil).SetSrcMAC), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSrcMAC", reflect.TypeOf((*MockAction)(nil).SetSrcMAC), addr)
 }
 
 // SetTunnelDst mocks base method.
-func (m *MockAction) SetTunnelDst(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockAction) SetTunnelDst(addr net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTunnelDst", arg0)
+	ret := m.ctrl.Call(m, "SetTunnelDst", addr)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetTunnelDst indicates an expected call of SetTunnelDst.
-func (mr *MockActionMockRecorder) SetTunnelDst(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetTunnelDst(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTunnelDst", reflect.TypeOf((*MockAction)(nil).SetTunnelDst), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTunnelDst", reflect.TypeOf((*MockAction)(nil).SetTunnelDst), addr)
 }
 
 // SetTunnelID mocks base method.
-func (m *MockAction) SetTunnelID(arg0 uint64) openflow.FlowBuilder {
+func (m *MockAction) SetTunnelID(tunnelID uint64) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTunnelID", arg0)
+	ret := m.ctrl.Call(m, "SetTunnelID", tunnelID)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetTunnelID indicates an expected call of SetTunnelID.
-func (mr *MockActionMockRecorder) SetTunnelID(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetTunnelID(tunnelID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTunnelID", reflect.TypeOf((*MockAction)(nil).SetTunnelID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTunnelID", reflect.TypeOf((*MockAction)(nil).SetTunnelID), tunnelID)
 }
 
 // SetVLAN mocks base method.
-func (m *MockAction) SetVLAN(arg0 uint16) openflow.FlowBuilder {
+func (m *MockAction) SetVLAN(vlanID uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetVLAN", arg0)
+	ret := m.ctrl.Call(m, "SetVLAN", vlanID)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetVLAN indicates an expected call of SetVLAN.
-func (mr *MockActionMockRecorder) SetVLAN(arg0 any) *gomock.Call {
+func (mr *MockActionMockRecorder) SetVLAN(vlanID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVLAN", reflect.TypeOf((*MockAction)(nil).SetVLAN), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVLAN", reflect.TypeOf((*MockAction)(nil).SetVLAN), vlanID)
 }
 
 // MockCTAction is a mock of CTAction interface.
 type MockCTAction struct {
 	ctrl     *gomock.Controller
 	recorder *MockCTActionMockRecorder
+	isgomock struct{}
 }
 
 // MockCTActionMockRecorder is the mock recorder for MockCTAction.
@@ -1261,24 +1266,24 @@ func (mr *MockCTActionMockRecorder) CTDone() *gomock.Call {
 }
 
 // DNAT mocks base method.
-func (m *MockCTAction) DNAT(arg0 *openflow.IPRange, arg1 *openflow.PortRange) openflow.CTAction {
+func (m *MockCTAction) DNAT(ipRange *openflow.IPRange, portRange *openflow.PortRange) openflow.CTAction {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DNAT", arg0, arg1)
+	ret := m.ctrl.Call(m, "DNAT", ipRange, portRange)
 	ret0, _ := ret[0].(openflow.CTAction)
 	return ret0
 }
 
 // DNAT indicates an expected call of DNAT.
-func (mr *MockCTActionMockRecorder) DNAT(arg0, arg1 any) *gomock.Call {
+func (mr *MockCTActionMockRecorder) DNAT(ipRange, portRange any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DNAT", reflect.TypeOf((*MockCTAction)(nil).DNAT), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DNAT", reflect.TypeOf((*MockCTAction)(nil).DNAT), ipRange, portRange)
 }
 
 // LoadToCtMark mocks base method.
-func (m *MockCTAction) LoadToCtMark(arg0 ...*openflow.CtMark) openflow.CTAction {
+func (m *MockCTAction) LoadToCtMark(marks ...*openflow.CtMark) openflow.CTAction {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range marks {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "LoadToCtMark", varargs...)
@@ -1287,51 +1292,51 @@ func (m *MockCTAction) LoadToCtMark(arg0 ...*openflow.CtMark) openflow.CTAction 
 }
 
 // LoadToCtMark indicates an expected call of LoadToCtMark.
-func (mr *MockCTActionMockRecorder) LoadToCtMark(arg0 ...any) *gomock.Call {
+func (mr *MockCTActionMockRecorder) LoadToCtMark(marks ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToCtMark", reflect.TypeOf((*MockCTAction)(nil).LoadToCtMark), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToCtMark", reflect.TypeOf((*MockCTAction)(nil).LoadToCtMark), marks...)
 }
 
 // LoadToLabelField mocks base method.
-func (m *MockCTAction) LoadToLabelField(arg0 uint64, arg1 *openflow.CtLabel) openflow.CTAction {
+func (m *MockCTAction) LoadToLabelField(value uint64, labelField *openflow.CtLabel) openflow.CTAction {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadToLabelField", arg0, arg1)
+	ret := m.ctrl.Call(m, "LoadToLabelField", value, labelField)
 	ret0, _ := ret[0].(openflow.CTAction)
 	return ret0
 }
 
 // LoadToLabelField indicates an expected call of LoadToLabelField.
-func (mr *MockCTActionMockRecorder) LoadToLabelField(arg0, arg1 any) *gomock.Call {
+func (mr *MockCTActionMockRecorder) LoadToLabelField(value, labelField any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToLabelField", reflect.TypeOf((*MockCTAction)(nil).LoadToLabelField), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToLabelField", reflect.TypeOf((*MockCTAction)(nil).LoadToLabelField), value, labelField)
 }
 
 // MoveToCtMarkField mocks base method.
-func (m *MockCTAction) MoveToCtMarkField(arg0 *openflow.RegField, arg1 *openflow.CtMarkField) openflow.CTAction {
+func (m *MockCTAction) MoveToCtMarkField(fromRegField *openflow.RegField, ctMark *openflow.CtMarkField) openflow.CTAction {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MoveToCtMarkField", arg0, arg1)
+	ret := m.ctrl.Call(m, "MoveToCtMarkField", fromRegField, ctMark)
 	ret0, _ := ret[0].(openflow.CTAction)
 	return ret0
 }
 
 // MoveToCtMarkField indicates an expected call of MoveToCtMarkField.
-func (mr *MockCTActionMockRecorder) MoveToCtMarkField(arg0, arg1 any) *gomock.Call {
+func (mr *MockCTActionMockRecorder) MoveToCtMarkField(fromRegField, ctMark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveToCtMarkField", reflect.TypeOf((*MockCTAction)(nil).MoveToCtMarkField), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveToCtMarkField", reflect.TypeOf((*MockCTAction)(nil).MoveToCtMarkField), fromRegField, ctMark)
 }
 
 // MoveToLabel mocks base method.
-func (m *MockCTAction) MoveToLabel(arg0 string, arg1, arg2 *openflow.Range) openflow.CTAction {
+func (m *MockCTAction) MoveToLabel(fromName string, fromRng, labelRng *openflow.Range) openflow.CTAction {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MoveToLabel", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "MoveToLabel", fromName, fromRng, labelRng)
 	ret0, _ := ret[0].(openflow.CTAction)
 	return ret0
 }
 
 // MoveToLabel indicates an expected call of MoveToLabel.
-func (mr *MockCTActionMockRecorder) MoveToLabel(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockCTActionMockRecorder) MoveToLabel(fromName, fromRng, labelRng any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveToLabel", reflect.TypeOf((*MockCTAction)(nil).MoveToLabel), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveToLabel", reflect.TypeOf((*MockCTAction)(nil).MoveToLabel), fromName, fromRng, labelRng)
 }
 
 // NAT mocks base method.
@@ -1349,23 +1354,24 @@ func (mr *MockCTActionMockRecorder) NAT() *gomock.Call {
 }
 
 // SNAT mocks base method.
-func (m *MockCTAction) SNAT(arg0 *openflow.IPRange, arg1 *openflow.PortRange) openflow.CTAction {
+func (m *MockCTAction) SNAT(ipRange *openflow.IPRange, portRange *openflow.PortRange) openflow.CTAction {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SNAT", arg0, arg1)
+	ret := m.ctrl.Call(m, "SNAT", ipRange, portRange)
 	ret0, _ := ret[0].(openflow.CTAction)
 	return ret0
 }
 
 // SNAT indicates an expected call of SNAT.
-func (mr *MockCTActionMockRecorder) SNAT(arg0, arg1 any) *gomock.Call {
+func (mr *MockCTActionMockRecorder) SNAT(ipRange, portRange any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SNAT", reflect.TypeOf((*MockCTAction)(nil).SNAT), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SNAT", reflect.TypeOf((*MockCTAction)(nil).SNAT), ipRange, portRange)
 }
 
 // MockFlowBuilder is a mock of FlowBuilder interface.
 type MockFlowBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MockFlowBuilderMockRecorder
+	isgomock struct{}
 }
 
 // MockFlowBuilderMockRecorder is the mock recorder for MockFlowBuilder.
@@ -1400,17 +1406,17 @@ func (mr *MockFlowBuilderMockRecorder) Action() *gomock.Call {
 }
 
 // Cookie mocks base method.
-func (m *MockFlowBuilder) Cookie(arg0 uint64) openflow.FlowBuilder {
+func (m *MockFlowBuilder) Cookie(cookieID uint64) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Cookie", arg0)
+	ret := m.ctrl.Call(m, "Cookie", cookieID)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // Cookie indicates an expected call of Cookie.
-func (mr *MockFlowBuilderMockRecorder) Cookie(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) Cookie(cookieID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cookie", reflect.TypeOf((*MockFlowBuilder)(nil).Cookie), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cookie", reflect.TypeOf((*MockFlowBuilder)(nil).Cookie), cookieID)
 }
 
 // Done mocks base method.
@@ -1428,136 +1434,136 @@ func (mr *MockFlowBuilderMockRecorder) Done() *gomock.Call {
 }
 
 // MatchARPOp mocks base method.
-func (m *MockFlowBuilder) MatchARPOp(arg0 uint16) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchARPOp(op uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchARPOp", arg0)
+	ret := m.ctrl.Call(m, "MatchARPOp", op)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchARPOp indicates an expected call of MatchARPOp.
-func (mr *MockFlowBuilderMockRecorder) MatchARPOp(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchARPOp(op any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPOp", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPOp), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPOp", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPOp), op)
 }
 
 // MatchARPSha mocks base method.
-func (m *MockFlowBuilder) MatchARPSha(arg0 net.HardwareAddr) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchARPSha(mac net.HardwareAddr) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchARPSha", arg0)
+	ret := m.ctrl.Call(m, "MatchARPSha", mac)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchARPSha indicates an expected call of MatchARPSha.
-func (mr *MockFlowBuilderMockRecorder) MatchARPSha(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchARPSha(mac any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPSha", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPSha), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPSha", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPSha), mac)
 }
 
 // MatchARPSpa mocks base method.
-func (m *MockFlowBuilder) MatchARPSpa(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchARPSpa(ip net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchARPSpa", arg0)
+	ret := m.ctrl.Call(m, "MatchARPSpa", ip)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchARPSpa indicates an expected call of MatchARPSpa.
-func (mr *MockFlowBuilderMockRecorder) MatchARPSpa(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchARPSpa(ip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPSpa", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPSpa), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPSpa", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPSpa), ip)
 }
 
 // MatchARPTha mocks base method.
-func (m *MockFlowBuilder) MatchARPTha(arg0 net.HardwareAddr) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchARPTha(mac net.HardwareAddr) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchARPTha", arg0)
+	ret := m.ctrl.Call(m, "MatchARPTha", mac)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchARPTha indicates an expected call of MatchARPTha.
-func (mr *MockFlowBuilderMockRecorder) MatchARPTha(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchARPTha(mac any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPTha", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPTha), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPTha", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPTha), mac)
 }
 
 // MatchARPTpa mocks base method.
-func (m *MockFlowBuilder) MatchARPTpa(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchARPTpa(ip net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchARPTpa", arg0)
+	ret := m.ctrl.Call(m, "MatchARPTpa", ip)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchARPTpa indicates an expected call of MatchARPTpa.
-func (mr *MockFlowBuilderMockRecorder) MatchARPTpa(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchARPTpa(ip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPTpa", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPTpa), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPTpa", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPTpa), ip)
 }
 
 // MatchCTDstIP mocks base method.
-func (m *MockFlowBuilder) MatchCTDstIP(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTDstIP(ip net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTDstIP", arg0)
+	ret := m.ctrl.Call(m, "MatchCTDstIP", ip)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTDstIP indicates an expected call of MatchCTDstIP.
-func (mr *MockFlowBuilderMockRecorder) MatchCTDstIP(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTDstIP(ip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTDstIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTDstIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTDstIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTDstIP), ip)
 }
 
 // MatchCTDstIPNet mocks base method.
-func (m *MockFlowBuilder) MatchCTDstIPNet(arg0 net.IPNet) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTDstIPNet(ipNet net.IPNet) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTDstIPNet", arg0)
+	ret := m.ctrl.Call(m, "MatchCTDstIPNet", ipNet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTDstIPNet indicates an expected call of MatchCTDstIPNet.
-func (mr *MockFlowBuilderMockRecorder) MatchCTDstIPNet(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTDstIPNet(ipNet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTDstIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTDstIPNet), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTDstIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTDstIPNet), ipNet)
 }
 
 // MatchCTDstPort mocks base method.
-func (m *MockFlowBuilder) MatchCTDstPort(arg0 uint16) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTDstPort(port uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTDstPort", arg0)
+	ret := m.ctrl.Call(m, "MatchCTDstPort", port)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTDstPort indicates an expected call of MatchCTDstPort.
-func (mr *MockFlowBuilderMockRecorder) MatchCTDstPort(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTDstPort(port any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTDstPort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTDstPort), port)
 }
 
 // MatchCTLabelField mocks base method.
-func (m *MockFlowBuilder) MatchCTLabelField(arg0, arg1 uint64, arg2 *openflow.CtLabel) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTLabelField(high, low uint64, field *openflow.CtLabel) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTLabelField", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "MatchCTLabelField", high, low, field)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTLabelField indicates an expected call of MatchCTLabelField.
-func (mr *MockFlowBuilderMockRecorder) MatchCTLabelField(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTLabelField(high, low, field any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTLabelField", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTLabelField), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTLabelField", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTLabelField), high, low, field)
 }
 
 // MatchCTMark mocks base method.
-func (m *MockFlowBuilder) MatchCTMark(arg0 ...*openflow.CtMark) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTMark(marks ...*openflow.CtMark) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range marks {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "MatchCTMark", varargs...)
@@ -1566,373 +1572,373 @@ func (m *MockFlowBuilder) MatchCTMark(arg0 ...*openflow.CtMark) openflow.FlowBui
 }
 
 // MatchCTMark indicates an expected call of MatchCTMark.
-func (mr *MockFlowBuilderMockRecorder) MatchCTMark(arg0 ...any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTMark(marks ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTMark), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTMark), marks...)
 }
 
 // MatchCTProtocol mocks base method.
-func (m *MockFlowBuilder) MatchCTProtocol(arg0 openflow.Protocol) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTProtocol(proto openflow.Protocol) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTProtocol", arg0)
+	ret := m.ctrl.Call(m, "MatchCTProtocol", proto)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTProtocol indicates an expected call of MatchCTProtocol.
-func (mr *MockFlowBuilderMockRecorder) MatchCTProtocol(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTProtocol(proto any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTProtocol", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTProtocol), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTProtocol", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTProtocol), proto)
 }
 
 // MatchCTSrcIP mocks base method.
-func (m *MockFlowBuilder) MatchCTSrcIP(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTSrcIP(ip net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTSrcIP", arg0)
+	ret := m.ctrl.Call(m, "MatchCTSrcIP", ip)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTSrcIP indicates an expected call of MatchCTSrcIP.
-func (mr *MockFlowBuilderMockRecorder) MatchCTSrcIP(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTSrcIP(ip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcIP), ip)
 }
 
 // MatchCTSrcIPNet mocks base method.
-func (m *MockFlowBuilder) MatchCTSrcIPNet(arg0 net.IPNet) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTSrcIPNet(ipnet net.IPNet) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTSrcIPNet", arg0)
+	ret := m.ctrl.Call(m, "MatchCTSrcIPNet", ipnet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTSrcIPNet indicates an expected call of MatchCTSrcIPNet.
-func (mr *MockFlowBuilderMockRecorder) MatchCTSrcIPNet(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTSrcIPNet(ipnet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcIPNet), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcIPNet), ipnet)
 }
 
 // MatchCTSrcPort mocks base method.
-func (m *MockFlowBuilder) MatchCTSrcPort(arg0 uint16) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTSrcPort(port uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTSrcPort", arg0)
+	ret := m.ctrl.Call(m, "MatchCTSrcPort", port)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTSrcPort indicates an expected call of MatchCTSrcPort.
-func (mr *MockFlowBuilderMockRecorder) MatchCTSrcPort(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTSrcPort(port any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcPort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcPort), port)
 }
 
 // MatchCTState mocks base method.
-func (m *MockFlowBuilder) MatchCTState(arg0 *openflow15.CTStates) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTState(ctStates *openflow15.CTStates) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTState", arg0)
+	ret := m.ctrl.Call(m, "MatchCTState", ctStates)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTState indicates an expected call of MatchCTState.
-func (mr *MockFlowBuilderMockRecorder) MatchCTState(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTState(ctStates any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTState", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTState), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTState", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTState), ctStates)
 }
 
 // MatchCTStateDNAT mocks base method.
-func (m *MockFlowBuilder) MatchCTStateDNAT(arg0 bool) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTStateDNAT(isSet bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateDNAT", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateDNAT", isSet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTStateDNAT indicates an expected call of MatchCTStateDNAT.
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateDNAT(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateDNAT(isSet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateDNAT", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateDNAT), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateDNAT", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateDNAT), isSet)
 }
 
 // MatchCTStateEst mocks base method.
-func (m *MockFlowBuilder) MatchCTStateEst(arg0 bool) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTStateEst(isSet bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateEst", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateEst", isSet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTStateEst indicates an expected call of MatchCTStateEst.
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateEst(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateEst(isSet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateEst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateEst), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateEst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateEst), isSet)
 }
 
 // MatchCTStateInv mocks base method.
-func (m *MockFlowBuilder) MatchCTStateInv(arg0 bool) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTStateInv(isSet bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateInv", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateInv", isSet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTStateInv indicates an expected call of MatchCTStateInv.
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateInv(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateInv(isSet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateInv", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateInv), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateInv", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateInv), isSet)
 }
 
 // MatchCTStateNew mocks base method.
-func (m *MockFlowBuilder) MatchCTStateNew(arg0 bool) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTStateNew(isSet bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateNew", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateNew", isSet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTStateNew indicates an expected call of MatchCTStateNew.
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateNew(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateNew(isSet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateNew", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateNew), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateNew", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateNew), isSet)
 }
 
 // MatchCTStateRel mocks base method.
-func (m *MockFlowBuilder) MatchCTStateRel(arg0 bool) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTStateRel(isSet bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateRel", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateRel", isSet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTStateRel indicates an expected call of MatchCTStateRel.
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateRel(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateRel(isSet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRel", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRel), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRel", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRel), isSet)
 }
 
 // MatchCTStateRpl mocks base method.
-func (m *MockFlowBuilder) MatchCTStateRpl(arg0 bool) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTStateRpl(isSet bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateRpl", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateRpl", isSet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTStateRpl indicates an expected call of MatchCTStateRpl.
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateRpl(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateRpl(isSet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRpl", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRpl), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRpl", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRpl), isSet)
 }
 
 // MatchCTStateSNAT mocks base method.
-func (m *MockFlowBuilder) MatchCTStateSNAT(arg0 bool) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTStateSNAT(isSet bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateSNAT", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateSNAT", isSet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTStateSNAT indicates an expected call of MatchCTStateSNAT.
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateSNAT(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateSNAT(isSet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateSNAT", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateSNAT), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateSNAT", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateSNAT), isSet)
 }
 
 // MatchCTStateTrk mocks base method.
-func (m *MockFlowBuilder) MatchCTStateTrk(arg0 bool) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTStateTrk(isSet bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateTrk", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateTrk", isSet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTStateTrk indicates an expected call of MatchCTStateTrk.
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateTrk(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateTrk(isSet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateTrk", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateTrk), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateTrk", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateTrk), isSet)
 }
 
 // MatchConjID mocks base method.
-func (m *MockFlowBuilder) MatchConjID(arg0 uint32) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchConjID(value uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchConjID", arg0)
+	ret := m.ctrl.Call(m, "MatchConjID", value)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchConjID indicates an expected call of MatchConjID.
-func (mr *MockFlowBuilderMockRecorder) MatchConjID(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchConjID(value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchConjID", reflect.TypeOf((*MockFlowBuilder)(nil).MatchConjID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchConjID", reflect.TypeOf((*MockFlowBuilder)(nil).MatchConjID), value)
 }
 
 // MatchDstIP mocks base method.
-func (m *MockFlowBuilder) MatchDstIP(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchDstIP(ip net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchDstIP", arg0)
+	ret := m.ctrl.Call(m, "MatchDstIP", ip)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchDstIP indicates an expected call of MatchDstIP.
-func (mr *MockFlowBuilderMockRecorder) MatchDstIP(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchDstIP(ip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstIP), ip)
 }
 
 // MatchDstIPNet mocks base method.
-func (m *MockFlowBuilder) MatchDstIPNet(arg0 net.IPNet) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchDstIPNet(ipNet net.IPNet) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchDstIPNet", arg0)
+	ret := m.ctrl.Call(m, "MatchDstIPNet", ipNet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchDstIPNet indicates an expected call of MatchDstIPNet.
-func (mr *MockFlowBuilderMockRecorder) MatchDstIPNet(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchDstIPNet(ipNet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstIPNet), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstIPNet), ipNet)
 }
 
 // MatchDstMAC mocks base method.
-func (m *MockFlowBuilder) MatchDstMAC(arg0 net.HardwareAddr) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchDstMAC(mac net.HardwareAddr) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchDstMAC", arg0)
+	ret := m.ctrl.Call(m, "MatchDstMAC", mac)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchDstMAC indicates an expected call of MatchDstMAC.
-func (mr *MockFlowBuilderMockRecorder) MatchDstMAC(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchDstMAC(mac any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstMAC", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstMAC), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstMAC", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstMAC), mac)
 }
 
 // MatchDstPort mocks base method.
-func (m *MockFlowBuilder) MatchDstPort(arg0 uint16, arg1 *uint16) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchDstPort(port uint16, portMask *uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchDstPort", arg0, arg1)
+	ret := m.ctrl.Call(m, "MatchDstPort", port, portMask)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchDstPort indicates an expected call of MatchDstPort.
-func (mr *MockFlowBuilderMockRecorder) MatchDstPort(arg0, arg1 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchDstPort(port, portMask any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstPort), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstPort), port, portMask)
 }
 
 // MatchICMPCode mocks base method.
-func (m *MockFlowBuilder) MatchICMPCode(arg0 byte) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchICMPCode(icmpCode byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchICMPCode", arg0)
+	ret := m.ctrl.Call(m, "MatchICMPCode", icmpCode)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchICMPCode indicates an expected call of MatchICMPCode.
-func (mr *MockFlowBuilderMockRecorder) MatchICMPCode(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchICMPCode(icmpCode any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPCode", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPCode), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPCode", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPCode), icmpCode)
 }
 
 // MatchICMPType mocks base method.
-func (m *MockFlowBuilder) MatchICMPType(arg0 byte) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchICMPType(icmpType byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchICMPType", arg0)
+	ret := m.ctrl.Call(m, "MatchICMPType", icmpType)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchICMPType indicates an expected call of MatchICMPType.
-func (mr *MockFlowBuilderMockRecorder) MatchICMPType(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchICMPType(icmpType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPType", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPType), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPType", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPType), icmpType)
 }
 
 // MatchICMPv6Code mocks base method.
-func (m *MockFlowBuilder) MatchICMPv6Code(arg0 byte) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchICMPv6Code(icmp6Code byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchICMPv6Code", arg0)
+	ret := m.ctrl.Call(m, "MatchICMPv6Code", icmp6Code)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchICMPv6Code indicates an expected call of MatchICMPv6Code.
-func (mr *MockFlowBuilderMockRecorder) MatchICMPv6Code(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchICMPv6Code(icmp6Code any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPv6Code", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPv6Code), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPv6Code", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPv6Code), icmp6Code)
 }
 
 // MatchICMPv6Type mocks base method.
-func (m *MockFlowBuilder) MatchICMPv6Type(arg0 byte) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchICMPv6Type(icmp6Type byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchICMPv6Type", arg0)
+	ret := m.ctrl.Call(m, "MatchICMPv6Type", icmp6Type)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchICMPv6Type indicates an expected call of MatchICMPv6Type.
-func (mr *MockFlowBuilderMockRecorder) MatchICMPv6Type(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchICMPv6Type(icmp6Type any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPv6Type", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPv6Type), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPv6Type", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPv6Type), icmp6Type)
 }
 
 // MatchIPDSCP mocks base method.
-func (m *MockFlowBuilder) MatchIPDSCP(arg0 byte) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchIPDSCP(dscp uint8) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchIPDSCP", arg0)
+	ret := m.ctrl.Call(m, "MatchIPDSCP", dscp)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchIPDSCP indicates an expected call of MatchIPDSCP.
-func (mr *MockFlowBuilderMockRecorder) MatchIPDSCP(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchIPDSCP(dscp any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchIPDSCP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchIPDSCP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchIPDSCP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchIPDSCP), dscp)
 }
 
 // MatchIPProtocolValue mocks base method.
-func (m *MockFlowBuilder) MatchIPProtocolValue(arg0 bool, arg1 byte) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchIPProtocolValue(isIPv6 bool, protoValue uint8) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchIPProtocolValue", arg0, arg1)
+	ret := m.ctrl.Call(m, "MatchIPProtocolValue", isIPv6, protoValue)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchIPProtocolValue indicates an expected call of MatchIPProtocolValue.
-func (mr *MockFlowBuilderMockRecorder) MatchIPProtocolValue(arg0, arg1 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchIPProtocolValue(isIPv6, protoValue any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchIPProtocolValue", reflect.TypeOf((*MockFlowBuilder)(nil).MatchIPProtocolValue), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchIPProtocolValue", reflect.TypeOf((*MockFlowBuilder)(nil).MatchIPProtocolValue), isIPv6, protoValue)
 }
 
 // MatchInPort mocks base method.
-func (m *MockFlowBuilder) MatchInPort(arg0 uint32) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchInPort(inPort uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchInPort", arg0)
+	ret := m.ctrl.Call(m, "MatchInPort", inPort)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchInPort indicates an expected call of MatchInPort.
-func (mr *MockFlowBuilderMockRecorder) MatchInPort(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchInPort(inPort any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchInPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchInPort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchInPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchInPort), inPort)
 }
 
 // MatchPktMark mocks base method.
-func (m *MockFlowBuilder) MatchPktMark(arg0 uint32, arg1 *uint32) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchPktMark(value uint32, mask *uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchPktMark", arg0, arg1)
+	ret := m.ctrl.Call(m, "MatchPktMark", value, mask)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchPktMark indicates an expected call of MatchPktMark.
-func (mr *MockFlowBuilderMockRecorder) MatchPktMark(arg0, arg1 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchPktMark(value, mask any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchPktMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchPktMark), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchPktMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchPktMark), value, mask)
 }
 
 // MatchPriority mocks base method.
@@ -1950,38 +1956,38 @@ func (mr *MockFlowBuilderMockRecorder) MatchPriority(arg0 any) *gomock.Call {
 }
 
 // MatchProtocol mocks base method.
-func (m *MockFlowBuilder) MatchProtocol(arg0 openflow.Protocol) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchProtocol(name openflow.Protocol) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchProtocol", arg0)
+	ret := m.ctrl.Call(m, "MatchProtocol", name)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchProtocol indicates an expected call of MatchProtocol.
-func (mr *MockFlowBuilderMockRecorder) MatchProtocol(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchProtocol(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchProtocol", reflect.TypeOf((*MockFlowBuilder)(nil).MatchProtocol), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchProtocol", reflect.TypeOf((*MockFlowBuilder)(nil).MatchProtocol), name)
 }
 
 // MatchRegFieldWithValue mocks base method.
-func (m *MockFlowBuilder) MatchRegFieldWithValue(arg0 *openflow.RegField, arg1 uint32) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchRegFieldWithValue(field *openflow.RegField, data uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchRegFieldWithValue", arg0, arg1)
+	ret := m.ctrl.Call(m, "MatchRegFieldWithValue", field, data)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchRegFieldWithValue indicates an expected call of MatchRegFieldWithValue.
-func (mr *MockFlowBuilderMockRecorder) MatchRegFieldWithValue(arg0, arg1 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchRegFieldWithValue(field, data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchRegFieldWithValue", reflect.TypeOf((*MockFlowBuilder)(nil).MatchRegFieldWithValue), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchRegFieldWithValue", reflect.TypeOf((*MockFlowBuilder)(nil).MatchRegFieldWithValue), field, data)
 }
 
 // MatchRegMark mocks base method.
-func (m *MockFlowBuilder) MatchRegMark(arg0 ...*openflow.RegMark) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchRegMark(marks ...*openflow.RegMark) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range marks {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "MatchRegMark", varargs...)
@@ -1990,169 +1996,170 @@ func (m *MockFlowBuilder) MatchRegMark(arg0 ...*openflow.RegMark) openflow.FlowB
 }
 
 // MatchRegMark indicates an expected call of MatchRegMark.
-func (mr *MockFlowBuilderMockRecorder) MatchRegMark(arg0 ...any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchRegMark(marks ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchRegMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchRegMark), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchRegMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchRegMark), marks...)
 }
 
 // MatchSrcIP mocks base method.
-func (m *MockFlowBuilder) MatchSrcIP(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchSrcIP(ip net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchSrcIP", arg0)
+	ret := m.ctrl.Call(m, "MatchSrcIP", ip)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchSrcIP indicates an expected call of MatchSrcIP.
-func (mr *MockFlowBuilderMockRecorder) MatchSrcIP(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchSrcIP(ip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcIP), ip)
 }
 
 // MatchSrcIPNet mocks base method.
-func (m *MockFlowBuilder) MatchSrcIPNet(arg0 net.IPNet) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchSrcIPNet(ipNet net.IPNet) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchSrcIPNet", arg0)
+	ret := m.ctrl.Call(m, "MatchSrcIPNet", ipNet)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchSrcIPNet indicates an expected call of MatchSrcIPNet.
-func (mr *MockFlowBuilderMockRecorder) MatchSrcIPNet(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchSrcIPNet(ipNet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcIPNet), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcIPNet), ipNet)
 }
 
 // MatchSrcMAC mocks base method.
-func (m *MockFlowBuilder) MatchSrcMAC(arg0 net.HardwareAddr) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchSrcMAC(mac net.HardwareAddr) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchSrcMAC", arg0)
+	ret := m.ctrl.Call(m, "MatchSrcMAC", mac)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchSrcMAC indicates an expected call of MatchSrcMAC.
-func (mr *MockFlowBuilderMockRecorder) MatchSrcMAC(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchSrcMAC(mac any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcMAC", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcMAC), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcMAC", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcMAC), mac)
 }
 
 // MatchSrcPort mocks base method.
-func (m *MockFlowBuilder) MatchSrcPort(arg0 uint16, arg1 *uint16) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchSrcPort(port uint16, portMask *uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchSrcPort", arg0, arg1)
+	ret := m.ctrl.Call(m, "MatchSrcPort", port, portMask)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchSrcPort indicates an expected call of MatchSrcPort.
-func (mr *MockFlowBuilderMockRecorder) MatchSrcPort(arg0, arg1 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchSrcPort(port, portMask any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcPort), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcPort), port, portMask)
 }
 
 // MatchTCPFlags mocks base method.
-func (m *MockFlowBuilder) MatchTCPFlags(arg0, arg1 uint16) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchTCPFlags(flag, mask uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchTCPFlags", arg0, arg1)
+	ret := m.ctrl.Call(m, "MatchTCPFlags", flag, mask)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchTCPFlags indicates an expected call of MatchTCPFlags.
-func (mr *MockFlowBuilderMockRecorder) MatchTCPFlags(arg0, arg1 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchTCPFlags(flag, mask any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTCPFlags", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTCPFlags), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTCPFlags", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTCPFlags), flag, mask)
 }
 
 // MatchTunnelDst mocks base method.
-func (m *MockFlowBuilder) MatchTunnelDst(arg0 net.IP) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchTunnelDst(dstIP net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchTunnelDst", arg0)
+	ret := m.ctrl.Call(m, "MatchTunnelDst", dstIP)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchTunnelDst indicates an expected call of MatchTunnelDst.
-func (mr *MockFlowBuilderMockRecorder) MatchTunnelDst(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchTunnelDst(dstIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunnelDst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunnelDst), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunnelDst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunnelDst), dstIP)
 }
 
 // MatchTunnelID mocks base method.
-func (m *MockFlowBuilder) MatchTunnelID(arg0 uint64) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchTunnelID(tunnelID uint64) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchTunnelID", arg0)
+	ret := m.ctrl.Call(m, "MatchTunnelID", tunnelID)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchTunnelID indicates an expected call of MatchTunnelID.
-func (mr *MockFlowBuilderMockRecorder) MatchTunnelID(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchTunnelID(tunnelID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunnelID", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunnelID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunnelID", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunnelID), tunnelID)
 }
 
 // MatchVLAN mocks base method.
-func (m *MockFlowBuilder) MatchVLAN(arg0 bool, arg1 uint16, arg2 *uint16) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchVLAN(nonVLAN bool, vlanId uint16, vlanMask *uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchVLAN", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "MatchVLAN", nonVLAN, vlanId, vlanMask)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchVLAN indicates an expected call of MatchVLAN.
-func (mr *MockFlowBuilderMockRecorder) MatchVLAN(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchVLAN(nonVLAN, vlanId, vlanMask any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchVLAN", reflect.TypeOf((*MockFlowBuilder)(nil).MatchVLAN), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchVLAN", reflect.TypeOf((*MockFlowBuilder)(nil).MatchVLAN), nonVLAN, vlanId, vlanMask)
 }
 
 // MatchXXReg mocks base method.
-func (m *MockFlowBuilder) MatchXXReg(arg0 int, arg1 []byte) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchXXReg(regID int, data []byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchXXReg", arg0, arg1)
+	ret := m.ctrl.Call(m, "MatchXXReg", regID, data)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchXXReg indicates an expected call of MatchXXReg.
-func (mr *MockFlowBuilderMockRecorder) MatchXXReg(arg0, arg1 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchXXReg(regID, data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchXXReg", reflect.TypeOf((*MockFlowBuilder)(nil).MatchXXReg), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchXXReg", reflect.TypeOf((*MockFlowBuilder)(nil).MatchXXReg), regID, data)
 }
 
 // SetHardTimeout mocks base method.
-func (m *MockFlowBuilder) SetHardTimeout(arg0 uint16) openflow.FlowBuilder {
+func (m *MockFlowBuilder) SetHardTimeout(timout uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetHardTimeout", arg0)
+	ret := m.ctrl.Call(m, "SetHardTimeout", timout)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetHardTimeout indicates an expected call of SetHardTimeout.
-func (mr *MockFlowBuilderMockRecorder) SetHardTimeout(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) SetHardTimeout(timout any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHardTimeout", reflect.TypeOf((*MockFlowBuilder)(nil).SetHardTimeout), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHardTimeout", reflect.TypeOf((*MockFlowBuilder)(nil).SetHardTimeout), timout)
 }
 
 // SetIdleTimeout mocks base method.
-func (m *MockFlowBuilder) SetIdleTimeout(arg0 uint16) openflow.FlowBuilder {
+func (m *MockFlowBuilder) SetIdleTimeout(timeout uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetIdleTimeout", arg0)
+	ret := m.ctrl.Call(m, "SetIdleTimeout", timeout)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SetIdleTimeout indicates an expected call of SetIdleTimeout.
-func (mr *MockFlowBuilderMockRecorder) SetIdleTimeout(arg0 any) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) SetIdleTimeout(timeout any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIdleTimeout", reflect.TypeOf((*MockFlowBuilder)(nil).SetIdleTimeout), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIdleTimeout", reflect.TypeOf((*MockFlowBuilder)(nil).SetIdleTimeout), timeout)
 }
 
 // MockGroup is a mock of Group interface.
 type MockGroup struct {
 	ctrl     *gomock.Controller
 	recorder *MockGroupMockRecorder
+	isgomock struct{}
 }
 
 // MockGroupMockRecorder is the mock recorder for MockGroup.
@@ -2215,18 +2222,18 @@ func (mr *MockGroupMockRecorder) Delete() *gomock.Call {
 }
 
 // GetBundleMessages mocks base method.
-func (m *MockGroup) GetBundleMessages(arg0 openflow.OFOperation) ([]ofctrl.OpenFlowModMessage, error) {
+func (m *MockGroup) GetBundleMessages(operation openflow.OFOperation) ([]ofctrl.OpenFlowModMessage, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBundleMessages", arg0)
+	ret := m.ctrl.Call(m, "GetBundleMessages", operation)
 	ret0, _ := ret[0].([]ofctrl.OpenFlowModMessage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBundleMessages indicates an expected call of GetBundleMessages.
-func (mr *MockGroupMockRecorder) GetBundleMessages(arg0 any) *gomock.Call {
+func (mr *MockGroupMockRecorder) GetBundleMessages(operation any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockGroup)(nil).GetBundleMessages), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockGroup)(nil).GetBundleMessages), operation)
 }
 
 // GetID mocks base method.
@@ -2301,6 +2308,7 @@ func (mr *MockGroupMockRecorder) Type() *gomock.Call {
 type MockBucketBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MockBucketBuilderMockRecorder
+	isgomock struct{}
 }
 
 // MockBucketBuilderMockRecorder is the mock recorder for MockBucketBuilder.
@@ -2335,93 +2343,94 @@ func (mr *MockBucketBuilderMockRecorder) Done() *gomock.Call {
 }
 
 // LoadRegMark mocks base method.
-func (m *MockBucketBuilder) LoadRegMark(arg0 *openflow.RegMark) openflow.BucketBuilder {
+func (m *MockBucketBuilder) LoadRegMark(mark *openflow.RegMark) openflow.BucketBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadRegMark", arg0)
+	ret := m.ctrl.Call(m, "LoadRegMark", mark)
 	ret0, _ := ret[0].(openflow.BucketBuilder)
 	return ret0
 }
 
 // LoadRegMark indicates an expected call of LoadRegMark.
-func (mr *MockBucketBuilderMockRecorder) LoadRegMark(arg0 any) *gomock.Call {
+func (mr *MockBucketBuilderMockRecorder) LoadRegMark(mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRegMark", reflect.TypeOf((*MockBucketBuilder)(nil).LoadRegMark), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRegMark", reflect.TypeOf((*MockBucketBuilder)(nil).LoadRegMark), mark)
 }
 
 // LoadToRegField mocks base method.
-func (m *MockBucketBuilder) LoadToRegField(arg0 *openflow.RegField, arg1 uint32) openflow.BucketBuilder {
+func (m *MockBucketBuilder) LoadToRegField(field *openflow.RegField, data uint32) openflow.BucketBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadToRegField", arg0, arg1)
+	ret := m.ctrl.Call(m, "LoadToRegField", field, data)
 	ret0, _ := ret[0].(openflow.BucketBuilder)
 	return ret0
 }
 
 // LoadToRegField indicates an expected call of LoadToRegField.
-func (mr *MockBucketBuilderMockRecorder) LoadToRegField(arg0, arg1 any) *gomock.Call {
+func (mr *MockBucketBuilderMockRecorder) LoadToRegField(field, data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToRegField", reflect.TypeOf((*MockBucketBuilder)(nil).LoadToRegField), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToRegField", reflect.TypeOf((*MockBucketBuilder)(nil).LoadToRegField), field, data)
 }
 
 // LoadXXReg mocks base method.
-func (m *MockBucketBuilder) LoadXXReg(arg0 int, arg1 []byte) openflow.BucketBuilder {
+func (m *MockBucketBuilder) LoadXXReg(regID int, data []byte) openflow.BucketBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadXXReg", arg0, arg1)
+	ret := m.ctrl.Call(m, "LoadXXReg", regID, data)
 	ret0, _ := ret[0].(openflow.BucketBuilder)
 	return ret0
 }
 
 // LoadXXReg indicates an expected call of LoadXXReg.
-func (mr *MockBucketBuilderMockRecorder) LoadXXReg(arg0, arg1 any) *gomock.Call {
+func (mr *MockBucketBuilderMockRecorder) LoadXXReg(regID, data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadXXReg", reflect.TypeOf((*MockBucketBuilder)(nil).LoadXXReg), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadXXReg", reflect.TypeOf((*MockBucketBuilder)(nil).LoadXXReg), regID, data)
 }
 
 // ResubmitToTable mocks base method.
-func (m *MockBucketBuilder) ResubmitToTable(arg0 byte) openflow.BucketBuilder {
+func (m *MockBucketBuilder) ResubmitToTable(tableID uint8) openflow.BucketBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResubmitToTable", arg0)
+	ret := m.ctrl.Call(m, "ResubmitToTable", tableID)
 	ret0, _ := ret[0].(openflow.BucketBuilder)
 	return ret0
 }
 
 // ResubmitToTable indicates an expected call of ResubmitToTable.
-func (mr *MockBucketBuilderMockRecorder) ResubmitToTable(arg0 any) *gomock.Call {
+func (mr *MockBucketBuilderMockRecorder) ResubmitToTable(tableID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResubmitToTable", reflect.TypeOf((*MockBucketBuilder)(nil).ResubmitToTable), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResubmitToTable", reflect.TypeOf((*MockBucketBuilder)(nil).ResubmitToTable), tableID)
 }
 
 // SetTunnelDst mocks base method.
-func (m *MockBucketBuilder) SetTunnelDst(arg0 net.IP) openflow.BucketBuilder {
+func (m *MockBucketBuilder) SetTunnelDst(addr net.IP) openflow.BucketBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTunnelDst", arg0)
+	ret := m.ctrl.Call(m, "SetTunnelDst", addr)
 	ret0, _ := ret[0].(openflow.BucketBuilder)
 	return ret0
 }
 
 // SetTunnelDst indicates an expected call of SetTunnelDst.
-func (mr *MockBucketBuilderMockRecorder) SetTunnelDst(arg0 any) *gomock.Call {
+func (mr *MockBucketBuilderMockRecorder) SetTunnelDst(addr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTunnelDst", reflect.TypeOf((*MockBucketBuilder)(nil).SetTunnelDst), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTunnelDst", reflect.TypeOf((*MockBucketBuilder)(nil).SetTunnelDst), addr)
 }
 
 // Weight mocks base method.
-func (m *MockBucketBuilder) Weight(arg0 uint16) openflow.BucketBuilder {
+func (m *MockBucketBuilder) Weight(val uint16) openflow.BucketBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Weight", arg0)
+	ret := m.ctrl.Call(m, "Weight", val)
 	ret0, _ := ret[0].(openflow.BucketBuilder)
 	return ret0
 }
 
 // Weight indicates an expected call of Weight.
-func (mr *MockBucketBuilderMockRecorder) Weight(arg0 any) *gomock.Call {
+func (mr *MockBucketBuilderMockRecorder) Weight(val any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Weight", reflect.TypeOf((*MockBucketBuilder)(nil).Weight), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Weight", reflect.TypeOf((*MockBucketBuilder)(nil).Weight), val)
 }
 
 // MockPacketOutBuilder is a mock of PacketOutBuilder interface.
 type MockPacketOutBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MockPacketOutBuilderMockRecorder
+	isgomock struct{}
 }
 
 // MockPacketOutBuilderMockRecorder is the mock recorder for MockPacketOutBuilder.
@@ -2442,45 +2451,45 @@ func (m *MockPacketOutBuilder) EXPECT() *MockPacketOutBuilderMockRecorder {
 }
 
 // AddLoadRegMark mocks base method.
-func (m *MockPacketOutBuilder) AddLoadRegMark(arg0 *openflow.RegMark) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) AddLoadRegMark(mark *openflow.RegMark) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddLoadRegMark", arg0)
+	ret := m.ctrl.Call(m, "AddLoadRegMark", mark)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // AddLoadRegMark indicates an expected call of AddLoadRegMark.
-func (mr *MockPacketOutBuilderMockRecorder) AddLoadRegMark(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) AddLoadRegMark(mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLoadRegMark", reflect.TypeOf((*MockPacketOutBuilder)(nil).AddLoadRegMark), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLoadRegMark", reflect.TypeOf((*MockPacketOutBuilder)(nil).AddLoadRegMark), mark)
 }
 
 // AddResubmitAction mocks base method.
-func (m *MockPacketOutBuilder) AddResubmitAction(arg0 *uint16, arg1 *byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) AddResubmitAction(inPort *uint16, table *uint8) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddResubmitAction", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddResubmitAction", inPort, table)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // AddResubmitAction indicates an expected call of AddResubmitAction.
-func (mr *MockPacketOutBuilderMockRecorder) AddResubmitAction(arg0, arg1 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) AddResubmitAction(inPort, table any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddResubmitAction", reflect.TypeOf((*MockPacketOutBuilder)(nil).AddResubmitAction), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddResubmitAction", reflect.TypeOf((*MockPacketOutBuilder)(nil).AddResubmitAction), inPort, table)
 }
 
 // AddSetIPTOSAction mocks base method.
-func (m *MockPacketOutBuilder) AddSetIPTOSAction(arg0 byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) AddSetIPTOSAction(data uint8) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddSetIPTOSAction", arg0)
+	ret := m.ctrl.Call(m, "AddSetIPTOSAction", data)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // AddSetIPTOSAction indicates an expected call of AddSetIPTOSAction.
-func (mr *MockPacketOutBuilderMockRecorder) AddSetIPTOSAction(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) AddSetIPTOSAction(data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSetIPTOSAction", reflect.TypeOf((*MockPacketOutBuilder)(nil).AddSetIPTOSAction), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSetIPTOSAction", reflect.TypeOf((*MockPacketOutBuilder)(nil).AddSetIPTOSAction), data)
 }
 
 // Done mocks base method.
@@ -2498,415 +2507,416 @@ func (mr *MockPacketOutBuilderMockRecorder) Done() *gomock.Call {
 }
 
 // SetDstIP mocks base method.
-func (m *MockPacketOutBuilder) SetDstIP(arg0 net.IP) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetDstIP(ip net.IP) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetDstIP", arg0)
+	ret := m.ctrl.Call(m, "SetDstIP", ip)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetDstIP indicates an expected call of SetDstIP.
-func (mr *MockPacketOutBuilderMockRecorder) SetDstIP(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetDstIP(ip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDstIP", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetDstIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDstIP", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetDstIP), ip)
 }
 
 // SetDstMAC mocks base method.
-func (m *MockPacketOutBuilder) SetDstMAC(arg0 net.HardwareAddr) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetDstMAC(mac net.HardwareAddr) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetDstMAC", arg0)
+	ret := m.ctrl.Call(m, "SetDstMAC", mac)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetDstMAC indicates an expected call of SetDstMAC.
-func (mr *MockPacketOutBuilderMockRecorder) SetDstMAC(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetDstMAC(mac any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDstMAC", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetDstMAC), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDstMAC", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetDstMAC), mac)
 }
 
 // SetEthPacket mocks base method.
-func (m *MockPacketOutBuilder) SetEthPacket(arg0 *protocol.Ethernet) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetEthPacket(packet *protocol.Ethernet) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetEthPacket", arg0)
+	ret := m.ctrl.Call(m, "SetEthPacket", packet)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetEthPacket indicates an expected call of SetEthPacket.
-func (mr *MockPacketOutBuilderMockRecorder) SetEthPacket(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetEthPacket(packet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEthPacket", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetEthPacket), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEthPacket", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetEthPacket), packet)
 }
 
 // SetICMPCode mocks base method.
-func (m *MockPacketOutBuilder) SetICMPCode(arg0 byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetICMPCode(icmpCode uint8) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetICMPCode", arg0)
+	ret := m.ctrl.Call(m, "SetICMPCode", icmpCode)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetICMPCode indicates an expected call of SetICMPCode.
-func (mr *MockPacketOutBuilderMockRecorder) SetICMPCode(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetICMPCode(icmpCode any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPCode", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPCode), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPCode", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPCode), icmpCode)
 }
 
 // SetICMPData mocks base method.
-func (m *MockPacketOutBuilder) SetICMPData(arg0 []byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetICMPData(data []byte) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetICMPData", arg0)
+	ret := m.ctrl.Call(m, "SetICMPData", data)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetICMPData indicates an expected call of SetICMPData.
-func (mr *MockPacketOutBuilderMockRecorder) SetICMPData(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetICMPData(data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPData", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPData), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPData", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPData), data)
 }
 
 // SetICMPID mocks base method.
-func (m *MockPacketOutBuilder) SetICMPID(arg0 uint16) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetICMPID(id uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetICMPID", arg0)
+	ret := m.ctrl.Call(m, "SetICMPID", id)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetICMPID indicates an expected call of SetICMPID.
-func (mr *MockPacketOutBuilderMockRecorder) SetICMPID(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetICMPID(id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPID", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPID", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPID), id)
 }
 
 // SetICMPSequence mocks base method.
-func (m *MockPacketOutBuilder) SetICMPSequence(arg0 uint16) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetICMPSequence(seq uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetICMPSequence", arg0)
+	ret := m.ctrl.Call(m, "SetICMPSequence", seq)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetICMPSequence indicates an expected call of SetICMPSequence.
-func (mr *MockPacketOutBuilderMockRecorder) SetICMPSequence(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetICMPSequence(seq any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPSequence", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPSequence), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPSequence", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPSequence), seq)
 }
 
 // SetICMPType mocks base method.
-func (m *MockPacketOutBuilder) SetICMPType(arg0 byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetICMPType(icmpType uint8) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetICMPType", arg0)
+	ret := m.ctrl.Call(m, "SetICMPType", icmpType)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetICMPType indicates an expected call of SetICMPType.
-func (mr *MockPacketOutBuilderMockRecorder) SetICMPType(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetICMPType(icmpType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPType", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPType), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetICMPType", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetICMPType), icmpType)
 }
 
 // SetIPFlags mocks base method.
-func (m *MockPacketOutBuilder) SetIPFlags(arg0 uint16) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetIPFlags(flags uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetIPFlags", arg0)
+	ret := m.ctrl.Call(m, "SetIPFlags", flags)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetIPFlags indicates an expected call of SetIPFlags.
-func (mr *MockPacketOutBuilderMockRecorder) SetIPFlags(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetIPFlags(flags any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPFlags", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPFlags), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPFlags", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPFlags), flags)
 }
 
 // SetIPHeaderID mocks base method.
-func (m *MockPacketOutBuilder) SetIPHeaderID(arg0 uint16) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetIPHeaderID(id uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetIPHeaderID", arg0)
+	ret := m.ctrl.Call(m, "SetIPHeaderID", id)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetIPHeaderID indicates an expected call of SetIPHeaderID.
-func (mr *MockPacketOutBuilderMockRecorder) SetIPHeaderID(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetIPHeaderID(id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPHeaderID", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPHeaderID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPHeaderID", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPHeaderID), id)
 }
 
 // SetIPProtocol mocks base method.
-func (m *MockPacketOutBuilder) SetIPProtocol(arg0 openflow.Protocol) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetIPProtocol(protocol openflow.Protocol) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetIPProtocol", arg0)
+	ret := m.ctrl.Call(m, "SetIPProtocol", protocol)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetIPProtocol indicates an expected call of SetIPProtocol.
-func (mr *MockPacketOutBuilderMockRecorder) SetIPProtocol(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetIPProtocol(protocol any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPProtocol", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPProtocol), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPProtocol", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPProtocol), protocol)
 }
 
 // SetIPProtocolValue mocks base method.
-func (m *MockPacketOutBuilder) SetIPProtocolValue(arg0 bool, arg1 byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetIPProtocolValue(isIPv6 bool, protoValue uint8) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetIPProtocolValue", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetIPProtocolValue", isIPv6, protoValue)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetIPProtocolValue indicates an expected call of SetIPProtocolValue.
-func (mr *MockPacketOutBuilderMockRecorder) SetIPProtocolValue(arg0, arg1 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetIPProtocolValue(isIPv6, protoValue any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPProtocolValue", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPProtocolValue), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPProtocolValue", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPProtocolValue), isIPv6, protoValue)
 }
 
 // SetInport mocks base method.
-func (m *MockPacketOutBuilder) SetInport(arg0 uint32) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetInport(inPort uint32) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetInport", arg0)
+	ret := m.ctrl.Call(m, "SetInport", inPort)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetInport indicates an expected call of SetInport.
-func (mr *MockPacketOutBuilderMockRecorder) SetInport(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetInport(inPort any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInport", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetInport), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInport", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetInport), inPort)
 }
 
 // SetL4Packet mocks base method.
-func (m *MockPacketOutBuilder) SetL4Packet(arg0 util.Message) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetL4Packet(packet util.Message) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetL4Packet", arg0)
+	ret := m.ctrl.Call(m, "SetL4Packet", packet)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetL4Packet indicates an expected call of SetL4Packet.
-func (mr *MockPacketOutBuilderMockRecorder) SetL4Packet(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetL4Packet(packet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetL4Packet", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetL4Packet), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetL4Packet", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetL4Packet), packet)
 }
 
 // SetOutport mocks base method.
-func (m *MockPacketOutBuilder) SetOutport(arg0 uint32) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetOutport(outport uint32) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetOutport", arg0)
+	ret := m.ctrl.Call(m, "SetOutport", outport)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetOutport indicates an expected call of SetOutport.
-func (mr *MockPacketOutBuilderMockRecorder) SetOutport(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetOutport(outport any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetOutport", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetOutport), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetOutport", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetOutport), outport)
 }
 
 // SetSrcIP mocks base method.
-func (m *MockPacketOutBuilder) SetSrcIP(arg0 net.IP) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetSrcIP(ip net.IP) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetSrcIP", arg0)
+	ret := m.ctrl.Call(m, "SetSrcIP", ip)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetSrcIP indicates an expected call of SetSrcIP.
-func (mr *MockPacketOutBuilderMockRecorder) SetSrcIP(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetSrcIP(ip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSrcIP", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetSrcIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSrcIP", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetSrcIP), ip)
 }
 
 // SetSrcMAC mocks base method.
-func (m *MockPacketOutBuilder) SetSrcMAC(arg0 net.HardwareAddr) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetSrcMAC(mac net.HardwareAddr) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetSrcMAC", arg0)
+	ret := m.ctrl.Call(m, "SetSrcMAC", mac)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetSrcMAC indicates an expected call of SetSrcMAC.
-func (mr *MockPacketOutBuilderMockRecorder) SetSrcMAC(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetSrcMAC(mac any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSrcMAC", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetSrcMAC), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSrcMAC", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetSrcMAC), mac)
 }
 
 // SetTCPAckNum mocks base method.
-func (m *MockPacketOutBuilder) SetTCPAckNum(arg0 uint32) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetTCPAckNum(ackNum uint32) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTCPAckNum", arg0)
+	ret := m.ctrl.Call(m, "SetTCPAckNum", ackNum)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetTCPAckNum indicates an expected call of SetTCPAckNum.
-func (mr *MockPacketOutBuilderMockRecorder) SetTCPAckNum(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPAckNum(ackNum any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPAckNum", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPAckNum), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPAckNum", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPAckNum), ackNum)
 }
 
 // SetTCPData mocks base method.
-func (m *MockPacketOutBuilder) SetTCPData(arg0 []byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetTCPData(data []byte) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTCPData", arg0)
+	ret := m.ctrl.Call(m, "SetTCPData", data)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetTCPData indicates an expected call of SetTCPData.
-func (mr *MockPacketOutBuilderMockRecorder) SetTCPData(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPData(data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPData", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPData), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPData", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPData), data)
 }
 
 // SetTCPDstPort mocks base method.
-func (m *MockPacketOutBuilder) SetTCPDstPort(arg0 uint16) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetTCPDstPort(port uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTCPDstPort", arg0)
+	ret := m.ctrl.Call(m, "SetTCPDstPort", port)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetTCPDstPort indicates an expected call of SetTCPDstPort.
-func (mr *MockPacketOutBuilderMockRecorder) SetTCPDstPort(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPDstPort(port any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPDstPort", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPDstPort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPDstPort", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPDstPort), port)
 }
 
 // SetTCPFlags mocks base method.
-func (m *MockPacketOutBuilder) SetTCPFlags(arg0 byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetTCPFlags(flags uint8) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTCPFlags", arg0)
+	ret := m.ctrl.Call(m, "SetTCPFlags", flags)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetTCPFlags indicates an expected call of SetTCPFlags.
-func (mr *MockPacketOutBuilderMockRecorder) SetTCPFlags(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPFlags(flags any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPFlags", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPFlags), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPFlags", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPFlags), flags)
 }
 
 // SetTCPHdrLen mocks base method.
-func (m *MockPacketOutBuilder) SetTCPHdrLen(arg0 byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetTCPHdrLen(hdrLen uint8) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTCPHdrLen", arg0)
+	ret := m.ctrl.Call(m, "SetTCPHdrLen", hdrLen)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetTCPHdrLen indicates an expected call of SetTCPHdrLen.
-func (mr *MockPacketOutBuilderMockRecorder) SetTCPHdrLen(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPHdrLen(hdrLen any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPHdrLen", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPHdrLen), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPHdrLen", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPHdrLen), hdrLen)
 }
 
 // SetTCPSeqNum mocks base method.
-func (m *MockPacketOutBuilder) SetTCPSeqNum(arg0 uint32) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetTCPSeqNum(seqNum uint32) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTCPSeqNum", arg0)
+	ret := m.ctrl.Call(m, "SetTCPSeqNum", seqNum)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetTCPSeqNum indicates an expected call of SetTCPSeqNum.
-func (mr *MockPacketOutBuilderMockRecorder) SetTCPSeqNum(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPSeqNum(seqNum any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPSeqNum", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPSeqNum), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPSeqNum", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPSeqNum), seqNum)
 }
 
 // SetTCPSrcPort mocks base method.
-func (m *MockPacketOutBuilder) SetTCPSrcPort(arg0 uint16) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetTCPSrcPort(port uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTCPSrcPort", arg0)
+	ret := m.ctrl.Call(m, "SetTCPSrcPort", port)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetTCPSrcPort indicates an expected call of SetTCPSrcPort.
-func (mr *MockPacketOutBuilderMockRecorder) SetTCPSrcPort(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPSrcPort(port any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPSrcPort", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPSrcPort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPSrcPort", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPSrcPort), port)
 }
 
 // SetTCPWinSize mocks base method.
-func (m *MockPacketOutBuilder) SetTCPWinSize(arg0 uint16) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetTCPWinSize(winSize uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTCPWinSize", arg0)
+	ret := m.ctrl.Call(m, "SetTCPWinSize", winSize)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetTCPWinSize indicates an expected call of SetTCPWinSize.
-func (mr *MockPacketOutBuilderMockRecorder) SetTCPWinSize(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPWinSize(winSize any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPWinSize", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPWinSize), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPWinSize", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPWinSize), winSize)
 }
 
 // SetTTL mocks base method.
-func (m *MockPacketOutBuilder) SetTTL(arg0 byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetTTL(ttl uint8) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTTL", arg0)
+	ret := m.ctrl.Call(m, "SetTTL", ttl)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetTTL indicates an expected call of SetTTL.
-func (mr *MockPacketOutBuilderMockRecorder) SetTTL(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetTTL(ttl any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTTL", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTTL), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTTL", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTTL), ttl)
 }
 
 // SetUDPData mocks base method.
-func (m *MockPacketOutBuilder) SetUDPData(arg0 []byte) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetUDPData(data []byte) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetUDPData", arg0)
+	ret := m.ctrl.Call(m, "SetUDPData", data)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetUDPData indicates an expected call of SetUDPData.
-func (mr *MockPacketOutBuilderMockRecorder) SetUDPData(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetUDPData(data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUDPData", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetUDPData), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUDPData", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetUDPData), data)
 }
 
 // SetUDPDstPort mocks base method.
-func (m *MockPacketOutBuilder) SetUDPDstPort(arg0 uint16) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetUDPDstPort(port uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetUDPDstPort", arg0)
+	ret := m.ctrl.Call(m, "SetUDPDstPort", port)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetUDPDstPort indicates an expected call of SetUDPDstPort.
-func (mr *MockPacketOutBuilderMockRecorder) SetUDPDstPort(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetUDPDstPort(port any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUDPDstPort", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetUDPDstPort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUDPDstPort", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetUDPDstPort), port)
 }
 
 // SetUDPSrcPort mocks base method.
-func (m *MockPacketOutBuilder) SetUDPSrcPort(arg0 uint16) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetUDPSrcPort(port uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetUDPSrcPort", arg0)
+	ret := m.ctrl.Call(m, "SetUDPSrcPort", port)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetUDPSrcPort indicates an expected call of SetUDPSrcPort.
-func (mr *MockPacketOutBuilderMockRecorder) SetUDPSrcPort(arg0 any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetUDPSrcPort(port any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUDPSrcPort", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetUDPSrcPort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUDPSrcPort", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetUDPSrcPort), port)
 }
 
 // MockMeter is a mock of Meter interface.
 type MockMeter struct {
 	ctrl     *gomock.Controller
 	recorder *MockMeterMockRecorder
+	isgomock struct{}
 }
 
 // MockMeterMockRecorder is the mock recorder for MockMeter.
@@ -2955,18 +2965,18 @@ func (mr *MockMeterMockRecorder) Delete() *gomock.Call {
 }
 
 // GetBundleMessages mocks base method.
-func (m *MockMeter) GetBundleMessages(arg0 openflow.OFOperation) ([]ofctrl.OpenFlowModMessage, error) {
+func (m *MockMeter) GetBundleMessages(operation openflow.OFOperation) ([]ofctrl.OpenFlowModMessage, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBundleMessages", arg0)
+	ret := m.ctrl.Call(m, "GetBundleMessages", operation)
 	ret0, _ := ret[0].([]ofctrl.OpenFlowModMessage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBundleMessages indicates an expected call of GetBundleMessages.
-func (mr *MockMeterMockRecorder) GetBundleMessages(arg0 any) *gomock.Call {
+func (mr *MockMeterMockRecorder) GetBundleMessages(operation any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockMeter)(nil).GetBundleMessages), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockMeter)(nil).GetBundleMessages), operation)
 }
 
 // MeterBand mocks base method.
@@ -3041,6 +3051,7 @@ func (mr *MockMeterMockRecorder) Type() *gomock.Call {
 type MockMeterBandBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MockMeterBandBuilderMockRecorder
+	isgomock struct{}
 }
 
 // MockMeterBandBuilderMockRecorder is the mock recorder for MockMeterBandBuilder.
@@ -3061,17 +3072,17 @@ func (m *MockMeterBandBuilder) EXPECT() *MockMeterBandBuilderMockRecorder {
 }
 
 // Burst mocks base method.
-func (m *MockMeterBandBuilder) Burst(arg0 uint32) openflow.MeterBandBuilder {
+func (m *MockMeterBandBuilder) Burst(burst uint32) openflow.MeterBandBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Burst", arg0)
+	ret := m.ctrl.Call(m, "Burst", burst)
 	ret0, _ := ret[0].(openflow.MeterBandBuilder)
 	return ret0
 }
 
 // Burst indicates an expected call of Burst.
-func (mr *MockMeterBandBuilderMockRecorder) Burst(arg0 any) *gomock.Call {
+func (mr *MockMeterBandBuilderMockRecorder) Burst(burst any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Burst", reflect.TypeOf((*MockMeterBandBuilder)(nil).Burst), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Burst", reflect.TypeOf((*MockMeterBandBuilder)(nil).Burst), burst)
 }
 
 // Done mocks base method.
@@ -3089,57 +3100,57 @@ func (mr *MockMeterBandBuilderMockRecorder) Done() *gomock.Call {
 }
 
 // Experimenter mocks base method.
-func (m *MockMeterBandBuilder) Experimenter(arg0 uint32) openflow.MeterBandBuilder {
+func (m *MockMeterBandBuilder) Experimenter(experimenter uint32) openflow.MeterBandBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Experimenter", arg0)
+	ret := m.ctrl.Call(m, "Experimenter", experimenter)
 	ret0, _ := ret[0].(openflow.MeterBandBuilder)
 	return ret0
 }
 
 // Experimenter indicates an expected call of Experimenter.
-func (mr *MockMeterBandBuilderMockRecorder) Experimenter(arg0 any) *gomock.Call {
+func (mr *MockMeterBandBuilderMockRecorder) Experimenter(experimenter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Experimenter", reflect.TypeOf((*MockMeterBandBuilder)(nil).Experimenter), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Experimenter", reflect.TypeOf((*MockMeterBandBuilder)(nil).Experimenter), experimenter)
 }
 
 // MeterType mocks base method.
-func (m *MockMeterBandBuilder) MeterType(arg0 ofctrl.MeterType) openflow.MeterBandBuilder {
+func (m *MockMeterBandBuilder) MeterType(meterType ofctrl.MeterType) openflow.MeterBandBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MeterType", arg0)
+	ret := m.ctrl.Call(m, "MeterType", meterType)
 	ret0, _ := ret[0].(openflow.MeterBandBuilder)
 	return ret0
 }
 
 // MeterType indicates an expected call of MeterType.
-func (mr *MockMeterBandBuilderMockRecorder) MeterType(arg0 any) *gomock.Call {
+func (mr *MockMeterBandBuilderMockRecorder) MeterType(meterType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MeterType", reflect.TypeOf((*MockMeterBandBuilder)(nil).MeterType), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MeterType", reflect.TypeOf((*MockMeterBandBuilder)(nil).MeterType), meterType)
 }
 
 // PrecLevel mocks base method.
-func (m *MockMeterBandBuilder) PrecLevel(arg0 byte) openflow.MeterBandBuilder {
+func (m *MockMeterBandBuilder) PrecLevel(precLevel uint8) openflow.MeterBandBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PrecLevel", arg0)
+	ret := m.ctrl.Call(m, "PrecLevel", precLevel)
 	ret0, _ := ret[0].(openflow.MeterBandBuilder)
 	return ret0
 }
 
 // PrecLevel indicates an expected call of PrecLevel.
-func (mr *MockMeterBandBuilderMockRecorder) PrecLevel(arg0 any) *gomock.Call {
+func (mr *MockMeterBandBuilderMockRecorder) PrecLevel(precLevel any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrecLevel", reflect.TypeOf((*MockMeterBandBuilder)(nil).PrecLevel), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrecLevel", reflect.TypeOf((*MockMeterBandBuilder)(nil).PrecLevel), precLevel)
 }
 
 // Rate mocks base method.
-func (m *MockMeterBandBuilder) Rate(arg0 uint32) openflow.MeterBandBuilder {
+func (m *MockMeterBandBuilder) Rate(rate uint32) openflow.MeterBandBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Rate", arg0)
+	ret := m.ctrl.Call(m, "Rate", rate)
 	ret0, _ := ret[0].(openflow.MeterBandBuilder)
 	return ret0
 }
 
 // Rate indicates an expected call of Rate.
-func (mr *MockMeterBandBuilderMockRecorder) Rate(arg0 any) *gomock.Call {
+func (mr *MockMeterBandBuilderMockRecorder) Rate(rate any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rate", reflect.TypeOf((*MockMeterBandBuilder)(nil).Rate), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rate", reflect.TypeOf((*MockMeterBandBuilder)(nil).Rate), rate)
 }

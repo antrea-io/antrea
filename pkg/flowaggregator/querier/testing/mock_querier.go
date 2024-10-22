@@ -36,6 +36,7 @@ import (
 type MockFlowAggregatorQuerier struct {
 	ctrl     *gomock.Controller
 	recorder *MockFlowAggregatorQuerierMockRecorder
+	isgomock struct{}
 }
 
 // MockFlowAggregatorQuerierMockRecorder is the mock recorder for MockFlowAggregatorQuerier.
@@ -56,17 +57,17 @@ func (m *MockFlowAggregatorQuerier) EXPECT() *MockFlowAggregatorQuerierMockRecor
 }
 
 // GetFlowRecords mocks base method.
-func (m *MockFlowAggregatorQuerier) GetFlowRecords(arg0 *intermediate.FlowKey) []map[string]any {
+func (m *MockFlowAggregatorQuerier) GetFlowRecords(flowKey *intermediate.FlowKey) []map[string]any {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetFlowRecords", arg0)
+	ret := m.ctrl.Call(m, "GetFlowRecords", flowKey)
 	ret0, _ := ret[0].([]map[string]any)
 	return ret0
 }
 
 // GetFlowRecords indicates an expected call of GetFlowRecords.
-func (mr *MockFlowAggregatorQuerierMockRecorder) GetFlowRecords(arg0 any) *gomock.Call {
+func (mr *MockFlowAggregatorQuerierMockRecorder) GetFlowRecords(flowKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFlowRecords", reflect.TypeOf((*MockFlowAggregatorQuerier)(nil).GetFlowRecords), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFlowRecords", reflect.TypeOf((*MockFlowAggregatorQuerier)(nil).GetFlowRecords), flowKey)
 }
 
 // GetRecordMetrics mocks base method.
