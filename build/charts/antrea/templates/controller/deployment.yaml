@@ -125,7 +125,6 @@ spec:
               path: /readyz
               port: api
               scheme: HTTPS
-            initialDelaySeconds: 5
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 5

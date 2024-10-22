@@ -5268,7 +5268,6 @@ spec:
               path: /readyz
               port: api
               scheme: HTTPS
-            initialDelaySeconds: 5
             timeoutSeconds: 5
             periodSeconds: 10
             # In large-scale clusters, it may take up to 40~50 seconds for the antrea-agent to reconnect to the antrea
@@ -5335,7 +5334,6 @@ spec:
                 - /bin/sh
                 - -c
                 - timeout 10 container_liveness_probe ovs
-            initialDelaySeconds: 5
             timeoutSeconds: 10
             periodSeconds: 10
             failureThreshold: 5
@@ -5473,7 +5471,6 @@ spec:
               path: /readyz
               port: api
               scheme: HTTPS
-            initialDelaySeconds: 5
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 5
