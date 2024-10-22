@@ -12,6 +12,10 @@ on:
         description: 'The released Antrea version to scan'
         type: string
         required: false
+      no-cache:
+        description: 'Do not use a cached Trivy DB'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -35,6 +39,33 @@ jobs:
         docker pull antrea/antrea-agent-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}
         docker pull antrea/antrea-controller-ubuntu:latest
         docker pull antrea/antrea-controller-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}
+    - name: Install Trivy
+      uses: aquasecurity/setup-trivy@v0.2.1
+    - name: Get current UTC date
+      id: date
+      run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+    - name: Restore Trivy DB cache
+      if: ${{ !inputs.no-cache }}
+      id: restore-db-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ github.workspace }}/.cache/trivy
+        key: cache-trivy-db-${{ steps.date.outputs.date }}
+        restore-keys: cache-trivy-db-
+    - name: Download Trivy DB
+      # We download the DB at most once a day, when there is no cache hit.
+      if: ${{ inputs.no-cache || steps.restore-db-cache.outputs.cache-hit != 'true' }}
+      # Try downloading the vulnerability DB up to 5 times, to account for TOOMANYREQUESTS errors.
+      # Need to specify the correct location for the download (using --cache-dir), so that
+      # aquasecurity/trivy-action can find it.
+      run: |
+        for i in {1..5}; do trivy image --download-db-only --cache-dir $GITHUB_WORKSPACE/.cache/trivy && break || sleep 1; done
+    - name: Save Trivy DB cache
+      if: ${{ !inputs.no-cache && steps.restore-db-cache.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/.cache/trivy
+        key: ${{ steps.restore-db-cache.outputs.cache-primary-key }}
     - name: Run Trivy vulnerability scanner on latest antrea-agent Docker image
       if: ${{ always() && steps.pull.conclusion == 'success' }}
       uses: aquasecurity/trivy-action@0.29.0
@@ -48,6 +79,12 @@ jobs:
         severity: 'CRITICAL,HIGH'
         format: 'table'
         output: 'trivy.agent.latest.txt'
+        skip-setup-trivy: true
+        # Skip caching, as we do it manually when we download the DB in the previous step.
+        cache: 'false'
+      env:
+        TRIVY_SKIP_DB_UPDATE: true
+        TRIVY_SKIP_JAVA_DB_UPDATE: true
     - name: Run Trivy vulnerability scanner on latest antrea-controller Docker image
       if: ${{ always() && steps.pull.conclusion == 'success' }}
       uses: aquasecurity/trivy-action@0.29.0
@@ -61,6 +98,11 @@ jobs:
         severity: 'CRITICAL,HIGH'
         format: 'table'
         output: 'trivy.controller.latest.txt'
+        skip-setup-trivy: true
+        cache: 'false'
+      env:
+        TRIVY_SKIP_DB_UPDATE: true
+        TRIVY_SKIP_JAVA_DB_UPDATE: true
     - name: Run Trivy vulnerability scanner on antrea-agent Docker image for latest released version
       if: ${{ always() && steps.pull.conclusion == 'success' }}
       uses: aquasecurity/trivy-action@0.29.0
@@ -72,6 +114,11 @@ jobs:
         severity: 'CRITICAL,HIGH'
         format: 'table'
         output: 'trivy.agent.${{ steps.find-antrea-greatest-version.outputs.antrea_version }}.txt'
+        skip-setup-trivy: true
+        cache: 'false'
+      env:
+        TRIVY_SKIP_DB_UPDATE: true
+        TRIVY_SKIP_JAVA_DB_UPDATE: true
     - name: Run Trivy vulnerability scanner on antrea-controller Docker image for latest released version
       if: ${{ always() && steps.pull.conclusion == 'success' }}
       uses: aquasecurity/trivy-action@0.29.0
@@ -83,6 +130,11 @@ jobs:
         severity: 'CRITICAL,HIGH'
         format: 'table'
         output: 'trivy.controller.${{ steps.find-antrea-greatest-version.outputs.antrea_version }}.txt'
+        skip-setup-trivy: true
+        cache: 'false'
+      env:
+        TRIVY_SKIP_DB_UPDATE: true
+        TRIVY_SKIP_JAVA_DB_UPDATE: true
     - name: Upload Trivy scan reports
       if: ${{ always() && steps.pull.conclusion == 'success' }}
       uses: actions/upload-artifact@v4
