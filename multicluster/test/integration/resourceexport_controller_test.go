@@ -72,7 +72,7 @@ var _ = Describe("ResourceExport controller", func() {
 				constants.SourceClusterID: clusteraID,
 			},
 			Generation: 1,
-			Finalizers: []string{constants.ResourceExportFinalizer},
+			Finalizers: []string{constants.LegacyResourceExportFinalizer},
 		},
 		Spec: mcsv1alpha1.ResourceExportSpec{
 			ClusterID: clusteraID,
@@ -127,7 +127,7 @@ var _ = Describe("ResourceExport controller", func() {
 				constants.SourceClusterID: clusterbID,
 			},
 			Generation: 1,
-			Finalizers: []string{constants.ResourceExportFinalizer},
+			Finalizers: []string{constants.LegacyResourceExportFinalizer},
 		},
 		Spec: mcsv1alpha1.ResourceExportSpec{
 			ClusterID: clusterbID,
