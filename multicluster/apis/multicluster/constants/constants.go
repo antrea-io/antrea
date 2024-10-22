@@ -24,7 +24,8 @@ const (
 	ServiceImportKind              = "ServiceImport"
 	ClusterInfoKind                = "ClusterInfo"
 
-	ResourceExportFinalizer = "resourceexport.finalizers.antrea.io"
+	LegacyResourceExportFinalizer = "resourceexport.finalizers.antrea.io"
+	ResourceExportFinalizer       = "resourceexport.antrea.io/finalizer"
 
 	// ResourceExport labels.
 	SourceName      = "sourceName"
