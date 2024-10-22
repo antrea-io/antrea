@@ -20,6 +20,7 @@ package leader
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -93,7 +94,7 @@ func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctr
 	}
 
 	r.addOrUpdateMemberStatus(memberID)
-	if common.StringExistsInSlice(memberAnnounce.Finalizers, finalizer) {
+	if slices.Contains(memberAnnounce.Finalizers, finalizer) {
 		return ctrl.Result{}, nil
 	}
 	klog.InfoS("Adding finalizer to MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(memberAnnounce))

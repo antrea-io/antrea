@@ -21,11 +21,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -53,9 +55,17 @@ var (
 		Namespace: "default",
 		Name:      "cluster-a-default-nginx-service",
 	}}
+	svcResReq2 = ctrl.Request{NamespacedName: types.NamespacedName{
+		Namespace: "default",
+		Name:      "cluster-b-default-nginx-service",
+	}}
 	epResReq = ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: "default",
 		Name:      "cluster-a-default-nginx-endpoints",
+	}}
+	epResReq2 = ctrl.Request{NamespacedName: types.NamespacedName{
+		Namespace: "default",
+		Name:      "cluster-c-default-nginx-endpoints",
 	}}
 	acnpResReq = ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: "default",
@@ -83,10 +93,24 @@ var (
 )
 
 func TestResourceExportReconciler_handleServiceExportDeleteEvent(t *testing.T) {
-	existingResExport := &mcsv1alpha1.ResourceExport{
+	existingResExportWithLegacyFinalizer := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:         "default",
 			Name:              "cluster-a-default-nginx-service",
+			Finalizers:        []string{constants.LegacyResourceExportFinalizer},
+			Labels:            svcLabels,
+			DeletionTimestamp: &now,
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Namespace: "default",
+			Name:      "nginx",
+			Kind:      constants.ServiceKind,
+		},
+	}
+	existingResExport := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:         "default",
+			Name:              "cluster-b-default-nginx-service",
 			Finalizers:        []string{constants.ResourceExportFinalizer},
 			Labels:            svcLabels,
 			DeletionTimestamp: &now,
@@ -104,17 +128,22 @@ func TestResourceExportReconciler_handleServiceExportDeleteEvent(t *testing.T) {
 		},
 	}
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-service"}
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExport, existResImport).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExportWithLegacyFinalizer, existingResExport, existResImport).Build()
+
 	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
-	if _, err := r.Reconcile(common.TestCtx, svcResReq); err != nil {
-		t.Errorf("ResourceExport Reconciler should handle ResourceExport delete event successfully but got error = %v", err)
-	} else {
-		resImport := &mcsv1alpha1.ResourceImport{}
-		err := fakeClient.Get(common.TestCtx, namespacedName, resImport)
-		if !apierrors.IsNotFound(err) {
-			t.Errorf("ResourceExport Reconciler should delete ResourceImport successfully but got error = %v", err)
-		}
-	}
+	_, err := r.Reconcile(common.TestCtx, svcResReq)
+	require.NoError(t, err, "ResourceExport Reconciler should handle ResourceExport delete event successfully")
+	_, err = r.Reconcile(common.TestCtx, svcResReq2)
+	require.NoError(t, err, "ResourceExport Reconciler should handle ResourceExport delete event successfully")
+
+	resImport := &mcsv1alpha1.ResourceImport{}
+	err = fakeClient.Get(common.TestCtx, namespacedName, resImport)
+	assert.Truef(t, apierrors.IsNotFound(err), "ResourceExport Reconciler should delete ResourceImport successfully")
+
+	resExportsLeft := &mcsv1alpha1.ResourceExportList{}
+	err = fakeClient.List(common.TestCtx, resExportsLeft)
+	require.NoError(t, err, "failed to get all ResourceExports")
+	assert.Empty(t, resExportsLeft.Items, "unexpected number of ResourceExports left in the cluster after deletion")
 }
 
 func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T) {
@@ -124,7 +153,7 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 			Name:              "cluster-a-default-nginx-endpoints",
 			Labels:            epLabels,
 			DeletionTimestamp: &now,
-			Finalizers:        []string{constants.ResourceExportFinalizer},
+			Finalizers:        []string{constants.LegacyResourceExportFinalizer},
 		},
 		Spec: mcsv1alpha1.ResourceExportSpec{
 			Namespace: "default",
@@ -140,7 +169,7 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 			Namespace:  "default",
 			Name:       "cluster-b-default-nginx-endpoints",
 			Labels:     epLabels,
-			Finalizers: []string{constants.ResourceExportFinalizer},
+			Finalizers: []string{constants.LegacyResourceExportFinalizer},
 		},
 		Spec: mcsv1alpha1.ResourceExportSpec{
 			Namespace: "default",
@@ -149,6 +178,22 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 			Endpoints: &mcsv1alpha1.EndpointsExport{
 				Subsets: common.EPNginxSubset2,
 			},
+		},
+	}
+	// A ResourceExport with both legacy and new domain qualified finalizers should remove
+	// all the finalizers and be deleted successfully.
+	existingResExport3 := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:         "default",
+			Name:              "cluster-c-default-nginx-endpoints",
+			Labels:            epLabels,
+			DeletionTimestamp: &now,
+			Finalizers:        []string{constants.LegacyResourceExportFinalizer, constants.ResourceExportFinalizer},
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Namespace: "default",
+			Name:      "nginx",
+			Kind:      constants.EndpointsKind,
 		},
 	}
 	existResImport := &mcsv1alpha1.ResourceImport{
@@ -167,20 +212,24 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 	}
 	expectedSubsets := common.EPNginxSubset2
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-endpoints"}
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExport1, existingResExport2, existResImport).
-		WithStatusSubresource(existingResExport1, existingResExport2, existResImport).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExport1, existingResExport2, existingResExport3, existResImport).
+		WithStatusSubresource(existingResExport1, existingResExport2, existingResExport3, existResImport).Build()
+
 	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
-	if _, err := r.Reconcile(common.TestCtx, epResReq); err != nil {
-		t.Errorf("ResourceExport Reconciler should handle Endpoints ResourceExport delete event successfully but got error = %v", err)
-	} else {
-		resImport := &mcsv1alpha1.ResourceImport{}
-		err := fakeClient.Get(common.TestCtx, namespacedName, resImport)
-		if err != nil {
-			t.Errorf("failed to get ResourceImport, got error = %v", err)
-		} else if !reflect.DeepEqual(resImport.Spec.Endpoints.Subsets, expectedSubsets) {
-			t.Errorf("expected ResourceImport Subsets are %v, but got %v", expectedSubsets, resImport.Spec.Endpoints.Subsets)
-		}
-	}
+	_, err := r.Reconcile(common.TestCtx, epResReq)
+	require.NoError(t, err, "ResourceExport Reconciler should handle Endpoints ResourceExport delete event successfully")
+	_, err = r.Reconcile(common.TestCtx, epResReq2)
+	require.NoError(t, err, "ResourceExport Reconciler should handle Endpoints ResourceExport delete event successfully")
+
+	resImport := &mcsv1alpha1.ResourceImport{}
+	err = fakeClient.Get(common.TestCtx, namespacedName, resImport)
+	require.NoError(t, err, "failed to get ResourceImport")
+	assert.ElementsMatch(t, expectedSubsets, resImport.Spec.Endpoints.Subsets, "unexpected ResourceImport Subsets")
+
+	resExportsLeft := &mcsv1alpha1.ResourceExportList{}
+	err = fakeClient.List(common.TestCtx, resExportsLeft)
+	require.NoError(t, err, "failed to get all ResourceExports")
+	assert.Equalf(t, 1, len(resExportsLeft.Items), "unexpected number of ResourceExports left in the cluster after deletion")
 }
 
 func TestResourceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
@@ -504,6 +553,20 @@ func TestResourceExportReconciler_handleClusterInfoKind(t *testing.T) {
 		},
 	}
 	deletedTime := metav1.Now()
+	cluster3ResExportToDelLegacyFinalizer := mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:         "default",
+			Name:              "cluster-c-default-clusterinfo",
+			Finalizers:        []string{constants.LegacyResourceExportFinalizer},
+			DeletionTimestamp: &deletedTime,
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Kind:      constants.ClusterInfoKind,
+			ClusterID: "cluster-c",
+			Name:      "cluster-c",
+			Namespace: "default",
+		},
+	}
 	cluster3ResExportToDel := mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:         "default",
@@ -531,52 +594,55 @@ func TestResourceExportReconciler_handleClusterInfoKind(t *testing.T) {
 		},
 	}
 	tests := []struct {
-		name         string
-		ciRes        mcsv1alpha1.ResourceExport
-		expectedInfo mcsv1alpha1.ClusterInfo
-		isDelete     bool
+		name            string
+		ciRes           mcsv1alpha1.ResourceExport
+		existingObjects []client.Object
+		expectedInfo    mcsv1alpha1.ClusterInfo
+		isDelete        bool
 	}{
 		{
-			name:         "create a ClusterInfo kind of ResourceImport successfully",
-			ciRes:        clusterACIResExport,
-			expectedInfo: clusterAInfo,
+			name:            "create a ClusterInfo kind of ResourceImport successfully",
+			ciRes:           clusterACIResExport,
+			existingObjects: []client.Object{&clusterACIResExport},
+			expectedInfo:    clusterAInfo,
 		},
 		{
-			name:         "update a ClusterInfo kind of ResourceImport successfully",
-			ciRes:        clusterBCIResExport,
-			expectedInfo: clusterBInfoNew,
+			name:            "update a ClusterInfo kind of ResourceImport successfully",
+			ciRes:           clusterBCIResExport,
+			existingObjects: []client.Object{&clusterBCIResExport, &existResImport},
+			expectedInfo:    clusterBInfoNew,
 		},
 		{
-			name:     "delete a ClusterInfo kind of ResourceImport successfully",
-			ciRes:    cluster3ResExportToDel,
-			isDelete: true,
+			name:            "delete a ClusterInfo kind of ResourceImport and ResourceExport with legacy finalizer successfully",
+			ciRes:           cluster3ResExportToDelLegacyFinalizer,
+			existingObjects: []client.Object{&existResImportToDel, &cluster3ResExportToDelLegacyFinalizer},
+			isDelete:        true,
+		},
+		{
+			name:            "delete a ClusterInfo kind of ResourceImport and ResourceExport successfully",
+			ciRes:           cluster3ResExportToDelLegacyFinalizer,
+			existingObjects: []client.Object{&existResImportToDel, &cluster3ResExportToDel},
+			isDelete:        true,
 		},
 	}
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(&clusterACIResExport, &clusterBCIResExport,
-		&existResImport, &existResImportToDel, &cluster3ResExportToDel).Build()
-	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingObjects...).Build()
+			r := NewResourceExportReconciler(fakeClient, common.TestScheme)
 			namespacedName := types.NamespacedName{Namespace: tt.ciRes.Namespace, Name: tt.ciRes.Name}
 			req := ctrl.Request{NamespacedName: namespacedName}
-			if _, err := r.Reconcile(common.TestCtx, req); err != nil {
-				t.Errorf("ResourceExport Reconciler should handle Resourcexports events successfully but got error = %v", err)
+			_, err := r.Reconcile(common.TestCtx, req)
+			require.NoError(t, err, "ResourceExport Reconciler should handle ResourceExports events successfully")
+
+			teImport := mcsv1alpha1.ResourceImport{}
+			err = fakeClient.Get(common.TestCtx, namespacedName, &teImport)
+			if err == nil {
+				assert.Falsef(t, tt.isDelete, "Expected error to be not found err but got nil")
+				assert.Truef(t, reflect.DeepEqual(*teImport.Spec.ClusterInfo, tt.expectedInfo), "unexpected ClusterInfo")
 			} else {
-				teImport := mcsv1alpha1.ResourceImport{}
-				err := fakeClient.Get(common.TestCtx, namespacedName, &teImport)
-				if err == nil {
-					if tt.isDelete {
-						t.Error("Expected not found err but got nil err")
-					} else if !reflect.DeepEqual(*teImport.Spec.ClusterInfo, tt.expectedInfo) {
-						t.Errorf("Expected ClusterInfo %v but got %v", tt.expectedInfo, teImport.Spec.ClusterInfo)
-					}
-				} else {
-					teExport := mcsv1alpha1.ResourceExport{}
-					err := fakeClient.Get(common.TestCtx, namespacedName, &teExport)
-					if !apierrors.IsNotFound(err) {
-						t.Errorf("ResourceExport should be deleted successfully but got = %v", err)
-					}
-				}
+				teExport := mcsv1alpha1.ResourceExport{}
+				err := fakeClient.Get(common.TestCtx, namespacedName, &teExport)
+				assert.Truef(t, apierrors.IsNotFound(err), "ResourceExport should be deleted successfully")
 			}
 		})
 	}
