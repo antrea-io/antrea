@@ -36,6 +36,7 @@ import (
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockInterfaceMockRecorder is the mock recorder for MockInterface.
@@ -56,429 +57,429 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AddNetAdapterIPAddress mocks base method.
-func (m *MockInterface) AddNetAdapterIPAddress(arg0 string, arg1 *net.IPNet, arg2 string) error {
+func (m *MockInterface) AddNetAdapterIPAddress(adapterName string, ipConfig *net.IPNet, gateway string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddNetAdapterIPAddress", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddNetAdapterIPAddress", adapterName, ipConfig, gateway)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddNetAdapterIPAddress indicates an expected call of AddNetAdapterIPAddress.
-func (mr *MockInterfaceMockRecorder) AddNetAdapterIPAddress(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddNetAdapterIPAddress(adapterName, ipConfig, gateway any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNetAdapterIPAddress", reflect.TypeOf((*MockInterface)(nil).AddNetAdapterIPAddress), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNetAdapterIPAddress", reflect.TypeOf((*MockInterface)(nil).AddNetAdapterIPAddress), adapterName, ipConfig, gateway)
 }
 
 // AddNetNat mocks base method.
-func (m *MockInterface) AddNetNat(arg0 string, arg1 *net.IPNet) error {
+func (m *MockInterface) AddNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddNetNat", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddNetNat", netNatName, subnetCIDR)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddNetNat indicates an expected call of AddNetNat.
-func (mr *MockInterfaceMockRecorder) AddNetNat(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddNetNat(netNatName, subnetCIDR any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNetNat", reflect.TypeOf((*MockInterface)(nil).AddNetNat), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNetNat", reflect.TypeOf((*MockInterface)(nil).AddNetNat), netNatName, subnetCIDR)
 }
 
 // AddNetNatStaticMapping mocks base method.
-func (m *MockInterface) AddNetNatStaticMapping(arg0 *winnet.NetNatStaticMapping) error {
+func (m *MockInterface) AddNetNatStaticMapping(mapping *winnet.NetNatStaticMapping) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddNetNatStaticMapping", arg0)
+	ret := m.ctrl.Call(m, "AddNetNatStaticMapping", mapping)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddNetNatStaticMapping indicates an expected call of AddNetNatStaticMapping.
-func (mr *MockInterfaceMockRecorder) AddNetNatStaticMapping(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddNetNatStaticMapping(mapping any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNetNatStaticMapping", reflect.TypeOf((*MockInterface)(nil).AddNetNatStaticMapping), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNetNatStaticMapping", reflect.TypeOf((*MockInterface)(nil).AddNetNatStaticMapping), mapping)
 }
 
 // AddNetRoute mocks base method.
-func (m *MockInterface) AddNetRoute(arg0 *winnet.Route) error {
+func (m *MockInterface) AddNetRoute(route *winnet.Route) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddNetRoute", arg0)
+	ret := m.ctrl.Call(m, "AddNetRoute", route)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddNetRoute indicates an expected call of AddNetRoute.
-func (mr *MockInterfaceMockRecorder) AddNetRoute(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddNetRoute(route any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNetRoute", reflect.TypeOf((*MockInterface)(nil).AddNetRoute), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNetRoute", reflect.TypeOf((*MockInterface)(nil).AddNetRoute), route)
 }
 
 // AddVMSwitch mocks base method.
-func (m *MockInterface) AddVMSwitch(arg0, arg1 string) error {
+func (m *MockInterface) AddVMSwitch(adapterName, vmSwitch string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddVMSwitch", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddVMSwitch", adapterName, vmSwitch)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddVMSwitch indicates an expected call of AddVMSwitch.
-func (mr *MockInterfaceMockRecorder) AddVMSwitch(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddVMSwitch(adapterName, vmSwitch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddVMSwitch", reflect.TypeOf((*MockInterface)(nil).AddVMSwitch), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddVMSwitch", reflect.TypeOf((*MockInterface)(nil).AddVMSwitch), adapterName, vmSwitch)
 }
 
 // EnableIPForwarding mocks base method.
-func (m *MockInterface) EnableIPForwarding(arg0 string) error {
+func (m *MockInterface) EnableIPForwarding(adapterName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnableIPForwarding", arg0)
+	ret := m.ctrl.Call(m, "EnableIPForwarding", adapterName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnableIPForwarding indicates an expected call of EnableIPForwarding.
-func (mr *MockInterfaceMockRecorder) EnableIPForwarding(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) EnableIPForwarding(adapterName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableIPForwarding", reflect.TypeOf((*MockInterface)(nil).EnableIPForwarding), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableIPForwarding", reflect.TypeOf((*MockInterface)(nil).EnableIPForwarding), adapterName)
 }
 
 // EnableNetAdapter mocks base method.
-func (m *MockInterface) EnableNetAdapter(arg0 string) error {
+func (m *MockInterface) EnableNetAdapter(adapterName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnableNetAdapter", arg0)
+	ret := m.ctrl.Call(m, "EnableNetAdapter", adapterName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnableNetAdapter indicates an expected call of EnableNetAdapter.
-func (mr *MockInterfaceMockRecorder) EnableNetAdapter(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) EnableNetAdapter(adapterName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableNetAdapter", reflect.TypeOf((*MockInterface)(nil).EnableNetAdapter), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableNetAdapter", reflect.TypeOf((*MockInterface)(nil).EnableNetAdapter), adapterName)
 }
 
 // EnableRSCOnVSwitch mocks base method.
-func (m *MockInterface) EnableRSCOnVSwitch(arg0 string) error {
+func (m *MockInterface) EnableRSCOnVSwitch(vSwitch string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnableRSCOnVSwitch", arg0)
+	ret := m.ctrl.Call(m, "EnableRSCOnVSwitch", vSwitch)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnableRSCOnVSwitch indicates an expected call of EnableRSCOnVSwitch.
-func (mr *MockInterfaceMockRecorder) EnableRSCOnVSwitch(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) EnableRSCOnVSwitch(vSwitch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableRSCOnVSwitch", reflect.TypeOf((*MockInterface)(nil).EnableRSCOnVSwitch), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableRSCOnVSwitch", reflect.TypeOf((*MockInterface)(nil).EnableRSCOnVSwitch), vSwitch)
 }
 
 // EnableVMSwitchOVSExtension mocks base method.
-func (m *MockInterface) EnableVMSwitchOVSExtension(arg0 string) error {
+func (m *MockInterface) EnableVMSwitchOVSExtension(vmSwitch string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnableVMSwitchOVSExtension", arg0)
+	ret := m.ctrl.Call(m, "EnableVMSwitchOVSExtension", vmSwitch)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnableVMSwitchOVSExtension indicates an expected call of EnableVMSwitchOVSExtension.
-func (mr *MockInterfaceMockRecorder) EnableVMSwitchOVSExtension(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) EnableVMSwitchOVSExtension(vmSwitch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableVMSwitchOVSExtension", reflect.TypeOf((*MockInterface)(nil).EnableVMSwitchOVSExtension), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableVMSwitchOVSExtension", reflect.TypeOf((*MockInterface)(nil).EnableVMSwitchOVSExtension), vmSwitch)
 }
 
 // GetDNServersByNetAdapterIndex mocks base method.
-func (m *MockInterface) GetDNServersByNetAdapterIndex(arg0 int) (string, error) {
+func (m *MockInterface) GetDNServersByNetAdapterIndex(adapterIndex int) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDNServersByNetAdapterIndex", arg0)
+	ret := m.ctrl.Call(m, "GetDNServersByNetAdapterIndex", adapterIndex)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetDNServersByNetAdapterIndex indicates an expected call of GetDNServersByNetAdapterIndex.
-func (mr *MockInterfaceMockRecorder) GetDNServersByNetAdapterIndex(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) GetDNServersByNetAdapterIndex(adapterIndex any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDNServersByNetAdapterIndex", reflect.TypeOf((*MockInterface)(nil).GetDNServersByNetAdapterIndex), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDNServersByNetAdapterIndex", reflect.TypeOf((*MockInterface)(nil).GetDNServersByNetAdapterIndex), adapterIndex)
 }
 
 // GetVMSwitchNetAdapterName mocks base method.
-func (m *MockInterface) GetVMSwitchNetAdapterName(arg0 string) (string, error) {
+func (m *MockInterface) GetVMSwitchNetAdapterName(vmSwitch string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVMSwitchNetAdapterName", arg0)
+	ret := m.ctrl.Call(m, "GetVMSwitchNetAdapterName", vmSwitch)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVMSwitchNetAdapterName indicates an expected call of GetVMSwitchNetAdapterName.
-func (mr *MockInterfaceMockRecorder) GetVMSwitchNetAdapterName(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) GetVMSwitchNetAdapterName(vmSwitch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMSwitchNetAdapterName", reflect.TypeOf((*MockInterface)(nil).GetVMSwitchNetAdapterName), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMSwitchNetAdapterName", reflect.TypeOf((*MockInterface)(nil).GetVMSwitchNetAdapterName), vmSwitch)
 }
 
 // IsNetAdapterIPv4DHCPEnabled mocks base method.
-func (m *MockInterface) IsNetAdapterIPv4DHCPEnabled(arg0 string) (bool, error) {
+func (m *MockInterface) IsNetAdapterIPv4DHCPEnabled(adapterName string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsNetAdapterIPv4DHCPEnabled", arg0)
+	ret := m.ctrl.Call(m, "IsNetAdapterIPv4DHCPEnabled", adapterName)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsNetAdapterIPv4DHCPEnabled indicates an expected call of IsNetAdapterIPv4DHCPEnabled.
-func (mr *MockInterfaceMockRecorder) IsNetAdapterIPv4DHCPEnabled(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) IsNetAdapterIPv4DHCPEnabled(adapterName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsNetAdapterIPv4DHCPEnabled", reflect.TypeOf((*MockInterface)(nil).IsNetAdapterIPv4DHCPEnabled), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsNetAdapterIPv4DHCPEnabled", reflect.TypeOf((*MockInterface)(nil).IsNetAdapterIPv4DHCPEnabled), adapterName)
 }
 
 // IsNetAdapterStatusUp mocks base method.
-func (m *MockInterface) IsNetAdapterStatusUp(arg0 string) (bool, error) {
+func (m *MockInterface) IsNetAdapterStatusUp(adapterName string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsNetAdapterStatusUp", arg0)
+	ret := m.ctrl.Call(m, "IsNetAdapterStatusUp", adapterName)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsNetAdapterStatusUp indicates an expected call of IsNetAdapterStatusUp.
-func (mr *MockInterfaceMockRecorder) IsNetAdapterStatusUp(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) IsNetAdapterStatusUp(adapterName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsNetAdapterStatusUp", reflect.TypeOf((*MockInterface)(nil).IsNetAdapterStatusUp), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsNetAdapterStatusUp", reflect.TypeOf((*MockInterface)(nil).IsNetAdapterStatusUp), adapterName)
 }
 
 // IsVMSwitchOVSExtensionEnabled mocks base method.
-func (m *MockInterface) IsVMSwitchOVSExtensionEnabled(arg0 string) (bool, error) {
+func (m *MockInterface) IsVMSwitchOVSExtensionEnabled(vmSwitch string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsVMSwitchOVSExtensionEnabled", arg0)
+	ret := m.ctrl.Call(m, "IsVMSwitchOVSExtensionEnabled", vmSwitch)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsVMSwitchOVSExtensionEnabled indicates an expected call of IsVMSwitchOVSExtensionEnabled.
-func (mr *MockInterfaceMockRecorder) IsVMSwitchOVSExtensionEnabled(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) IsVMSwitchOVSExtensionEnabled(vmSwitch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsVMSwitchOVSExtensionEnabled", reflect.TypeOf((*MockInterface)(nil).IsVMSwitchOVSExtensionEnabled), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsVMSwitchOVSExtensionEnabled", reflect.TypeOf((*MockInterface)(nil).IsVMSwitchOVSExtensionEnabled), vmSwitch)
 }
 
 // IsVirtualNetAdapter mocks base method.
-func (m *MockInterface) IsVirtualNetAdapter(arg0 string) (bool, error) {
+func (m *MockInterface) IsVirtualNetAdapter(adapterName string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsVirtualNetAdapter", arg0)
+	ret := m.ctrl.Call(m, "IsVirtualNetAdapter", adapterName)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsVirtualNetAdapter indicates an expected call of IsVirtualNetAdapter.
-func (mr *MockInterfaceMockRecorder) IsVirtualNetAdapter(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) IsVirtualNetAdapter(adapterName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsVirtualNetAdapter", reflect.TypeOf((*MockInterface)(nil).IsVirtualNetAdapter), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsVirtualNetAdapter", reflect.TypeOf((*MockInterface)(nil).IsVirtualNetAdapter), adapterName)
 }
 
 // NetAdapterExists mocks base method.
-func (m *MockInterface) NetAdapterExists(arg0 string) bool {
+func (m *MockInterface) NetAdapterExists(adapterName string) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NetAdapterExists", arg0)
+	ret := m.ctrl.Call(m, "NetAdapterExists", adapterName)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // NetAdapterExists indicates an expected call of NetAdapterExists.
-func (mr *MockInterfaceMockRecorder) NetAdapterExists(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) NetAdapterExists(adapterName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetAdapterExists", reflect.TypeOf((*MockInterface)(nil).NetAdapterExists), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetAdapterExists", reflect.TypeOf((*MockInterface)(nil).NetAdapterExists), adapterName)
 }
 
 // RemoveNetAdapterIPAddress mocks base method.
-func (m *MockInterface) RemoveNetAdapterIPAddress(arg0 string, arg1 net.IP) error {
+func (m *MockInterface) RemoveNetAdapterIPAddress(adapterName string, ipAddr net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveNetAdapterIPAddress", arg0, arg1)
+	ret := m.ctrl.Call(m, "RemoveNetAdapterIPAddress", adapterName, ipAddr)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveNetAdapterIPAddress indicates an expected call of RemoveNetAdapterIPAddress.
-func (mr *MockInterfaceMockRecorder) RemoveNetAdapterIPAddress(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RemoveNetAdapterIPAddress(adapterName, ipAddr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNetAdapterIPAddress", reflect.TypeOf((*MockInterface)(nil).RemoveNetAdapterIPAddress), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNetAdapterIPAddress", reflect.TypeOf((*MockInterface)(nil).RemoveNetAdapterIPAddress), adapterName, ipAddr)
 }
 
 // RemoveNetNatStaticMapping mocks base method.
-func (m *MockInterface) RemoveNetNatStaticMapping(arg0 *winnet.NetNatStaticMapping) error {
+func (m *MockInterface) RemoveNetNatStaticMapping(mapping *winnet.NetNatStaticMapping) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveNetNatStaticMapping", arg0)
+	ret := m.ctrl.Call(m, "RemoveNetNatStaticMapping", mapping)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveNetNatStaticMapping indicates an expected call of RemoveNetNatStaticMapping.
-func (mr *MockInterfaceMockRecorder) RemoveNetNatStaticMapping(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RemoveNetNatStaticMapping(mapping any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNetNatStaticMapping", reflect.TypeOf((*MockInterface)(nil).RemoveNetNatStaticMapping), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNetNatStaticMapping", reflect.TypeOf((*MockInterface)(nil).RemoveNetNatStaticMapping), mapping)
 }
 
 // RemoveNetNatStaticMappingsByNetNat mocks base method.
-func (m *MockInterface) RemoveNetNatStaticMappingsByNetNat(arg0 string) error {
+func (m *MockInterface) RemoveNetNatStaticMappingsByNetNat(netNatName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveNetNatStaticMappingsByNetNat", arg0)
+	ret := m.ctrl.Call(m, "RemoveNetNatStaticMappingsByNetNat", netNatName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveNetNatStaticMappingsByNetNat indicates an expected call of RemoveNetNatStaticMappingsByNetNat.
-func (mr *MockInterfaceMockRecorder) RemoveNetNatStaticMappingsByNetNat(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RemoveNetNatStaticMappingsByNetNat(netNatName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNetNatStaticMappingsByNetNat", reflect.TypeOf((*MockInterface)(nil).RemoveNetNatStaticMappingsByNetNat), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNetNatStaticMappingsByNetNat", reflect.TypeOf((*MockInterface)(nil).RemoveNetNatStaticMappingsByNetNat), netNatName)
 }
 
 // RemoveNetRoute mocks base method.
-func (m *MockInterface) RemoveNetRoute(arg0 *winnet.Route) error {
+func (m *MockInterface) RemoveNetRoute(route *winnet.Route) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveNetRoute", arg0)
+	ret := m.ctrl.Call(m, "RemoveNetRoute", route)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveNetRoute indicates an expected call of RemoveNetRoute.
-func (mr *MockInterfaceMockRecorder) RemoveNetRoute(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RemoveNetRoute(route any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNetRoute", reflect.TypeOf((*MockInterface)(nil).RemoveNetRoute), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNetRoute", reflect.TypeOf((*MockInterface)(nil).RemoveNetRoute), route)
 }
 
 // RemoveVMSwitch mocks base method.
-func (m *MockInterface) RemoveVMSwitch(arg0 string) error {
+func (m *MockInterface) RemoveVMSwitch(vmSwitch string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveVMSwitch", arg0)
+	ret := m.ctrl.Call(m, "RemoveVMSwitch", vmSwitch)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveVMSwitch indicates an expected call of RemoveVMSwitch.
-func (mr *MockInterfaceMockRecorder) RemoveVMSwitch(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RemoveVMSwitch(vmSwitch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveVMSwitch", reflect.TypeOf((*MockInterface)(nil).RemoveVMSwitch), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveVMSwitch", reflect.TypeOf((*MockInterface)(nil).RemoveVMSwitch), vmSwitch)
 }
 
 // RenameNetAdapter mocks base method.
-func (m *MockInterface) RenameNetAdapter(arg0, arg1 string) error {
+func (m *MockInterface) RenameNetAdapter(oriName, newName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RenameNetAdapter", arg0, arg1)
+	ret := m.ctrl.Call(m, "RenameNetAdapter", oriName, newName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RenameNetAdapter indicates an expected call of RenameNetAdapter.
-func (mr *MockInterfaceMockRecorder) RenameNetAdapter(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RenameNetAdapter(oriName, newName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenameNetAdapter", reflect.TypeOf((*MockInterface)(nil).RenameNetAdapter), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenameNetAdapter", reflect.TypeOf((*MockInterface)(nil).RenameNetAdapter), oriName, newName)
 }
 
 // RenameVMNetworkAdapter mocks base method.
-func (m *MockInterface) RenameVMNetworkAdapter(arg0, arg1, arg2 string, arg3 bool) error {
+func (m *MockInterface) RenameVMNetworkAdapter(networkName, macStr, newName string, renameNetAdapter bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RenameVMNetworkAdapter", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "RenameVMNetworkAdapter", networkName, macStr, newName, renameNetAdapter)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RenameVMNetworkAdapter indicates an expected call of RenameVMNetworkAdapter.
-func (mr *MockInterfaceMockRecorder) RenameVMNetworkAdapter(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RenameVMNetworkAdapter(networkName, macStr, newName, renameNetAdapter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenameVMNetworkAdapter", reflect.TypeOf((*MockInterface)(nil).RenameVMNetworkAdapter), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenameVMNetworkAdapter", reflect.TypeOf((*MockInterface)(nil).RenameVMNetworkAdapter), networkName, macStr, newName, renameNetAdapter)
 }
 
 // ReplaceNetNatStaticMapping mocks base method.
-func (m *MockInterface) ReplaceNetNatStaticMapping(arg0 *winnet.NetNatStaticMapping) error {
+func (m *MockInterface) ReplaceNetNatStaticMapping(mapping *winnet.NetNatStaticMapping) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReplaceNetNatStaticMapping", arg0)
+	ret := m.ctrl.Call(m, "ReplaceNetNatStaticMapping", mapping)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ReplaceNetNatStaticMapping indicates an expected call of ReplaceNetNatStaticMapping.
-func (mr *MockInterfaceMockRecorder) ReplaceNetNatStaticMapping(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ReplaceNetNatStaticMapping(mapping any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceNetNatStaticMapping", reflect.TypeOf((*MockInterface)(nil).ReplaceNetNatStaticMapping), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceNetNatStaticMapping", reflect.TypeOf((*MockInterface)(nil).ReplaceNetNatStaticMapping), mapping)
 }
 
 // ReplaceNetNeighbor mocks base method.
-func (m *MockInterface) ReplaceNetNeighbor(arg0 *winnet.Neighbor) error {
+func (m *MockInterface) ReplaceNetNeighbor(neighbor *winnet.Neighbor) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReplaceNetNeighbor", arg0)
+	ret := m.ctrl.Call(m, "ReplaceNetNeighbor", neighbor)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ReplaceNetNeighbor indicates an expected call of ReplaceNetNeighbor.
-func (mr *MockInterfaceMockRecorder) ReplaceNetNeighbor(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ReplaceNetNeighbor(neighbor any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceNetNeighbor", reflect.TypeOf((*MockInterface)(nil).ReplaceNetNeighbor), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceNetNeighbor", reflect.TypeOf((*MockInterface)(nil).ReplaceNetNeighbor), neighbor)
 }
 
 // ReplaceNetRoute mocks base method.
-func (m *MockInterface) ReplaceNetRoute(arg0 *winnet.Route) error {
+func (m *MockInterface) ReplaceNetRoute(route *winnet.Route) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReplaceNetRoute", arg0)
+	ret := m.ctrl.Call(m, "ReplaceNetRoute", route)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ReplaceNetRoute indicates an expected call of ReplaceNetRoute.
-func (mr *MockInterfaceMockRecorder) ReplaceNetRoute(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ReplaceNetRoute(route any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceNetRoute", reflect.TypeOf((*MockInterface)(nil).ReplaceNetRoute), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceNetRoute", reflect.TypeOf((*MockInterface)(nil).ReplaceNetRoute), route)
 }
 
 // RouteListFiltered mocks base method.
-func (m *MockInterface) RouteListFiltered(arg0 uint16, arg1 *winnet.Route, arg2 uint64) ([]winnet.Route, error) {
+func (m *MockInterface) RouteListFiltered(family uint16, filter *winnet.Route, filterMask uint64) ([]winnet.Route, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RouteListFiltered", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "RouteListFiltered", family, filter, filterMask)
 	ret0, _ := ret[0].([]winnet.Route)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // RouteListFiltered indicates an expected call of RouteListFiltered.
-func (mr *MockInterfaceMockRecorder) RouteListFiltered(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RouteListFiltered(family, filter, filterMask any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RouteListFiltered", reflect.TypeOf((*MockInterface)(nil).RouteListFiltered), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RouteListFiltered", reflect.TypeOf((*MockInterface)(nil).RouteListFiltered), family, filter, filterMask)
 }
 
 // SetNetAdapterDNSServers mocks base method.
-func (m *MockInterface) SetNetAdapterDNSServers(arg0, arg1 string) error {
+func (m *MockInterface) SetNetAdapterDNSServers(adapterName, dnsServers string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetNetAdapterDNSServers", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetNetAdapterDNSServers", adapterName, dnsServers)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetNetAdapterDNSServers indicates an expected call of SetNetAdapterDNSServers.
-func (mr *MockInterfaceMockRecorder) SetNetAdapterDNSServers(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) SetNetAdapterDNSServers(adapterName, dnsServers any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNetAdapterDNSServers", reflect.TypeOf((*MockInterface)(nil).SetNetAdapterDNSServers), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNetAdapterDNSServers", reflect.TypeOf((*MockInterface)(nil).SetNetAdapterDNSServers), adapterName, dnsServers)
 }
 
 // SetNetAdapterMTU mocks base method.
-func (m *MockInterface) SetNetAdapterMTU(arg0 string, arg1 int) error {
+func (m *MockInterface) SetNetAdapterMTU(adapterName string, mtu int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetNetAdapterMTU", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetNetAdapterMTU", adapterName, mtu)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetNetAdapterMTU indicates an expected call of SetNetAdapterMTU.
-func (mr *MockInterfaceMockRecorder) SetNetAdapterMTU(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) SetNetAdapterMTU(adapterName, mtu any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNetAdapterMTU", reflect.TypeOf((*MockInterface)(nil).SetNetAdapterMTU), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNetAdapterMTU", reflect.TypeOf((*MockInterface)(nil).SetNetAdapterMTU), adapterName, mtu)
 }
 
 // VMSwitchExists mocks base method.
-func (m *MockInterface) VMSwitchExists(arg0 string) (bool, error) {
+func (m *MockInterface) VMSwitchExists(vmSwitch string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VMSwitchExists", arg0)
+	ret := m.ctrl.Call(m, "VMSwitchExists", vmSwitch)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // VMSwitchExists indicates an expected call of VMSwitchExists.
-func (mr *MockInterfaceMockRecorder) VMSwitchExists(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) VMSwitchExists(vmSwitch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VMSwitchExists", reflect.TypeOf((*MockInterface)(nil).VMSwitchExists), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VMSwitchExists", reflect.TypeOf((*MockInterface)(nil).VMSwitchExists), vmSwitch)
 }

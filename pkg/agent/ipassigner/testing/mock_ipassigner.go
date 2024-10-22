@@ -35,6 +35,7 @@ import (
 type MockIPAssigner struct {
 	ctrl     *gomock.Controller
 	recorder *MockIPAssignerMockRecorder
+	isgomock struct{}
 }
 
 // MockIPAssignerMockRecorder is the mock recorder for MockIPAssigner.
@@ -55,18 +56,18 @@ func (m *MockIPAssigner) EXPECT() *MockIPAssignerMockRecorder {
 }
 
 // AssignIP mocks base method.
-func (m *MockIPAssigner) AssignIP(arg0 string, arg1 *v1beta1.SubnetInfo, arg2 bool) (bool, error) {
+func (m *MockIPAssigner) AssignIP(ip string, subnetInfo *v1beta1.SubnetInfo, forceAdvertise bool) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AssignIP", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AssignIP", ip, subnetInfo, forceAdvertise)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AssignIP indicates an expected call of AssignIP.
-func (mr *MockIPAssignerMockRecorder) AssignIP(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockIPAssignerMockRecorder) AssignIP(ip, subnetInfo, forceAdvertise any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignIP", reflect.TypeOf((*MockIPAssigner)(nil).AssignIP), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignIP", reflect.TypeOf((*MockIPAssigner)(nil).AssignIP), ip, subnetInfo, forceAdvertise)
 }
 
 // AssignedIPs mocks base method.
@@ -84,18 +85,18 @@ func (mr *MockIPAssignerMockRecorder) AssignedIPs() *gomock.Call {
 }
 
 // GetInterfaceID mocks base method.
-func (m *MockIPAssigner) GetInterfaceID(arg0 *v1beta1.SubnetInfo) (int, bool) {
+func (m *MockIPAssigner) GetInterfaceID(subnetInfo *v1beta1.SubnetInfo) (int, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetInterfaceID", arg0)
+	ret := m.ctrl.Call(m, "GetInterfaceID", subnetInfo)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
 // GetInterfaceID indicates an expected call of GetInterfaceID.
-func (mr *MockIPAssignerMockRecorder) GetInterfaceID(arg0 any) *gomock.Call {
+func (mr *MockIPAssignerMockRecorder) GetInterfaceID(subnetInfo any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceID", reflect.TypeOf((*MockIPAssigner)(nil).GetInterfaceID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceID", reflect.TypeOf((*MockIPAssigner)(nil).GetInterfaceID), subnetInfo)
 }
 
 // InitIPs mocks base method.
@@ -125,16 +126,16 @@ func (mr *MockIPAssignerMockRecorder) Run(arg0 any) *gomock.Call {
 }
 
 // UnassignIP mocks base method.
-func (m *MockIPAssigner) UnassignIP(arg0 string) (bool, error) {
+func (m *MockIPAssigner) UnassignIP(ip string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnassignIP", arg0)
+	ret := m.ctrl.Call(m, "UnassignIP", ip)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UnassignIP indicates an expected call of UnassignIP.
-func (mr *MockIPAssignerMockRecorder) UnassignIP(arg0 any) *gomock.Call {
+func (mr *MockIPAssignerMockRecorder) UnassignIP(ip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnassignIP", reflect.TypeOf((*MockIPAssigner)(nil).UnassignIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnassignIP", reflect.TypeOf((*MockIPAssigner)(nil).UnassignIP), ip)
 }

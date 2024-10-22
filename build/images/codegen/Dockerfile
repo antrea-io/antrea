@@ -44,7 +44,7 @@ RUN go install k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go install k8s.io/kube-openapi/cmd/openapi-gen@$KUBEOPENAPI_VERSION && \
     go install k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \
     go install k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION && \
-    go install go.uber.org/mock/mockgen@v0.4.0 && \
+    go install go.uber.org/mock/mockgen@v0.5.0 && \
     go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0 && \
     go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0 && \
     go install golang.org/x/tools/cmd/goimports@latest && \

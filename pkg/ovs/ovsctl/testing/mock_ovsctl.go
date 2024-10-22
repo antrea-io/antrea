@@ -35,6 +35,7 @@ import (
 type MockOVSCtlClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockOVSCtlClientMockRecorder
+	isgomock struct{}
 }
 
 // MockOVSCtlClientMockRecorder is the mock recorder for MockOVSCtlClient.
@@ -55,24 +56,24 @@ func (m *MockOVSCtlClient) EXPECT() *MockOVSCtlClientMockRecorder {
 }
 
 // DeleteDPInterface mocks base method.
-func (m *MockOVSCtlClient) DeleteDPInterface(arg0 string) error {
+func (m *MockOVSCtlClient) DeleteDPInterface(name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteDPInterface", arg0)
+	ret := m.ctrl.Call(m, "DeleteDPInterface", name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteDPInterface indicates an expected call of DeleteDPInterface.
-func (mr *MockOVSCtlClientMockRecorder) DeleteDPInterface(arg0 any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) DeleteDPInterface(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDPInterface", reflect.TypeOf((*MockOVSCtlClient)(nil).DeleteDPInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDPInterface", reflect.TypeOf((*MockOVSCtlClient)(nil).DeleteDPInterface), name)
 }
 
 // DumpFlows mocks base method.
-func (m *MockOVSCtlClient) DumpFlows(arg0 ...string) ([]string, error) {
+func (m *MockOVSCtlClient) DumpFlows(args ...string) ([]string, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "DumpFlows", varargs...)
@@ -82,16 +83,16 @@ func (m *MockOVSCtlClient) DumpFlows(arg0 ...string) ([]string, error) {
 }
 
 // DumpFlows indicates an expected call of DumpFlows.
-func (mr *MockOVSCtlClientMockRecorder) DumpFlows(arg0 ...any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) DumpFlows(args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpFlows), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpFlows), args...)
 }
 
 // DumpFlowsWithoutTableNames mocks base method.
-func (m *MockOVSCtlClient) DumpFlowsWithoutTableNames(arg0 ...string) ([]string, error) {
+func (m *MockOVSCtlClient) DumpFlowsWithoutTableNames(args ...string) ([]string, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "DumpFlowsWithoutTableNames", varargs...)
@@ -101,24 +102,24 @@ func (m *MockOVSCtlClient) DumpFlowsWithoutTableNames(arg0 ...string) ([]string,
 }
 
 // DumpFlowsWithoutTableNames indicates an expected call of DumpFlowsWithoutTableNames.
-func (mr *MockOVSCtlClientMockRecorder) DumpFlowsWithoutTableNames(arg0 ...any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) DumpFlowsWithoutTableNames(args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlowsWithoutTableNames", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpFlowsWithoutTableNames), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlowsWithoutTableNames", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpFlowsWithoutTableNames), args...)
 }
 
 // DumpGroup mocks base method.
-func (m *MockOVSCtlClient) DumpGroup(arg0 uint32) (string, error) {
+func (m *MockOVSCtlClient) DumpGroup(groupID uint32) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpGroup", arg0)
+	ret := m.ctrl.Call(m, "DumpGroup", groupID)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DumpGroup indicates an expected call of DumpGroup.
-func (mr *MockOVSCtlClientMockRecorder) DumpGroup(arg0 any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) DumpGroup(groupID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpGroup", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpGroup), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpGroup", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpGroup), groupID)
 }
 
 // DumpGroups mocks base method.
@@ -137,18 +138,18 @@ func (mr *MockOVSCtlClientMockRecorder) DumpGroups() *gomock.Call {
 }
 
 // DumpMatchedFlow mocks base method.
-func (m *MockOVSCtlClient) DumpMatchedFlow(arg0 string) (string, error) {
+func (m *MockOVSCtlClient) DumpMatchedFlow(matchStr string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpMatchedFlow", arg0)
+	ret := m.ctrl.Call(m, "DumpMatchedFlow", matchStr)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DumpMatchedFlow indicates an expected call of DumpMatchedFlow.
-func (mr *MockOVSCtlClientMockRecorder) DumpMatchedFlow(arg0 any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) DumpMatchedFlow(matchStr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpMatchedFlow", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpMatchedFlow), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpMatchedFlow", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpMatchedFlow), matchStr)
 }
 
 // DumpPortsDesc mocks base method.
@@ -167,18 +168,18 @@ func (mr *MockOVSCtlClientMockRecorder) DumpPortsDesc() *gomock.Call {
 }
 
 // DumpTableFlows mocks base method.
-func (m *MockOVSCtlClient) DumpTableFlows(arg0 byte) ([]string, error) {
+func (m *MockOVSCtlClient) DumpTableFlows(table uint8) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpTableFlows", arg0)
+	ret := m.ctrl.Call(m, "DumpTableFlows", table)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DumpTableFlows indicates an expected call of DumpTableFlows.
-func (mr *MockOVSCtlClientMockRecorder) DumpTableFlows(arg0 any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) DumpTableFlows(table any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTableFlows), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTableFlows), table)
 }
 
 // GetDPFeatures mocks base method.
@@ -197,10 +198,10 @@ func (mr *MockOVSCtlClientMockRecorder) GetDPFeatures() *gomock.Call {
 }
 
 // RunAppctlCmd mocks base method.
-func (m *MockOVSCtlClient) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) ([]byte, error) {
+func (m *MockOVSCtlClient) RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{cmd, needsBridge}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "RunAppctlCmd", varargs...)
@@ -210,17 +211,17 @@ func (m *MockOVSCtlClient) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) 
 }
 
 // RunAppctlCmd indicates an expected call of RunAppctlCmd.
-func (mr *MockOVSCtlClientMockRecorder) RunAppctlCmd(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) RunAppctlCmd(cmd, needsBridge any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{cmd, needsBridge}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunAppctlCmd", reflect.TypeOf((*MockOVSCtlClient)(nil).RunAppctlCmd), varargs...)
 }
 
 // RunOfctlCmd mocks base method.
-func (m *MockOVSCtlClient) RunOfctlCmd(arg0 string, arg1 ...string) ([]byte, error) {
+func (m *MockOVSCtlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{cmd}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "RunOfctlCmd", varargs...)
@@ -230,37 +231,37 @@ func (m *MockOVSCtlClient) RunOfctlCmd(arg0 string, arg1 ...string) ([]byte, err
 }
 
 // RunOfctlCmd indicates an expected call of RunOfctlCmd.
-func (mr *MockOVSCtlClientMockRecorder) RunOfctlCmd(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) RunOfctlCmd(cmd any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{cmd}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunOfctlCmd", reflect.TypeOf((*MockOVSCtlClient)(nil).RunOfctlCmd), varargs...)
 }
 
 // SetPortNoFlood mocks base method.
-func (m *MockOVSCtlClient) SetPortNoFlood(arg0 int) error {
+func (m *MockOVSCtlClient) SetPortNoFlood(ofport int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetPortNoFlood", arg0)
+	ret := m.ctrl.Call(m, "SetPortNoFlood", ofport)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetPortNoFlood indicates an expected call of SetPortNoFlood.
-func (mr *MockOVSCtlClientMockRecorder) SetPortNoFlood(arg0 any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) SetPortNoFlood(ofport any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPortNoFlood", reflect.TypeOf((*MockOVSCtlClient)(nil).SetPortNoFlood), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPortNoFlood", reflect.TypeOf((*MockOVSCtlClient)(nil).SetPortNoFlood), ofport)
 }
 
 // Trace mocks base method.
-func (m *MockOVSCtlClient) Trace(arg0 *ovsctl.TracingRequest) (string, error) {
+func (m *MockOVSCtlClient) Trace(req *ovsctl.TracingRequest) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Trace", arg0)
+	ret := m.ctrl.Call(m, "Trace", req)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Trace indicates an expected call of Trace.
-func (mr *MockOVSCtlClientMockRecorder) Trace(arg0 any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) Trace(req any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Trace", reflect.TypeOf((*MockOVSCtlClient)(nil).Trace), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Trace", reflect.TypeOf((*MockOVSCtlClient)(nil).Trace), req)
 }

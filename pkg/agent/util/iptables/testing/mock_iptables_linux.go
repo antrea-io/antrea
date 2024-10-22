@@ -35,6 +35,7 @@ import (
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockInterfaceMockRecorder is the mock recorder for MockInterface.
@@ -55,74 +56,74 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AppendRule mocks base method.
-func (m *MockInterface) AppendRule(arg0 iptables.Protocol, arg1, arg2 string, arg3 []string) error {
+func (m *MockInterface) AppendRule(protocol iptables.Protocol, table, chain string, ruleSpec []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AppendRule", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "AppendRule", protocol, table, chain, ruleSpec)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AppendRule indicates an expected call of AppendRule.
-func (mr *MockInterfaceMockRecorder) AppendRule(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AppendRule(protocol, table, chain, ruleSpec any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendRule", reflect.TypeOf((*MockInterface)(nil).AppendRule), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendRule", reflect.TypeOf((*MockInterface)(nil).AppendRule), protocol, table, chain, ruleSpec)
 }
 
 // ChainExists mocks base method.
-func (m *MockInterface) ChainExists(arg0 iptables.Protocol, arg1, arg2 string) (bool, error) {
+func (m *MockInterface) ChainExists(protocol iptables.Protocol, table, chain string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ChainExists", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ChainExists", protocol, table, chain)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ChainExists indicates an expected call of ChainExists.
-func (mr *MockInterfaceMockRecorder) ChainExists(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ChainExists(protocol, table, chain any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChainExists", reflect.TypeOf((*MockInterface)(nil).ChainExists), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChainExists", reflect.TypeOf((*MockInterface)(nil).ChainExists), protocol, table, chain)
 }
 
 // DeleteChain mocks base method.
-func (m *MockInterface) DeleteChain(arg0 iptables.Protocol, arg1, arg2 string) error {
+func (m *MockInterface) DeleteChain(protocol iptables.Protocol, table, chain string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteChain", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DeleteChain", protocol, table, chain)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteChain indicates an expected call of DeleteChain.
-func (mr *MockInterfaceMockRecorder) DeleteChain(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteChain(protocol, table, chain any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteChain", reflect.TypeOf((*MockInterface)(nil).DeleteChain), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteChain", reflect.TypeOf((*MockInterface)(nil).DeleteChain), protocol, table, chain)
 }
 
 // DeleteRule mocks base method.
-func (m *MockInterface) DeleteRule(arg0 iptables.Protocol, arg1, arg2 string, arg3 []string) error {
+func (m *MockInterface) DeleteRule(protocol iptables.Protocol, table, chain string, ruleSpec []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRule", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "DeleteRule", protocol, table, chain, ruleSpec)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteRule indicates an expected call of DeleteRule.
-func (mr *MockInterfaceMockRecorder) DeleteRule(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteRule(protocol, table, chain, ruleSpec any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRule", reflect.TypeOf((*MockInterface)(nil).DeleteRule), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRule", reflect.TypeOf((*MockInterface)(nil).DeleteRule), protocol, table, chain, ruleSpec)
 }
 
 // EnsureChain mocks base method.
-func (m *MockInterface) EnsureChain(arg0 iptables.Protocol, arg1, arg2 string) error {
+func (m *MockInterface) EnsureChain(protocol iptables.Protocol, table, chain string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnsureChain", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "EnsureChain", protocol, table, chain)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnsureChain indicates an expected call of EnsureChain.
-func (mr *MockInterfaceMockRecorder) EnsureChain(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) EnsureChain(protocol, table, chain any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureChain", reflect.TypeOf((*MockInterface)(nil).EnsureChain), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureChain", reflect.TypeOf((*MockInterface)(nil).EnsureChain), protocol, table, chain)
 }
 
 // HasRandomFully mocks base method.
@@ -140,46 +141,46 @@ func (mr *MockInterfaceMockRecorder) HasRandomFully() *gomock.Call {
 }
 
 // InsertRule mocks base method.
-func (m *MockInterface) InsertRule(arg0 iptables.Protocol, arg1, arg2 string, arg3 []string) error {
+func (m *MockInterface) InsertRule(protocol iptables.Protocol, table, chain string, ruleSpec []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InsertRule", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "InsertRule", protocol, table, chain, ruleSpec)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InsertRule indicates an expected call of InsertRule.
-func (mr *MockInterfaceMockRecorder) InsertRule(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) InsertRule(protocol, table, chain, ruleSpec any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertRule", reflect.TypeOf((*MockInterface)(nil).InsertRule), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertRule", reflect.TypeOf((*MockInterface)(nil).InsertRule), protocol, table, chain, ruleSpec)
 }
 
 // ListRules mocks base method.
-func (m *MockInterface) ListRules(arg0 iptables.Protocol, arg1, arg2 string) (map[iptables.Protocol][]string, error) {
+func (m *MockInterface) ListRules(protocol iptables.Protocol, table, chain string) (map[iptables.Protocol][]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListRules", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ListRules", protocol, table, chain)
 	ret0, _ := ret[0].(map[iptables.Protocol][]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListRules indicates an expected call of ListRules.
-func (mr *MockInterfaceMockRecorder) ListRules(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ListRules(protocol, table, chain any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRules", reflect.TypeOf((*MockInterface)(nil).ListRules), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRules", reflect.TypeOf((*MockInterface)(nil).ListRules), protocol, table, chain)
 }
 
 // Restore mocks base method.
-func (m *MockInterface) Restore(arg0 string, arg1, arg2 bool) error {
+func (m *MockInterface) Restore(data string, flush, useIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Restore", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Restore", data, flush, useIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Restore indicates an expected call of Restore.
-func (mr *MockInterfaceMockRecorder) Restore(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Restore(data, flush, useIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockInterface)(nil).Restore), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockInterface)(nil).Restore), data, flush, useIPv6)
 }
 
 // Save mocks base method.

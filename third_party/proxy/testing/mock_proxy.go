@@ -36,6 +36,7 @@ import (
 type MockProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockProviderMockRecorder is the mock recorder for MockProvider.
@@ -56,39 +57,39 @@ func (m *MockProvider) EXPECT() *MockProviderMockRecorder {
 }
 
 // OnEndpointSliceAdd mocks base method.
-func (m *MockProvider) OnEndpointSliceAdd(arg0 *v10.EndpointSlice) {
+func (m *MockProvider) OnEndpointSliceAdd(endpointSlice *v10.EndpointSlice) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnEndpointSliceAdd", arg0)
+	m.ctrl.Call(m, "OnEndpointSliceAdd", endpointSlice)
 }
 
 // OnEndpointSliceAdd indicates an expected call of OnEndpointSliceAdd.
-func (mr *MockProviderMockRecorder) OnEndpointSliceAdd(arg0 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnEndpointSliceAdd(endpointSlice any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointSliceAdd", reflect.TypeOf((*MockProvider)(nil).OnEndpointSliceAdd), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointSliceAdd", reflect.TypeOf((*MockProvider)(nil).OnEndpointSliceAdd), endpointSlice)
 }
 
 // OnEndpointSliceDelete mocks base method.
-func (m *MockProvider) OnEndpointSliceDelete(arg0 *v10.EndpointSlice) {
+func (m *MockProvider) OnEndpointSliceDelete(endpointSlice *v10.EndpointSlice) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnEndpointSliceDelete", arg0)
+	m.ctrl.Call(m, "OnEndpointSliceDelete", endpointSlice)
 }
 
 // OnEndpointSliceDelete indicates an expected call of OnEndpointSliceDelete.
-func (mr *MockProviderMockRecorder) OnEndpointSliceDelete(arg0 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnEndpointSliceDelete(endpointSlice any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointSliceDelete", reflect.TypeOf((*MockProvider)(nil).OnEndpointSliceDelete), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointSliceDelete", reflect.TypeOf((*MockProvider)(nil).OnEndpointSliceDelete), endpointSlice)
 }
 
 // OnEndpointSliceUpdate mocks base method.
-func (m *MockProvider) OnEndpointSliceUpdate(arg0, arg1 *v10.EndpointSlice) {
+func (m *MockProvider) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *v10.EndpointSlice) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnEndpointSliceUpdate", arg0, arg1)
+	m.ctrl.Call(m, "OnEndpointSliceUpdate", oldEndpointSlice, newEndpointSlice)
 }
 
 // OnEndpointSliceUpdate indicates an expected call of OnEndpointSliceUpdate.
-func (mr *MockProviderMockRecorder) OnEndpointSliceUpdate(arg0, arg1 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointSliceUpdate", reflect.TypeOf((*MockProvider)(nil).OnEndpointSliceUpdate), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointSliceUpdate", reflect.TypeOf((*MockProvider)(nil).OnEndpointSliceUpdate), oldEndpointSlice, newEndpointSlice)
 }
 
 // OnEndpointSlicesSynced mocks base method.
@@ -104,27 +105,27 @@ func (mr *MockProviderMockRecorder) OnEndpointSlicesSynced() *gomock.Call {
 }
 
 // OnEndpointsAdd mocks base method.
-func (m *MockProvider) OnEndpointsAdd(arg0 *v1.Endpoints) {
+func (m *MockProvider) OnEndpointsAdd(endpoints *v1.Endpoints) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnEndpointsAdd", arg0)
+	m.ctrl.Call(m, "OnEndpointsAdd", endpoints)
 }
 
 // OnEndpointsAdd indicates an expected call of OnEndpointsAdd.
-func (mr *MockProviderMockRecorder) OnEndpointsAdd(arg0 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnEndpointsAdd(endpoints any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointsAdd", reflect.TypeOf((*MockProvider)(nil).OnEndpointsAdd), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointsAdd", reflect.TypeOf((*MockProvider)(nil).OnEndpointsAdd), endpoints)
 }
 
 // OnEndpointsDelete mocks base method.
-func (m *MockProvider) OnEndpointsDelete(arg0 *v1.Endpoints) {
+func (m *MockProvider) OnEndpointsDelete(endpoints *v1.Endpoints) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnEndpointsDelete", arg0)
+	m.ctrl.Call(m, "OnEndpointsDelete", endpoints)
 }
 
 // OnEndpointsDelete indicates an expected call of OnEndpointsDelete.
-func (mr *MockProviderMockRecorder) OnEndpointsDelete(arg0 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnEndpointsDelete(endpoints any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointsDelete", reflect.TypeOf((*MockProvider)(nil).OnEndpointsDelete), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointsDelete", reflect.TypeOf((*MockProvider)(nil).OnEndpointsDelete), endpoints)
 }
 
 // OnEndpointsSynced mocks base method.
@@ -140,39 +141,39 @@ func (mr *MockProviderMockRecorder) OnEndpointsSynced() *gomock.Call {
 }
 
 // OnEndpointsUpdate mocks base method.
-func (m *MockProvider) OnEndpointsUpdate(arg0, arg1 *v1.Endpoints) {
+func (m *MockProvider) OnEndpointsUpdate(oldEndpoints, endpoints *v1.Endpoints) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnEndpointsUpdate", arg0, arg1)
+	m.ctrl.Call(m, "OnEndpointsUpdate", oldEndpoints, endpoints)
 }
 
 // OnEndpointsUpdate indicates an expected call of OnEndpointsUpdate.
-func (mr *MockProviderMockRecorder) OnEndpointsUpdate(arg0, arg1 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnEndpointsUpdate(oldEndpoints, endpoints any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointsUpdate", reflect.TypeOf((*MockProvider)(nil).OnEndpointsUpdate), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnEndpointsUpdate", reflect.TypeOf((*MockProvider)(nil).OnEndpointsUpdate), oldEndpoints, endpoints)
 }
 
 // OnNodeAdd mocks base method.
-func (m *MockProvider) OnNodeAdd(arg0 *v1.Node) {
+func (m *MockProvider) OnNodeAdd(node *v1.Node) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnNodeAdd", arg0)
+	m.ctrl.Call(m, "OnNodeAdd", node)
 }
 
 // OnNodeAdd indicates an expected call of OnNodeAdd.
-func (mr *MockProviderMockRecorder) OnNodeAdd(arg0 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnNodeAdd(node any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnNodeAdd", reflect.TypeOf((*MockProvider)(nil).OnNodeAdd), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnNodeAdd", reflect.TypeOf((*MockProvider)(nil).OnNodeAdd), node)
 }
 
 // OnNodeDelete mocks base method.
-func (m *MockProvider) OnNodeDelete(arg0 *v1.Node) {
+func (m *MockProvider) OnNodeDelete(node *v1.Node) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnNodeDelete", arg0)
+	m.ctrl.Call(m, "OnNodeDelete", node)
 }
 
 // OnNodeDelete indicates an expected call of OnNodeDelete.
-func (mr *MockProviderMockRecorder) OnNodeDelete(arg0 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnNodeDelete(node any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnNodeDelete", reflect.TypeOf((*MockProvider)(nil).OnNodeDelete), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnNodeDelete", reflect.TypeOf((*MockProvider)(nil).OnNodeDelete), node)
 }
 
 // OnNodeSynced mocks base method.
@@ -188,39 +189,39 @@ func (mr *MockProviderMockRecorder) OnNodeSynced() *gomock.Call {
 }
 
 // OnNodeUpdate mocks base method.
-func (m *MockProvider) OnNodeUpdate(arg0, arg1 *v1.Node) {
+func (m *MockProvider) OnNodeUpdate(oldNode, node *v1.Node) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnNodeUpdate", arg0, arg1)
+	m.ctrl.Call(m, "OnNodeUpdate", oldNode, node)
 }
 
 // OnNodeUpdate indicates an expected call of OnNodeUpdate.
-func (mr *MockProviderMockRecorder) OnNodeUpdate(arg0, arg1 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnNodeUpdate(oldNode, node any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnNodeUpdate", reflect.TypeOf((*MockProvider)(nil).OnNodeUpdate), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnNodeUpdate", reflect.TypeOf((*MockProvider)(nil).OnNodeUpdate), oldNode, node)
 }
 
 // OnServiceAdd mocks base method.
-func (m *MockProvider) OnServiceAdd(arg0 *v1.Service) {
+func (m *MockProvider) OnServiceAdd(service *v1.Service) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnServiceAdd", arg0)
+	m.ctrl.Call(m, "OnServiceAdd", service)
 }
 
 // OnServiceAdd indicates an expected call of OnServiceAdd.
-func (mr *MockProviderMockRecorder) OnServiceAdd(arg0 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnServiceAdd(service any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnServiceAdd", reflect.TypeOf((*MockProvider)(nil).OnServiceAdd), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnServiceAdd", reflect.TypeOf((*MockProvider)(nil).OnServiceAdd), service)
 }
 
 // OnServiceDelete mocks base method.
-func (m *MockProvider) OnServiceDelete(arg0 *v1.Service) {
+func (m *MockProvider) OnServiceDelete(service *v1.Service) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnServiceDelete", arg0)
+	m.ctrl.Call(m, "OnServiceDelete", service)
 }
 
 // OnServiceDelete indicates an expected call of OnServiceDelete.
-func (mr *MockProviderMockRecorder) OnServiceDelete(arg0 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnServiceDelete(service any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnServiceDelete", reflect.TypeOf((*MockProvider)(nil).OnServiceDelete), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnServiceDelete", reflect.TypeOf((*MockProvider)(nil).OnServiceDelete), service)
 }
 
 // OnServiceSynced mocks base method.
@@ -236,27 +237,27 @@ func (mr *MockProviderMockRecorder) OnServiceSynced() *gomock.Call {
 }
 
 // OnServiceUpdate mocks base method.
-func (m *MockProvider) OnServiceUpdate(arg0, arg1 *v1.Service) {
+func (m *MockProvider) OnServiceUpdate(oldService, service *v1.Service) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnServiceUpdate", arg0, arg1)
+	m.ctrl.Call(m, "OnServiceUpdate", oldService, service)
 }
 
 // OnServiceUpdate indicates an expected call of OnServiceUpdate.
-func (mr *MockProviderMockRecorder) OnServiceUpdate(arg0, arg1 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) OnServiceUpdate(oldService, service any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnServiceUpdate", reflect.TypeOf((*MockProvider)(nil).OnServiceUpdate), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnServiceUpdate", reflect.TypeOf((*MockProvider)(nil).OnServiceUpdate), oldService, service)
 }
 
 // Run mocks base method.
-func (m *MockProvider) Run(arg0 <-chan struct{}) {
+func (m *MockProvider) Run(stopCh <-chan struct{}) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Run", arg0)
+	m.ctrl.Call(m, "Run", stopCh)
 }
 
 // Run indicates an expected call of Run.
-func (mr *MockProviderMockRecorder) Run(arg0 any) *gomock.Call {
+func (mr *MockProviderMockRecorder) Run(stopCh any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockProvider)(nil).Run), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockProvider)(nil).Run), stopCh)
 }
 
 // SyncLoop mocks base method.

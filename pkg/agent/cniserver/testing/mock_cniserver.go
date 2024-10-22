@@ -34,6 +34,7 @@ import (
 type MockSriovNet struct {
 	ctrl     *gomock.Controller
 	recorder *MockSriovNetMockRecorder
+	isgomock struct{}
 }
 
 // MockSriovNetMockRecorder is the mock recorder for MockSriovNet.
@@ -54,106 +55,106 @@ func (m *MockSriovNet) EXPECT() *MockSriovNetMockRecorder {
 }
 
 // GetNetDevicesFromPci mocks base method.
-func (m *MockSriovNet) GetNetDevicesFromPci(arg0 string) ([]string, error) {
+func (m *MockSriovNet) GetNetDevicesFromPci(pciAddress string) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNetDevicesFromPci", arg0)
+	ret := m.ctrl.Call(m, "GetNetDevicesFromPci", pciAddress)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetNetDevicesFromPci indicates an expected call of GetNetDevicesFromPci.
-func (mr *MockSriovNetMockRecorder) GetNetDevicesFromPci(arg0 any) *gomock.Call {
+func (mr *MockSriovNetMockRecorder) GetNetDevicesFromPci(pciAddress any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetDevicesFromPci", reflect.TypeOf((*MockSriovNet)(nil).GetNetDevicesFromPci), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetDevicesFromPci", reflect.TypeOf((*MockSriovNet)(nil).GetNetDevicesFromPci), pciAddress)
 }
 
 // GetPfName mocks base method.
-func (m *MockSriovNet) GetPfName(arg0 string) (string, error) {
+func (m *MockSriovNet) GetPfName(vf string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPfName", arg0)
+	ret := m.ctrl.Call(m, "GetPfName", vf)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPfName indicates an expected call of GetPfName.
-func (mr *MockSriovNetMockRecorder) GetPfName(arg0 any) *gomock.Call {
+func (mr *MockSriovNetMockRecorder) GetPfName(vf any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPfName", reflect.TypeOf((*MockSriovNet)(nil).GetPfName), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPfName", reflect.TypeOf((*MockSriovNet)(nil).GetPfName), vf)
 }
 
 // GetUplinkRepresentor mocks base method.
-func (m *MockSriovNet) GetUplinkRepresentor(arg0 string) (string, error) {
+func (m *MockSriovNet) GetUplinkRepresentor(pciAddress string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUplinkRepresentor", arg0)
+	ret := m.ctrl.Call(m, "GetUplinkRepresentor", pciAddress)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetUplinkRepresentor indicates an expected call of GetUplinkRepresentor.
-func (mr *MockSriovNetMockRecorder) GetUplinkRepresentor(arg0 any) *gomock.Call {
+func (mr *MockSriovNetMockRecorder) GetUplinkRepresentor(pciAddress any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUplinkRepresentor", reflect.TypeOf((*MockSriovNet)(nil).GetUplinkRepresentor), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUplinkRepresentor", reflect.TypeOf((*MockSriovNet)(nil).GetUplinkRepresentor), pciAddress)
 }
 
 // GetVFLinkNames mocks base method.
-func (m *MockSriovNet) GetVFLinkNames(arg0 string) (string, error) {
+func (m *MockSriovNet) GetVFLinkNames(pciAddr string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVFLinkNames", arg0)
+	ret := m.ctrl.Call(m, "GetVFLinkNames", pciAddr)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVFLinkNames indicates an expected call of GetVFLinkNames.
-func (mr *MockSriovNetMockRecorder) GetVFLinkNames(arg0 any) *gomock.Call {
+func (mr *MockSriovNetMockRecorder) GetVFLinkNames(pciAddr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVFLinkNames", reflect.TypeOf((*MockSriovNet)(nil).GetVFLinkNames), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVFLinkNames", reflect.TypeOf((*MockSriovNet)(nil).GetVFLinkNames), pciAddr)
 }
 
 // GetVfIndexByPciAddress mocks base method.
-func (m *MockSriovNet) GetVfIndexByPciAddress(arg0 string) (int, error) {
+func (m *MockSriovNet) GetVfIndexByPciAddress(vfPciAddress string) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVfIndexByPciAddress", arg0)
+	ret := m.ctrl.Call(m, "GetVfIndexByPciAddress", vfPciAddress)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVfIndexByPciAddress indicates an expected call of GetVfIndexByPciAddress.
-func (mr *MockSriovNetMockRecorder) GetVfIndexByPciAddress(arg0 any) *gomock.Call {
+func (mr *MockSriovNetMockRecorder) GetVfIndexByPciAddress(vfPciAddress any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVfIndexByPciAddress", reflect.TypeOf((*MockSriovNet)(nil).GetVfIndexByPciAddress), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVfIndexByPciAddress", reflect.TypeOf((*MockSriovNet)(nil).GetVfIndexByPciAddress), vfPciAddress)
 }
 
 // GetVfRepresentor mocks base method.
-func (m *MockSriovNet) GetVfRepresentor(arg0 string, arg1 int) (string, error) {
+func (m *MockSriovNet) GetVfRepresentor(uplink string, vfIndex int) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVfRepresentor", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetVfRepresentor", uplink, vfIndex)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVfRepresentor indicates an expected call of GetVfRepresentor.
-func (mr *MockSriovNetMockRecorder) GetVfRepresentor(arg0, arg1 any) *gomock.Call {
+func (mr *MockSriovNetMockRecorder) GetVfRepresentor(uplink, vfIndex any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVfRepresentor", reflect.TypeOf((*MockSriovNet)(nil).GetVfRepresentor), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVfRepresentor", reflect.TypeOf((*MockSriovNet)(nil).GetVfRepresentor), uplink, vfIndex)
 }
 
 // GetVfid mocks base method.
-func (m *MockSriovNet) GetVfid(arg0, arg1 string) (int, error) {
+func (m *MockSriovNet) GetVfid(addr, pfName string) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVfid", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetVfid", addr, pfName)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVfid indicates an expected call of GetVfid.
-func (mr *MockSriovNetMockRecorder) GetVfid(arg0, arg1 any) *gomock.Call {
+func (mr *MockSriovNetMockRecorder) GetVfid(addr, pfName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVfid", reflect.TypeOf((*MockSriovNet)(nil).GetVfid), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVfid", reflect.TypeOf((*MockSriovNet)(nil).GetVfid), addr, pfName)
 }

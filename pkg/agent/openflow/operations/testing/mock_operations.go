@@ -36,6 +36,7 @@ import (
 type MockOFEntryOperations struct {
 	ctrl     *gomock.Controller
 	recorder *MockOFEntryOperationsMockRecorder
+	isgomock struct{}
 }
 
 // MockOFEntryOperationsMockRecorder is the mock recorder for MockOFEntryOperations.
@@ -56,99 +57,99 @@ func (m *MockOFEntryOperations) EXPECT() *MockOFEntryOperationsMockRecorder {
 }
 
 // AddAll mocks base method.
-func (m *MockOFEntryOperations) AddAll(arg0 []*openflow15.FlowMod) error {
+func (m *MockOFEntryOperations) AddAll(flows []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddAll", arg0)
+	ret := m.ctrl.Call(m, "AddAll", flows)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddAll indicates an expected call of AddAll.
-func (mr *MockOFEntryOperationsMockRecorder) AddAll(arg0 any) *gomock.Call {
+func (mr *MockOFEntryOperationsMockRecorder) AddAll(flows any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAll", reflect.TypeOf((*MockOFEntryOperations)(nil).AddAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAll", reflect.TypeOf((*MockOFEntryOperations)(nil).AddAll), flows)
 }
 
 // AddOFEntries mocks base method.
-func (m *MockOFEntryOperations) AddOFEntries(arg0 []openflow.OFEntry) error {
+func (m *MockOFEntryOperations) AddOFEntries(ofEntries []openflow.OFEntry) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddOFEntries", arg0)
+	ret := m.ctrl.Call(m, "AddOFEntries", ofEntries)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddOFEntries indicates an expected call of AddOFEntries.
-func (mr *MockOFEntryOperationsMockRecorder) AddOFEntries(arg0 any) *gomock.Call {
+func (mr *MockOFEntryOperationsMockRecorder) AddOFEntries(ofEntries any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOFEntries", reflect.TypeOf((*MockOFEntryOperations)(nil).AddOFEntries), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOFEntries", reflect.TypeOf((*MockOFEntryOperations)(nil).AddOFEntries), ofEntries)
 }
 
 // BundleOps mocks base method.
-func (m *MockOFEntryOperations) BundleOps(arg0, arg1, arg2 []*openflow15.FlowMod) error {
+func (m *MockOFEntryOperations) BundleOps(adds, mods, dels []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BundleOps", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "BundleOps", adds, mods, dels)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // BundleOps indicates an expected call of BundleOps.
-func (mr *MockOFEntryOperationsMockRecorder) BundleOps(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockOFEntryOperationsMockRecorder) BundleOps(adds, mods, dels any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BundleOps", reflect.TypeOf((*MockOFEntryOperations)(nil).BundleOps), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BundleOps", reflect.TypeOf((*MockOFEntryOperations)(nil).BundleOps), adds, mods, dels)
 }
 
 // DeleteAll mocks base method.
-func (m *MockOFEntryOperations) DeleteAll(arg0 []*openflow15.FlowMod) error {
+func (m *MockOFEntryOperations) DeleteAll(flows []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteAll", arg0)
+	ret := m.ctrl.Call(m, "DeleteAll", flows)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteAll indicates an expected call of DeleteAll.
-func (mr *MockOFEntryOperationsMockRecorder) DeleteAll(arg0 any) *gomock.Call {
+func (mr *MockOFEntryOperationsMockRecorder) DeleteAll(flows any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAll", reflect.TypeOf((*MockOFEntryOperations)(nil).DeleteAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAll", reflect.TypeOf((*MockOFEntryOperations)(nil).DeleteAll), flows)
 }
 
 // DeleteOFEntries mocks base method.
-func (m *MockOFEntryOperations) DeleteOFEntries(arg0 []openflow.OFEntry) error {
+func (m *MockOFEntryOperations) DeleteOFEntries(ofEntries []openflow.OFEntry) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteOFEntries", arg0)
+	ret := m.ctrl.Call(m, "DeleteOFEntries", ofEntries)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteOFEntries indicates an expected call of DeleteOFEntries.
-func (mr *MockOFEntryOperationsMockRecorder) DeleteOFEntries(arg0 any) *gomock.Call {
+func (mr *MockOFEntryOperationsMockRecorder) DeleteOFEntries(ofEntries any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOFEntries", reflect.TypeOf((*MockOFEntryOperations)(nil).DeleteOFEntries), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOFEntries", reflect.TypeOf((*MockOFEntryOperations)(nil).DeleteOFEntries), ofEntries)
 }
 
 // ModifyAll mocks base method.
-func (m *MockOFEntryOperations) ModifyAll(arg0 []*openflow15.FlowMod) error {
+func (m *MockOFEntryOperations) ModifyAll(flows []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ModifyAll", arg0)
+	ret := m.ctrl.Call(m, "ModifyAll", flows)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ModifyAll indicates an expected call of ModifyAll.
-func (mr *MockOFEntryOperationsMockRecorder) ModifyAll(arg0 any) *gomock.Call {
+func (mr *MockOFEntryOperationsMockRecorder) ModifyAll(flows any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyAll", reflect.TypeOf((*MockOFEntryOperations)(nil).ModifyAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyAll", reflect.TypeOf((*MockOFEntryOperations)(nil).ModifyAll), flows)
 }
 
 // ModifyOFEntries mocks base method.
-func (m *MockOFEntryOperations) ModifyOFEntries(arg0 []openflow.OFEntry) error {
+func (m *MockOFEntryOperations) ModifyOFEntries(ofEntries []openflow.OFEntry) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ModifyOFEntries", arg0)
+	ret := m.ctrl.Call(m, "ModifyOFEntries", ofEntries)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ModifyOFEntries indicates an expected call of ModifyOFEntries.
-func (mr *MockOFEntryOperationsMockRecorder) ModifyOFEntries(arg0 any) *gomock.Call {
+func (mr *MockOFEntryOperationsMockRecorder) ModifyOFEntries(ofEntries any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyOFEntries", reflect.TypeOf((*MockOFEntryOperations)(nil).ModifyOFEntries), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyOFEntries", reflect.TypeOf((*MockOFEntryOperations)(nil).ModifyOFEntries), ofEntries)
 }

@@ -35,6 +35,7 @@ import (
 type MockConnTrackDumper struct {
 	ctrl     *gomock.Controller
 	recorder *MockConnTrackDumperMockRecorder
+	isgomock struct{}
 }
 
 // MockConnTrackDumperMockRecorder is the mock recorder for MockConnTrackDumper.
@@ -55,9 +56,9 @@ func (m *MockConnTrackDumper) EXPECT() *MockConnTrackDumperMockRecorder {
 }
 
 // DumpFlows mocks base method.
-func (m *MockConnTrackDumper) DumpFlows(arg0 uint16) ([]*flowexporter.Connection, int, error) {
+func (m *MockConnTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpFlows", arg0)
+	ret := m.ctrl.Call(m, "DumpFlows", zoneFilter)
 	ret0, _ := ret[0].([]*flowexporter.Connection)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
@@ -65,9 +66,9 @@ func (m *MockConnTrackDumper) DumpFlows(arg0 uint16) ([]*flowexporter.Connection
 }
 
 // DumpFlows indicates an expected call of DumpFlows.
-func (mr *MockConnTrackDumperMockRecorder) DumpFlows(arg0 any) *gomock.Call {
+func (mr *MockConnTrackDumperMockRecorder) DumpFlows(zoneFilter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockConnTrackDumper)(nil).DumpFlows), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockConnTrackDumper)(nil).DumpFlows), zoneFilter)
 }
 
 // GetMaxConnections mocks base method.
@@ -89,6 +90,7 @@ func (mr *MockConnTrackDumperMockRecorder) GetMaxConnections() *gomock.Call {
 type MockNetFilterConnTrack struct {
 	ctrl     *gomock.Controller
 	recorder *MockNetFilterConnTrackMockRecorder
+	isgomock struct{}
 }
 
 // MockNetFilterConnTrackMockRecorder is the mock recorder for MockNetFilterConnTrack.
@@ -123,16 +125,16 @@ func (mr *MockNetFilterConnTrackMockRecorder) Dial() *gomock.Call {
 }
 
 // DumpFlowsInCtZone mocks base method.
-func (m *MockNetFilterConnTrack) DumpFlowsInCtZone(arg0 uint16) ([]*flowexporter.Connection, error) {
+func (m *MockNetFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpFlowsInCtZone", arg0)
+	ret := m.ctrl.Call(m, "DumpFlowsInCtZone", zoneFilter)
 	ret0, _ := ret[0].([]*flowexporter.Connection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DumpFlowsInCtZone indicates an expected call of DumpFlowsInCtZone.
-func (mr *MockNetFilterConnTrackMockRecorder) DumpFlowsInCtZone(arg0 any) *gomock.Call {
+func (mr *MockNetFilterConnTrackMockRecorder) DumpFlowsInCtZone(zoneFilter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlowsInCtZone", reflect.TypeOf((*MockNetFilterConnTrack)(nil).DumpFlowsInCtZone), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlowsInCtZone", reflect.TypeOf((*MockNetFilterConnTrack)(nil).DumpFlowsInCtZone), zoneFilter)
 }

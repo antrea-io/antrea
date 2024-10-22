@@ -38,6 +38,7 @@ import (
 type MockInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockInterfaceMockRecorder is the mock recorder for MockInterface.
@@ -58,377 +59,377 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AddEgressRoutes mocks base method.
-func (m *MockInterface) AddEgressRoutes(arg0 uint32, arg1 int, arg2 net.IP, arg3 int) error {
+func (m *MockInterface) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddEgressRoutes", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "AddEgressRoutes", tableID, dev, gateway, prefixLength)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddEgressRoutes indicates an expected call of AddEgressRoutes.
-func (mr *MockInterfaceMockRecorder) AddEgressRoutes(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddEgressRoutes(tableID, dev, gateway, prefixLength any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressRoutes", reflect.TypeOf((*MockInterface)(nil).AddEgressRoutes), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressRoutes", reflect.TypeOf((*MockInterface)(nil).AddEgressRoutes), tableID, dev, gateway, prefixLength)
 }
 
 // AddEgressRule mocks base method.
-func (m *MockInterface) AddEgressRule(arg0, arg1 uint32) error {
+func (m *MockInterface) AddEgressRule(tableID, mark uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddEgressRule", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddEgressRule", tableID, mark)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddEgressRule indicates an expected call of AddEgressRule.
-func (mr *MockInterfaceMockRecorder) AddEgressRule(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddEgressRule(tableID, mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressRule", reflect.TypeOf((*MockInterface)(nil).AddEgressRule), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressRule", reflect.TypeOf((*MockInterface)(nil).AddEgressRule), tableID, mark)
 }
 
 // AddExternalIPConfigs mocks base method.
-func (m *MockInterface) AddExternalIPConfigs(arg0 string, arg1 net.IP) error {
+func (m *MockInterface) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddExternalIPConfigs", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddExternalIPConfigs", svcInfoStr, externalIP)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddExternalIPConfigs indicates an expected call of AddExternalIPConfigs.
-func (mr *MockInterfaceMockRecorder) AddExternalIPConfigs(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddExternalIPConfigs(svcInfoStr, externalIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExternalIPConfigs", reflect.TypeOf((*MockInterface)(nil).AddExternalIPConfigs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExternalIPConfigs", reflect.TypeOf((*MockInterface)(nil).AddExternalIPConfigs), svcInfoStr, externalIP)
 }
 
 // AddLocalAntreaFlexibleIPAMPodRule mocks base method.
-func (m *MockInterface) AddLocalAntreaFlexibleIPAMPodRule(arg0 []net.IP) error {
+func (m *MockInterface) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddLocalAntreaFlexibleIPAMPodRule", arg0)
+	ret := m.ctrl.Call(m, "AddLocalAntreaFlexibleIPAMPodRule", podAddresses)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddLocalAntreaFlexibleIPAMPodRule indicates an expected call of AddLocalAntreaFlexibleIPAMPodRule.
-func (mr *MockInterfaceMockRecorder) AddLocalAntreaFlexibleIPAMPodRule(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddLocalAntreaFlexibleIPAMPodRule(podAddresses any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLocalAntreaFlexibleIPAMPodRule", reflect.TypeOf((*MockInterface)(nil).AddLocalAntreaFlexibleIPAMPodRule), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLocalAntreaFlexibleIPAMPodRule", reflect.TypeOf((*MockInterface)(nil).AddLocalAntreaFlexibleIPAMPodRule), podAddresses)
 }
 
 // AddNodePortConfigs mocks base method.
-func (m *MockInterface) AddNodePortConfigs(arg0 []net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+func (m *MockInterface) AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol openflow.Protocol) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddNodePortConfigs", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddNodePortConfigs", nodePortAddresses, port, protocol)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddNodePortConfigs indicates an expected call of AddNodePortConfigs.
-func (mr *MockInterfaceMockRecorder) AddNodePortConfigs(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddNodePortConfigs(nodePortAddresses, port, protocol any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNodePortConfigs", reflect.TypeOf((*MockInterface)(nil).AddNodePortConfigs), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNodePortConfigs", reflect.TypeOf((*MockInterface)(nil).AddNodePortConfigs), nodePortAddresses, port, protocol)
 }
 
 // AddOrUpdateNodeNetworkPolicyIPSet mocks base method.
-func (m *MockInterface) AddOrUpdateNodeNetworkPolicyIPSet(arg0 string, arg1 sets.Set[string], arg2 bool) error {
+func (m *MockInterface) AddOrUpdateNodeNetworkPolicyIPSet(ipsetName string, ipsetEntries sets.Set[string], isIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddOrUpdateNodeNetworkPolicyIPSet", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddOrUpdateNodeNetworkPolicyIPSet", ipsetName, ipsetEntries, isIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddOrUpdateNodeNetworkPolicyIPSet indicates an expected call of AddOrUpdateNodeNetworkPolicyIPSet.
-func (mr *MockInterfaceMockRecorder) AddOrUpdateNodeNetworkPolicyIPSet(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddOrUpdateNodeNetworkPolicyIPSet(ipsetName, ipsetEntries, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateNodeNetworkPolicyIPSet", reflect.TypeOf((*MockInterface)(nil).AddOrUpdateNodeNetworkPolicyIPSet), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateNodeNetworkPolicyIPSet", reflect.TypeOf((*MockInterface)(nil).AddOrUpdateNodeNetworkPolicyIPSet), ipsetName, ipsetEntries, isIPv6)
 }
 
 // AddOrUpdateNodeNetworkPolicyIPTables mocks base method.
-func (m *MockInterface) AddOrUpdateNodeNetworkPolicyIPTables(arg0 []string, arg1 [][]string, arg2 bool) error {
+func (m *MockInterface) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, iptablesRules [][]string, isIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddOrUpdateNodeNetworkPolicyIPTables", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddOrUpdateNodeNetworkPolicyIPTables", iptablesChains, iptablesRules, isIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddOrUpdateNodeNetworkPolicyIPTables indicates an expected call of AddOrUpdateNodeNetworkPolicyIPTables.
-func (mr *MockInterfaceMockRecorder) AddOrUpdateNodeNetworkPolicyIPTables(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains, iptablesRules, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateNodeNetworkPolicyIPTables", reflect.TypeOf((*MockInterface)(nil).AddOrUpdateNodeNetworkPolicyIPTables), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateNodeNetworkPolicyIPTables", reflect.TypeOf((*MockInterface)(nil).AddOrUpdateNodeNetworkPolicyIPTables), iptablesChains, iptablesRules, isIPv6)
 }
 
 // AddRouteForLink mocks base method.
-func (m *MockInterface) AddRouteForLink(arg0 *net.IPNet, arg1 int) error {
+func (m *MockInterface) AddRouteForLink(dstCIDR *net.IPNet, linkIndex int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddRouteForLink", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddRouteForLink", dstCIDR, linkIndex)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddRouteForLink indicates an expected call of AddRouteForLink.
-func (mr *MockInterfaceMockRecorder) AddRouteForLink(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddRouteForLink(dstCIDR, linkIndex any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRouteForLink", reflect.TypeOf((*MockInterface)(nil).AddRouteForLink), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRouteForLink", reflect.TypeOf((*MockInterface)(nil).AddRouteForLink), dstCIDR, linkIndex)
 }
 
 // AddRoutes mocks base method.
-func (m *MockInterface) AddRoutes(arg0 *net.IPNet, arg1 string, arg2, arg3 net.IP) error {
+func (m *MockInterface) AddRoutes(podCIDR *net.IPNet, peerNodeName string, peerNodeIP, peerGwIP net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddRoutes", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "AddRoutes", podCIDR, peerNodeName, peerNodeIP, peerGwIP)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddRoutes indicates an expected call of AddRoutes.
-func (mr *MockInterfaceMockRecorder) AddRoutes(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddRoutes(podCIDR, peerNodeName, peerNodeIP, peerGwIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRoutes", reflect.TypeOf((*MockInterface)(nil).AddRoutes), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRoutes", reflect.TypeOf((*MockInterface)(nil).AddRoutes), podCIDR, peerNodeName, peerNodeIP, peerGwIP)
 }
 
 // AddSNATRule mocks base method.
-func (m *MockInterface) AddSNATRule(arg0 net.IP, arg1 uint32) error {
+func (m *MockInterface) AddSNATRule(snatIP net.IP, mark uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddSNATRule", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddSNATRule", snatIP, mark)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddSNATRule indicates an expected call of AddSNATRule.
-func (mr *MockInterfaceMockRecorder) AddSNATRule(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddSNATRule(snatIP, mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRule", reflect.TypeOf((*MockInterface)(nil).AddSNATRule), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRule", reflect.TypeOf((*MockInterface)(nil).AddSNATRule), snatIP, mark)
 }
 
 // ClearConntrackEntryForService mocks base method.
-func (m *MockInterface) ClearConntrackEntryForService(arg0 net.IP, arg1 uint16, arg2 net.IP, arg3 openflow.Protocol) error {
+func (m *MockInterface) ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, endpointIP net.IP, protocol openflow.Protocol) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ClearConntrackEntryForService", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "ClearConntrackEntryForService", svcIP, svcPort, endpointIP, protocol)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ClearConntrackEntryForService indicates an expected call of ClearConntrackEntryForService.
-func (mr *MockInterfaceMockRecorder) ClearConntrackEntryForService(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ClearConntrackEntryForService(svcIP, svcPort, endpointIP, protocol any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearConntrackEntryForService", reflect.TypeOf((*MockInterface)(nil).ClearConntrackEntryForService), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearConntrackEntryForService", reflect.TypeOf((*MockInterface)(nil).ClearConntrackEntryForService), svcIP, svcPort, endpointIP, protocol)
 }
 
 // DeleteEgressRoutes mocks base method.
-func (m *MockInterface) DeleteEgressRoutes(arg0 uint32) error {
+func (m *MockInterface) DeleteEgressRoutes(tableID uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteEgressRoutes", arg0)
+	ret := m.ctrl.Call(m, "DeleteEgressRoutes", tableID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteEgressRoutes indicates an expected call of DeleteEgressRoutes.
-func (mr *MockInterfaceMockRecorder) DeleteEgressRoutes(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteEgressRoutes(tableID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressRoutes", reflect.TypeOf((*MockInterface)(nil).DeleteEgressRoutes), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressRoutes", reflect.TypeOf((*MockInterface)(nil).DeleteEgressRoutes), tableID)
 }
 
 // DeleteEgressRule mocks base method.
-func (m *MockInterface) DeleteEgressRule(arg0, arg1 uint32) error {
+func (m *MockInterface) DeleteEgressRule(tableID, mark uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteEgressRule", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteEgressRule", tableID, mark)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteEgressRule indicates an expected call of DeleteEgressRule.
-func (mr *MockInterfaceMockRecorder) DeleteEgressRule(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteEgressRule(tableID, mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressRule", reflect.TypeOf((*MockInterface)(nil).DeleteEgressRule), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressRule", reflect.TypeOf((*MockInterface)(nil).DeleteEgressRule), tableID, mark)
 }
 
 // DeleteExternalIPConfigs mocks base method.
-func (m *MockInterface) DeleteExternalIPConfigs(arg0 string, arg1 net.IP) error {
+func (m *MockInterface) DeleteExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteExternalIPConfigs", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteExternalIPConfigs", svcInfoStr, externalIP)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteExternalIPConfigs indicates an expected call of DeleteExternalIPConfigs.
-func (mr *MockInterfaceMockRecorder) DeleteExternalIPConfigs(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteExternalIPConfigs(svcInfoStr, externalIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExternalIPConfigs", reflect.TypeOf((*MockInterface)(nil).DeleteExternalIPConfigs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExternalIPConfigs", reflect.TypeOf((*MockInterface)(nil).DeleteExternalIPConfigs), svcInfoStr, externalIP)
 }
 
 // DeleteLocalAntreaFlexibleIPAMPodRule mocks base method.
-func (m *MockInterface) DeleteLocalAntreaFlexibleIPAMPodRule(arg0 []net.IP) error {
+func (m *MockInterface) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteLocalAntreaFlexibleIPAMPodRule", arg0)
+	ret := m.ctrl.Call(m, "DeleteLocalAntreaFlexibleIPAMPodRule", podAddresses)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteLocalAntreaFlexibleIPAMPodRule indicates an expected call of DeleteLocalAntreaFlexibleIPAMPodRule.
-func (mr *MockInterfaceMockRecorder) DeleteLocalAntreaFlexibleIPAMPodRule(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLocalAntreaFlexibleIPAMPodRule", reflect.TypeOf((*MockInterface)(nil).DeleteLocalAntreaFlexibleIPAMPodRule), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLocalAntreaFlexibleIPAMPodRule", reflect.TypeOf((*MockInterface)(nil).DeleteLocalAntreaFlexibleIPAMPodRule), podAddresses)
 }
 
 // DeleteNodeNetworkPolicyIPSet mocks base method.
-func (m *MockInterface) DeleteNodeNetworkPolicyIPSet(arg0 string, arg1 bool) error {
+func (m *MockInterface) DeleteNodeNetworkPolicyIPSet(ipsetName string, isIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteNodeNetworkPolicyIPSet", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteNodeNetworkPolicyIPSet", ipsetName, isIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteNodeNetworkPolicyIPSet indicates an expected call of DeleteNodeNetworkPolicyIPSet.
-func (mr *MockInterfaceMockRecorder) DeleteNodeNetworkPolicyIPSet(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteNodeNetworkPolicyIPSet(ipsetName, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodeNetworkPolicyIPSet", reflect.TypeOf((*MockInterface)(nil).DeleteNodeNetworkPolicyIPSet), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodeNetworkPolicyIPSet", reflect.TypeOf((*MockInterface)(nil).DeleteNodeNetworkPolicyIPSet), ipsetName, isIPv6)
 }
 
 // DeleteNodeNetworkPolicyIPTables mocks base method.
-func (m *MockInterface) DeleteNodeNetworkPolicyIPTables(arg0 []string, arg1 bool) error {
+func (m *MockInterface) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteNodeNetworkPolicyIPTables", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteNodeNetworkPolicyIPTables", iptablesChains, isIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteNodeNetworkPolicyIPTables indicates an expected call of DeleteNodeNetworkPolicyIPTables.
-func (mr *MockInterfaceMockRecorder) DeleteNodeNetworkPolicyIPTables(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteNodeNetworkPolicyIPTables(iptablesChains, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodeNetworkPolicyIPTables", reflect.TypeOf((*MockInterface)(nil).DeleteNodeNetworkPolicyIPTables), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodeNetworkPolicyIPTables", reflect.TypeOf((*MockInterface)(nil).DeleteNodeNetworkPolicyIPTables), iptablesChains, isIPv6)
 }
 
 // DeleteNodePortConfigs mocks base method.
-func (m *MockInterface) DeleteNodePortConfigs(arg0 []net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+func (m *MockInterface) DeleteNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol openflow.Protocol) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteNodePortConfigs", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DeleteNodePortConfigs", nodePortAddresses, port, protocol)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteNodePortConfigs indicates an expected call of DeleteNodePortConfigs.
-func (mr *MockInterfaceMockRecorder) DeleteNodePortConfigs(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteNodePortConfigs(nodePortAddresses, port, protocol any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodePortConfigs", reflect.TypeOf((*MockInterface)(nil).DeleteNodePortConfigs), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodePortConfigs", reflect.TypeOf((*MockInterface)(nil).DeleteNodePortConfigs), nodePortAddresses, port, protocol)
 }
 
 // DeleteRouteForLink mocks base method.
-func (m *MockInterface) DeleteRouteForLink(arg0 *net.IPNet, arg1 int) error {
+func (m *MockInterface) DeleteRouteForLink(dstCIDR *net.IPNet, linkIndex int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRouteForLink", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteRouteForLink", dstCIDR, linkIndex)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteRouteForLink indicates an expected call of DeleteRouteForLink.
-func (mr *MockInterfaceMockRecorder) DeleteRouteForLink(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteRouteForLink(dstCIDR, linkIndex any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRouteForLink", reflect.TypeOf((*MockInterface)(nil).DeleteRouteForLink), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRouteForLink", reflect.TypeOf((*MockInterface)(nil).DeleteRouteForLink), dstCIDR, linkIndex)
 }
 
 // DeleteRoutes mocks base method.
-func (m *MockInterface) DeleteRoutes(arg0 *net.IPNet) error {
+func (m *MockInterface) DeleteRoutes(podCIDR *net.IPNet) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRoutes", arg0)
+	ret := m.ctrl.Call(m, "DeleteRoutes", podCIDR)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteRoutes indicates an expected call of DeleteRoutes.
-func (mr *MockInterfaceMockRecorder) DeleteRoutes(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteRoutes(podCIDR any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRoutes", reflect.TypeOf((*MockInterface)(nil).DeleteRoutes), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRoutes", reflect.TypeOf((*MockInterface)(nil).DeleteRoutes), podCIDR)
 }
 
 // DeleteSNATRule mocks base method.
-func (m *MockInterface) DeleteSNATRule(arg0 uint32) error {
+func (m *MockInterface) DeleteSNATRule(mark uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSNATRule", arg0)
+	ret := m.ctrl.Call(m, "DeleteSNATRule", mark)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteSNATRule indicates an expected call of DeleteSNATRule.
-func (mr *MockInterfaceMockRecorder) DeleteSNATRule(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteSNATRule(mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRule", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRule), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRule", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRule), mark)
 }
 
 // Initialize mocks base method.
-func (m *MockInterface) Initialize(arg0 *config.NodeConfig, arg1 func()) error {
+func (m *MockInterface) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Initialize", arg0, arg1)
+	ret := m.ctrl.Call(m, "Initialize", nodeConfig, done)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Initialize indicates an expected call of Initialize.
-func (mr *MockInterfaceMockRecorder) Initialize(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Initialize(nodeConfig, done any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockInterface)(nil).Initialize), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockInterface)(nil).Initialize), nodeConfig, done)
 }
 
 // MigrateRoutesToGw mocks base method.
-func (m *MockInterface) MigrateRoutesToGw(arg0 string) error {
+func (m *MockInterface) MigrateRoutesToGw(linkName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MigrateRoutesToGw", arg0)
+	ret := m.ctrl.Call(m, "MigrateRoutesToGw", linkName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // MigrateRoutesToGw indicates an expected call of MigrateRoutesToGw.
-func (mr *MockInterfaceMockRecorder) MigrateRoutesToGw(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) MigrateRoutesToGw(linkName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateRoutesToGw", reflect.TypeOf((*MockInterface)(nil).MigrateRoutesToGw), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateRoutesToGw", reflect.TypeOf((*MockInterface)(nil).MigrateRoutesToGw), linkName)
 }
 
 // Reconcile mocks base method.
-func (m *MockInterface) Reconcile(arg0 []string) error {
+func (m *MockInterface) Reconcile(podCIDRs []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Reconcile", arg0)
+	ret := m.ctrl.Call(m, "Reconcile", podCIDRs)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Reconcile indicates an expected call of Reconcile.
-func (mr *MockInterfaceMockRecorder) Reconcile(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Reconcile(podCIDRs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reconcile", reflect.TypeOf((*MockInterface)(nil).Reconcile), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reconcile", reflect.TypeOf((*MockInterface)(nil).Reconcile), podCIDRs)
 }
 
 // RestoreEgressRoutesAndRules mocks base method.
-func (m *MockInterface) RestoreEgressRoutesAndRules(arg0, arg1 int) error {
+func (m *MockInterface) RestoreEgressRoutesAndRules(minTableID, maxTableID int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RestoreEgressRoutesAndRules", arg0, arg1)
+	ret := m.ctrl.Call(m, "RestoreEgressRoutesAndRules", minTableID, maxTableID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RestoreEgressRoutesAndRules indicates an expected call of RestoreEgressRoutesAndRules.
-func (mr *MockInterfaceMockRecorder) RestoreEgressRoutesAndRules(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RestoreEgressRoutesAndRules(minTableID, maxTableID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreEgressRoutesAndRules", reflect.TypeOf((*MockInterface)(nil).RestoreEgressRoutesAndRules), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreEgressRoutesAndRules", reflect.TypeOf((*MockInterface)(nil).RestoreEgressRoutesAndRules), minTableID, maxTableID)
 }
 
 // Run mocks base method.
-func (m *MockInterface) Run(arg0 <-chan struct{}) {
+func (m *MockInterface) Run(stopCh <-chan struct{}) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Run", arg0)
+	m.ctrl.Call(m, "Run", stopCh)
 }
 
 // Run indicates an expected call of Run.
-func (mr *MockInterfaceMockRecorder) Run(arg0 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Run(stopCh any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockInterface)(nil).Run), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockInterface)(nil).Run), stopCh)
 }
 
 // UnMigrateRoutesFromGw mocks base method.
-func (m *MockInterface) UnMigrateRoutesFromGw(arg0 *net.IPNet, arg1 string) error {
+func (m *MockInterface) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnMigrateRoutesFromGw", arg0, arg1)
+	ret := m.ctrl.Call(m, "UnMigrateRoutesFromGw", route, linkName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UnMigrateRoutesFromGw indicates an expected call of UnMigrateRoutesFromGw.
-func (mr *MockInterfaceMockRecorder) UnMigrateRoutesFromGw(arg0, arg1 any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) UnMigrateRoutesFromGw(route, linkName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnMigrateRoutesFromGw", reflect.TypeOf((*MockInterface)(nil).UnMigrateRoutesFromGw), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnMigrateRoutesFromGw", reflect.TypeOf((*MockInterface)(nil).UnMigrateRoutesFromGw), route, linkName)
 }

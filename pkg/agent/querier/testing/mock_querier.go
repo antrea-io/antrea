@@ -44,6 +44,7 @@ import (
 type MockAgentQuerier struct {
 	ctrl     *gomock.Controller
 	recorder *MockAgentQuerierMockRecorder
+	isgomock struct{}
 }
 
 // MockAgentQuerierMockRecorder is the mock recorder for MockAgentQuerier.
@@ -64,15 +65,15 @@ func (m *MockAgentQuerier) EXPECT() *MockAgentQuerierMockRecorder {
 }
 
 // GetAgentInfo mocks base method.
-func (m *MockAgentQuerier) GetAgentInfo(arg0 *v1beta1.AntreaAgentInfo, arg1 bool) {
+func (m *MockAgentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "GetAgentInfo", arg0, arg1)
+	m.ctrl.Call(m, "GetAgentInfo", agentInfo, partial)
 }
 
 // GetAgentInfo indicates an expected call of GetAgentInfo.
-func (mr *MockAgentQuerierMockRecorder) GetAgentInfo(arg0, arg1 any) *gomock.Call {
+func (mr *MockAgentQuerierMockRecorder) GetAgentInfo(agentInfo, partial any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAgentInfo", reflect.TypeOf((*MockAgentQuerier)(nil).GetAgentInfo), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAgentInfo", reflect.TypeOf((*MockAgentQuerier)(nil).GetAgentInfo), agentInfo, partial)
 }
 
 // GetBGPPolicyInfoQuerier mocks base method.
