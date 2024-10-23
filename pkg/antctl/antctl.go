@@ -669,6 +669,39 @@ $ antctl get podmulticaststats pod -n namespace`,
 			commandGroup:        get,
 			transformedResponse: reflect.TypeOf(agentapis.BGPPeerResponse{}),
 		},
+		{
+			use:     "bgproutes",
+			aliases: []string{"bgproute"},
+			short:   "Print the advertised bgp routes.",
+			long:    "Print the advertised bgp routes.",
+			example: `  Get the list of all advertised bgp routes
+  $ antctl get bgproutes
+  Get the list of advertised IPv4 bgp routes
+  $ antctl get bgproutes --ipv4-only
+  Get the list of advertised IPv6 bgp routes
+  $ antctl get bgproutes --ipv6-only
+`,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/bgproutes",
+					params: []flagInfo{
+						{
+							name:   "ipv4-only",
+							usage:  "Get advertised IPv4 bgp routes only",
+							isBool: true,
+						},
+						{
+							name:   "ipv6-only",
+							usage:  "Get advertised IPv6 bgp routes only",
+							isBool: true,
+						},
+					},
+					outputType: multiple,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(agentapis.BGPRouteResponse{}),
+		},
 	},
 	rawCommands: []rawCommand{
 		{

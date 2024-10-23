@@ -147,4 +147,6 @@ type AgentBGPPolicyInfoQuerier interface {
 	GetBGPPolicyInfo() (string, string, int32, int32)
 	// GetBGPPeerStatus returns current status of all BGP Peers of effective BGP Policy applied on the Node.
 	GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error)
+	// GetBGPRoutes returns the advertised BGP routes.
+	GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) ([]string, error)
 }

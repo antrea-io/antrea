@@ -229,3 +229,20 @@ func (r BGPPeerResponse) GetTableRow(_ int) []string {
 func (r BGPPeerResponse) SortRows() bool {
 	return true
 }
+
+// BGPRouteResponse describes the response struct of bgproutes command.
+type BGPRouteResponse struct {
+	Route string `json:"route,omitempty"`
+}
+
+func (r BGPRouteResponse) GetTableHeader() []string {
+	return []string{"ROUTE"}
+}
+
+func (r BGPRouteResponse) GetTableRow(_ int) []string {
+	return []string{r.Route}
+}
+
+func (r BGPRouteResponse) SortRows() bool {
+	return true
+}
