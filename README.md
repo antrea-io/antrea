@@ -60,7 +60,7 @@ Your feedback is more than welcome!
 [#antrea](https://kubernetes.slack.com/messages/CR2J23M0X) channel.
 * Check the [Antrea Team Calendar](https://calendar.google.com/calendar/embed?src=uuillgmcb1cu3rmv7r7jrhcrco%40group.calendar.google.com)
   and join the developer and user communities!
-  + The [Antrea community meeting](https://broadcom.zoom.us/j/91668049513?pwd=WHpaYTE2eWhja0xUN21MRU1BWllYdz09),
+  + The [Antrea community meeting](https://broadcom.zoom.us/j/823654111?pwd=MEV6blNtUUtqallVSkVFSGZtQ1kwUT09),
 every two weeks on Tuesday at 5AM GMT+1 (United Kingdom time). See Antrea team calendar for localized times.
     - [Meeting minutes](https://github.com/antrea-io/antrea/wiki/Community-Meetings)
     - [Meeting recordings](https://www.youtube.com/playlist?list=PLuzde2hYeDBdw0BuQCYbYqxzoJYY1hfwv)
