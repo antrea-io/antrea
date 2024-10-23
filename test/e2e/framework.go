@@ -332,6 +332,16 @@ func (p *PodIPs) AsSlice() []*net.IP {
 	return ips
 }
 
+func (p *PodIPs) AsStrings() (ipv4, ipv6 string) {
+	if p.IPv4 != nil {
+		ipv4 = p.IPv4.String()
+	}
+	if p.IPv6 != nil {
+		ipv6 = p.IPv6.String()
+	}
+	return
+}
+
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
 // (including if idx is 0, which is reserved for the control-plane Node)
 func workerNodeName(idx int) string {
