@@ -2230,3 +2230,84 @@ func TestGetBGPPeerStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestGetBGPRoutes(t *testing.T) {
+	effectivePolicyState := generateBGPPolicyState(bgpPolicyName1,
+		179,
+		65000,
+		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+		[]string{ipStrToPrefix(clusterIPv4),
+			ipStrToPrefix(loadBalancerIPv4),
+			podIPv4CIDR.String(),
+			ipStrToPrefix(clusterIPv6),
+			ipStrToPrefix(loadBalancerIPv6),
+			podIPv6CIDR.String(),
+		},
+		[]bgp.PeerConfig{},
+	)
+	ctx := context.Background()
+	testCases := []struct {
+		name              string
+		ipv4Routes        bool
+		ipv6Routes        bool
+		existingState     *bgpPolicyState
+		expectedBgpRoutes []string
+		expectedErr       string
+	}{
+		{
+			name:          "get all advertised routes",
+			ipv4Routes:    true,
+			ipv6Routes:    true,
+			existingState: effectivePolicyState,
+			expectedBgpRoutes: []string{
+				ipStrToPrefix(clusterIPv4),
+				ipStrToPrefix(loadBalancerIPv4),
+				podIPv4CIDR.String(),
+				ipStrToPrefix(clusterIPv6),
+				ipStrToPrefix(loadBalancerIPv6),
+				podIPv6CIDR.String(),
+			},
+		},
+		{
+			name:          "get advertised ipv4 routes only",
+			ipv4Routes:    true,
+			existingState: effectivePolicyState,
+			expectedBgpRoutes: []string{
+				ipStrToPrefix(clusterIPv4),
+				ipStrToPrefix(loadBalancerIPv4),
+				podIPv4CIDR.String(),
+			},
+		},
+		{
+			name:          "get advertised ipv6 routes only",
+			ipv6Routes:    true,
+			existingState: effectivePolicyState,
+			expectedBgpRoutes: []string{
+				ipStrToPrefix(clusterIPv6),
+				ipStrToPrefix(loadBalancerIPv6),
+				podIPv6CIDR.String(),
+			},
+		},
+		{
+			name:        "bgpPolicyState does not exist",
+			ipv4Routes:  true,
+			expectedErr: ErrBGPPolicyNotFound.Error(),
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newFakeController(t, nil, nil, tt.ipv4Routes, tt.ipv6Routes)
+
+			// Fake the BGPPolicy state.
+			c.bgpPolicyState = tt.existingState
+
+			actualBgpRoutes, err := c.GetBGPRoutes(ctx, tt.ipv4Routes, tt.ipv6Routes)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.ElementsMatch(t, tt.expectedBgpRoutes, actualBgpRoutes)
+			}
+		})
+	}
+}
