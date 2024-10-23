@@ -28,7 +28,7 @@ RUN make antctl-instr-binary
 
 RUN make antrea-cni antrea-agent-instr-binary
 
-FROM antrea/base-ubuntu:${BUILD_TAG}
+FROM antrea/base-ubuntu-${TARGETARCH}:${BUILD_TAG}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The Docker image to deploy the antrea-agent with code coverage measurement enabled (used for testing)."

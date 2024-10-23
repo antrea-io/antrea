@@ -132,17 +132,15 @@ if [ "$BUILD_TAG" != "" ]; then
 fi
 
 # We pull all images ahead of time, instead of calling the independent build.sh
-# scripts with "--pull". We do not want to overwrite the antrea/openvswitch
-# image we just built when calling build.sh to build the antrea/base-ubuntu
-# image!
+# scripts with "--pull".
 if $PULL; then
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
         docker pull $PLATFORM_ARG ubuntu:24.04
         docker pull $PLATFORM_ARG golang:$GO_VERSION
     else
-        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:24.04
+        docker pull $PLATFORM_ARG ${DOCKER_REGISTRY}/antrea/ubuntu:24.04
         docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:24.04 ubuntu:24.04
-        docker pull ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION
+        docker pull $PLATFORM_ARG ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION
         docker tag ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION golang:$GO_VERSION
     fi
     if [ "$DISTRO" == "ubi" ]; then
@@ -169,6 +167,9 @@ export NO_PULL=1
 # explicitly (note that we already set DOCKER_CLI_EXPERIMENTAL=enabled at the
 # beginning of the script).
 export DOCKER_BUILDKIT=1
+if [ "$PLATFORM" != "" ]; then
+    export DOCKER_TARGETPLATFORM="$PLATFORM"
+fi
 if [ "$DISTRO" == "ubuntu" ]; then
     if $COVERAGE; then
         make build-controller-ubuntu-coverage

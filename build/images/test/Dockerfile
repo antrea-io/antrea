@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG BUILD_TAG
-FROM antrea/openvswitch:${BUILD_TAG}
+FROM antrea/openvswitch-$TARGETARCH:$BUILD_TAG
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image for Antrea integration tests."
