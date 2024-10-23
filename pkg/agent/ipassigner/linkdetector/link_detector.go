@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipassigner
+package linkdetector
 
-import (
-	"errors"
+type LinkEventHandler func(linkName string)
 
-	"antrea.io/antrea/pkg/agent/ipassigner/linkdetector"
-)
+type Interface interface {
+	LinkExists(linkName string) bool
 
-func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkDetector linkdetector.Interface) (IPAssigner, error) {
-	return nil, errors.New("IPAssigner is not implemented on Windows")
+	// Run starts the detector.
+	Run(stopCh <-chan struct{})
+
+	// AddEventHandler registers an eventHandler of link updates. It's not thread-safe and should be called before
+	// starting the detector.
+	AddEventHandler(handler LinkEventHandler, linkName ...string)
+
+	// HasSynced returns true if the cache has been initialized with the existing links.
+	HasSynced() bool
 }

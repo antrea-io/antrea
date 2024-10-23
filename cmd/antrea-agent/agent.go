@@ -52,6 +52,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/ipassigner/linkdetector"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/monitortool"
@@ -546,6 +547,7 @@ func run(o *Options) error {
 	var externalIPPoolController *externalippool.ExternalIPPoolController
 	var externalIPController *serviceexternalip.ServiceExternalIPController
 	var memberlistCluster *memberlist.Cluster
+	var linkDetector linkdetector.Interface
 
 	if o.enableEgress || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
@@ -565,6 +567,7 @@ func run(o *Options) error {
 		if err != nil {
 			return fmt.Errorf("error creating new memberlist cluster: %v", err)
 		}
+		linkDetector = linkdetector.NewLinkDetector()
 	}
 	if o.enableEgress {
 		egressController, err = egress.NewEgressController(
@@ -572,6 +575,7 @@ func run(o *Options) error {
 			memberlistCluster, egressInformer, externalIPPoolInformer, nodeInformer, podUpdateChannel, serviceCIDRProvider, o.config.Egress.MaxEgressIPsPerNode,
 			features.DefaultFeatureGate.Enabled(features.EgressTrafficShaping),
 			features.DefaultFeatureGate.Enabled(features.EgressSeparateSubnet),
+			linkDetector,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new Egress controller: %v", err)
@@ -584,6 +588,7 @@ func run(o *Options) error {
 			memberlistCluster,
 			serviceInformer,
 			endpointsInformer,
+			linkDetector,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new ServiceExternalIP controller: %v", err)
@@ -997,6 +1002,10 @@ func run(o *Options) error {
 	// Start the node latency monitor if applicable.
 	if nodeLatencyMonitor != nil {
 		go nodeLatencyMonitor.Run(stopCh)
+	}
+
+	if linkDetector != nil {
+		go linkDetector.Run(stopCh)
 	}
 
 	<-stopCh

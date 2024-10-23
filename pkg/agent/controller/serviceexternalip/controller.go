@@ -32,6 +32,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/ipassigner"
+	"antrea.io/antrea/pkg/agent/ipassigner/linkdetector"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/querier"
@@ -77,6 +78,8 @@ type ServiceExternalIPController struct {
 
 	assignedIPs      map[string]sets.Set[string]
 	assignedIPsMutex sync.Mutex
+
+	linkDetector linkdetector.Interface
 }
 
 var _ querier.ServiceExternalIPStatusQuerier = (*ServiceExternalIPController)(nil)
@@ -87,6 +90,7 @@ func NewServiceExternalIPController(
 	cluster memberlist.Interface,
 	serviceInformer coreinformers.ServiceInformer,
 	endpointsInformer coreinformers.EndpointsInformer,
+	linkDetector linkdetector.Interface,
 ) (*ServiceExternalIPController, error) {
 	c := &ServiceExternalIPController{
 		nodeName: nodeName,
@@ -105,8 +109,9 @@ func NewServiceExternalIPController(
 		endpointsListerSynced: endpointsInformer.Informer().HasSynced,
 		externalIPStates:      make(map[apimachinerytypes.NamespacedName]externalIPState),
 		assignedIPs:           make(map[string]sets.Set[string]),
+		linkDetector:          linkDetector,
 	}
-	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, "")
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, "", linkDetector)
 	if err != nil {
 		return nil, fmt.Errorf("initializing service external IP assigner failed: %v", err)
 	}
@@ -240,7 +245,7 @@ func (c *ServiceExternalIPController) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
 
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.serviceListerSynced, c.endpointsListerSynced) {
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.serviceListerSynced, c.endpointsListerSynced, c.linkDetector.HasSynced) {
 		return
 	}
 
