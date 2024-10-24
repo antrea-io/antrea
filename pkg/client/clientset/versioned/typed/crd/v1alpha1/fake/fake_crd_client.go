@@ -38,6 +38,10 @@ func (c *FakeCrdV1alpha1) NodeLatencyMonitors() v1alpha1.NodeLatencyMonitorInter
 	return &FakeNodeLatencyMonitors{c}
 }
 
+func (c *FakeCrdV1alpha1) PacketCaptures() v1alpha1.PacketCaptureInterface {
+	return &FakePacketCaptures{c}
+}
+
 func (c *FakeCrdV1alpha1) SupportBundleCollections() v1alpha1.SupportBundleCollectionInterface {
 	return &FakeSupportBundleCollections{c}
 }

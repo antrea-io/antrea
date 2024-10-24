@@ -17,6 +17,7 @@ package v1alpha1
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24") that is allowed
@@ -353,4 +354,140 @@ type BGPPeer struct {
 	// GracefulRestartTimeSeconds specifies how long the BGP peer would wait for the BGP session to re-establish after
 	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
 	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+}
+
+type PodReference struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+// Source describes the source spec of the packetcapture.
+type Source struct {
+	// Pod is the source Pod.
+	Pod *PodReference `json:"pod,omitempty"`
+	// IP is the source IPv4 or IPv6 address.
+	IP *string `json:"ip,omitempty"`
+}
+
+// Destination describes the destination spec of the PacketCapture.
+type Destination struct {
+	// Pod is the destination Pod, exclusive with destination Service.
+	Pod *PodReference `json:"pod,omitempty"`
+	// IP is the destination IPv4 or IPv6 address.
+	IP *string `json:"ip,omitempty"`
+}
+
+// TransportHeader describes spec of a TransportHeader.
+type TransportHeader struct {
+	UDP *UDPHeader `json:"udp,omitempty"`
+	TCP *TCPHeader `json:"tcp,omitempty"`
+}
+
+// UDPHeader describes spec of a UDP header.
+type UDPHeader struct {
+	// SrcPort is the source port.
+	SrcPort *int32 `json:"srcPort,omitempty"`
+	// DstPort is the destination port.
+	DstPort *int32 `json:"dstPort,omitempty"`
+}
+
+// TCPHeader describes spec of a TCP header.
+type TCPHeader struct {
+	// SrcPort is the source port.
+	SrcPort *int32 `json:"srcPort,omitempty"`
+	// DstPort is the destination port.
+	DstPort *int32 `json:"dstPort,omitempty"`
+	// Flags are tcp flags filter in BPF format. eg: 'tcp[13] & 16!=0' or 'tcp[tcpflags] == tcp-ack'
+	Flags *string `json:"flags,omitempty"`
+}
+
+// Packet includes header info.
+type Packet struct {
+	// IPFamily is the filter's IP family. Defaults to IPv4.
+	IPFamily v1.IPFamily `json:"ipFamily,omitempty"`
+	// Protocol represents the transport protocol. Default is to not filter on protocol.
+	Protocol        *intstr.IntOrString `json:"protocol,omitempty"`
+	TransportHeader TransportHeader     `json:"transportHeader"`
+}
+
+// PacketCaptureFirstNConfig contains the config for the FirstN type capture. The only supported parameter is
+// `Number` at the moment, meaning capturing the first specified number of packets in a flow.
+type PacketCaptureFirstNConfig struct {
+	Number int32 `json:"number"`
+}
+
+const DefaultPacketCaptureTimeout uint16 = 60
+
+type PacketCapturePhase string
+
+const (
+	PacketCaptureRunning   PacketCapturePhase = "Running"
+	PacketCaptureSucceeded PacketCapturePhase = "Succeeded"
+	PacketCaptureFailed    PacketCapturePhase = "Failed"
+)
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type PacketCaptureList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []PacketCapture `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type PacketCapture struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              PacketCaptureSpec   `json:"spec"`
+	Status            PacketCaptureStatus `json:"status"`
+}
+
+type CaptureConfig struct {
+	// FirstN means we only capture first N packets from the target traffic.
+	// At the moment this is the only supported configuration and it is required for every capture.
+	FirstN *PacketCaptureFirstNConfig `json:"firstN,omitempty"`
+}
+
+// PacketCaptureFileServer specifies the PacketCapture file server information.
+type PacketCaptureFileServer struct {
+	// The URL of the file server. It is set with format: scheme://host[:port][/path],
+	// e.g, https://api.example.com:8443/v1/supportbundles/. If scheme is not set, https is used by default.
+	URL string `json:"url"`
+}
+
+type PacketCaptureSpec struct {
+	// Timeout is the timeout for this capture session. If not specified, defaults to 60s.
+	Timeout       *uint16       `json:"timeout,omitempty"`
+	CaptureConfig CaptureConfig `json:"captureConfig"`
+	// Source is the traffic source we want to perform capture on. Both `Source` and `Destination` is reuqired
+	// for a capture session, and at least one `Pod` should present either in the source or the destination.
+	Source      Source      `json:"source"`
+	Destination Destination `json:"destination"`
+	// Packet defines what kind of traffic we want to capture between the source and desination. If not spicified,
+	// all kinds of traffic will count.
+	Packet *Packet `json:"packet,omitempty"`
+	// FileServer specifies the sftp url config for a file server. If present, captured packets will be uploaded to this server.
+	// If not, packets file will only be present in the antrea-agent pod.
+	// When capture finished, the path information will be shown in `.status.PacketsFilePath`.
+	FileServer *PacketCaptureFileServer `json:"fileServer,omitempty"`
+}
+
+type PacketCaptureStatus struct {
+	Phase PacketCapturePhase `json:"phase"`
+	// Reason records the failure reason when the capture fails.
+	Reason string `json:"reason"`
+	// NumCapturedPackets records how many packets have been captured. If it reaches the target number, the capture
+	// can be considered as finished.
+	NumCapturedPackets int32 `json:"numCapturedPackets,omitempty"`
+	// PacketsFilePath is the file path where the captured packets are stored. The format is: "<antrea-agent-pod-name>:<path>".
+	// If `.spec.FileServer` is present, this file will also be uploaded to the targeted location. This file
+	// will be removed after the PacketCapture CR is deleted.
+	PacketsFilePath string `json:"packetsFilePath"`
+	// StartTime is the time when this capture session starts.
+	StartTime *metav1.Time `json:"startTime,omitempty"`
 }
