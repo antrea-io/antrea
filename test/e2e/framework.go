@@ -140,8 +140,6 @@ const (
 	defaultCHDatabaseURL                = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
 
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
-	randomPatchAnnotationKey        = "test.antrea.io/random-value"
-	annotationValueLen              = 8
 	iperfPort                       = 5201
 	iperfSvcPort                    = 9999
 )
