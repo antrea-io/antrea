@@ -421,6 +421,20 @@ func (mr *MockClientMockRecorder) InstallNodeFlows(hostname, peerConfigs, tunnel
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallNodeFlows), hostname, peerConfigs, tunnelPeerIP, ipsecTunOFPort, peerNodeMAC)
 }
 
+// InstallPacketCaptureFlows mocks base method.
+func (m *MockClient) InstallPacketCaptureFlows(arg0 byte, arg1 bool, arg2 *openflow0.Packet, arg3 []openflow0.Packet, arg4 uint32, arg5 uint16) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallPacketCaptureFlows", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallPacketCaptureFlows indicates an expected call of InstallPacketCaptureFlows.
+func (mr *MockClientMockRecorder) InstallPacketCaptureFlows(arg0, arg1, arg2, arg3, arg4, arg5 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPacketCaptureFlows", reflect.TypeOf((*MockClient)(nil).InstallPacketCaptureFlows), arg0, arg1, arg2, arg3, arg4, arg5)
+}
+
 // InstallPodFlows mocks base method.
 func (m *MockClient) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32, vlanID uint16, labelID *uint32) error {
 	m.ctrl.T.Helper()
@@ -959,6 +973,20 @@ func (m *MockClient) UninstallNodeFlows(hostname string) error {
 func (mr *MockClientMockRecorder) UninstallNodeFlows(hostname any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallNodeFlows", reflect.TypeOf((*MockClient)(nil).UninstallNodeFlows), hostname)
+}
+
+// UninstallPacketCaptureFlows mocks base method.
+func (m *MockClient) UninstallPacketCaptureFlows(arg0 byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallPacketCaptureFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallPacketCaptureFlows indicates an expected call of UninstallPacketCaptureFlows.
+func (mr *MockClientMockRecorder) UninstallPacketCaptureFlows(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPacketCaptureFlows", reflect.TypeOf((*MockClient)(nil).UninstallPacketCaptureFlows), arg0)
 }
 
 // UninstallPodFlows mocks base method.
