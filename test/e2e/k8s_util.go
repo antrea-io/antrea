@@ -667,6 +667,14 @@ func (data *TestData) UpdateConfigMap(configMap *v1.ConfigMap) error {
 	return err
 }
 
+func (data *TestData) CreateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error) {
+	configMapObject, err := data.clientset.CoreV1().ConfigMaps(configMap.Namespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return configMapObject, nil
+}
+
 // DeleteService is a convenience function for deleting a Service by Namespace and name.
 func (data *TestData) DeleteService(ns, name string) error {
 	log.Infof("Deleting Service %s in ns %s", name, ns)
