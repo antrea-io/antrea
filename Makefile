@@ -37,14 +37,6 @@ TEST_ARGS ?=
 # If we have stdin we can run interactive so the tests running in docker can be interrupted.
 INTERACTIVE_ARGS := $(shell [ -t 0 ] && echo "-it")
 
-BUILD_TAG :=
-ifndef CUSTOM_BUILD_TAG
-	BUILD_TAG = $(shell build/images/build-tag.sh)
-else
-	BUILD_TAG = $(CUSTOM_BUILD_TAG)
-	DOCKER_IMG_VERSION = $(CUSTOM_BUILD_TAG)
-endif
-
 DOCKER_BUILD_ARGS :=
 ifeq ($(NO_PULL),)
 	DOCKER_BUILD_ARGS += --pull
@@ -57,7 +49,6 @@ ifneq ($(DOCKER_TARGETPLATFORM),)
 endif
 DOCKER_BUILD_ARGS += --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
-DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
 
 export CGO_ENABLED
 
@@ -65,6 +56,17 @@ export CGO_ENABLED
 all: build
 
 include versioning.mk
+
+# This should be located after the include directive for versioning.mk,
+# so that we can override DOCKER_IMG_VERSION with CUSTOM_BUILD_TAG.
+BUILD_TAG :=
+ifndef CUSTOM_BUILD_TAG
+	BUILD_TAG = $(shell build/images/build-tag.sh)
+else
+	BUILD_TAG = $(CUSTOM_BUILD_TAG)
+	DOCKER_IMG_VERSION = $(CUSTOM_BUILD_TAG)
+endif
+DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
 
 LDFLAGS += $(VERSION_LDFLAGS)
 

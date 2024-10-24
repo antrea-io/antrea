@@ -73,8 +73,8 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --kind-cluster-name      Name of the kind Cluster.
         --proxyall               Enable proxyAll to test AntreaProxy.
         --build-tag              Custom build tag for images.
-        --docker-user             Username for Docker account.
-        --docker-password         Password for Docker account."
+        --docker-user            Username for Docker account.
+        --docker-password        Password for Docker account."
 
 function print_usage {
     echoerr "$_usage"
@@ -201,7 +201,7 @@ function clean_antrea {
     for antrea_yml in ${WORKDIR}/*.yml; do
         kubectl delete -f $antrea_yml --ignore-not-found=true || true
     done
-    docker images --format "{{.Repository}}:{{.Tag}}" | grep 'antrea'| xargs -r docker rmi -f || true
+    docker images --format "{{.Repository}}:{{.Tag}}" | grep ${BUILD_TAG} | xargs -r docker rmi || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     check_and_cleanup_docker_build_cache
 }
@@ -608,7 +608,6 @@ function deliver_antrea {
             kind load docker-image antrea/antrea-agent-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
             kind load docker-image antrea/antrea-controller-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
             kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER} 
-            kubectl config use-context kind-${KIND_CLUSTER}
             docker cp ./build/yamls/antrea.yml ${KIND_CLUSTER}-control-plane:/root/antrea.yml
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
@@ -674,7 +673,7 @@ function run_e2e {
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
     elif [[ $TESTBED_TYPE == "kind" ]]; then
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind -timeout=100m --prometheus
+        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind --kind.kubeconfig ${KUBECONFIG_PATH} -timeout=100m --prometheus
     elif [[ $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind -timeout=100m --prometheus --antrea-ipam
     else
