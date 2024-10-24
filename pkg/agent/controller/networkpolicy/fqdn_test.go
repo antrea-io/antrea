@@ -402,10 +402,10 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 			},
 			existingDNSCache: map[string]dnsMeta{
 				"test.antrea.io": {
-					responseIPs: map[string]net.IP{
-						"127.0.0.1":    net.ParseIP("127.0.0.1"),
-						"192.155.12.1": net.ParseIP("192.155.12.1"),
-						"192.158.1.38": net.ParseIP("192.158.1.38"),
+					responseIPs: map[string]ipWithTTL{
+						"127.0.0.1":    {net.ParseIP("127.0.0.1"), time.Now()},
+						"192.155.12.1": {net.ParseIP("192.155.12.1"), time.Now()},
+						"192.158.1.38": {net.ParseIP("192.158.1.38"), time.Now()},
 					},
 				},
 			},
@@ -581,6 +581,86 @@ func TestSyncDirtyRules(t *testing.T) {
 				}
 			}
 			assert.Equal(t, tc.expectedDirtyRulesRemaining, f.ruleSyncTracker.getDirtyRules())
+		})
+	}
+}
+
+func TestOnDNSResponse(t *testing.T) {
+	currentTime := time.Now()
+	tests := []struct {
+		name             string
+		existingDNSCache map[string]dnsMeta
+		responseIPs      map[string]ipWithTTL
+		expectedIPs      map[string]time.Time
+	}{
+		{
+			name: "new IP added",
+			existingDNSCache: map[string]dnsMeta{
+				"fqdn-test-pod.lfx.test": {
+					responseIPs: map[string]ipWithTTL{},
+				},
+			},
+			responseIPs: map[string]ipWithTTL{
+				"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(10 * time.Second)},
+			},
+			expectedIPs: map[string]time.Time{
+				"192.0.2.1": currentTime.Add(10 * time.Second),
+			},
+		},
+		{
+			name: "old IP retained but with a shorter new TTl",
+			existingDNSCache: map[string]dnsMeta{
+				"fqdn-test-pod.lfx.test": {
+					responseIPs: map[string]ipWithTTL{
+						"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(10 * time.Second)},
+					},
+				},
+			},
+			responseIPs: map[string]ipWithTTL{
+				"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedIPs: map[string]time.Time{
+				"192.0.2.1": currentTime.Add(10 * time.Second),
+			},
+		},
+		{
+			name: "old IP retained but with a larger new TTl",
+			existingDNSCache: map[string]dnsMeta{
+				"fqdn-test-pod.lfx.test": {
+					responseIPs: map[string]ipWithTTL{
+						"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(10 * time.Second)},
+					},
+				},
+			},
+			responseIPs: map[string]ipWithTTL{
+				"192.0.2.1": {ip: net.ParseIP("192.0.2.1"), expirationTime: currentTime.Add(20 * time.Second)},
+			},
+			expectedIPs: map[string]time.Time{
+				"192.0.2.1": currentTime.Add(20 * time.Second),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			f, _ := newMockFQDNController(t, controller, nil)
+			f.dnsEntryCache = tc.existingDNSCache
+
+			f.onDNSResponse("fqdn-test-pod.lfx.test", tc.responseIPs, nil)
+
+			dnsMetaData := f.dnsEntryCache["fqdn-test-pod.lfx.test"]
+			if len(dnsMetaData.responseIPs) != len(tc.expectedIPs) {
+				t.Errorf("Expected %d IPs in cache, got %d", len(tc.expectedIPs), len(dnsMetaData.responseIPs))
+			}
+
+			for ipStr, expectedTTL := range tc.expectedIPs {
+				if ipMeta, exists := dnsMetaData.responseIPs[ipStr]; !exists || ipMeta.expirationTime.Before(time.Now()) {
+					t.Errorf("Expected %s to be found with a valid TTL", ipStr)
+				} else if !ipMeta.expirationTime.Equal(expectedTTL) {
+					t.Errorf("Expected TTL for %s to be %v, got %v", ipStr, expectedTTL, ipMeta.expirationTime)
+				}
+			}
 		})
 	}
 }
