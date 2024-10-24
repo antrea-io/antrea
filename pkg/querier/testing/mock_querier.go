@@ -364,18 +364,18 @@ func (m *MockAgentBGPPolicyInfoQuerier) EXPECT() *MockAgentBGPPolicyInfoQuerierM
 }
 
 // GetBGPPeerStatus mocks base method.
-func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error) {
+func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPeerStatus(ctx context.Context, ipv4Peers, ipv6Peers bool) ([]bgp.PeerStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBGPPeerStatus", ctx)
+	ret := m.ctrl.Call(m, "GetBGPPeerStatus", ctx, ipv4Peers, ipv6Peers)
 	ret0, _ := ret[0].([]bgp.PeerStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBGPPeerStatus indicates an expected call of GetBGPPeerStatus.
-func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPeerStatus(ctx any) *gomock.Call {
+func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPeerStatus(ctx, ipv4Peers, ipv6Peers any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPPeerStatus", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPPeerStatus), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPPeerStatus", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPPeerStatus), ctx, ipv4Peers, ipv6Peers)
 }
 
 // GetBGPPolicyInfo mocks base method.

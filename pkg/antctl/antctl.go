@@ -655,14 +655,30 @@ $ antctl get podmulticaststats pod -n namespace`,
 		{
 			use:     "bgppeers",
 			aliases: []string{"bgppeer"},
-			short:   "Print the current status of all bgp peers of effective bgppolicy",
-			long:    "Print the current status of all bgp peers of effective bgppolicy which includes peer IP address with port, asn and state",
-			example: `  Get the list of bgppeers with their current status
+			short:   "Print the current status of bgp peers of effective bgppolicy",
+			long:    "Print the current status of bgp peers of effective bgppolicy which includes peer IP address with port, asn and state",
+			example: `  Get the list of all bgp peers with their current status
   $ antctl get bgppeers
+  Get the list of IPv4 bgp peers with their current status
+  $ antctl get bgppeers --ipv4-only
+  Get the list of IPv6 bgp peers with their current status
+  $ antctl get bgppeers --ipv6-only
 `,
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
-					path:       "/bgppeers",
+					path: "/bgppeers",
+					params: []flagInfo{
+						{
+							name:   "ipv4-only",
+							usage:  "Get IPv4 bgp peers only",
+							isBool: true,
+						},
+						{
+							name:   "ipv6-only",
+							usage:  "Get IPv6 bgp peers only",
+							isBool: true,
+						},
+					},
 					outputType: multiple,
 				},
 			},
