@@ -41,4 +41,8 @@ const (
 
 	// L7FlowExporterAnnotationKey is the key of the L7 network flow export annotation that enables L7 network flow export for annotated Pod or Namespace based on the value of annotation which is direction of traffic.
 	L7FlowExporterAnnotationKey string = "visibility.antrea.io/l7-export"
+
+	// PodNotReadyAnnotationKey represents the key of the Pod annotation that specifies the Pod's networking is not ready.
+	// This annotation is used only on Windows.
+	PodNotReadyAnnotationKey string = "pod.antrea.io/not-ready"
 )

@@ -408,6 +408,9 @@ type Client interface {
 	// or ip, port, protocol and direction. It is used to bypass NetworkPolicy enforcement on a VM for the particular
 	// traffic.
 	InstallPolicyBypassFlows(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) error
+
+	// SubscribeOFPortStatusMessage registers a channel to listen the OpenFlow PortStatus message.
+	SubscribeOFPortStatusMessage(statusCh chan *openflow15.PortStatus)
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -1696,4 +1699,8 @@ func (c *client) getMeterStats() {
 	if err := c.bridge.GetMeterStats(handleMeterStatsReply); err != nil {
 		klog.ErrorS(err, "Failed to get OVS meter stats")
 	}
+}
+
+func (c *client) SubscribeOFPortStatusMessage(statusCh chan *openflow15.PortStatus) {
+	c.bridge.SubscribePortStatusConsumer(statusCh)
 }

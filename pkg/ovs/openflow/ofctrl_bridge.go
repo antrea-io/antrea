@@ -202,6 +202,9 @@ type OFBridge struct {
 	// pktConsumers is a map from PacketIn category to the channel that is used to publish the PacketIn message.
 	pktConsumers sync.Map
 
+	// portStatusConsumerCh is a channel to notify agent a PortStatus message is received
+	portStatusConsumerCh chan *openflow15.PortStatus
+
 	mpReplyChsMutex sync.RWMutex
 	mpReplyChs      map[uint32]chan *openflow15.MultipartReply
 	// tunMetadataLengthMap is used to store the tlv-map settings on the OVS bridge. Key is the index of tunnel metedata,
@@ -716,6 +719,27 @@ func (b *OFBridge) MaxRetry() int {
 // to OFSwitch if it fails this time.
 func (b *OFBridge) RetryInterval() time.Duration {
 	return b.retryInterval
+}
+
+func (b *OFBridge) PortStatusRcvd(status *openflow15.PortStatus) {
+	if b.portStatusConsumerCh == nil {
+		return
+	}
+	// Correspond to MessageStream.outbound log level.
+	if klog.V(7).Enabled() {
+		klog.InfoS("Received PortStatus", "portStatus", status)
+	} else {
+		klog.V(4).InfoS("Received PortStatus")
+	}
+	switch status.Reason {
+	// We only process add/modified status for now.
+	case openflow15.PR_ADD, openflow15.PR_MODIFY:
+		b.portStatusConsumerCh <- status
+	}
+}
+
+func (b *OFBridge) SubscribePortStatusConsumer(statusCh chan *openflow15.PortStatus) {
+	b.portStatusConsumerCh = statusCh
 }
 
 func (b *OFBridge) setPacketInFormatTo2() {
