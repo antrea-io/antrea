@@ -28,6 +28,8 @@ type Interface interface {
 	ExternalNodes() ExternalNodeInformer
 	// NodeLatencyMonitors returns a NodeLatencyMonitorInformer.
 	NodeLatencyMonitors() NodeLatencyMonitorInformer
+	// PacketCaptures returns a PacketCaptureInformer.
+	PacketCaptures() PacketCaptureInformer
 	// SupportBundleCollections returns a SupportBundleCollectionInformer.
 	SupportBundleCollections() SupportBundleCollectionInformer
 }
@@ -56,6 +58,11 @@ func (v *version) ExternalNodes() ExternalNodeInformer {
 // NodeLatencyMonitors returns a NodeLatencyMonitorInformer.
 func (v *version) NodeLatencyMonitors() NodeLatencyMonitorInformer {
 	return &nodeLatencyMonitorInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// PacketCaptures returns a PacketCaptureInformer.
+func (v *version) PacketCaptures() PacketCaptureInformer {
+	return &packetCaptureInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // SupportBundleCollections returns a SupportBundleCollectionInformer.
