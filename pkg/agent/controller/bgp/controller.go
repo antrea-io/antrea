@@ -970,8 +970,8 @@ func (c *Controller) GetBGPPolicyInfo() (string, string, int32, int32) {
 	return name, routerID, localASN, listenPort
 }
 
-// GetBGPPeerStatus returns current status of all BGP Peers of effective BGP Policy applied on the Node.
-func (c *Controller) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error) {
+// GetBGPPeerStatus returns current status of BGP Peers of effective BGP Policy applied on the Node.
+func (c *Controller) GetBGPPeerStatus(ctx context.Context, ipv4Peers, ipv6Peers bool) ([]bgp.PeerStatus, error) {
 	getBgpServer := func() bgp.Interface {
 		c.bgpPolicyStateMutex.RLock()
 		defer c.bgpPolicyStateMutex.RUnlock()
@@ -985,9 +985,25 @@ func (c *Controller) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, er
 	if bgpServer == nil {
 		return nil, ErrBGPPolicyNotFound
 	}
-	peers, err := bgpServer.GetPeers(ctx)
+	allPeers, err := bgpServer.GetPeers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bgp peers: %w", err)
+	}
+
+	peers := make([]bgp.PeerStatus, 0, len(allPeers))
+	if ipv4Peers { // insert IPv4 peers
+		for _, peer := range allPeers {
+			if utilnet.IsIPv4String(peer.Address) {
+				peers = append(peers, peer)
+			}
+		}
+	}
+	if ipv6Peers { // insert IPv6 peers
+		for _, peer := range allPeers {
+			if utilnet.IsIPv6String(peer.Address) {
+				peers = append(peers, peer)
+			}
+		}
 	}
 	return peers, nil
 }
