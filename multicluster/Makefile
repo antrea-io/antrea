@@ -54,9 +54,6 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CURDIR)/hack/generate-manifest.sh -m > build/yamls/antrea-multicluster-member.yml
 	$(CURDIR)/hack/update-checksum.sh
 
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..."
-
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
