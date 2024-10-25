@@ -458,6 +458,9 @@ EOF
     fi
     IMAGE_OPT="--image kindest/node:${K8S_VERSION}"
   fi
+
+  flock ~/.antrea/.clusters.lock --command "echo \"$CLUSTER_NAME $(date +%s)\" >> ~/.antrea/.clusters"
+  rm -rf ~/.antrea/.clusters.lock
   kind create cluster --name $CLUSTER_NAME --config $config_file $IMAGE_OPT
 
   # force coredns to run on control-plane node because it
@@ -508,7 +511,9 @@ EOF
 function destroy {
   update_kind_ipam_routes "del"
   if [[ $UNTIL_TIME_IN_MINS != "" ]]; then
-      clean_kind
+      if [[ -e ~/.antrea/.clusters ]]; then
+          clean_kind
+      fi
   else
       kind delete cluster --name $CLUSTER_NAME
   fi
@@ -556,19 +561,28 @@ function destroy_external_servers {
 
 function clean_kind {
     echo "=== Cleaning up stale kind clusters ==="
-    read -a all_kind_clusters <<< $(kind get clusters)
-    for kind_cluster_name in "${all_kind_clusters[@]}"; do
-        creationTimestamp=$(kubectl get nodes --context kind-$kind_cluster_name -o json -l node-role.kubernetes.io/control-plane | \
-        jq -r '.items[0].metadata.creationTimestamp')
-        creation=$(printUnixTimestamp "$creationTimestamp")
-        now=$(date -u '+%s')
-        diff=$((now-creation))
-        timeout=$(($UNTIL_TIME_IN_MINS*60))
-        if [[ $diff -gt $timeout ]]; then
-           echo "=== kind ${kind_cluster_name} present from more than $UNTIL_TIME_IN_MINS minutes ==="
-           kind delete cluster --name $kind_cluster_name
-        fi
-    done
+    (
+      flock -x 200
+
+      current_timestamp=$(date +%s)
+      while IFS=' ' read -r name creationTimestamp; do
+          if [[ -z "$name" || -z "$creationTimestamp" ]]; then
+              continue
+          fi
+          # Calculate the time difference
+          time_difference=$((current_timestamp - creationTimestamp))
+          # Check if the creation happened more than 1 hour ago (3600 seconds)
+          if (( time_difference > 3600 )); then
+              echo "The creation of $name happened more than 1 hour ago."
+              kind delete cluster --name "$name" || echo "Cluster could not be deleted"
+          else
+              echo "The creation of $name happened within the last hour."
+              echo "$name $creationTimestamp" >> ~/.antrea/.clusters.swp
+          fi
+      done < ~/.antrea/.clusters
+      mv ~/.antrea/.clusters.swp ~/.antrea/.clusters
+    ) 200>>~/.antrea/.clusters.lock
+    rm -rf ~/.antrea/.clusters.lock
 }
 
 if ! command -v kind &> /dev/null
@@ -576,6 +590,8 @@ then
     echoerr "kind could not be found"
     exit 1
 fi
+
+mkdir -p ~/.antrea
 
 while [[ $# -gt 0 ]]
  do
