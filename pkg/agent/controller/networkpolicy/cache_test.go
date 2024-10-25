@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -171,17 +172,24 @@ func TestGetMaxPriority(t *testing.T) {
 }
 
 type dirtyRuleRecorder struct {
-	rules   sets.Set[string]
-	eventCh chan string
+	m     sync.Mutex
+	rules sets.Set[string]
 }
 
 func newDirtyRuleRecorder() *dirtyRuleRecorder {
-	return &dirtyRuleRecorder{sets.New[string](), make(chan string, 100)}
+	return &dirtyRuleRecorder{rules: sets.New[string]()}
 }
 
 func (r *dirtyRuleRecorder) Record(ruleID string) {
+	r.m.Lock()
+	defer r.m.Unlock()
 	r.rules.Insert(ruleID)
-	r.eventCh <- ruleID
+}
+
+func (r *dirtyRuleRecorder) Rules() sets.Set[string] {
+	r.m.Lock()
+	defer r.m.Unlock()
+	return r.rules.Clone()
 }
 
 func newAppliedToGroupMemberPod(name, namespace string, containerPorts ...v1beta2.NamedPort) *v1beta2.GroupMember {
@@ -1282,20 +1290,9 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 				PodName:      name,
 			}
 			podUpdateNotifier.Notify(e)
-			func() {
-				// Drain the channel with 10 ms timeout so we can know it's done.
-				for {
-					select {
-					case <-recorder.eventCh:
-					case <-time.After(time.Millisecond * 10):
-						return
-					}
-				}
-			}()
-
-			if !recorder.rules.Equal(tt.expectedDirtyRules) {
-				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
-			}
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				assert.Equal(t, tt.expectedDirtyRules, recorder.Rules())
+			}, 1*time.Second, 10*time.Millisecond, "Dirty rules did not match")
 		})
 	}
 }
@@ -1389,19 +1386,9 @@ func TestRuleCacheProcessServiceGroupIDUpdates(t *testing.T) {
 				c.rules.Add(rule)
 			}
 			svcUpdateChan <- tt.svcUpdate
-			func() {
-				// Drain the channel with 10 ms timeout so we can know it's done.
-				for {
-					select {
-					case <-recorder.eventCh:
-					case <-time.After(time.Millisecond * 10):
-						return
-					}
-				}
-			}()
-			if !recorder.rules.Equal(tt.expectedDirtyRules) {
-				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
-			}
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				assert.Equal(t, tt.expectedDirtyRules, recorder.Rules())
+			}, 1*time.Second, 10*time.Millisecond, "Dirty rules did not match")
 		})
 	}
 }
