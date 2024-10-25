@@ -74,6 +74,16 @@ var (
 	ipv6Peer1         = generateBGPPeer(ipv6Peer1Addr, peer1ASN, 179, 120)
 	ipv4Peer1Config   = generateBGPPeerConfig(&ipv4Peer1, peer1AuthPassword)
 	ipv6Peer1Config   = generateBGPPeerConfig(&ipv6Peer1, peer1AuthPassword)
+	ipv4Peer1Status   = bgp.PeerStatus{
+		Address:      ipv4Peer1Addr,
+		ASN:          peer1ASN,
+		SessionState: bgp.SessionActive,
+	}
+	ipv6Peer1Status = bgp.PeerStatus{
+		Address:      ipv6Peer1Addr,
+		ASN:          peer1ASN,
+		SessionState: bgp.SessionActive,
+	}
 
 	peer2ASN          = int32(65532)
 	peer2AuthPassword = "bgp-peer2" // #nosec G101
@@ -83,6 +93,16 @@ var (
 	ipv6Peer2         = generateBGPPeer(ipv6Peer2Addr, peer2ASN, 179, 120)
 	ipv4Peer2Config   = generateBGPPeerConfig(&ipv4Peer2, peer2AuthPassword)
 	ipv6Peer2Config   = generateBGPPeerConfig(&ipv6Peer2, peer2AuthPassword)
+	ipv4Peer2Status   = bgp.PeerStatus{
+		Address:      ipv4Peer2Addr,
+		ASN:          peer2ASN,
+		SessionState: bgp.SessionActive,
+	}
+	ipv6Peer2Status = bgp.PeerStatus{
+		Address:      ipv6Peer2Addr,
+		ASN:          peer2ASN,
+		SessionState: bgp.SessionActive,
+	}
 
 	updatedIPv4Peer2       = generateBGPPeer(ipv4Peer2Addr, peer2ASN, 179, 60)
 	updatedIPv6Peer2       = generateBGPPeer(ipv6Peer2Addr, peer2ASN, 179, 60)
@@ -2166,40 +2186,43 @@ func TestGetBGPPeerStatus(t *testing.T) {
 	ctx := context.Background()
 	testCases := []struct {
 		name                  string
+		ipv4Peers             bool
+		ipv6Peers             bool
 		existingState         *bgpPolicyState
 		expectedCalls         func(mockBGPServer *bgptest.MockInterfaceMockRecorder)
 		expectedBgpPeerStatus []bgp.PeerStatus
 		expectedErr           error
 	}{
 		{
-			name:          "bgpPolicyState exists",
+			name:          "get ipv4 bgp peers",
+			ipv4Peers:     true,
 			existingState: &bgpPolicyState{},
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
-				mockBGPServer.GetPeers(ctx).Return([]bgp.PeerStatus{
-					{
-						Address:      "192.168.77.200",
-						ASN:          65001,
-						SessionState: bgp.SessionEstablished,
-					},
-					{
-						Address:      "192.168.77.201",
-						ASN:          65002,
-						SessionState: bgp.SessionActive,
-					},
-				}, nil)
+				mockBGPServer.GetPeers(ctx).Return([]bgp.PeerStatus{ipv4Peer1Status, ipv4Peer2Status,
+					ipv6Peer1Status, ipv6Peer2Status}, nil)
 			},
-			expectedBgpPeerStatus: []bgp.PeerStatus{
-				{
-					Address:      "192.168.77.200",
-					ASN:          65001,
-					SessionState: bgp.SessionEstablished,
-				},
-				{
-					Address:      "192.168.77.201",
-					ASN:          65002,
-					SessionState: bgp.SessionActive,
-				},
+			expectedBgpPeerStatus: []bgp.PeerStatus{ipv4Peer1Status, ipv4Peer2Status},
+		},
+		{
+			name:          "get ipv6 bgp peers",
+			ipv6Peers:     true,
+			existingState: &bgpPolicyState{},
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				mockBGPServer.GetPeers(ctx).Return([]bgp.PeerStatus{ipv4Peer1Status, ipv4Peer2Status,
+					ipv6Peer1Status, ipv6Peer2Status}, nil)
 			},
+			expectedBgpPeerStatus: []bgp.PeerStatus{ipv6Peer1Status, ipv6Peer2Status},
+		},
+		{
+			name:          "get all bgp peers",
+			ipv4Peers:     true,
+			ipv6Peers:     true,
+			existingState: &bgpPolicyState{},
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				mockBGPServer.GetPeers(ctx).Return([]bgp.PeerStatus{ipv4Peer1Status, ipv4Peer2Status,
+					ipv6Peer1Status, ipv6Peer2Status}, nil)
+			},
+			expectedBgpPeerStatus: []bgp.PeerStatus{ipv4Peer1Status, ipv4Peer2Status, ipv6Peer1Status, ipv6Peer2Status},
 		},
 		{
 			name:        "bgpPolicyState does not exist",
@@ -2208,7 +2231,7 @@ func TestGetBGPPeerStatus(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(t, nil, nil, true, false)
+			c := newFakeController(t, nil, nil, tt.ipv4Peers, tt.ipv6Peers)
 
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
@@ -2220,12 +2243,12 @@ func TestGetBGPPeerStatus(t *testing.T) {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
 			}
 
-			actualBgpPeerStatus, err := c.GetBGPPeerStatus(ctx)
+			actualBgpPeerStatus, err := c.GetBGPPeerStatus(ctx, tt.ipv4Peers, tt.ipv6Peers)
 			if tt.expectedErr != nil {
 				assert.ErrorIs(t, err, tt.expectedErr)
 			} else {
 				require.NoError(t, err)
-				assert.ElementsMatch(t, actualBgpPeerStatus, tt.expectedBgpPeerStatus)
+				assert.Equal(t, tt.expectedBgpPeerStatus, actualBgpPeerStatus)
 			}
 		})
 	}

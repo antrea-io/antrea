@@ -774,11 +774,26 @@ of effective BGP policy applied on the local Node. It includes Peer IP address w
 ASN, and State of the BGP Peers.
 
 ```bash
+# Get the list of all bgp peers
 $ antctl get bgppeers
+
+PEER                       ASN   STATE
+192.168.77.200:179         65001 Established
+[fec0::196:168:77:251]:179 65002 Active
+
+# Get the list of IPv4 bgp peers only
+$ antctl get bgppeers --ipv4-only
 
 PEER               ASN   STATE
 192.168.77.200:179 65001 Established
 192.168.77.201:179 65002 Active
+
+# Get the list of IPv6 bgp peers only
+$ antctl get bgppeers --ipv6-only
+
+PEER                       ASN   STATE
+[fec0::196:168:77:251]:179 65001 Established
+[fec0::196:168:77:252]:179 65002 Active
 ```
 
 `antctl` agent command `get bgproutes` prints the advertised BGP routes on the local Node.
