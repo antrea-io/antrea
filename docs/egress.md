@@ -466,13 +466,15 @@ in a cluster using `kube-proxy` IPVS. The issue was fixed in Antrea v1.7.0.
 
 ## Known issues
 
-To support `EgressSeparateSubnet` feature, VLAN sub-interfaces will be created by
-Antrea Agents, the `rp_filter` of VLAN sub-interfaces should be 2, which enables loose
-mode filtering. In a vanilla Kubernetes cluster, Antrea Agents will set the `rp_filter`
-to 2 automatically without user intervention. However, it has been observed that
-`rp_filter` update by Antrea has no effect on OpenShift clusters due to [a known issue](https://github.com/antrea-io/antrea/issues/6546).
-A workaround is to leverage OpenShift Node Tuning Operator to update the `rp_filter`
-for `all` interface on all Egress Nodes:
+To support the `EgressSeparateSubnet` feature, VLAN sub-interfaces will be
+created by Antrea Agent on a Node, and the `rp_filter` setting of the VLAN
+sub-interfaces should be set to `2`, which configures loose reverse path
+filtering. In a vanilla Kubernetes cluster, Antrea Agent will set `rp_filter` to
+`2` automatically without user intervention. However, it has been observed that
+the `rp_filter` update by Antrea takes no effect on an OpenShift cluster due to
+[a known issue](https://github.com/antrea-io/antrea/issues/6546). A workaround
+for this issue is to leverage OpenShift Node Tuning Operator to update
+`rp_filter` for all interfaces on all Egress Nodes:
 
 ```yaml
 apiVersion: tuned.openshift.io/v1
@@ -496,8 +498,8 @@ spec:
     profile: openshift-antrea
 ```
 
-After you apply above `Tuned` CR named `antrea` in a given OpenShift cluster, the Node
-Tuning Operator will watch the CR and update `net.ipv4.conf.all.rp_filter` to 2 for all
-matched Nodes (e.g. all Nodes with a label `network-role=egress-gateway`). Please refer
-to the OpenShift official document about [Using the Node Tuning Operator](https://docs.openshift.com/container-platform/4.16/scalability_and_performance/using-node-tuning-operator.html)
-for more details of `Tuned` CR.
+After you apply the above `Tuned` CR named `antrea` in an OpenShift cluster, the
+Node Tuning Operator will reconcile the CR and update
+`net.ipv4.conf.all.rp_filter` to `2` for all the matched Nodes (e.g. all Nodes
+with label `network-role=egress-gateway`). Please refer to the OpenShift
+document about [Using the Node Tuning Operator](https://docs.openshift.com/container-platform/4.16/scalability_and_performance/using-node-tuning-operator.html).
