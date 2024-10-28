@@ -48,10 +48,10 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
 # VM configuration
 declare -A LINUX_HOSTS_TO_IP
 declare -A WINDOWS_HOSTS_TO_IP
-declare -a LIN_HOSTNAMES=("vmbmtest0-1" "vmbmtest0-redhat-0")
-declare -a WIN_HOSTNAMES=("vmbmtest0-win-0")
-declare -A LINUX_HOSTS_TO_USERNAME=(["vmbmtest0-1"]="ubuntu" ["vmbmtest0-redhat-0"]="root")
-declare -A WINDOWS_HOSTS_TO_USERNAME=(["vmbmtest0-win-0"]="Administrator")
+declare -a LIN_HOSTNAMES=("vmbm0-1" "vmbm0-redhat-0")
+declare -a WIN_HOSTNAMES=("vmbm0-win-0")
+declare -A LINUX_HOSTS_TO_USERNAME=(["vmbm0-1"]="ubuntu" ["vmbm0-redhat-0"]="root")
+declare -A WINDOWS_HOSTS_TO_USERNAME=(["vmbm0-win-0"]="Administrator")
 
 # To run kubectl cmds
 export KUBECONFIG=${KUBECONFIG_PATH}
@@ -143,10 +143,15 @@ function apply_antrea {
     fi
     TEMP_ANTREA_TAR="antrea-image.tar"
     docker save antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest -o $TEMP_ANTREA_TAR
-    ctr -n k8s.io image import $TEMP_ANTREA_TAR
+    kubectl get nodes --selector=kubernetes.io/os=linux --no-headers=true -o custom-columns=IP:.status.addresses[0].address | while read -r IP; do
+        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" $TEMP_ANTREA_TAR jenkins@${IP}:${WORKDIR}/$TEMP_ANTREA_TAR
+        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "crictl rmi --prune; crictl ps --state Exited; ctr -n=k8s.io images import ${WORKDIR}/$TEMP_ANTREA_TAR" || true
+    done
     rm $TEMP_ANTREA_TAR
     echo "====== Applying Antrea yaml ======"
     ./hack/generate-manifest.sh --feature-gates ExternalNode=true,SupportBundleCollection=true --extra-helm-values "controller.apiNodePort=32767" > ${WORKDIR}/antrea.yml
+    IP=$(kubectl get nodes --selector=node-role.kubernetes.io/control-plane= --no-headers=true -o custom-columns=IP:.status.addresses[0].address)
+    rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ${WORKDIR}/*.yml jenkins@${IP}:${WORKDIR}/
     kubectl apply -f ${WORKDIR}/antrea.yml
 }
 
