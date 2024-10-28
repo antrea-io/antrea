@@ -102,7 +102,7 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// clean up any replicated resources like ResourceImport.
 	// For more details about using Finalizers, please refer to https://book.kubebuilder.io/reference/using-finalizers.html.
 	if !resExport.DeletionTimestamp.IsZero() {
-		if slices.Contains(resExport.Finalizers, constants.LegacyResourceExportFinalizer) || slices.Contains(resExport.Finalizers, constants.ResourceExportFinalizer) {
+		if slices.Contains(resExport.Finalizers, constants.ResourceExportFinalizer) || slices.Contains(resExport.Finalizers, constants.LegacyResourceExportFinalizer) {
 			err := r.handleDeleteEvent(ctx, &resExport)
 			if err != nil {
 				return ctrl.Result{}, err
@@ -111,7 +111,11 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		return ctrl.Result{}, nil
 	}
-
+	// For ResourceExports that are not deleted, make sure that their finalizers are set
+	// with ResourceExportFinalizer before the reconciliation loop.
+	if r, err := r.setResourceExportFinalizers(&resExport); err != nil {
+		return r, err
+	}
 	createResImport, existingResImport, err := r.getExistingResImport(ctx, resExport)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -156,6 +160,21 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.updateResourceExportStatus(&resExport, succeed)
 	}
 
+	return ctrl.Result{}, nil
+}
+
+func (r *ResourceExportReconciler) setResourceExportFinalizers(resExport *mcsv1alpha1.ResourceExport) (ctrl.Result, error) {
+	// Remove legacy ResourceExport finalizer if it exists in the current ResourceExport
+	finalizers := slices.DeleteFunc(slices.Clone(resExport.Finalizers), func(s string) bool {
+		return s == constants.LegacyResourceExportFinalizer
+	})
+	if !slices.Contains(finalizers, constants.ResourceExportFinalizer) {
+		finalizers = append(finalizers, constants.ResourceExportFinalizer)
+	}
+	resExport.SetFinalizers(finalizers)
+	if err := r.Client.Update(context.Background(), resExport, &client.UpdateOptions{}); err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 

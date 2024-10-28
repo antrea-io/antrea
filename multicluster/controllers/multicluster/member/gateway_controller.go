@@ -173,7 +173,6 @@ func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.R
 		},
 		Spec: resExportSpec,
 	}
-	resExport.Finalizers = []string{constants.ResourceExportFinalizer}
 	if err := commonArea.Create(ctx, resExport, &client.CreateOptions{}); err != nil {
 		return err
 	}
