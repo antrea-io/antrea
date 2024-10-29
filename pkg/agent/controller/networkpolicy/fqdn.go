@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/clock"
 	"net"
 	"os"
 	"regexp"
@@ -155,6 +156,12 @@ type fqdnController struct {
 	ipv4Enabled           bool
 	ipv6Enabled           bool
 	gwPort                uint32
+	// clock allows for time-dependent operations within the fqdnController.
+	// By using a clock.Clock as a field, we ensure that all time-related calls throughout the
+	// implementation of the fqdnController utilize this clock, for example , calls to clock.Now() instead of time.Now()
+	// The default implementation uses clock.RealClock{}, this also allows to
+	// inject a custom clock (like fake clock) when writing tests via the newMockFQDNController.
+	clock clock.Clock
 }
 
 func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32) (*fqdnController, error) {
@@ -177,6 +184,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 		ipv4Enabled:            v4Enabled,
 		ipv6Enabled:            v6Enabled,
 		gwPort:                 gwPort,
+		clock:                  clock.RealClock{},
 	}
 	if controller.ofClient != nil {
 		if err := controller.ofClient.NewDNSPacketInConjunction(dnsInterceptRuleID); err != nil {
@@ -420,16 +428,16 @@ func (f *fqdnController) onDNSResponse(
 	}
 
 	addressUpdate := false
-	currentTime := time.Now()
+	currentTime := f.clock.Now()
 	ipWithExpirationMap := make(map[string]ipWithExpiration)
 
-	// timeToReQuery establishes a maximum reference time for tracking the minimum re-query time to DNS, as IPs expire.
-	var timeToReQuery *time.Time
+	// timeToRequery establishes the time after which a new DNS query should be sent for the FQDN.
+	var timeToRequery *time.Time
 
 	updateIPWithExpiration := func(ip string, ipMeta ipWithExpiration) {
 		ipWithExpirationMap[ip] = ipMeta
-		if timeToReQuery == nil || ipMeta.expirationTime.Before(*timeToReQuery) {
-			timeToReQuery = &ipMeta.expirationTime
+		if timeToRequery == nil || ipMeta.expirationTime.Before(*timeToRequery) {
+			timeToRequery = &ipMeta.expirationTime
 		}
 	}
 
@@ -493,7 +501,10 @@ func (f *fqdnController) onDNSResponse(
 		f.dnsEntryCache[fqdn] = dnsMeta{
 			responseIPs: ipWithExpirationMap,
 		}
-		f.dnsQueryQueue.AddAfter(fqdn, timeToReQuery.Sub(currentTime))
+		// timeToRequery passed below is guaranteed to be non-nil here because updateIPWithExpiration() is called on each IP in
+		// newIPWithExpiration that either isn't cached in the existing DNS cache or it remains unexpired. This ensures that timeToReQuery is
+		// always set to the earliest expiration time in the response, hence also enabling proper DNS re-query scheduling.
+		f.dnsQueryQueue.AddAfter(fqdn, timeToRequery.Sub(currentTime))
 	}
 
 	f.syncDirtyRules(fqdn, waitCh, addressUpdate)
@@ -631,7 +642,7 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 	}
 	fqdn := strings.ToLower(msg.Question[0].Name)
 	responseIPs := map[string]ipWithExpiration{}
-	currentTime := time.Now()
+	currentTime := f.clock.Now()
 	for _, ans := range msg.Answer {
 		switch r := ans.(type) {
 		case *dns.A:
@@ -699,7 +710,7 @@ func (f *fqdnController) lookupIP(ctx context.Context, fqdn string) error {
 		for _, ip := range ips {
 			responseIPs[ip.String()] = ipWithExpiration{
 				ip:             ip,
-				expirationTime: time.Now().Add(time.Duration(defaultTTL) * time.Second),
+				expirationTime: f.clock.Now().Add(time.Duration(defaultTTL) * time.Second),
 			}
 		}
 		return responseIPs

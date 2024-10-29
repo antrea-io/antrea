@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/util/workqueue"
 	clocktesting "k8s.io/utils/clock/testing"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -595,15 +594,18 @@ func TestOnDNSResponse(t *testing.T) {
 	selectorItem2 := fqdnSelectorItem{
 		matchName: "random-domain.com",
 	}
-	fakeClock := clocktesting.NewFakeClock(time.Now())
-	currentTime := fakeClock.Now()
+	currentTime := time.Now()
+
+	getDuration := func(d time.Duration) *time.Duration {
+		return &d
+	}
 
 	tests := []struct {
 		name                  string
 		existingDNSCache      map[string]dnsMeta
 		dnsResponseIPs        map[string]ipWithExpiration
 		expectedIPs           map[string]ipWithExpiration
-		expectedItem          string
+		expectedRequeryAfter  *time.Duration
 		mockSelectorToRuleIDs map[fqdnSelectorItem]sets.Set[string]
 	}{
 		{
@@ -624,7 +626,7 @@ func TestOnDNSResponse(t *testing.T) {
 				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(6 * time.Second)},
 				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(10 * time.Second)},
 			},
-			expectedItem: testFQDN,
+			expectedRequeryAfter: getDuration(5 * time.Second),
 		},
 		{
 			name: "existing DNS cache not impacted",
@@ -673,7 +675,7 @@ func TestOnDNSResponse(t *testing.T) {
 			expectedIPs: map[string]ipWithExpiration{
 				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(5 * time.Second)},
 			},
-			expectedItem: testFQDN,
+			expectedRequeryAfter: getDuration(5 * time.Second),
 		},
 		{
 			name: "stale IP with unexpired TTL are retained",
@@ -698,7 +700,7 @@ func TestOnDNSResponse(t *testing.T) {
 			expectedIPs: map[string]ipWithExpiration{
 				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
 			},
-			expectedItem: testFQDN,
+			expectedRequeryAfter: getDuration(5 * time.Second),
 			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
 				selectorItem1: sets.New[string]("mockRule1"),
 			},
@@ -720,16 +722,10 @@ func TestOnDNSResponse(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			fakeClock := clocktesting.NewFakeClock(currentTime)
 			controller := gomock.NewController(t)
 			f, _ := newMockFQDNController(t, controller, nil)
-			mockDNSQueryQueue := workqueue.NewTypedRateLimitingQueueWithConfig(
-				workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
-				workqueue.TypedRateLimitingQueueConfig[string]{
-					Name:  "fqdn-test",
-					Clock: fakeClock,
-				},
-			)
-			f.dnsQueryQueue = mockDNSQueryQueue
+			f.clock = fakeClock
 			f.dnsEntryCache = tc.existingDNSCache
 			if tc.mockSelectorToRuleIDs != nil {
 				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
@@ -745,11 +741,16 @@ func TestOnDNSResponse(t *testing.T) {
 				assert.NotEqual(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "Did not Expect %+v in cache, got %+v", tc.expectedIPs, cachedDnsMetaData.responseIPs)
 			}
 
-			if tc.expectedItem != "" {
-				fakeClock.Step(5 * time.Second)
-				actualItem, _ := f.dnsQueryQueue.Get()
-				f.dnsQueryQueue.Done(actualItem)
-				assert.Equal(t, tc.expectedItem, actualItem)
+			if tc.expectedRequeryAfter != nil {
+				fakeClock.Step(*tc.expectedRequeryAfter)
+				// needed to avoid blocking on Get() in case of failure
+				require.Eventually(t, func() bool { return f.dnsQueryQueue.Len() > 0 }, 1*time.Second, 10*time.Millisecond)
+				item, _ := f.dnsQueryQueue.Get()
+				f.dnsQueryQueue.Done(item)
+				assert.Equal(t, testFQDN, item)
+			} else {
+				// make sure that there is no requery
+				assert.Never(t, func() bool { return f.dnsQueryQueue.Len() > 0 }, 100*time.Millisecond, 10*time.Millisecond)
 			}
 		})
 	}
