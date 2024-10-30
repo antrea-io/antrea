@@ -157,11 +157,7 @@ type fqdnController struct {
 	ipv4Enabled           bool
 	ipv6Enabled           bool
 	gwPort                uint32
-	// clock allows for time-dependent operations within the fqdnController.
-	// By using a clock.Clock as a field, we ensure that all time-related calls throughout the
-	// implementation of the fqdnController utilize this clock
-	// The default implementation uses clock.RealClock{}, this also allows to
-	// inject a custom clock (like fake clock) when writing tests via the newMockFQDNController.
+	// clock allows injecting a custom (fake) clock in unit tests.
 	clock clock.Clock
 }
 
@@ -418,10 +414,10 @@ func (f *fqdnController) deleteRuleSelectedPods(ruleID string) error {
 
 func (f *fqdnController) onDNSResponse(
 	fqdn string,
-	newIPWithExpiration map[string]ipWithExpiration,
+	newIPsWithExpiration map[string]ipWithExpiration,
 	waitCh chan error,
 ) {
-	if len(newIPWithExpiration) == 0 {
+	if len(newIPsWithExpiration) == 0 {
 		klog.V(4).InfoS("FQDN was not resolved to any addresses, skip updating DNS cache", "fqdn", fqdn)
 		if waitCh != nil {
 			waitCh <- nil
@@ -448,7 +444,7 @@ func (f *fqdnController) onDNSResponse(
 	cachedDNSMeta, exist := f.dnsEntryCache[fqdn]
 	if exist {
 		// check for new IPs.
-		for newIPStr, newIPMeta := range newIPWithExpiration {
+		for newIPStr, newIPMeta := range newIPsWithExpiration {
 			if _, exist := cachedDNSMeta.responseIPs[newIPStr]; !exist {
 				updateIPWithExpiration(newIPStr, newIPMeta)
 				addressUpdate = true
@@ -457,7 +453,7 @@ func (f *fqdnController) onDNSResponse(
 
 		// check for presence of already cached IPs in the new response.
 		for cachedIPStr, cachedIPMeta := range cachedDNSMeta.responseIPs {
-			if newIPMeta, exist := newIPWithExpiration[cachedIPStr]; !exist {
+			if newIPMeta, exist := newIPsWithExpiration[cachedIPStr]; !exist {
 				// The IP was not found in current response.
 				if cachedIPMeta.expirationTime.Before(currentTime) {
 					// this IP is expired and stale, remove it by not including it but also signal an update to syncRules.
@@ -492,7 +488,7 @@ func (f *fqdnController) onDNSResponse(
 			}
 		}
 		if addToCache {
-			for ipStr, ipMeta := range newIPWithExpiration {
+			for ipStr, ipMeta := range newIPsWithExpiration {
 				updateIPWithExpiration(ipStr, ipMeta)
 			}
 			addressUpdate = true
@@ -503,9 +499,7 @@ func (f *fqdnController) onDNSResponse(
 		f.dnsEntryCache[fqdn] = dnsMeta{
 			responseIPs: ipWithExpirationMap,
 		}
-		// timeToRequery passed below is guaranteed to be non-nil here because updateIPWithExpiration() is called on each IP in
-		// newIPWithExpiration that either isn't cached in the existing DNS cache or it remains unexpired. This ensures that timeToReQuery is
-		// always set to the earliest expiration time in the response, hence also enabling proper DNS re-query scheduling.
+		// timeToRequery is guaranteed not to be nil because ipWithExpirationMap is not empty, and adding an entry to ipWithExpirationMap requires updating timeToRequery
 		f.dnsQueryQueue.AddAfter(fqdn, timeToRequery.Sub(currentTime))
 	}
 

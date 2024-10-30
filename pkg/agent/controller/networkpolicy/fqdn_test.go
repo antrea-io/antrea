@@ -724,7 +724,7 @@ func TestOnDNSResponse(t *testing.T) {
 			if tc.expectedRequeryAfter != nil {
 				fakeClock.Step(*tc.expectedRequeryAfter)
 				// needed to avoid blocking on Get() in case of failure
-				require.Eventually(t, func() bool { return f.dnsQueryQueue.Len() > 0 }, 100*time.Second, 10*time.Millisecond)
+				require.Eventually(t, func() bool { return f.dnsQueryQueue.Len() > 0 }, 1*time.Second, 10*time.Millisecond)
 				item, _ := f.dnsQueryQueue.Get()
 				f.dnsQueryQueue.Done(item)
 				assert.Equal(t, testFQDN, item)
