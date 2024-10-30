@@ -58,7 +58,7 @@ jobs:
         docker push antrea/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
 
   push-manifest:
-    needs: build
+    needs: [get-version, build]
     runs-on: ubuntu-latest
     env:
       DOCKER_TAG: ${{ needs.get-version.outputs.version }}
