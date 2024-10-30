@@ -31,14 +31,13 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
-	"antrea.io/libOpenflow/protocol"
-	"antrea.io/ofnet/ofctrl"
-
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/types"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	utilsets "antrea.io/antrea/pkg/util/sets"
 	dnsutil "antrea.io/antrea/third_party/dns"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/ofnet/ofctrl"
 )
 
 const (
