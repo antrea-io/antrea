@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/clock"
 	"net"
 	"testing"
 	"time"
@@ -32,13 +33,16 @@ import (
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 )
 
-func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string, fakeClock *clocktesting.FakeClock) (*fqdnController, *openflowtest.MockClient) {
+func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string, clockToInject clock.Clock) (*fqdnController, *openflowtest.MockClient) {
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOFClient.EXPECT().NewDNSPacketInConjunction(gomock.Any()).Return(nil).AnyTimes()
 	dirtyRuleHandler := func(rule string) {}
 	dnsServerAddr := "8.8.8.8:53" // dummy DNS server, will not be used since we don't send any request in these tests
 	if dnsServer != nil {
 		dnsServerAddr = *dnsServer
+	}
+	if clockToInject == nil {
+		clockToInject = clock.RealClock{}
 	}
 	f, err := newFQDNController(
 		mockOFClient,
@@ -48,7 +52,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		true,
 		false,
 		config.DefaultHostGatewayOFPort,
-		fakeClock,
+		clockToInject,
 	)
 	require.NoError(t, err)
 	return f, mockOFClient
@@ -627,7 +631,7 @@ func TestOnDNSResponse(t *testing.T) {
 			expectedRequeryAfter: ptr.To(5 * time.Second),
 		},
 		{
-			name: "existing DNS cache not impacted",
+			name: "empty DNS response",
 			existingDNSCache: map[string]dnsMeta{
 				testFQDN: {
 					responseIPs: map[string]ipWithExpiration{
@@ -660,6 +664,7 @@ func TestOnDNSResponse(t *testing.T) {
 				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(10 * time.Second)},
 				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(5 * time.Second)},
 			},
+			expectedRequeryAfter: ptr.To(5 * time.Second),
 		},
 		{
 			name: "stale IP with expired TTL is evicted",
@@ -715,11 +720,18 @@ func TestOnDNSResponse(t *testing.T) {
 				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
 			}
 
+			for selectorItem := range f.selectorItemToRuleIDs {
+				if selectorItem.matches(testFQDN) {
+					t.Logf("SELECTOR ITEM MATCHS")
+
+				}
+			}
+
 			f.onDNSResponse(testFQDN, tc.dnsResponseIPs, nil)
 
 			cachedDnsMetaData, _ := f.dnsEntryCache[testFQDN]
 
-			assert.Equal(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "Expected %+v in cache, got %+v", tc.expectedIPs, cachedDnsMetaData.responseIPs)
+			assert.Equal(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "FQDN cache doesn't match expected entries")
 
 			if tc.expectedRequeryAfter != nil {
 				fakeClock.Step(*tc.expectedRequeryAfter)
