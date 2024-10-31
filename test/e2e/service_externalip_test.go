@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +38,68 @@ import (
 	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
+)
+
+// externalIPPoolRangeGenerator is used to generate non-overlapping ranges for ExternalIPPools
+// during tests.
+// Even though each test case deletes created pools at the end of the test case, if a new pool is
+// created immediately with an overlapping range, its creation may fail as the
+// externalippoolvalidator may not have registered the previous deletion yet (informer cache not
+// updated yet).
+type externalIPPoolRangeGenerator struct {
+	prefix netip.Prefix
+}
+
+func newExternalIPPoolRangeGenerator(cidr string) *externalIPPoolRangeGenerator {
+	prefix := netip.MustParsePrefix(cidr).Masked()
+	bits := prefix.Bits()
+	if bits == 0 || bits%8 != 0 {
+		panic("prefix size must be a multiple of 8")
+	}
+	return &externalIPPoolRangeGenerator{
+		prefix: prefix,
+	}
+}
+
+func (g *externalIPPoolRangeGenerator) next() *externalIPPoolRangeGenerator {
+	offset := (g.prefix.Bits() - 1) / 8
+	addr := g.prefix.Addr()
+	s := addr.AsSlice()
+	if s[offset] == 0xff {
+		panic("out of ranges")
+	}
+	s[offset] += 1
+	addr, _ = netip.AddrFromSlice(s)
+	g.prefix = netip.PrefixFrom(addr, g.prefix.Bits())
+	return g
+}
+
+func (g *externalIPPoolRangeGenerator) getCIDR(bits int) string {
+	if bits < g.prefix.Bits() {
+		panic("requested range is too large")
+	}
+	return netip.PrefixFrom(g.prefix.Addr(), bits).String()
+}
+
+// getNthIP iterates through each IP, so it is meant to be called with a small n value.
+func (g *externalIPPoolRangeGenerator) getNthIP(n int) string {
+	if n < 0 {
+		panic("can't request n-th IP with negative n")
+	}
+	addr := g.prefix.Addr()
+	for i := 0; i < n; i++ {
+		addr = addr.Next()
+	}
+	return addr.String()
+}
+
+func (g *externalIPPoolRangeGenerator) getFirstIP() string {
+	return g.getNthIP(1)
+}
+
+var (
+	ipPoolRangeV4 = newExternalIPPoolRangeGenerator("169.254.100.0/24")
+	ipPoolRangeV6 = newExternalIPPoolRangeGenerator("2021:1::aa00/120")
 )
 
 func TestServiceExternalIP(t *testing.T) {
@@ -72,7 +135,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 	}{
 		{
 			name:    "endpoint created",
-			ipRange: v1beta1.IPRange{CIDR: "169.254.100.0/30"},
+			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -82,7 +145,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 					},
 				},
 			},
-			expectedExternalIP:      "169.254.100.1",
+			expectedExternalIP:      ipPoolRangeV4.getFirstIP(),
 			originalEndpointSubsets: nil,
 			expectedNodeOrigin:      "",
 			updatedEndpointSubsets: []v1.EndpointSubset{
@@ -99,7 +162,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "endpoint created IPv6",
-			ipRange: v1beta1.IPRange{CIDR: "2021:1::aaa0/124"},
+			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -109,7 +172,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 					},
 				},
 			},
-			expectedExternalIP:      "2021:1::aaa1",
+			expectedExternalIP:      ipPoolRangeV6.getFirstIP(),
 			originalEndpointSubsets: nil,
 			expectedNodeOrigin:      "",
 			updatedEndpointSubsets: []v1.EndpointSubset{
@@ -126,7 +189,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "endpoint changed",
-			ipRange: v1beta1.IPRange{CIDR: "169.254.100.0/30"},
+			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -136,7 +199,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 					},
 				},
 			},
-			expectedExternalIP: "169.254.100.1",
+			expectedExternalIP: ipPoolRangeV4.getFirstIP(),
 			originalEndpointSubsets: []v1.EndpointSubset{
 				{
 					Addresses: []v1.EndpointAddress{
@@ -162,7 +225,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "endpoint changed IPv6",
-			ipRange: v1beta1.IPRange{CIDR: "2021:1::aaa0/124"},
+			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -172,7 +235,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 					},
 				},
 			},
-			expectedExternalIP: "2021:1::aaa1",
+			expectedExternalIP: ipPoolRangeV6.getFirstIP(),
 			originalEndpointSubsets: []v1.EndpointSubset{
 				{
 					Addresses: []v1.EndpointAddress{
@@ -264,31 +327,31 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 	}{
 		{
 			name:    "single matching Node",
-			ipRange: v1beta1.IPRange{CIDR: "169.254.100.0/30"},
+			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					v1.LabelHostname: nodeName(0),
 				},
 			},
-			expectedExternalIP: "169.254.100.1",
+			expectedExternalIP: ipPoolRangeV4.getFirstIP(),
 			expectedNodes:      sets.New[string](nodeName(0)),
 			expectedTotal:      2,
 		},
 		{
 			name:    "single matching Node with IPv6 range",
-			ipRange: v1beta1.IPRange{CIDR: "2021:1::aaa0/124"},
+			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					v1.LabelHostname: nodeName(0),
 				},
 			},
-			expectedExternalIP: "2021:1::aaa1",
+			expectedExternalIP: ipPoolRangeV6.getFirstIP(),
 			expectedNodes:      sets.New[string](nodeName(0)),
 			expectedTotal:      15,
 		},
 		{
 			name:    "two matching Nodes",
-			ipRange: v1beta1.IPRange{Start: "169.254.101.10", End: "169.254.101.11"},
+			ipRange: v1beta1.IPRange{Start: ipPoolRangeV4.next().getFirstIP(), End: ipPoolRangeV4.getNthIP(2)},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -298,19 +361,19 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 					},
 				},
 			},
-			expectedExternalIP: "169.254.101.10",
+			expectedExternalIP: ipPoolRangeV4.getFirstIP(),
 			expectedNodes:      sets.New[string](nodeName(0), nodeName(1)),
 			expectedTotal:      2,
 		},
 		{
 			name:    "no matching Node",
-			ipRange: v1beta1.IPRange{CIDR: "169.254.102.0/30"},
+			ipRange: v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"foo": "bar",
 				},
 			},
-			expectedExternalIP: "169.254.102.1",
+			expectedExternalIP: ipPoolRangeV4.getFirstIP(),
 			expectedNodes:      sets.New[string](),
 			expectedTotal:      2,
 		},
@@ -446,28 +509,28 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 			name:               "same Node",
 			originalNode:       nodeName(0),
 			newNode:            nodeName(0),
-			originalIPRange:    v1beta1.IPRange{CIDR: "169.254.100.0/30"},
-			originalExternalIP: "169.254.100.1",
-			newIPRange:         v1beta1.IPRange{CIDR: "169.254.101.0/30"},
-			newExternalIP:      "169.254.101.1",
+			originalIPRange:    v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			originalExternalIP: ipPoolRangeV4.getFirstIP(),
+			newIPRange:         v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			newExternalIP:      ipPoolRangeV4.getFirstIP(),
 		},
 		{
 			name:               "different Nodes",
 			originalNode:       nodeName(0),
 			newNode:            nodeName(1),
-			originalIPRange:    v1beta1.IPRange{CIDR: "169.254.100.0/30"},
-			originalExternalIP: "169.254.100.1",
-			newIPRange:         v1beta1.IPRange{CIDR: "169.254.101.0/30"},
-			newExternalIP:      "169.254.101.1",
+			originalIPRange:    v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			originalExternalIP: ipPoolRangeV4.getFirstIP(),
+			newIPRange:         v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			newExternalIP:      ipPoolRangeV4.getFirstIP(),
 		},
 		{
 			name:               "different Nodes in IPv6 cluster",
 			originalNode:       nodeName(0),
 			newNode:            nodeName(1),
-			originalIPRange:    v1beta1.IPRange{CIDR: "2021:2::aaa0/124"},
-			originalExternalIP: "2021:2::aaa1",
-			newIPRange:         v1beta1.IPRange{CIDR: "2021:2::bbb0/124"},
-			newExternalIP:      "2021:2::bbb1",
+			originalIPRange:    v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
+			originalExternalIP: ipPoolRangeV6.getFirstIP(),
+			newIPRange:         v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
+			newExternalIP:      ipPoolRangeV6.getFirstIP(),
 		},
 	}
 	for idx, tt := range tests {
@@ -519,13 +582,13 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 	}{
 		{
 			name:       "IPv4 cluster",
-			ipRange:    v1beta1.IPRange{CIDR: "169.254.100.0/30"},
-			expectedIP: "169.254.100.1",
+			ipRange:    v1beta1.IPRange{CIDR: ipPoolRangeV4.next().getCIDR(30)},
+			expectedIP: ipPoolRangeV4.getFirstIP(),
 		},
 		{
 			name:       "IPv6 cluster",
-			ipRange:    v1beta1.IPRange{CIDR: "2021:4::aaa0/124"},
-			expectedIP: "2021:4::aaa1",
+			ipRange:    v1beta1.IPRange{CIDR: ipPoolRangeV6.next().getCIDR(124)},
+			expectedIP: ipPoolRangeV6.getFirstIP(),
 		},
 	}
 	for _, tt := range tests {
