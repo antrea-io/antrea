@@ -129,8 +129,10 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 			mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 			mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
 
+			clusterUUID := uuid.New()
 			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
 				return &flowAggregator{
+					clusterUUID:                 clusterUUID,
 					aggregatorTransportProtocol: "tcp",
 					aggregationProcess:          mockAggregationProcess,
 					activeFlowRecordTimeout:     testActiveTimeout,
@@ -186,6 +188,10 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 			mockIPFIXRegistry.EXPECT().GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID).Return(destinationPodLabelsElement, nil)
 			destinationPodLabelsIE := ipfixentities.NewStringInfoElement(destinationPodLabelsElement, podLabels)
 			mockRecord.EXPECT().AddInfoElement(destinationPodLabelsIE).Return(nil)
+			clusterIDElement := ipfixentities.NewInfoElement("clusterId", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
+			mockIPFIXRegistry.EXPECT().GetInfoElement("clusterId", ipfixregistry.AntreaEnterpriseID).Return(clusterIDElement, nil)
+			clusterIDIE := ipfixentities.NewStringInfoElement(clusterIDElement, clusterUUID.String())
+			mockRecord.EXPECT().AddInfoElement(clusterIDIE).Return(nil)
 			mockAggregationProcess.EXPECT().SetExternalFieldsFilled(flowRecord, true)
 			mockAggregationProcess.EXPECT().IsAggregatedRecordIPv4(*flowRecord).Return(!tc.isIPv6)
 

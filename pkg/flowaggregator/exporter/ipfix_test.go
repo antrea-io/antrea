@@ -296,6 +296,9 @@ func createElementList(isIPv6 bool, mockIPFIXRegistry *ipfixtesting.MockIPFIXReg
 		elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
 		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
 	}
+	elemList = append(elemList, createElement("clusterId", ipfixregistry.AntreaEnterpriseID))
+	mockIPFIXRegistry.EXPECT().GetInfoElement("clusterId", ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+
 	return elemList
 }
 

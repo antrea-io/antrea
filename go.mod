@@ -251,3 +251,5 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.17.1 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
+
+replace github.com/vmware/go-ipfix => github.com/antoninbas/vmware-go-ipfix v0.2.1-0.20241024212541-62590a7b4d08
