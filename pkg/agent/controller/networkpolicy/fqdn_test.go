@@ -17,7 +17,6 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/clock"
 	"net"
 	"testing"
 	"time"
@@ -26,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
