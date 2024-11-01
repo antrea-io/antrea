@@ -29,6 +29,7 @@ type CrdV1alpha1Interface interface {
 	BGPPoliciesGetter
 	ExternalNodesGetter
 	NodeLatencyMonitorsGetter
+	PacketCapturesGetter
 	SupportBundleCollectionsGetter
 }
 
@@ -47,6 +48,10 @@ func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterfac
 
 func (c *CrdV1alpha1Client) NodeLatencyMonitors() NodeLatencyMonitorInterface {
 	return newNodeLatencyMonitors(c)
+}
+
+func (c *CrdV1alpha1Client) PacketCaptures() PacketCaptureInterface {
+	return newPacketCaptures(c)
 }
 
 func (c *CrdV1alpha1Client) SupportBundleCollections() SupportBundleCollectionInterface {
