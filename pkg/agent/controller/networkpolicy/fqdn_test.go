@@ -52,7 +52,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		true,
 		false,
 		config.DefaultHostGatewayOFPort,
-		clockToInject,
+		clockToInject.(clock.WithTicker),
 	)
 	require.NoError(t, err)
 	return f, mockOFClient
@@ -657,11 +657,11 @@ func TestOnDNSResponse(t *testing.T) {
 				},
 			},
 			dnsResponseIPs: map[string]ipWithExpiration{
-				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(10 * time.Second)},
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(1 * time.Second)},
 				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(5 * time.Second)},
 			},
 			expectedIPs: map[string]ipWithExpiration{
-				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(10 * time.Second)},
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
 				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(5 * time.Second)},
 			},
 			expectedRequeryAfter: ptr.To(5 * time.Second),
@@ -718,13 +718,6 @@ func TestOnDNSResponse(t *testing.T) {
 			f.dnsEntryCache = tc.existingDNSCache
 			if tc.mockSelectorToRuleIDs != nil {
 				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
-			}
-
-			for selectorItem := range f.selectorItemToRuleIDs {
-				if selectorItem.matches(testFQDN) {
-					t.Logf("SELECTOR ITEM MATCHS")
-
-				}
 			}
 
 			f.onDNSResponse(testFQDN, tc.dnsResponseIPs, nil)

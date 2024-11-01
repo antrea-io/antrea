@@ -161,32 +161,7 @@ type fqdnController struct {
 	clock clock.Clock
 }
 
-// CustomWithTickerClock wraps clock.Clock and provides NewTicker to implement clock.WithTicker
-type CustomWithTickerClock struct {
-	clock.Clock
-}
-
-// NewTicker is implemented to fulfill the clock.WithTicker interface.
-func (c *CustomWithTickerClock) NewTicker(d time.Duration) clock.Ticker {
-	return &realTicker{time.NewTicker(d)}
-
-}
-
-// realTicker wraps time.Ticker to implement clock.Ticker interface
-type realTicker struct {
-	*time.Ticker
-}
-
-func (t *realTicker) C() <-chan time.Time {
-	return t.Ticker.C
-}
-
-func (t *realTicker) Stop() {
-	t.Ticker.Stop()
-}
-
-func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.Clock) (*fqdnController, error) {
-	customClock := &CustomWithTickerClock{Clock: clock}
+func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.WithTicker) (*fqdnController, error) {
 	controller := &fqdnController{
 		ofClient:         client,
 		dirtyRuleHandler: dirtyRuleHandler,
@@ -196,7 +171,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
 			workqueue.TypedRateLimitingQueueConfig[string]{
 				Name:  "fqdn",
-				Clock: customClock,
+				Clock: clock,
 			},
 		),
 		dnsEntryCache:          map[string]dnsMeta{},
@@ -519,7 +494,7 @@ func (f *fqdnController) onDNSResponse(
 		}
 	}
 
-	// ipWithExpirationMap remains empty only when FQDN doesn't match any selector or the IPs are not in response and have expired.
+	// ipWithExpirationMap remains empty only when FQDN doesn't match any selector.
 	if len(ipWithExpirationMap) > 0 {
 		f.dnsEntryCache[fqdn] = dnsMeta{
 			responseIPs: ipWithExpirationMap,
