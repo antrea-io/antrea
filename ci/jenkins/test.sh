@@ -429,7 +429,7 @@ function deliver_antrea_linux {
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
     docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
     echo "===== Pull necessary images on Control-Plane node ====="
-    common_images=("registry.k8s.io/e2e-test-images/agnhost:2.40")
+    common_images=("registry.k8s.io/e2e-test-images/agnhost:2.52")
     k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.52" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
     conformance_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.52" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
     e2e_images=("toolbox:1.4-0" "nginx:1.21.6-alpine")
@@ -485,7 +485,7 @@ function deliver_antrea_windows {
         revert_snapshot_windows ${WORKER_NAME}
         k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.52" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2" "registry.k8s.io/pause:3.10")
         conformance_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.52" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2" "registry.k8s.io/e2e-test-images/pause:3.10")
-        e2e_images=("${DOCKER_REGISTRY}/antrea/toolbox:1.4-0" "registry.k8s.io/e2e-test-images/agnhost:2.40")
+        e2e_images=("${DOCKER_REGISTRY}/antrea/toolbox:1.4-0" "registry.k8s.io/e2e-test-images/agnhost:2.52")
         # Pull necessary images in advance to avoid transient error
         for i in "${!k8s_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull --user ${DOCKER_USERNAME}:${DOCKER_PASSWORD} ${k8s_images[i]} && ctr -n k8s.io images tag ${k8s_images[i]} ${conformance_images[i]}" || true

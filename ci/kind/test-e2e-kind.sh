@@ -249,9 +249,9 @@ if $flow_visibility; then
     manifest_args="$manifest_args --feature-gates FlowExporter=true,L7FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
 fi
 
-COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
+COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.52" \
                     "antrea/nginx:1.21.6-alpine" \
-                    "antrea/toolbox:1.3-0")
+                    "antrea/toolbox:1.4-0")
 
 FLOW_VISIBILITY_IMAGE_LIST=("antrea/ipfix-collector:v0.11.0" \
                             "antrea/clickhouse-operator:0.21.0" \

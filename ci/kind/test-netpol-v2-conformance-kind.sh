@@ -105,7 +105,7 @@ if [ -n "$feature_gates" ]; then
   manifest_args="$manifest_args --feature-gates $feature_gates"
 fi
 
-IMAGE_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.43" \
+IMAGE_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.52" \
             "antrea/antrea-agent-ubuntu:latest" \
             "antrea/antrea-controller-ubuntu:latest")
 
