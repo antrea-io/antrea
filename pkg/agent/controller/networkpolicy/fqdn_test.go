@@ -33,7 +33,7 @@ import (
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 )
 
-func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string, clockToInject clock.Clock) (*fqdnController, *openflowtest.MockClient) {
+func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string, clockToInject clock.WithTicker) (*fqdnController, *openflowtest.MockClient) {
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOFClient.EXPECT().NewDNSPacketInConjunction(gomock.Any()).Return(nil).AnyTimes()
 	dirtyRuleHandler := func(rule string) {}
@@ -52,7 +52,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		true,
 		false,
 		config.DefaultHostGatewayOFPort,
-		clockToInject.(clock.WithTicker),
+		clockToInject,
 	)
 	require.NoError(t, err)
 	return f, mockOFClient

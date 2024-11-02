@@ -494,14 +494,11 @@ func (f *fqdnController) onDNSResponse(
 		}
 	}
 
-	// ipWithExpirationMap remains empty only when FQDN doesn't match any selector.
+	// ipWithExpirationMap remains empty and timeToRequery is nil only when FQDN doesn't match any selector.
 	if len(ipWithExpirationMap) > 0 {
 		f.dnsEntryCache[fqdn] = dnsMeta{
 			responseIPs: ipWithExpirationMap,
 		}
-	}
-	if timeToRequery != nil {
-		// timeToRequery is never nil since ipWithExpirationMap is non-empty and updates when adding entries.
 		f.dnsQueryQueue.AddAfter(fqdn, timeToRequery.Sub(currentTime))
 	}
 
