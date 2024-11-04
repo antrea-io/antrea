@@ -35,6 +35,21 @@ import (
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
+var (
+	netlinkAdd         = netlink.LinkAdd
+	netlinkDel         = netlink.LinkDel
+	ensureRPF          = util.EnsureRPFilterOnInterface
+	netlinkSetUp       = netlink.LinkSetUp
+	netInterfaceByName = net.InterfaceByName
+	netlinkAddrAdd     = netlink.AddrAdd
+	netlinkAddrDel     = netlink.AddrDel
+	netlinkAddrList    = netlink.AddrList
+)
+
+type advertiseArpNdp func(a *assignee, ip net.IP)
+
+var advertiseResponder advertiseArpNdp = (*assignee).advertise
+
 // VLAN interfaces created by antrea-agent will be named with the prefix.
 // For example, when VLAN ID is 10, the name will be antrea-ext.10.
 // It can be used to determine whether it's safe to delete an interface when it's no longer used.
@@ -79,7 +94,7 @@ func (as *assignee) deletable() bool {
 }
 
 func (as *assignee) destroy() error {
-	if err := netlink.LinkDel(as.link); err != nil {
+	if err := netlinkDel(as.link); err != nil {
 		return fmt.Errorf("error deleting interface %v: %w", as.link, err)
 	}
 	return nil
@@ -89,7 +104,7 @@ func (as *assignee) assign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
 	// If there is a real link, add the IP to its address list.
 	if as.link != nil {
 		addr := getIPNet(ip, subnetInfo)
-		if err := netlink.AddrAdd(as.link, &netlink.Addr{IPNet: addr}); err != nil {
+		if err := netlinkAddrAdd(as.link, &netlink.Addr{IPNet: addr}); err != nil {
 			if !errors.Is(err, unix.EEXIST) {
 				return fmt.Errorf("failed to add IP %v to interface %s: %v", addr, as.link.Attrs().Name, err)
 			} else {
@@ -111,7 +126,7 @@ func (as *assignee) assign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
 		}
 	}
 	// Always advertise the IP when the IP is newly assigned to this Node.
-	as.advertise(ip)
+	advertiseResponder(as, ip)
 	as.ips.Insert(ip.String())
 	return nil
 }
@@ -134,7 +149,7 @@ func (as *assignee) unassign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
 	// If there is a real link, delete the IP from its address list.
 	if as.link != nil {
 		addr := getIPNet(ip, subnetInfo)
-		if err := netlink.AddrDel(as.link, &netlink.Addr{IPNet: addr}); err != nil {
+		if err := netlinkAddrDel(as.link, &netlink.Addr{IPNet: addr}); err != nil {
 			if !errors.Is(err, unix.EADDRNOTAVAIL) {
 				return fmt.Errorf("failed to delete IP %v from interface %s: %v", ip, as.link.Attrs().Name, err)
 			} else {
@@ -171,7 +186,7 @@ func (as *assignee) getVLANID() (int, bool) {
 
 func (as *assignee) loadIPAddresses() (map[string]*crdv1b1.SubnetInfo, error) {
 	assignedIPs := map[string]*crdv1b1.SubnetInfo{}
-	addresses, err := netlink.AddrList(as.link, netlink.FAMILY_ALL)
+	addresses, err := netlinkAddrList(as.link, netlink.FAMILY_ALL)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +377,7 @@ func (a *ipAssigner) AssignIP(ip string, subnetInfo *crdv1b1.SubnetInfo, forceAd
 		if crdv1b1.CompareSubnetInfo(subnetInfo, oldSubnetInfo, true) {
 			klog.V(2).InfoS("The IP is already assigned", "ip", ip)
 			if forceAdvertise {
-				as.advertise(parsedIP)
+				advertiseResponder(as, parsedIP)
 			}
 			return false, nil
 		}
@@ -497,7 +512,7 @@ func (a *ipAssigner) getAssignee(subnetInfo *crdv1b1.SubnetInfo, createIfNotExis
 		},
 		VlanId: int(subnetInfo.VLAN),
 	}
-	if err := netlink.LinkAdd(vlan); err != nil {
+	if err := netlinkAdd(vlan); err != nil {
 		if !errors.Is(err, unix.EEXIST) {
 			return nil, fmt.Errorf("error creating VLAN sub-interface for VLAN %d", subnetInfo.VLAN)
 		}
@@ -505,7 +520,7 @@ func (a *ipAssigner) getAssignee(subnetInfo *crdv1b1.SubnetInfo, createIfNotExis
 	// Loose mode is needed because incoming traffic received on the interface is expected to be received on the parent
 	// external interface when looking up the main table. To make it look up the custom table, we will need to restore
 	// the mark on the reply traffic and turn on src_valid_mark on this interface, which is more complicated.
-	if err := util.EnsureRPFilterOnInterface(name, 2); err != nil {
+	if err := ensureRPF(name, 2); err != nil {
 		return nil, err
 	}
 	as, err := a.addVLANAssignee(vlan, subnetInfo.VLAN)
@@ -516,10 +531,10 @@ func (a *ipAssigner) getAssignee(subnetInfo *crdv1b1.SubnetInfo, createIfNotExis
 }
 
 func (a *ipAssigner) addVLANAssignee(link netlink.Link, vlan int32) (*assignee, error) {
-	if err := netlink.LinkSetUp(link); err != nil {
+	if err := netlinkSetUp(link); err != nil {
 		return nil, fmt.Errorf("error setting up interface %v", link)
 	}
-	iface, err := net.InterfaceByName(link.Attrs().Name)
+	iface, err := netInterfaceByName(link.Attrs().Name)
 	if err != nil {
 		return nil, err
 	}

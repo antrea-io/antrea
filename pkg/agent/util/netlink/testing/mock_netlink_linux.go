@@ -136,10 +136,24 @@ func (m *MockInterface) LinkAddAltName(link netlink.Link, name string) error {
 	return ret0
 }
 
+// LinkAdd mocks base method.
+func (m *MockInterface) LinkAdd(arg0 netlink.Link) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkAdd", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
 // LinkAddAltName indicates an expected call of LinkAddAltName.
 func (mr *MockInterfaceMockRecorder) LinkAddAltName(link, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkAddAltName", reflect.TypeOf((*MockInterface)(nil).LinkAddAltName), link, name)
+}
+
+// LinkAdd indicates an expected call of LinkAdd.
+func (mr *MockInterfaceMockRecorder) LinkAdd(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkAdd", reflect.TypeOf((*MockInterface)(nil).LinkAdd), arg0)
 }
 
 // LinkByIndex mocks base method.
@@ -179,11 +193,24 @@ func (m *MockInterface) LinkDelAltName(link netlink.Link, name string) error {
 	ret0, _ := ret[0].(error)
 	return ret0
 }
+// LinkDel mocks base method.
+func (m *MockInterface) LinkDel(arg0 netlink.Link) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkDel", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
 
 // LinkDelAltName indicates an expected call of LinkDelAltName.
 func (mr *MockInterfaceMockRecorder) LinkDelAltName(link, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkDelAltName", reflect.TypeOf((*MockInterface)(nil).LinkDelAltName), link, name)
+}
+
+// LinkDel indicates an expected call of LinkDel.
+func (mr *MockInterfaceMockRecorder) LinkDel(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkDel", reflect.TypeOf((*MockInterface)(nil).LinkDel), arg0)
 }
 
 // LinkSetDown mocks base method.
