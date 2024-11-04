@@ -24,15 +24,14 @@ import (
 	"sync"
 	"time"
 
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/miekg/dns"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-
-	"antrea.io/libOpenflow/protocol"
-	"antrea.io/ofnet/ofctrl"
 
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/types"
