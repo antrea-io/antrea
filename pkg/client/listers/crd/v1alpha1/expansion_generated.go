@@ -32,6 +32,10 @@ type ExternalNodeNamespaceListerExpansion interface{}
 // NodeLatencyMonitorLister.
 type NodeLatencyMonitorListerExpansion interface{}
 
+// PacketCaptureListerExpansion allows custom methods to be added to
+// PacketCaptureLister.
+type PacketCaptureListerExpansion interface{}
+
 // SupportBundleCollectionListerExpansion allows custom methods to be added to
 // SupportBundleCollectionLister.
 type SupportBundleCollectionListerExpansion interface{}
