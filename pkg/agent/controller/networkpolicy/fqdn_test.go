@@ -729,9 +729,7 @@ func TestOnDNSResponse(t *testing.T) {
 			if tc.expectedRequeryAfter != nil {
 				// Wait for the DelayingQueue to create the timer which signals that the
 				// DNS request for the FQDN item is ready to be sent.
-				require.Eventually(t, func() bool {
-					return fakeClock.TimersAdded() > 0
-				}, 1*time.Second, 10*time.Millisecond)
+				require.Eventually(t, func() bool { return fakeClock.TimersAdded() > 0 }, 1*time.Second, 10*time.Millisecond)
 
 				fakeClock.Step(*tc.expectedRequeryAfter)
 				// needed to avoid blocking on Get() in case of failure
