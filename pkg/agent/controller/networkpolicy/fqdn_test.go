@@ -25,18 +25,23 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/clock"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 )
 
-func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string) (*fqdnController, *openflowtest.MockClient) {
+func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string, clockToInject clock.WithTicker) (*fqdnController, *openflowtest.MockClient) {
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOFClient.EXPECT().NewDNSPacketInConjunction(gomock.Any()).Return(nil).AnyTimes()
 	dirtyRuleHandler := func(rule string) {}
 	dnsServerAddr := "8.8.8.8:53" // dummy DNS server, will not be used since we don't send any request in these tests
 	if dnsServer != nil {
 		dnsServerAddr = *dnsServer
+	}
+	if clockToInject == nil {
+		clockToInject = clock.RealClock{}
 	}
 	f, err := newFQDNController(
 		mockOFClient,
@@ -46,6 +51,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		true,
 		false,
 		config.DefaultHostGatewayOFPort,
+		clockToInject,
 	)
 	require.NoError(t, err)
 	return f, mockOFClient
@@ -164,7 +170,7 @@ func TestAddFQDNRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			f, c := newMockFQDNController(t, controller, nil)
+			f, c := newMockFQDNController(t, controller, nil, nil)
 			if tt.addressAdded {
 				c.EXPECT().AddAddressToDNSConjunction(dnsInterceptRuleID, gomock.Any()).Times(1)
 			}
@@ -325,7 +331,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			f, c := newMockFQDNController(t, controller, nil)
+			f, c := newMockFQDNController(t, controller, nil, nil)
 			c.EXPECT().AddAddressToDNSConjunction(dnsInterceptRuleID, gomock.Any()).Times(len(tt.previouslyAddedRules))
 			f.dnsEntryCache = tt.existingDNSCache
 			if tt.addressRemoved {
@@ -344,7 +350,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 func TestLookupIPFallback(t *testing.T) {
 	controller := gomock.NewController(t)
 	dnsServer := "" // force a fallback to local resolver
-	f, _ := newMockFQDNController(t, controller, &dnsServer)
+	f, _ := newMockFQDNController(t, controller, &dnsServer, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// not ideal as a unit test because it requires the ability to resolve
@@ -402,10 +408,10 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 			},
 			existingDNSCache: map[string]dnsMeta{
 				"test.antrea.io": {
-					responseIPs: map[string]net.IP{
-						"127.0.0.1":    net.ParseIP("127.0.0.1"),
-						"192.155.12.1": net.ParseIP("192.155.12.1"),
-						"192.158.1.38": net.ParseIP("192.158.1.38"),
+					responseIPs: map[string]ipWithExpiration{
+						"127.0.0.1":    {net.ParseIP("127.0.0.1"), time.Now()},
+						"192.155.12.1": {net.ParseIP("192.155.12.1"), time.Now()},
+						"192.158.1.38": {net.ParseIP("192.158.1.38"), time.Now()},
 					},
 				},
 			},
@@ -421,7 +427,7 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			f, _ := newMockFQDNController(t, controller, nil)
+			f, _ := newMockFQDNController(t, controller, nil, nil)
 			if tc.existingSelectorItemToFQDN != nil {
 				f.selectorItemToFQDN = tc.existingSelectorItemToFQDN
 			}
@@ -539,7 +545,7 @@ func TestSyncDirtyRules(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			f, _ := newMockFQDNController(t, controller, nil)
+			f, _ := newMockFQDNController(t, controller, nil, nil)
 			var dirtyRuleSyncCalls []string
 			f.dirtyRuleHandler = func(s string) {
 				dirtyRuleSyncCalls = append(dirtyRuleSyncCalls, s)
@@ -581,6 +587,160 @@ func TestSyncDirtyRules(t *testing.T) {
 				}
 			}
 			assert.Equal(t, tc.expectedDirtyRulesRemaining, f.ruleSyncTracker.getDirtyRules())
+		})
+	}
+}
+
+func TestOnDNSResponse(t *testing.T) {
+	testFQDN := "fqdn-test-pod.lfx.test"
+	selectorItem1 := fqdnSelectorItem{
+		matchName: testFQDN,
+	}
+	selectorItem2 := fqdnSelectorItem{
+		matchName: "random-domain.com",
+	}
+	currentTime := time.Now()
+
+	tests := []struct {
+		name                  string
+		existingDNSCache      map[string]dnsMeta
+		dnsResponseIPs        map[string]ipWithExpiration
+		expectedIPs           map[string]ipWithExpiration
+		expectedRequeryAfter  *time.Duration
+		mockSelectorToRuleIDs map[fqdnSelectorItem]sets.Set[string]
+	}{
+		{
+			name: "new IP added",
+			existingDNSCache: map[string]dnsMeta{
+				testFQDN: {
+					responseIPs: map[string]ipWithExpiration{
+						"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+						"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(6 * time.Second)},
+					},
+				},
+			},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(10 * time.Second)},
+			},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(6 * time.Second)},
+				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(10 * time.Second)},
+			},
+			expectedRequeryAfter: ptr.To(5 * time.Second),
+		},
+		{
+			name: "empty DNS response",
+			existingDNSCache: map[string]dnsMeta{
+				testFQDN: {
+					responseIPs: map[string]ipWithExpiration{
+						"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+						"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(6 * time.Second)},
+					},
+				},
+			},
+			dnsResponseIPs: map[string]ipWithExpiration{},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(6 * time.Second)},
+			},
+		},
+		{
+			name: "old IP present in DNS response is retained with an updated TTL fetched from response",
+			existingDNSCache: map[string]dnsMeta{
+				testFQDN: {
+					responseIPs: map[string]ipWithExpiration{
+						"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+						"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(1 * time.Second)},
+					},
+				},
+			},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(1 * time.Second)},
+				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+				"192.1.1.2": {ip: net.ParseIP("192.1.1.2"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedRequeryAfter: ptr.To(5 * time.Second),
+		},
+		{
+			name: "stale IP with expired TTL is evicted",
+			existingDNSCache: map[string]dnsMeta{
+				testFQDN: {
+					responseIPs: map[string]ipWithExpiration{
+						"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(-1 * time.Second)},
+					},
+				},
+			},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.3": {ip: net.ParseIP("192.1.1.3"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedRequeryAfter: ptr.To(5 * time.Second),
+		},
+		{
+			name:             "existingDNSCache is empty, the new response matches a selector.",
+			existingDNSCache: map[string]dnsMeta{},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedRequeryAfter: ptr.To(5 * time.Second),
+			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem1: sets.New[string]("mockRule1"),
+			},
+		},
+		{
+			name:             "existingDNSCache is empty, the new response doesn't match any selector",
+			existingDNSCache: map[string]dnsMeta{},
+			dnsResponseIPs: map[string]ipWithExpiration{
+				"192.1.1.1": {ip: net.ParseIP("192.1.1.1"), expirationTime: currentTime.Add(5 * time.Second)},
+			},
+			expectedIPs: nil,
+			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem2: sets.New[string]("mockRule2"),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClock := newFakeClock(currentTime)
+			controller := gomock.NewController(t)
+			f, _ := newMockFQDNController(t, controller, nil, fakeClock)
+			f.dnsEntryCache = tc.existingDNSCache
+			if tc.mockSelectorToRuleIDs != nil {
+				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
+			}
+			require.Zero(t, fakeClock.TimersAdded())
+
+			f.onDNSResponse(testFQDN, tc.dnsResponseIPs, nil)
+
+			cachedDnsMetaData, _ := f.dnsEntryCache[testFQDN]
+
+			assert.Equal(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "FQDN cache doesn't match expected entries")
+
+			if tc.expectedRequeryAfter != nil {
+				// Wait for the DelayingQueue to create the timer which signals that the
+				// DNS request for the FQDN item is ready to be sent.
+				require.Eventually(t, func() bool { return fakeClock.TimersAdded() > 0 }, 1*time.Second, 10*time.Millisecond)
+
+				fakeClock.Step(*tc.expectedRequeryAfter)
+				// needed to avoid blocking on Get() in case of failure
+				require.Eventually(t, func() bool { return f.dnsQueryQueue.Len() > 0 }, 1*time.Second, 10*time.Millisecond)
+				item, _ := f.dnsQueryQueue.Get()
+				f.dnsQueryQueue.Done(item)
+				assert.Equal(t, testFQDN, item)
+			} else {
+				// make sure that there is no requery
+				assert.Never(t, func() bool { return f.dnsQueryQueue.Len() > 0 }, 100*time.Millisecond, 10*time.Millisecond)
+			}
 		})
 	}
 }
