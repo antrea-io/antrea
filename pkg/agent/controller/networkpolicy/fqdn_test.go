@@ -26,7 +26,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/clock"
-	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -712,13 +711,14 @@ func TestOnDNSResponse(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeClock := clocktesting.NewFakeClock(currentTime)
+			fakeClock := newFakeClock(currentTime)
 			controller := gomock.NewController(t)
 			f, _ := newMockFQDNController(t, controller, nil, fakeClock)
 			f.dnsEntryCache = tc.existingDNSCache
 			if tc.mockSelectorToRuleIDs != nil {
 				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
 			}
+			require.Zero(t, fakeClock.TimersAdded())
 
 			f.onDNSResponse(testFQDN, tc.dnsResponseIPs, nil)
 
@@ -727,6 +727,12 @@ func TestOnDNSResponse(t *testing.T) {
 			assert.Equal(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "FQDN cache doesn't match expected entries")
 
 			if tc.expectedRequeryAfter != nil {
+				// Wait for the DelayingQueue to create the timer which signals that the
+				// DNS request for the FQDN item is ready to be sent.
+				require.Eventually(t, func() bool {
+					return fakeClock.TimersAdded() > 0
+				}, 1*time.Second, 10*time.Millisecond)
+
 				fakeClock.Step(*tc.expectedRequeryAfter)
 				// needed to avoid blocking on Get() in case of failure
 				require.Eventually(t, func() bool { return f.dnsQueryQueue.Len() > 0 }, 1*time.Second, 10*time.Millisecond)
