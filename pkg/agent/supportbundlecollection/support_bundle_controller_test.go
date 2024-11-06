@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/support"
+	"antrea.io/antrea/pkg/util/sftp"
 )
 
 type fakeController struct {
@@ -69,7 +70,7 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 		supportBundleCollection *cpv1b2.SupportBundleCollection
 		expectedCompleted       bool
 		agentDumper             *mockAgentDumper
-		uploader                uploader
+		uploader                sftp.Uploader
 	}{
 		{
 			name:                    "Add SupportBundleCollection",
@@ -198,15 +199,18 @@ func TestSupportBundleCollectionDelete(t *testing.T) {
 type testUploader struct {
 }
 
-func (uploader *testUploader) upload(address string, path string, config *ssh.ClientConfig, tarGzFile io.Reader) error {
+func (uploader *testUploader) Upload(address string, path string, config *ssh.ClientConfig, tarGzFile io.Reader) error {
 	klog.Info("Called test uploader")
+	if _, err := sftp.ParseSFTPUploadUrl(address); err != nil {
+		return err
+	}
 	return nil
 }
 
 type testFailedUploader struct {
 }
 
-func (uploader *testFailedUploader) upload(address string, path string, config *ssh.ClientConfig, tarGzFile io.Reader) error {
+func (uploader *testFailedUploader) Upload(address string, path string, config *ssh.ClientConfig, tarGzFile io.Reader) error {
 	klog.Info("Called test uploader for failed case")
 	return fmt.Errorf("uploader failed")
 }
