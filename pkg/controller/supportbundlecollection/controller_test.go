@@ -43,6 +43,7 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	bundlecollectionstore "antrea.io/antrea/pkg/controller/supportbundlecollection/store"
 	"antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/auth"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -104,7 +105,7 @@ func TestReconcileSupportBundles(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			secretKeyWithAPIKey: []byte(base64.StdEncoding.EncodeToString([]byte("a valid API key"))),
+			auth.SecretKeyWithAPIKey: []byte(base64.StdEncoding.EncodeToString([]byte("a valid API key"))),
 		},
 	}
 	coreObjects = append(coreObjects, secret)
@@ -662,111 +663,6 @@ func TestGetBundleExternalNodes(t *testing.T) {
 type secretConfig struct {
 	name string
 	data map[string][]byte
-}
-
-func TestParseBundleAuth(t *testing.T) {
-	ns := "ns-auth"
-	apiKey := testKeyString
-	token := testTokenString
-	usr := "user"
-	pwd := "pwd123456"
-	var secretObjects []runtime.Object
-	for _, s := range prepareSecrets(ns, []secretConfig{
-		{name: "s1", data: map[string][]byte{secretKeyWithAPIKey: []byte(apiKey)}},
-		{name: "s2", data: map[string][]byte{secretKeyWithBearerToken: []byte(token)}},
-		{name: "s3", data: map[string][]byte{secretKeyWithUsername: []byte(usr), secretKeyWithPassword: []byte(pwd)}},
-		{name: "invalid-base64", data: map[string][]byte{secretKeyWithAPIKey: []byte("invalid string to decode with base64")}},
-		{name: "invalid-secret", data: map[string][]byte{"unknown": []byte(apiKey)}},
-	}) {
-		secretObjects = append(secretObjects, s)
-	}
-
-	testClient := newTestClient(secretObjects, nil)
-	controller := newController(testClient)
-	stopCh := make(chan struct{})
-	testClient.start(stopCh)
-
-	testClient.waitForSync(stopCh)
-
-	for _, tc := range []struct {
-		authentication v1alpha1.BundleServerAuthConfiguration
-		expectedError  string
-		expectedAuth   *controlplane.BundleServerAuthConfiguration
-	}{
-		{
-			authentication: v1alpha1.BundleServerAuthConfiguration{
-				AuthType: v1alpha1.APIKey,
-				AuthSecret: &corev1.SecretReference{
-					Namespace: ns,
-					Name:      "s1",
-				},
-			},
-			expectedAuth: &controlplane.BundleServerAuthConfiguration{
-				APIKey: testKeyString,
-			},
-		},
-		{
-			authentication: v1alpha1.BundleServerAuthConfiguration{
-				AuthType: v1alpha1.BearerToken,
-				AuthSecret: &corev1.SecretReference{
-					Namespace: ns,
-					Name:      "s2",
-				},
-			},
-			expectedAuth: &controlplane.BundleServerAuthConfiguration{
-				BearerToken: testTokenString,
-			},
-		},
-		{
-			authentication: v1alpha1.BundleServerAuthConfiguration{
-				AuthType: v1alpha1.BasicAuthentication,
-				AuthSecret: &corev1.SecretReference{
-					Namespace: ns,
-					Name:      "s3",
-				},
-			},
-			expectedAuth: &controlplane.BundleServerAuthConfiguration{
-				BasicAuthentication: &controlplane.BasicAuthentication{
-					Username: usr,
-					Password: pwd,
-				},
-			},
-		},
-		{
-			authentication: v1alpha1.BundleServerAuthConfiguration{
-				AuthType: v1alpha1.BearerToken,
-				AuthSecret: &corev1.SecretReference{
-					Namespace: ns,
-					Name:      "invalid-secret",
-				},
-			},
-			expectedError: fmt.Sprintf("not found authentication in Secret %s/invalid-secret with key %s", ns, secretKeyWithBearerToken),
-		},
-		{
-			authentication: v1alpha1.BundleServerAuthConfiguration{
-				AuthType: v1alpha1.BearerToken,
-				AuthSecret: &corev1.SecretReference{
-					Namespace: ns,
-					Name:      "not-exist",
-				},
-			},
-			expectedError: fmt.Sprintf("unable to get Secret with name not-exist in Namespace %s", ns),
-		},
-		{
-			authentication: v1alpha1.BundleServerAuthConfiguration{
-				AuthType:   v1alpha1.APIKey,
-				AuthSecret: nil,
-			},
-			expectedError: "authentication is not specified",
-		},
-	} {
-		auth, err := controller.parseBundleAuth(tc.authentication)
-		if tc.expectedError != "" {
-			assert.Contains(t, err.Error(), tc.expectedError)
-		} else {
-			assert.Equal(t, tc.expectedAuth, auth)
-		}
-	}
 }
 
 func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
@@ -2086,9 +1982,9 @@ func prepareTopology() ([]runtime.Object, []runtime.Object) {
 	username := []byte("testUsername")
 	pwd := []byte("testPassword")
 	for _, s := range prepareSecrets(secretNamespace, []secretConfig{
-		{name: secretWithAPIKey, data: map[string][]byte{secretKeyWithAPIKey: apiKey}},
-		{name: secretWithToken, data: map[string][]byte{secretKeyWithBearerToken: token}},
-		{name: secretWithBasicAuth, data: map[string][]byte{secretKeyWithUsername: username, secretKeyWithPassword: pwd}},
+		{name: secretWithAPIKey, data: map[string][]byte{auth.SecretKeyWithAPIKey: apiKey}},
+		{name: secretWithToken, data: map[string][]byte{auth.SecretKeyWithBearerToken: token}},
+		{name: secretWithBasicAuth, data: map[string][]byte{auth.SecretKeyWithUsername: username, auth.SecretKeyWithPassword: pwd}},
 	}) {
 		coreObjects = append(coreObjects, s)
 	}
