@@ -294,3 +294,51 @@ func newExternalEntityInterface(name string, entityIPs []net.IP, entityName stri
 		},
 	}
 }
+
+func TestUpdateStore(t *testing.T) {
+	store := NewInterfaceStore()
+	mac, _ := net.ParseMAC("aa:aa:aa:aa:aa:aa")
+	ifConfig := &InterfaceConfig{
+		Type:          ContainerInterface,
+		InterfaceName: "interface1",
+		IPs:           []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("2.2.2.2")},
+		MAC:           mac,
+		VLANID:        1023,
+		OVSPortConfig: &OVSPortConfig{
+			PortUUID: "12345678",
+		},
+		ContainerInterfaceConfig: &ContainerInterfaceConfig{
+			ContainerID:  "aaaaaaa",
+			PodNamespace: "default",
+			PodName:      "p1",
+			IFDev:        "eth0",
+		},
+		TunnelInterfaceConfig: &TunnelInterfaceConfig{
+			Type:            AntreaIPsecTunnel,
+			NodeName:        "n1",
+			LocalIP:         net.ParseIP("10.10.10.10"),
+			RemoteIP:        net.ParseIP("20.20.20.20"),
+			DestinationPort: 443,
+			RemoteName:      "n2",
+			PSK:             "abcdefg",
+			Csum:            true,
+		},
+		EntityInterfaceConfig: &EntityInterfaceConfig{
+			EntityName:      "e1",
+			EntityNamespace: "ns1",
+			UplinkPort: &OVSPortConfig{
+				PortUUID: "87654321",
+				OFPort:   1025,
+			},
+		},
+	}
+	store.AddInterface(ifConfig)
+	oldCfg, ok := store.GetInterfaceByName("interface1")
+	require.True(t, ok)
+	newCfg := oldCfg.DeepCopy()
+	newCfg.OVSPortConfig.OFPort = 1024
+	store.UpdateInterface(newCfg)
+	ifConfig2, ok := store.GetInterfaceByName("interface1")
+	require.True(t, ok)
+	assert.Equal(t, int32(1024), ifConfig2.OFPort)
+}
