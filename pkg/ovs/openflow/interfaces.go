@@ -146,6 +146,9 @@ type Bridge interface {
 	ResumePacket(packetIn *ofctrl.PacketIn) error
 	// BuildPacketOut returns a new PacketOutBuilder.
 	BuildPacketOut() PacketOutBuilder
+	// SubscribePortStatusConsumer registers a consumer to listen to OpenFlow PortStatus message.
+	// We only support a single consumer for now.
+	SubscribePortStatusConsumer(statusCh chan *openflow15.PortStatus)
 }
 
 // TableStatus represents the status of a specific flow table. The status is useful for debugging.

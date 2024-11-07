@@ -55,11 +55,13 @@ func (t InterfaceType) String() string {
 	return strconv.Itoa(int(t))
 }
 
+// +k8s:deepcopy-gen=true
 type OVSPortConfig struct {
 	PortUUID string
 	OFPort   int32
 }
 
+// +k8s:deepcopy-gen=true
 type ContainerInterfaceConfig struct {
 	ContainerID  string
 	PodName      string
@@ -68,6 +70,7 @@ type ContainerInterfaceConfig struct {
 	IFDev string
 }
 
+// +k8s:deepcopy-gen=true
 type TunnelInterfaceConfig struct {
 	Type ovsconfig.TunnelType
 	// Name of the remote Node.
@@ -87,6 +90,7 @@ type TunnelInterfaceConfig struct {
 	Csum bool
 }
 
+// +k8s:deepcopy-gen=true
 type EntityInterfaceConfig struct {
 	EntityName      string
 	EntityNamespace string
@@ -94,6 +98,7 @@ type EntityInterfaceConfig struct {
 	UplinkPort *OVSPortConfig
 }
 
+// +k8s:deepcopy-gen=true
 type InterfaceConfig struct {
 	Type InterfaceType
 	// Unique name of the interface, also used for the OVS port name.
@@ -113,6 +118,7 @@ type InterfaceConfig struct {
 type InterfaceStore interface {
 	Initialize(interfaces []*InterfaceConfig)
 	AddInterface(interfaceConfig *InterfaceConfig)
+	UpdateInterface(interfaceConfig *InterfaceConfig)
 	ListInterfaces() []*InterfaceConfig
 	DeleteInterface(interfaceConfig *InterfaceConfig)
 	GetInterface(interfaceKey string) (*InterfaceConfig, bool)
