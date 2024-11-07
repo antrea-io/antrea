@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import (
 	openflow0 "antrea.io/antrea/pkg/ovs/openflow"
 	ip "antrea.io/antrea/pkg/util/ip"
 	proxy "antrea.io/antrea/third_party/proxy"
+	openflow15 "antrea.io/libOpenflow/openflow15"
 	protocol "antrea.io/libOpenflow/protocol"
 	util "antrea.io/libOpenflow/util"
 	ofctrl "antrea.io/ofnet/ofctrl"
@@ -846,6 +847,18 @@ func (m *MockClient) StartPacketInHandler(arg0 <-chan struct{}) {
 func (mr *MockClientMockRecorder) StartPacketInHandler(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPacketInHandler", reflect.TypeOf((*MockClient)(nil).StartPacketInHandler), arg0)
+}
+
+// SubscribeOFPortStatusMessage mocks base method.
+func (m *MockClient) SubscribeOFPortStatusMessage(arg0 chan *openflow15.PortStatus) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SubscribeOFPortStatusMessage", arg0)
+}
+
+// SubscribeOFPortStatusMessage indicates an expected call of SubscribeOFPortStatusMessage.
+func (mr *MockClientMockRecorder) SubscribeOFPortStatusMessage(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeOFPortStatusMessage", reflect.TypeOf((*MockClient)(nil).SubscribeOFPortStatusMessage), arg0)
 }
 
 // SubscribePacketIn mocks base method.

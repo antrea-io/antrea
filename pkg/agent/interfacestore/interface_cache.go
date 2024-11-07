@@ -105,6 +105,11 @@ func (c *interfaceCache) AddInterface(interfaceConfig *InterfaceConfig) {
 	}
 }
 
+// UpdateInterface updates interfaceConfig into local cache.
+func (c *interfaceCache) UpdateInterface(interfaceConfig *InterfaceConfig) {
+	c.cache.Update(interfaceConfig)
+}
+
 // DeleteInterface deletes interface from local cache.
 func (c *interfaceCache) DeleteInterface(interfaceConfig *InterfaceConfig) {
 	c.cache.Delete(interfaceConfig)

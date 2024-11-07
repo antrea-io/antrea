@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -339,6 +339,18 @@ func (m *MockBridge) SubscribePacketIn(arg0 byte, arg1 *openflow.PacketInQueue) 
 func (mr *MockBridgeMockRecorder) SubscribePacketIn(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePacketIn", reflect.TypeOf((*MockBridge)(nil).SubscribePacketIn), arg0, arg1)
+}
+
+// SubscribePortStatusConsumer mocks base method.
+func (m *MockBridge) SubscribePortStatusConsumer(arg0 chan *openflow15.PortStatus) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SubscribePortStatusConsumer", arg0)
+}
+
+// SubscribePortStatusConsumer indicates an expected call of SubscribePortStatusConsumer.
+func (mr *MockBridgeMockRecorder) SubscribePortStatusConsumer(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePortStatusConsumer", reflect.TypeOf((*MockBridge)(nil).SubscribePortStatusConsumer), arg0)
 }
 
 // MockTable is a mock of Table interface.

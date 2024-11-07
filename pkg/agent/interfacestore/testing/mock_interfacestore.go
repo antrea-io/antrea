@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -276,4 +276,16 @@ func (m *MockInterfaceStore) ListInterfaces() []*interfacestore.InterfaceConfig 
 func (mr *MockInterfaceStoreMockRecorder) ListInterfaces() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListInterfaces", reflect.TypeOf((*MockInterfaceStore)(nil).ListInterfaces))
+}
+
+// UpdateInterface mocks base method.
+func (m *MockInterfaceStore) UpdateInterface(arg0 *interfacestore.InterfaceConfig) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UpdateInterface", arg0)
+}
+
+// UpdateInterface indicates an expected call of UpdateInterface.
+func (mr *MockInterfaceStoreMockRecorder) UpdateInterface(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateInterface", reflect.TypeOf((*MockInterfaceStore)(nil).UpdateInterface), arg0)
 }
