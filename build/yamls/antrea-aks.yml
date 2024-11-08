@@ -3060,7 +3060,7 @@ spec:
                   properties:
                     url:
                       type: string
-                      pattern: 's{0,1}ftps{0,1}:\/\/[\w-_./]+:\d+'
+                      pattern: 'sftps{0,1}:\/\/[\w-_./]+:\d+'
             status:
               type: object
               properties:
@@ -3967,8 +3967,11 @@ data:
     # be enabled, otherwise this flag will not take effect.
     #  CleanupStaleUDPSvcConntrack: true
 
-    # Enable traceflow which provides packet tracing feature to diagnose network issue.
+    # Enable Traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
+
+    # Enable PacketCapture feature which supports capturing packets to diagnose network issues.
+    #  PacketCapture: false
 
     # Enable NodePortLocal feature to make the Pods reachable externally through NodePort
     #  NodePortLocal: true
@@ -4675,6 +4678,20 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
+      - packetcaptures
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - packetcaptures/status
+    verbs:
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
       - egresses
     verbs:
       - get
@@ -4753,6 +4770,7 @@ rules:
       - secrets
     resourceNames:
       - antrea-bgp-passwords
+      - antrea-packetcapture-fileserver-auth
     verbs:
       - get
       - list
@@ -5365,7 +5383,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4325a243ab510df539883b6384a30cf8b04ff862796444a6c5c10999159479c5
+        checksum/config: e2d1d8af083c88667ac4c22c87dea63e595b2f4f770190c32afb00c480440fe3
       labels:
         app: antrea
         component: antrea-agent
@@ -5603,7 +5621,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4325a243ab510df539883b6384a30cf8b04ff862796444a6c5c10999159479c5
+        checksum/config: e2d1d8af083c88667ac4c22c87dea63e595b2f4f770190c32afb00c480440fe3
       labels:
         app: antrea
         component: antrea-controller

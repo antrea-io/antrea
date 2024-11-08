@@ -91,7 +91,7 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 			supportBundleCollection: generateSupportbundleCollection("supportBundle3", "https://10.220.175.92:22/root/supportbundle"),
 			expectedCompleted:       false,
 			agentDumper:             &mockAgentDumper{},
-			uploader:                &testUploader{},
+			uploader:                &testFailedUploader{},
 		},
 		{
 			name:                    "Add SupportBundleCollection with retry logics",

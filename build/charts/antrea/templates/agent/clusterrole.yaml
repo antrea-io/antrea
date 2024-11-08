@@ -163,6 +163,20 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
+      - packetcaptures
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - packetcaptures/status
+    verbs:
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
       - egresses
     verbs:
       - get
@@ -241,6 +255,7 @@ rules:
       - secrets
     resourceNames:
       - antrea-bgp-passwords
+      - antrea-packetcapture-fileserver-auth
     verbs:
       - get
       - list
