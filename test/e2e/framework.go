@@ -1490,6 +1490,18 @@ func (b *PodBuilder) WithReadinessProbe(probe *corev1.Probe) *PodBuilder {
 	return b
 }
 
+// WithCustomDNSConfig adds custom DNS IP to the Pod spec.
+func (b *PodBuilder) WithCustomDNSConfig(dnsServiceIP string) *PodBuilder {
+	b.MutateFunc = func(pod *corev1.Pod) {
+		pod.Spec.DNSPolicy = corev1.DNSNone
+		if pod.Spec.DNSConfig == nil {
+			pod.Spec.DNSConfig = &corev1.PodDNSConfig{}
+		}
+		pod.Spec.DNSConfig.Nameservers = []string{dnsServiceIP}
+	}
+	return b
+}
+
 func (b *PodBuilder) Create(data *TestData) error {
 	containerName := b.ContainerName
 	if containerName == "" {
@@ -3244,7 +3256,6 @@ func (data *TestData) runDNSQuery(
 	}
 
 	digCmd := strings.Fields(digCmdStr)
-	fmt.Printf("Running: kubectl exec %s -c %s -n %s -- %s", podName, containerName, podNamespace, strings.Join(digCmd, " "))
 	stdout, stderr, err := data.RunCommandFromPod(podNamespace, podName, containerName, digCmd)
 	if err != nil {
 		return nil, fmt.Errorf("error when running dig command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
@@ -3278,6 +3289,6 @@ func (data *TestData) setPodAnnotation(namespace, podName, annotationKey string,
 		return err
 	}
 
-	log.Infof("Successfully patched pod %s in namespace %s", podName, namespace)
+	log.Infof("Successfully patched Pod %s in Namespace %s", podName, namespace)
 	return nil
 }

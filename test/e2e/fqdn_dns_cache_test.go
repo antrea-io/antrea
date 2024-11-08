@@ -52,43 +52,48 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	// create two agnHost Pods and get their IPv4 addresses. The IP of these Pods will be mapped against the FQDN.
+	// create two agnhost Pods and get their IPv4 addresses. The IP of these Pods will be mapped against the FQDN.
 	podCount := 2
-	agnHostPodIPs := make([]*PodIPs, podCount)
+	agnhostPodIPs := make([]*PodIPs, podCount)
 	for i := 0; i < podCount; i++ {
-		agnHostPodIPs[i] = createHttpAgnHostPod(t, data)
+		agnhostPodIPs[i] = createHttpAgnhostPod(t, data)
 	}
 
-	// get IPv4 addresses of the agnHost pods created.
-	agnHostPodOneIP, _ := agnHostPodIPs[0].AsStrings()
-	agnHostPodTwoIP, _ := agnHostPodIPs[1].AsStrings()
+	// get IPv4 addresses of the agnhost Pods created.
+	agnhostPodOneIP, _ := agnhostPodIPs[0].AsStrings()
+	agnhostPodTwoIP, _ := agnhostPodIPs[1].AsStrings()
 
-	// create customDNS service and get its ClusterIP.
-	customDnsService, err := data.CreateServiceWithAnnotations("custom-dns-service", data.testNamespace, dnsPort,
+	// create customDNS Service and get its ClusterIP.
+	customDNSService, err := data.CreateServiceWithAnnotations("custom-dns-service", data.testNamespace, dnsPort,
 		dnsPort, corev1.ProtocolUDP, map[string]string{"app": "custom-dns"}, false,
 		false, corev1.ServiceTypeClusterIP, ptr.To[corev1.IPFamily](corev1.IPv4Protocol), map[string]string{})
 	require.NoError(t, err, "Error creating custom DNS Service")
-	dnsServiceIP := customDnsService.Spec.ClusterIP
+	dnsServiceIP := customDNSService.Spec.ClusterIP
 
-	// create a ConfigMap for the custom DNS server, mapping IP of agnHost Pod 1 to the FQDN.
+	// create a ConfigMap for the custom DNS server, mapping IP of agnhost Pod 1 to the FQDN.
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "custom-dns-config",
 			Namespace: data.testNamespace,
 		},
-		Data: createDnsConfig(t, map[string]string{agnHostPodOneIP: testFQDN}, dnsTTL),
+		Data: createDNSConfig(t, map[string]string{agnhostPodOneIP: testFQDN}, dnsTTL),
 	}
-	customDnsConfigMap, err := data.CreateConfigMap(configMap)
+	customDNSConfigMap, err := data.CreateConfigMap(configMap)
 	require.NoError(t, err, "failed to create custom DNS ConfigMap")
 
-	createCustomDnsPod(t, data, configMap.Name)
+	createCustomDNSPod(t, data, configMap.Name)
 
-	// set the custom DNS server IP address in Antrea configMap.
-	setDnsServerAddressInAntrea(t, data, dnsServiceIP)
-	defer setDnsServerAddressInAntrea(t, data, "") //reset after the test.
+	// set the custom DNS server IP address in Antrea ConfigMap.
+	setDNSServerAddressInAntrea(t, data, dnsServiceIP)
+	defer setDNSServerAddressInAntrea(t, data, "") //reset after the test.
 
-	createFqdnPolicyInNamespace(t, data, testFQDN, "test-anp-fqdn", "custom-dns", "fqdn-cache-test")
-	createToolboxPod(t, data, dnsServiceIP)
+	createFQDNPolicyInNamespace(t, data, testFQDN, "test-anp-fqdn", "custom-dns", "fqdn-cache-test")
+	require.NoError(t, NewPodBuilder(toolboxPodName, data.testNamespace, ToolboxImage).
+		WithLabels(map[string]string{"app": "fqdn-cache-test"}).
+		WithContainerName(toolboxContainerName).
+		WithCustomDNSConfig(dnsServiceIP).
+		Create(data))
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, toolboxPodName, data.testNamespace))
 
 	curlFQDN := func(target string) (string, error) {
 		cmd := []string{"curl", target}
@@ -100,25 +105,24 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 		return stdout, nil
 	}
 
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		stdout, err := curlFQDN(testFQDN)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		_, err := curlFQDN(testFQDN)
 		assert.NoError(t, err)
-		t.Logf("Response of curl to FQDN: %s", stdout)
-	}, 2*time.Second, 100*time.Millisecond, "trying to curl the FQDN: ", testFQDN)
+	}, 2*time.Second, 1*time.Millisecond, "failed to curl test FQDN: ", testFQDN)
 
-	// confirm that the FQDN resolves to the expected IP address and store it to simulate caching of this IP associated with the FQDN.
-	t.Logf("Resolving FQDN to simulate caching the current IP inside Toolbox Pod...")
+	// confirm that the FQDN resolves to the expected IP address and store it to simulate caching of this IP by the client Pod.
+	t.Logf("Resolving FQDN to simulate caching the current IP inside toolbox Pod")
 	resolvedIP, err := data.runDNSQuery(toolboxPodName, toolboxContainerName, data.testNamespace, testFQDN, false, dnsServiceIP)
 	fqdnIP := resolvedIP.String()
 	require.NoError(t, err, "failed to resolve FQDN to an IP from toolbox Pod")
-	require.Equalf(t, agnHostPodOneIP, fqdnIP, "The IP set against the FQDN in the DNS server should be the same, but got %s instead of %s", fqdnIP, agnHostPodOneIP)
-	t.Logf("Successfully received the expected IP %s using the dig command against the FQDN", fqdnIP)
+	require.Equalf(t, agnhostPodOneIP, fqdnIP, "Resolved IP does not match expected value")
+	t.Logf("Successfully received the expected IP %s against the test FQDN", fqdnIP)
 
 	// update the IP address mapped to the FQDN in the custom DNS ConfigMap.
-	t.Logf("Updating host mapping in DNS server config to use new IP: %s", agnHostPodTwoIP)
-	customDnsConfigMap.Data = createDnsConfig(t, map[string]string{agnHostPodTwoIP: testFQDN}, dnsTTL)
-	require.NoError(t, data.UpdateConfigMap(customDnsConfigMap), "failed to update configmap with new IP")
-	t.Logf("Successfully updated DNS ConfigMap with new IP: %s", agnHostPodTwoIP)
+	t.Logf("Updating host mapping in DNS server config to use new IP: %s", agnhostPodTwoIP)
+	customDNSConfigMap.Data = createDNSConfig(t, map[string]string{agnhostPodTwoIP: testFQDN}, dnsTTL)
+	require.NoError(t, data.UpdateConfigMap(customDNSConfigMap), "failed to update configmap with new IP")
+	t.Logf("Successfully updated DNS ConfigMap with new IP: %s", agnhostPodTwoIP)
 
 	// try to trigger an immediate refresh of the configmap by setting annotations in custom DNS server Pod, this way
 	// we try to bypass the kubelet sync period which may be as long as (1 minute by default) + TTL of ConfigMaps.
@@ -128,36 +132,27 @@ func TestFQDNPolicyWithCachedDNS(t *testing.T) {
 
 	// finally verify that Curling the previously cached IP fails after DNS update.
 	// The wait time here should be slightly longer than the reload value specified in the custom DNS configuration.
-	assert.EventuallyWithT(t, func(collectT *assert.CollectT) {
-		t.Logf("Trying to curl the existing cached IP of the domain: %s", fqdnIP)
-		stdout, err := curlFQDN(fqdnIP)
-		if err != nil {
-			t.Logf("Curling the cached IP failed")
-		} else {
-			t.Logf("Response of curl to cached IP: %+v", stdout)
-		}
-		assert.Error(collectT, err)
+	// TODO: This assertion currently verifies the issue described in https://github.com/antrea-io/antrea/issues/6229. It will need to be updated once minTTL support is implemented.
+	t.Logf("Trying to curl the existing cached IP of the domain: %s", fqdnIP)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		_, err := curlFQDN(fqdnIP)
+		assert.Error(t, err)
 	}, 10*time.Second, 1*time.Second)
 }
 
-// setDnsServerAddressInAntrea sets or resets the custom DNS server IP address in Antrea configMap.
-func setDnsServerAddressInAntrea(t *testing.T, data *TestData, dnsServiceIP string) {
+// setDNSServerAddressInAntrea sets or resets the custom DNS server IP address in Antrea ConfigMap.
+func setDNSServerAddressInAntrea(t *testing.T, data *TestData, dnsServiceIP string) {
 	agentChanges := func(config *agentconfig.AgentConfig) {
 		config.DNSServerOverride = dnsServiceIP
 	}
 	err := data.mutateAntreaConfigMap(nil, agentChanges, false, true)
 	require.NoError(t, err, "Error when setting up custom DNS server IP in Antrea configmap")
 
-	if dnsServiceIP == "" {
-		t.Logf("Removing DNS server IP from antrea agent as part of teardown")
-	} else {
-		t.Logf("DNS server value set to %s in antrea \n", dnsServiceIP)
-	}
-
+	t.Logf("DNSServerOverride set to %q in Antrea Agent config", dnsServiceIP)
 }
 
-// createFqdnPolicyInNamespace creates an FQDN policy in the specified namespace.
-func createFqdnPolicyInNamespace(t *testing.T, data *TestData, testFQDN string, fqdnPolicyName, customDnsLabelValue, fqdnPodSelectorLabelValue string) {
+// createFQDNPolicyInNamespace creates a FQDN policy in the specified Namespace.
+func createFQDNPolicyInNamespace(t *testing.T, data *TestData, testFQDN string, fqdnPolicyName, customDNSLabelValue, fqdnPodSelectorLabelValue string) {
 	podSelectorLabel := map[string]string{
 		"app": fqdnPodSelectorLabelValue,
 	}
@@ -171,7 +166,7 @@ func createFqdnPolicyInNamespace(t *testing.T, data *TestData, testFQDN string, 
 	builder.AddFQDNRule(testFQDN, utils.ProtocolTCP, &port, nil, nil, "AllowForFQDN", nil,
 		crdv1beta1.RuleActionAllow)
 	builder.AddEgress(utils.ProtocolUDP, &udpPort, nil, nil, nil, nil,
-		nil, nil, nil, nil, map[string]string{"app": customDnsLabelValue},
+		nil, nil, nil, nil, map[string]string{"app": customDNSLabelValue},
 		nil, nil, nil, nil,
 		nil, nil, crdv1beta1.RuleActionAllow, "", "AllowDnsQueries")
 	builder.AddEgress(utils.ProtocolTCP, nil, nil, nil, nil, nil,
@@ -180,40 +175,22 @@ func createFqdnPolicyInNamespace(t *testing.T, data *TestData, testFQDN string, 
 		nil, nil, crdv1beta1.RuleActionReject, "", "DropAllRemainingTraffic")
 
 	annp, err := data.CreateOrUpdateANNP(builder.Get())
-	require.NoError(t, err, "error while deploying antrea policy")
+	require.NoError(t, err, "error while deploying Antrea policy")
 	require.NoError(t, data.waitForANNPRealized(t, annp.Namespace, annp.Name, 10*time.Second))
 }
 
-// createToolBoxPod creates the toolbox Pod with custom DNS settings for test purpose.
-func createToolboxPod(t *testing.T, data *TestData, dnsServiceIP string) {
-	mutateSpecForAddingCustomDNS := func(pod *corev1.Pod) {
-		pod.Spec.DNSPolicy = corev1.DNSNone
-		if pod.Spec.DNSConfig == nil {
-			pod.Spec.DNSConfig = &corev1.PodDNSConfig{}
-		}
-		pod.Spec.DNSConfig.Nameservers = []string{dnsServiceIP}
-
-	}
-	require.NoError(t, NewPodBuilder(toolboxPodName, data.testNamespace, ToolboxImage).
-		WithLabels(map[string]string{"app": "fqdn-cache-test"}).
-		WithContainerName(toolboxContainerName).
-		WithMutateFunc(mutateSpecForAddingCustomDNS).
-		Create(data))
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, toolboxPodName, data.testNamespace))
-}
-
-// createHttpAgnHostPod creates an agnHost Pod that serves HTTP requests and returns the IP of Pod created.
-func createHttpAgnHostPod(t *testing.T, data *TestData) *PodIPs {
+// createHttpAgnhostPod creates an agnhost Pod that serves HTTP requests and returns the IP of Pod created.
+func createHttpAgnhostPod(t *testing.T, data *TestData) *PodIPs {
 	const (
-		agnHostPort          = 80
-		agnHostPodNamePreFix = "agnhost-"
+		agnhostPort          = 80
+		agnhostPodNamePreFix = "agnhost-"
 	)
-	podName := randName(agnHostPodNamePreFix)
-	args := []string{"netexec", "--http-port=" + strconv.Itoa(agnHostPort)}
+	podName := randName(agnhostPodNamePreFix)
+	args := []string{"netexec", "--http-port=" + strconv.Itoa(agnhostPort)}
 	ports := []corev1.ContainerPort{
 		{
 			Name:          "http",
-			ContainerPort: agnHostPort,
+			ContainerPort: agnhostPort,
 			Protocol:      corev1.ProtocolTCP,
 		},
 	}
@@ -228,8 +205,8 @@ func createHttpAgnHostPod(t *testing.T, data *TestData) *PodIPs {
 	return podIPs
 }
 
-// createDnsPod creates the CoreDNS Pod configured to use the custom DNS ConfigMap.
-func createCustomDnsPod(t *testing.T, data *TestData, configName string) {
+// createDNSPod creates the CoreDNS Pod configured to use the custom DNS ConfigMap.
+func createCustomDNSPod(t *testing.T, data *TestData, configName string) {
 	volume := []corev1.Volume{
 		{
 			Name: "config-volume",
@@ -265,8 +242,8 @@ func createCustomDnsPod(t *testing.T, data *TestData, configName string) {
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, "custom-dns-server", data.testNamespace))
 }
 
-// createDnsConfig generates a DNS configuration for the specified IP address and domain name.
-func createDnsConfig(t *testing.T, hosts map[string]string, ttl int) map[string]string {
+// createDNSConfig generates a DNS configuration for the specified IP address and domain name.
+func createDNSConfig(t *testing.T, hosts map[string]string, ttl int) map[string]string {
 	const coreFileTemplate = `lfx.test:53 {
         errors
         log
