@@ -450,7 +450,7 @@ type PacketCaptureFileServer struct {
 
 type PacketCaptureSpec struct {
 	// Timeout is the timeout for this capture session. If not specified, defaults to 60s.
-	Timeout       *uint32       `json:"timeout,omitempty"`
+	Timeout       *int32        `json:"timeout,omitempty"`
 	CaptureConfig CaptureConfig `json:"captureConfig"`
 	// Source is the traffic source we want to perform capture on. Both `Source` and `Destination` is required
 	// for a capture session, and at least one `Pod` should be present either in the source or the destination.

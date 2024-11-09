@@ -165,7 +165,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData) {
 	udpProto := intstr.FromString("UDP")
 	tcpProto := intstr.FromString("TCP")
 	testServerPort := int32(80)
-	pcShortTimeout := uint32(5)
+	pcShortTimeout := int32(5)
 	nonExistPodName := "non-existing-pod"
 	testNonExistPort := int32(8085)
 
@@ -543,13 +543,13 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 
 	timeout := tc.pc.Spec.Timeout
 	if timeout == nil {
-		tv := uint32(15)
+		tv := int32(15)
 		timeout = &tv
 	}
 
 	if strings.Contains(tc.name, "timeout") {
 		// wait more for status update.
-		tv := *timeout + uint32(10)
+		tv := *timeout + int32(10)
 		timeout = &tv
 	}
 

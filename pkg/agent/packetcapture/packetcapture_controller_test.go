@@ -58,7 +58,7 @@ var (
 	pod2MAC, _               = net.ParseMAC("aa:bb:cc:dd:ee:00")
 	ofPortPod1               = uint32(1)
 	ofPortPod2               = uint32(2)
-	testCaptureTimeout       = uint32(1)
+	testCaptureTimeout       = int32(1)
 	testCaptureNum     int32 = 15
 
 	icmpProto    = intstr.FromString("ICMP")
@@ -272,8 +272,9 @@ func addPodInterface(ifaceStore interfacestore.InterfaceStore, podNamespace, pod
 
 func TestMultiplePacketCaptures(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
-	packetsDir := "/tmp/antrea/packetcapture/packets"
-	defaultFS.MkdirAll(packetsDir, 0755)
+	defer func() {
+		defaultFS = afero.NewOsFs()
+	}()
 	nameFunc := func(id int) string {
 		return fmt.Sprintf("pc-%d", id)
 	}
@@ -326,8 +327,7 @@ func TestMultiplePacketCaptures(t *testing.T) {
 
 }
 
-// TestPacketCaptureControllerRun was used to validate the whole run process is working. It doesn't wait for
-// the testing pc to finish. on sandbox env, no good solution to open raw socket.
+// TestPacketCaptureControllerRun was used to validate the whole run process is working.
 func TestPacketCaptureControllerRun(t *testing.T) {
 	pcs := []struct {
 		name                 string
