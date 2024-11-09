@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
+	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
 	"antrea.io/antrea/pkg/agent/ipassigner/responder"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/arping"
@@ -217,7 +218,7 @@ type ipAssigner struct {
 }
 
 // NewIPAssigner returns an *ipAssigner.
-func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (IPAssigner, error) {
+func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface) (IPAssigner, error) {
 	ipv4, ipv6, externalInterface, err := util.GetIPNetDeviceByName(nodeTransportInterface)
 	if err != nil {
 		return nil, fmt.Errorf("get IPNetDevice from name %s error: %+v", nodeTransportInterface, err)
@@ -242,17 +243,11 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (IPAss
 			return nil, err
 		}
 		if dummyDeviceName == "" || arpIgnore > 0 {
-			a.defaultAssignee.arpResponder, err = responder.NewARPResponder(externalInterface)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create ARP responder for link %s: %v", externalInterface.Name, err)
-			}
+			a.defaultAssignee.arpResponder = responder.NewARPResponder(externalInterface.Name, linkMonitor)
 		}
 	}
 	if ipv6 != nil {
-		a.defaultAssignee.ndpResponder, err = responder.NewNDPResponder(externalInterface)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create NDP responder for link %s: %v", externalInterface.Name, err)
-		}
+		a.defaultAssignee.ndpResponder = responder.NewNDPResponder(externalInterface.Name, linkMonitor)
 	}
 	if dummyDeviceName != "" {
 		a.defaultAssignee.link, err = ensureDummyDevice(dummyDeviceName)

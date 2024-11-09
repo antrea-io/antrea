@@ -103,14 +103,13 @@ func TestARPResponder_HandleARPRequest(t *testing.T) {
 				assignedIPs.Insert(ip.String())
 			}
 			r := arpResponder{
-				iface:       localIface,
-				conn:        localARPClient,
+				linkName:    localIface.Name,
 				assignedIPs: sets.New[string](),
 			}
 			for _, ip := range tt.assignedIPs {
 				r.AddIP(ip)
 			}
-			err = r.handleARPRequest()
+			err = r.handleARPRequest(localARPClient, localIface)
 			require.NoError(t, err)
 			// We cannot use remoteARPClient.ReadFrom as it is blocking.
 			replyB, addr, err := remoteConn.Receive()
@@ -159,7 +158,7 @@ func Test_arpResponder_addIP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &arpResponder{
-				iface:       iface,
+				linkName:    iface.Name,
 				assignedIPs: tt.assignedIPs,
 			}
 			err := r.AddIP(tt.ip)
@@ -207,7 +206,7 @@ func Test_arpResponder_removeIP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &arpResponder{
-				iface:       iface,
+				linkName:    iface.Name,
 				assignedIPs: tt.assignedIPs,
 			}
 			err := r.RemoveIP(tt.ip)
