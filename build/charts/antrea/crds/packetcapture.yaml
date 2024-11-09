@@ -160,7 +160,7 @@ spec:
                   properties:
                     url:
                       type: string
-                      pattern: 'sftps{0,1}:\/\/[\w-_./]+:\d+'
+                      pattern: 'sftp:\/\/[\w-_./]+:\d+'
             status:
               type: object
               properties:

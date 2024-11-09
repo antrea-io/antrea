@@ -32,28 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
-)
-
-var (
-	pcSecretNamespace = "kube-system"
-	// #nosec G101
-	pcSecretName     = "antrea-packetcapture-fileserver-auth"
-	tcpServerPodName = "tcp-server"
-	pcToolboxPodName = "toolbox"
-	udpServerPodName = "udp-server"
-	nonExistPodName  = "non-existing-pod"
-
-	tcpProto  = intstr.FromString("TCP")
-	icmpProto = intstr.FromString("ICMP")
-	udpProto  = intstr.FromString("UDP")
-
-	testServerPort   int32 = 80
-	testNonExistPort int32 = 8085
-
-	pcTimeoutReason = "PacketCapture timeout"
-	pcShortTimeout  = uint16(5)
 )
 
 type pcTestCase struct {
@@ -110,7 +89,7 @@ func genSFTPDeployment() *appsv1.Deployment {
 					Containers: []v1.Container{
 						{
 							Name:            "sftp",
-							Image:           "antrea/sftp",
+							Image:           "ghcr.io/atmoz/sftp/debian:latest",
 							ImagePullPolicy: v1.PullIfNotPresent,
 							Args:            []string{"foo:pass:::upload"},
 						},
@@ -134,32 +113,20 @@ func createUDPServerPod(name string, ns string, portNum int32, serverNode string
 // TestPacketCapture is the top-level test which contains all subtests for
 // PacketCapture related test cases, so they can share setup, teardown.
 func TestPacketCapture(t *testing.T) {
+	skipIfFeatureDisabled(t, features.PacketCapture, true, false)
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 
-	var previousAgentPacketCaptureEnableState bool
-	ac := func(config *agentconfig.AgentConfig) {
-		previousAgentPacketCaptureEnableState = config.FeatureGates[string(features.PacketCapture)]
-		config.FeatureGates[string(features.PacketCapture)] = true
-	}
-	if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
-		t.Fatalf("Failed to enable PacketCapture flag: %v", err)
-	}
-	defer func() {
-		ac := func(config *agentconfig.AgentConfig) {
-			config.FeatureGates[string(features.PacketCapture)] = previousAgentPacketCaptureEnableState
-		}
-		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
-			t.Errorf("Failed to disable PacketCapture flag: %v", err)
-		}
-	}()
-
 	// setup sftp server for test.
 	secretUserName := "foo"
 	secretPassword := "pass"
+	// #nosec G101
+	pcSecretName := "antrea-packetcapture-fileserver-auth"
+	pcSecretNamespace := "kube-system"
 	_, err = data.clientset.AppsV1().Deployments(data.testNamespace).Create(context.TODO(), genSFTPDeployment(), metav1.CreateOptions{})
 	require.NoError(t, err)
 	_, err = data.clientset.CoreV1().Services(data.testNamespace).Create(context.TODO(), genSFTPService(), metav1.CreateOptions{})
@@ -183,33 +150,39 @@ func TestPacketCapture(t *testing.T) {
 	t.Run("testPacketCaptureBasic", func(t *testing.T) {
 		testPacketCaptureBasic(t, data)
 	})
-	t.Run("testPacketCapture", func(t *testing.T) {
-		testPacketCapture(t, data)
-	})
 
 }
 
-func testPacketCapture(t *testing.T, data *TestData) {
+// testPacketCaptureTCP verifies if PacketCapture can capture tcp packets. this function only contains basic
+// cases with pod-to-pod.
+func testPacketCaptureBasic(t *testing.T, data *TestData) {
 	nodeIdx := 0
-	if len(clusterInfo.windowsNodes) != 0 {
-		nodeIdx = clusterInfo.windowsNodes[0]
-	}
 	node1 := nodeName(nodeIdx)
+	tcpServerPodName := "tcp-server"
+	pcToolboxPodName := "toolbox"
+	udpServerPodName := "udp-server"
+	icmpProto := intstr.FromString("ICMP")
+	udpProto := intstr.FromString("UDP")
+	tcpProto := intstr.FromString("TCP")
+	testServerPort := int32(80)
+	pcShortTimeout := uint32(5)
+	nonExistPodName := "non-existing-pod"
+	testNonExistPort := int32(8085)
 
-	err := data.createServerPodWithLabels(tcpServerPodName, data.testNamespace, serverPodPort, nil)
+	err := createUDPServerPod(udpServerPodName, data.testNamespace, serverPodPort, node1)
+	defer data.DeletePodAndWait(defaultTimeout, udpServerPodName, data.testNamespace)
+	require.NoError(t, err)
+	// test tcp server pod
+	err = data.createServerPodWithLabels(tcpServerPodName, data.testNamespace, serverPodPort, nil)
+	defer data.DeletePodAndWait(defaultTimeout, tcpServerPodName, data.testNamespace)
 	require.NoError(t, err)
 	err = data.createToolboxPodOnNode(pcToolboxPodName, data.testNamespace, node1, false)
+	defer data.DeletePodAndWait(defaultTimeout, pcToolboxPodName, data.testNamespace)
 	require.NoError(t, err)
-
 	podIPs := waitForPodIPs(t, data, []PodInfo{
 		{tcpServerPodName, getOSString(), "", data.testNamespace},
 		{pcToolboxPodName, getOSString(), "", data.testNamespace},
 	})
-
-	// Give a little time for Windows containerd Nodes to set up OVS.
-	// Containerd configures port asynchronously, which could cause execution time of installing flow longer than docker.
-	time.Sleep(time.Second * 1)
-
 	tcpServerPodIP := podIPs[tcpServerPodName].IPv4.String()
 
 	testcases := []pcTestCase{
@@ -254,17 +227,15 @@ func testPacketCapture(t *testing.T, data *TestData) {
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
-						Type:               crdv1alpha1.PacketCaptureCompleted,
+						Type:               crdv1alpha1.PacketCaptureComplete,
 						Status:             metav1.ConditionStatus(v1.ConditionTrue),
 						LastTransitionTime: metav1.Now(),
 						Reason:             "Timeout",
-						Message:            "context deadline exceeded",
 					},
 				},
 			},
 		},
 		{
-
 			name:      nonExistPodName,
 			ipVersion: 4,
 			srcPod:    pcToolboxPodName,
@@ -295,11 +266,10 @@ func testPacketCapture(t *testing.T, data *TestData) {
 					},
 				},
 			},
-
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
-						Type:               crdv1alpha1.PacketCaptureCompleted,
+						Type:               crdv1alpha1.PacketCaptureComplete,
 						Status:             metav1.ConditionStatus(v1.ConditionFalse),
 						LastTransitionTime: metav1.Now(),
 						Reason:             "CaptureFailed",
@@ -308,39 +278,6 @@ func testPacketCapture(t *testing.T, data *TestData) {
 				},
 			},
 		},
-	}
-	t.Run("testPacketCapture", func(t *testing.T) {
-		for _, tc := range testcases {
-			tc := tc
-			t.Run(tc.name, func(t *testing.T) {
-				t.Parallel()
-				runPacketCaptureTest(t, data, tc)
-			})
-		}
-	})
-}
-
-// testPacketCaptureTCP verifies if PacketCapture can capture tcp packets. this function only contains basic
-// cases with pod-to-pod.
-func testPacketCaptureBasic(t *testing.T, data *TestData) {
-	nodeIdx := 0
-	if len(clusterInfo.windowsNodes) != 0 {
-		nodeIdx = clusterInfo.windowsNodes[0]
-	}
-	node1 := nodeName(nodeIdx)
-
-	err := createUDPServerPod(udpServerPodName, data.testNamespace, serverPodPort, node1)
-	defer data.DeletePodAndWait(defaultTimeout, udpServerPodName, data.testNamespace)
-	require.NoError(t, err)
-	// test tcp server pod
-	err = data.createServerPodWithLabels(tcpServerPodName, data.testNamespace, serverPodPort, nil)
-	defer data.DeletePodAndWait(defaultTimeout, tcpServerPodName, data.testNamespace)
-	require.NoError(t, err)
-	err = data.createToolboxPodOnNode(pcToolboxPodName, data.testNamespace, node1, false)
-	defer data.DeletePodAndWait(defaultTimeout, pcToolboxPodName, data.testNamespace)
-	require.NoError(t, err)
-
-	testcases := []pcTestCase{
 		{
 			name:      "ipv4-tcp",
 			ipVersion: 4,
@@ -385,7 +322,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData) {
 				NumberCaptured: 5,
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
-						Type:               crdv1alpha1.PacketCaptureCompleted,
+						Type:               crdv1alpha1.PacketCaptureComplete,
 						Status:             metav1.ConditionStatus(v1.ConditionTrue),
 						LastTransitionTime: metav1.Now(),
 						Reason:             "Succeed",
@@ -443,7 +380,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData) {
 				NumberCaptured: 5,
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
-						Type:               crdv1alpha1.PacketCaptureCompleted,
+						Type:               crdv1alpha1.PacketCaptureComplete,
 						Status:             metav1.ConditionStatus(v1.ConditionTrue),
 						LastTransitionTime: metav1.Now(),
 						Reason:             "Succeed",
@@ -496,7 +433,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData) {
 				NumberCaptured: 5,
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
-						Type:               crdv1alpha1.PacketCaptureCompleted,
+						Type:               crdv1alpha1.PacketCaptureComplete,
 						Status:             metav1.ConditionStatus(v1.ConditionTrue),
 						LastTransitionTime: metav1.Now(),
 						Reason:             "Succeed",
@@ -523,14 +460,15 @@ func testPacketCaptureBasic(t *testing.T, data *TestData) {
 }
 
 func getOSString() string {
-	if len(clusterInfo.windowsNodes) != 0 {
-		return "windows"
-	} else {
-		return "linux"
-	}
+	return "linux"
 }
 
 func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
+	pcToolboxPodName := "toolbox"
+	icmpProto := intstr.FromString("ICMP")
+	udpProto := intstr.FromString("UDP")
+	tcpProto := intstr.FromString("TCP")
+	nonExistPodName := "non-existing-pod"
 	switch tc.ipVersion {
 	case 4:
 		skipIfNotIPv4Cluster(t)
@@ -560,7 +498,7 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		}
 	}()
 
-	if dstPodName != nonExistPodName && tc.expectedStatus.Conditions[0].Message != pcTimeoutReason {
+	if !strings.Contains(tc.pc.Name, "non-exist") && !strings.Contains(tc.pc.Name, "timeout") {
 		srcPod := tc.srcPod
 		if dstIP := tc.pc.Spec.Destination.IP; dstIP != nil {
 			ip := net.ParseIP(*dstIP)
@@ -605,13 +543,13 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 
 	timeout := tc.pc.Spec.Timeout
 	if timeout == nil {
-		tv := uint16(15)
+		tv := uint32(15)
 		timeout = &tv
 	}
 
 	if strings.Contains(tc.name, "timeout") {
 		// wait more for status update.
-		tv := *timeout + uint16(10)
+		tv := *timeout + uint32(10)
 		timeout = &tv
 	}
 
@@ -620,11 +558,14 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		t.Fatalf("Error: Get PacketCapture failed: %v", err)
 	}
 	tc.expectedStatus.FilePath = pc.Status.FilePath
-
+	if strings.Contains(tc.name, "timeout") {
+		// if can be 0 or  less thant target number.
+		tc.expectedStatus.NumberCaptured = pc.Status.NumberCaptured
+	}
 	// remove pending condition as it's random
 	newCond := []crdv1alpha1.PacketCaptureCondition{}
 	for _, cond := range pc.Status.Conditions {
-		if cond.Type == crdv1alpha1.PacketCapturePending || cond.Type == crdv1alpha1.PacketCaptureRunning {
+		if cond.Type == crdv1alpha1.PacketCaptureStarted {
 			continue
 		}
 		newCond = append(newCond, cond)
@@ -665,9 +606,8 @@ func isPacketCaptureReady(pc *crdv1alpha1.PacketCapture) bool {
 	if len(pc.Status.Conditions) == 0 {
 		return false
 	}
-
 	for _, cond := range pc.Status.Conditions {
-		if cond.Type == crdv1alpha1.PacketCaptureCompleted {
+		if cond.Type == crdv1alpha1.PacketCaptureComplete {
 			return true
 		}
 	}
@@ -679,9 +619,8 @@ func isPacketCaptureRunning(pc *crdv1alpha1.PacketCapture) bool {
 	if len(pc.Status.Conditions) == 0 {
 		return false
 	}
-
 	for _, cond := range pc.Status.Conditions {
-		if cond.Type == crdv1alpha1.PacketCaptureRunning && cond.Status == metav1.ConditionTrue {
+		if cond.Type == crdv1alpha1.PacketCaptureStarted && cond.Status == metav1.ConditionTrue {
 			return true
 		}
 	}
@@ -706,7 +645,6 @@ func packetCaptureStatusEqual(oldStatus, newStatus crdv1alpha1.PacketCaptureStat
 }
 
 func conditionSliceEqualsIgnoreLastTransitionTime(as, bs []crdv1alpha1.PacketCaptureCondition) bool {
-
 	sort.Slice(as, func(i, j int) bool {
 		return as[i].Type < as[j].Type
 	})

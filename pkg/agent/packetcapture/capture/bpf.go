@@ -17,6 +17,7 @@ package capture
 import (
 	"encoding/binary"
 	"net"
+	"strings"
 
 	"golang.org/x/net/bpf"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -92,7 +93,7 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP) []
 			if packetSpec.Protocol.Type == intstr.Int {
 				proto = uint32(packetSpec.Protocol.IntVal)
 			} else {
-				proto = ProtocolMap[packetSpec.Protocol.StrVal]
+				proto = ProtocolMap[strings.ToUpper(packetSpec.Protocol.StrVal)]
 			}
 
 			inst = append(inst, loadIPv4Protocol)

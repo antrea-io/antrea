@@ -721,7 +721,7 @@ func (in *PacketCaptureSpec) DeepCopyInto(out *PacketCaptureSpec) {
 	*out = *in
 	if in.Timeout != nil {
 		in, out := &in.Timeout, &out.Timeout
-		*out = new(uint16)
+		*out = new(uint32)
 		**out = **in
 	}
 	in.CaptureConfig.DeepCopyInto(&out.CaptureConfig)

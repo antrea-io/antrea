@@ -450,7 +450,7 @@ type PacketCaptureFileServer struct {
 
 type PacketCaptureSpec struct {
 	// Timeout is the timeout for this capture session. If not specified, defaults to 60s.
-	Timeout       *uint16       `json:"timeout,omitempty"`
+	Timeout       *uint32       `json:"timeout,omitempty"`
 	CaptureConfig CaptureConfig `json:"captureConfig"`
 	// Source is the traffic source we want to perform capture on. Both `Source` and `Destination` is required
 	// for a capture session, and at least one `Pod` should be present either in the source or the destination.
@@ -480,13 +480,11 @@ type PacketCaptureStatus struct {
 type PacketCaptureConditionType string
 
 const (
-	// PacketCapturePending means this request is still pending.
-	PacketCapturePending PacketCaptureConditionType = "PacketCapturePending"
-	// PacketCaptureRunning means antrea is processing this capture request.
-	PacketCaptureRunning PacketCaptureConditionType = "PacketCaptureRunning"
-	// PacketCaptureCompleted means enough packets have been captured and saved in an antrea-agent Pod locally already, but results haven't been
+	// PacketCaptureStarted means this request has been started.
+	PacketCaptureStarted PacketCaptureConditionType = "PacketCaptureStarted"
+	// PacketCaptureComplete means enough packets have been captured and saved in an antrea-agent Pod locally already, but results haven't been
 	// uploaded yet (if a file server has been configured).
-	PacketCaptureCompleted PacketCaptureConditionType = "PacketCaptureCompleted"
+	PacketCaptureComplete PacketCaptureConditionType = "PacketCaptureComplete"
 	// PacketCaptureFileUploaded means the captured packets file has been uploaded to the target file server.
 	PacketCaptureFileUploaded PacketCaptureConditionType = "PacketCaptureFileUploaded"
 )
