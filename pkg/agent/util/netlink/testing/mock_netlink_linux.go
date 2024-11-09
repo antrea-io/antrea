@@ -186,6 +186,21 @@ func (mr *MockInterfaceMockRecorder) LinkDelAltName(link, name any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkDelAltName", reflect.TypeOf((*MockInterface)(nil).LinkDelAltName), link, name)
 }
 
+// LinkList mocks base method.
+func (m *MockInterface) LinkList() ([]netlink.Link, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkList")
+	ret0, _ := ret[0].([]netlink.Link)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LinkList indicates an expected call of LinkList.
+func (mr *MockInterfaceMockRecorder) LinkList() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkList", reflect.TypeOf((*MockInterface)(nil).LinkList))
+}
+
 // LinkSetDown mocks base method.
 func (m *MockInterface) LinkSetDown(link netlink.Link) error {
 	m.ctrl.T.Helper()

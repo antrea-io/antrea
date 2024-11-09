@@ -18,36 +18,27 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/mdlayher/arp"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 )
 
 type arpResponder struct {
-	iface       *net.Interface
-	conn        *arp.Client
+	once        sync.Once
+	linkName    string
 	assignedIPs sets.Set[string]
 	mutex       sync.Mutex
+	linkEventCh chan struct{}
 }
 
 var _ Responder = (*arpResponder)(nil)
 
-func NewARPResponder(iface *net.Interface) (*arpResponder, error) {
-	conn, err := arp.Dial(iface)
-	if err != nil {
-		return nil, fmt.Errorf("creating ARP responder for %q: %s", iface.Name, err)
-	}
-	return &arpResponder{
-		iface:       iface,
-		conn:        conn,
-		assignedIPs: sets.New[string](),
-	}, nil
-}
-
 func (r *arpResponder) InterfaceName() string {
-	return r.iface.Name
+	return r.linkName
 }
 
 func (r *arpResponder) AddIP(ip net.IP) error {
@@ -55,7 +46,7 @@ func (r *arpResponder) AddIP(ip net.IP) error {
 		return fmt.Errorf("only IPv4 is supported")
 	}
 	if r.addIP(ip) {
-		klog.InfoS("Assigned IP to ARP responder", "ip", ip, "interface", r.iface.Name)
+		klog.InfoS("Assigned IP to ARP responder", "ip", ip, "interface", r.linkName)
 	}
 	return nil
 }
@@ -65,13 +56,13 @@ func (r *arpResponder) RemoveIP(ip net.IP) error {
 		return fmt.Errorf("only IPv4 is supported")
 	}
 	if r.deleteIP(ip) {
-		klog.InfoS("Removed IP from ARP responder", "ip", ip, "interface", r.iface.Name)
+		klog.InfoS("Removed IP from ARP responder", "ip", ip, "interface", r.linkName)
 	}
 	return nil
 }
 
-func (r *arpResponder) handleARPRequest() error {
-	pkt, _, err := r.conn.Read()
+func (r *arpResponder) handleARPRequest(client *arp.Client, iface *net.Interface) error {
+	pkt, _, err := client.Read()
 	if err != nil {
 		return err
 	}
@@ -79,26 +70,74 @@ func (r *arpResponder) handleARPRequest() error {
 		return nil
 	}
 	if !r.isIPAssigned(pkt.TargetIP) {
-		klog.V(4).InfoS("Ignored ARP request", "ip", pkt.TargetIP, "interface", r.iface.Name)
+		klog.V(4).InfoS("Ignored ARP request", "ip", pkt.TargetIP, "interface", r.linkName)
 		return nil
 	}
-	if err := r.conn.Reply(pkt, r.iface.HardwareAddr, pkt.TargetIP); err != nil {
+	if err := client.Reply(pkt, iface.HardwareAddr, pkt.TargetIP); err != nil {
 		return fmt.Errorf("failed to reply ARP packet for IP %s: %v", pkt.TargetIP, err)
 	}
-	klog.V(4).InfoS("Sent ARP response", "ip", pkt.TargetIP, "interface", r.iface.Name)
+	klog.V(4).InfoS("Sent ARP response", "ip", pkt.TargetIP, "interface", r.linkName)
 	return nil
 }
 
 func (r *arpResponder) Run(stopCh <-chan struct{}) {
+	// The responder instance is created by the factory and can be shared by multiple callers.
+	// Using once.Do here ensures it is started only once.
+	r.once.Do(func() {
+		go wait.NonSlidingUntil(func() {
+			r.dialAndHandleRequests(stopCh)
+		}, time.Second, stopCh)
+	})
+	<-stopCh
+}
+
+func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
+	transportInterface, err := net.InterfaceByName(r.linkName)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get interface by name", "deviceName", r.linkName)
+		return
+	}
+	client, err := arp.Dial(transportInterface)
+	if err != nil {
+		klog.ErrorS(err, "Failed to dial ARP client", "deviceName", r.linkName)
+		return
+	}
+	reloadCh := make(chan struct{})
+
+	klog.InfoS("ARP responder started", "interface", transportInterface.Name, "index", transportInterface.Index)
+	defer klog.InfoS("ARP responder stopped", "interface", transportInterface.Name, "index", transportInterface.Index)
+
+	go func() {
+		defer client.Close()
+		defer close(reloadCh)
+
+		for {
+			select {
+			case <-stopCh:
+				return
+			case <-r.linkEventCh:
+				newTransportInterface, err := net.InterfaceByName(r.linkName)
+				if err != nil {
+					klog.ErrorS(err, "Failed to get interface by name", "name", r.linkName)
+					continue
+				}
+				if transportInterface.Index != newTransportInterface.Index {
+					klog.InfoS("Transport interface index changed, restarting ARP responder", "name", transportInterface.Name, "oldIndex", transportInterface.Index, "newIndex", newTransportInterface.Index)
+					return
+				}
+				klog.V(4).InfoS("Transport interface not changed")
+			}
+		}
+	}()
+
 	for {
 		select {
-		case <-stopCh:
-			r.conn.Close()
+		case <-reloadCh:
 			return
 		default:
-			err := r.handleARPRequest()
+			err := r.handleARPRequest(client, transportInterface)
 			if err != nil {
-				klog.ErrorS(err, "Failed to handle ARP request", "deviceName", r.iface.Name)
+				klog.ErrorS(err, "Failed to handle ARP request", "deviceName", r.linkName)
 			}
 		}
 	}
@@ -128,4 +167,13 @@ func (r *arpResponder) addIP(ip net.IP) bool {
 		r.assignedIPs.Insert(ip.String())
 	}
 	return !exist
+}
+
+func (r *arpResponder) onLinkUpdate(linkName string) {
+	klog.V(4).InfoS("Received link update event", "name", linkName)
+	select {
+	// if an event is already present in the channel, we can drop this new one as we only monitor one link
+	case r.linkEventCh <- struct{}{}:
+	default:
+	}
 }
