@@ -62,6 +62,7 @@ edit the Agent configuration in the
 | `L7FlowExporter`              | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
 | `BGPPolicy`                   | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
 | `NodeLatencyMonitor`          | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
+| `PacketCapture`               | Agent              | `false` | Alpha | v2.2          | N/A          | N/A        | No                 |                                               |
 
 ## Description and Requirements of Features
 
@@ -531,3 +532,12 @@ experienced by Pod traffic.
 #### Requirements for this Feature
 
 - Linux Nodes only - the feature has not been tested on Windows Nodes yet.
+
+### PacketCapture
+
+`PacketCapture` allows user to capture live traffic packets from specified flows for further analysis.
+Refer to this [document](packetcapture-guide.md) for more information.
+
+#### Requirements for this Feature
+
+This feature is only supported on Linux for now.
