@@ -27,7 +27,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
@@ -115,15 +114,7 @@ func getNPLAnnotations(t *testing.T, data *TestData, r *require.Assertions, test
 				return false, nil
 			}
 
-			podIPStrings := sets.New[string](pod.Status.PodIP)
-			for _, podIP := range pod.Status.PodIPs {
-				ipStr := strings.TrimSpace(podIP.IP)
-				if ipStr != "" {
-					podIPStrings.Insert(ipStr)
-				}
-			}
-
-			testPodIP, err = parsePodIPs(podIPStrings)
+			testPodIP, err = parsePodIPs(pod)
 			if err != nil || testPodIP.IPv4 == nil {
 				return false, nil
 			}

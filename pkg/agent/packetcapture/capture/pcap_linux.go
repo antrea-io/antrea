@@ -40,27 +40,29 @@ func NewPcapCapture() (*pcapCapture, error) {
 }
 
 func (p *pcapCapture) Capture(ctx context.Context, device string, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error) {
-	eth, err := pcapgo.NewEthernetHandle(device)
-	if err != nil {
-		return nil, err
-	}
-
-	eth.SetPromiscuous(false)
-	eth.SetCaptureLength(maxSnapshotBytes)
-
+	// Compile the BPF filter in advance to reduce the time window between starting the capture and applying the filter.
 	inst := compilePacketFilter(packet, srcIP, dstIP)
-	klog.V(5).InfoS("Generated bpf instructions for Packetcapture", "device", device, "srcIP", srcIP, "dstIP", dstIP, "packetSpec", packet, "bpf", inst)
+	klog.V(5).InfoS("Generated bpf instructions for PacketCapture", "device", device, "srcIP", srcIP, "dstIP", dstIP, "packetSpec", packet, "bpf", inst)
 	rawInst, err := bpf.Assemble(inst)
 	if err != nil {
 		return nil, err
 	}
-	err = eth.SetBPF(rawInst)
+
+	eth, err := pcapgo.NewEthernetHandle(device)
 	if err != nil {
 		return nil, err
 	}
+	if err = eth.SetPromiscuous(false); err != nil {
+		return nil, err
+	}
+	if err = eth.SetBPF(rawInst); err != nil {
+		return nil, err
+	}
+	if err = eth.SetCaptureLength(maxSnapshotBytes); err != nil {
+		return nil, err
+	}
 
-	packetSource := gopacket.NewPacketSource(eth, layers.LinkTypeEthernet)
-	packetSource.NoCopy = true
+	packetSource := gopacket.NewPacketSource(eth, layers.LinkTypeEthernet, gopacket.WithNoCopy(true))
 	return packetSource.PacketsCtx(ctx), nil
 
 }
