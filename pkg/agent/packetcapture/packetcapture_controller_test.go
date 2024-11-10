@@ -280,7 +280,7 @@ func TestMultiplePacketCaptures(t *testing.T) {
 	}
 	var objs []runtime.Object
 	for i := 0; i < 20; i++ {
-		objs = append(objs, genTestCR(nameFunc(i), int32(testCaptureNum)))
+		objs = append(objs, genTestCR(nameFunc(i), testCaptureNum))
 	}
 	pcc := newFakePacketCaptureController(t, nil, objs)
 	pcc.sftpUploader = &testUploader{url: testFTPUrl}
@@ -291,38 +291,39 @@ func TestMultiplePacketCaptures(t *testing.T) {
 	pcc.informerFactory.Start(stopCh)
 	pcc.informerFactory.WaitForCacheSync(stopCh)
 	go pcc.Run(stopCh)
-	assert.Eventually(t, func() bool {
-		items, err := pcc.crdClient.CrdV1alpha1().PacketCaptures().List(context.Background(), metav1.ListOptions{})
-		if err != nil {
-			return false
-		}
-		for _, result := range items.Items {
-			for _, cond := range result.Status.Conditions {
-				if cond.Type == crdv1alpha1.PacketCaptureComplete || cond.Type == crdv1alpha1.PacketCaptureFileUploaded {
-					if cond.Status == metav1.ConditionFalse {
-						return false
-					}
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		list, _ := pcc.crdClient.CrdV1alpha1().PacketCaptures().List(context.Background(), metav1.ListOptions{})
+		for _, item := range list.Items {
+			var startedStatus, completeStatus, uploadStatus metav1.ConditionStatus
+			for _, cond := range item.Status.Conditions {
+				if cond.Type == crdv1alpha1.PacketCaptureStarted {
+					startedStatus = cond.Status
+				}
+				if cond.Type == crdv1alpha1.PacketCaptureComplete {
+					completeStatus = cond.Status
+				}
+				if cond.Type == crdv1alpha1.PacketCaptureFileUploaded {
+					uploadStatus = cond.Status
 				}
 			}
+			assert.Equal(c, metav1.ConditionTrue, startedStatus)
+			assert.Equal(c, metav1.ConditionTrue, completeStatus)
+			assert.Equal(c, metav1.ConditionTrue, uploadStatus)
 		}
 		pcc.mutex.Lock()
-		if pcc.numRunningCaptures != 0 {
-			return false
-		}
-		pcc.mutex.Unlock()
-		return true
+		defer pcc.mutex.Unlock()
+		assert.Equal(c, 0, pcc.numRunningCaptures)
+		assert.Equal(c, 20, len(pcc.captures))
 	}, 5*time.Second, 50*time.Millisecond)
+
 	for i := 0; i < 20; i++ {
 		err := pcc.crdClient.CrdV1alpha1().PacketCaptures().Delete(context.TODO(), nameFunc(i), metav1.DeleteOptions{})
 		require.NoError(t, err)
 	}
 	assert.Eventually(t, func() bool {
 		pcc.mutex.Lock()
-		if len(pcc.captures) != 0 {
-			return false
-		}
-		pcc.mutex.Unlock()
-		return true
+		defer pcc.mutex.Unlock()
+		return len(pcc.captures) == 0
 	}, 2*time.Second, 20*time.Millisecond)
 
 }
@@ -332,11 +333,13 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 	pcs := []struct {
 		name                 string
 		pc                   *crdv1alpha1.PacketCapture
+		expectStartedStatus  metav1.ConditionStatus
 		expectCompleteStatus metav1.ConditionStatus
 		expectUploadStatus   metav1.ConditionStatus
 	}{
 		{
-			name:                 "start packetcapture",
+			name:                 "pod-to-pod with file server",
+			expectStartedStatus:  metav1.ConditionTrue,
 			expectCompleteStatus: metav1.ConditionTrue,
 			expectUploadStatus:   metav1.ConditionTrue,
 			pc: &crdv1alpha1.PacketCapture{
@@ -370,9 +373,9 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 			},
 		},
 		{
-			name:                 "parse ip",
+			name:                 "pod-to-pod without file server",
+			expectStartedStatus:  metav1.ConditionTrue,
 			expectCompleteStatus: metav1.ConditionTrue,
-			expectUploadStatus:   metav1.ConditionTrue,
 			pc: &crdv1alpha1.PacketCapture{
 				ObjectMeta: metav1.ObjectMeta{Name: "pc2", UID: "uid2"},
 				Spec: crdv1alpha1.PacketCaptureSpec{
@@ -396,17 +399,13 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 					Packet: &crdv1alpha1.Packet{
 						Protocol: &icmpProto,
 					},
-					FileServer: &crdv1alpha1.PacketCaptureFileServer{
-						URL: "sftp://127.0.0.1:22/aaa",
-					},
 					Timeout: &testCaptureTimeout,
 				},
 			},
 		},
 		{
-			name:                 "invalid proto",
-			expectCompleteStatus: metav1.ConditionFalse,
-			expectUploadStatus:   metav1.ConditionFalse,
+			name:                "invalid proto",
+			expectStartedStatus: metav1.ConditionFalse,
 			pc: &crdv1alpha1.PacketCapture{
 				ObjectMeta: metav1.ObjectMeta{Name: "pc4", UID: "uid4"},
 				Spec: crdv1alpha1.PacketCaptureSpec{
@@ -439,6 +438,7 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 		},
 		{
 			name:                 "upload failed",
+			expectStartedStatus:  metav1.ConditionTrue,
 			expectCompleteStatus: metav1.ConditionTrue,
 			expectUploadStatus:   metav1.ConditionFalse,
 			pc: &crdv1alpha1.PacketCapture{
@@ -489,30 +489,29 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 	go pcc.Run(stopCh)
 	for _, item := range pcs {
 		t.Run(item.name, func(t *testing.T) {
-			assert.Eventually(t, func() bool {
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
 				result, err := pcc.crdClient.CrdV1alpha1().PacketCaptures().Get(context.Background(), item.pc.Name, metav1.GetOptions{})
-				if err != nil {
-					return false
-				}
+				require.NoError(c, err)
+				var startedStatus, completeStatus, uploadStatus metav1.ConditionStatus
 				for _, cond := range result.Status.Conditions {
-					if cond.Type == crdv1alpha1.PacketCaptureComplete && item.expectCompleteStatus != cond.Status {
-						return false
+					if cond.Type == crdv1alpha1.PacketCaptureStarted {
+						startedStatus = cond.Status
 					}
-					if cond.Type == crdv1alpha1.PacketCaptureFileUploaded && item.expectUploadStatus != cond.Status {
-						return false
+					if cond.Type == crdv1alpha1.PacketCaptureComplete {
+						completeStatus = cond.Status
+					}
+					if cond.Type == crdv1alpha1.PacketCaptureFileUploaded {
+						uploadStatus = cond.Status
 					}
 				}
+				assert.Equal(c, item.expectStartedStatus, startedStatus)
+				assert.Equal(c, item.expectUploadStatus, uploadStatus)
+				assert.Equal(c, item.expectCompleteStatus, completeStatus)
+				assert.Equal(c, item.expectUploadStatus, uploadStatus)
 				if item.expectCompleteStatus == metav1.ConditionTrue {
-					if result.Status.NumberCaptured != testCaptureNum {
-						return false
-					}
+					assert.Equal(c, testCaptureNum, result.Status.NumberCaptured)
 				}
-				// delete cr
-				err = pcc.crdClient.CrdV1alpha1().PacketCaptures().Delete(context.TODO(), item.pc.Name, metav1.DeleteOptions{})
-				return err == nil
-
 			}, 2*time.Second, 20*time.Millisecond)
-			stopCh <- struct{}{}
 		})
 	}
 }

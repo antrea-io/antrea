@@ -1,3 +1,6 @@
+//go:build !linux
+// +build !linux
+
 // Copyright 2024 Antrea Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,9 +31,9 @@ type pcapCapture struct {
 }
 
 func NewPcapCapture() (*pcapCapture, error) {
-	return nil, errors.New("PacketCapture is not implemented on Windows")
+	return nil, errors.New("PacketCapture is not implemented")
 }
 
 func (p *pcapCapture) Capture(ctx context.Context, device string, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error) {
-	return nil, errors.New("PacketCapture is not implemented on Windows")
+	return nil, errors.New("PacketCapture is not implemented")
 }

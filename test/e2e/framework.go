@@ -1725,14 +1725,7 @@ func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace strin
 	if pod.Status.PodIP == "" {
 		return nil, fmt.Errorf("Pod is running but has no assigned IP, which should never happen")
 	}
-	podIPStrings := sets.New[string](pod.Status.PodIP)
-	for _, podIP := range pod.Status.PodIPs {
-		ipStr := strings.TrimSpace(podIP.IP)
-		if ipStr != "" {
-			podIPStrings.Insert(ipStr)
-		}
-	}
-	ips, err := parsePodIPs(podIPStrings)
+	ips, err := parsePodIPs(pod)
 	if err != nil {
 		return nil, err
 	}
@@ -1748,7 +1741,14 @@ func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace strin
 	return ips, nil
 }
 
-func parsePodIPs(podIPStrings sets.Set[string]) (*PodIPs, error) {
+func parsePodIPs(pod *corev1.Pod) (*PodIPs, error) {
+	podIPStrings := sets.New[string](pod.Status.PodIP)
+	for _, podIP := range pod.Status.PodIPs {
+		ipStr := strings.TrimSpace(podIP.IP)
+		if ipStr != "" {
+			podIPStrings.Insert(ipStr)
+		}
+	}
 	ips := new(PodIPs)
 	for idx := range sets.List(podIPStrings) {
 		ipStr := sets.List(podIPStrings)[idx]
