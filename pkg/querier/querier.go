@@ -23,6 +23,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/bgp"
+	bgpcontroller "antrea.io/antrea/pkg/agent/controller/bgp"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/multicast"
 	"antrea.io/antrea/pkg/agent/types"
@@ -148,5 +149,5 @@ type AgentBGPPolicyInfoQuerier interface {
 	// GetBGPPeerStatus returns current status of BGP Peers of effective BGP Policy applied on the Node.
 	GetBGPPeerStatus(ctx context.Context, ipv4Peers, ipv6Peers bool) ([]bgp.PeerStatus, error)
 	// GetBGPRoutes returns the advertised BGP routes.
-	GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) ([]string, error)
+	GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) (map[bgp.Route]bgpcontroller.RouteMetadata, error)
 }
