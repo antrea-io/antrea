@@ -85,7 +85,9 @@ major_minor_number="${release%.*}"
 branch="release-${major_minor_number}"
 tag="v${release}"
 project="${repo##*/}"
-title="${project^} $tag"
+# Capitalize the first letter of the project in the title. It doesn't use ${project^} as it's not supported in older
+# versions of macOS's default shell, bash v3.2.
+title="$(echo "${project:0:1}" | tr '[:lower:]' '[:upper:]')${project:1} $tag"
 changelog_url="https://github.com/$repo/raw/$branch/CHANGELOG/CHANGELOG-${major_minor_number}.md"
 
 echo "+++ Downloading changelog..."
