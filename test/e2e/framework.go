@@ -1490,14 +1490,15 @@ func (b *PodBuilder) WithReadinessProbe(probe *corev1.Probe) *PodBuilder {
 	return b
 }
 
-// WithCustomDNSConfig adds custom DNS IP to the Pod spec.
-func (b *PodBuilder) WithCustomDNSConfig(dnsServiceIP string) *PodBuilder {
+// WithCustomDNSConfig adds a custom DNS Configuration to the Pod spec.
+// It ensures that the DNSPolicy is set to 'None' and assigns the provided DNSConfig.
+func (b *PodBuilder) WithCustomDNSConfig(dnsServerConfig *corev1.PodDNSConfig) *PodBuilder {
 	b.MutateFunc = func(pod *corev1.Pod) {
+		// Set DNSPolicy to None to allow custom DNSConfig
 		pod.Spec.DNSPolicy = corev1.DNSNone
-		if pod.Spec.DNSConfig == nil {
-			pod.Spec.DNSConfig = &corev1.PodDNSConfig{}
-		}
-		pod.Spec.DNSConfig.Nameservers = []string{dnsServiceIP}
+
+		// Assign the provided DNSConfig to the Pod's DNSConfig field
+		pod.Spec.DNSConfig = dnsServerConfig
 	}
 	return b
 }
