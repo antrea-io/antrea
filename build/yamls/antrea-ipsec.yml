@@ -4246,7 +4246,12 @@ data:
     # Defaults to "". It must be a host string or a host:port pair of the DNS server (e.g. 10.96.0.10,
     # 10.96.0.10:53, [fd00:10:96::a]:53).
     dnsServerOverride: ""
-
+    
+    # The minTTL setting helps address the problem of applications caching DNS response IPs indefinitely.
+    # Cluster administrators should configure this value, ideally setting it to be equal to or greater than the maximum TTL
+    # value of the application's DNS cache.
+    minTTL: ""
+    
     # Comma-separated list of Cipher Suites. If omitted, the default Go Cipher Suites will be used.
     # https://golang.org/pkg/crypto/tls/#pkg-constants
     # Note that TLS1.3 Cipher Suites cannot be added to the list. But the apiserver will always

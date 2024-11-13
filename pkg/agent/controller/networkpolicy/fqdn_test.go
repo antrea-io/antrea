@@ -52,6 +52,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		false,
 		config.DefaultHostGatewayOFPort,
 		clockToInject,
+		0,
 	)
 	require.NoError(t, err)
 	return f, mockOFClient

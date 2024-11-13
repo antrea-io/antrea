@@ -105,7 +105,8 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 		config.DefaultTunOFPort,
 		&config.NodeConfig{},
 		wait.NewGroup(),
-		l7reconciler)
+		l7reconciler,
+		0)
 	reconciler := newMockReconciler()
 	controller.podReconciler = reconciler
 	controller.auditLogger = nil
