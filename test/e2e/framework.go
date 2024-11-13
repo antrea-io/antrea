@@ -1366,6 +1366,7 @@ type PodBuilder struct {
 	ResourceRequests   corev1.ResourceList
 	ResourceLimits     corev1.ResourceList
 	ReadinessProbe     *corev1.Probe
+	DnsConfig          *corev1.PodDNSConfig
 }
 
 func NewPodBuilder(name, ns, image string) *PodBuilder {
@@ -1492,14 +1493,8 @@ func (b *PodBuilder) WithReadinessProbe(probe *corev1.Probe) *PodBuilder {
 
 // WithCustomDNSConfig adds a custom DNS Configuration to the Pod spec.
 // It ensures that the DNSPolicy is set to 'None' and assigns the provided DNSConfig.
-func (b *PodBuilder) WithCustomDNSConfig(dnsServerConfig *corev1.PodDNSConfig) *PodBuilder {
-	b.MutateFunc = func(pod *corev1.Pod) {
-		// Set DNSPolicy to None to allow custom DNSConfig
-		pod.Spec.DNSPolicy = corev1.DNSNone
-
-		// Assign the provided DNSConfig to the Pod's DNSConfig field
-		pod.Spec.DNSConfig = dnsServerConfig
-	}
+func (b *PodBuilder) WithCustomDNSConfig(dnsConfig *corev1.PodDNSConfig) *PodBuilder {
+	b.DnsConfig = dnsConfig
 	return b
 }
 
@@ -1544,6 +1539,13 @@ func (b *PodBuilder) Create(data *TestData) error {
 	if b.NodeName == controlPlaneNodeName() {
 		// tolerate NoSchedule taint if we want Pod to run on control-plane Node
 		podSpec.Tolerations = controlPlaneNoScheduleTolerations()
+	}
+	if b.DnsConfig != nil {
+		// Set DNSPolicy to None to allow custom DNSConfig
+		podSpec.DNSPolicy = corev1.DNSNone
+
+		// Assign the provided DNSConfig to the Pod's DNSConfig field
+		podSpec.DNSConfig = b.DnsConfig
 	}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
