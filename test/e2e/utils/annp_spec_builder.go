@@ -214,3 +214,29 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgressLogging(logLabel string) *Antr
 	}
 	return b
 }
+
+func (b *AntreaNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
+	protoc AntreaPolicyProtocol, port *int32, portName *string, endPort *int32, name string,
+	specs []ANNPAppliedToSpec, action crdv1beta1.RuleAction) *AntreaNetworkPolicySpecBuilder {
+	var appliedTos []crdv1beta1.AppliedTo
+
+	for _, at := range specs {
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector,
+			at.PodSelectorMatchExp,
+			at.ExternalEntitySelector,
+			at.ExternalEntitySelectorMatchExp,
+			at.Group))
+	}
+
+	policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
+	ports, _ := GenPortsOrProtocols(protoc, port, portName, endPort, nil, nil, nil, nil, nil, nil)
+	newRule := crdv1beta1.Rule{
+		To:        policyPeer,
+		Ports:     ports,
+		Action:    &action,
+		Name:      name,
+		AppliedTo: appliedTos,
+	}
+	b.Spec.Egress = append(b.Spec.Egress, newRule)
+	return b
+}

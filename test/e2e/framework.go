@@ -331,6 +331,16 @@ func (p *PodIPs) AsSlice() []*net.IP {
 	return ips
 }
 
+func (p *PodIPs) AsStrings() (ipv4, ipv6 string) {
+	if p.IPv4 != nil {
+		ipv4 = p.IPv4.String()
+	}
+	if p.IPv6 != nil {
+		ipv6 = p.IPv6.String()
+	}
+	return
+}
+
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
 // (including if idx is 0, which is reserved for the control-plane Node)
 func workerNodeName(idx int) string {
@@ -1357,6 +1367,7 @@ type PodBuilder struct {
 	ResourceRequests   corev1.ResourceList
 	ResourceLimits     corev1.ResourceList
 	ReadinessProbe     *corev1.Probe
+	DnsConfig          *corev1.PodDNSConfig
 }
 
 func NewPodBuilder(name, ns, image string) *PodBuilder {
@@ -1481,6 +1492,13 @@ func (b *PodBuilder) WithReadinessProbe(probe *corev1.Probe) *PodBuilder {
 	return b
 }
 
+// WithCustomDNSConfig adds a custom DNS Configuration to the Pod spec.
+// It ensures that the DNSPolicy is set to 'None' and assigns the provided DNSConfig.
+func (b *PodBuilder) WithCustomDNSConfig(dnsConfig *corev1.PodDNSConfig) *PodBuilder {
+	b.DnsConfig = dnsConfig
+	return b
+}
+
 func (b *PodBuilder) Create(data *TestData) error {
 	containerName := b.ContainerName
 	if containerName == "" {
@@ -1522,6 +1540,13 @@ func (b *PodBuilder) Create(data *TestData) error {
 	if b.NodeName == controlPlaneNodeName() {
 		// tolerate NoSchedule taint if we want Pod to run on control-plane Node
 		podSpec.Tolerations = controlPlaneNoScheduleTolerations()
+	}
+	if b.DnsConfig != nil {
+		// Set DNSPolicy to None to allow custom DNSConfig
+		podSpec.DNSPolicy = corev1.DNSNone
+
+		// Assign the provided DNSConfig to the Pod's DNSConfig field
+		podSpec.DNSConfig = b.DnsConfig
 	}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -3219,4 +3244,55 @@ func (data *TestData) GetPodLogs(ctx context.Context, namespace, name, container
 		return "", fmt.Errorf("error when copying logs for Pod '%s/%s': %w", namespace, name, err)
 	}
 	return b.String(), nil
+}
+
+func (data *TestData) runDNSQuery(
+	podName string,
+	containerName string,
+	podNamespace string,
+	dstAddr string,
+	useTCP bool,
+	dnsServiceIP string) (net.IP, error) {
+
+	digCmdStr := fmt.Sprintf("dig "+"@"+dnsServiceIP+" +short %s", dstAddr)
+	if useTCP {
+		digCmdStr += " +tcp"
+	}
+
+	digCmd := strings.Fields(digCmdStr)
+	stdout, stderr, err := data.RunCommandFromPod(podNamespace, podName, containerName, digCmd)
+	if err != nil {
+		return nil, fmt.Errorf("error when running dig command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
+	}
+
+	ipAddress := net.ParseIP(strings.TrimSpace(stdout))
+	if ipAddress != nil {
+		return ipAddress, nil
+	} else {
+		return nil, fmt.Errorf("invalid IP address found %v", stdout)
+	}
+}
+
+// setPodAnnotation Patches a pod by adding an annotation with a specified key and value.
+func (data *TestData) setPodAnnotation(namespace, podName, annotationKey string, annotationValue string) error {
+	annotations := map[string]string{
+		annotationKey: annotationValue,
+	}
+	annotationPatch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": annotations,
+		},
+	}
+
+	patchData, err := json.Marshal(annotationPatch)
+	if err != nil {
+		return err
+	}
+
+	if _, err := data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), podName, types.MergePatchType, patchData, metav1.PatchOptions{}); err != nil {
+		return err
+	}
+
+	log.Infof("Successfully patched Pod %s in Namespace %s", podName, namespace)
+	return nil
 }
