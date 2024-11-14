@@ -607,7 +607,7 @@ func (o *Options) validateK8sNodeOptions() error {
 	}
 	// If minTTL is greater than 1, it indicates that the value has been set externally by a cluster admin, and should be respected.
 	if o.config.MinTTL > 1 {
-		o.minTTL = o.config.MinTTL
+		o.minTTL = uint32(o.config.MinTTL)
 	}
 
 	if err := o.validateSecondaryNetworkConfig(); err != nil {

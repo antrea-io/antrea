@@ -4233,12 +4233,12 @@ data:
     # Defaults to "". It must be a host string or a host:port pair of the DNS server (e.g. 10.96.0.10,
     # 10.96.0.10:53, [fd00:10:96::a]:53).
     dnsServerOverride: ""
-    
-    # The minTTL setting helps address the problem of applications caching DNS response IPs indefinitely.
-    # Cluster administrators should configure this value, ideally setting it to be equal to or greater than the maximum TTL
-    # value of the application's DNS cache.
-    minTTL: ""
-    
+
+    #The minTTL setting helps address the problem of applications caching DNS response IPs indefinitely.
+    #The Cluster administrators should configure this value, ideally setting it to be equal to or greater than the maximum TTL
+    #value of the application's DNS cache.
+    minTTL: 0
+
     # Comma-separated list of Cipher Suites. If omitted, the default Go Cipher Suites will be used.
     # https://golang.org/pkg/crypto/tls/#pkg-constants
     # Note that TLS1.3 Cipher Suites cannot be added to the list. But the apiserver will always
@@ -5388,7 +5388,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 2b4d82bcb825d50926115bad2125097f85aed424bfc49147444314cad8b7826a
+        checksum/config: c4ad25f9ec2098da315a12afe29cc046695aa2072dd3690c1b06cec95e05f5f9
       labels:
         app: antrea
         component: antrea-agent
@@ -5624,7 +5624,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 2b4d82bcb825d50926115bad2125097f85aed424bfc49147444314cad8b7826a
+        checksum/config: c4ad25f9ec2098da315a12afe29cc046695aa2072dd3690c1b06cec95e05f5f9
       labels:
         app: antrea
         component: antrea-controller
