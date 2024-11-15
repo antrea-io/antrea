@@ -5270,8 +5270,12 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	k8sUtils.Cleanup(namespaces)
 }
 
-// TestFQDNCacheMinTTL tests stable FQDN access for applications with cached DNS resolutions
-// when FQDN NetworkPolicy are in use and the FQDN-to-IP resolution changes frequently.
+// TestFQDNCacheMinTTL ensures stable FQDN access for applications that cache DNS resolutions,
+// even when FQDN-to-IP mappings change frequently, and FQDN-based NetworkPolicies are in use.
+// It validates the functionality of the new minTTL configuration, which is used for scenarios
+// where applications may cache DNS responses beyond the TTL defined in original DNS response.
+// The minTTL value enforces that resolved IPs remain in datapath rules for as long as
+// applications might cache them, thereby preventing intermittent network connectivity issues to the FQDN concerned.
 func TestFQDNCacheMinTTL(t *testing.T) {
 	const (
 		testFQDN = "fqdn-test-pod.lfx.test"
@@ -5368,14 +5372,13 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 	require.NoError(t, data.setPodAnnotation(data.testNamespace, "custom-dns-server", "test.antrea.io/random-value",
 		randSeq(8)), "failed to update custom DNS Pod annotation.")
 
-	// finally verify that Curling the previously cached IP fails after DNS update.
+	// finally verify that Curling the previously cached IP does not fail after DNS update.
 	// The wait time here should be slightly longer than the reload value specified in the custom DNS configuration.
-	// TODO: This assertion currently verifies the issue described in https://github.com/antrea-io/antrea/issues/6229.
-	// It will need to be updated once minTTL support is implemented.
+	// TODO: This assertion verifies the fix to the issue described in https://github.com/antrea-io/antrea/issues/6229.
 	t.Logf("Trying to curl the existing cached IP of the domain: %s", fqdnIP)
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		_, err := curlFQDN(fqdnIP)
-		assert.Error(t, err)
+		assert.NoError(t, err)
 	}, 10*time.Second, 1*time.Second)
 }
 
