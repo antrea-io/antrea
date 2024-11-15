@@ -120,8 +120,8 @@ const (
 	antreaControllerConfName = "antrea-controller.conf"
 	flowAggregatorConfName   = "flow-aggregator.conf"
 
-	agnhostImage        = "registry.k8s.io/e2e-test-images/agnhost:2.40"
-	ToolboxImage        = "antrea/toolbox:1.3-0"
+	agnhostImage        = "registry.k8s.io/e2e-test-images/agnhost:2.52"
+	ToolboxImage        = "antrea/toolbox:1.4-0"
 	mcjoinImage         = "antrea/mcjoin:v2.9"
 	nginxImage          = "antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"

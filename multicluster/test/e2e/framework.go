@@ -51,7 +51,7 @@ const (
 	regularNodeClientSuffix string = "regular-client"
 
 	nginxImage   = "antrea/nginx:1.21.6-alpine"
-	agnhostImage = "registry.k8s.io/e2e-test-images/agnhost:2.40"
+	agnhostImage = "registry.k8s.io/e2e-test-images/agnhost:2.52"
 )
 
 var provider providers.ProviderInterface
