@@ -161,7 +161,7 @@ type fqdnController struct {
 	clock clock.Clock
 }
 
-func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.WithTicker, minTTL uint32) (*fqdnController, error) {
+func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.WithTicker, minTTL int) (*fqdnController, error) {
 	controller := &fqdnController{
 		ofClient:         client,
 		dirtyRuleHandler: dirtyRuleHandler,
@@ -183,7 +183,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 		ipv6Enabled:            v6Enabled,
 		gwPort:                 gwPort,
 		clock:                  clock,
-		minTTL:                 minTTL,
+		minTTL:                 uint32(minTTL),
 	}
 	if controller.ofClient != nil {
 		if err := controller.ofClient.NewDNSPacketInConjunction(dnsInterceptRuleID); err != nil {
@@ -638,13 +638,6 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 	}
 	fqdn := strings.ToLower(msg.Question[0].Name)
 	responseIPs := map[string]ipWithExpiration{}
-	getMaxTTL := func(ttl1, ttl2 uint32) uint32 {
-		if ttl1 > ttl2 {
-			return ttl1
-		} else {
-			return ttl2
-		}
-	}
 	currentTime := f.clock.Now()
 	for _, ans := range msg.Answer {
 		switch r := ans.(type) {
@@ -652,7 +645,7 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 			if f.ipv4Enabled {
 				responseIPs[r.A.String()] = ipWithExpiration{
 					ip:             r.A,
-					expirationTime: currentTime.Add(time.Duration(getMaxTTL(f.minTTL, r.Header().Ttl)) * time.Second),
+					expirationTime: currentTime.Add(time.Duration(max(f.minTTL, r.Header().Ttl)) * time.Second),
 				}
 
 			}
@@ -660,7 +653,7 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 			if f.ipv6Enabled {
 				responseIPs[r.AAAA.String()] = ipWithExpiration{
 					ip:             r.AAAA,
-					expirationTime: currentTime.Add(time.Duration(getMaxTTL(f.minTTL, r.Header().Ttl)) * time.Second),
+					expirationTime: currentTime.Add(time.Duration(max(f.minTTL, r.Header().Ttl)) * time.Second),
 				}
 			}
 		}

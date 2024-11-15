@@ -90,7 +90,6 @@ type Options struct {
 	nplEndPort             int
 	dnsServerOverride      string
 	nodeType               config.NodeType
-	minTTL                 uint32
 
 	// enableEgress represents whether Egress should run or not, calculated from its feature gate configuration and
 	// whether the traffic mode supports it.
@@ -605,10 +604,9 @@ func (o *Options) validateK8sNodeOptions() error {
 		}
 		o.dnsServerOverride = hostPort
 	}
-	// If minTTL is greater than 1, it indicates that the value has been set externally by a cluster admin, and should be respected.
-	if o.config.MinTTL > 1 {
-		o.minTTL = uint32(o.config.MinTTL)
-	}
+
+	// Ensure that the minTTL is not negative.
+	o.config.MinTTL = max(o.config.MinTTL, 0)
 
 	if err := o.validateSecondaryNetworkConfig(); err != nil {
 		return fmt.Errorf("failed to validate secondary network config: %v", err)
