@@ -161,7 +161,7 @@ type fqdnController struct {
 	clock clock.Clock
 }
 
-func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.WithTicker, minTTL int) (*fqdnController, error) {
+func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.WithTicker, fqdnCacheMinTTL uint32) (*fqdnController, error) {
 	controller := &fqdnController{
 		ofClient:         client,
 		dirtyRuleHandler: dirtyRuleHandler,
@@ -183,7 +183,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 		ipv6Enabled:            v6Enabled,
 		gwPort:                 gwPort,
 		clock:                  clock,
-		minTTL:                 uint32(minTTL),
+		minTTL:                 fqdnCacheMinTTL,
 	}
 	if controller.ofClient != nil {
 		if err := controller.ofClient.NewDNSPacketInConjunction(dnsInterceptRuleID); err != nil {

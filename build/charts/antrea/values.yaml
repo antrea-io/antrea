@@ -189,7 +189,7 @@ dnsServerOverride: ""
 # -- The minTTL setting helps address the problem of applications caching DNS response IPs indefinitely.
 # The Cluster administrators should configure this value, ideally setting it to be equal to or greater than the maximum TTL
 # value of the application's DNS cache.
-minTTL: 0
+fqdnCacheMinTTL: 0
 # -- IPv4 CIDR range used for Services. Required when AntreaProxy is disabled.
 serviceCIDR: ""
 # -- IPv6 CIDR range used for Services. Required when AntreaProxy is disabled.

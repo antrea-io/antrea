@@ -528,7 +528,7 @@ func run(o *Options) error {
 		nodeConfig,
 		podNetworkWait,
 		l7Reconciler,
-		o.config.MinTTL,
+		uint32(o.config.FqdnCacheMinTTL),
 	)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)

@@ -155,13 +155,19 @@ func (o *Options) validate(args []string) error {
 		return fmt.Errorf("nodeType %s requires feature gate ExternalNode to be enabled", o.config.NodeType)
 	}
 
-	if o.config.NodeType == config.ExternalNode.String() {
+	// validate FqdnCacheMinTTL
+	if o.config.FqdnCacheMinTTL < 0 {
+		return fmt.Errorf("fqdnCacheMinTTL set to an invalid value, its must be a positive integer")
+	}
+
+	switch o.config.NodeType {
+	case config.ExternalNode.String():
 		o.nodeType = config.ExternalNode
 		return o.validateExternalNodeOptions()
-	} else if o.config.NodeType == config.K8sNode.String() {
+	case config.K8sNode.String():
 		o.nodeType = config.K8sNode
 		return o.validateK8sNodeOptions()
-	} else {
+	default:
 		return fmt.Errorf("unsupported nodeType %s", o.config.NodeType)
 	}
 }
@@ -604,9 +610,6 @@ func (o *Options) validateK8sNodeOptions() error {
 		}
 		o.dnsServerOverride = hostPort
 	}
-
-	// Ensure that the minTTL is not negative.
-	o.config.MinTTL = max(o.config.MinTTL, 0)
 
 	if err := o.validateSecondaryNetworkConfig(); err != nil {
 		return fmt.Errorf("failed to validate secondary network config: %v", err)
