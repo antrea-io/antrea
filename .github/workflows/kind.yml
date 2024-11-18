@@ -118,7 +118,7 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*.cov.out*'
+        files: '*.cov.out*'
         disable_search: true
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap
@@ -188,7 +188,7 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*.cov.out*'
+        files: '*.cov.out*'
         disable_search: true
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap-non-default
@@ -260,7 +260,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: '*.cov.out*'
+          files: '*.cov.out*'
           disable_search: true
           flags: kind-e2e-tests
           name: codecov-test-e2e-encap-all-features-enabled
@@ -323,7 +323,7 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*.cov.out*'
+        files: '*.cov.out*'
         disable_search: true
         flags: kind-e2e-tests
         name: codecov-test-e2e-noencap
@@ -386,7 +386,7 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*.cov.out*'
+        files: '*.cov.out*'
         disable_search: true
         flags: kind-e2e-tests
         name: codecov-test-e2e-hybrid
@@ -461,7 +461,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: '*.cov.out*'
+          files: '*.cov.out*'
           disable_search: true
           flags: kind-e2e-tests
           name: codecov-test-e2e-fa

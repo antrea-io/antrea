@@ -50,7 +50,7 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: .coverage/coverage-unit.txt
+        files: .coverage/coverage-unit.txt
         disable_search: true
         flags: unit-tests
         name: codecov-unit-test
@@ -76,7 +76,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: .coverage/coverage-unit.txt
+          files: .coverage/coverage-unit.txt
           disable_search: true
           flags: unit-tests
           name: codecov-unit-test
