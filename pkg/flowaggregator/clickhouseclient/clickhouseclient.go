@@ -108,7 +108,7 @@ type ClickHouseExportProcess struct {
 	db     *sql.DB
 	config ClickHouseConfig
 	// deque buffers flows records between batch commits.
-	deque *deque.Deque
+	deque deque.Deque[*flowrecord.FlowRecord]
 	// dequeMutex is for concurrency between adding and removing records from deque.
 	dequeMutex sync.Mutex
 	// queueSize is the max size of deque
@@ -151,7 +151,6 @@ func NewClickHouseClient(config ClickHouseConfig, clusterUUID string) (*ClickHou
 	chClient := &ClickHouseExportProcess{
 		db:          connect,
 		config:      config,
-		deque:       deque.New(),
 		queueSize:   maxQueueSize,
 		clusterUUID: clusterUUID,
 	}
@@ -271,12 +270,8 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 	// currSize could have increased due to CacheRecord being called in between.
 	currSize = ch.deque.Len()
 	recordsToExport := make([]*flowrecord.FlowRecord, 0, currSize)
-	for i := 0; i < currSize; i++ {
-		record, ok := ch.deque.PopFront().(*flowrecord.FlowRecord)
-		if !ok {
-			continue
-		}
-		recordsToExport = append(recordsToExport, record)
+	for range currSize {
+		recordsToExport = append(recordsToExport, ch.deque.PopFront())
 	}
 	ch.dequeMutex.Unlock()
 
