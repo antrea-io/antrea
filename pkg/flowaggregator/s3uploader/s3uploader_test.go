@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
@@ -104,7 +104,7 @@ func TestBatchUploadAll(t *testing.T) {
 	ctx := context.Background()
 	mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, nil)
 	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
+	nameRand := rand.New(rand.NewPCG(1, 0))
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 10,
@@ -137,7 +137,7 @@ func TestBatchUploadAllPartialSuccess(t *testing.T) {
 		mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, fmt.Errorf("random error")),
 	)
 	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
+	nameRand := rand.New(rand.NewPCG(1, 0))
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 1,
@@ -166,7 +166,7 @@ func TestBatchUploadAllError(t *testing.T) {
 	ctx := context.Background()
 	s3uploader := &S3Uploader{}
 	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
+	nameRand := rand.New(rand.NewPCG(1, 0))
 	s3UploadProc := S3UploadProcess{
 		bucketName:       "test-bucket-name",
 		compress:         false,
@@ -209,7 +209,7 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 		},
 	)
 	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
+	nameRand := rand.New(rand.NewPCG(1, 0))
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 10,
@@ -249,7 +249,7 @@ func TestFlushCacheOnStop(t *testing.T) {
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
 	mockS3Uploader.EXPECT().Upload(gomock.Any(), gomock.Any(), nil).Return(nil, nil)
 	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
+	nameRand := rand.New(rand.NewPCG(1, 0))
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 10,

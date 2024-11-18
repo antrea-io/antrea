@@ -17,7 +17,7 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2" // Updated import path to use math/rand/v2
 	"strconv"
 	"strings"
 	"testing"
@@ -31,6 +31,13 @@ import (
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreae2e "antrea.io/antrea/test/e2e"
 	e2euttils "antrea.io/antrea/test/e2e/utils"
+)
+
+const (
+	bufferFlushTimeout         = 1 * time.Minute
+	maxNumBuffersPendingUpload = 5
+	seed                       = 1                   // Define a fixed seed for deterministic tests
+	fakeClusterUUID            = "fake-cluster-uuid" // Define a fake cluster UUID for testing
 )
 
 func initializeForServiceExportsTest(t *testing.T, data *MCTestData) {
@@ -97,7 +104,7 @@ func (data *MCTestData) tearDownClientPodInCluster(t *testing.T) {
 	deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, getClusterRegularClientPodName(westCluster))
 }
 
-// Try to curl the counter part Services in east and west clusters.
+// Try to curl the counterpart Services in east and west clusters.
 // If we get status code 200, it means that the resources are exported by the east
 // cluster and imported by the west cluster.
 func testMCServiceConnectivity(t *testing.T, data *MCTestData) {
@@ -245,7 +252,6 @@ func (data *MCTestData) testANNPToServices(t *testing.T) {
 
 	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", eastIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
 	assert.Equal(t, antreae2e.Dropped, connectivity, "Failure -- wrong result from probing exported Service from regular clientPod after applying toServices AntreaNetworkPolicy")
-
 }
 
 func (data *MCTestData) testStretchedNetworkPolicy(t *testing.T) {
@@ -458,7 +464,7 @@ func (data *MCTestData) testStretchedNetworkPolicyUpdatePolicy(t *testing.T) {
 	// Update the policy to select the eastRegularClient.
 	acnpBuilder.AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName}, nil, "", nil, crdv1beta1.RuleActionDrop)
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder.Get()); err != nil {
-		t.Fatalf("Error updateing ACNP %s: %v", acnpBuilder.Name, err)
+		t.Fatalf("Error updating ACNP %s: %v", acnpBuilder.Name, err)
 	}
 	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
 	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
@@ -509,7 +515,8 @@ func (data *MCTestData) getNodeNamesFromCluster(clusterName string) (string, str
 		return "", "", fmt.Errorf("error when getting Node list: %v, stderr: %s", err, stderr)
 	}
 	nodes := strings.Split(strings.TrimRight(output, " "), " ")
-	gwIdx := rand.Intn(len(nodes)) // #nosec G404: for test only
+	mainRand := rand.New(rand.NewPCG(1, 0)) // Initialize with fixed seeds for deterministic behavior
+	gwIdx := mainRand.IntN(len(nodes))      // #nosec G404: for test only
 	var regularNode string
 	for i, node := range nodes {
 		if i != gwIdx {
@@ -524,7 +531,7 @@ func (data *MCTestData) getNodeNamesFromCluster(clusterName string) (string, str
 func (data *MCTestData) setGatewayNode(t *testing.T, clusterName string, nodeName string) error {
 	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(clusterName), fmt.Sprintf("kubectl annotate node %s multicluster.antrea.io/gateway=true", nodeName))
 	if err != nil || rc != 0 || stderr != "" {
-		return fmt.Errorf("error when annotate the Node %s: %s, stderr: %s", nodeName, err, stderr)
+		return fmt.Errorf("error when annotating the Node %s: %s, stderr: %s", nodeName, err, stderr)
 	}
 	t.Logf("The Node %s is annotated as Gateway in cluster %s", nodeName, clusterName)
 	return nil
