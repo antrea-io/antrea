@@ -47,7 +47,7 @@ jobs:
     - name: Run unit tests
       run: make test-unit
     - name: Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: .coverage/coverage-unit.txt
@@ -73,7 +73,7 @@ jobs:
       - name: Run unit tests
         run: make test-unit
       - name: Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: .coverage/coverage-unit.txt
@@ -105,7 +105,7 @@ jobs:
           cd multicluster
           make test-integration
       - name: Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: .coverage/coverage-integration.txt,multicluster/.coverage/coverage-integration.txt
