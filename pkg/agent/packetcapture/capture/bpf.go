@@ -72,6 +72,12 @@ func compareProtocol(protocol uint32, skipTrue, skipFalse uint8) bpf.Instruction
 	return bpf.JumpIf{Cond: bpf.JumpEqual, Val: protocol, SkipTrue: skipTrue, SkipFalse: skipFalse}
 }
 
+// zeroFilter is a filter that will drop all packets.
+// see: https://github.com/antrea-io/antrea/issues/6815 for the user case.
+func zeroFilter() []bpf.Instruction {
+	return []bpf.Instruction{returnDrop}
+}
+
 // compilePacketFilter compiles the CRD spec to bpf instructions. For now, we only focus on
 // ipv4 traffic. Compared to the raw BPF filter supported by libpcap, we only need to support
 // limited use cases, so an expression parser is not needed.
