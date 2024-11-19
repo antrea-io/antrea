@@ -24,7 +24,6 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/gammazero/deque"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,24 +45,23 @@ var fakeClusterUUID = uuid.New().String()
 func TestCacheRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	chExportProc := ClickHouseExportProcess{
-		deque: deque.New(),
+	chExportProc := &ClickHouseExportProcess{
+		queueSize: 1,
 	}
 
-	chExportProc.queueSize = 1
 	// First call. only populate row.
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
 	chExportProc.CacheRecord(mockRecord)
 	assert.Equal(t, 1, chExportProc.deque.Len())
-	assert.Equal(t, "10.10.0.79", chExportProc.deque.At(0).(*flowrecord.FlowRecord).SourceIP)
+	assert.Equal(t, "10.10.0.79", chExportProc.deque.At(0).SourceIP)
 
 	// Second call. discard prev row and add new row.
 	mockRecord = ipfixentitiestesting.NewMockRecord(ctrl)
 	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, false)
 	chExportProc.CacheRecord(mockRecord)
 	assert.Equal(t, 1, chExportProc.deque.Len())
-	assert.Equal(t, "2001:0:3238:dfe1:63::fefb", chExportProc.deque.At(0).(*flowrecord.FlowRecord).SourceIP)
+	assert.Equal(t, "2001:0:3238:dfe1:63::fefb", chExportProc.deque.At(0).SourceIP)
 }
 
 func TestBatchCommitAll(t *testing.T) {
@@ -71,9 +69,8 @@ func TestBatchCommitAll(t *testing.T) {
 	require.NoError(t, err, "error when opening a stub database connection")
 	defer db.Close()
 
-	chExportProc := ClickHouseExportProcess{
+	chExportProc := &ClickHouseExportProcess{
 		db:          db,
-		deque:       deque.New(),
 		queueSize:   maxQueueSize,
 		clusterUUID: fakeClusterUUID,
 	}
@@ -153,9 +150,8 @@ func TestBatchCommitAllMultiRecord(t *testing.T) {
 	require.NoError(t, err, "error when opening a stub database connection")
 	defer db.Close()
 
-	chExportProc := ClickHouseExportProcess{
+	chExportProc := &ClickHouseExportProcess{
 		db:        db,
-		deque:     deque.New(),
 		queueSize: maxQueueSize,
 	}
 	recordRow := flowrecord.FlowRecord{}
@@ -185,9 +181,8 @@ func TestBatchCommitAllError(t *testing.T) {
 	require.NoError(t, err, "error when opening a stub database connection")
 	defer db.Close()
 
-	chExportProc := ClickHouseExportProcess{
+	chExportProc := &ClickHouseExportProcess{
 		db:        db,
-		deque:     deque.New(),
 		queueSize: maxQueueSize,
 	}
 	recordRow := flowrecord.FlowRecord{}
@@ -211,8 +206,7 @@ func TestBatchCommitAllError(t *testing.T) {
 }
 
 func TestPushRecordsToFrontOfQueue(t *testing.T) {
-	chExportProc := ClickHouseExportProcess{
-		deque:     deque.New(),
+	chExportProc := &ClickHouseExportProcess{
 		queueSize: 4,
 	}
 
@@ -255,10 +249,9 @@ func TestFlushCacheOnStop(t *testing.T) {
 	// something arbitrarily large
 	const commitInterval = time.Hour
 
-	chExportProc := ClickHouseExportProcess{
+	chExportProc := &ClickHouseExportProcess{
 		db:        db,
 		config:    ClickHouseConfig{CommitInterval: commitInterval},
-		deque:     deque.New(),
 		queueSize: maxQueueSize,
 	}
 
@@ -290,10 +283,9 @@ func TestUpdateCH(t *testing.T) {
 	// something small for the sake of the test
 	const commitInterval = 100 * time.Millisecond
 
-	chExportProc := ClickHouseExportProcess{
+	chExportProc := &ClickHouseExportProcess{
 		db:        db1,
 		config:    ClickHouseConfig{CommitInterval: commitInterval},
-		deque:     deque.New(),
 		queueSize: maxQueueSize,
 	}
 
