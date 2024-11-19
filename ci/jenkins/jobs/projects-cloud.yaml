@@ -757,19 +757,10 @@
               # Prevent exposing credentials in the console output by adding set +x
               # This is to avoid other developers removing this set+x by accident
               set +x
-              token_file="/var/lib/jenkins/gcp_cred"
-              cp $token_file ${{WORKSPACE}}/gcp_cred
-              sudo gcloud iam workforce-pools create-cred-config \
-                locations/global/workforcePools/${{WORKFORCE_POOL}}/providers/oidc-provider \
-                --subject-token-type urn:ietf:params:oauth:token-type:id_token \
-                --credential-source-file gcp_cred \
-                --workforce-pool-user-project antrea\
-                --project antrea\
-                --output-file gcp_cred_config.json
-              sudo gcloud auth login --cred-file=gcp_cred_config.json
+              sudo gcloud auth login --cred-file=${CREDENTIAL_PATH}
               sudo gcloud config set project antrea
               sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
-                --skip-iam-policy-binding --gcloud-sdk-path ${{GCLOUD_SDK_PATH}} \
+                --svc-account ${SERVICE_ACCOUNT} --gcloud-sdk-path ${{GCLOUD_PATH}} \
                 --log-mode detail --setup-only
           triggers:
           - timed: H H */2 * *
@@ -794,82 +785,6 @@
             - text:
                 credential-id: WORKFORCE_POOL # Jenkins secret that stores the cloud resource pool id
                 variable: WORKFORCE_POOL
-      - 'cloud-{name}-{test_name}-credential':
-          test_name: gke
-          node: antrea-credential
-          description: 'This is the cloud credential job for antrea gke tests.'
-          builders:
-          - shell: |-
-              #!/bin/bash
-              # Prevent exposing credentials in the console output by adding set +x
-              # This is to avoid other developers removing this set+x by accident
-              set +x
-              token_file="/var/lib/jenkins/ci_properties.txt"
-              if [ -e "$token_file" ]; then
-                  modification_timestamp=$(stat -c %Y "$token_file")
-                  current_timestamp=$(date +%s)
-                  time_difference=$((current_timestamp - modification_timestamp))
-              else
-                  time_difference=14401
-              fi
-              # The credentials are valid for 12 hours, to allow sufficient time for job execution, the reuse threshold is set to 4 hours.
-              threshold=14400
-              if [ "$time_difference" -gt "$threshold" ]; then
-                  echo "Generate the new Cloud Credential"
-                  json_data=$(python3 get_access_using_api_client.py ${{CLOUD_CLIENT_ID}} ${{CLOUD_CLIENT_TOKEN}} PowerUser gcp ${{GKE_RESOURCE_ID}} 43200 prd)
-                  json_data=$(echo $json_data | sed "s/'/\"/g" | sed 's/True/true/')
-                  id_token=$(echo $json_data | jq -r '.credential.idToken')
-                  echo "ID_TOKEN=$id_token" > ${{WORKSPACE}}/ci_properties.txt
-                  cp ${{WORKSPACE}}/ci_properties.txt $token_file
-              else
-                  echo "Reuse the unexpired Cloud Credential"
-                  cp $token_file ${{WORKSPACE}}/ci_properties.txt
-              fi
-          triggers:
-          - timed: H H/6 * * *
-          publishers:
-          - trigger-parameterized-builds:
-            - project:
-              - cloud-{name}-renew-credential
-              current-parameters: true
-              property-file: 'ci_properties.txt'
-          - email:
-              notify-every-unstable-build: true
-              recipients: projectantrea-dev@googlegroups.com
-          wrappers:
-          - credentials-binding:
-            - text:
-                credential-id: CLOUD_CLIENT_ID # Jenkins secret that stores client id
-                variable: CLOUD_CLIENT_ID
-            - text:
-                credential-id: CLOUD_CLIENT_TOKEN # Jenkins secret that stores client secret token
-                variable: CLOUD_CLIENT_TOKEN
-            - text:
-                credential-id: GKE_RESOURCE_ID
-                variable: GKE_RESOURCE_ID
-      - 'cloud-{name}-{test_name}-credential':
-          test_name: renew
-          node: antrea-cloud
-          description: 'This is a periodic job to renew the credential on cloud node.'
-          builders:
-          - shell: |-
-              #!/bin/bash
-              # Prevent exposing credentials in the console output by adding set +x
-              # This is to avoid other developers removing this set+x by accident
-              set +x
-              cd /var/lib/jenkins
-              if [ -z "$ID_TOKEN" ]; then
-                  echo "No Token ID Found"
-                  exit 1
-              else
-                  echo "${{ID_TOKEN}}" > gcp_cred
-              fi
-          publishers:
-          - email:
-              notify-every-unstable-build: true
-              recipients: projectantrea-dev@googlegroups.com
-          triggers: []
-          wrappers: []
       - 'cloud-{name}-{test_name}-cleanup':
           test_name: gke
           description: This is for deleting GKE test clusters.
