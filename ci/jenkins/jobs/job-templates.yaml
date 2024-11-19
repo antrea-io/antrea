@@ -285,30 +285,6 @@
      wrappers: '{wrappers}'
 
 - job-template:
-     name: 'cloud-{name}-{test_name}-credential'
-     node: '{node}'
-     triggers: '{triggers}'
-     builders: '{builders}'
-     parameters:
-     - string:
-         default: ''
-         description: The cloud token ID of the cloud provider.
-         name: ID_TOKEN
-         trim: 'false'
-     description: '{description}'
-     block-downstream: false
-     block-upstream: false
-     project-type: freestyle
-     properties:
-     - build-discarder:
-         artifact-days-to-keep: -1
-         artifact-num-to-keep: -1
-         days-to-keep: 30
-         num-to-keep: 30
-     publishers: '{publishers}'
-     wrappers: '{wrappers}'
-
-- job-template:
      name: 'cloud-{name}-{test_name}-cleanup'
      node: '{node}'
      triggers: '{triggers}'
