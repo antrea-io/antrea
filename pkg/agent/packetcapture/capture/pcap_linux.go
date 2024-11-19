@@ -40,6 +40,12 @@ func NewPcapCapture() (*pcapCapture, error) {
 	return &pcapCapture{}, nil
 }
 
+// zeroFilter is a filter that will drop all packets.
+// see: https://github.com/antrea-io/antrea/issues/6815 for the user case.
+func zeroFilter() []bpf.Instruction {
+	return []bpf.Instruction{returnDrop}
+}
+
 func (p *pcapCapture) Capture(ctx context.Context, device string, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error) {
 	// Compile the BPF filter in advance to reduce the time window between starting the capture and applying the filter.
 	inst := compilePacketFilter(packet, srcIP, dstIP)
