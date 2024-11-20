@@ -80,6 +80,9 @@ const (
 	// PacketCapture uses a dedicated Secret object to store authentication information for a file server.
 	// #nosec G101
 	fileServerAuthSecretName = "antrea-packetcapture-fileserver-auth"
+
+	// max packet size we can capture.
+	snapLen = 65536
 )
 
 type packetCapturePhase string
@@ -449,13 +452,20 @@ func (c *Controller) performCapture(
 	if err != nil {
 		return false, err
 	}
-	pcapngWriter, err := pcapgo.NewNgWriter(file, layers.LinkTypeEthernet)
+
+	// set SnapLength here to make tcpdump on Mac OSX works. By default, its value is
+	// 0 and means unlimited, but tcpdump on Mac OSX will complain:
+	// 'tcpdump: pcap_loop: invalid packet capture length <len>, bigger than snaplen of 524288'
+	ngInterface := pcapgo.DefaultNgInterface
+	ngInterface.SnapLength = snapLen
+	ngInterface.LinkType = layers.LinkTypeEthernet
+	pcapngWriter, err := pcapgo.NewNgWriterInterface(file, ngInterface, pcapgo.DefaultNgWriterOptions)
 	if err != nil {
 		return false, fmt.Errorf("couldn't initialize a pcap writer: %w", err)
 	}
 	defer pcapngWriter.Flush()
 	updateRateLimiter := rate.NewLimiter(rate.Every(captureStatusUpdatePeriod), 1)
-	packets, err := c.captureInterface.Capture(ctx, device, srcIP, dstIP, pc.Spec.Packet)
+	packets, err := c.captureInterface.Capture(ctx, device, snapLen, srcIP, dstIP, pc.Spec.Packet)
 	if err != nil {
 		return false, err
 	}
