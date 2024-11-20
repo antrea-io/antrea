@@ -28,11 +28,6 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
-const (
-	// Max packet size for pcap capture.
-	maxSnapshotBytes = 65536
-)
-
 type pcapCapture struct {
 }
 
@@ -46,7 +41,7 @@ func zeroFilter() []bpf.Instruction {
 	return []bpf.Instruction{returnDrop}
 }
 
-func (p *pcapCapture) Capture(ctx context.Context, device string, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error) {
+func (p *pcapCapture) Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error) {
 	// Compile the BPF filter in advance to reduce the time window between starting the capture and applying the filter.
 	inst := compilePacketFilter(packet, srcIP, dstIP)
 	klog.V(5).InfoS("Generated bpf instructions for PacketCapture", "device", device, "srcIP", srcIP, "dstIP", dstIP, "packetSpec", packet, "bpf", inst)
@@ -80,7 +75,7 @@ func (p *pcapCapture) Capture(ctx context.Context, device string, srcIP, dstIP n
 	if err = eth.SetBPF(zeroRawInst); err != nil {
 		return nil, err
 	}
-	if err = eth.SetCaptureLength(maxSnapshotBytes); err != nil {
+	if err = eth.SetCaptureLength(snapLen); err != nil {
 		return nil, err
 	}
 

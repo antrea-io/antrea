@@ -24,5 +24,5 @@ import (
 )
 
 type PacketCapturer interface {
-	Capture(ctx context.Context, device string, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error)
+	Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error)
 }
