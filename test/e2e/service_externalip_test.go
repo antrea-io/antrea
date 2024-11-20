@@ -47,9 +47,25 @@ import (
 // externalippoolvalidator may not have registered the previous deletion yet (informer cache not
 // updated yet).
 type externalIPPoolRangeGenerator struct {
+	// the current prefix
 	prefix netip.Prefix
 }
 
+// newExternalIPPoolRangeGenerator creates an externalIPPoolRangeGenerator, using the provided CIDR
+// as the starting prefix. Calling the getCIDR(bits int) method will return a subset of the provided
+// CIDR. Calling the next() method will update the current internal prefix to the next consecutive
+// CIDR to the one provided originally (with the same prefix size), after which getCIDR(bits int)
+// can be called again. The provided CIDR must have a prefix size which is a multiple of 8.
+//
+// Example usage:
+//
+//	ipPoolRangeV4 := newExternalIPPoolRangeGenerator("169.254.100.0/24")
+//	cidr1 := ipPoolRangeV4.getCIDR(30)
+//	fmt.Println(cidr1) // Prints 169.254.100.0/30
+//	cidr2 := ipPoolRangeV4.next().getCIDR(24)
+//	fmt.Println(cidr2) // Prints 169.254.101.0/24
+//	cidr3 := ipPoolRangeV4.next().getCIDR(30)
+//	fmt.Println(cidr3) // Prints 169.254.102.0/30
 func newExternalIPPoolRangeGenerator(cidr string) *externalIPPoolRangeGenerator {
 	prefix := netip.MustParsePrefix(cidr).Masked()
 	bits := prefix.Bits()
@@ -61,6 +77,8 @@ func newExternalIPPoolRangeGenerator(cidr string) *externalIPPoolRangeGenerator 
 	}
 }
 
+// next updates the current prefix to the next consecutive CIDR. For example, if the prefix is
+// 169.254.100.0/24, it will be updated to 169.254.100.1/24.
 func (g *externalIPPoolRangeGenerator) next() *externalIPPoolRangeGenerator {
 	offset := (g.prefix.Bits() - 1) / 8
 	addr := g.prefix.Addr()
@@ -74,6 +92,10 @@ func (g *externalIPPoolRangeGenerator) next() *externalIPPoolRangeGenerator {
 	return g
 }
 
+// getCIDR returns the first CIDR included in the current prefix, with the desired prefix
+// size. Successive calls to getCIDR without an intermediate call to next will keep returning the
+// same value. The desired prefix size (bits) must be greater than or equal to the size of the
+// current internal prefix (i.e., a smaller CIDR).
 func (g *externalIPPoolRangeGenerator) getCIDR(bits int) string {
 	if bits < g.prefix.Bits() {
 		panic("requested range is too large")
