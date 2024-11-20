@@ -34,6 +34,6 @@ func NewPcapCapture() (*pcapCapture, error) {
 	return nil, errors.New("PacketCapture is not implemented")
 }
 
-func (p *pcapCapture) Capture(ctx context.Context, device string, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error) {
+func (p *pcapCapture) Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error) {
 	return nil, errors.New("PacketCapture is not implemented")
 }
