@@ -119,6 +119,60 @@ var (
 			Name: "node-3",
 		},
 	}
+	controllerPod = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "antrea-controller-1",
+			Namespace: "kube-system",
+			Labels: map[string]string{
+				"app":       "antrea",
+				"component": "antrea-controller",
+			},
+		},
+		Spec: v1.PodSpec{
+			NodeName: "node-1",
+			Containers: []v1.Container{
+				{
+					Name: "antrea-controller",
+				},
+			},
+		},
+	}
+	pod1 = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "antrea-agent-1",
+			Namespace: "kube-system",
+			Labels: map[string]string{
+				"app":       "antrea",
+				"component": "antrea-agent",
+			},
+		},
+		Spec: v1.PodSpec{
+			NodeName: "node-1",
+			Containers: []v1.Container{
+				{
+					Name: "antrea-agent",
+				},
+			},
+		},
+	}
+	pod2 = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "antrea-agent-2",
+			Namespace: "kube-system",
+			Labels: map[string]string{
+				"app":       "antrea",
+				"component": "antrea-agent",
+			},
+		},
+		Spec: v1.PodSpec{
+			NodeName: "node-2",
+			Containers: []v1.Container{
+				{
+					Name: "antrea-agent",
+				},
+			},
+		},
+	}
 	nameList = []string{"node-1", "node-3"}
 )
 
@@ -320,9 +374,8 @@ func TestProcessResults(t *testing.T) {
 		option.dir = path
 	}()
 	tests := []struct {
-		name        string
-		resultMap   map[string]error
-		expectedErr string
+		name      string
+		resultMap map[string]error
 	}{
 		{
 			name: "All nodes failed",
@@ -331,7 +384,6 @@ func TestProcessResults(t *testing.T) {
 				"node-1": fmt.Errorf("error-1"),
 				"node-2": fmt.Errorf("error-2"),
 			},
-			expectedErr: "no data was collected:",
 		},
 		{
 			name: "Not all nodes failed",
@@ -351,17 +403,24 @@ func TestProcessResults(t *testing.T) {
 				defaultFS = afero.NewOsFs()
 			}()
 
-			err := processResults(tt.resultMap, option.dir)
-			if tt.expectedErr != "" {
-				require.ErrorContains(t, err, tt.expectedErr)
-			} else {
-				require.NoError(t, err)
-			}
-			// Both test cases above have failed Nodes, hence this file should always be created/
+			antreaInterface := fakeclientset.NewSimpleClientset(&controllerInfo, agentInfo1, agentInfo2)
+			k8sClient := fake.NewSimpleClientset(controllerPod, pod1, pod2)
+			err := processResults(context.TODO(), antreaInterface, k8sClient, tt.resultMap, option.dir)
+			require.NoError(t, err)
 			b, err := afero.ReadFile(defaultFS, filepath.Join(option.dir, "failed_nodes"))
 			require.NoError(t, err)
 			data := string(b)
 			for node, err := range tt.resultMap {
+				fileName := fmt.Sprintf("agent_%s.tar.gz", node)
+				if node == "" {
+					fileName = "controller.tar.gz"
+				}
+				if err != nil {
+					ok, checkErr := afero.Exists(defaultFS, filepath.Join(option.dir, fileName))
+					require.NoError(t, checkErr)
+					assert.True(t, ok, fmt.Sprintf("expected support bundle file %s not found", fileName))
+				}
+
 				if node == "" {
 					continue
 				}
