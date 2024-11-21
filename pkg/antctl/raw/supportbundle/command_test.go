@@ -413,12 +413,12 @@ func TestProcessResults(t *testing.T) {
 			for node, err := range tt.resultMap {
 				fileName := fmt.Sprintf("agent_%s.tar.gz", node)
 				if node == "" {
-					fileName = "controller.tar.gz"
+					fileName = "controller_node-1.tar.gz"
 				}
 				if err != nil {
 					ok, checkErr := afero.Exists(defaultFS, filepath.Join(option.dir, fileName))
 					require.NoError(t, checkErr)
-					assert.True(t, ok, fmt.Sprintf("expected support bundle file %s not found", fileName))
+					assert.True(t, ok, "expected support bundle file %s not found", fileName)
 				}
 
 				if node == "" {

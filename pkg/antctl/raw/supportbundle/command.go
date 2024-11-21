@@ -590,7 +590,7 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create clientset: %w", err)
 	}
 
-	if err := os.MkdirAll(option.dir, 0700|os.ModeDir); err != nil {
+	if err := os.MkdirAll(option.dir, 0700); err != nil {
 		return fmt.Errorf("error when creating output dir: %w", err)
 	}
 
@@ -688,8 +688,8 @@ func processResults(ctx context.Context, antreaClientset antrea.Interface, k8sCl
 		}
 	}
 
-	controllerFail := resultMap[""] != nil
-	if controllerFail {
+	controllerFailed := resultMap[""] != nil
+	if controllerFailed {
 		fmt.Println("Controller Info Failed Reason: " + resultMap[""].Error())
 	}
 
@@ -704,15 +704,15 @@ func processResults(ctx context.Context, antreaClientset antrea.Interface, k8sCl
 
 	// download logs from kubernetes api
 	if failedNodes != nil {
-		err = downloadAgentBundleFromKubernetes(ctx, antreaClientset, k8sClient, failedNodes, dir)
+		err = downloadFallbackAgentBundleFromKubernetes(ctx, antreaClientset, k8sClient, failedNodes, dir)
 		if err != nil {
 			fmt.Println("Failed to download agent bundle from kubernetes api: " + err.Error())
 		} else {
 			allFailed = false
 		}
 	}
-	if controllerFail {
-		err = downloadControlleBundleFromKubernetes(ctx, antreaClientset, k8sClient, dir)
+	if controllerFailed {
+		err = downloadFallbackControllerBundleFromKubernetes(ctx, antreaClientset, k8sClient, dir)
 		if err != nil {
 			fmt.Println("Failed to download controller bundle from kubernetes api: " + err.Error())
 		} else {
@@ -727,7 +727,7 @@ func processResults(ctx context.Context, antreaClientset antrea.Interface, k8sCl
 	}
 }
 
-func downloadControlleBundleFromKubernetes(ctx context.Context, antreaClientset antrea.Interface, k8sClient kubernetes.Interface, dir string) error {
+func downloadFallbackControllerBundleFromKubernetes(ctx context.Context, antreaClientset antrea.Interface, k8sClient kubernetes.Interface, dir string) error {
 	var errors []error
 	tmpDir, err := afero.TempDir(defaultFS, "", "bundle_tmp_")
 	if err != nil {
@@ -735,15 +735,23 @@ func downloadControlleBundleFromKubernetes(ctx context.Context, antreaClientset 
 	}
 	defer defaultFS.RemoveAll(tmpDir)
 
-	controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(ctx, "antrea-controller", metav1.GetOptions{})
-	if err == nil {
-		data, err := yaml.Marshal(controllerInfo)
-		if err == nil {
-			err = afero.WriteFile(defaultFS, filepath.Join(tmpDir, "controllerinfo"), data, 0644)
-			errors = append(errors, err)
+	if err := func() error {
+		controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(ctx, "antrea-controller", metav1.GetOptions{})
+		if err != nil {
+			return err
 		}
+		data, err := yaml.Marshal(controllerInfo)
+		if err != nil {
+			return err
+		}
+		if err := afero.WriteFile(defaultFS, filepath.Join(dir, "controllerinfo"), data, 0644); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		errors = append(errors, err)
 	}
-	errors = append(errors, err)
+
 	pods, err := k8sClient.CoreV1().Pods("kube-system").List(ctx, metav1.ListOptions{
 		ResourceVersion: "0",
 		LabelSelector:   "app=antrea,component=antrea-controller",
@@ -751,14 +759,23 @@ func downloadControlleBundleFromKubernetes(ctx context.Context, antreaClientset 
 	errors = append(errors, err)
 	if err == nil {
 		for _, pod := range pods.Items {
-			err = downloadPodLogs(ctx, k8sClient, "controller", pod.Namespace, pod.Name, k8s.GetPodContainerNames(&pod), dir, tmpDir)
+			err = downloadPodLogs(ctx, k8sClient, pod.Namespace, pod.Name, k8s.GetPodContainerNames(&pod), tmpDir)
 			errors = append(errors, err)
+			gzFileName := filepath.Join(dir, "controller_"+pod.Spec.NodeName+".tar.gz")
+			f, err := defaultFS.Create(gzFileName)
+			if err != nil {
+				errors = append(errors, err)
+			} else {
+				defer f.Close()
+				_, err := compress.PackDir(defaultFS, tmpDir, f)
+				errors = append(errors, err)
+			}
 		}
 	}
 	return utilerror.NewAggregate(errors)
 }
 
-func downloadAgentBundleFromKubernetes(ctx context.Context, antreaClientset antrea.Interface, k8sClient kubernetes.Interface, failedNodes []string, dir string) error {
+func downloadFallbackAgentBundleFromKubernetes(ctx context.Context, antreaClientset antrea.Interface, k8sClient kubernetes.Interface, failedNodes []string, dir string) error {
 	agentInfoList, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().List(ctx, metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		return err
@@ -796,31 +813,33 @@ func downloadAgentBundleFromKubernetes(ctx context.Context, antreaClientset antr
 				errors = append(errors, err)
 			}
 		}
-		err = downloadPodLogs(ctx, k8sClient, "agent_"+pod.Spec.NodeName, pod.Namespace, pod.Name, k8s.GetPodContainerNames(&pod), dir, tmpDir)
+		err = downloadPodLogs(ctx, k8sClient, pod.Namespace, pod.Name, k8s.GetPodContainerNames(&pod), tmpDir)
 		errors = append(errors, err)
-
+		gzFileName := filepath.Join(dir, "agent_"+pod.Spec.NodeName+".tar.gz")
+		f, err := defaultFS.Create(gzFileName)
+		if err != nil {
+			errors = append(errors, err)
+		} else {
+			defer f.Close()
+			_, err := compress.PackDir(defaultFS, tmpDir, f)
+			errors = append(errors, err)
+		}
 	}
 	return utilerror.NewAggregate(errors)
 }
 
-func downloadPodLogs(ctx context.Context, k8sClient kubernetes.Interface, comp string, namespace string, podName string, containers []string, dir string, tmpDir string) error {
-	var errors []error
-	for _, containerName := range containers {
-		containerDirName := containerName
-		if strings.HasPrefix(containerName, "antrea-") {
-			containerDirName = strings.ReplaceAll(containerName, "antrea-", "")
-		}
-
-		podLogDir := filepath.Join(tmpDir, "logs", containerDirName)
-		err := os.MkdirAll(podLogDir, 0755)
+func downloadPodLogs(ctx context.Context, k8sClient kubernetes.Interface, namespace string, podName string, containers []string, tmpDir string) error {
+	downloadContainerLogs := func(containerName string) error {
+		containerDirName, _ := strings.CutPrefix(containerName, "antrea-")
+		containerLogDir := filepath.Join(tmpDir, "logs", containerDirName)
+		err := os.MkdirAll(containerLogDir, 0755)
 		if err != nil {
 			return err
 		}
-		fileName := filepath.Join(podLogDir, containerName+".log")
+		fileName := filepath.Join(containerLogDir, containerName+".log")
 		f, err := defaultFS.Create(fileName)
 		if err != nil {
-			errors = append(errors, err)
-			continue
+			return err
 		}
 		defer f.Close()
 		logOption := &corev1.PodLogOptions{
@@ -829,24 +848,18 @@ func downloadPodLogs(ctx context.Context, k8sClient kubernetes.Interface, comp s
 		logs := k8sClient.CoreV1().Pods(namespace).GetLogs(podName, logOption)
 		logStream, err := logs.Stream(ctx)
 		if err != nil {
-			errors = append(errors, err)
-			continue
+			return err
 		}
 
 		_, err = io.Copy(f, logStream)
-		errors = append(errors, err)
-		err = logStream.Close()
-		errors = append(errors, err)
+		if err != nil {
+			return err
+		}
+		return logStream.Close()
 	}
-
-	gzFileName := filepath.Join(dir, comp+".tar.gz")
-	f, err := defaultFS.Create(gzFileName)
-	if err != nil {
-		errors = append(errors, err)
-	} else {
-		defer f.Close()
-		_, err := compress.PackDir(defaultFS, tmpDir, f)
-		errors = append(errors, err)
+	var errors []error
+	for _, containerName := range containers {
+		errors = append(errors, downloadContainerLogs(containerName))
 	}
 	return utilerror.NewAggregate(errors)
 }
