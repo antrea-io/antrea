@@ -270,12 +270,14 @@ function configure_vlan_subnets {
   bridge_id=$(docker network inspect kind -f {{.ID}})
   bridge_interface="br-${bridge_id:0:12}"
   
+  vlan_interfaces=()
   for vlan_subnet in "${VLAN_SUBNETS[@]}"; do
     # Extract VLAN ID and subnets
     vlan_id=$(echo $vlan_subnet | cut -d= -f1)
     subnets=$(echo $vlan_subnet | cut -d= -f2)
     
     vlan_interface="br-${bridge_id:0:7}.$vlan_id"
+    vlan_interfaces+=("$vlan_interface")
 
     docker_run_with_host_net ip link add link $bridge_interface name $vlan_interface type vlan id $vlan_id
     docker_run_with_host_net ip link set $vlan_interface up
@@ -287,7 +289,16 @@ function configure_vlan_subnets {
     done
 
     docker_run_with_host_net iptables -t filter -A FORWARD -i $bridge_interface -o $vlan_interface -j ACCEPT
-    docker_run_with_host_net iptables -t filter -A FORWARD -o $bridge_interface -i $vlan_interface -j ACCEPT
+    docker_run_with_host_net iptables -t filter -A FORWARD -i $vlan_interface -o $bridge_interface -j ACCEPT
+    docker_run_with_host_net iptables -t filter -A FORWARD -i $vlan_interface -o $vlan_interface -j ACCEPT
+  done
+
+  # Allow traffic between VLANs
+  for ((i=0; i<${#vlan_interfaces[@]}; i++)); do
+    for ((j=i+1; j<${#vlan_interfaces[@]}; j++)); do
+      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[i]} -o ${vlan_interfaces[j]} ACCEPT
+      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[j]} -o ${vlan_interfaces[i]} ACCEPT
+    done
   done
 }
 
