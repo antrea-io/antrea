@@ -85,14 +85,12 @@ jobs:
           antrea/antrea-agent-ubuntu-arm:"${DOCKER_TAG}" \
           antrea/antrea-agent-ubuntu-amd64:"${DOCKER_TAG}"
         docker manifest push --purge antrea/antrea-agent-ubuntu:"${DOCKER_TAG}"
-    - name: Trigger Antrea arm tests
+    # Same repository workflow dispatch to run conformance tests
+    - name: Run conformance tests
       uses: benc-uk/workflow-dispatch@v1
       with:
-        repo: vmware-tanzu/antrea-build-infra
-        ref: refs/heads/main
-        workflow: Test Antrea ARM images
-        token: ${{ secrets.ANTREA_BUILD_INFRA_WORKFLOW_DISPATCH_PAT }}
-        inputs: ${{ format('{{ "antrea-repository":"antrea-io/antrea", "antrea-ref":"{0}", "docker-tag":"{1}" }}', github.ref, env.DOCKER_TAG) }}
+        workflow: .github/workflows/conformance.yml
+        inputs: ${{ format('{{ "antrea-version":"{0}", "antrea-image-distro":"ubuntu", "test-suite":"conformance", "runner":"{1}", "antrea-image-platform":"{2}", "always-upload-logs":true }}', github.ref, matrix.runner, matrix.platform) }}
 
   build-ubi:
     runs-on: [ubuntu-latest]

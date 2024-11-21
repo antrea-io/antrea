@@ -35,12 +35,24 @@ on:
         description: Always upload logs regardless of the test result.
         type: boolean
         default: false
+      runner:
+        description: The Github runner to use for the workflow
+        default: ubuntu-latest
+      antrea-image-platform:
+        description: Platform argument to provide when building the Antrea images
+        type: choice
+        options:
+          - "linux/amd64"
+          - "linux/arm64"
+          - "linux/arm/v7"
+        default: "linux/amd64"
+        required: true
 
 
 jobs:
   test:
     name: Run tests
-    runs-on: [ubuntu-latest]
+    runs-on: ${{ inputs.runner }}
     steps:
       - name: Free disk space
         # https://github.com/actions/virtual-environments/issues/709
@@ -70,13 +82,17 @@ jobs:
       - name: Build Antrea image if required
         if: ${{ steps.check-release.outputs.released == 'false' }}
         run: |
-          ./hack/build-antrea-linux-all.sh --pull --distro ${{ inputs.antrea-image-distro }}
-      - name: Install Kind
+          ./hack/build-antrea-linux-all.sh --pull --distro ${{ inputs.antrea-image-distro }} --platform ${{ inputs.antrea-image-platform }}
+      - name: Get Kind version
+        id: get_kind_version
         run: |
           KIND_VERSION=$(head -n1 ./ci/kind/version || echo v0.23.0)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+          echo "kind_version=${KIND_VERSION}" >> $GITHUB_OUTPUT
+      - name: Install Kind
+        uses: helm/kind-action@v1
+        with:
+          version: ${{ steps.get_kind_version.outputs.kind_version }}
+          install_only: true
       - name: Build local image for conformance test
         if: ${{ inputs.k8s-version != '' }}
         run: |
