@@ -401,8 +401,9 @@ Namespace to the new Node.
 There are several options that can be configured for Egress according to your
 case.
 
-- `egress.exceptCIDRs` - The CIDR ranges to which outbound Pod traffic will not
-  be SNAT'd by Egresses. The option was added in Antrea v1.4.0.
+- `egress.exceptCIDRs` - A list of CIDR ranges to which outbound Pod traffic
+  will not be SNAT'd by Egresses, e.g. `["192.168.0.0/16", "172.16.0.0/12"]`.
+  The option was added in Antrea v1.4.0.
 - `egress.maxEgressIPsPerNode` - The maximum number of Egress IPs that can be
   assigned to a Node. It's useful when the Node network restricts the number of
   secondary IPs a Node can have, e.g. in AWS EC2. The configured value must not
