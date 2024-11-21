@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
+	"github.com/miekg/dns"
 	"net"
 	"testing"
 	"time"
@@ -32,7 +33,8 @@ import (
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 )
 
-func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string, clockToInject clock.WithTicker) (*fqdnController, *openflowtest.MockClient) {
+func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string,
+	clockToInject clock.WithTicker, fqdnCacheMinTTL uint32) (*fqdnController, *openflowtest.MockClient) {
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOFClient.EXPECT().NewDNSPacketInConjunction(gomock.Any()).Return(nil).AnyTimes()
 	dirtyRuleHandler := func(rule string) {}
@@ -52,7 +54,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		false,
 		config.DefaultHostGatewayOFPort,
 		clockToInject,
-		0,
+		fqdnCacheMinTTL,
 	)
 	require.NoError(t, err)
 	return f, mockOFClient
@@ -171,7 +173,7 @@ func TestAddFQDNRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			f, c := newMockFQDNController(t, controller, nil, nil)
+			f, c := newMockFQDNController(t, controller, nil, nil, 0)
 			if tt.addressAdded {
 				c.EXPECT().AddAddressToDNSConjunction(dnsInterceptRuleID, gomock.Any()).Times(1)
 			}
@@ -332,7 +334,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			f, c := newMockFQDNController(t, controller, nil, nil)
+			f, c := newMockFQDNController(t, controller, nil, nil, 0)
 			c.EXPECT().AddAddressToDNSConjunction(dnsInterceptRuleID, gomock.Any()).Times(len(tt.previouslyAddedRules))
 			f.dnsEntryCache = tt.existingDNSCache
 			if tt.addressRemoved {
@@ -351,7 +353,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 func TestLookupIPFallback(t *testing.T) {
 	controller := gomock.NewController(t)
 	dnsServer := "" // force a fallback to local resolver
-	f, _ := newMockFQDNController(t, controller, &dnsServer, nil)
+	f, _ := newMockFQDNController(t, controller, &dnsServer, nil, 0)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// not ideal as a unit test because it requires the ability to resolve
@@ -428,7 +430,7 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			f, _ := newMockFQDNController(t, controller, nil, nil)
+			f, _ := newMockFQDNController(t, controller, nil, nil, 0)
 			if tc.existingSelectorItemToFQDN != nil {
 				f.selectorItemToFQDN = tc.existingSelectorItemToFQDN
 			}
@@ -546,7 +548,7 @@ func TestSyncDirtyRules(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			f, _ := newMockFQDNController(t, controller, nil, nil)
+			f, _ := newMockFQDNController(t, controller, nil, nil, 0)
 			var dirtyRuleSyncCalls []string
 			f.dirtyRuleHandler = func(s string) {
 				dirtyRuleSyncCalls = append(dirtyRuleSyncCalls, s)
@@ -714,7 +716,7 @@ func TestOnDNSResponse(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeClock := newFakeClock(currentTime)
 			controller := gomock.NewController(t)
-			f, _ := newMockFQDNController(t, controller, nil, fakeClock)
+			f, _ := newMockFQDNController(t, controller, nil, fakeClock, 0)
 			f.dnsEntryCache = tc.existingDNSCache
 			if tc.mockSelectorToRuleIDs != nil {
 				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
@@ -742,6 +744,143 @@ func TestOnDNSResponse(t *testing.T) {
 				// make sure that there is no requery
 				assert.Never(t, func() bool { return f.dnsQueryQueue.Len() > 0 }, 100*time.Millisecond, 10*time.Millisecond)
 			}
+		})
+	}
+}
+func TestFQDNCacheMinTTL(t *testing.T) {
+	currentTime := time.Now()
+	testIP := "192.168.1.1"
+	testFQDN := "fqdn-test-pod.lfx.test"
+	selectorItem2 := fqdnSelectorItem{
+		matchName: testFQDN,
+	}
+	tests := []struct {
+		name                  string
+		expectedTTL           time.Time
+		fqdnCacheMinTTL       uint32
+		existingDNSCache      map[string]dnsMeta
+		dnsMsg                *dns.Msg
+		mockSelectorToRuleIDs map[fqdnSelectorItem]sets.Set[string]
+	}{
+		{
+			name:             "Response TTL less than FQDNCacheTTL",
+			expectedTTL:      currentTime.Add(10 * time.Second),
+			fqdnCacheMinTTL:  10,
+			existingDNSCache: map[string]dnsMeta{},
+			dnsMsg: &dns.Msg{
+				Question: []dns.Question{
+					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
+				},
+				Answer: []dns.RR{
+					&dns.A{
+						Hdr: dns.RR_Header{
+							Name:   testFQDN,
+							Rrtype: dns.TypeA,
+							Class:  dns.ClassINET,
+							Ttl:    5,
+						},
+						A: net.ParseIP(testIP),
+					},
+				},
+			},
+			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem2: sets.New[string]("mockRule2"),
+			},
+		},
+		{
+			name:             "Response TTL more than FQDNCacheTTL",
+			expectedTTL:      currentTime.Add(10 * time.Second),
+			fqdnCacheMinTTL:  5,
+			existingDNSCache: map[string]dnsMeta{},
+			dnsMsg: &dns.Msg{
+				Question: []dns.Question{
+					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
+				},
+				Answer: []dns.RR{
+					&dns.A{
+						Hdr: dns.RR_Header{
+							Name:   testFQDN,
+							Rrtype: dns.TypeA,
+							Class:  dns.ClassINET,
+							Ttl:    10,
+						},
+						A: net.ParseIP(testIP),
+					},
+				},
+			},
+			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem2: sets.New[string]("mockRule2"),
+			},
+		},
+		{
+			name:             "Response TTL equal to FQDNCacheTTL",
+			expectedTTL:      currentTime.Add(5 * time.Second),
+			fqdnCacheMinTTL:  5,
+			existingDNSCache: map[string]dnsMeta{},
+			dnsMsg: &dns.Msg{
+				Question: []dns.Question{
+					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
+				},
+				Answer: []dns.RR{
+					&dns.A{
+						Hdr: dns.RR_Header{
+							Name:   testFQDN,
+							Rrtype: dns.TypeA,
+							Class:  dns.ClassINET,
+							Ttl:    5,
+						},
+						A: net.ParseIP(testIP),
+					},
+				},
+			},
+			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem2: sets.New[string]("mockRule2"),
+			},
+		},
+		{
+			name:             "FQDNCacheTTL is not set",
+			expectedTTL:      currentTime.Add(5 * time.Second),
+			fqdnCacheMinTTL:  0,
+			existingDNSCache: map[string]dnsMeta{},
+			dnsMsg: &dns.Msg{
+				Question: []dns.Question{
+					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
+				},
+				Answer: []dns.RR{
+					&dns.A{
+						Hdr: dns.RR_Header{
+							Name:   testFQDN,
+							Rrtype: dns.TypeA,
+							Class:  dns.ClassINET,
+							Ttl:    5,
+						},
+						A: net.ParseIP(testIP),
+					},
+				},
+			},
+			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem2: sets.New[string]("mockRule2"),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClock := newFakeClock(currentTime)
+			controller := gomock.NewController(t)
+			f, _ := newMockFQDNController(t, controller, nil, fakeClock, tc.fqdnCacheMinTTL)
+			require.Zero(t, fakeClock.TimersAdded())
+			if tc.mockSelectorToRuleIDs != nil {
+				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
+			}
+			f.onDNSResponseMsg(tc.dnsMsg, nil)
+			cachedDnsMetaData, ok := f.dnsEntryCache[testFQDN]
+			if !ok {
+				t.Fatalf("Cache entry not found for FQDN %s", testFQDN)
+			}
+
+			assert.Equal(t, tc.expectedTTL, cachedDnsMetaData.responseIPs[testIP].expirationTime)
+
 		})
 	}
 }

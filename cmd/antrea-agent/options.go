@@ -157,17 +157,16 @@ func (o *Options) validate(args []string) error {
 
 	// validate FqdnCacheMinTTL
 	if o.config.FqdnCacheMinTTL < 0 {
-		return fmt.Errorf("fqdnCacheMinTTL set to an invalid value, its must be a positive integer")
+		return fmt.Errorf("fqdnCacheMinTTL must be greater than or equal to 0")
 	}
 
-	switch o.config.NodeType {
-	case config.ExternalNode.String():
+	if o.config.NodeType == config.ExternalNode.String() {
 		o.nodeType = config.ExternalNode
 		return o.validateExternalNodeOptions()
-	case config.K8sNode.String():
+	} else if o.config.NodeType == config.K8sNode.String() {
 		o.nodeType = config.K8sNode
 		return o.validateK8sNodeOptions()
-	default:
+	} else {
 		return fmt.Errorf("unsupported nodeType %s", o.config.NodeType)
 	}
 }
