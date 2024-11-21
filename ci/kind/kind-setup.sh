@@ -301,6 +301,14 @@ function configure_vlan_subnets {
     done
   done
 
+  # Allow traffic between VLANs
+  for ((i=0; i<${#vlan_interfaces[@]}; i++)); do
+    for ((j=i+1; j<${#vlan_interfaces[@]}; j++)); do
+      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[i]} -o ${vlan_interfaces[j]} -j ACCEPT
+      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[j]} -o ${vlan_interfaces[i]} -j ACCEPT
+    done
+  done
+
   if [[ $FLEXIBLE_IPAM == true ]]; then
     docker_run_with_host_net ipset create excluded_subnets hash:net
     docker_run_with_host_net ipset add excluded_subnets 192.168.241.0/24
