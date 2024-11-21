@@ -4145,7 +4145,8 @@ data:
       port: 51820
 
     egress:
-      # exceptCIDRs is the CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses.
+      # exceptCIDRs is a list of CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses, e.g.
+      # ["192.168.0.0/16", "172.16.0.0/12"].
       exceptCIDRs:
       # The maximum number of Egress IPs that can be assigned to a Node. It's useful when the Node network restricts
       # the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255.
@@ -5383,7 +5384,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 2b4d82bcb825d50926115bad2125097f85aed424bfc49147444314cad8b7826a
+        checksum/config: ee43fc8c8c5ac8097a757da0545e43b25f98d8f2d831842f7ee76e1ed7581267
       labels:
         app: antrea
         component: antrea-agent
@@ -5619,7 +5620,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 2b4d82bcb825d50926115bad2125097f85aed424bfc49147444314cad8b7826a
+        checksum/config: ee43fc8c8c5ac8097a757da0545e43b25f98d8f2d831842f7ee76e1ed7581267
       labels:
         app: antrea
         component: antrea-controller
