@@ -1010,30 +1010,23 @@ func (c *Controller) GetBGPPeerStatus(ctx context.Context, ipv4Peers, ipv6Peers 
 
 // GetBGPRoutes returns the advertised BGP routes.
 func (c *Controller) GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) ([]string, error) {
-	getBgpRoutesAdvertised := func() sets.Set[bgp.Route] {
-		c.bgpPolicyStateMutex.RLock()
-		defer c.bgpPolicyStateMutex.RUnlock()
-		if c.bgpPolicyState == nil {
-			return nil
-		}
-		return c.bgpPolicyState.routes
-	}
+	c.bgpPolicyStateMutex.RLock()
+	defer c.bgpPolicyStateMutex.RUnlock()
 
-	bgpRoutesAdvertised := getBgpRoutesAdvertised()
-	if bgpRoutesAdvertised == nil {
+	if c.bgpPolicyState == nil {
 		return nil, ErrBGPPolicyNotFound
 	}
 
-	bgpRoutes := make([]string, 0, bgpRoutesAdvertised.Len())
+	bgpRoutes := make([]string, 0, c.bgpPolicyState.routes.Len())
 	if ipv4Routes { // insert IPv4 advertised routes
-		for route := range bgpRoutesAdvertised {
+		for route := range c.bgpPolicyState.routes {
 			if utilnet.IsIPv4CIDRString(route.Prefix) {
 				bgpRoutes = append(bgpRoutes, route.Prefix)
 			}
 		}
 	}
 	if ipv6Routes { // insert IPv6 advertised routes
-		for route := range bgpRoutesAdvertised {
+		for route := range c.bgpPolicyState.routes {
 			if utilnet.IsIPv6CIDRString(route.Prefix) {
 				bgpRoutes = append(bgpRoutes, route.Prefix)
 			}
