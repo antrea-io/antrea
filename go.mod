@@ -40,7 +40,7 @@ require (
 	github.com/mdlayher/packet v1.1.2
 	github.com/miekg/dns v1.1.62
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
-	github.com/onsi/ginkgo/v2 v2.21.0
+	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.35.1
 	github.com/osrg/gobgp/v3 v3.31.0
 	github.com/pkg/sftp v1.13.7
