@@ -39,3 +39,7 @@ updates:
         patterns:
         - "actions/upload-artifact"
         - "actions/download-artifact"
+      trivy-actions:
+        patterns:
+        - "aquasecurity/setup-trivy"
+        - "aquasecurity/trivy-action"
