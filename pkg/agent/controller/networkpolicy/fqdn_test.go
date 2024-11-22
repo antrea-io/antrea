@@ -751,22 +751,16 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 	currentTime := time.Now()
 	testIP := "192.168.1.1"
 	testFQDN := "fqdn-test-pod.lfx.test"
-	selectorItem2 := fqdnSelectorItem{
-		matchName: testFQDN,
-	}
 	tests := []struct {
-		name                  string
-		expectedTTL           time.Time
-		fqdnCacheMinTTL       uint32
-		existingDNSCache      map[string]dnsMeta
-		dnsMsg                *dns.Msg
-		mockSelectorToRuleIDs map[fqdnSelectorItem]sets.Set[string]
+		name            string
+		expectedTTL     time.Time
+		fqdnCacheMinTTL uint32
+		dnsMsg          *dns.Msg
 	}{
 		{
-			name:             "Response TTL less than FQDNCacheTTL",
-			expectedTTL:      currentTime.Add(10 * time.Second),
-			fqdnCacheMinTTL:  10,
-			existingDNSCache: map[string]dnsMeta{},
+			name:            "Response TTL less than FQDNCacheTTL",
+			expectedTTL:     currentTime.Add(10 * time.Second),
+			fqdnCacheMinTTL: 10,
 			dnsMsg: &dns.Msg{
 				Question: []dns.Question{
 					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
@@ -783,15 +777,11 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 					},
 				},
 			},
-			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
-				selectorItem2: sets.New[string]("mockRule2"),
-			},
 		},
 		{
-			name:             "Response TTL more than FQDNCacheTTL",
-			expectedTTL:      currentTime.Add(10 * time.Second),
-			fqdnCacheMinTTL:  5,
-			existingDNSCache: map[string]dnsMeta{},
+			name:            "Response TTL more than FQDNCacheTTL",
+			expectedTTL:     currentTime.Add(10 * time.Second),
+			fqdnCacheMinTTL: 5,
 			dnsMsg: &dns.Msg{
 				Question: []dns.Question{
 					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
@@ -808,15 +798,11 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 					},
 				},
 			},
-			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
-				selectorItem2: sets.New[string]("mockRule2"),
-			},
 		},
 		{
-			name:             "Response TTL equal to FQDNCacheTTL",
-			expectedTTL:      currentTime.Add(5 * time.Second),
-			fqdnCacheMinTTL:  5,
-			existingDNSCache: map[string]dnsMeta{},
+			name:            "Response TTL equal to FQDNCacheTTL",
+			expectedTTL:     currentTime.Add(5 * time.Second),
+			fqdnCacheMinTTL: 5,
 			dnsMsg: &dns.Msg{
 				Question: []dns.Question{
 					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
@@ -833,15 +819,11 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 					},
 				},
 			},
-			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
-				selectorItem2: sets.New[string]("mockRule2"),
-			},
 		},
 		{
-			name:             "FQDNCacheTTL is not set",
-			expectedTTL:      currentTime.Add(5 * time.Second),
-			fqdnCacheMinTTL:  0,
-			existingDNSCache: map[string]dnsMeta{},
+			name:            "FQDNCacheTTL is not set",
+			expectedTTL:     currentTime.Add(5 * time.Second),
+			fqdnCacheMinTTL: 0,
 			dnsMsg: &dns.Msg{
 				Question: []dns.Question{
 					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
@@ -857,9 +839,6 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 						A: net.ParseIP(testIP),
 					},
 				},
-			},
-			mockSelectorToRuleIDs: map[fqdnSelectorItem]sets.Set[string]{
-				selectorItem2: sets.New[string]("mockRule2"),
 			},
 		},
 	}
@@ -870,17 +849,9 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 			controller := gomock.NewController(t)
 			f, _ := newMockFQDNController(t, controller, nil, fakeClock, tc.fqdnCacheMinTTL)
 			require.Zero(t, fakeClock.TimersAdded())
-			if tc.mockSelectorToRuleIDs != nil {
-				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
-			}
-			f.onDNSResponseMsg(tc.dnsMsg, nil)
-			cachedDnsMetaData, ok := f.dnsEntryCache[testFQDN]
-			if !ok {
-				t.Fatalf("Cache entry not found for FQDN %s", testFQDN)
-			}
-
-			assert.Equal(t, tc.expectedTTL, cachedDnsMetaData.responseIPs[testIP].expirationTime)
-
+			_, responseIPs, err := f.parseDNSResponse(tc.dnsMsg)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedTTL, responseIPs[testIP].expirationTime)
 		})
 	}
 }
