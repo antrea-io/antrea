@@ -1118,39 +1118,42 @@ func (c *EgressController) syncEgress(egressName string) error {
 	}()
 
 	egressIP := net.ParseIP(eState.egressIP)
-	// Install SNAT flows for desired Pods.
-	for pod := range pods {
-		eState.pods.Insert(pod)
-		stalePods.Delete(pod)
+	egress, _ = c.egressLister.Get(egressName)
+	if egress.Status.EgressNode != "" {
+		// Install SNAT flows for desired Pods.
+		for pod := range pods {
+			eState.pods.Insert(pod)
+			stalePods.Delete(pod)
 
-		// If the Egress is not the effective one for the Pod, do nothing.
-		if !c.bindPodEgress(pod, egressName) {
-			continue
+			// If the Egress is not the effective one for the Pod, do nothing.
+			if !c.bindPodEgress(pod, egressName) {
+				continue
+			}
+
+			// Get the Pod's openflow port.
+			parts := strings.Split(pod, "/")
+			podNamespace, podName := parts[0], parts[1]
+			ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
+			if len(ifaces) == 0 {
+				klog.Infof("Interfaces of Pod %s/%s not found", podNamespace, podName)
+				continue
+			}
+
+			ofPort := ifaces[0].OFPort
+			if eState.ofPorts.Has(ofPort) {
+				staleOFPorts.Delete(ofPort)
+				continue
+			}
+			if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+				return err
+			}
+			eState.ofPorts.Insert(ofPort)
 		}
 
-		// Get the Pod's openflow port.
-		parts := strings.Split(pod, "/")
-		podNamespace, podName := parts[0], parts[1]
-		ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
-		if len(ifaces) == 0 {
-			klog.Infof("Interfaces of Pod %s/%s not found", podNamespace, podName)
-			continue
-		}
-
-		ofPort := ifaces[0].OFPort
-		if eState.ofPorts.Has(ofPort) {
-			staleOFPorts.Delete(ofPort)
-			continue
-		}
-		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+		// Uninstall SNAT flows for stale Pods.
+		if err := c.uninstallPodFlows(egressName, eState, staleOFPorts, stalePods); err != nil {
 			return err
 		}
-		eState.ofPorts.Insert(ofPort)
-	}
-
-	// Uninstall SNAT flows for stale Pods.
-	if err := c.uninstallPodFlows(egressName, eState, staleOFPorts, stalePods); err != nil {
-		return err
 	}
 	return nil
 }
