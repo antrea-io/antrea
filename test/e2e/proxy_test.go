@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -28,6 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -224,6 +227,87 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
 		loadBalancerTestCases(t, data, clusterUrl, localUrl, healthExpected, nodes, healthUrls, toolboxes)
 	})
+}
+
+func testProxyLoadBalancerServiceSourceRanges(t *testing.T, isIPv6 bool) {
+	skipIfHasWindowsNodes(t)
+	skipIfNumNodesLessThan(t, 2)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
+
+	node := nodeName(0)
+	testNamespace := data.testNamespace
+
+	// Create test client Pods.
+	allowedClient, allowedClientIPs, _ := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "allowed-client", node, testNamespace, false)
+	notAllowedClient, _, _ := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "not-allowed-client", node, testNamespace, false)
+	allowedPodIP := allowedClientIPs.IPv4.String() + "/32"
+
+	ingressIP := "169.254.169.1"
+	ipFamily := corev1.IPv4Protocol
+	if isIPv6 {
+		allowedPodIP = allowedClientIPs.IPv6.String() + "/128"
+		ingressIP = "fd75::aabb:ccdd:ef00"
+		ipFamily = corev1.IPv6Protocol
+	}
+
+	// Create test LoadBalancer Service.
+	serviceName := "agnhost-lb"
+	service := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				"antrea-e2e": serviceName,
+				"app":        serviceName,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			SessionAffinity: corev1.ServiceAffinityNone,
+			Ports: []corev1.ServicePort{{
+				Port:       8080,
+				TargetPort: intstr.FromInt(8080),
+				Protocol:   corev1.ProtocolTCP,
+			}},
+			Type:                     corev1.ServiceTypeLoadBalancer,
+			Selector:                 map[string]string{"app": "agnhost"},
+			IPFamilies:               []corev1.IPFamily{ipFamily},
+			LoadBalancerSourceRanges: []string{allowedPodIP},
+		},
+	}
+	svc, err := data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
+	require.NoError(t, err)
+	updatedSvc := svc.DeepCopy()
+	updatedSvc.Status.LoadBalancer.Ingress = []corev1.LoadBalancerIngress{{IP: ingressIP}}
+	patchData, err := json.Marshal(updatedSvc)
+	require.NoError(t, err)
+	_, err = data.clientset.CoreV1().Services(testNamespace).Patch(context.TODO(), svc.Name, k8stypes.MergePatchType, patchData, metav1.PatchOptions{}, "status")
+	require.NoError(t, err)
+
+	// Create backend Pod.
+	createAgnhostPod(t, data, "agnhost-pod", node, false)
+
+	// Connect the LoadBalancer ingress IP from the allowed client.
+	url := "http://" + net.JoinHostPort(ingressIP, "8080")
+	require.NoError(t, probeFromPod(data, allowedClient, toolboxContainerName, url), "Service LoadBalancer should be able to be connected from the Pod")
+	// Connect the LoadBalancer ingress IP from the not allowed client.
+	_, _, err = data.RunCommandFromPod(data.testNamespace, notAllowedClient, toolboxContainerName, []string{"wget", "-O", "-", url, "-T", "2", "--tries", "3"})
+	require.Error(t, err, "Service LoadBalancer should not be able to be connected from the Pod")
+}
+
+func TestProxyLoadBalancerServiceSourceRangesIPv4(t *testing.T) {
+	skipIfNotIPv4Cluster(t)
+	testProxyLoadBalancerServiceSourceRanges(t, false)
+}
+
+func TestProxyLoadBalancerServiceSourceRangesIPv6(t *testing.T) {
+	skipIfNotIPv6Cluster(t)
+	testProxyLoadBalancerServiceSourceRanges(t, true)
 }
 
 func loadBalancerTestCases(t *testing.T, data *TestData, clusterUrl, localUrl, healthExpected string, nodes, healthUrls, pods []string) {
