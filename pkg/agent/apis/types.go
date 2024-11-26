@@ -232,15 +232,17 @@ func (r BGPPeerResponse) SortRows() bool {
 
 // BGPRouteResponse describes the response struct of bgproutes command.
 type BGPRouteResponse struct {
-	Route string `json:"route,omitempty"`
+	Route     string `json:"route,omitempty"`
+	Type      string `json:"type,omitempty"`
+	K8sObjRef string `json:"k8sObjRef,omitempty"`
 }
 
 func (r BGPRouteResponse) GetTableHeader() []string {
-	return []string{"ROUTE"}
+	return []string{"ROUTE", "TYPE", "K8S-OBJ-REF"}
 }
 
 func (r BGPRouteResponse) GetTableRow(_ int) []string {
-	return []string{r.Route}
+	return []string{r.Route, r.Type, r.K8sObjRef}
 }
 
 func (r BGPRouteResponse) SortRows() bool {

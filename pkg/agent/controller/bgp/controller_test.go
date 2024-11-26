@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -55,9 +54,11 @@ const (
 )
 
 var (
-	podIPv4CIDR  = ip.MustParseCIDR("10.10.0.0/24")
-	podIPv6CIDR  = ip.MustParseCIDR("fec0:10:10::/64")
-	nodeIPv4Addr = ip.MustParseCIDR("192.168.77.100/24")
+	podIPv4CIDR      = ip.MustParseCIDR("10.10.0.0/24")
+	podIPv4CIDRRoute = bgp.Route{Prefix: podIPv4CIDR.String()}
+	podIPv6CIDR      = ip.MustParseCIDR("fec0:10:10::/64")
+	podIPv6CIDRRoute = bgp.Route{Prefix: podIPv6CIDR.String()}
+	nodeIPv4Addr     = ip.MustParseCIDR("192.168.77.100/24")
 
 	testNodeConfig = &config.NodeConfig{
 		PodIPv4CIDR:  podIPv4CIDR,
@@ -127,10 +128,12 @@ var (
 	localNodeName = "local"
 	node          = generateNode(localNodeName, nodeLabels1, nodeAnnotations1)
 
-	ipv4EgressIP1 = "192.168.77.200"
-	ipv6EgressIP1 = "fec0::192:168:77:200"
-	ipv4EgressIP2 = "192.168.77.201"
-	ipv6EgressIP2 = "fec0::192:168:77:2001"
+	ipv4EgressIP1      = "192.168.77.200"
+	ipv4EgressIP1Route = bgp.Route{Prefix: ipStrToPrefix(ipv4EgressIP1)}
+	ipv6EgressIP1      = "fec0::192:168:77:200"
+	ipv6EgressIP1Route = bgp.Route{Prefix: ipStrToPrefix(ipv6EgressIP1)}
+	ipv4EgressIP2      = "192.168.77.201"
+	ipv6EgressIP2      = "fec0::192:168:77:2001"
 
 	ipv4Egress1 = generateEgress("eg1-4", ipv4EgressIP1, localNodeName)
 	ipv6Egress1 = generateEgress("eg1-6", ipv6EgressIP1, localNodeName)
@@ -147,12 +150,12 @@ var (
 	creationTimestampAdd2s = metav1.NewTime(creationTimestamp.Add(2 * time.Second))
 	creationTimestampAdd3s = metav1.NewTime(creationTimestamp.Add(3 * time.Second))
 
-	clusterIPv4      = "10.96.10.10"
-	externalIPv4     = "192.168.77.100"
+	clusterIPv4s     = []string{"10.96.10.10", "10.96.10.11"}
+	externalIPv4s    = []string{"192.168.77.100", "192.168.77.101"}
 	loadBalancerIPv4 = "192.168.77.150"
 	endpointIPv4     = "10.10.0.10"
-	clusterIPv6      = "fec0::10:96:10:10"
-	externalIPv6     = "fec0::192:168:77:100"
+	clusterIPv6s     = []string{"fec0::10:96:10:10", "fec0::10:96:10:11"}
+	externalIPv6s    = []string{"fec0::192:168:77:100", "fec0::192:168:77:101"}
 	loadBalancerIPv6 = "fec0::192:168:77:150"
 	endpointIPv6     = "fec0::10:10:0:10"
 
@@ -163,20 +166,48 @@ var (
 	ipv4LoadBalancerName = "loadbalancer-4"
 	ipv6LoadBalancerName = "loadbalancer-6"
 
+	clusterIPv4Route1     = bgp.Route{Prefix: ipStrToPrefix(clusterIPv4s[0])}
+	clusterIPv6Route1     = bgp.Route{Prefix: ipStrToPrefix(clusterIPv6s[0])}
+	clusterIPv4Route2     = bgp.Route{Prefix: ipStrToPrefix(clusterIPv4s[1])}
+	clusterIPv6Route2     = bgp.Route{Prefix: ipStrToPrefix(clusterIPv6s[1])}
+	externalIPv4Route1    = bgp.Route{Prefix: ipStrToPrefix(externalIPv4s[0])}
+	externalIPv6Route1    = bgp.Route{Prefix: ipStrToPrefix(externalIPv6s[0])}
+	externalIPv4Route2    = bgp.Route{Prefix: ipStrToPrefix(externalIPv4s[1])}
+	externalIPv6Route2    = bgp.Route{Prefix: ipStrToPrefix(externalIPv6s[1])}
+	loadBalancerIPv4Route = bgp.Route{Prefix: ipStrToPrefix(loadBalancerIPv4)}
+	loadBalancerIPv6Route = bgp.Route{Prefix: ipStrToPrefix(loadBalancerIPv6)}
+
+	allRoutes = map[bgp.Route]RouteMetadata{
+		clusterIPv4Route1:     {Type: ServiceClusterIP, K8sObjRef: getServiceName(ipv4ClusterIPName1)},
+		clusterIPv6Route1:     {Type: ServiceClusterIP, K8sObjRef: getServiceName(ipv6ClusterIPName1)},
+		clusterIPv4Route2:     {Type: ServiceClusterIP, K8sObjRef: getServiceName(ipv4LoadBalancerName)},
+		clusterIPv6Route2:     {Type: ServiceClusterIP, K8sObjRef: getServiceName(ipv6LoadBalancerName)},
+		externalIPv4Route1:    {Type: ServiceExternalIP, K8sObjRef: getServiceName(ipv4ClusterIPName1)},
+		externalIPv6Route1:    {Type: ServiceExternalIP, K8sObjRef: getServiceName(ipv6ClusterIPName1)},
+		externalIPv4Route2:    {Type: ServiceExternalIP, K8sObjRef: getServiceName(ipv4LoadBalancerName)},
+		externalIPv6Route2:    {Type: ServiceExternalIP, K8sObjRef: getServiceName(ipv6LoadBalancerName)},
+		loadBalancerIPv4Route: {Type: ServiceLoadBalancerIP, K8sObjRef: getServiceName(ipv4LoadBalancerName)},
+		loadBalancerIPv6Route: {Type: ServiceLoadBalancerIP, K8sObjRef: getServiceName(ipv6LoadBalancerName)},
+		ipv4EgressIP1Route:    {Type: EgressIP, K8sObjRef: "eg1-4"},
+		ipv6EgressIP1Route:    {Type: EgressIP, K8sObjRef: "eg1-6"},
+		podIPv4CIDRRoute:      {Type: NodeIPAMPodCIDR},
+		podIPv6CIDRRoute:      {Type: NodeIPAMPodCIDR},
+	}
+
 	endpointSliceSuffix = rand.String(5)
-	ipv4ClusterIP1      = generateService(ipv4ClusterIPName1, corev1.ServiceTypeClusterIP, clusterIPv4, externalIPv4, "", false, false)
+	ipv4ClusterIP1      = generateService(ipv4ClusterIPName1, corev1.ServiceTypeClusterIP, clusterIPv4s[0], externalIPv4s[0], "", false, false)
 	ipv4ClusterIP1Eps   = generateEndpointSlice(ipv4ClusterIPName1, endpointSliceSuffix, false, false, endpointIPv4)
-	ipv4ClusterIP2      = generateService(ipv4ClusterIPName2, corev1.ServiceTypeClusterIP, clusterIPv4, externalIPv4, "", true, true)
+	ipv4ClusterIP2      = generateService(ipv4ClusterIPName2, corev1.ServiceTypeClusterIP, clusterIPv4s[0], externalIPv4s[0], "", true, true)
 	ipv4ClusterIP2Eps   = generateEndpointSlice(ipv4ClusterIPName2, endpointSliceSuffix, false, false, endpointIPv4)
 
-	ipv6ClusterIP1    = generateService(ipv6ClusterIPName1, corev1.ServiceTypeClusterIP, clusterIPv6, externalIPv6, "", false, false)
+	ipv6ClusterIP1    = generateService(ipv6ClusterIPName1, corev1.ServiceTypeClusterIP, clusterIPv6s[0], externalIPv6s[0], "", false, false)
 	ipv6ClusterIP1Eps = generateEndpointSlice(ipv6ClusterIPName1, endpointSliceSuffix, false, false, endpointIPv6)
-	ipv6ClusterIP2    = generateService(ipv6ClusterIPName2, corev1.ServiceTypeClusterIP, clusterIPv6, externalIPv6, "", true, true)
+	ipv6ClusterIP2    = generateService(ipv6ClusterIPName2, corev1.ServiceTypeClusterIP, clusterIPv6s[0], externalIPv6s[0], "", true, true)
 	ipv6ClusterIP2Eps = generateEndpointSlice(ipv6ClusterIPName2, endpointSliceSuffix, false, false, endpointIPv6)
 
-	ipv4LoadBalancer    = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, clusterIPv4, externalIPv4, loadBalancerIPv4, false, false)
+	ipv4LoadBalancer    = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, clusterIPv4s[1], externalIPv4s[1], loadBalancerIPv4, false, false)
 	ipv4LoadBalancerEps = generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, false, false, endpointIPv4)
-	ipv6LoadBalancer    = generateService(ipv6LoadBalancerName, corev1.ServiceTypeLoadBalancer, clusterIPv6, externalIPv6, loadBalancerIPv6, false, false)
+	ipv6LoadBalancer    = generateService(ipv6LoadBalancerName, corev1.ServiceTypeLoadBalancer, clusterIPv6s[1], externalIPv6s[1], loadBalancerIPv6, false, false)
 	ipv6LoadBalancerEps = generateEndpointSlice(ipv6LoadBalancerName, endpointSliceSuffix, false, false, endpointIPv6)
 
 	bgpPeerPasswords = map[string]string{
@@ -287,13 +318,13 @@ func TestBGPPolicyAdd(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(clusterIPv4)},
+				[]bgp.Route{clusterIPv4Route1},
 				[]bgp.PeerConfig{ipv4Peer1Config},
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(clusterIPv4)}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route1})
 			},
 		},
 		{
@@ -319,13 +350,13 @@ func TestBGPPolicyAdd(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(externalIPv6)},
+				[]bgp.Route{externalIPv6Route1},
 				[]bgp.PeerConfig{ipv6Peer1Config},
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv6)}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv6Route1})
 			},
 		},
 		{
@@ -354,15 +385,15 @@ func TestBGPPolicyAdd(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(loadBalancerIPv4), ipStrToPrefix(loadBalancerIPv6)},
+				[]bgp.Route{loadBalancerIPv4Route, loadBalancerIPv6Route},
 				[]bgp.PeerConfig{ipv4Peer1Config, ipv6Peer1Config},
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv4)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv6)}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv6Route})
 			},
 		},
 		{
@@ -388,13 +419,13 @@ func TestBGPPolicyAdd(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(ipv4EgressIP1)},
+				[]bgp.Route{ipv4EgressIP1Route},
 				[]bgp.PeerConfig{ipv4Peer1Config},
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(ipv4EgressIP1)}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{ipv4EgressIP1Route})
 			},
 		},
 		{
@@ -416,13 +447,13 @@ func TestBGPPolicyAdd(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{podIPv6CIDR.String()},
+				[]bgp.Route{podIPv6CIDRRoute},
 				[]bgp.PeerConfig{ipv6Peer1Config},
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
 			},
 		},
 		{
@@ -490,14 +521,14 @@ func TestBGPPolicyAdd(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(clusterIPv4)},
+				[]bgp.Route{clusterIPv4Route1},
 				[]bgp.PeerConfig{ipv4Peer1Config},
 			),
 			expectedState: generateBGPPolicyState(bgpPolicyName2,
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(clusterIPv4)},
+				[]bgp.Route{clusterIPv4Route1},
 				[]bgp.PeerConfig{ipv4Peer1Config},
 			),
 		},
@@ -555,13 +586,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{ipStrToPrefix(clusterIPv4),
-			ipStrToPrefix(clusterIPv6),
-			ipStrToPrefix(loadBalancerIPv4),
-			ipStrToPrefix(loadBalancerIPv6),
-			podIPv4CIDR.String(),
-			podIPv6CIDR.String(),
-		},
+		[]bgp.Route{clusterIPv4Route2, clusterIPv6Route2, loadBalancerIPv4Route, loadBalancerIPv6Route, podIPv4CIDRRoute, podIPv6CIDRRoute},
 		[]bgp.PeerConfig{ipv4Peer1Config,
 			ipv6Peer1Config,
 			ipv4Peer2Config,
@@ -649,23 +674,24 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer2Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer2Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(clusterIPv4)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(clusterIPv6)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv4)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv6)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv4CIDR.String()}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv6Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv6Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
 			},
 			expectedState: generateBGPPolicyState(bgpPolicyName2,
 				1179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(clusterIPv4),
-					ipStrToPrefix(clusterIPv6),
-					ipStrToPrefix(loadBalancerIPv4),
-					ipStrToPrefix(loadBalancerIPv6),
-					podIPv4CIDR.String(),
-					podIPv6CIDR.String(),
+				[]bgp.Route{
+					clusterIPv4Route2,
+					clusterIPv6Route2,
+					loadBalancerIPv4Route,
+					loadBalancerIPv6Route,
+					podIPv4CIDRRoute,
+					podIPv6CIDRRoute,
 				},
 				[]bgp.PeerConfig{ipv4Peer1Config,
 					ipv6Peer1Config,
@@ -718,10 +744,11 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(externalIPv4),
-					ipStrToPrefix(externalIPv6),
-					ipStrToPrefix(ipv4EgressIP1),
-					ipStrToPrefix(ipv6EgressIP1),
+				[]bgp.Route{
+					externalIPv4Route2,
+					externalIPv6Route2,
+					ipv4EgressIP1Route,
+					ipv6EgressIP1Route,
 				},
 				[]bgp.PeerConfig{ipv4Peer1Config,
 					ipv6Peer1Config,
@@ -730,17 +757,17 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				},
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv4)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(ipv4EgressIP1)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv6)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(ipv6EgressIP1)}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{ipv4EgressIP1Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv6Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{ipv6EgressIP1Route})
 
-				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(clusterIPv4)}})
-				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv4)}})
-				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv4CIDR.String()}})
-				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(clusterIPv6)}})
-				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv6)}})
-				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
+				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route2})
+				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
+				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
+				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{clusterIPv6Route2})
+				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv6Route})
+				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
 			},
 		},
 		{
@@ -764,10 +791,11 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				179,
 				65001,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(externalIPv4),
-					ipStrToPrefix(externalIPv6),
-					ipStrToPrefix(ipv4EgressIP1),
-					ipStrToPrefix(ipv6EgressIP1),
+				[]bgp.Route{
+					externalIPv4Route2,
+					externalIPv6Route2,
+					ipv4EgressIP1Route,
+					ipv6EgressIP1Route,
 				},
 				[]bgp.PeerConfig{ipv4Peer1Config,
 					ipv6Peer1Config,
@@ -782,10 +810,10 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer2Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer2Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv4)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(ipv4EgressIP1)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv6)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(ipv6EgressIP1)}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{ipv4EgressIP1Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv6Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{ipv6EgressIP1Route})
 			},
 		},
 		{
@@ -809,12 +837,13 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				1179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(clusterIPv4),
-					ipStrToPrefix(clusterIPv6),
-					ipStrToPrefix(loadBalancerIPv4),
-					ipStrToPrefix(loadBalancerIPv6),
-					podIPv4CIDR.String(),
-					podIPv6CIDR.String(),
+				[]bgp.Route{
+					clusterIPv4Route2,
+					clusterIPv6Route2,
+					loadBalancerIPv4Route,
+					loadBalancerIPv6Route,
+					podIPv4CIDRRoute,
+					podIPv6CIDRRoute,
 				},
 				[]bgp.PeerConfig{ipv4Peer1Config,
 					ipv6Peer1Config,
@@ -829,12 +858,12 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer2Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer2Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(clusterIPv4)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv4)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv4CIDR.String()}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(clusterIPv6)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv6)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv6Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv6Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
 			},
 		},
 		{
@@ -857,12 +886,13 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{ipStrToPrefix(clusterIPv4),
-					ipStrToPrefix(clusterIPv6),
-					ipStrToPrefix(loadBalancerIPv4),
-					ipStrToPrefix(loadBalancerIPv6),
-					podIPv4CIDR.String(),
-					podIPv6CIDR.String(),
+				[]bgp.Route{
+					clusterIPv4Route2,
+					clusterIPv6Route2,
+					loadBalancerIPv4Route,
+					loadBalancerIPv6Route,
+					podIPv4CIDRRoute,
+					podIPv6CIDRRoute,
 				},
 				[]bgp.PeerConfig{updatedIPv4Peer2Config,
 					updatedIPv6Peer2Config,
@@ -981,10 +1011,7 @@ func TestBGPPolicyDelete(t *testing.T) {
 		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{
-			ipStrToPrefix(loadBalancerIPv4),
-			ipStrToPrefix(loadBalancerIPv6),
-		},
+		[]bgp.Route{loadBalancerIPv4Route, loadBalancerIPv6Route},
 		[]bgp.PeerConfig{
 			ipv4Peer1Config,
 			ipv6Peer1Config,
@@ -1008,10 +1035,7 @@ func TestBGPPolicyDelete(t *testing.T) {
 		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{
-			ipStrToPrefix(externalIPv4),
-			ipStrToPrefix(externalIPv6),
-		},
+		[]bgp.Route{externalIPv4Route2, externalIPv6Route2},
 		[]bgp.PeerConfig{
 			ipv4Peer2Config,
 			ipv6Peer2Config},
@@ -1034,10 +1058,7 @@ func TestBGPPolicyDelete(t *testing.T) {
 		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{
-			ipStrToPrefix(externalIPv4),
-			ipStrToPrefix(externalIPv6),
-		},
+		[]bgp.Route{externalIPv4Route2, externalIPv6Route2},
 		[]bgp.PeerConfig{
 			ipv4Peer2Config,
 			ipv6Peer2Config},
@@ -1078,10 +1099,10 @@ func TestBGPPolicyDelete(t *testing.T) {
 				mockBGPServer.RemovePeer(gomock.Any(), ipv6Peer1Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer2Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer2Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv4)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv6)}})
-				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv4)}})
-				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv6)}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv6Route2})
+				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
+				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv6Route})
 			},
 		},
 		{
@@ -1095,8 +1116,8 @@ func TestBGPPolicyDelete(t *testing.T) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer2Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer2Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv4)}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv6)}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv6Route2})
 			},
 		},
 		{
@@ -1158,7 +1179,7 @@ func TestNodeUpdate(t *testing.T) {
 		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{podIPv4CIDR.String(), podIPv6CIDR.String()},
+		[]bgp.Route{podIPv4CIDRRoute, podIPv6CIDRRoute},
 		[]bgp.PeerConfig{ipv4Peer1Config, ipv6Peer1Config})
 	policy2 := generateBGPPolicy(bgpPolicyName2,
 		creationTimestampAdd1s,
@@ -1175,7 +1196,7 @@ func TestNodeUpdate(t *testing.T) {
 		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{podIPv4CIDR.String(), podIPv6CIDR.String()},
+		[]bgp.Route{podIPv4CIDRRoute, podIPv6CIDRRoute},
 		[]bgp.PeerConfig{ipv4Peer1Config, ipv6Peer1Config})
 	policy3 := generateBGPPolicy(bgpPolicyName3,
 		creationTimestampAdd2s,
@@ -1234,8 +1255,8 @@ func TestNodeUpdate(t *testing.T) {
 				mockBGPServer.Stop(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv4CIDR.String()}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
 			},
 		},
 		{
@@ -1260,15 +1281,15 @@ func TestNodeUpdate(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations2[types.NodeBGPRouterIDAnnotationKey],
-				[]string{podIPv4CIDR.String(), podIPv6CIDR.String()},
+				[]bgp.Route{podIPv4CIDRRoute, podIPv6CIDRRoute},
 				[]bgp.PeerConfig{ipv4Peer1Config, ipv6Peer1Config}),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.Stop(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv4CIDR.String()}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
 			},
 		},
 		{
@@ -1282,15 +1303,15 @@ func TestNodeUpdate(t *testing.T) {
 				179,
 				65000,
 				nodeIPv4Addr.IP.String(),
-				[]string{podIPv4CIDR.String(), podIPv6CIDR.String()},
+				[]bgp.Route{podIPv4CIDRRoute, podIPv6CIDRRoute},
 				[]bgp.PeerConfig{ipv4Peer1Config, ipv6Peer1Config}),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.Stop(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv4CIDR.String()}})
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
 			},
 		},
 		{
@@ -1302,19 +1323,19 @@ func TestNodeUpdate(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{podIPv6CIDR.String()},
+				[]bgp.Route{podIPv6CIDRRoute},
 				[]bgp.PeerConfig{ipv6Peer1Config}),
 			expectedState: generateBGPPolicyState(bgpPolicyName1,
 				179,
 				65000,
 				nodeAnnotations2[types.NodeBGPRouterIDAnnotationKey],
-				[]string{podIPv6CIDR.String()},
+				[]bgp.Route{podIPv6CIDRRoute},
 				[]bgp.PeerConfig{ipv6Peer1Config}),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.Stop(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
 			},
 		},
 		{
@@ -1326,19 +1347,21 @@ func TestNodeUpdate(t *testing.T) {
 				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-				[]string{podIPv6CIDR.String()},
+				[]bgp.Route{
+					podIPv6CIDRRoute,
+				},
 				[]bgp.PeerConfig{ipv6Peer1Config}),
 			expectedState: generateBGPPolicyState(bgpPolicyName1,
 				179,
 				65000,
 				"156.67.103.8",
-				[]string{podIPv6CIDR.String()},
+				[]bgp.Route{podIPv6CIDRRoute},
 				[]bgp.PeerConfig{ipv6Peer1Config}),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
 				mockBGPServer.Stop(gomock.Any())
 				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
-				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv6CIDR.String()}})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
 			},
 		},
 	}
@@ -1644,10 +1667,7 @@ func TestBGPSecretUpdate(t *testing.T) {
 	require.Eventually(t, func() bool {
 		c.bgpPeerPasswordsMutex.RLock()
 		defer c.bgpPeerPasswordsMutex.RUnlock()
-		if reflect.DeepEqual(c.bgpPeerPasswords, bgpPeerPasswords) {
-			return true
-		}
-		return false
+		return reflect.DeepEqual(c.bgpPeerPasswords, bgpPeerPasswords)
 	}, 5*time.Second, 10*time.Millisecond)
 
 	// Wait for the dummy event triggered by BGPPolicy add events.
@@ -1656,7 +1676,7 @@ func TestBGPSecretUpdate(t *testing.T) {
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer2Config)
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer3Config)
-	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv4CIDR.String()}})
+	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
@@ -1673,10 +1693,7 @@ func TestBGPSecretUpdate(t *testing.T) {
 	require.Eventually(t, func() bool {
 		c.bgpPeerPasswordsMutex.RLock()
 		defer c.bgpPeerPasswordsMutex.RUnlock()
-		if reflect.DeepEqual(c.bgpPeerPasswords, updatedBGPPeerPasswords) {
-			return true
-		}
-		return false
+		return reflect.DeepEqual(c.bgpPeerPasswords, updatedBGPPeerPasswords)
 	}, 5*time.Second, 10*time.Millisecond)
 
 	// Wait for the dummy event triggered by Secret update event, and mark it done.
@@ -1767,7 +1784,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 
 	mockBGPServer.EXPECT().Start(gomock.Any())
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer2Config)
-	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv4)}})
+	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
@@ -1776,7 +1793,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{ipStrToPrefix(loadBalancerIPv4)},
+		[]bgp.Route{loadBalancerIPv4Route},
 		[]bgp.PeerConfig{ipv4Peer2Config}),
 		c.bgpPolicyState)
 
@@ -1793,7 +1810,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{ipStrToPrefix(loadBalancerIPv4)},
+		[]bgp.Route{loadBalancerIPv4Route},
 		[]bgp.PeerConfig{ipv4Peer2Config}),
 		c.bgpPolicyState)
 
@@ -1811,13 +1828,13 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{},
+		[]bgp.Route{},
 		[]bgp.PeerConfig{}),
 		c.bgpPolicyState)
 
 	// Mock the retry. Add the BGP peer successfully, but fail in advertising routes.
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
-	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: podIPv4CIDR.String()}}).Return(fmt.Errorf("failed to advertise routes"))
+	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute}).Return(fmt.Errorf("failed to advertise routes"))
 	require.EqualError(t, c.syncBGPPolicy(ctx), "failed to advertise routes")
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
@@ -1825,7 +1842,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{},
+		[]bgp.Route{},
 		[]bgp.PeerConfig{ipv4Peer1Config}),
 		c.bgpPolicyState)
 
@@ -1836,7 +1853,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer2Config)
 	mockBGPServer.EXPECT().RemovePeer(gomock.Any(), ipv4Peer1Config)
-	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv4)}})
+	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
 
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
@@ -1844,7 +1861,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{ipStrToPrefix(externalIPv4)},
+		[]bgp.Route{externalIPv4Route2},
 		[]bgp.PeerConfig{ipv4Peer2Config}),
 		c.bgpPolicyState)
 
@@ -1854,8 +1871,8 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), updatedIPv4Peer2Config)
-	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(externalIPv4)}})
-	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: ipStrToPrefix(loadBalancerIPv4)}})
+	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
+	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
 
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
@@ -1863,7 +1880,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		1179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{ipStrToPrefix(loadBalancerIPv4)},
+		[]bgp.Route{loadBalancerIPv4Route},
 		[]bgp.PeerConfig{updatedIPv4Peer2Config}),
 		c.bgpPolicyState)
 }
@@ -1872,12 +1889,12 @@ func generateBGPPolicyState(bgpPolicyName string,
 	listenPort int32,
 	localASN int32,
 	routerID string,
-	prefixes []string,
+	bgpRoutes []bgp.Route,
 	peerConfigs []bgp.PeerConfig) *bgpPolicyState {
-	routes := sets.New[bgp.Route]()
+	routes := map[bgp.Route]RouteMetadata{}
 	peerConfigMap := make(map[string]bgp.PeerConfig)
-	for _, prefix := range prefixes {
-		routes.Insert(bgp.Route{Prefix: prefix})
+	for _, route := range bgpRoutes {
+		routes[route] = allRoutes[route]
 	}
 	for _, peerConfig := range peerConfigs {
 		peerKey := generateBGPPeerKey(peerConfig.Address, peerConfig.ASN)
@@ -1899,13 +1916,17 @@ func deepCopyBGPPolicyState(in *bgpPolicyState) *bgpPolicyState {
 		peerKey := generateBGPPeerKey(peerConfig.Address, peerConfig.ASN)
 		peerConfigMap[peerKey] = peerConfig
 	}
+	routes := make(map[bgp.Route]RouteMetadata)
+	for routeType := range in.routes {
+		routes[routeType] = in.routes[routeType]
+	}
 
 	return &bgpPolicyState{
 		bgpPolicyName: in.bgpPolicyName,
 		listenPort:    in.listenPort,
 		localASN:      in.localASN,
 		routerID:      in.routerID,
-		routes:        in.routes.Union(nil),
+		routes:        routes,
 		peerConfigs:   peerConfigMap,
 	}
 }
@@ -2137,6 +2158,9 @@ func waitAndGetDummyEvent(t *testing.T, c *fakeController) {
 func doneDummyEvent(t *testing.T, c *fakeController) {
 	c.queue.Done(dummyKey)
 }
+func getServiceName(name string) string {
+	return namespaceDefault + "/" + name
+}
 
 func TestGetBGPPolicyInfo(t *testing.T) {
 	testCases := []struct {
@@ -2259,13 +2283,8 @@ func TestGetBGPRoutes(t *testing.T) {
 		179,
 		65000,
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-		[]string{ipStrToPrefix(clusterIPv4),
-			ipStrToPrefix(loadBalancerIPv4),
-			podIPv4CIDR.String(),
-			ipStrToPrefix(clusterIPv6),
-			ipStrToPrefix(loadBalancerIPv6),
-			podIPv6CIDR.String(),
-		},
+		[]bgp.Route{clusterIPv4Route1, clusterIPv6Route1, loadBalancerIPv4Route,
+			loadBalancerIPv6Route, podIPv4CIDRRoute, podIPv6CIDRRoute},
 		[]bgp.PeerConfig{},
 	)
 	ctx := context.Background()
@@ -2274,7 +2293,7 @@ func TestGetBGPRoutes(t *testing.T) {
 		ipv4Routes        bool
 		ipv6Routes        bool
 		existingState     *bgpPolicyState
-		expectedBgpRoutes []string
+		expectedBgpRoutes map[bgp.Route]RouteMetadata
 		expectedErr       string
 	}{
 		{
@@ -2282,33 +2301,33 @@ func TestGetBGPRoutes(t *testing.T) {
 			ipv4Routes:    true,
 			ipv6Routes:    true,
 			existingState: effectivePolicyState,
-			expectedBgpRoutes: []string{
-				ipStrToPrefix(clusterIPv4),
-				ipStrToPrefix(loadBalancerIPv4),
-				podIPv4CIDR.String(),
-				ipStrToPrefix(clusterIPv6),
-				ipStrToPrefix(loadBalancerIPv6),
-				podIPv6CIDR.String(),
+			expectedBgpRoutes: map[bgp.Route]RouteMetadata{
+				clusterIPv4Route1:     allRoutes[clusterIPv4Route1],
+				clusterIPv6Route1:     allRoutes[clusterIPv6Route1],
+				loadBalancerIPv4Route: allRoutes[loadBalancerIPv4Route],
+				loadBalancerIPv6Route: allRoutes[loadBalancerIPv6Route],
+				podIPv4CIDRRoute:      allRoutes[podIPv4CIDRRoute],
+				podIPv6CIDRRoute:      allRoutes[podIPv6CIDRRoute],
 			},
 		},
 		{
 			name:          "get advertised ipv4 routes only",
 			ipv4Routes:    true,
 			existingState: effectivePolicyState,
-			expectedBgpRoutes: []string{
-				ipStrToPrefix(clusterIPv4),
-				ipStrToPrefix(loadBalancerIPv4),
-				podIPv4CIDR.String(),
+			expectedBgpRoutes: map[bgp.Route]RouteMetadata{
+				clusterIPv4Route1:     allRoutes[clusterIPv4Route1],
+				loadBalancerIPv4Route: allRoutes[loadBalancerIPv4Route],
+				podIPv4CIDRRoute:      allRoutes[podIPv4CIDRRoute],
 			},
 		},
 		{
 			name:          "get advertised ipv6 routes only",
 			ipv6Routes:    true,
 			existingState: effectivePolicyState,
-			expectedBgpRoutes: []string{
-				ipStrToPrefix(clusterIPv6),
-				ipStrToPrefix(loadBalancerIPv6),
-				podIPv6CIDR.String(),
+			expectedBgpRoutes: map[bgp.Route]RouteMetadata{
+				clusterIPv6Route1:     allRoutes[clusterIPv6Route1],
+				loadBalancerIPv6Route: allRoutes[loadBalancerIPv6Route],
+				podIPv6CIDRRoute:      allRoutes[podIPv6CIDRRoute],
 			},
 		},
 		{
@@ -2329,7 +2348,7 @@ func TestGetBGPRoutes(t *testing.T) {
 				assert.EqualError(t, err, tt.expectedErr)
 			} else {
 				require.NoError(t, err)
-				assert.ElementsMatch(t, tt.expectedBgpRoutes, actualBgpRoutes)
+				assert.Equal(t, tt.expectedBgpRoutes, actualBgpRoutes)
 			}
 		})
 	}
