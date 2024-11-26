@@ -11,6 +11,7 @@ on:
       - main
       - release-*
       - feature/*
+      - push-antrea-ubuntu-images-to-ghcr.io-test
 
 jobs:
   check-env:
@@ -29,7 +30,7 @@ jobs:
     - name: Checking if image needs to be pushed
       id: check_push
       run: |
-        if [ "${{ github.repository }}" == "antrea-io/antrea" ] && [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
+        if [ "${{ github.repository }}" == "antrea-io/antrea" ] && [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/push-antrea-ubuntu-images-to-ghcr.io-test" ]; then
           echo "push_needed=true" >> $GITHUB_OUTPUT
           echo "docker_driver=docker-container" >> $GITHUB_OUTPUT
         else
@@ -58,7 +59,7 @@ jobs:
           suffix: arm
     runs-on: ${{ matrix.runner }}
     env:
-      DOCKER_TAG: latest
+      DOCKER_TAG: test-latest
     steps:
     - uses: actions/checkout@v4
       with:
@@ -97,18 +98,18 @@ jobs:
           t=($target)
           registry="${t[0]}"
           namespace="${t[1]}"
-          docker tag antrea/antrea-controller-ubuntu:"${DOCKER_TAG}" ${registry}/${namespace}/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
-          docker tag antrea/antrea-agent-ubuntu:"${DOCKER_TAG}" ${registry}/${namespace}/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
+          docker tag antrea/antrea-controller-ubuntu:latest ${registry}/${namespace}/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
+          docker tag antrea/antrea-agent-ubuntu:latest ${registry}/${namespace}/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
           docker push ${registry}/${namespace}/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
           docker push ${registry}/${namespace}/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
         done
     # Same repository workflow dispatch to run conformance tests
-    - name: Run conformance tests
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      uses: benc-uk/workflow-dispatch@v1
-      with:
-        workflow: .github/workflows/conformance.yml
-        inputs: ${{ format('{{ "antrea-version":"{0}", "antrea-image-distro":"ubuntu", "test-suite":"conformance", "runner":"{1}", "antrea-image-platform":"{2}" }}', github.sha, matrix.runner, matrix.platform) }}
+    # - name: Run conformance tests
+    #   if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+    #   uses: benc-uk/workflow-dispatch@v1
+    #   with:
+    #     workflow: .github/workflows/conformance.yml
+    #     inputs: ${{ format('{{ "antrea-version":"{0}", "antrea-image-distro":"ubuntu", "test-suite":"conformance", "runner":"{1}", "antrea-image-platform":"{2}" }}', github.sha, matrix.runner, matrix.platform) }}
 
   push-manifest:
     needs: [check-env, build]
@@ -122,7 +123,7 @@ jobs:
           namespace: antrea-io
     runs-on: ubuntu-latest
     env:
-      DOCKER_TAG: latest
+      DOCKER_TAG: test-latest
     steps:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -156,138 +157,138 @@ jobs:
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-amd64:"${DOCKER_TAG}"
         docker manifest push --purge ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}"
 
-  build-ubi:
-    needs: check-env
-    if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: ubuntu-latest
-    env:
-      DOCKER_TAG: latest
-    steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
-    - uses: actions/checkout@v4
-      with:
-        show-progress: false
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      with:
-        driver: ${{ needs.check-env.outputs.docker_driver }}
-    - uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
-    - name: Build Antrea UBI9 Docker image without pushing to registry
-      if: ${{ needs.check-env.outputs.push_needed == 'false' }}
-      run: |
-        ./hack/build-antrea-linux-all.sh --pull --distro ubi
-    - name: Build and push Antrea UBI9 Docker image to registry
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        ./hack/build-antrea-linux-all.sh --pull --push-base-images --distro ubi
-        docker push antrea/antrea-agent-ubi:"${DOCKER_TAG}"
-        docker push antrea/antrea-controller-ubi:"${DOCKER_TAG}"
+  # build-ubi:
+  #   needs: check-env
+  #   if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     DOCKER_TAG: latest
+  #   steps:
+  #   - name: Free disk space
+  #     # https://github.com/actions/virtual-environments/issues/709
+  #     run: |
+  #       sudo apt-get clean
+  #       df -h
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       show-progress: false
+  #   - name: Set up Docker Buildx
+  #     uses: docker/setup-buildx-action@v3
+  #     with:
+  #       driver: ${{ needs.check-env.outputs.docker_driver }}
+  #   - uses: actions/setup-go@v5
+  #     with:
+  #       go-version-file: 'go.mod'
+  #   - name: Build Antrea UBI9 Docker image without pushing to registry
+  #     if: ${{ needs.check-env.outputs.push_needed == 'false' }}
+  #     run: |
+  #       ./hack/build-antrea-linux-all.sh --pull --distro ubi
+  #   - name: Build and push Antrea UBI9 Docker image to registry
+  #     if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+  #     env:
+  #       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #     run: |
+  #       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #       ./hack/build-antrea-linux-all.sh --pull --push-base-images --distro ubi
+  #       docker push antrea/antrea-agent-ubi:"${DOCKER_TAG}"
+  #       docker push antrea/antrea-controller-ubi:"${DOCKER_TAG}"
 
-  build-scale:
-    needs: check-env
-    if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-latest]
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        show-progress: false
-    - name: Build Antrea Agent Simulator Docker image
-      run: make build-scale-simulator
-    - name: Push Antrea Agent Simulator Docker image to registry
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/antrea-ubuntu-simulator:latest
+  # build-scale:
+  #   needs: check-env
+  #   if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+  #   runs-on: [ubuntu-latest]
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       show-progress: false
+  #   - name: Build Antrea Agent Simulator Docker image
+  #     run: make build-scale-simulator
+  #   - name: Push Antrea Agent Simulator Docker image to registry
+  #     if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+  #     env:
+  #       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #     run: |
+  #       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #       docker push antrea/antrea-ubuntu-simulator:latest
 
-  build-windows:
-    needs: check-env
-    if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-latest]
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        show-progress: false
-    - name: Build Antrea Windows Docker image
-      if: ${{ needs.check-env.outputs.push_needed == 'false' }}
-      run: ./hack/build-antrea-windows-all.sh --pull
-    - name: Push Antrea Windows Docker image to registry
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        ./hack/build-antrea-windows-all.sh --pull --push --push-base-images
-      shell: bash
+  # build-windows:
+  #   needs: check-env
+  #   if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+  #   runs-on: [ubuntu-latest]
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       show-progress: false
+  #   - name: Build Antrea Windows Docker image
+  #     if: ${{ needs.check-env.outputs.push_needed == 'false' }}
+  #     run: ./hack/build-antrea-windows-all.sh --pull
+  #   - name: Push Antrea Windows Docker image to registry
+  #     if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+  #     env:
+  #       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #     run: |
+  #       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #       ./hack/build-antrea-windows-all.sh --pull --push --push-base-images
+  #     shell: bash
 
-  build-antrea-mc-controller:
-    needs: check-env
-    if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-latest]
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        show-progress: false
-    - name: Build antrea-mc-controller Docker image
-      run: make build-antrea-mc-controller
-    - name: Push antrea-mc-controller Docker image to registry
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/antrea-mc-controller:latest
+  # build-antrea-mc-controller:
+  #   needs: check-env
+  #   if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+  #   runs-on: [ubuntu-latest]
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       show-progress: false
+  #   - name: Build antrea-mc-controller Docker image
+  #     run: make build-antrea-mc-controller
+  #   - name: Push antrea-mc-controller Docker image to registry
+  #     if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+  #     env:
+  #       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #     run: |
+  #       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #       docker push antrea/antrea-mc-controller:latest
 
-  build-flow-aggregator:
-    needs: check-env
-    if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-latest]
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        show-progress: false
-    - name: Build flow-aggregator Docker image
-      run: make flow-aggregator-image
-    - name: Check flow-aggregator Docker image
-      run: docker run antrea/flow-aggregator --version
-    - name: Push flow-aggregator Docker image to registry
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/flow-aggregator:latest
+  # build-flow-aggregator:
+  #   needs: check-env
+  #   if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+  #   runs-on: [ubuntu-latest]
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       show-progress: false
+  #   - name: Build flow-aggregator Docker image
+  #     run: make flow-aggregator-image
+  #   - name: Check flow-aggregator Docker image
+  #     run: docker run antrea/flow-aggregator --version
+  #   - name: Push flow-aggregator Docker image to registry
+  #     if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+  #     env:
+  #       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #     run: |
+  #       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #       docker push antrea/flow-aggregator:latest
 
-  build-antrea-migrator:
-    needs: check-env
-    if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-latest]
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        show-progress: false
-    - name: Build antrea-migrator Docker image
-      run: make build-migrator
-    - name: Push antrea-migrator Docker image to registry
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/antrea-migrator:latest
+  # build-antrea-migrator:
+  #   needs: check-env
+  #   if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+  #   runs-on: [ubuntu-latest]
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       show-progress: false
+  #   - name: Build antrea-migrator Docker image
+  #     run: make build-migrator
+  #   - name: Push antrea-migrator Docker image to registry
+  #     if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+  #     env:
+  #       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #     run: |
+  #       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #       docker push antrea/antrea-migrator:latest
