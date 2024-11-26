@@ -29,6 +29,7 @@ import (
 	reflect "reflect"
 
 	bgp "antrea.io/antrea/pkg/agent/bgp"
+	bgp0 "antrea.io/antrea/pkg/agent/controller/bgp"
 	interfacestore "antrea.io/antrea/pkg/agent/interfacestore"
 	multicast "antrea.io/antrea/pkg/agent/multicast"
 	types "antrea.io/antrea/pkg/agent/types"
@@ -396,10 +397,10 @@ func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPolicyInfo() *gomock.
 }
 
 // GetBGPRoutes mocks base method.
-func (m *MockAgentBGPPolicyInfoQuerier) GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) ([]string, error) {
+func (m *MockAgentBGPPolicyInfoQuerier) GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) (map[bgp.Route]bgp0.RouteMetadata, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBGPRoutes", ctx, ipv4Routes, ipv6Routes)
-	ret0, _ := ret[0].([]string)
+	ret0, _ := ret[0].(map[bgp.Route]bgp0.RouteMetadata)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
