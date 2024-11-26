@@ -4234,9 +4234,9 @@ data:
     # 10.96.0.10:53, [fd00:10:96::a]:53).
     dnsServerOverride: ""
 
-    # The fqdnCacheMinTTL setting helps address the problem of applications caching DNS response IPs beyond the TTL value for the DNS record.
-    # It is used to enforce FQDN policy rules, ensuring that resolved IPs are included in datapath rules for as long as the application is caching them.
-    # This value should ideally be set to the maximum caching duration across all applications.
+    # fqdnCacheMinTTL helps address the issue of applications caching DNS response IPs beyond the TTL value for the DNS record.
+    # It is used to enforce FQDN policy rules, ensuring that resolved IPs are included in datapath rules for as long as the application caches them.
+    # Ideally, this value should be set to the maximum caching duration across all applications.
     fqdnCacheMinTTL: 0
 
     # Comma-separated list of Cipher Suites. If omitted, the default Go Cipher Suites will be used.
@@ -5388,7 +5388,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e110c8521f19cd9446a44a03bd30688f9dc9925a22e4663865a00ae57eb45321
+        checksum/config: 26500c4b6044436511d74f96651a7eb894b7c631922c21daf07fe39e18207951
       labels:
         app: antrea
         component: antrea-agent
@@ -5627,7 +5627,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e110c8521f19cd9446a44a03bd30688f9dc9925a22e4663865a00ae57eb45321
+        checksum/config: 26500c4b6044436511d74f96651a7eb894b7c631922c21daf07fe39e18207951
       labels:
         app: antrea
         component: antrea-controller

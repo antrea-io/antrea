@@ -51,7 +51,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		dnsServerAddr,
 		dirtyRuleHandler,
 		true,
-		false,
+		true,
 		config.DefaultHostGatewayOFPort,
 		clockToInject,
 		fqdnCacheMinTTL,
@@ -749,97 +749,66 @@ func TestOnDNSResponse(t *testing.T) {
 }
 func TestFQDNCacheMinTTL(t *testing.T) {
 	currentTime := time.Now()
-	testIP := "192.168.1.1"
+	testIPv4 := "192.168.1.1"
+	testIPv6 := "2001:db8::1"
 	testFQDN := "fqdn-test-pod.lfx.test"
+	getDNSMsg := func(ttl uint32) *dns.Msg {
+		return &dns.Msg{
+			Question: []dns.Question{
+				{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
+				{Name: testFQDN, Qtype: dns.TypeAAAA, Qclass: dns.ClassINET},
+			},
+			Answer: []dns.RR{
+				&dns.A{
+					Hdr: dns.RR_Header{
+						Name:   testFQDN,
+						Rrtype: dns.TypeA,
+						Class:  dns.ClassINET,
+						Ttl:    ttl,
+					},
+					A: net.ParseIP(testIPv4),
+				},
+				&dns.AAAA{
+					Hdr: dns.RR_Header{
+						Name:   testFQDN,
+						Rrtype: dns.TypeAAAA,
+						Class:  dns.ClassINET,
+						Ttl:    ttl,
+					},
+					AAAA: net.ParseIP(testIPv6),
+				},
+			},
+		}
+	}
 	tests := []struct {
 		name            string
 		expectedTTL     time.Time
 		fqdnCacheMinTTL uint32
-		dnsMsg          *dns.Msg
+		ttl             uint32
 	}{
 		{
 			name:            "Response TTL less than FQDNCacheTTL",
 			expectedTTL:     currentTime.Add(10 * time.Second),
 			fqdnCacheMinTTL: 10,
-			dnsMsg: &dns.Msg{
-				Question: []dns.Question{
-					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
-				},
-				Answer: []dns.RR{
-					&dns.A{
-						Hdr: dns.RR_Header{
-							Name:   testFQDN,
-							Rrtype: dns.TypeA,
-							Class:  dns.ClassINET,
-							Ttl:    5,
-						},
-						A: net.ParseIP(testIP),
-					},
-				},
-			},
+			ttl:             5,
 		},
 		{
 			name:            "Response TTL more than FQDNCacheTTL",
 			expectedTTL:     currentTime.Add(10 * time.Second),
 			fqdnCacheMinTTL: 5,
-			dnsMsg: &dns.Msg{
-				Question: []dns.Question{
-					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
-				},
-				Answer: []dns.RR{
-					&dns.A{
-						Hdr: dns.RR_Header{
-							Name:   testFQDN,
-							Rrtype: dns.TypeA,
-							Class:  dns.ClassINET,
-							Ttl:    10,
-						},
-						A: net.ParseIP(testIP),
-					},
-				},
-			},
+			ttl:             10,
 		},
 		{
 			name:            "Response TTL equal to FQDNCacheTTL",
 			expectedTTL:     currentTime.Add(5 * time.Second),
 			fqdnCacheMinTTL: 5,
-			dnsMsg: &dns.Msg{
-				Question: []dns.Question{
-					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
-				},
-				Answer: []dns.RR{
-					&dns.A{
-						Hdr: dns.RR_Header{
-							Name:   testFQDN,
-							Rrtype: dns.TypeA,
-							Class:  dns.ClassINET,
-							Ttl:    5,
-						},
-						A: net.ParseIP(testIP),
-					},
-				},
-			},
+			ttl:             5,
 		},
 		{
 			name:            "FQDNCacheTTL is not set",
 			expectedTTL:     currentTime.Add(5 * time.Second),
 			fqdnCacheMinTTL: 0,
-			dnsMsg: &dns.Msg{
-				Question: []dns.Question{
-					{Name: testFQDN, Qtype: dns.TypeA, Qclass: dns.ClassINET},
-				},
-				Answer: []dns.RR{
-					&dns.A{
-						Hdr: dns.RR_Header{
-							Name:   testFQDN,
-							Rrtype: dns.TypeA,
-							Class:  dns.ClassINET,
-							Ttl:    5,
-						},
-						A: net.ParseIP(testIP),
-					},
-				},
-			},
+			ttl:             5,
 		},
 	}
 
@@ -848,10 +817,11 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 			fakeClock := newFakeClock(currentTime)
 			controller := gomock.NewController(t)
 			f, _ := newMockFQDNController(t, controller, nil, fakeClock, tc.fqdnCacheMinTTL)
-			require.Zero(t, fakeClock.TimersAdded())
-			_, responseIPs, err := f.parseDNSResponse(tc.dnsMsg)
-			assert.NoError(t, err)
-			assert.Equal(t, tc.expectedTTL, responseIPs[testIP].expirationTime)
+			dnsMsg := getDNSMsg(tc.ttl)
+			_, responseIPs, err := f.parseDNSResponse(dnsMsg)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedTTL, responseIPs[testIPv4].expirationTime)
+			assert.Equal(t, tc.expectedTTL, responseIPs[testIPv6].expirationTime)
 		})
 	}
 }

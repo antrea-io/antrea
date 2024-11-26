@@ -158,7 +158,7 @@ type AgentConfig struct {
 	// The minTTL setting helps address the problem of applications caching DNS response IPs indefinitely.
 	// The Cluster administrators should configure this value, ideally setting it to be equal to or greater than the maximum TTL
 	// value of the application's DNS cache.
-	FqdnCacheMinTTL int `yaml:"FQDNCacheMinTTL,omitempty"`
+	FqdnCacheMinTTL int `yaml:"fqdnCacheMinTTL,omitempty"`
 	// Cipher suites to use.
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.
