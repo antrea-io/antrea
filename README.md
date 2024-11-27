@@ -41,6 +41,28 @@ Antrea has been tested with Kubernetes clusters running version 1.19 or later.
 Getting started with Antrea is very simple, and takes only a few minutes.
 See how it's done in the [Getting started](docs/getting-started.md) document.
 
+## Kubernetes Compatibility
+
+We strive to stay up-to-date with the latest Kubernetes releases and provide
+timely updates and patches to maintain compatibility with future versions as
+well. The table lists the compatibility of Antrea with different Kubernetes
+versions currently under maintenance.
+
+:white_check_mark: means that we have run the
+[Kubernetes Conformance test suite](https://github.com/kubernetes/kubernetes/blob/master/test/conformance/testdata/conformance.yaml)
+on both Linux and Windows and they passed for the versions listed.
+
+| Antrea                                                              |    Kubernetes 1.27     |    Kubernetes 1.26     |  Kubernetes 1.25   |  Kubernetes 1.24   |
+|---------------------------------------------------------------------|:----------------------:|:----------------------:|:------------------:|:------------------:|
+| [v1.12.0](https://github.com/antrea-io/antrea/releases/tag/v1.12.0) | :white_check_mark:[^1] | :white_check_mark:[^1] | :white_check_mark: | :white_check_mark: |
+| [v1.11.2](https://github.com/antrea-io/antrea/releases/tag/v1.11.2) | :white_check_mark:[^1] | :white_check_mark:[^1] | :white_check_mark: | :white_check_mark: |
+
+[^1]: antrea-agent on Windows Node was deployed with `antreaProxy.proxyAll` due to [the removal of kube-proxy userspace modes](https://kubernetes.io/blog/2022/11/18/upcoming-changes-in-kubernetes-1-26/#removal-of-kube-proxy-userspace-modes).
+
+For compatability with historical versions, check out
+[supported K8s versions](docs/versioning.md#supported-k8s-versions) for more
+information.
+
 ## Contributing
 
 The Antrea community welcomes new contributors. We are waiting for your PRs!
