@@ -747,7 +747,11 @@ func TestOnDNSResponse(t *testing.T) {
 		})
 	}
 }
-func TestFQDNCacheMinTTL(t *testing.T) {
+
+// TestParseDNSResponseOnFQDNCacheMinTTL tests the behavior of the parseDNSResponse function when
+// handling DNS responses with varying TTL values, and checks if the TTL used for caching respects
+// the minimum TTL (fqdnCacheMinTTL) for a given Fully Qualified Domain Name (FQDN).
+func TestParseDNSResponseOnFQDNCacheMinTTL(t *testing.T) {
 	currentTime := time.Now()
 	testIPv4 := "192.168.1.1"
 	testIPv6 := "2001:db8::1"
@@ -782,33 +786,33 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 	}
 	tests := []struct {
 		name            string
-		expectedTTL     time.Time
+		expectedTTL     time.Duration
 		fqdnCacheMinTTL uint32
-		ttl             uint32
+		responseTTL     uint32
 	}{
 		{
-			name:            "Response TTL less than FQDNCacheTTL",
-			expectedTTL:     currentTime.Add(10 * time.Second),
+			name:            "Response TTL less than fqdnCacheMinTTL",
+			expectedTTL:     10,
 			fqdnCacheMinTTL: 10,
-			ttl:             5,
+			responseTTL:     5,
 		},
 		{
-			name:            "Response TTL more than FQDNCacheTTL",
-			expectedTTL:     currentTime.Add(10 * time.Second),
+			name:            "Response TTL more than fqdnCacheMinTTL",
+			expectedTTL:     10,
 			fqdnCacheMinTTL: 5,
-			ttl:             10,
+			responseTTL:     10,
 		},
 		{
-			name:            "Response TTL equal to FQDNCacheTTL",
-			expectedTTL:     currentTime.Add(5 * time.Second),
+			name:            "Response TTL equal to fqdnCacheMinTTL",
+			expectedTTL:     5,
 			fqdnCacheMinTTL: 5,
-			ttl:             5,
+			responseTTL:     5,
 		},
 		{
-			name:            "FQDNCacheTTL is not set",
-			expectedTTL:     currentTime.Add(5 * time.Second),
+			name:            "fqdnCacheMinTTL is not set",
+			expectedTTL:     5,
 			fqdnCacheMinTTL: 0,
-			ttl:             5,
+			responseTTL:     5,
 		},
 	}
 
@@ -817,11 +821,12 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 			fakeClock := newFakeClock(currentTime)
 			controller := gomock.NewController(t)
 			f, _ := newMockFQDNController(t, controller, nil, fakeClock, tc.fqdnCacheMinTTL)
-			dnsMsg := getDNSMsg(tc.ttl)
+			dnsMsg := getDNSMsg(tc.responseTTL)
 			_, responseIPs, err := f.parseDNSResponse(dnsMsg)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expectedTTL, responseIPs[testIPv4].expirationTime)
-			assert.Equal(t, tc.expectedTTL, responseIPs[testIPv6].expirationTime)
+			expectedTTL := currentTime.Add(tc.expectedTTL * time.Second)
+			assert.Equal(t, expectedTTL, responseIPs[testIPv4].expirationTime)
+			assert.Equal(t, expectedTTL, responseIPs[testIPv6].expirationTime)
 		})
 	}
 }
