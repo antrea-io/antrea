@@ -83,6 +83,13 @@ jobs:
         docker tag antrea/antrea-agent-ubuntu:"${DOCKER_TAG}" antrea/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
         docker push antrea/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
         docker push antrea/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
+    # Same repository workflow dispatch to run conformance tests
+    - name: Run conformance tests
+      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+      uses: benc-uk/workflow-dispatch@v1
+      with:
+        workflow: .github/workflows/conformance.yml
+        inputs: ${{ format('{{ "antrea-version":"{0}", "antrea-image-distro":"ubuntu", "test-suite":"conformance", "runner":"{1}", "antrea-image-platform":"{2}" }}', github.sha, matrix.runner, matrix.platform) }}
 
   push-manifest:
     needs: [check-env, build]

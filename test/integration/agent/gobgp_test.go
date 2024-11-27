@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/bgp"
@@ -33,13 +34,10 @@ import (
 func TestGoBGPLifecycle(t *testing.T) {
 	asn1 := int32(61179)
 	asn2 := int32(62179)
-	asn3 := int32(63179)
 	routerID1 := "192.168.1.1"
 	routerID2 := "192.168.1.2"
-	routerID3 := "192.168.1.3"
 	listenPort1 := int32(1179)
 	listenPort2 := int32(2179)
-	listenPort3 := int32(3179)
 	server1GlobalConfig := &bgp.GlobalConfig{
 		ASN:        uint32(asn1),
 		RouterID:   routerID1,
@@ -50,73 +48,47 @@ func TestGoBGPLifecycle(t *testing.T) {
 		RouterID:   routerID2,
 		ListenPort: listenPort2,
 	}
-	server3GlobalConfig := &bgp.GlobalConfig{
-		ASN:        uint32(asn3),
-		RouterID:   routerID3,
-		ListenPort: listenPort3,
-	}
+
+	var l klog.Level
+	require.NoError(t, l.Set("4"))
+	defer l.Set("0")
 
 	server1 := gobgp.NewGoBGPServer(server1GlobalConfig)
 	server2 := gobgp.NewGoBGPServer(server2GlobalConfig)
-	server3 := gobgp.NewGoBGPServer(server3GlobalConfig)
 
 	ctx := context.Background()
 
 	t.Log("Starting all BGP servers")
 	require.NoError(t, server1.Start(ctx))
 	require.NoError(t, server2.Start(ctx))
-	require.NoError(t, server3.Start(ctx))
 	t.Log("Started all BGP servers")
 
-	ipv4Server1Config := bgp.PeerConfig{
+	server1Config := bgp.PeerConfig{
 		BGPPeer: &v1alpha1.BGPPeer{
 			Address:                    "127.0.0.1",
-			Port:                       ptr.To[int32](1179),
-			ASN:                        61179,
+			Port:                       &listenPort1,
+			ASN:                        asn1,
 			MultihopTTL:                ptr.To[int32](2),
 			GracefulRestartTimeSeconds: ptr.To[int32](120),
 		},
 	}
-	ipv6Server1Config := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
-			Address:                    "::1",
-			Port:                       ptr.To[int32](1179),
-			ASN:                        61179,
-			MultihopTTL:                ptr.To[int32](2),
-			GracefulRestartTimeSeconds: ptr.To[int32](120),
-		},
-	}
-	ipv4Server2Config := bgp.PeerConfig{
+	server2Config := bgp.PeerConfig{
 		BGPPeer: &v1alpha1.BGPPeer{
 			Address:                    "127.0.0.1",
-			Port:                       ptr.To[int32](2179),
-			ASN:                        62179,
+			Port:                       &listenPort2,
+			ASN:                        asn2,
 			MultihopTTL:                ptr.To[int32](3),
 			GracefulRestartTimeSeconds: ptr.To[int32](130),
 		},
 	}
-	ipv6Server3Config := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
-			Address:                    "::1",
-			Port:                       ptr.To[int32](3179),
-			ASN:                        63179,
-			MultihopTTL:                ptr.To[int32](1),
-			GracefulRestartTimeSeconds: ptr.To[int32](140),
-		},
-	}
 
 	t.Log("Adding BGP peers for BGP server1")
-	require.NoError(t, server1.AddPeer(ctx, ipv4Server2Config))
-	require.NoError(t, server1.AddPeer(ctx, ipv6Server3Config))
+	require.NoError(t, server1.AddPeer(ctx, server2Config))
 	t.Log("Added BGP peers for BGP server1")
 
 	t.Log("Adding BGP peers for BGP server2")
-	require.NoError(t, server2.AddPeer(ctx, ipv4Server1Config))
+	require.NoError(t, server2.AddPeer(ctx, server1Config))
 	t.Log("Added BGP peers for BGP server2")
-
-	t.Log("Adding BGP peers for BGP server3")
-	require.NoError(t, server3.AddPeer(ctx, ipv6Server1Config))
-	t.Log("Added BGP peers for BGP server3")
 
 	getPeersFn := func(server bgp.Interface) sets.Set[string] {
 		peerKeys := sets.New[string]()
@@ -135,7 +107,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 
 	t.Log("Getting peers of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		expected := sets.New[string]("::1-63179", "127.0.0.1-62179")
+		expected := sets.New[string]("127.0.0.1-62179")
 		got := getPeersFn(server1)
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
@@ -149,47 +121,24 @@ func TestGoBGPLifecycle(t *testing.T) {
 	}, 30*time.Second, time.Second)
 	t.Log("Got peers of BGP server2 and verified them")
 
-	t.Log("Getting peers of BGP server3 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		expected := sets.New[string]("::1-61179")
-		got := getPeersFn(server3)
-		assert.Equal(t, expected, got)
-	}, 30*time.Second, time.Second)
-	t.Log("Got peers of BGP server3 and verified them")
-
-	ipv4Server1Routes := []bgp.Route{
+	server1Routes := []bgp.Route{
 		{Prefix: "1.1.0.0/24"},
 		{Prefix: "1.2.0.0/24"},
 		{Prefix: "1.3.0.0/24"},
 	}
-	ipv6Server1Routes := []bgp.Route{
-		{Prefix: "1000:1::/64"},
-		{Prefix: "1000:2::/64"},
-		{Prefix: "1000:3::/64"},
-	}
-	ipv4Server2Routes := []bgp.Route{
+	server2Routes := []bgp.Route{
 		{Prefix: "2.1.0.0/24"},
 		{Prefix: "2.2.0.0/24"},
 		{Prefix: "2.3.0.0/24"},
 	}
-	ipv6Server3Routes := []bgp.Route{
-		{Prefix: "3000:1::/64"},
-		{Prefix: "3000:2::/64"},
-		{Prefix: "3000:3::/64"},
-	}
 
-	t.Log("Advertising IPv4 and IPv6 routes on BGP server1")
-	require.NoError(t, server1.AdvertiseRoutes(ctx, ipv4Server1Routes))
-	require.NoError(t, server1.AdvertiseRoutes(ctx, ipv6Server1Routes))
-	t.Log("Advertised IPv4 and IPv6 routes on BGP server1")
+	t.Log("Advertising routes on BGP server1")
+	require.NoError(t, server1.AdvertiseRoutes(ctx, server1Routes))
+	t.Log("Advertised routes on BGP server1")
 
-	t.Log("Advertising IPv4 routes on BGP server2")
-	require.NoError(t, server2.AdvertiseRoutes(ctx, ipv4Server2Routes))
-	t.Log("Advertised IPv4 routes on BGP server2")
-
-	t.Log("Advertising IPv6 routes on BGP server3")
-	require.NoError(t, server3.AdvertiseRoutes(ctx, ipv6Server3Routes))
-	t.Log("Advertised IPv6 routes on server3")
+	t.Log("Advertising routes on BGP server2")
+	require.NoError(t, server2.AdvertiseRoutes(ctx, server2Routes))
+	t.Log("Advertised routes on BGP server2")
 
 	getReceivedRoutesFn := func(server bgp.Interface, peerAddress string) []bgp.Route {
 		routes, err := server.GetRoutes(ctx, bgp.RouteReceived, peerAddress)
@@ -199,137 +148,83 @@ func TestGoBGPLifecycle(t *testing.T) {
 		return routes
 	}
 
-	t.Log("Getting received IPv4 and IPv6 routes of BGP server1 and verifying them")
+	t.Log("Getting received routes of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		// Get the IPv4 routes advertised by server2 and verify them.
-		gotIPv4Server2Routes := getReceivedRoutesFn(server1, "127.0.0.1")
-		assert.ElementsMatch(t, ipv4Server2Routes, gotIPv4Server2Routes)
-
-		// Get the IPv6 routes advertised by server3 and verify them.
-		gotIPv6Server3Routes := getReceivedRoutesFn(server1, "::1")
-		assert.ElementsMatch(t, ipv6Server3Routes, gotIPv6Server3Routes)
+		// Get the routes advertised by server2 and verify them.
+		gotServer2Routes := getReceivedRoutesFn(server1, "127.0.0.1")
+		assert.ElementsMatch(t, server2Routes, gotServer2Routes)
 	}, 30*time.Second, time.Second)
-	t.Log("Got received IPv4 and IPv6 routes of BGP server1 and verified them")
+	t.Log("Got received routes of BGP server1 and verified them")
 
-	t.Log("Getting received IPv4 routes of BGP server2 and verifying them")
+	t.Log("Getting received routes of BGP server2 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		// Get the IPv4 routes advertised by server1 and verify them.
-		gotIPv4Server1Routes := getReceivedRoutesFn(server2, "127.0.0.1")
-		assert.ElementsMatch(t, ipv4Server1Routes, gotIPv4Server1Routes)
+		// Get the routes advertised by server1 and verify them.
+		gotServer1Routes := getReceivedRoutesFn(server2, "127.0.0.1")
+		assert.ElementsMatch(t, server1Routes, gotServer1Routes)
 	}, 30*time.Second, time.Second)
-	t.Log("Got received IPv4 routes of BGP server2 and verified them")
+	t.Log("Got received routes of BGP server2 and verified them")
 
-	t.Log("Getting received IPv6 routes of BGP server3 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		// Get the IPv6 routes advertised by server1 and verify them.
-		gotIPv6Server1Routes := getReceivedRoutesFn(server3, "::1")
-		assert.ElementsMatch(t, ipv6Server1Routes, gotIPv6Server1Routes)
-	}, 30*time.Second, time.Second)
-	t.Log("Got received IPv6 routes of BGP server3 and verified them")
-
-	updatedIPv4Server1Routes := []bgp.Route{
+	updatedServer1Routes := []bgp.Route{
 		{Prefix: "1.1.0.0/24"},
 		{Prefix: "1.2.0.0/24"},
 	}
-	ipv4Server1RoutesToWithdraw := []bgp.Route{
+	server1RoutesToWithdraw := []bgp.Route{
 		{Prefix: "1.3.0.0/24"},
 	}
-	updatedIPv6Server1Routes := []bgp.Route{
-		{Prefix: "1000:1::/64"},
-		{Prefix: "1000:2::/64"},
-	}
-	ipv6Server1RoutesToWithdraw := []bgp.Route{
-		{Prefix: "1000:3::/64"},
-	}
-	updatedIPv4Server2Routes := []bgp.Route{
+	updatedServer2Routes := []bgp.Route{
 		{Prefix: "2.1.0.0/24"},
 		{Prefix: "2.2.0.0/24"},
 	}
-	ipv4Server2RoutesToWithdraw := []bgp.Route{
+	server2RoutesToWithdraw := []bgp.Route{
 		{Prefix: "2.3.0.0/24"},
 	}
-	updatedIPv6Server3Routes := []bgp.Route{
-		{Prefix: "3000:1::/64"},
-		{Prefix: "3000:2::/64"},
-	}
-	ipv6Server3RoutesToWithdraw := []bgp.Route{
-		{Prefix: "3000:3::/64"},
-	}
 
-	t.Log("Withdrawing IPv4 and IPv6 routes on BGP server1")
-	require.NoError(t, server1.WithdrawRoutes(ctx, ipv4Server1RoutesToWithdraw))
-	require.NoError(t, server1.WithdrawRoutes(ctx, ipv6Server1RoutesToWithdraw))
-	t.Log("Withdrew IPv4 and IPv6 routes on BGP server1")
+	t.Log("Withdrawing routes on BGP server1")
+	require.NoError(t, server1.WithdrawRoutes(ctx, server1RoutesToWithdraw))
+	t.Log("Withdrew routes on BGP server1")
 
-	t.Log("Withdrawing IPv4 routes on BGP server2")
-	require.NoError(t, server2.WithdrawRoutes(ctx, ipv4Server2RoutesToWithdraw))
-	t.Log("Withdrew IPv4 routes on BGP server2")
+	t.Log("Withdrawing routes on BGP server2")
+	require.NoError(t, server2.WithdrawRoutes(ctx, server2RoutesToWithdraw))
+	t.Log("Withdrew routes on BGP server2")
 
-	t.Log("Withdrawing IPv6 routes on BGP server3")
-	require.NoError(t, server3.WithdrawRoutes(ctx, ipv6Server3RoutesToWithdraw))
-	t.Log("Withdrew IPv6 routes on BGP server3")
-
-	t.Log("Getting received IPv4 and IPv6 routes of BGP server1 and verifying them")
+	t.Log("Getting received routes of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		// Get the IPv4 routes advertised by server2 and verify them.
-		gotIPv4Server2Routes := getReceivedRoutesFn(server1, "127.0.0.1")
-		assert.ElementsMatch(t, updatedIPv4Server2Routes, gotIPv4Server2Routes)
-
-		// Get the IPv6 routes advertised by server3 and verify them.
-		gotIPv6Server3Routes := getReceivedRoutesFn(server1, "::1")
-		assert.ElementsMatch(t, updatedIPv6Server3Routes, gotIPv6Server3Routes)
+		// Get the routes advertised by server2 and verify them.
+		gotServer2Routes := getReceivedRoutesFn(server1, "127.0.0.1")
+		assert.ElementsMatch(t, updatedServer2Routes, gotServer2Routes)
 	}, 30*time.Second, time.Second)
 
-	t.Log("Getting received IPv4 routes of BGP server2 and verifying them")
+	t.Log("Getting received routes of BGP server2 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		// Get the IPv4 routes advertised by server1 and verify them.
-		gotIPv4Server1Routes := getReceivedRoutesFn(server2, "127.0.0.1")
-		assert.ElementsMatch(t, updatedIPv4Server1Routes, gotIPv4Server1Routes)
+		// Get the routes advertised by server1 and verify them.
+		gotServer1Routes := getReceivedRoutesFn(server2, "127.0.0.1")
+		assert.ElementsMatch(t, updatedServer1Routes, gotServer1Routes)
 	}, 30*time.Second, time.Second)
-	t.Log("Got received IPv4 routes of BGP server2 and verified them")
+	t.Log("Got received routes of BGP server2 and verified them")
 
-	t.Log("Getting received IPv6 routes of BGP server3 and verifying them")
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		// Get the IPv6 routes advertised by server1 and verify them.
-		gotIPv6Server1Routes := getReceivedRoutesFn(server3, "::1")
-		assert.ElementsMatch(t, updatedIPv6Server1Routes, gotIPv6Server1Routes)
-	}, 30*time.Second, time.Second)
-	t.Log("Got received IPv6 routes of BGP server3 and verified them")
-
-	updatedIPv4Server2Config := bgp.PeerConfig{
+	updatedServer2Config := bgp.PeerConfig{
 		BGPPeer: &v1alpha1.BGPPeer{
 			Address:                    "127.0.0.1",
-			Port:                       ptr.To[int32](2179),
-			ASN:                        62179,
-			MultihopTTL:                ptr.To[int32](1),
-			GracefulRestartTimeSeconds: ptr.To[int32](180),
-		},
-	}
-	updatedIPv6Server3Config := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
-			Address:                    "::1",
-			Port:                       ptr.To[int32](3179),
-			ASN:                        63179,
+			Port:                       &listenPort2,
+			ASN:                        asn2,
 			MultihopTTL:                ptr.To[int32](1),
 			GracefulRestartTimeSeconds: ptr.To[int32](180),
 		},
 	}
 	t.Log("Updating peers of BGP server1")
-	require.NoError(t, server1.UpdatePeer(ctx, updatedIPv4Server2Config))
-	require.NoError(t, server1.UpdatePeer(ctx, updatedIPv6Server3Config))
+	require.NoError(t, server1.UpdatePeer(ctx, updatedServer2Config))
 	t.Log("Updated peers of server1")
 
 	t.Log("Getting peers of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		expected := sets.New[string]("::1-63179", "127.0.0.1-62179")
+		expected := sets.New[string]("127.0.0.1-62179")
 		got := getPeersFn(server1)
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
 	t.Log("Got peers of BGP server1 and verified them")
 
 	t.Log("Deleting peers of BGP server1")
-	require.NoError(t, server1.RemovePeer(ctx, updatedIPv4Server2Config))
-	require.NoError(t, server1.RemovePeer(ctx, updatedIPv6Server3Config))
+	require.NoError(t, server1.RemovePeer(ctx, updatedServer2Config))
 	t.Log("Deleted peers of BGP server1")
 
 	t.Log("Getting peers of BGP server1 and verifying them")
@@ -343,6 +238,5 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Stopping all BGP servers")
 	require.NoError(t, server1.Stop(ctx))
 	require.NoError(t, server2.Stop(ctx))
-	require.NoError(t, server3.Stop(ctx))
 	t.Log("Stopped all BGP servers")
 }

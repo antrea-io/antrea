@@ -18,7 +18,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/netip"
 	"reflect"
+	"slices"
+	"strings"
 
 	"k8s.io/klog/v2"
 
@@ -68,11 +71,35 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 		}
 
 		var bgpRoutesResp []apis.BGPRouteResponse
-		for _, bgpRoute := range bgpRoutes {
+		for bgpRoute := range bgpRoutes {
 			bgpRoutesResp = append(bgpRoutesResp, apis.BGPRouteResponse{
-				Route: bgpRoute,
+				Route:     bgpRoute.Prefix,
+				Type:      string(bgpRoutes[bgpRoute].Type),
+				K8sObjRef: bgpRoutes[bgpRoute].K8sObjRef,
 			})
 		}
+		// make sure that we provide a stable order for the API response
+		slices.SortFunc(bgpRoutesResp, func(a, b apis.BGPRouteResponse) int {
+			pA, _ := netip.ParsePrefix(a.Route)
+			pB, _ := netip.ParsePrefix(b.Route)
+			// IPv4 routes first, then IPv6 routes
+			if pA.Addr().Is4() && !pB.Addr().Is4() {
+				return -1
+			}
+			if !pA.Addr().Is4() && pB.Addr().Is4() {
+				return 1
+			}
+			// both routes are from the same IP family, now order based on route type
+			if n := strings.Compare(a.Type, b.Type); n != 0 {
+				return n
+			}
+			// finally, for routes of the same IP family and type, order based on prefix
+			// shorter prefixes come first; if the length is the same we order by IP
+			if n := pA.Bits() - pB.Bits(); n != 0 {
+				return n
+			}
+			return pA.Addr().Compare(pB.Addr())
+		})
 
 		if err := json.NewEncoder(w).Encode(bgpRoutesResp); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

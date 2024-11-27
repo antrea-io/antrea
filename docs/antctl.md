@@ -803,25 +803,29 @@ For more information about route advertisement, please refer to [Advertisements]
 # Get the list of all advertised bgp routes
 $ antctl get bgproutes
 
-ROUTE
-10.96.10.10/32
-192.168.77.100/32
-fec0::10:96:10:10/128
-fec0::192:168:77:100/128
+ROUTE                    TYPE                  K8S-OBJ-REF
+172.18.0.3/32            EgressIP              egress1
+10.244.1.0/24            NodeIPAMPodCIDR       <NONE>
+10.96.0.1/32             ServiceLoadBalancerIP default/svc1
+fec0::192:168:77:100/128 EgressIP              egress2
+fd00:10:244:1::/64       NodeIPAMPodCIDR       <NONE>
+fec0::10:96:10:10/128    ServiceLoadBalancerIP default/svc2
 
 # Get the list of advertised IPv4 bgp routes
 $ antctl get bgproutes --ipv4-only
 
-ROUTE
-10.96.10.10/32
-192.168.77.100/32
+ROUTE         TYPE                  K8S-OBJ-REF
+172.18.0.3/32 EgressIP              egress1
+10.244.1.0/24 NodeIPAMPodCIDR       <NONE>
+10.96.0.1/32  ServiceLoadBalancerIP default/svc1
 
 # Get the list of advertised IPv6 bgp routes
 $ antctl get bgproutes --ipv6-only
 
-ROUTE
-fec0::10:96:10:10/128
-fec0::192:168:77:100/128
+ROUTE                    TYPE                  K8S-OBJ-REF
+fec0::192:168:77:100/128 EgressIP              egress2
+fd00:10:244:1::/64       NodeIPAMPodCIDR       <NONE>
+fec0::10:96:10:10/128    ServiceLoadBalancerIP default/svc2
 ```
 
 ### Upgrade existing objects of CRDs

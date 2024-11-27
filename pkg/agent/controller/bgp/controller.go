@@ -78,6 +78,21 @@ var (
 	ErrBGPPolicyNotFound = errors.New("BGPPolicy not found")
 )
 
+type AdvertisedRouteType string
+
+const (
+	EgressIP              AdvertisedRouteType = "EgressIP"
+	ServiceLoadBalancerIP AdvertisedRouteType = "ServiceLoadBalancerIP"
+	ServiceExternalIP     AdvertisedRouteType = "ServiceExternalIP"
+	ServiceClusterIP      AdvertisedRouteType = "ServiceClusterIP"
+	NodeIPAMPodCIDR       AdvertisedRouteType = "NodeIPAMPodCIDR"
+)
+
+type RouteMetadata struct {
+	Type      AdvertisedRouteType
+	K8sObjRef string
+}
+
 type bgpPolicyState struct {
 	// The local BGP server.
 	bgpServer bgp.Interface
@@ -89,8 +104,8 @@ type bgpPolicyState struct {
 	localASN int32
 	// The router ID used by the local BGP server.
 	routerID string
-	// routes stores all BGP routers advertised to BGP peers.
-	routes sets.Set[bgp.Route]
+	// routes stores all BGP routes advertised to BGP peers.
+	routes map[bgp.Route]RouteMetadata
 	// peerConfigs is a map that stores configurations of BGP peers. The map keys are the concatenated strings of BGP
 	// peer IP address and ASN (e.g., "192.168.77.100-65000", "2001::1-65000").
 	peerConfigs map[string]bgp.PeerConfig
@@ -387,7 +402,7 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 			routerID:      routerID,
 			listenPort:    listenPort,
 			localASN:      localASN,
-			routes:        make(sets.Set[bgp.Route]),
+			routes:        make(map[bgp.Route]RouteMetadata),
 			peerConfigs:   make(map[string]bgp.PeerConfig),
 		}
 	} else if c.bgpPolicyState.bgpPolicyName != bgpPolicyName {
@@ -452,26 +467,29 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 }
 
 func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertisements v1alpha1.Advertisements) error {
-	curRoutes, err := c.getRoutes(bgpAdvertisements)
-	if err != nil {
-		return err
-	}
+	curRoutes := c.getRoutes(bgpAdvertisements)
 	preRoutes := c.bgpPolicyState.routes
-	routesToAdvertise := curRoutes.Difference(preRoutes)
-	routesToWithdraw := preRoutes.Difference(curRoutes)
+	currRoutesKeys := sets.KeySet(curRoutes)
+	preRoutesKeys := sets.KeySet(preRoutes)
+
+	routesToAdvertise := currRoutesKeys.Difference(preRoutesKeys)
+	routesToWithdraw := preRoutesKeys.Difference(currRoutesKeys)
 
 	bgpServer := c.bgpPolicyState.bgpServer
 	for route := range routesToAdvertise {
 		if err := bgpServer.AdvertiseRoutes(ctx, []bgp.Route{route}); err != nil {
 			return err
 		}
-		c.bgpPolicyState.routes.Insert(route)
+		c.bgpPolicyState.routes[route] = RouteMetadata{
+			Type:      curRoutes[route].Type,
+			K8sObjRef: curRoutes[route].K8sObjRef,
+		}
 	}
 	for route := range routesToWithdraw {
 		if err := bgpServer.WithdrawRoutes(ctx, []bgp.Route{route}); err != nil {
 			return err
 		}
-		c.bgpPolicyState.routes.Delete(route)
+		delete(c.bgpPolicyState.routes, route)
 	}
 
 	return nil
@@ -540,8 +558,8 @@ func (c *Controller) getRouterID() (string, error) {
 	return routerID, nil
 }
 
-func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) (sets.Set[bgp.Route], error) {
-	allRoutes := sets.New[bgp.Route]()
+func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) map[bgp.Route]RouteMetadata {
+	allRoutes := make(map[bgp.Route]RouteMetadata)
 
 	if advertisements.Service != nil {
 		c.addServiceRoutes(advertisements.Service, allRoutes)
@@ -553,15 +571,15 @@ func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) (sets.Set
 		c.addPodRoutes(allRoutes)
 	}
 
-	return allRoutes, nil
+	return allRoutes
 }
 
-func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertisement, allRoutes sets.Set[bgp.Route]) {
+func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertisement, allRoutes map[bgp.Route]RouteMetadata) {
 	ipTypes := sets.New(advertisement.IPTypes...)
 	services, _ := c.serviceLister.List(labels.Everything())
 
-	var serviceIPs []string
 	for _, svc := range services {
+		svcRef := svc.Namespace + "/" + svc.Name
 		internalLocal := svc.Spec.InternalTrafficPolicy != nil && *svc.Spec.InternalTrafficPolicy == corev1.ServiceInternalTrafficPolicyLocal
 		externalLocal := svc.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyLocal
 		var hasLocalEndpoints bool
@@ -571,35 +589,41 @@ func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertiseme
 		if ipTypes.Has(v1alpha1.ServiceIPTypeClusterIP) {
 			if internalLocal && hasLocalEndpoints || !internalLocal {
 				for _, clusterIP := range svc.Spec.ClusterIPs {
-					serviceIPs = append(serviceIPs, clusterIP)
+					if c.enabledIPv4 && utilnet.IsIPv4String(clusterIP) {
+						addRoutes(allRoutes, clusterIP+ipv4Suffix, svcRef, ServiceClusterIP)
+					} else if c.enabledIPv6 && utilnet.IsIPv6String(clusterIP) {
+						addRoutes(allRoutes, clusterIP+ipv6Suffix, svcRef, ServiceClusterIP)
+					}
 				}
 			}
 		}
 		if ipTypes.Has(v1alpha1.ServiceIPTypeExternalIP) {
 			if externalLocal && hasLocalEndpoints || !externalLocal {
 				for _, externalIP := range svc.Spec.ExternalIPs {
-					serviceIPs = append(serviceIPs, externalIP)
+					if c.enabledIPv4 && utilnet.IsIPv4String(externalIP) {
+						addRoutes(allRoutes, externalIP+ipv4Suffix, svcRef, ServiceExternalIP)
+					} else if c.enabledIPv6 && utilnet.IsIPv6String(externalIP) {
+						addRoutes(allRoutes, externalIP+ipv6Suffix, svcRef, ServiceExternalIP)
+					}
 				}
 			}
 		}
 		if ipTypes.Has(v1alpha1.ServiceIPTypeLoadBalancerIP) && svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
 			if externalLocal && hasLocalEndpoints || !externalLocal {
-				serviceIPs = append(serviceIPs, getIngressIPs(svc)...)
+				loadBalancerIPs := getIngressIPs(svc)
+				for _, loadBalancerIP := range loadBalancerIPs {
+					if c.enabledIPv4 && utilnet.IsIPv4String(loadBalancerIP) {
+						addRoutes(allRoutes, loadBalancerIP+ipv4Suffix, svcRef, ServiceLoadBalancerIP)
+					} else if c.enabledIPv6 && utilnet.IsIPv6String(loadBalancerIP) {
+						addRoutes(allRoutes, loadBalancerIP+ipv6Suffix, svcRef, ServiceLoadBalancerIP)
+					}
+				}
 			}
-		}
-	}
-
-	for _, ip := range serviceIPs {
-		if c.enabledIPv4 && utilnet.IsIPv4String(ip) {
-			allRoutes.Insert(bgp.Route{Prefix: ip + ipv4Suffix})
-		}
-		if c.enabledIPv6 && utilnet.IsIPv6String(ip) {
-			allRoutes.Insert(bgp.Route{Prefix: ip + ipv6Suffix})
 		}
 	}
 }
 
-func (c *Controller) addEgressRoutes(allRoutes sets.Set[bgp.Route]) {
+func (c *Controller) addEgressRoutes(allRoutes map[bgp.Route]RouteMetadata) {
 	egresses, _ := c.egressLister.List(labels.Everything())
 	for _, eg := range egresses {
 		if eg.Status.EgressNode != c.nodeName {
@@ -607,20 +631,26 @@ func (c *Controller) addEgressRoutes(allRoutes sets.Set[bgp.Route]) {
 		}
 		ip := eg.Status.EgressIP
 		if c.enabledIPv4 && utilnet.IsIPv4String(ip) {
-			allRoutes.Insert(bgp.Route{Prefix: ip + ipv4Suffix})
-		}
-		if c.enabledIPv6 && utilnet.IsIPv6String(ip) {
-			allRoutes.Insert(bgp.Route{Prefix: ip + ipv6Suffix})
+			addRoutes(allRoutes, ip+ipv4Suffix, eg.Name, EgressIP)
+		} else if c.enabledIPv6 && utilnet.IsIPv6String(ip) {
+			addRoutes(allRoutes, ip+ipv6Suffix, eg.Name, EgressIP)
 		}
 	}
 }
 
-func (c *Controller) addPodRoutes(allRoutes sets.Set[bgp.Route]) {
+func (c *Controller) addPodRoutes(allRoutes map[bgp.Route]RouteMetadata) {
 	if c.enabledIPv4 {
-		allRoutes.Insert(bgp.Route{Prefix: c.podIPv4CIDR})
+		addRoutes(allRoutes, c.podIPv4CIDR, "", NodeIPAMPodCIDR)
 	}
 	if c.enabledIPv6 {
-		allRoutes.Insert(bgp.Route{Prefix: c.podIPv6CIDR})
+		addRoutes(allRoutes, c.podIPv6CIDR, "", NodeIPAMPodCIDR)
+	}
+}
+
+func addRoutes(allRoutes map[bgp.Route]RouteMetadata, prefix, k8sObjRef string, routeType AdvertisedRouteType) {
+	allRoutes[bgp.Route{Prefix: prefix}] = RouteMetadata{
+		Type:      routeType,
+		K8sObjRef: k8sObjRef,
 	}
 }
 
@@ -1009,34 +1039,20 @@ func (c *Controller) GetBGPPeerStatus(ctx context.Context, ipv4Peers, ipv6Peers 
 }
 
 // GetBGPRoutes returns the advertised BGP routes.
-func (c *Controller) GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) ([]string, error) {
-	getBgpRoutesAdvertised := func() sets.Set[bgp.Route] {
-		c.bgpPolicyStateMutex.RLock()
-		defer c.bgpPolicyStateMutex.RUnlock()
-		if c.bgpPolicyState == nil {
-			return nil
-		}
-		return c.bgpPolicyState.routes
-	}
+func (c *Controller) GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) (map[bgp.Route]RouteMetadata, error) {
+	c.bgpPolicyStateMutex.RLock()
+	defer c.bgpPolicyStateMutex.RUnlock()
 
-	bgpRoutesAdvertised := getBgpRoutesAdvertised()
-	if bgpRoutesAdvertised == nil {
+	if c.bgpPolicyState == nil {
 		return nil, ErrBGPPolicyNotFound
 	}
 
-	bgpRoutes := make([]string, 0, bgpRoutesAdvertised.Len())
-	if ipv4Routes { // insert IPv4 advertised routes
-		for route := range bgpRoutesAdvertised {
-			if utilnet.IsIPv4CIDRString(route.Prefix) {
-				bgpRoutes = append(bgpRoutes, route.Prefix)
-			}
-		}
-	}
-	if ipv6Routes { // insert IPv6 advertised routes
-		for route := range bgpRoutesAdvertised {
-			if utilnet.IsIPv6CIDRString(route.Prefix) {
-				bgpRoutes = append(bgpRoutes, route.Prefix)
-			}
+	bgpRoutes := make(map[bgp.Route]RouteMetadata)
+	for route := range c.bgpPolicyState.routes {
+		if ipv4Routes && utilnet.IsIPv4CIDRString(route.Prefix) {
+			bgpRoutes[route] = c.bgpPolicyState.routes[route]
+		} else if ipv6Routes && utilnet.IsIPv6CIDRString(route.Prefix) {
+			bgpRoutes[route] = c.bgpPolicyState.routes[route]
 		}
 	}
 	return bgpRoutes, nil

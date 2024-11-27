@@ -110,7 +110,8 @@ ipsec:
     selfSignedCA: true
 
 egress:
-  # -- CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses.
+  # -- A list of CIDR ranges to which outbound Pod traffic will not be SNAT'd by
+  # Egresses, e.g. ["192.168.0.0/16", "172.16.0.0/12"].
   exceptCIDRs: []
   # -- The maximum number of Egress IPs that can be assigned to a Node. It is
   # useful when the Node network restricts the number of secondary IPs a Node

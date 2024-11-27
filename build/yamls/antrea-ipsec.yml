@@ -4158,7 +4158,8 @@ data:
       port: 51820
 
     egress:
-      # exceptCIDRs is the CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses.
+      # exceptCIDRs is a list of CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses, e.g.
+      # ["192.168.0.0/16", "172.16.0.0/12"].
       exceptCIDRs:
       # The maximum number of Egress IPs that can be assigned to a Node. It's useful when the Node network restricts
       # the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255.
