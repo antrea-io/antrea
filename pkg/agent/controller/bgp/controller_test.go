@@ -2210,37 +2210,13 @@ func TestGetBGPPeerStatus(t *testing.T) {
 	ctx := context.Background()
 	testCases := []struct {
 		name                  string
-		ipv4Peers             bool
-		ipv6Peers             bool
 		existingState         *bgpPolicyState
 		expectedCalls         func(mockBGPServer *bgptest.MockInterfaceMockRecorder)
 		expectedBgpPeerStatus []bgp.PeerStatus
 		expectedErr           error
 	}{
 		{
-			name:          "get ipv4 bgp peers",
-			ipv4Peers:     true,
-			existingState: &bgpPolicyState{},
-			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
-				mockBGPServer.GetPeers(ctx).Return([]bgp.PeerStatus{ipv4Peer1Status, ipv4Peer2Status,
-					ipv6Peer1Status, ipv6Peer2Status}, nil)
-			},
-			expectedBgpPeerStatus: []bgp.PeerStatus{ipv4Peer1Status, ipv4Peer2Status},
-		},
-		{
-			name:          "get ipv6 bgp peers",
-			ipv6Peers:     true,
-			existingState: &bgpPolicyState{},
-			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
-				mockBGPServer.GetPeers(ctx).Return([]bgp.PeerStatus{ipv4Peer1Status, ipv4Peer2Status,
-					ipv6Peer1Status, ipv6Peer2Status}, nil)
-			},
-			expectedBgpPeerStatus: []bgp.PeerStatus{ipv6Peer1Status, ipv6Peer2Status},
-		},
-		{
-			name:          "get all bgp peers",
-			ipv4Peers:     true,
-			ipv6Peers:     true,
+			name:          "get bgp peers status",
 			existingState: &bgpPolicyState{},
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.GetPeers(ctx).Return([]bgp.PeerStatus{ipv4Peer1Status, ipv4Peer2Status,
@@ -2255,7 +2231,7 @@ func TestGetBGPPeerStatus(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(t, nil, nil, tt.ipv4Peers, tt.ipv6Peers)
+			c := newFakeController(t, nil, nil, true, true)
 
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
@@ -2267,7 +2243,7 @@ func TestGetBGPPeerStatus(t *testing.T) {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
 			}
 
-			actualBgpPeerStatus, err := c.GetBGPPeerStatus(ctx, tt.ipv4Peers, tt.ipv6Peers)
+			actualBgpPeerStatus, err := c.GetBGPPeerStatus(ctx)
 			if tt.expectedErr != nil {
 				assert.ErrorIs(t, err, tt.expectedErr)
 			} else {
@@ -2290,16 +2266,12 @@ func TestGetBGPRoutes(t *testing.T) {
 	ctx := context.Background()
 	testCases := []struct {
 		name              string
-		ipv4Routes        bool
-		ipv6Routes        bool
 		existingState     *bgpPolicyState
 		expectedBgpRoutes map[bgp.Route]RouteMetadata
 		expectedErr       string
 	}{
 		{
-			name:          "get all advertised routes",
-			ipv4Routes:    true,
-			ipv6Routes:    true,
+			name:          "get advertised routes",
 			existingState: effectivePolicyState,
 			expectedBgpRoutes: map[bgp.Route]RouteMetadata{
 				clusterIPv4Route1:     allRoutes[clusterIPv4Route1],
@@ -2307,43 +2279,22 @@ func TestGetBGPRoutes(t *testing.T) {
 				loadBalancerIPv4Route: allRoutes[loadBalancerIPv4Route],
 				loadBalancerIPv6Route: allRoutes[loadBalancerIPv6Route],
 				podIPv4CIDRRoute:      allRoutes[podIPv4CIDRRoute],
-				podIPv6CIDRRoute:      allRoutes[podIPv6CIDRRoute],
-			},
-		},
-		{
-			name:          "get advertised ipv4 routes only",
-			ipv4Routes:    true,
-			existingState: effectivePolicyState,
-			expectedBgpRoutes: map[bgp.Route]RouteMetadata{
-				clusterIPv4Route1:     allRoutes[clusterIPv4Route1],
-				loadBalancerIPv4Route: allRoutes[loadBalancerIPv4Route],
-				podIPv4CIDRRoute:      allRoutes[podIPv4CIDRRoute],
-			},
-		},
-		{
-			name:          "get advertised ipv6 routes only",
-			ipv6Routes:    true,
-			existingState: effectivePolicyState,
-			expectedBgpRoutes: map[bgp.Route]RouteMetadata{
-				clusterIPv6Route1:     allRoutes[clusterIPv6Route1],
-				loadBalancerIPv6Route: allRoutes[loadBalancerIPv6Route],
 				podIPv6CIDRRoute:      allRoutes[podIPv6CIDRRoute],
 			},
 		},
 		{
 			name:        "bgpPolicyState does not exist",
-			ipv4Routes:  true,
 			expectedErr: ErrBGPPolicyNotFound.Error(),
 		},
 	}
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(t, nil, nil, tt.ipv4Routes, tt.ipv6Routes)
+			c := newFakeController(t, nil, nil, true, true)
 
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
 
-			actualBgpRoutes, err := c.GetBGPRoutes(ctx, tt.ipv4Routes, tt.ipv6Routes)
+			actualBgpRoutes, err := c.GetBGPRoutes(ctx)
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
 			} else {

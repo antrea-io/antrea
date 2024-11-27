@@ -43,17 +43,21 @@ var (
 	podIPv4CIDRRoute      = bgp.Route{Prefix: podIPv4CIDR}
 	clusterIPv4           = "10.96.10.10"
 	clusterIPv4Route      = bgp.Route{Prefix: ipStrToPrefix(clusterIPv4)}
+	egressIPv4            = "10.96.11.10"
+	egressIPv4Route       = bgp.Route{Prefix: ipStrToPrefix(egressIPv4)}
 	loadBalancerIPv6      = "fec0::192:168:77:150"
 	loadBalancerIPv6Route = bgp.Route{Prefix: ipStrToPrefix(loadBalancerIPv6)}
 	egressIPv6            = "fec0::192:168:77:200"
 	egressIPv6Route       = bgp.Route{Prefix: ipStrToPrefix(egressIPv6)}
 
 	ipv4ClusterIPName    = "clusterip-4"
+	ipv4EgressName       = "egress-4"
 	ipv6LoadBalancerName = "loadbalancer-6"
 	ipv6EgressName       = "egress-6"
 
 	allRoutes = map[bgp.Route]bgpcontroller.RouteMetadata{
 		clusterIPv4Route:      {Type: bgpcontroller.ServiceClusterIP, K8sObjRef: getServiceName(ipv4ClusterIPName)},
+		egressIPv4Route:       {Type: bgpcontroller.EgressIP, K8sObjRef: ipv4EgressName},
 		loadBalancerIPv6Route: {Type: bgpcontroller.ServiceLoadBalancerIP, K8sObjRef: getServiceName(ipv6LoadBalancerName)},
 		egressIPv6Route:       {Type: bgpcontroller.EgressIP, K8sObjRef: ipv6EgressName},
 		podIPv4CIDRRoute:      {Type: bgpcontroller.NodeIPAMPodCIDR},
@@ -72,22 +76,22 @@ func TestBGPRouteQuery(t *testing.T) {
 		{
 			name: "bgpPolicyState does not exist",
 			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
-				mockBGPServer.EXPECT().GetBGPRoutes(context.Background(), true, true).Return(nil, bgpcontroller.ErrBGPPolicyNotFound)
+				mockBGPServer.EXPECT().GetBGPRoutes(context.Background()).Return(nil, bgpcontroller.ErrBGPPolicyNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 		},
 		{
 			name: "get all advertised routes",
 			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
-				mockBGPServer.EXPECT().GetBGPRoutes(ctx, true, true).Return(
-					map[bgp.Route]bgpcontroller.RouteMetadata{
-						clusterIPv4Route: allRoutes[clusterIPv4Route],
-						podIPv4CIDRRoute: allRoutes[podIPv4CIDRRoute],
-						egressIPv6Route:  allRoutes[egressIPv6Route],
-					}, nil)
+				mockBGPServer.EXPECT().GetBGPRoutes(ctx).Return(allRoutes, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedResponse: []apis.BGPRouteResponse{
+				{
+					Route:     egressIPv4Route.Prefix,
+					Type:      string(allRoutes[egressIPv4Route].Type),
+					K8sObjRef: allRoutes[egressIPv4Route].K8sObjRef,
+				},
 				{
 					Route: podIPv4CIDR,
 					Type:  string(bgpcontroller.NodeIPAMPodCIDR),
@@ -102,20 +106,26 @@ func TestBGPRouteQuery(t *testing.T) {
 					Type:      string(allRoutes[egressIPv6Route].Type),
 					K8sObjRef: allRoutes[egressIPv6Route].K8sObjRef,
 				},
+				{
+					Route:     loadBalancerIPv6Route.Prefix,
+					Type:      string(allRoutes[loadBalancerIPv6Route].Type),
+					K8sObjRef: allRoutes[loadBalancerIPv6Route].K8sObjRef,
+				},
 			},
 		},
 		{
 			name: "get advertised ipv4 routes only",
 			url:  "?ipv4-only",
 			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
-				mockBGPServer.EXPECT().GetBGPRoutes(ctx, true, false).Return(
-					map[bgp.Route]bgpcontroller.RouteMetadata{
-						clusterIPv4Route: allRoutes[clusterIPv4Route],
-						podIPv4CIDRRoute: allRoutes[podIPv4CIDRRoute],
-					}, nil)
+				mockBGPServer.EXPECT().GetBGPRoutes(ctx).Return(allRoutes, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedResponse: []apis.BGPRouteResponse{
+				{
+					Route:     egressIPv4Route.Prefix,
+					Type:      string(allRoutes[egressIPv4Route].Type),
+					K8sObjRef: allRoutes[egressIPv4Route].K8sObjRef,
+				},
 				{
 					Route: podIPv4CIDRRoute.Prefix,
 					Type:  string(allRoutes[podIPv4CIDRRoute].Type),
@@ -131,11 +141,7 @@ func TestBGPRouteQuery(t *testing.T) {
 			name: "get advertised ipv6 routes only",
 			url:  "?ipv6-only=",
 			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
-				mockBGPServer.EXPECT().GetBGPRoutes(ctx, false, true).Return(
-					map[bgp.Route]bgpcontroller.RouteMetadata{
-						loadBalancerIPv6Route: allRoutes[loadBalancerIPv6Route],
-						egressIPv6Route:       allRoutes[egressIPv6Route],
-					}, nil)
+				mockBGPServer.EXPECT().GetBGPRoutes(ctx).Return(allRoutes, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedResponse: []apis.BGPRouteResponse{
@@ -160,6 +166,41 @@ func TestBGPRouteQuery(t *testing.T) {
 			name:           "both flags are passed",
 			url:            "?ipv4-only&ipv6-only",
 			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "get all advertised egressIP routes",
+			url:  "?type=EgressIP",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPRoutes(ctx).Return(allRoutes, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: []apis.BGPRouteResponse{
+				{
+					Route:     egressIPv4Route.Prefix,
+					Type:      string(allRoutes[egressIPv4Route].Type),
+					K8sObjRef: allRoutes[egressIPv4Route].K8sObjRef,
+				},
+				{
+					Route:     egressIPv6Route.Prefix,
+					Type:      string(allRoutes[egressIPv6Route].Type),
+					K8sObjRef: allRoutes[egressIPv6Route].K8sObjRef,
+				},
+			},
+		},
+		{
+			name: "get advertised IPv4 egressIP routes",
+			url:  "?ipv4-only&type=EgressIP",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPRoutes(ctx).Return(allRoutes, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: []apis.BGPRouteResponse{
+				{
+					Route:     egressIPv4Route.Prefix,
+					Type:      string(allRoutes[egressIPv4Route].Type),
+					K8sObjRef: allRoutes[egressIPv4Route].K8sObjRef,
+				},
+			},
 		},
 	}
 

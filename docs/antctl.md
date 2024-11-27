@@ -826,6 +826,13 @@ ROUTE                    TYPE                  K8S-OBJ-REF
 fec0::192:168:77:100/128 EgressIP              egress2
 fd00:10:244:1::/64       NodeIPAMPodCIDR       <NONE>
 fec0::10:96:10:10/128    ServiceLoadBalancerIP default/svc2
+
+# Get the list of all advertised routes of a specific type
+$ antctl get bgproutes -T EgressIP
+
+ROUTE                    TYPE     K8S-OBJ-REF
+172.18.0.3/32            EgressIP egress1
+fec0::192:168:77:100/128 EgressIP egress2
 ```
 
 ### Upgrade existing objects of CRDs

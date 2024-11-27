@@ -1001,7 +1001,7 @@ func (c *Controller) GetBGPPolicyInfo() (string, string, int32, int32) {
 }
 
 // GetBGPPeerStatus returns current status of BGP Peers of effective BGP Policy applied on the Node.
-func (c *Controller) GetBGPPeerStatus(ctx context.Context, ipv4Peers, ipv6Peers bool) ([]bgp.PeerStatus, error) {
+func (c *Controller) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error) {
 	getBgpServer := func() bgp.Interface {
 		c.bgpPolicyStateMutex.RLock()
 		defer c.bgpPolicyStateMutex.RUnlock()
@@ -1019,27 +1019,11 @@ func (c *Controller) GetBGPPeerStatus(ctx context.Context, ipv4Peers, ipv6Peers 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bgp peers: %w", err)
 	}
-
-	peers := make([]bgp.PeerStatus, 0, len(allPeers))
-	if ipv4Peers { // insert IPv4 peers
-		for _, peer := range allPeers {
-			if utilnet.IsIPv4String(peer.Address) {
-				peers = append(peers, peer)
-			}
-		}
-	}
-	if ipv6Peers { // insert IPv6 peers
-		for _, peer := range allPeers {
-			if utilnet.IsIPv6String(peer.Address) {
-				peers = append(peers, peer)
-			}
-		}
-	}
-	return peers, nil
+	return allPeers, nil
 }
 
 // GetBGPRoutes returns the advertised BGP routes.
-func (c *Controller) GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) (map[bgp.Route]RouteMetadata, error) {
+func (c *Controller) GetBGPRoutes(ctx context.Context) (map[bgp.Route]RouteMetadata, error) {
 	c.bgpPolicyStateMutex.RLock()
 	defer c.bgpPolicyStateMutex.RUnlock()
 
@@ -1048,12 +1032,8 @@ func (c *Controller) GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bo
 	}
 
 	bgpRoutes := make(map[bgp.Route]RouteMetadata)
-	for route := range c.bgpPolicyState.routes {
-		if ipv4Routes && utilnet.IsIPv4CIDRString(route.Prefix) {
-			bgpRoutes[route] = c.bgpPolicyState.routes[route]
-		} else if ipv6Routes && utilnet.IsIPv6CIDRString(route.Prefix) {
-			bgpRoutes[route] = c.bgpPolicyState.routes[route]
-		}
+	for route, routeMetadata := range c.bgpPolicyState.routes {
+		bgpRoutes[route] = routeMetadata
 	}
 	return bgpRoutes, nil
 }
