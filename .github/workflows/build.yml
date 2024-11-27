@@ -84,7 +84,7 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Build and push Antrea Docker image to registries
+    - name: Build and push Antrea Docker images to registries
       if: ${{ needs.check-env.outputs.push_needed == 'true' }}
       run: |
         ./hack/build-antrea-linux-all.sh --platform ${{ matrix.platform }} --pull --push-base-images
@@ -182,7 +182,7 @@ jobs:
       if: ${{ needs.check-env.outputs.push_needed == 'false' }}
       run: |
         ./hack/build-antrea-linux-all.sh --pull --distro ubi
-    - name: Build and push Antrea UBI9 Docker image to registry
+    - name: Build and push Antrea UBI9 Docker images to registry
       if: ${{ needs.check-env.outputs.push_needed == 'true' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
