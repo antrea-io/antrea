@@ -824,9 +824,9 @@ func TestParseDNSResponseOnFQDNCacheMinTTL(t *testing.T) {
 			dnsMsg := getDNSMsg(tc.responseTTL)
 			_, responseIPs, err := f.parseDNSResponse(dnsMsg)
 			require.NoError(t, err)
-			expectedTTL := currentTime.Add(tc.expectedTTL * time.Second)
-			assert.Equal(t, expectedTTL, responseIPs[testIPv4].expirationTime)
-			assert.Equal(t, expectedTTL, responseIPs[testIPv6].expirationTime)
+			expectedExpirationTime := currentTime.Add(tc.expectedTTL * time.Second)
+			assert.Equal(t, expectedExpirationTime, responseIPs[testIPv4].expirationTime)
+			assert.Equal(t, expectedExpirationTime, responseIPs[testIPv6].expirationTime)
 		})
 	}
 }
