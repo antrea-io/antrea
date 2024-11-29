@@ -15,6 +15,7 @@
 package runtime
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -47,10 +48,24 @@ func ResolveKubeconfig(path string) (*rest.Config, error) {
 			path = clientcmd.RecommendedHomeFile
 		}
 	}
-	if _, err = os.Stat(path); path == clientcmd.RecommendedHomeFile && os.IsNotExist(err) {
-		return rest.InClusterConfig()
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if path == clientcmd.RecommendedHomeFile {
+			config, inClusterErr := rest.InClusterConfig()
+			if inClusterErr == nil {
+				return config, nil
+			}
+			return nil, fmt.Errorf(
+				"failed to resolve kubeconfig: neither a valid kubeconfig file was found at '%s', nor could InClusterConfig be used: %w",
+				path, inClusterErr,
+			)
+		}
+		return nil, fmt.Errorf("failed to resolve kubeconfig: kubeconfig file does not exist at path '%s'", path)
 	}
-	return clientcmd.BuildConfigFromFlags("", path)
+	config, err := clientcmd.BuildConfigFromFlags("", path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build kubeconfig from file at path '%s': %w", path, err)
+	}
+	return config, nil
 }
 
 func init() {
