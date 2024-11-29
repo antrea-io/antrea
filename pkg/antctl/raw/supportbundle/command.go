@@ -125,7 +125,8 @@ var getSupportBundleClient func(cmd *cobra.Command) (systemclientset.SupportBund
 func setupSupportBundleClient(cmd *cobra.Command) (systemclientset.SupportBundleInterface, error) {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
-		return nil, err
+		klog.Warningf("Failed to get kubeconfig: %v", err)
+		kubeconfig = &rest.Config{}
 	}
 	raw.SetupLocalKubeconfig(kubeconfig)
 	client, err := systemclientset.NewForConfig(kubeconfig)
