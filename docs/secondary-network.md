@@ -64,7 +64,7 @@ metadata:
 data:
   antrea-agent.conf: |
     secondaryNetwork:
-    ovsBridges: [{"bridgeName": "br-secondary", "physicalInterfaces": ["eth1"]}]
+      ovsBridges: [{"bridgeName": "br-secondary", "physicalInterfaces": ["eth1"]}]
 ```
 
 At the moment, Antrea supports only a single OVS bridge for secondary networks,
@@ -136,7 +136,7 @@ metadata:
  annotations:
    k8s.v1.cni.cncf.io/networks: '[
      {"name": "vlan100"},
-     {"name": vlan200, "namespace": "networks", "interface": "eth200"}
+     {"name": "vlan200", "namespace": "networks", "interface": "eth200"}
    ]'
 spec:
  containers:

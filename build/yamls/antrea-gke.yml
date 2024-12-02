@@ -4003,8 +4003,9 @@ data:
     #  Multicluster: false
 
     # Enable support for provisioning secondary network interfaces for Pods (using
-    # Pod annotations). At the moment, Antrea can only create secondary network
-    # interfaces using SR-IOV VFs on baremetal Nodes.
+    # Pod annotations). At the moment, Antrea can create secondary network
+    # interfaces either using SR-IOV VFs on bare-metal Nodes or veth interfaces
+    # bridged to the underlay network, with or without VLAN tagging.
     #  SecondaryNetwork: false
 
     # Enable managing external IPs of Services of LoadBalancer type.
@@ -4174,7 +4175,6 @@ data:
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     enablePrometheusMetrics: true
-
 
     flowExporter:
       # Enable FlowExporter, a feature used to export polled conntrack connections as
@@ -4363,6 +4363,16 @@ data:
       maxAge: 28
       # Compress enables gzip compression on rotated files.
       compress: true
+
+    # SecondaryNetwork related configurations.
+    secondaryNetwork:
+      # Configuration of OVS bridges for secondary network. At the moment, at
+      # most one OVS bridge can be specified. If the specified bridge does not exist
+      # on the Node, antrea-agent will create it based on the configuration.
+      # The following configuration specifies an OVS bridge with name "br1" and a
+      # physical interface "eth1":
+      # [{bridgeName: "br1", physicalInterfaces: ["eth1"]}]
+      ovsBridges:
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -5384,7 +5394,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: d5912db1ec029b1a335f401b7bec529db08f165c5a9e96baa2f8a23f336d9f3f
+        checksum/config: e9ea48fa57cb11513f69a1fb2b44dd3c6cb96aa739598c1db5091ea91f097f4b
       labels:
         app: antrea
         component: antrea-agent
@@ -5620,7 +5630,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: d5912db1ec029b1a335f401b7bec529db08f165c5a9e96baa2f8a23f336d9f3f
+        checksum/config: e9ea48fa57cb11513f69a1fb2b44dd3c6cb96aa739598c1db5091ea91f097f4b
       labels:
         app: antrea
         component: antrea-controller
