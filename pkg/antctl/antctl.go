@@ -696,6 +696,8 @@ $ antctl get podmulticaststats pod -n namespace`,
   $ antctl get bgproutes --ipv4-only
   Get the list of advertised IPv6 bgp routes
   $ antctl get bgproutes --ipv6-only
+  Get the list of all advertised routes of a specific type
+  $ antctl get bgproutes -T EgressIP
 `,
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
@@ -710,6 +712,12 @@ $ antctl get podmulticaststats pod -n namespace`,
 							name:   "ipv6-only",
 							usage:  "Get advertised IPv6 bgp routes only",
 							isBool: true,
+						},
+						{
+							name:            "type",
+							shorthand:       "T",
+							usage:           "Get advertised bgp routes of a specific type. Valid types are EgressIP, ServiceLoadBalancerIP, ServiceExternalIP, ServiceClusterIP or NodeIPAMPodCIDR.",
+							supportedValues: []string{"EgressIP", "ServiceLoadBalancerIP", "ServiceExternalIP", "ServiceClusterIP", "NodeIPAMPodCIDR"},
 						},
 					},
 					outputType: multiple,
