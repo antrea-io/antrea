@@ -628,9 +628,6 @@ func TestStartTraceflow(t *testing.T) {
 	tcs := []struct {
 		name           string
 		tf             *crdv1beta1.Traceflow
-		ofPort         uint32
-		receiverOnly   bool
-		packet         *binding.Packet
 		expectedCalls  func(mockOFClient *openflowtest.MockClient)
 		nodeConfig     *config.NodeConfig
 		expectedErr    string
@@ -654,16 +651,6 @@ func TestStartTraceflow(t *testing.T) {
 					Phase:        crdv1beta1.Running,
 					DataplaneTag: 1,
 				},
-			},
-			ofPort: ofPortPod1,
-			packet: &binding.Packet{
-				SourceIP:       net.ParseIP(pod1IPv4),
-				SourceMAC:      pod1MAC,
-				DestinationIP:  net.ParseIP(pod2IPv4),
-				DestinationMAC: pod2MAC,
-				IPProto:        1,
-				TTL:            64,
-				ICMPType:       8,
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
 				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, uint16(crdv1beta1.DefaultTraceflowTimeout))
@@ -696,15 +683,6 @@ func TestStartTraceflow(t *testing.T) {
 					DataplaneTag: 1,
 				},
 			},
-			ofPort: ofPortPod1,
-			packet: &binding.Packet{
-				SourceIP:      net.ParseIP(pod1IPv4),
-				SourceMAC:     pod1MAC,
-				DestinationIP: net.ParseIP(dstIPv4),
-				IPProto:       1,
-				TTL:           64,
-				ICMPType:      8,
-			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
 				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, uint16(crdv1beta1.DefaultTraceflowTimeout))
 				mockOFClient.EXPECT().SendTraceflowPacket(uint8(1), &binding.Packet{
@@ -733,7 +711,6 @@ func TestStartTraceflow(t *testing.T) {
 					DataplaneTag: 1,
 				},
 			},
-			ofPort: ofPortPod2,
 			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
 				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), true, false, true, &binding.Packet{DestinationMAC: pod2MAC}, ofPortPod2, uint16(crdv1beta1.DefaultTraceflowTimeout))
 			},
