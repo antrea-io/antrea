@@ -109,27 +109,28 @@ var (
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
-	client                clientset.Interface
-	crdClient             versioned.Interface
-	ovsBridgeClient       ovsconfig.OVSBridgeClient
-	ovsCtlClient          ovsctl.OVSCtlClient
-	ofClient              openflow.Client
-	routeClient           route.Interface
-	wireGuardClient       wireguard.Interface
-	ifaceStore            interfacestore.InterfaceStore
-	ovsBridge             string
-	hostGateway           string // name of gateway port on the OVS bridge
-	mtu                   int
-	networkConfig         *config.NetworkConfig
-	nodeConfig            *config.NodeConfig
-	wireGuardConfig       *config.WireGuardConfig
-	egressConfig          *config.EgressConfig
-	serviceConfig         *config.ServiceConfig
-	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
-	enableL7NetworkPolicy bool
-	enableL7FlowExporter  bool
-	connectUplinkToBridge bool
-	enableAntreaProxy     bool
+	client                   clientset.Interface
+	crdClient                versioned.Interface
+	ovsBridgeClient          ovsconfig.OVSBridgeClient
+	ovsCtlClient             ovsctl.OVSCtlClient
+	ofClient                 openflow.Client
+	routeClient              route.Interface
+	wireGuardClient          wireguard.Interface
+	ifaceStore               interfacestore.InterfaceStore
+	ovsBridge                string
+	hostGateway              string // name of gateway port on the OVS bridge
+	mtu                      int
+	networkConfig            *config.NetworkConfig
+	nodeConfig               *config.NodeConfig
+	wireGuardConfig          *config.WireGuardConfig
+	egressConfig             *config.EgressConfig
+	serviceConfig            *config.ServiceConfig
+	l7NetworkPolicyConfig    *config.L7NetworkPolicyConfig
+	enableL7NetworkPolicy    bool
+	enableL7FlowExporter     bool
+	connectUplinkToBridge    bool
+	enableAntreaProxy        bool
+	disableTXChecksumOffload bool
 	// podNetworkWait should be decremented once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
 	podNetworkWait *utilwait.Group
@@ -166,32 +167,34 @@ func NewInitializer(
 	enableAntreaProxy bool,
 	enableL7NetworkPolicy bool,
 	enableL7FlowExporter bool,
+	disableTXChecksumOffload bool,
 ) *Initializer {
 	return &Initializer{
-		ovsBridgeClient:         ovsBridgeClient,
-		ovsCtlClient:            ovsCtlClient,
-		client:                  k8sClient,
-		crdClient:               crdClient,
-		ifaceStore:              ifaceStore,
-		ofClient:                ofClient,
-		routeClient:             routeClient,
-		ovsBridge:               ovsBridge,
-		hostGateway:             hostGateway,
-		mtu:                     mtu,
-		networkConfig:           networkConfig,
-		wireGuardConfig:         wireGuardConfig,
-		egressConfig:            egressConfig,
-		serviceConfig:           serviceConfig,
-		l7NetworkPolicyConfig:   &config.L7NetworkPolicyConfig{},
-		podNetworkWait:          podNetworkWait,
-		flowRestoreCompleteWait: flowRestoreCompleteWait,
-		stopCh:                  stopCh,
-		nodeType:                nodeType,
-		externalNodeNamespace:   externalNodeNamespace,
-		connectUplinkToBridge:   connectUplinkToBridge,
-		enableAntreaProxy:       enableAntreaProxy,
-		enableL7NetworkPolicy:   enableL7NetworkPolicy,
-		enableL7FlowExporter:    enableL7FlowExporter,
+		ovsBridgeClient:          ovsBridgeClient,
+		ovsCtlClient:             ovsCtlClient,
+		client:                   k8sClient,
+		crdClient:                crdClient,
+		ifaceStore:               ifaceStore,
+		ofClient:                 ofClient,
+		routeClient:              routeClient,
+		ovsBridge:                ovsBridge,
+		hostGateway:              hostGateway,
+		mtu:                      mtu,
+		networkConfig:            networkConfig,
+		wireGuardConfig:          wireGuardConfig,
+		egressConfig:             egressConfig,
+		serviceConfig:            serviceConfig,
+		l7NetworkPolicyConfig:    &config.L7NetworkPolicyConfig{},
+		podNetworkWait:           podNetworkWait,
+		flowRestoreCompleteWait:  flowRestoreCompleteWait,
+		stopCh:                   stopCh,
+		nodeType:                 nodeType,
+		externalNodeNamespace:    externalNodeNamespace,
+		connectUplinkToBridge:    connectUplinkToBridge,
+		enableAntreaProxy:        enableAntreaProxy,
+		enableL7NetworkPolicy:    enableL7NetworkPolicy,
+		enableL7FlowExporter:     enableL7FlowExporter,
+		disableTXChecksumOffload: disableTXChecksumOffload,
 	}
 }
 
@@ -705,6 +708,9 @@ func (i *Initializer) setupGatewayInterface() error {
 		if err := setInterfaceARPAnnounce(gatewayIface.InterfaceName, 1); err != nil {
 			return err
 		}
+	}
+	if err := i.setTXChecksumOffloadOnGateway(); err != nil {
+		return err
 	}
 
 	return nil
