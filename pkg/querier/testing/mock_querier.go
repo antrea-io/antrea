@@ -365,18 +365,18 @@ func (m *MockAgentBGPPolicyInfoQuerier) EXPECT() *MockAgentBGPPolicyInfoQuerierM
 }
 
 // GetBGPPeerStatus mocks base method.
-func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPeerStatus(ctx context.Context, ipv4Peers, ipv6Peers bool) ([]bgp.PeerStatus, error) {
+func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBGPPeerStatus", ctx, ipv4Peers, ipv6Peers)
+	ret := m.ctrl.Call(m, "GetBGPPeerStatus", ctx)
 	ret0, _ := ret[0].([]bgp.PeerStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBGPPeerStatus indicates an expected call of GetBGPPeerStatus.
-func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPeerStatus(ctx, ipv4Peers, ipv6Peers any) *gomock.Call {
+func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPeerStatus(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPPeerStatus", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPPeerStatus), ctx, ipv4Peers, ipv6Peers)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPPeerStatus", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPPeerStatus), ctx)
 }
 
 // GetBGPPolicyInfo mocks base method.
@@ -397,16 +397,16 @@ func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPolicyInfo() *gomock.
 }
 
 // GetBGPRoutes mocks base method.
-func (m *MockAgentBGPPolicyInfoQuerier) GetBGPRoutes(ctx context.Context, ipv4Routes, ipv6Routes bool) (map[bgp.Route]bgp0.RouteMetadata, error) {
+func (m *MockAgentBGPPolicyInfoQuerier) GetBGPRoutes(ctx context.Context) (map[bgp.Route]bgp0.RouteMetadata, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBGPRoutes", ctx, ipv4Routes, ipv6Routes)
+	ret := m.ctrl.Call(m, "GetBGPRoutes", ctx)
 	ret0, _ := ret[0].(map[bgp.Route]bgp0.RouteMetadata)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBGPRoutes indicates an expected call of GetBGPRoutes.
-func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPRoutes(ctx, ipv4Routes, ipv6Routes any) *gomock.Call {
+func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPRoutes(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPRoutes", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPRoutes), ctx, ipv4Routes, ipv6Routes)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPRoutes", reflect.TypeOf((*MockAgentBGPPolicyInfoQuerier)(nil).GetBGPRoutes), ctx)
 }

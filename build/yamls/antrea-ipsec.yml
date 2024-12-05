@@ -4016,8 +4016,9 @@ data:
     #  Multicluster: false
 
     # Enable support for provisioning secondary network interfaces for Pods (using
-    # Pod annotations). At the moment, Antrea can only create secondary network
-    # interfaces using SR-IOV VFs on baremetal Nodes.
+    # Pod annotations). At the moment, Antrea can create secondary network
+    # interfaces either using SR-IOV VFs on bare-metal Nodes or veth interfaces
+    # bridged to the underlay network, with or without VLAN tagging.
     #  SecondaryNetwork: false
 
     # Enable managing external IPs of Services of LoadBalancer type.
@@ -4187,7 +4188,6 @@ data:
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     enablePrometheusMetrics: true
-
 
     flowExporter:
       # Enable FlowExporter, a feature used to export polled conntrack connections as
@@ -4382,6 +4382,16 @@ data:
       maxAge: 28
       # Compress enables gzip compression on rotated files.
       compress: true
+
+    # SecondaryNetwork related configurations.
+    secondaryNetwork:
+      # Configuration of OVS bridges for secondary network. At the moment, at
+      # most one OVS bridge can be specified. If the specified bridge does not exist
+      # on the Node, antrea-agent will create it based on the configuration.
+      # The following configuration specifies an OVS bridge with name "br1" and a
+      # physical interface "eth1":
+      # [{bridgeName: "br1", physicalInterfaces: ["eth1"]}]
+      ovsBridges:
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",

@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/controller/bgp"
@@ -40,6 +41,7 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 		}
 
 		values := r.URL.Query()
+		bgpRouteType := values.Get("type")
 		var ipv4Only, ipv6Only bool
 		if values.Has("ipv4-only") {
 			if values.Get("ipv4-only") != "" {
@@ -60,7 +62,7 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			return
 		}
 
-		bgpRoutes, err := bq.GetBGPRoutes(r.Context(), !ipv6Only, !ipv4Only)
+		bgpRoutes, err := bq.GetBGPRoutes(r.Context())
 		if err != nil {
 			if errors.Is(err, bgp.ErrBGPPolicyNotFound) {
 				http.Error(w, "there is no effective bgp policy applied to the Node", http.StatusNotFound)
@@ -71,11 +73,20 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 		}
 
 		var bgpRoutesResp []apis.BGPRouteResponse
-		for bgpRoute := range bgpRoutes {
+		for bgpRoute, routeMetadata := range bgpRoutes {
+			if ipv4Only && !utilnet.IsIPv4CIDRString(bgpRoute.Prefix) {
+				continue
+			}
+			if ipv6Only && !utilnet.IsIPv6CIDRString(bgpRoute.Prefix) {
+				continue
+			}
+			if bgpRouteType != "" && bgpRouteType != string(routeMetadata.Type) {
+				continue
+			}
 			bgpRoutesResp = append(bgpRoutesResp, apis.BGPRouteResponse{
 				Route:     bgpRoute.Prefix,
-				Type:      string(bgpRoutes[bgpRoute].Type),
-				K8sObjRef: bgpRoutes[bgpRoute].K8sObjRef,
+				Type:      string(routeMetadata.Type),
+				K8sObjRef: routeMetadata.K8sObjRef,
 			})
 		}
 		// make sure that we provide a stable order for the API response

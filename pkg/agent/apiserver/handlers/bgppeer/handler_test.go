@@ -31,6 +31,35 @@ import (
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
+var (
+	bgpPeerStatus = []bgp.PeerStatus{
+		{
+			Address:      "192.168.77.201",
+			Port:         179,
+			ASN:          65002,
+			SessionState: bgp.SessionActive,
+		},
+		{
+			Address:      "fec0::196:168:77:252",
+			Port:         179,
+			ASN:          65002,
+			SessionState: bgp.SessionActive,
+		},
+		{
+			Address:      "192.168.77.200",
+			Port:         179,
+			ASN:          65001,
+			SessionState: bgp.SessionEstablished,
+		},
+		{
+			Address:      "fec0::196:168:77:251",
+			Port:         179,
+			ASN:          65001,
+			SessionState: bgp.SessionEstablished,
+		},
+	}
+)
+
 func TestBGPPeerQuery(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
@@ -44,21 +73,7 @@ func TestBGPPeerQuery(t *testing.T) {
 			name: "get ipv4 bgp peers only",
 			url:  "?ipv4-only",
 			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
-				mockBGPServer.EXPECT().GetBGPPeerStatus(ctx, true, false).Return(
-					[]bgp.PeerStatus{
-						{
-							Address:      "192.168.77.200",
-							Port:         179,
-							ASN:          65001,
-							SessionState: bgp.SessionEstablished,
-						},
-						{
-							Address:      "192.168.77.201",
-							Port:         179,
-							ASN:          65002,
-							SessionState: bgp.SessionActive,
-						},
-					}, nil)
+				mockBGPServer.EXPECT().GetBGPPeerStatus(ctx).Return(bgpPeerStatus, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedResponse: []apis.BGPPeerResponse{
@@ -78,21 +93,7 @@ func TestBGPPeerQuery(t *testing.T) {
 			name: "get ipv6 bgp peers only",
 			url:  "?ipv6-only=",
 			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
-				mockBGPServer.EXPECT().GetBGPPeerStatus(ctx, false, true).Return(
-					[]bgp.PeerStatus{
-						{
-							Address:      "fec0::196:168:77:251",
-							Port:         179,
-							ASN:          65001,
-							SessionState: bgp.SessionEstablished,
-						},
-						{
-							Address:      "fec0::196:168:77:252",
-							Port:         179,
-							ASN:          65002,
-							SessionState: bgp.SessionActive,
-						},
-					}, nil)
+				mockBGPServer.EXPECT().GetBGPPeerStatus(ctx).Return(bgpPeerStatus, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedResponse: []apis.BGPPeerResponse{
@@ -111,21 +112,7 @@ func TestBGPPeerQuery(t *testing.T) {
 		{
 			name: "get all bgp peers",
 			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
-				mockBGPServer.EXPECT().GetBGPPeerStatus(ctx, true, true).Return(
-					[]bgp.PeerStatus{
-						{
-							Address:      "192.168.77.200",
-							Port:         179,
-							ASN:          65001,
-							SessionState: bgp.SessionEstablished,
-						},
-						{
-							Address:      "fec0::196:168:77:251",
-							Port:         179,
-							ASN:          65002,
-							SessionState: bgp.SessionActive,
-						},
-					}, nil)
+				mockBGPServer.EXPECT().GetBGPPeerStatus(ctx).Return(bgpPeerStatus, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedResponse: []apis.BGPPeerResponse{
@@ -135,7 +122,17 @@ func TestBGPPeerQuery(t *testing.T) {
 					State: "Established",
 				},
 				{
+					Peer:  "192.168.77.201:179",
+					ASN:   65002,
+					State: "Active",
+				},
+				{
 					Peer:  "[fec0::196:168:77:251]:179",
+					ASN:   65001,
+					State: "Established",
+				},
+				{
+					Peer:  "[fec0::196:168:77:252]:179",
 					ASN:   65002,
 					State: "Active",
 				},
@@ -144,7 +141,7 @@ func TestBGPPeerQuery(t *testing.T) {
 		{
 			name: "bgpPolicyState does not exist",
 			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
-				mockBGPServer.EXPECT().GetBGPPeerStatus(ctx, true, true).Return(nil, bgpcontroller.ErrBGPPolicyNotFound)
+				mockBGPServer.EXPECT().GetBGPPeerStatus(ctx).Return(nil, bgpcontroller.ErrBGPPolicyNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 		},
