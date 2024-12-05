@@ -5280,8 +5280,8 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 // by TestFQDNCacheMinTTL with 2 fqdnCacheMinTTL values where `0` represents a default value
 // when fqdnCacheMinTTL is unset .
 func TestFQDNCacheMinTTL(t *testing.T) {
-	t.Run("FQDNCacheMinTTL-unset", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 0) })
-	t.Run("FQDNCacheMinTTL-set-to-10s", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 10) })
+	t.Run("minTTLUnset", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 0) })
+	t.Run("minTTL10s", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 10) })
 }
 
 func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
@@ -5334,8 +5334,8 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 	createCustomDNSPod(t, data, configMap.Name)
 
 	// set the custom DNS server IP address in Antrea ConfigMap.
-	setDNSServerAddressInAntrea(t, data, dnsServiceIP, fqdnCacheMinTTL)
-	defer setDNSServerAddressInAntrea(t, data, "", 0) //reset after the test.
+	configureFQDNPolicyEnforcement(t, data, dnsServiceIP, fqdnCacheMinTTL)
+	defer configureFQDNPolicyEnforcement(t, data, "", 0) //reset after the test.
 
 	createPolicyForFQDNCacheMinTTL(t, data, testFQDN, "test-anp-fqdn", "custom-dns", "fqdn-cache-test")
 	require.NoError(t, NewPodBuilder(toolboxPodName, data.testNamespace, ToolboxImage).
@@ -5382,7 +5382,6 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 
 	// finally verify that Curling the previously cached IP does not fail after DNS update.
 	// The wait time here should be slightly longer than the reload value specified in the custom DNS configuration.
-	// TODO: This assertion verifies the fix to the issue described in https://github.com/antrea-io/antrea/issues/6229.
 	t.Logf("Trying to curl the existing cached IP of the domain: %s", fqdnIP)
 
 	if fqdnCacheMinTTL == 0 {
@@ -5393,15 +5392,15 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 		}, 20*time.Second, 1*time.Second)
 	} else {
 		// fqdnCacheMinTTL is set hence we expect no error at least till the period equivalent to fqdnCacheMinTTL's value.
-		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		assert.Never(t, func() bool {
 			_, err := curlFQDN(fqdnIP)
-			assert.NoError(t, err)
+			return err != nil
 		}, time.Duration(fqdnCacheMinTTL)*time.Second, 1*time.Second)
 	}
 }
 
-// setDNSServerAddressInAntrea sets or resets the custom DNS server IP address and FQDNCacheMinTTL in Antrea ConfigMap.
-func setDNSServerAddressInAntrea(t *testing.T, data *TestData, dnsServiceIP string, fqdnCacheMinTTL int) {
+// configureFQDNPolicyEnforcement sets or resets the custom DNS server IP address and FQDNCacheMinTTL in Antrea ConfigMap.
+func configureFQDNPolicyEnforcement(t *testing.T, data *TestData, dnsServiceIP string, fqdnCacheMinTTL int) {
 	agentChanges := func(config *agentconfig.AgentConfig) {
 		config.DNSServerOverride = dnsServiceIP
 		config.FQDNCacheMinTTL = fqdnCacheMinTTL
