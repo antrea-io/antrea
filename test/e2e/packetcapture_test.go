@@ -42,6 +42,7 @@ import (
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/features"
+	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
 )
 
 var (
@@ -80,6 +81,19 @@ func genSFTPService() *v1.Service {
 	}
 }
 
+func genSSHKeysSecret(ed25519Key, rsaKey []byte) *v1.Secret {
+	return &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "ssh-keys",
+		},
+		Immutable: ptr.To(true),
+		Data: map[string][]byte{
+			"ed25519": ed25519Key,
+			"rsa":     rsaKey,
+		},
+	}
+}
+
 func genSFTPDeployment() *appsv1.Deployment {
 	replicas := int32(1)
 	selector := map[string]string{"app": "sftp"}
@@ -113,6 +127,31 @@ func genSFTPDeployment() *appsv1.Deployment {
 								},
 								PeriodSeconds: 3,
 							},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "ssh-keys",
+									ReadOnly:  true,
+									MountPath: "/etc/ssh/ssh_host_ed25519_key",
+									SubPath:   "ed25519",
+								},
+								{
+									Name:      "ssh-keys",
+									ReadOnly:  true,
+									MountPath: "/etc/ssh/ssh_host_rsa_key",
+									SubPath:   "rsa",
+								},
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: "ssh-keys",
+							VolumeSource: v1.VolumeSource{
+								Secret: &v1.SecretVolumeSource{
+									SecretName:  "ssh-keys",
+									DefaultMode: ptr.To[int32](0400),
+								},
+							},
 						},
 					},
 				},
@@ -142,13 +181,18 @@ func TestPacketCapture(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
+	ed25519PubKey, ed25519PrivateKey, err := sftptesting.GenerateEd25519Key()
+	require.NoError(t, err)
+	rsaPubKey, rsaPrivateKey, err := sftptesting.GenerateRSAKey(4096)
+	require.NoError(t, err)
+
+	_, err = data.clientset.CoreV1().Secrets(data.testNamespace).Create(context.TODO(), genSSHKeysSecret(ed25519PrivateKey, rsaPrivateKey), metav1.CreateOptions{})
+	require.NoError(t, err)
 	deployment, err := data.clientset.AppsV1().Deployments(data.testNamespace).Create(context.TODO(), genSFTPDeployment(), metav1.CreateOptions{})
 	require.NoError(t, err)
-	defer data.clientset.AppsV1().Deployments(data.testNamespace).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
-	svc, err := data.clientset.CoreV1().Services(data.testNamespace).Create(context.TODO(), genSFTPService(), metav1.CreateOptions{})
+	_, err = data.clientset.CoreV1().Services(data.testNamespace).Create(context.TODO(), genSFTPService(), metav1.CreateOptions{})
 	require.NoError(t, err)
-	defer data.clientset.CoreV1().Services(data.testNamespace).Delete(context.TODO(), svc.Name, metav1.DeleteOptions{})
-	failOnError(data.waitForDeploymentReady(t, data.testNamespace, "sftp", defaultTimeout), t)
+	failOnError(data.waitForDeploymentReady(t, deployment.Namespace, deployment.Name, defaultTimeout), t)
 
 	sec := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -166,14 +210,14 @@ func TestPacketCapture(t *testing.T) {
 	defer data.clientset.CoreV1().Secrets(sec.Namespace).Delete(context.TODO(), sec.Name, metav1.DeleteOptions{})
 
 	t.Run("testPacketCaptureBasic", func(t *testing.T) {
-		testPacketCaptureBasic(t, data)
+		testPacketCaptureBasic(t, data, ed25519PubKey.Marshal(), rsaPubKey.Marshal())
 	})
 
 }
 
 // testPacketCaptureTCP verifies if PacketCapture can capture tcp packets. this function only contains basic
 // cases with pod-to-pod.
-func testPacketCaptureBasic(t *testing.T, data *TestData) {
+func testPacketCaptureBasic(t *testing.T, data *TestData, ed25519PubKey, rsaPubKey []byte) {
 	node1 := nodeName(0)
 	clientPodName := "client"
 	tcpServerPodName := "tcp-server"
@@ -329,7 +373,8 @@ func testPacketCaptureBasic(t *testing.T, data *TestData) {
 						},
 					},
 					FileServer: &crdv1alpha1.PacketCaptureFileServer{
-						URL: fmt.Sprintf("sftp://%s:30010/upload", controlPlaneNodeIPv4()),
+						URL:           fmt.Sprintf("sftp://%s:30010/upload", controlPlaneNodeIPv4()),
+						HostPublicKey: ed25519PubKey,
 					},
 					Packet: &crdv1alpha1.Packet{
 						Protocol: &tcpProto,
@@ -393,7 +438,8 @@ func testPacketCaptureBasic(t *testing.T, data *TestData) {
 						},
 					},
 					FileServer: &crdv1alpha1.PacketCaptureFileServer{
-						URL: fmt.Sprintf("sftp://%s:30010/upload", controlPlaneNodeIPv4()),
+						URL:           fmt.Sprintf("sftp://%s:30010/upload", controlPlaneNodeIPv4()),
+						HostPublicKey: rsaPubKey,
 					},
 					Packet: &crdv1alpha1.Packet{
 						Protocol: &udpProto,
@@ -617,7 +663,7 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	tmpDir := t.TempDir()
 	dstFileName := filepath.Join(tmpDir, fileName)
 	packetFile := filepath.Join("/tmp", "antrea", "packetcapture", "packets", fileName)
-	require.NoError(t, data.copyPodFiles(antreaPodName, "antrea-agent", "kube-system", packetFile, tmpDir))
+	require.NoError(t, data.copyPodFile(antreaPodName, "antrea-agent", "kube-system", packetFile, tmpDir))
 	defer os.Remove(dstFileName)
 	file, err := os.Open(dstFileName)
 	require.NoError(t, err)

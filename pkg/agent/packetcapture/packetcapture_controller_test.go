@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"testing"
 	"time"
 
@@ -46,6 +47,7 @@ import (
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/util/k8s"
+	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
 )
 
 var (
@@ -145,17 +147,22 @@ func genTestCR(name string, num int32) *crdv1alpha1.PacketCapture {
 type testUploader struct {
 	url      string
 	fileName string
-	// for concurrent cases, no need to check
-	checkFileName bool
+	hostKey  ssh.PublicKey
 }
 
 func (uploader *testUploader) Upload(url string, fileName string, config *ssh.ClientConfig, outputFile io.Reader) error {
 	if url != uploader.url {
 		return fmt.Errorf("expected url: %s for uploader, got: %s", uploader.url, url)
 	}
-	if uploader.checkFileName {
-		if fileName != uploader.fileName {
-			return fmt.Errorf("expected filename: %s, got: %s ", uploader.fileName, fileName)
+	if fileName != "" && fileName != uploader.fileName {
+		return fmt.Errorf("expected filename: %s, got: %s ", uploader.fileName, fileName)
+	}
+	if uploader.hostKey != nil {
+		if config.HostKeyAlgorithms != nil && !slices.Equal(config.HostKeyAlgorithms, []string{uploader.hostKey.Type()}) {
+			return fmt.Errorf("unsupported host key algorithm")
+		}
+		if err := config.HostKeyCallback("", nil, uploader.hostKey); err != nil {
+			return fmt.Errorf("invalid host key: %w", err)
 		}
 	}
 	return nil
@@ -591,6 +598,72 @@ func TestMergeConditions(t *testing.T) {
 		t.Run(item.name, func(t *testing.T) {
 			result := mergeConditions(item.old, item.new)
 			assert.True(t, conditionSliceEqualsIgnoreLastTransitionTime(item.expected, result))
+		})
+	}
+}
+
+func TestUploadPackets(t *testing.T) {
+	ctx := context.Background()
+
+	generateHostKey := func(t *testing.T) ssh.PublicKey {
+		publicKey, _, err := sftptesting.GenerateEd25519Key()
+		require.NoError(t, err)
+		return publicKey
+	}
+	hostKey1 := generateHostKey(t)
+	hostKey2 := generateHostKey(t)
+
+	fs := afero.NewMemMapFs()
+
+	testCases := []struct {
+		name            string
+		serverHostKey   ssh.PublicKey
+		expectedHostKey []byte
+		expectedErr     string
+	}{
+		{
+			name:            "matching key",
+			serverHostKey:   hostKey1,
+			expectedHostKey: hostKey1.Marshal(),
+		},
+		{
+			name:            "non matching key",
+			serverHostKey:   hostKey2,
+			expectedHostKey: hostKey1.Marshal(),
+			expectedErr:     "host key mismatch",
+		},
+		{
+			name:            "ignore host key",
+			serverHostKey:   hostKey1,
+			expectedHostKey: nil,
+		},
+		{
+			name:            "invalid key format",
+			serverHostKey:   hostKey1,
+			expectedHostKey: []byte("abc"),
+			expectedErr:     "invalid host public key",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pc := genTestCR("foo", testCaptureNum)
+			pcc := newFakePacketCaptureController(t, nil, nil)
+			pcc.sftpUploader = &testUploader{
+				url:      testFTPUrl,
+				fileName: pcc.generatePacketsPathForServer(pc.Name),
+				hostKey:  tc.serverHostKey,
+			}
+			pc.Spec.FileServer.HostPublicKey = tc.expectedHostKey
+			f, err := afero.TempFile(fs, "", "upload-test")
+			require.NoError(t, err)
+			defer f.Close()
+			err = pcc.uploadPackets(ctx, pc, f)
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tc.expectedErr)
+			}
 		})
 	}
 }

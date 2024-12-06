@@ -585,12 +585,25 @@ func (c *Controller) uploadPackets(ctx context.Context, pc *crdv1alpha1.PacketCa
 	if serverAuth.BasicAuthentication == nil {
 		return fmt.Errorf("failed to get basic authentication info for the file server")
 	}
+	// #nosec G106: users should set hostPublicKey, accepting arbitrary keys is not recommended.
+	hostKeyCallback := ssh.InsecureIgnoreHostKey()
+	var hostKeyAlgorithms []string
+	if pc.Spec.FileServer.HostPublicKey != nil {
+		key, err := ssh.ParsePublicKey(pc.Spec.FileServer.HostPublicKey)
+		if err != nil {
+			return fmt.Errorf("invalid host public key: %w", err)
+		}
+		hostKeyCallback = ssh.FixedHostKey(key)
+		// With a single fixed key, it makes sense to set this in case the server supports
+		// multiple keys (e.g., ed25519 and rsa).
+		hostKeyAlgorithms = sftp.GetAlgorithmsForHostKey(key)
+	}
 	cfg := &ssh.ClientConfig{
-		User: serverAuth.BasicAuthentication.Username,
-		Auth: []ssh.AuthMethod{ssh.Password(serverAuth.BasicAuthentication.Password)},
-		// #nosec G106: skip host key check here and users can specify their own checks if needed
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         time.Second,
+		User:              serverAuth.BasicAuthentication.Username,
+		Auth:              []ssh.AuthMethod{ssh.Password(serverAuth.BasicAuthentication.Password)},
+		HostKeyCallback:   hostKeyCallback,
+		HostKeyAlgorithms: hostKeyAlgorithms,
+		Timeout:           time.Second,
 	}
 	return uploader.Upload(pc.Spec.FileServer.URL, c.generatePacketsPathForServer(pc.Name), cfg, outputFile)
 }
