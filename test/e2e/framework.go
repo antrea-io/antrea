@@ -2840,7 +2840,7 @@ func (data *TestData) collectCovFiles(podName string, containerName string, nsNa
 			continue
 		}
 		if err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Second, 5*time.Second, true, func(ctx context.Context) (bool, error) {
-			if err = data.copyPodFiles(podName, containerName, nsName, file, covDir); err != nil {
+			if err = data.copyPodFile(podName, containerName, nsName, file, covDir); err != nil {
 				log.Infof("Coverage file not available yet for copy: %v", err)
 				return false, nil
 			}
@@ -2880,11 +2880,19 @@ func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) e
 
 }
 
-// copyPodFiles copies file from a Pod and save it to specified directory
-func (data *TestData) copyPodFiles(podName string, containerName string, nsName string, fileName string, destDir string) error {
-	// getPodWriter creates the file with name podName-fileName-suffix. It returns nil if the
-	// file cannot be created. File must be closed by the caller.
-	getPodWriter := func(fileName string) *os.File {
+// readPodFile reads a file from a Pod and returns the file contents as a string.
+func (data *TestData) readPodFile(podName string, containerName string, nsName string, fileName string) (string, error) {
+	cmd := []string{"cat", fileName}
+	stdout, stderr, err := data.RunCommandFromPod(nsName, podName, containerName, cmd)
+	if err != nil {
+		return "", fmt.Errorf("cannot retrieve content of file '%s' from Pod '%s', stderr: <%v>, err: <%v>", fileName, podName, stderr, err)
+	}
+	return stdout, nil
+}
+
+// copyPodFile copies a file from a Pod and save it to specified directory.
+func (data *TestData) copyPodFile(podName string, containerName string, nsName string, fileName string, destDir string) error {
+	getWriter := func(fileName string) *os.File {
 		destFile := filepath.Join(destDir, fileName)
 		f, err := os.Create(destFile)
 		if err != nil {
@@ -2895,20 +2903,16 @@ func (data *TestData) copyPodFiles(podName string, containerName string, nsName 
 	}
 	// dump the file from Antrea Pods to disk.
 	basename := path.Base(fileName)
-	w := getPodWriter(basename)
+	w := getWriter(basename)
 	if w == nil {
 		return nil
 	}
 	defer w.Close()
-	cmd := []string{"cat", fileName}
-	log.Infof("Copying file: %s", basename)
-	stdout, stderr, err := data.RunCommandFromPod(nsName, podName, containerName, cmd)
+	stdout, err := data.readPodFile(podName, containerName, nsName, fileName)
 	if err != nil {
-		return fmt.Errorf("cannot retrieve content of file '%s' from Pod '%s', stderr: <%v>, err: <%v>", fileName, podName, stderr, err)
+		return err
 	}
-	if stdout == "" {
-		return nil
-	}
+	log.Infof("Copying file %q from Pod %s/%s", fileName, nsName, podName)
 	w.WriteString(stdout)
 	return nil
 }
