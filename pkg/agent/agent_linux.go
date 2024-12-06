@@ -269,7 +269,7 @@ func (i *Initializer) setTXChecksumOffload() error {
 		if err := ethtool.EthtoolTXHWCsumOff(i.hostGateway); err != nil {
 			return fmt.Errorf("error when disabling TX checksum offload on %s: %v", i.hostGateway, err)
 		}
-		klog.Warningf("Disabled TX checksum offload on %s", i.hostGateway)
+		klog.InfoS("Disabled TX checksum offload on host gateway interface", "hostGateway", i.hostGateway)
 	}
 	return nil
 }

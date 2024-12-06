@@ -123,9 +123,9 @@ type AgentConfig struct {
 	// Disable TX checksum offloading for container network interfaces and the host gateway interface (default:
 	// antrea-gw0). It's supposed to be set to true when the datapath doesn't support TX checksum offloading,
 	// which causes packets to be dropped due to bad checksum.
-	// If this option is later set to false, for the host gateway interface, Antrea will not restore its
-	// original TX checksum state, as Antrea does not retain the original configuration. Users are responsible
-	// for manually reconfiguring the setting if needed.
+	// If this option is later set to false, Antrea does nothing to the affected container network interfaces
+	// and the host gateway interface. To restore the default TX checksum state of the affected interfaces,
+	// it is recommended to delete them and recreate.
 	// This option affects Linux Nodes only.
 	DisableTXChecksumOffload bool `yaml:"disableTXChecksumOffload,omitempty"`
 	// APIPort is the port for the antrea-agent APIServer to serve on.
