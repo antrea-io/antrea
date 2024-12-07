@@ -376,7 +376,7 @@ function create {
   fi
 
   set +e
-  kind get clusters | grep $CLUSTER_NAME > /dev/null 2>&1
+  kind get clusters | grep -x "$CLUSTER_NAME" > /dev/null 2>&1
   if [[ $? -eq 0 ]]; then
     echoerr "cluster $CLUSTER_NAME already created"
     exit 0
