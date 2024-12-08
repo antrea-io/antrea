@@ -108,7 +108,7 @@ func newCIDR(cidrStr string) *net.IPNet {
 }
 
 func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore interfacestore.InterfaceStore, ofClient *openflowtest.MockClient, v4Enabled, v6Enabled bool) *podReconciler {
-	f, _ := newMockFQDNController(t, controller, nil, nil)
+	f, _ := newMockFQDNController(t, controller, nil, nil, 0)
 	ch := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator()
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch)}

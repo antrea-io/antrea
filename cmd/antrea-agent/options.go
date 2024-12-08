@@ -155,6 +155,10 @@ func (o *Options) validate(args []string) error {
 		return fmt.Errorf("nodeType %s requires feature gate ExternalNode to be enabled", o.config.NodeType)
 	}
 
+	if o.config.FQDNCacheMinTTL < 0 {
+		return fmt.Errorf("fqdnCacheMinTTL must be greater than or equal to 0")
+	}
+
 	if o.config.NodeType == config.ExternalNode.String() {
 		o.nodeType = config.ExternalNode
 		return o.validateExternalNodeOptions()

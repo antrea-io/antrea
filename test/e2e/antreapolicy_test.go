@@ -5270,9 +5270,21 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	k8sUtils.Cleanup(namespaces)
 }
 
-// TestFQDNCacheMinTTL tests stable FQDN access for applications with cached DNS resolutions
-// when FQDN NetworkPolicy are in use and the FQDN-to-IP resolution changes frequently.
+// TestFQDNCacheMinTTL ensures stable FQDN access for applications that cache DNS resolutions,
+// even when FQDN-to-IP mappings change frequently, and FQDN-based NetworkPolicies are in use.
+// It validates the functionality of the new minTTL configuration, which is used for scenarios
+// where applications may cache DNS responses beyond the TTL defined in original DNS response.
+// The minTTL value enforces that resolved IPs remain in datapath rules for as long as
+// applications might cache them, thereby preventing intermittent network connectivity issues
+// to the FQDN concerned. Actual test logic runs in testWithFQDNCacheMinTTL, which gets called
+// by TestFQDNCacheMinTTL with 2 fqdnCacheMinTTL values where `0` represents a default value
+// when fqdnCacheMinTTL is unset .
 func TestFQDNCacheMinTTL(t *testing.T) {
+	t.Run("minTTLUnset", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 0) })
+	t.Run("minTTL10s", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 10) })
+}
+
+func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 	const (
 		testFQDN = "fqdn-test-pod.lfx.test"
 		dnsPort  = 53
@@ -5322,8 +5334,8 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 	createCustomDNSPod(t, data, configMap.Name)
 
 	// set the custom DNS server IP address in Antrea ConfigMap.
-	setDNSServerAddressInAntrea(t, data, dnsServiceIP)
-	defer setDNSServerAddressInAntrea(t, data, "") //reset after the test.
+	configureFQDNPolicyEnforcement(t, data, dnsServiceIP, fqdnCacheMinTTL)
+	defer configureFQDNPolicyEnforcement(t, data, "", 0) //reset after the test.
 
 	createPolicyForFQDNCacheMinTTL(t, data, testFQDN, "test-anp-fqdn", "custom-dns", "fqdn-cache-test")
 	require.NoError(t, NewPodBuilder(toolboxPodName, data.testNamespace, ToolboxImage).
@@ -5368,26 +5380,34 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 	require.NoError(t, data.setPodAnnotation(data.testNamespace, "custom-dns-server", "test.antrea.io/random-value",
 		randSeq(8)), "failed to update custom DNS Pod annotation.")
 
-	// finally verify that Curling the previously cached IP fails after DNS update.
+	// finally verify that Curling the previously cached IP does not fail after DNS update.
 	// The wait time here should be slightly longer than the reload value specified in the custom DNS configuration.
-	// TODO: This assertion currently verifies the issue described in https://github.com/antrea-io/antrea/issues/6229.
-	// It will need to be updated once minTTL support is implemented.
 	t.Logf("Trying to curl the existing cached IP of the domain: %s", fqdnIP)
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		_, err := curlFQDN(fqdnIP)
-		assert.Error(t, err)
-	}, 10*time.Second, 1*time.Second)
+
+	if fqdnCacheMinTTL == 0 {
+		// fqdnCacheMinTTL is unset , hence we expect an error in connection .
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			_, err := curlFQDN(fqdnIP)
+			assert.Error(t, err)
+		}, 20*time.Second, 1*time.Second)
+	} else {
+		// fqdnCacheMinTTL is set hence we expect no error at least till the period equivalent to fqdnCacheMinTTL's value.
+		assert.Never(t, func() bool {
+			_, err := curlFQDN(fqdnIP)
+			return err != nil
+		}, time.Duration(fqdnCacheMinTTL)*time.Second, 1*time.Second)
+	}
 }
 
-// setDNSServerAddressInAntrea sets or resets the custom DNS server IP address in Antrea ConfigMap.
-func setDNSServerAddressInAntrea(t *testing.T, data *TestData, dnsServiceIP string) {
+// configureFQDNPolicyEnforcement sets or resets the custom DNS server IP address and FQDNCacheMinTTL in Antrea ConfigMap.
+func configureFQDNPolicyEnforcement(t *testing.T, data *TestData, dnsServiceIP string, fqdnCacheMinTTL int) {
 	agentChanges := func(config *agentconfig.AgentConfig) {
 		config.DNSServerOverride = dnsServiceIP
+		config.FQDNCacheMinTTL = fqdnCacheMinTTL
 	}
 	err := data.mutateAntreaConfigMap(nil, agentChanges, false, true)
-	require.NoError(t, err, "Error when setting up custom DNS server IP in Antrea configmap")
-
-	t.Logf("DNSServerOverride set to %q in Antrea Agent config", dnsServiceIP)
+	require.NoError(t, err, "Error when setting up custom DNS server IP and FQDNCacheMinTTL in Antrea configmap")
+	t.Logf("DNSServerOverride set to %q and FQDNCacheMinTTL set to %d in Antrea Agent config", dnsServiceIP, fqdnCacheMinTTL)
 }
 
 // createPolicyForFQDNCacheMinTTL creates a FQDN policy in the specified Namespace.
