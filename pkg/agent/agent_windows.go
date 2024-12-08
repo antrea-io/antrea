@@ -512,3 +512,7 @@ func (i *Initializer) installVMInitialFlows() error {
 func (i *Initializer) prepareL7EngineInterfaces() error {
 	return nil
 }
+
+func (i *Initializer) setTXChecksumOffload() error {
+	return nil
+}
