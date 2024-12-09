@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/spf13/afero"
-	"golang.org/x/crypto/ssh"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -299,28 +298,15 @@ func (c *SupportBundleController) uploadSupportBundle(supportBundle *cpv1b2.Supp
 	if _, err := outputFile.Seek(0, 0); err != nil {
 		return fmt.Errorf("failed to upload to the file server while setting offset: %v", err)
 	}
-	// #nosec G106: users should set hostPublicKey, accepting arbitrary keys is not recommended.
-	hostKeyCallback := ssh.InsecureIgnoreHostKey()
-	var hostKeyAlgorithms []string
-	if supportBundle.FileServer.HostPublicKey != nil {
-		key, err := ssh.ParsePublicKey(supportBundle.FileServer.HostPublicKey)
-		if err != nil {
-			return fmt.Errorf("invalid host public key: %w", err)
-		}
-		hostKeyCallback = ssh.FixedHostKey(key)
-		// With a single fixed key, it makes sense to set this in case the server supports
-		// multiple keys (e.g., ed25519 and rsa).
-		hostKeyAlgorithms = sftp.GetAlgorithmsForHostKey(key)
-	}
 	fileName := c.nodeName + "_" + supportBundle.Name + ".tar.gz"
-	cfg := &ssh.ClientConfig{
-		User:              supportBundle.Authentication.BasicAuthentication.Username,
-		Auth:              []ssh.AuthMethod{ssh.Password(supportBundle.Authentication.BasicAuthentication.Password)},
-		HostKeyCallback:   hostKeyCallback,
-		HostKeyAlgorithms: hostKeyAlgorithms,
-		Timeout:           time.Second,
+	cfg, err := sftp.GetSSHClientConfig(
+		supportBundle.Authentication.BasicAuthentication.Username,
+		supportBundle.Authentication.BasicAuthentication.Password,
+		supportBundle.FileServer.HostPublicKey,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to generate SSH client config: %w", err)
 	}
-
 	return uploader.Upload(supportBundle.FileServer.URL, fileName, cfg, outputFile)
 }
 

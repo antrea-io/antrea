@@ -757,18 +757,6 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 			},
 			expectFailure: true,
 		},
-		{
-			bundleConfig: bundleConfig{
-				name: "b6",
-				nodes: &bundleNodes{
-					names: []string{"n1", "n2"},
-				},
-				authType: v1alpha1.APIKey,
-				// invalid key
-				hostPublicKey: []byte("abc"),
-			},
-			expectedError: "invalid host public key",
-		},
 	}
 
 	for _, tc := range testCases {

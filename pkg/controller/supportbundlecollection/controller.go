@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/crypto/ssh"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
@@ -400,12 +399,6 @@ func (c *Controller) createInternalSupportBundleCollection(bundle *v1alpha1.Supp
 		bundleAuthConfig.BasicAuthentication = &controlplane.BasicAuthentication{
 			Username: authentication.BasicAuthentication.Username,
 			Password: authentication.BasicAuthentication.Password,
-		}
-	}
-	// Validate the format of the public key here, to catch invalid keys early.
-	if bundle.Spec.FileServer.HostPublicKey != nil {
-		if _, err := ssh.ParsePublicKey(bundle.Spec.FileServer.HostPublicKey); err != nil {
-			return nil, fmt.Errorf("invalid host public key: %w", err)
 		}
 	}
 	internalBundleCollection := c.addInternalSupportBundleCollection(bundle, nodeSpan, bundleAuthConfig, metav1.NewTime(expiredAt))
