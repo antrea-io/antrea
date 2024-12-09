@@ -5345,6 +5345,9 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 		Create(data))
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, toolboxPodName, data.testNamespace))
 
+	// get timestamp before the Pod resolves the FQDN for the first time
+	startCacheTime := time.Now()
+
 	curlFQDN := func(target string) (string, error) {
 		cmd := []string{"curl", target}
 		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, toolboxPodName, toolboxContainerName, cmd)
@@ -5358,7 +5361,7 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		_, err := curlFQDN(testFQDN)
 		assert.NoError(t, err)
-	}, 2*time.Second, 1*time.Millisecond, "failed to curl test FQDN: ", testFQDN)
+	}, 2*time.Second, 100*time.Millisecond, "failed to curl test FQDN: ", testFQDN)
 
 	// confirm that the FQDN resolves to the expected IP address and store it to simulate caching of this IP by the client Pod.
 	t.Logf("Resolving FQDN to simulate caching the current IP inside toolbox Pod")
@@ -5380,10 +5383,21 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 	require.NoError(t, data.setPodAnnotation(data.testNamespace, "custom-dns-server", "test.antrea.io/random-value",
 		randSeq(8)), "failed to update custom DNS Pod annotation.")
 
-	// finally verify that Curling the previously cached IP does not fail after DNS update.
+	// finally verify that Curling the previously cached IP does not fail after DNS update, as long as fqdnCacheMinTTL is set.
 	// The wait time here should be slightly longer than the reload value specified in the custom DNS configuration.
 	t.Logf("Trying to curl the existing cached IP of the domain: %s", fqdnIP)
 
+	// Calculate `waitFor` to determine the duration to wait for the 'Never' assertion.
+	// This accounts for the elapsed time since the initial DNS request was made from the Pod
+	// and the start of the FQDN cache's minimum TTL (fqdnCacheMinTTL). The duration is reduced
+	// by 1 second as a buffer acting as a safety margin.
+	safetyMargin := 1 * time.Second
+	waitFor := (time.Duration(fqdnCacheMinTTL)*time.Second - time.Since(startCacheTime)) - safetyMargin
+
+	if waitFor <= 0 {
+		t.Logf("Invalid waitFor computed: %v. Clamping to 1 second.", waitFor)
+		waitFor = 1 * time.Second
+	}
 	if fqdnCacheMinTTL == 0 {
 		// fqdnCacheMinTTL is unset , hence we expect an error in connection .
 		assert.EventuallyWithT(t, func(t *assert.CollectT) {
@@ -5391,11 +5405,12 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 			assert.Error(t, err)
 		}, 20*time.Second, 1*time.Second)
 	} else {
+
 		// fqdnCacheMinTTL is set hence we expect no error at least till the period equivalent to fqdnCacheMinTTL's value.
 		assert.Never(t, func() bool {
 			_, err := curlFQDN(fqdnIP)
 			return err != nil
-		}, time.Duration(fqdnCacheMinTTL)*time.Second, 1*time.Second)
+		}, waitFor, 1*time.Second)
 	}
 }
 
