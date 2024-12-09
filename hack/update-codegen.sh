@@ -48,7 +48,7 @@ fi
 function docker_run() {
   # Silence CLI suggestions.
   export DOCKER_CLI_HINTS=false
-  docker pull ${IMAGE_NAME}
+  [ -n "$NO_PULL" ] || docker pull ${IMAGE_NAME}
   set -x
   ANTREA_SRC_PATH="/mnt/antrea"
   # The .git directory in ANTREA_SRC_PATH must be marked as "safe".
