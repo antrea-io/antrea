@@ -82,6 +82,8 @@ message BasicAuthentication {
 
 message BundleFileServer {
   optional string url = 1;
+
+  optional bytes hostPublicKey = 2;
 }
 
 message BundleServerAuthConfiguration {

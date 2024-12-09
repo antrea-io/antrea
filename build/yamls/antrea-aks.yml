@@ -3061,6 +3061,9 @@ spec:
                     url:
                       type: string
                       pattern: 'sftp:\/\/[\w-_./]+:\d+'
+                    hostPublicKey:
+                      type: string
+                      format: byte
             status:
               type: object
               properties:
@@ -3197,6 +3200,9 @@ spec:
                   properties:
                     url:
                       type: string
+                    hostPublicKey:
+                      type: string
+                      format: byte
                 authentication:
                   type: object
                   properties:
