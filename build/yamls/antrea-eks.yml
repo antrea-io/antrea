@@ -6000,7 +6000,7 @@ webhooks:
         namespace: kube-system
         path: "/validate/supportbundlecollection"
     rules:
-      - operations: ["UPDATE", "DELETE"]
+      - operations: ["CREATE", "UPDATE", "DELETE"]
         apiGroups: ["crd.antrea.io"]
         apiVersions: ["v1alpha1"]
         resources: ["supportbundlecollections"]
