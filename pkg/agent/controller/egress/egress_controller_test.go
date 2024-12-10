@@ -271,20 +271,14 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(500), uint32(500))
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 				mockOFClient.EXPECT().UninstallEgressQoS(uint32(1))
 
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(0))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeLocalEgressIP1), uint32(0))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 			},
 		},
@@ -321,12 +315,8 @@ func TestSyncEgress(t *testing.T) {
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 
 				mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(500), uint32(500))
@@ -371,16 +361,12 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(500), uint32(500))
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 
 				mockOFClient.EXPECT().UninstallEgressQoS(uint32(1))
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP2).Return(false, nil)
 
@@ -425,21 +411,15 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(500), uint32(500))
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 				mockOFClient.EXPECT().UninstallEgressQoS(uint32(1))
 
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 			},
 		},
@@ -475,12 +455,8 @@ func TestSyncEgress(t *testing.T) {
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 
@@ -530,12 +506,11 @@ func TestSyncEgress(t *testing.T) {
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP2), uint32(2))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP2), uint32(2))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeLocalEgressIP2), uint32(2))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP2), uint32(2))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP2).Return(false, nil)
@@ -581,9 +556,8 @@ func TestSyncEgress(t *testing.T) {
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil).Times(3)
 			},
@@ -630,8 +604,6 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP2, nil, true).Return(true, nil)
 				// forceAdvertise depends on how fast the Egress status update is reflected in the informer cache, which doesn't really matter.
@@ -687,8 +659,6 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, nil, true).Return(true, nil)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 			},
 			expectedEvents: []string{
@@ -730,14 +700,10 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, nil, true).Return(true, nil)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(true, nil)
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
 			},
 			expectedEvents: []string{
@@ -776,11 +742,11 @@ func TestSyncEgress(t *testing.T) {
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil).Times(3)
 
 				mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(500), uint32(500))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 			},
 		},
 		{
@@ -815,11 +781,11 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(500), uint32(500))
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil).Times(3)
 
 				mockOFClient.EXPECT().UninstallEgressQoS(uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 			},
 		},
 		{
@@ -854,10 +820,10 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(500), uint32(500))
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil).Times(3)
 				mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(10000), uint32(20000))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 			},
 		},
 		{
@@ -902,7 +868,6 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, nil, true).Return(true, nil)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}, true).Return(true, nil)
@@ -912,6 +877,7 @@ func TestSyncEgress(t *testing.T) {
 
 				// forceAdvertise depends on how fast the Egress status update is reflected in the informer cache, which doesn't really matter.
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}, gomock.Any()).Return(false, nil)
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 			},
 			expectedEvents: []string{
 				"Assigned Egress egressA with IP 1.1.1.1 on Node node1",
@@ -960,13 +926,13 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}, true).Return(true, nil)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().GetInterfaceID(&crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}).Return(20, true)
 				mockRouteClient.EXPECT().AddEgressRoutes(uint32(101), 20, net.ParseIP(fakeGatewayIP), 16)
 				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1))
 
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP2, PrefixLength: 16}, true).Return(true, nil)
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().DeleteEgressRule(uint32(101), uint32(1))
 				mockRouteClient.EXPECT().DeleteEgressRoutes(uint32(101))
 				mockIPAssigner.EXPECT().GetInterfaceID(&crdv1b1.SubnetInfo{Gateway: fakeGatewayIP2, PrefixLength: 16}).Return(30, true)
@@ -1029,7 +995,6 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}, true).Return(true, nil)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().GetInterfaceID(&crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}).Return(20, true)
 				mockRouteClient.EXPECT().AddEgressRoutes(uint32(101), 20, net.ParseIP(fakeGatewayIP), 16)
@@ -1082,7 +1047,6 @@ func TestSyncEgress(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}, true).Return(true, nil)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().GetInterfaceID(&crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}).Return(20, true)
 				mockRouteClient.EXPECT().AddEgressRoutes(uint32(101), 20, net.ParseIP(fakeGatewayIP), 16)
@@ -1092,7 +1056,6 @@ func TestSyncEgress(t *testing.T) {
 				mockRouteClient.EXPECT().DeleteEgressRule(uint32(101), uint32(1))
 				mockRouteClient.EXPECT().DeleteEgressRoutes(uint32(101))
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
 			},
 			expectedEvents: []string{
@@ -1205,7 +1168,6 @@ func TestPodUpdateShouldSyncEgress(t *testing.T) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	c.addEgressGroup(egressGroup)
@@ -1215,7 +1177,6 @@ func TestPodUpdateShouldSyncEgress(t *testing.T) {
 	require.NoError(t, c.syncEgress(item))
 	c.queue.Done(item)
 
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(10), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	// Mock CNIServer
 	addPodInterface(c.ifaceStore, "ns1", "pendingPod", 10)
@@ -1340,21 +1301,15 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	checkQueueItemExistence(t, c.queue, egress1.Name, egress2.Name, egress3.Name)
 
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	err := c.syncEgress(egress1.Name)
 	assert.NoError(t, err)
 
-	// egress2's IP is not local and pod1 has enforced egress1, so only one Pod SNAT flow is expected.
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
 	err = c.syncEgress(egress2.Name)
 	assert.NoError(t, err)
 
-	// egress3 shares the same IP as egress1 and pod2 has enforced egress1, so only one Pod SNAT flow is expected.
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(4), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	err = c.syncEgress(egress3.Name)
 	assert.NoError(t, err)
@@ -1362,8 +1317,6 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	// After deleting egress1, pod1 and pod2 no longer enforces egress1. The Egress IP shouldn't be released as egress3
 	// is still referring to it.
 	// egress2 and egress3 are expected to be triggered for resync.
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress1.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
 		_, err := c.egressLister.Get(egress1.Name)
@@ -1375,21 +1328,14 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	assert.NoError(t, err)
 	checkQueueItemExistence(t, c.queue, egress2.Name, egress3.Name)
 
-	// pod1 is expected to enforce egress2.
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
 	err = c.syncEgress(egress2.Name)
 	assert.NoError(t, err)
 
-	// pod2 is expected to enforce egress3.
-	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	err = c.syncEgress(egress3.Name)
 	assert.NoError(t, err)
 
-	// After deleting egress2, pod1 and pod3 no longer enforces any Egress.
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(3))
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress2.Name, metav1.DeleteOptions{})
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
 	assert.Eventually(t, func() bool {
@@ -1404,8 +1350,6 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	// After deleting egress3, pod2 and pod4 no longer enforces any Egress. The Egress IP should be released.
 	c.mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 	c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(4))
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress3.Name, metav1.DeleteOptions{})
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	assert.Eventually(t, func() bool {
