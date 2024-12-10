@@ -350,7 +350,7 @@ type HTTPProtocol struct {
 // matches all TLS handshake packets.
 type TLSProtocol struct {
 	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
-	SNI string `json:"sni,omitempty" protobuf:"bytes,1,opt,name=sni"`
+	SNI string
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
