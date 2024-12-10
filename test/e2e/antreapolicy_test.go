@@ -5387,17 +5387,6 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 	// The wait time here should be slightly longer than the reload value specified in the custom DNS configuration.
 	t.Logf("Trying to curl the existing cached IP of the domain: %s", fqdnIP)
 
-	// Calculate `waitFor` to determine the duration to wait for the 'Never' assertion.
-	// This accounts for the elapsed time since the initial DNS request was made from the Pod
-	// and the start of the FQDN cache's minimum TTL (fqdnCacheMinTTL). The duration is reduced
-	// by 1 second as a buffer acting as a safety margin.
-	safetyMargin := 1 * time.Second
-	waitFor := (time.Duration(fqdnCacheMinTTL)*time.Second - time.Since(startCacheTime)) - safetyMargin
-
-	if waitFor <= 0 {
-		t.Logf("Invalid waitFor computed: %v. Clamping to 1 second.", waitFor)
-		waitFor = 1 * time.Second
-	}
 	if fqdnCacheMinTTL == 0 {
 		// fqdnCacheMinTTL is unset , hence we expect an error in connection .
 		assert.EventuallyWithT(t, func(t *assert.CollectT) {
@@ -5405,6 +5394,13 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 			assert.Error(t, err)
 		}, 20*time.Second, 1*time.Second)
 	} else {
+		// Calculate `waitFor` to determine the duration to wait for the 'Never' assertion.
+		// This accounts for the elapsed time since the initial DNS request was made from the Pod
+		// and the start of the FQDN cache's minimum TTL (fqdnCacheMinTTL). The duration is reduced
+		// by 1 second as a buffer acting as a safety margin.
+		safetyMargin := 1 * time.Second
+		waitFor := (time.Duration(fqdnCacheMinTTL)*time.Second - time.Since(startCacheTime)) - safetyMargin
+		require.GreaterOrEqual(t, waitFor, 5*time.Second)
 
 		// fqdnCacheMinTTL is set hence we expect no error at least till the period equivalent to fqdnCacheMinTTL's value.
 		assert.Never(t, func() bool {
