@@ -127,6 +127,7 @@ type fqdnController struct {
 	ofClient openflow.Client
 	// dnsServerAddr stores the coreDNS server address, or the user provided DNS server address.
 	dnsServerAddr string
+	minTTL        uint32
 
 	// dirtyRuleHandler is a callback that is run upon finding a rule out-of-sync.
 	dirtyRuleHandler func(string)
@@ -160,7 +161,7 @@ type fqdnController struct {
 	clock clock.Clock
 }
 
-func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.WithTicker) (*fqdnController, error) {
+func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.WithTicker, fqdnCacheMinTTL uint32) (*fqdnController, error) {
 	controller := &fqdnController{
 		ofClient:         client,
 		dirtyRuleHandler: dirtyRuleHandler,
@@ -182,6 +183,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 		ipv6Enabled:            v6Enabled,
 		gwPort:                 gwPort,
 		clock:                  clock,
+		minTTL:                 fqdnCacheMinTTL,
 	}
 	if controller.ofClient != nil {
 		if err := controller.ofClient.NewDNSPacketInConjunction(dnsInterceptRuleID); err != nil {
@@ -643,7 +645,7 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 			if f.ipv4Enabled {
 				responseIPs[r.A.String()] = ipWithExpiration{
 					ip:             r.A,
-					expirationTime: currentTime.Add(time.Duration(r.Header().Ttl) * time.Second),
+					expirationTime: currentTime.Add(time.Duration(max(f.minTTL, r.Header().Ttl)) * time.Second),
 				}
 
 			}
@@ -651,7 +653,7 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 			if f.ipv6Enabled {
 				responseIPs[r.AAAA.String()] = ipWithExpiration{
 					ip:             r.AAAA,
-					expirationTime: currentTime.Add(time.Duration(r.Header().Ttl) * time.Second),
+					expirationTime: currentTime.Add(time.Duration(max(f.minTTL, r.Header().Ttl)) * time.Second),
 				}
 			}
 		}
