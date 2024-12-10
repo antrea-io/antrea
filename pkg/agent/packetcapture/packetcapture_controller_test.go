@@ -154,7 +154,7 @@ func (uploader *testUploader) Upload(url string, fileName string, config *ssh.Cl
 	if url != uploader.url {
 		return fmt.Errorf("expected url: %s for uploader, got: %s", uploader.url, url)
 	}
-	if fileName != "" && fileName != uploader.fileName {
+	if uploader.fileName != "" && fileName != uploader.fileName {
 		return fmt.Errorf("expected filename: %s, got: %s ", uploader.fileName, fileName)
 	}
 	if uploader.hostKey != nil {

@@ -196,12 +196,12 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 		},
 		{
 			name:                    "Add SupportBundleCollection with invalid host key",
-			supportBundleCollection: generateSupportbundleCollection("supportBundle14", "sftp://10.220.175.92:22/root/supportbundle", []byte("abc")),
+			supportBundleCollection: generateSupportbundleCollection("supportBundle15", "sftp://10.220.175.92:22/root/supportbundle", []byte("abc")),
 			agentDumper:             &mockAgentDumper{},
 			uploader: &testUploader{
 				hostKey: hostKey1,
 			},
-			expectedSyncErr: "failed to generate support bundle: invalid host public key",
+			expectedSyncErr: "failed to generate support bundle: failed to generate SSH client config: invalid host public key",
 		},
 	}
 
