@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"golang.org/x/crypto/ssh"
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -42,6 +43,15 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 		}
 	}
 
+	validate := func(bundle *crdv1alpha1.SupportBundleCollection) error {
+		if bundle.Spec.FileServer.HostPublicKey != nil {
+			if _, err := ssh.ParsePublicKey(bundle.Spec.FileServer.HostPublicKey); err != nil {
+				return fmt.Errorf("invalid host public key: %w", err)
+			}
+		}
+		return nil
+	}
+
 	validateProcessingCollection := func() *admv1.AdmissionResponse {
 		var msg string
 		allowed := true
@@ -55,8 +65,17 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 		return validationResult(allowed, msg)
 	}
 
-	if review.Request.Operation == admv1.Update {
+	switch review.Request.Operation {
+	case admv1.Create:
+		klog.V(2).Info("Validating CREATE request for SupportBundleCollection")
+		if err := validate(&newObj); err != nil {
+			return newAdmissionResponseForErr(err)
+		}
+	case admv1.Update:
 		klog.V(2).Info("Validating UPDATE request for SupportBundleCollection")
+		if err := validate(&newObj); err != nil {
+			return newAdmissionResponseForErr(err)
+		}
 		if isCollectionCompleted(&oldObj) {
 			return validationResult(false, fmt.Sprintf("SupportBundleCollection %s is completed, cannot be updated", oldObj.Name))
 		}

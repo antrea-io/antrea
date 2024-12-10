@@ -31,7 +31,6 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcapgo"
 	"github.com/spf13/afero"
-	"golang.org/x/crypto/ssh"
 	"golang.org/x/time/rate"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -585,12 +584,13 @@ func (c *Controller) uploadPackets(ctx context.Context, pc *crdv1alpha1.PacketCa
 	if serverAuth.BasicAuthentication == nil {
 		return fmt.Errorf("failed to get basic authentication info for the file server")
 	}
-	cfg := &ssh.ClientConfig{
-		User: serverAuth.BasicAuthentication.Username,
-		Auth: []ssh.AuthMethod{ssh.Password(serverAuth.BasicAuthentication.Password)},
-		// #nosec G106: skip host key check here and users can specify their own checks if needed
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         time.Second,
+	cfg, err := sftp.GetSSHClientConfig(
+		serverAuth.BasicAuthentication.Username,
+		serverAuth.BasicAuthentication.Password,
+		pc.Spec.FileServer.HostPublicKey,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to generate SSH client config: %w", err)
 	}
 	return uploader.Upload(pc.Spec.FileServer.URL, c.generatePacketsPathForServer(pc.Name), cfg, outputFile)
 }

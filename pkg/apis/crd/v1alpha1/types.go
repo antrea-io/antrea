@@ -176,6 +176,10 @@ type BundleFileServer struct {
 	// The URL of the bundle file server. It is set with format: scheme://host[:port][/path],
 	// e.g, https://api.example.com:8443/v1/supportbundles/. If scheme is not set, https is used by default.
 	URL string `json:"url"`
+	// HostPublicKey specifies the only host public key that will be accepted when connecting to
+	// the file server. If omitted, any host key will be accepted, which is not recommended.
+	// For SFTP, the key must be formatted for use in the SSH wire protocol according to RFC 4253, section 6.6.
+	HostPublicKey []byte `json:"hostPublicKey,omitempty"`
 }
 
 // BundleServerAuthType defines the authentication type to access the BundleFileServer.
@@ -421,6 +425,10 @@ type PacketCaptureFileServer struct {
 	// The URL of the file server. It is set with format: scheme://host[:port][/path],
 	// e.g., https://api.example.com:8443/v1/packets/. Currently only `sftp` protocol is supported.
 	URL string `json:"url"`
+	// HostPublicKey specifies the only host public key that will be accepted when connecting to
+	// the file server. If omitted, any host key will be accepted, which is not recommended.
+	// For SFTP, the key must be formatted for use in the SSH wire protocol according to RFC 4253, section 6.6.
+	HostPublicKey []byte `json:"hostPublicKey,omitempty"`
 }
 
 type PacketCaptureSpec struct {

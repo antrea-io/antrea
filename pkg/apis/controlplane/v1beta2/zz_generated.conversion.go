@@ -697,6 +697,7 @@ func Convert_controlplane_BasicAuthentication_To_v1beta2_BasicAuthentication(in 
 
 func autoConvert_v1beta2_BundleFileServer_To_controlplane_BundleFileServer(in *BundleFileServer, out *controlplane.BundleFileServer, s conversion.Scope) error {
 	out.URL = in.URL
+	out.HostPublicKey = *(*[]byte)(unsafe.Pointer(&in.HostPublicKey))
 	return nil
 }
 
@@ -707,6 +708,7 @@ func Convert_v1beta2_BundleFileServer_To_controlplane_BundleFileServer(in *Bundl
 
 func autoConvert_controlplane_BundleFileServer_To_v1beta2_BundleFileServer(in *controlplane.BundleFileServer, out *BundleFileServer, s conversion.Scope) error {
 	out.URL = in.URL
+	out.HostPublicKey = *(*[]byte)(unsafe.Pointer(&in.HostPublicKey))
 	return nil
 }
 

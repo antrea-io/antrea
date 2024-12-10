@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/spf13/afero"
-	"golang.org/x/crypto/ssh"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -300,14 +299,14 @@ func (c *SupportBundleController) uploadSupportBundle(supportBundle *cpv1b2.Supp
 		return fmt.Errorf("failed to upload to the file server while setting offset: %v", err)
 	}
 	fileName := c.nodeName + "_" + supportBundle.Name + ".tar.gz"
-	cfg := &ssh.ClientConfig{
-		User: supportBundle.Authentication.BasicAuthentication.Username,
-		Auth: []ssh.AuthMethod{ssh.Password(supportBundle.Authentication.BasicAuthentication.Password)},
-		// #nosec G106: skip host key check here and users can specify their own checks if needed
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         time.Second,
+	cfg, err := sftp.GetSSHClientConfig(
+		supportBundle.Authentication.BasicAuthentication.Username,
+		supportBundle.Authentication.BasicAuthentication.Password,
+		supportBundle.FileServer.HostPublicKey,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to generate SSH client config: %w", err)
 	}
-
 	return uploader.Upload(supportBundle.FileServer.URL, fileName, cfg, outputFile)
 }
 

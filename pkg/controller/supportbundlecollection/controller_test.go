@@ -45,6 +45,7 @@ import (
 	"antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/auth"
 	"antrea.io/antrea/pkg/util/k8s"
+	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
 )
 
 const (
@@ -84,6 +85,7 @@ type bundleConfig struct {
 	authType        v1alpha1.BundleServerAuthType
 	secretName      string
 	secretNamespace string
+	hostPublicKey   []byte
 	conditions      []v1alpha1.SupportBundleCollectionCondition
 	phase           bundlePhase
 	createTime      *time.Time
@@ -674,6 +676,9 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 
 	testClient.waitForSync(stopCh)
 
+	hostPublicKey, _, err := sftptesting.GenerateEd25519Key()
+	require.NoError(t, err)
+
 	expiredDuration, _ := time.ParseDuration("-61m")
 	expiredCreationTime := time.Now().Add(expiredDuration)
 	testCases := []struct {
@@ -690,7 +695,8 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 					names:  []string{"n1", "n2"},
 					labels: map[string]string{"test": "selected"},
 				},
-				authType: v1alpha1.APIKey,
+				authType:      v1alpha1.APIKey,
+				hostPublicKey: hostPublicKey.Marshal(),
 			},
 			expectedNodes: sets.New[string]("n1", "n2", "n3", "n4"),
 			expectedAuth: controlplane.BundleServerAuthConfiguration{
@@ -763,8 +769,9 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 			bundleConfig.secretName = secretName
 			bundleConfig.secretNamespace = secretNamespace
 		}
-		bundle, err := testClient.crdClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), generateSupportBundleResource(bundleConfig), metav1.CreateOptions{})
-		require.Nil(t, err)
+		bundle := generateSupportBundleResource(bundleConfig)
+		_, err := testClient.crdClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), bundle, metav1.CreateOptions{})
+		require.NoError(t, err)
 		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
 			_, getErr := controller.supportBundleCollectionLister.Get(tc.bundleConfig.name)
 			if getErr == nil {
@@ -792,6 +799,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 				internalBundle, _ := obj.(*types.SupportBundleCollection)
 				assert.Equal(t, tc.expectedNodes, internalBundle.NodeNames)
 				assert.Equal(t, tc.expectedAuth, internalBundle.Authentication)
+				assert.Equal(t, bundle.Spec.FileServer, internalBundle.FileServer)
 			} else {
 				updatedBundle, err := testClient.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.TODO(), bundle.Name, metav1.GetOptions{})
 				require.NoError(t, err)
@@ -810,8 +818,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 	}
 
 	// Test update span
-	err := testClient.client.CoreV1().Nodes().Delete(context.TODO(), "n3", metav1.DeleteOptions{})
-	require.NoError(t, err)
+	require.NoError(t, testClient.client.CoreV1().Nodes().Delete(context.TODO(), "n3", metav1.DeleteOptions{}))
 	updatedBundleCollection := generateSupportBundleResource(
 		bundleConfig{
 			name: "b1",
@@ -1864,7 +1871,8 @@ func generateSupportBundleResource(b bundleConfig) *v1alpha1.SupportBundleCollec
 		},
 		Spec: v1alpha1.SupportBundleCollectionSpec{
 			FileServer: v1alpha1.BundleFileServer{
-				URL: "https://1.1.1.1:443/supportbundles/upload",
+				URL:           "https://1.1.1.1:443/supportbundles/upload",
+				HostPublicKey: b.hostPublicKey,
 			},
 			ExpirationMinutes: 60,
 			SinceTime:         "2h",

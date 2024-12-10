@@ -57,6 +57,10 @@ metadata:
 spec:
   fileServer:
     url: sftp://127.0.0.1:22/upload # Define your own sftp url here.
+    # Host public key (as a base64-encoded string) that will be accepted when connecting to the file server.
+    # Get this key from your SSH server configuration, or from a known_hosts file.
+    # If omitted, any host key will be accepted, which is insecure and not recommended.
+    hostPublicKey: AAAAC3NzaC1lZDI1NTE5AAAAIBCUI6Yi9KbkiPXK2MzqYYtlluw7v_WQz071JZPdZEKr # Replace with your own.
   timeout: 60
   captureConfig:
     firstN:

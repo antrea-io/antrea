@@ -97,7 +97,8 @@ func ToSupportBundleCollectionMsg(in *types.SupportBundleCollection, out *contro
 	out.ExpiredAt = in.ExpiredAt
 	out.SinceTime = in.SinceTime
 	out.FileServer = controlplane.BundleFileServer{
-		URL: in.FileServer.URL,
+		URL:           in.FileServer.URL,
+		HostPublicKey: in.FileServer.HostPublicKey,
 	}
 	out.Authentication = in.Authentication
 }
