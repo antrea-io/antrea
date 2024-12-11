@@ -866,7 +866,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			t.Fatalf("Error when waiting for Egress to be realized: %v", err)
 		}
 		t.Logf("Egress %s is realized with Egress IP %s", egress.Name, egressNodeIP)
-		defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+		defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 		if !isIPv6 {
 			if clientIPs.IPv4 != nil && serverIPs.IPv4 != nil {
 				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, egressNodeName, label)
@@ -908,7 +908,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			t.Fatalf("Error when waiting for Egress to be realized: %v", err)
 		}
 		t.Logf("Egress %s is realized with Egress IP %s", egress.Name, egressNodeIP)
-		defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+		defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 		if !isIPv6 {
 			if clientIPs.IPv4 != nil && serverIPs.IPv4 != nil {
 				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, egressNodeName, label)
