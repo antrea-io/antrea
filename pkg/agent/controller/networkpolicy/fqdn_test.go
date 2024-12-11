@@ -51,7 +51,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		dnsServerAddr,
 		dirtyRuleHandler,
 		true,
-		true,
+		false,
 		config.DefaultHostGatewayOFPort,
 		clockToInject,
 		fqdnCacheMinTTL,
@@ -821,6 +821,7 @@ func TestParseDNSResponseOnFQDNCacheMinTTL(t *testing.T) {
 			fakeClock := newFakeClock(currentTime)
 			controller := gomock.NewController(t)
 			f, _ := newMockFQDNController(t, controller, nil, fakeClock, tc.fqdnCacheMinTTL)
+			f.ipv6Enabled = true // this test needs IPv6 enabled
 			dnsMsg := getDNSMsg(tc.responseTTL)
 			_, responseIPs, err := f.parseDNSResponse(dnsMsg)
 			require.NoError(t, err)

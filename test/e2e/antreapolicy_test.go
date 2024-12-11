@@ -5281,7 +5281,7 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 // when fqdnCacheMinTTL is unset .
 func TestFQDNCacheMinTTL(t *testing.T) {
 	t.Run("minTTLUnset", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 0) })
-	t.Run("minTTL10s", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 10) })
+	t.Run("minTTL20s", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 20) })
 }
 
 func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
@@ -5392,7 +5392,7 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			_, err := curlFQDN(fqdnIP)
 			assert.Error(t, err)
-		}, 20*time.Second, 1*time.Second)
+		}, 10*time.Second, 1*time.Second)
 	} else {
 		// Calculate `waitFor` to determine the duration to wait for the 'Never' assertion.
 		// This accounts for the elapsed time since the initial DNS request was made from the Pod
@@ -5402,7 +5402,7 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 		waitFor := (time.Duration(fqdnCacheMinTTL)*time.Second - time.Since(startCacheTime)) - safetyMargin
 		require.GreaterOrEqual(t, waitFor, 5*time.Second)
 
-		// fqdnCacheMinTTL is set hence we expect no error at least till the period equivalent to fqdnCacheMinTTL's value.
+		// fqdnCacheMinTTL is set hence we expect no error at least until fqdnCacheMinTTL expires.
 		assert.Never(t, func() bool {
 			_, err := curlFQDN(fqdnIP)
 			return err != nil
