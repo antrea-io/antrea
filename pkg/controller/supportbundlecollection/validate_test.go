@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	adminv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,11 +28,13 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
 )
 
 func TestValidateSupportBundleCollection(t *testing.T) {
-	bundleCollection := generateSupportBundleResource(bundleConfig{
-		name: "b1",
+	const name = "b1"
+	existingConfig := &bundleConfig{
+		name: name,
 		nodes: &bundleNodes{
 			labels: map[string]string{"test": "selected"},
 		},
@@ -40,27 +43,31 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			labels:    map[string]string{"test": "selected"},
 		},
 		authType: crdv1alpha1.APIKey,
-	})
+	}
 	authentication := &controlplane.BundleServerAuthConfiguration{
 		APIKey: "bundle_api_key",
 	}
 	nodeSpan := sets.New[string]("n1", "n2", "n3", "n4")
 	expiredAt := metav1.NewTime(time.Now().Add(time.Minute))
 
+	hostPublicKey, _, err := sftptesting.GenerateEd25519Key()
+	require.NoError(t, err)
+
 	tests := []struct {
-		name              string
-		existsInCache     bool
-		existingStatus    *crdv1alpha1.SupportBundleCollectionStatus
-		updatedCollection *bundleConfig
-		requestOperation  adminv1.Operation
-		expectedResponse  *adminv1.AdmissionResponse
+		name               string
+		requestOperation   adminv1.Operation
+		existingCollection *bundleConfig
+		collection         *bundleConfig
+		existsInCache      bool
+		existingStatus     *crdv1alpha1.SupportBundleCollectionStatus
+		expectedResponse   *adminv1.AdmissionResponse
 	}{
 		{
-			name:             "update before started",
-			existsInCache:    false,
-			requestOperation: adminv1.Update,
-			updatedCollection: &bundleConfig{
-				name: "b1",
+			name:               "update before started",
+			requestOperation:   adminv1.Update,
+			existingCollection: existingConfig,
+			collection: &bundleConfig{
+				name: name,
 				nodes: &bundleNodes{
 					labels: map[string]string{"test": "selected"},
 				},
@@ -71,18 +78,20 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 				},
 				authType: crdv1alpha1.APIKey,
 			},
-			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
-		}, {
-			name:             "delete before started",
 			existsInCache:    false,
-			requestOperation: adminv1.Delete,
 			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
 		}, {
-			name:             "update after started",
-			existsInCache:    true,
-			requestOperation: adminv1.Update,
-			updatedCollection: &bundleConfig{
-				name: "b1",
+			name:               "delete before started",
+			requestOperation:   adminv1.Delete,
+			existingCollection: existingConfig,
+			existsInCache:      false,
+			expectedResponse:   &adminv1.AdmissionResponse{Allowed: true},
+		}, {
+			name:               "update after started",
+			requestOperation:   adminv1.Update,
+			existingCollection: existingConfig,
+			collection: &bundleConfig{
+				name: name,
 				nodes: &bundleNodes{
 					labels: map[string]string{"test": "selected"},
 				},
@@ -93,6 +102,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 				},
 				authType: crdv1alpha1.APIKey,
 			},
+			existsInCache: true,
 			expectedResponse: &adminv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
@@ -100,16 +110,11 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 				},
 			},
 		}, {
-			name:             "update status after started",
-			existsInCache:    true,
-			requestOperation: adminv1.Update,
-			existingStatus: &crdv1alpha1.SupportBundleCollectionStatus{
-				Conditions: []crdv1alpha1.SupportBundleCollectionCondition{
-					{Type: crdv1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
-				},
-			},
-			updatedCollection: &bundleConfig{
-				name: "b1",
+			name:               "update status after started",
+			requestOperation:   adminv1.Update,
+			existingCollection: existingConfig,
+			collection: &bundleConfig{
+				name: name,
 				nodes: &bundleNodes{
 					labels: map[string]string{"test": "selected"},
 				},
@@ -123,19 +128,19 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 					{Status: metav1.ConditionTrue, Type: crdv1alpha1.BundleCollected},
 				},
 			},
-			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
-		}, {
-			name:             "update after completed",
-			existsInCache:    true,
-			requestOperation: adminv1.Update,
+			existsInCache: true,
 			existingStatus: &crdv1alpha1.SupportBundleCollectionStatus{
 				Conditions: []crdv1alpha1.SupportBundleCollectionCondition{
 					{Type: crdv1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
-					{Type: crdv1alpha1.CollectionCompleted, Status: metav1.ConditionTrue},
 				},
 			},
-			updatedCollection: &bundleConfig{
-				name: "b1",
+			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
+		}, {
+			name:               "update after completed",
+			requestOperation:   adminv1.Update,
+			existingCollection: existingConfig,
+			collection: &bundleConfig{
+				name: name,
 				nodes: &bundleNodes{
 					labels: map[string]string{"test": "selected"},
 				},
@@ -146,6 +151,13 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 				},
 				authType: crdv1alpha1.APIKey,
 			},
+			existsInCache: true,
+			existingStatus: &crdv1alpha1.SupportBundleCollectionStatus{
+				Conditions: []crdv1alpha1.SupportBundleCollectionCondition{
+					{Type: crdv1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
+					{Type: crdv1alpha1.CollectionCompleted, Status: metav1.ConditionTrue},
+				},
+			},
 			expectedResponse: &adminv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
@@ -153,17 +165,11 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 				},
 			},
 		}, {
-			name:             "update status after completed",
-			existsInCache:    true,
-			requestOperation: adminv1.Update,
-			existingStatus: &crdv1alpha1.SupportBundleCollectionStatus{
-				Conditions: []crdv1alpha1.SupportBundleCollectionCondition{
-					{Type: crdv1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
-					{Type: crdv1alpha1.CollectionCompleted, Status: metav1.ConditionTrue},
-				},
-			},
-			updatedCollection: &bundleConfig{
-				name: "b1",
+			name:               "update status after completed",
+			requestOperation:   adminv1.Update,
+			existingCollection: existingConfig,
+			collection: &bundleConfig{
+				name: name,
 				nodes: &bundleNodes{
 					labels: map[string]string{"test": "selected"},
 				},
@@ -177,6 +183,13 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 					{Status: metav1.ConditionTrue, Type: crdv1alpha1.BundleCollected},
 				},
 			},
+			existsInCache: true,
+			existingStatus: &crdv1alpha1.SupportBundleCollectionStatus{
+				Conditions: []crdv1alpha1.SupportBundleCollectionCondition{
+					{Type: crdv1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
+					{Type: crdv1alpha1.CollectionCompleted, Status: metav1.ConditionTrue},
+				},
+			},
 			expectedResponse: &adminv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
@@ -184,19 +197,21 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 				},
 			},
 		}, {
-			name:          "delete after started",
-			existsInCache: true,
+			name:               "delete after started",
+			requestOperation:   adminv1.Delete,
+			existingCollection: existingConfig,
+			existsInCache:      true,
 			existingStatus: &crdv1alpha1.SupportBundleCollectionStatus{
 				Conditions: []crdv1alpha1.SupportBundleCollectionCondition{
 					{Type: crdv1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
 				},
 			},
-			requestOperation: adminv1.Delete,
 			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
 		}, {
-			name:             "delete after completed",
-			existsInCache:    true,
-			requestOperation: adminv1.Delete,
+			name:               "delete after completed",
+			requestOperation:   adminv1.Delete,
+			existingCollection: existingConfig,
+			existsInCache:      true,
 			existingStatus: &crdv1alpha1.SupportBundleCollectionStatus{
 				Conditions: []crdv1alpha1.SupportBundleCollectionCondition{
 					{Type: crdv1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
@@ -204,6 +219,30 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 				},
 			},
 			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
+		}, {
+			name:             "create with host public key",
+			requestOperation: adminv1.Create,
+			collection: &bundleConfig{
+				name:          name,
+				authType:      crdv1alpha1.APIKey,
+				hostPublicKey: hostPublicKey.Marshal(),
+			},
+			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
+		}, {
+			name:             "create with invalid host public key",
+			requestOperation: adminv1.Create,
+			collection: &bundleConfig{
+				name:     name,
+				authType: crdv1alpha1.APIKey,
+				// invalid key
+				hostPublicKey: []byte("abc"),
+			},
+			expectedResponse: &adminv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "invalid host public key: ssh: short read",
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -214,23 +253,25 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			controller := newController(testClient)
 			testClient.start(stopCh)
 			testClient.waitForSync(stopCh)
+			var bundleCollection, existingBundleCollection *crdv1alpha1.SupportBundleCollection
+			if tt.existingCollection != nil {
+				existingBundleCollection = generateSupportBundleResource(*tt.existingCollection)
+			}
+			if tt.collection != nil {
+				bundleCollection = generateSupportBundleResource(*tt.collection)
+			}
 			if tt.existsInCache {
-				controller.addInternalSupportBundleCollection(bundleCollection, nodeSpan, authentication, expiredAt)
+				controller.addInternalSupportBundleCollection(existingBundleCollection, nodeSpan, authentication, expiredAt)
 			}
-			oldBundleCollection := bundleCollection
 			if tt.existingStatus != nil {
-				oldBundleCollection.Status = *tt.existingStatus
-			}
-			newBundleCollection := oldBundleCollection
-			if tt.updatedCollection != nil {
-				newBundleCollection = generateSupportBundleResource(*tt.updatedCollection)
+				existingBundleCollection.Status = *tt.existingStatus
 			}
 			review := &adminv1.AdmissionReview{
 				Request: &adminv1.AdmissionRequest{
-					Name:      bundleCollection.Name,
+					Name:      name,
 					Operation: tt.requestOperation,
-					OldObject: runtime.RawExtension{Raw: marshal(oldBundleCollection)},
-					Object:    runtime.RawExtension{Raw: marshal(newBundleCollection)},
+					OldObject: runtime.RawExtension{Raw: marshal(existingBundleCollection)},
+					Object:    runtime.RawExtension{Raw: marshal(bundleCollection)},
 				},
 			}
 			gotResponse := controller.Validate(review)
@@ -240,6 +281,9 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 }
 
 func marshal(object runtime.Object) []byte {
+	if object == nil {
+		return nil
+	}
 	raw, _ := json.Marshal(object)
 	return raw
 }

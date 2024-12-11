@@ -813,6 +813,12 @@ func schema_pkg_apis_controlplane_v1beta2_BundleFileServer(ref common.ReferenceC
 							Format:  "",
 						},
 					},
+					"hostPublicKey": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "byte",
+						},
+					},
 				},
 				Required: []string{"url"},
 			},

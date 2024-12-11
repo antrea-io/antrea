@@ -560,6 +560,9 @@ type BundleFileServer struct {
 	// The URL of the bundle file server. It is set with format: scheme://host[:port][/path],
 	// e.g, https://api.example.com:8443/v1/supportbundles/. If scheme is not set, https is used by default.
 	URL string
+	// HostPublicKey specifies the only host public key that will be accepted when connecting to
+	// the file server. If omitted, any host key will be accepted, which is not recommended.
+	HostPublicKey []byte
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
