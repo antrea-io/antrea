@@ -138,6 +138,9 @@ func NewPodController(
 		// Subscribe Pod CNI add/del events.
 		podUpdateSubscriber.Subscribe(pc.processCNIUpdate)
 	}
+
+	pc.RestoreSecondaryNetwork(ovsBridgeClient, ifaceStore)
+
 	return &pc, nil
 }
 
@@ -501,4 +504,70 @@ func checkForPodSecondaryNetworkAttachement(pod *corev1.Pod) (string, bool) {
 	} else {
 		return netObj, false
 	}
+}
+
+// RestoreSecondaryNetwork restore cniCache and pod interface when agent restart.
+func (pc *PodController) RestoreSecondaryNetwork(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore) {
+	err := InitializeInterfaceStore(ovsBridgeClient, ifaceStore)
+	if err != nil {
+		klog.ErrorS(err, "Failed to initialize the secondary bridge interface store")
+	}
+
+	knownInterfaces := ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+	for _, containerConfig := range knownInterfaces {
+		Config, exists := ifaceStore.GetContainerInterface(containerConfig.ContainerID)
+		if !exists {
+			klog.InfoS("The container interface has been deleted ", "container id", Config.ContainerID)
+			return
+		}
+		event := types.PodUpdate{
+			IsAdd:        true,
+			PodName:      Config.PodName,
+			PodNamespace: Config.PodNamespace,
+			ContainerID:  Config.ContainerID,
+		}
+		pc.processCNIUpdate(event)
+
+	}
+}
+
+func InitializeInterfaceStore(ovsClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore) error {
+	ovsPorts, err := ovsClient.GetPortList()
+	if err != nil {
+		klog.ErrorS(err, "Failed to list OVS ports for the secondary bridge")
+		return err
+	}
+
+	ifaceList := make([]*interfacestore.InterfaceConfig, 0, len(ovsPorts))
+	for index := range ovsPorts {
+		port := &ovsPorts[index]
+		ovsPort := &interfacestore.OVSPortConfig{
+			PortUUID: port.UUID,
+			OFPort:   port.OFPort,
+		}
+
+		interfaceType, ok := port.ExternalIDs[interfacestore.AntreaInterfaceTypeKey]
+		if !ok {
+			klog.InfoS("Interface type is not set for the secondary bridge", "interfaceName", port.Name)
+			continue
+		}
+
+		var intf *interfacestore.InterfaceConfig
+		switch interfaceType {
+		case interfacestore.AntreaContainer:
+			intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
+		default:
+			klog.InfoS("Unknown Antrea interface type for the secondary bridge", "type", interfaceType)
+		}
+
+		if intf != nil {
+			ifaceList = append(ifaceList, intf)
+		}
+
+	}
+
+	ifaceStore.Initialize(ifaceList)
+	klog.InfoS("Successfully initialized the secondary bridge interface store")
+
+	return nil
 }
