@@ -15,15 +15,19 @@
 package e2esecondary
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
 	"testing"
 	"time"
 
+	netattdef "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
 	logs "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	antreae2e "antrea.io/antrea/test/e2e"
 )
@@ -219,6 +223,222 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 	return nil
 }
 
+// pauseAndResumeAntreaAgent pauses and resumes the antrea-agent DaemonSet.
+func (data *testData) pauseAndResumeAntreaAgent() error {
+	const namespace, name = "kube-system", "antrea-agent"
+
+	patchPause := []byte(`[
+		{"op": "add", "path": "/spec/template/spec/nodeSelector", "value": {"pause-daemonset": "true"}}
+	]`)
+
+	patchResume := []byte(`[
+		{"op": "remove", "path": "/spec/template/spec/nodeSelector"}
+	]`)
+
+	// Pause antrea-agent
+	if err := data.e2eTestData.PatchDaemonSet(namespace, name, patchPause); err != nil {
+		return fmt.Errorf("failed to pause antrea-agent: %w", err)
+	}
+	fmt.Println("Antrea Agent paused successfully")
+
+	// Delete Pod after pausing agent
+	podName := data.pods[0].podName
+	logs.Infof("Deleting VLAN Pod %s", podName)
+	if err := data.e2eTestData.DeletePodAndWait(defaultTimeout, podName, data.e2eTestData.GetTestNamespace()); err != nil {
+		// Putting log because agent is in paused state so deleting Pod status will not reflect, status will updated once agent resumed.
+		logs.Infof("Antrea Agent has been paused; Pod %s status updated once agent resumed", podName)
+	}
+
+	// Resume antrea-agent
+	if err := data.e2eTestData.PatchDaemonSet(namespace, name, patchResume); err != nil {
+		return fmt.Errorf("failed to resume Antrea agent: %w", err)
+	}
+	fmt.Println("Antrea Agent resumed successfully")
+
+	return nil
+}
+
+// getPodPortsAndIPs retrieves the interfaces and IPs of a target Pod.
+func (data *testData) getPodPortsAndIPs(targetPod *testPodInfo) (map[string][]string, error) {
+	cmd := []string{"ip", "addr", "show"}
+	stdout, _, err := data.e2eTestData.RunCommandFromPod(data.e2eTestData.GetTestNamespace(), targetPod.podName, containerName, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error listing interfaces for Pod %s: %w", targetPod.podName, err)
+	}
+
+	portsAndIPs := make(map[string][]string)
+	var ifaceName string
+
+	for _, line := range strings.Split(stdout, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && strings.HasSuffix(fields[0], ":") {
+			ifaceName = strings.Split(strings.TrimSuffix(fields[1], ":"), "@")[0]
+		}
+
+		if len(fields) > 1 && (fields[0] == "inet" || fields[0] == "inet6") {
+			ipAddress := fields[1]
+			portsAndIPs[ifaceName] = append(portsAndIPs[ifaceName], ipAddress)
+		}
+	}
+	return portsAndIPs, nil
+}
+
+// checkIPReleased verifies if the VLAN IP is released.
+func (data *testData) checkIPReleased(ipPoolName, podIPString string) error {
+	crdClient, err := data.e2eTestData.GetCRDClient()
+	if err != nil {
+		return fmt.Errorf("failed to get CRD client: %w", err)
+	}
+
+	timeout := time.After(40 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for IP %s to be released", podIPString)
+		case <-ticker.C:
+			ipPool, err := crdClient.CrdV1beta1().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to get IPPool %s: %w", ipPoolName, err)
+			}
+
+			released := true
+			for _, ipAddress := range ipPool.Status.IPAddresses {
+				if podIPString == ipAddress.IPAddress {
+					released = false
+					break
+				}
+			}
+
+			if released {
+				return nil
+			}
+		}
+	}
+}
+
+// getNetAttachDefClient returns a NetAttachDef client.
+func (data *testData) getNetAttachDefClient() (netattdef.Interface, error) {
+	config, err := data.e2eTestData.GetKubeConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
+	}
+
+	client, err := netattdef.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create NetAttachDef client: %w", err)
+	}
+	return client, nil
+}
+
+// getIPPoolNames retrieves the IPPool names from a NetworkAttachmentDefinition.
+func (data *testData) getIPPoolNames(networkName, namespace string) ([]string, error) {
+	client, err := data.getNetAttachDefClient()
+	if err != nil {
+		return nil, err
+	}
+
+	nad, err := client.K8sCniCncfIoV1().NetworkAttachmentDefinitions(namespace).Get(context.TODO(), networkName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NetworkAttachmentDefinition %s: %w", networkName, err)
+	}
+
+	var nadConfig struct {
+		IPAM struct {
+			IPPools []string `json:"ippools"`
+		} `json:"ipam"`
+	}
+
+	if err := json.Unmarshal([]byte(nad.Spec.Config), &nadConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse NAD config JSON: %w", err)
+	}
+
+	return nadConfig.IPAM.IPPools, nil
+}
+
+// reconcilationAfterAgentRestart verifies OVS cleanup and IP release.
+func (data *testData) reconcilationAfterAgentRestart(t *testing.T) error {
+	vlanPod := data.pods[0]
+	iface1 := "eth1"
+
+	logs.Infof("Fetching OVS ports for Pod %s before deletion", vlanPod.podName)
+	beforePorts, err := data.getPodPortsAndIPs(vlanPod)
+	if err != nil {
+		return fmt.Errorf("failed to get OVS ports before deletion: %w", err)
+	}
+
+	PodIP, _, _ := net.ParseCIDR(beforePorts[iface1][0])
+
+	IPPools, err := data.getIPPoolNames(vlanPod.interfaceNetworks[iface1], "default")
+	if err != nil {
+		return fmt.Errorf("failed to get IPPool: %w", err)
+	}
+
+	if err := data.pauseAndResumeAntreaAgent(); err != nil {
+		return fmt.Errorf("failed to pause Antrea agent: %w", err)
+	}
+
+	logs.Infof("Checking OVS ports after VLAN Pod deletion")
+	afterPorts, err := data.getPodPortsAndIPs(vlanPod)
+	if err != nil {
+		logs.Infof("OVS ports for Pod %s has been deleted %v", vlanPod.podName, err)
+	}
+
+	if len(afterPorts) != 0 {
+		if afterPorts[iface1][0] == beforePorts[iface1][0] {
+			return fmt.Errorf("Ovs ports still there")
+		}
+	}
+
+	logs.Infof("Checking if VLAN IP is released")
+	if err := data.checkIPReleased(IPPools[0], PodIP.String()); err != nil {
+		return fmt.Errorf("VLAN IP release failed: %w", err)
+	}
+
+	return nil
+}
+
+// removePodsAndCheckOVSPorts removes a Pod and check if its OVS ports and IPs are released.
+func (data *testData) removePodsAndCheckOVSPorts(t *testing.T) error {
+	vlanPod := data.pods[1]
+	iface1 := "eth1"
+
+	beforePorts, err := data.getPodPortsAndIPs(vlanPod)
+	if err != nil {
+		return fmt.Errorf("failed to get OVS ports before deletion: %w", err)
+	}
+
+	PodIP := beforePorts[iface1][0]
+	IPPools, err := data.getIPPoolNames(vlanPod.interfaceNetworks[iface1], "default")
+	if err != nil {
+		return fmt.Errorf("failed to get IPPool: %w", err)
+	}
+
+	if err := data.e2eTestData.DeletePodAndWait(defaultTimeout, vlanPod.podName, data.e2eTestData.GetTestNamespace()); err != nil {
+		return fmt.Errorf("failed to delete Pod %s: %w", vlanPod.podName, err)
+	}
+
+	logs.Infof("Fetching OVS ports for Pod %s after deletion", vlanPod.podName)
+	afterPorts, err := data.getPodPortsAndIPs(vlanPod)
+	if err != nil {
+		logs.Infof("OVS ports for Pod %s has been deleted %v", vlanPod.podName, err)
+	}
+	if len(afterPorts) != 0 {
+		if afterPorts[iface1] != nil {
+			return fmt.Errorf("Ovs ports still there")
+		}
+	}
+
+	logs.Infof("Checking if VLAN IP is released")
+	if err := data.checkIPReleased(IPPools[0], PodIP); err != nil {
+		return fmt.Errorf("VLAN IP release failed: %v", err)
+	}
+
+	return nil
+}
+
 func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo) {
 	e2eTestData, err := antreae2e.SetupTest(t)
 	if err != nil {
@@ -235,6 +455,19 @@ func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo)
 		err := testData.pingBetweenInterfaces(t)
 		if err != nil {
 			t.Fatalf("Error when pinging between interfaces: %v", err)
+		}
+	})
+
+	t.Run("testreconcilationAfterAgentRestart", func(t *testing.T) {
+		err := testData.reconcilationAfterAgentRestart(t)
+		if err != nil {
+			t.Fatalf("Error when restarting antrea agent: %v", err)
+		}
+	})
+
+	t.Run("testremovePodsAndCheckOVSPorts", func(t *testing.T) {
+		if err := testData.removePodsAndCheckOVSPorts(t); err != nil {
+			t.Fatalf("Error when removing the Pod: %v", err)
 		}
 	})
 }
