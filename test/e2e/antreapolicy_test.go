@@ -4133,7 +4133,7 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 		nil, nil, nil, nil, nil, action, "", "", nil)
 	acnp := builder.Get()
 	_, err = k8sUtils.CreateOrUpdateACNP(acnp)
-	defer data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp.Name, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp.Name, metav1.DeleteOptions{})
 	if err != nil {
 		t.Fatalf("failed to create acnp %v: %v", acnpName, err)
 	}
@@ -4218,7 +4218,7 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	if err != nil {
 		t.Fatalf("failed to create acnp %v: %v", acnpName, err)
 	}
-	defer data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp.Name, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp.Name, metav1.DeleteOptions{})
 
 	captured, err := checkPacketCaptureResult(t, data, tcpdumpName, cmd)
 	if action == crdv1beta1.RuleActionAllow {
@@ -4769,9 +4769,9 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		nil, nil, nil, nil, crdv1beta1.RuleActionAllow, "", "")
 	annp := annpBuilder.Get()
 	log.Debugf("creating ANNP %v", annp.Name)
-	_, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Create(context.TODO(), annp, metav1.CreateOptions{})
+	_, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Create(context.TODO(), annp, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	defer data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Delete(context.TODO(), annp.Name, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Delete(context.TODO(), annp.Name, metav1.DeleteOptions{})
 
 	acnpBuilder := &ClusterNetworkPolicySpecBuilder{}
 	acnpBuilder = acnpBuilder.SetName("acnp-applied-to-two-nodes").
@@ -4781,9 +4781,9 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		nil, nil, nil, nil, nil, crdv1beta1.RuleActionAllow, "", "", nil)
 	acnp := acnpBuilder.Get()
 	log.Debugf("creating ACNP %v", acnp.Name)
-	_, err = data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Create(context.TODO(), acnp, metav1.CreateOptions{})
+	_, err = data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Create(context.TODO(), acnp, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	defer data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp.Name, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp.Name, metav1.DeleteOptions{})
 
 	expectedStatus := crdv1beta1.NetworkPolicyStatus{
 		Phase:                crdv1beta1.NetworkPolicyRealized,
@@ -4820,9 +4820,9 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 		nil, nil, nil, []ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": server1Name}}}, crdv1beta1.RuleActionAllow, "", "")
 	annp := annpBuilder.Get()
 	log.Debugf("creating ANNP %v", annp.Name)
-	annp, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Create(context.TODO(), annp, metav1.CreateOptions{})
+	annp, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Create(context.TODO(), annp, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	defer data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Delete(context.TODO(), annp.Name, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Delete(context.TODO(), annp.Name, metav1.DeleteOptions{})
 
 	annp = checkANNPStatus(t, data, annp, crdv1beta1.NetworkPolicyStatus{
 		Phase:                crdv1beta1.NetworkPolicyRealized,
@@ -4834,7 +4834,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 
 	// Remove the second ingress rule.
 	annp.Spec.Ingress = annp.Spec.Ingress[0:1]
-	_, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), annp, metav1.UpdateOptions{})
+	_, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), annp, metav1.UpdateOptions{})
 	assert.NoError(t, err)
 	annp = checkANNPStatus(t, data, annp, crdv1beta1.NetworkPolicyStatus{
 		Phase:                crdv1beta1.NetworkPolicyRealized,
@@ -4847,7 +4847,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	// Add a non-existing group.
 	// Although nothing will be changed in datapath, the policy's status should be realized with the latest generation.
 	annp.Spec.Ingress[0].AppliedTo = append(annp.Spec.Ingress[0].AppliedTo, crdv1beta1.AppliedTo{Group: "foo"})
-	_, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), annp, metav1.UpdateOptions{})
+	_, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), annp, metav1.UpdateOptions{})
 	assert.NoError(t, err)
 	annp = checkANNPStatus(t, data, annp, crdv1beta1.NetworkPolicyStatus{
 		Phase:                crdv1beta1.NetworkPolicyRealized,
@@ -4860,7 +4860,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	// Delete the non-existing group.
 	// Although nothing will be changed in datapath, the policy's status should be realized with the latest generation.
 	annp.Spec.Ingress[0].AppliedTo = annp.Spec.Ingress[0].AppliedTo[0:1]
-	_, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), annp, metav1.UpdateOptions{})
+	_, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), annp, metav1.UpdateOptions{})
 	assert.NoError(t, err)
 	checkANNPStatus(t, data, annp, crdv1beta1.NetworkPolicyStatus{
 		Phase:                crdv1beta1.NetworkPolicyRealized,
@@ -4943,7 +4943,7 @@ func TestAntreaPolicyStatusWithAppliedToUnsupportedGroup(t *testing.T) {
 func checkANNPStatus(t *testing.T, data *TestData, annp *crdv1beta1.NetworkPolicy, expectedStatus crdv1beta1.NetworkPolicyStatus) *crdv1beta1.NetworkPolicy {
 	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, policyRealizedTimeout, false, func(ctx context.Context) (bool, error) {
 		var err error
-		annp, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Get(context.TODO(), annp.Name, metav1.GetOptions{})
+		annp, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Get(context.TODO(), annp.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -4956,7 +4956,7 @@ func checkANNPStatus(t *testing.T, data *TestData, annp *crdv1beta1.NetworkPolic
 func checkACNPStatus(t *testing.T, data *TestData, acnp *crdv1beta1.ClusterNetworkPolicy, expectedStatus crdv1beta1.NetworkPolicyStatus) *crdv1beta1.ClusterNetworkPolicy {
 	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, policyRealizedTimeout, false, func(ctx context.Context) (bool, error) {
 		var err error
-		acnp, err = data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), acnp.Name, metav1.GetOptions{})
+		acnp, err = data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), acnp.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -4972,7 +4972,7 @@ func checkACNPStatus(t *testing.T, data *TestData, acnp *crdv1beta1.ClusterNetwo
 func (data *TestData) waitForANNPRealized(t *testing.T, namespace string, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ANNP '%s/%s' to be realized", namespace, name)
 	if err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
-		annp, err := data.crdClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		annp, err := data.CRDClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -4989,7 +4989,7 @@ func (data *TestData) waitForANNPRealized(t *testing.T, namespace string, name s
 func (data *TestData) waitForACNPRealized(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ACNP '%s' to be realized", name)
 	if err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
-		acnp, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+		acnp, err := data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -5131,7 +5131,7 @@ func testANNPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 	}
 
 	if err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
-		stats, err := data.crdClient.StatsV1alpha1().AntreaNetworkPolicyStats(data.testNamespace).Get(context.TODO(), "np1", metav1.GetOptions{})
+		stats, err := data.CRDClient.StatsV1alpha1().AntreaNetworkPolicyStats(data.testNamespace).Get(context.TODO(), "np1", metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -5266,7 +5266,7 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	}
 
 	if err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
-		stats, err := data.crdClient.StatsV1alpha1().AntreaClusterNetworkPolicyStats().Get(context.TODO(), "cnp1", metav1.GetOptions{})
+		stats, err := data.CRDClient.StatsV1alpha1().AntreaClusterNetworkPolicyStats().Get(context.TODO(), "cnp1", metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}

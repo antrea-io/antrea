@@ -2140,7 +2140,7 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 	}
 
 	egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressIP, nil)
-	defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 	testcaseLocalEgress := testcase{
 		name:      "egressFromLocalNode",
@@ -2212,9 +2212,9 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 				MatchLabels: map[string]string{"antrea-e2e": remotePodNames[0]},
 			},
 		}
-		_, err := data.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		_, err := data.CRDClient.CrdV1beta1().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
 		if err != nil && errors.IsConflict(err) {
-			toUpdate, _ = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			toUpdate, _ = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 		}
 		return err
 	})
@@ -2361,7 +2361,7 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 				Spec: tc.spec,
 			}
 			tf.Name = randName("")
-			_, err := data.crdClient.CrdV1beta1().Traceflows().Create(context.TODO(), tf, metav1.CreateOptions{})
+			_, err := data.CRDClient.CrdV1beta1().Traceflows().Create(context.TODO(), tf, metav1.CreateOptions{})
 			if tc.allowed {
 				assert.Nil(t, err)
 			} else {
@@ -2379,7 +2379,7 @@ func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1beta1.
 	var err error
 	timeout := 15 * time.Second
 	if err = wait.PollUntilContextTimeout(context.Background(), defaultInterval, timeout, true, func(ctx context.Context) (bool, error) {
-		tf, err = data.crdClient.CrdV1beta1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
+		tf, err = data.CRDClient.CrdV1beta1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
 			return false, nil
 		}
@@ -2460,7 +2460,7 @@ func (data *TestData) createANNPDenyIngress(key string, value string, name strin
 			Egress: []v1beta1.Rule{},
 		},
 	}
-	annpCreated, err := k8sUtils.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Create(context.TODO(), &annp, metav1.CreateOptions{})
+	annpCreated, err := k8sUtils.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Create(context.TODO(), &annp, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -2469,7 +2469,7 @@ func (data *TestData) createANNPDenyIngress(key string, value string, name strin
 
 // deleteAntreaNetworkpolicy deletes an Antrea NetworkPolicy.
 func (data *TestData) deleteAntreaNetworkpolicy(policy *v1beta1.NetworkPolicy) error {
-	if err := k8sUtils.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
+	if err := k8sUtils.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("unable to cleanup policy %v: %v", policy.Name, err)
 	}
 	return nil
@@ -2540,11 +2540,11 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 	if tc.skipIfNeeded != nil {
 		tc.skipIfNeeded(t)
 	}
-	if _, err := data.crdClient.CrdV1beta1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
+	if _, err := data.CRDClient.CrdV1beta1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Error when creating traceflow: %v", err)
 	}
 	defer func() {
-		if err := data.crdClient.CrdV1beta1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
+		if err := data.CRDClient.CrdV1beta1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
 			t.Errorf("Error when deleting traceflow: %v", err)
 		}
 	}()

@@ -134,7 +134,7 @@ func createL7NetworkPolicy(t *testing.T,
 
 	annp := annpBuilder.Get()
 	t.Logf("Creating ANNP %v", annp.Name)
-	_, err := data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Create(context.TODO(), annp, metav1.CreateOptions{})
+	_, err := data.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Create(context.TODO(), annp, metav1.CreateOptions{})
 	assert.NoError(t, err)
 }
 
@@ -272,7 +272,7 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, false)
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
-		data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
+		data.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
 		time.Sleep(networkPolicyDelay)
 
 		// Since the fist L7 NetworkPolicy has been deleted, corresponding packets will be matched by the second L7 NetworkPolicy,
@@ -280,7 +280,7 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, dstPodIPs, true, true)
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, true)
 
-		data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowAnyPath, metav1.DeleteOptions{})
+		data.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowAnyPath, metav1.DeleteOptions{})
 	})
 
 	time.Sleep(networkPolicyDelay)
@@ -301,7 +301,7 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, false)
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
-		data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
+		data.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
 		time.Sleep(networkPolicyDelay)
 
 		// Since the fist L7 NetworkPolicy has been deleted, corresponding packets will be matched by the second L7 NetworkPolicy,
@@ -424,7 +424,7 @@ func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 	probeL7NetworkPolicyTLS(t, data, clientPodName, serverIPs, serverNameBravo, false)
 
 	// Delete the first L7 NetworkPolicy that allows server name '*.alfa.test.l7.tls'.
-	data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowSNIAlfa, metav1.DeleteOptions{})
+	data.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowSNIAlfa, metav1.DeleteOptions{})
 	time.Sleep(networkPolicyDelay)
 
 	probeL7NetworkPolicyTLS(t, data, clientPodName, serverIPs, serverNameAlfa, false)

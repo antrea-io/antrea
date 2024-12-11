@@ -308,9 +308,9 @@ func testSupportBundleCollection(
 			},
 		},
 	}
-	_, err = data.crdClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), sbc, metav1.CreateOptions{})
+	_, err = data.CRDClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), sbc, metav1.CreateOptions{})
 	require.NoError(t, err)
-	defer data.crdClient.CrdV1alpha1().SupportBundleCollections().Delete(context.TODO(), bundleName, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1alpha1().SupportBundleCollections().Delete(context.TODO(), bundleName, metav1.DeleteOptions{})
 	sbc, err = data.waitForSupportBundleCollectionCompleted(t, bundleName, 30*time.Second)
 	require.NoError(t, err)
 
@@ -347,7 +347,7 @@ func (data *TestData) waitForSupportBundleCollection(
 ) (*crdv1alpha1.SupportBundleCollection, error) {
 	var sbc *crdv1alpha1.SupportBundleCollection
 	if err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
-		c, err := data.crdClient.CrdV1alpha1().SupportBundleCollections().Get(ctx, name, metav1.GetOptions{})
+		c, err := data.CRDClient.CrdV1alpha1().SupportBundleCollections().Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}

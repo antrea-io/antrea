@@ -254,12 +254,12 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	skipIfProxyDisabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 
-	_, err = data.crdClient.CrdV1beta1().IPPools().Create(context.TODO(), testIPPoolv4, metav1.CreateOptions{})
+	_, err = data.CRDClient.CrdV1beta1().IPPools().Create(context.TODO(), testIPPoolv4, metav1.CreateOptions{})
 	defer deleteIPPoolWrapper(t, data, testIPPoolv4.Name)
 	if err != nil {
 		t.Fatalf("Failed to create v4 IPPool CR: %v", err)
 	}
-	_, err = data.crdClient.CrdV1beta1().IPPools().Create(context.TODO(), testIPPoolv6, metav1.CreateOptions{})
+	_, err = data.CRDClient.CrdV1beta1().IPPools().Create(context.TODO(), testIPPoolv6, metav1.CreateOptions{})
 	defer deleteIPPoolWrapper(t, data, testIPPoolv6.Name)
 	if err != nil {
 		t.Fatalf("Failed to create v6 IPPool CR: %v", err)

@@ -152,8 +152,8 @@ func TestBGPPolicy(t *testing.T) {
 			},
 		},
 	}
-	bgpPolicy, err = data.crdClient.CrdV1alpha1().BGPPolicies().Create(context.TODO(), bgpPolicy, metav1.CreateOptions{})
-	defer data.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
+	bgpPolicy, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Create(context.TODO(), bgpPolicy, metav1.CreateOptions{})
+	defer data.CRDClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
 	require.NoError(t, err)
 
 	t.Log("Get the routes installed on remote FRR router and verify them")
@@ -184,7 +184,7 @@ func TestBGPPolicy(t *testing.T) {
 	updatedBGPPolicy := bgpPolicy.DeepCopy()
 	updatedBGPPolicy.Spec.LocalASN = updatedNodeASN
 	updatedBGPPolicy.Spec.Advertisements.Pod = nil
-	_, err = data.crdClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), updatedBGPPolicy, metav1.UpdateOptions{})
+	_, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), updatedBGPPolicy, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	t.Log("Get routes installed on remote FRR router and verify them")
