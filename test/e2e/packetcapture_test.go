@@ -472,11 +472,11 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		}
 	}
 
-	if _, err := data.crdClient.CrdV1alpha1().PacketCaptures().Create(context.TODO(), tc.pc, metav1.CreateOptions{}); err != nil {
+	if _, err := data.CRDClient.CrdV1alpha1().PacketCaptures().Create(context.TODO(), tc.pc, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Error when creating PacketCapture: %v", err)
 	}
 	defer func() {
-		if err := data.crdClient.CrdV1alpha1().PacketCaptures().Delete(context.TODO(), tc.pc.Name, metav1.DeleteOptions{}); err != nil {
+		if err := data.CRDClient.CrdV1alpha1().PacketCaptures().Delete(context.TODO(), tc.pc.Name, metav1.DeleteOptions{}); err != nil {
 			t.Errorf("Error when deleting PacketCapture: %v", err)
 		}
 	}()
@@ -559,7 +559,7 @@ func (data *TestData) waitForPacketCapture(t *testing.T, name string, specTimeou
 		timeout = time.Duration(specTimeout) * time.Second
 	}
 	if err = wait.PollUntilContextTimeout(context.Background(), defaultInterval, timeout, true, func(ctx context.Context) (bool, error) {
-		c, err := data.crdClient.CrdV1alpha1().PacketCaptures().Get(ctx, name, metav1.GetOptions{})
+		c, err := data.CRDClient.CrdV1alpha1().PacketCaptures().Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}

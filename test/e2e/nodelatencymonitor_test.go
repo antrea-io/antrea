@@ -47,7 +47,7 @@ func TestNodeLatencyMonitor(t *testing.T) {
 		expectedTargetIPLatencyStats = 2
 	}
 
-	_, err = data.crdClient.CrdV1alpha1().NodeLatencyMonitors().Create(context.TODO(), &crdv1alpha1.NodeLatencyMonitor{
+	_, err = data.CRDClient.CrdV1alpha1().NodeLatencyMonitors().Create(context.TODO(), &crdv1alpha1.NodeLatencyMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default",
 		},
@@ -59,7 +59,7 @@ func TestNodeLatencyMonitor(t *testing.T) {
 	t.Logf("NodeLatencyMonitor CR created successfully.")
 
 	defer func() {
-		err = data.crdClient.CrdV1alpha1().NodeLatencyMonitors().Delete(context.TODO(), "default", metav1.DeleteOptions{})
+		err = data.CRDClient.CrdV1alpha1().NodeLatencyMonitors().Delete(context.TODO(), "default", metav1.DeleteOptions{})
 		require.NoError(t, err, "Failed to delete NodeLatencyMonitor CR")
 		t.Logf("NodeLatencyMonitor CR deleted successfully.")
 	}()
@@ -109,7 +109,7 @@ func TestNodeLatencyMonitor(t *testing.T) {
 	}
 
 	err = wait.PollUntilContextTimeout(context.TODO(), time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-		statsList, err := data.crdClient.StatsV1alpha1().NodeLatencyStats().List(ctx, metav1.ListOptions{})
+		statsList, err := data.CRDClient.StatsV1alpha1().NodeLatencyStats().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -118,7 +118,7 @@ func TestNodeLatencyMonitor(t *testing.T) {
 	require.NoError(t, err, "Failed to validate initial NodeLatencyStats")
 
 	err = wait.PollUntilContextTimeout(context.TODO(), time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-		statsList, err := data.crdClient.StatsV1alpha1().NodeLatencyStats().List(ctx, metav1.ListOptions{})
+		statsList, err := data.CRDClient.StatsV1alpha1().NodeLatencyStats().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
