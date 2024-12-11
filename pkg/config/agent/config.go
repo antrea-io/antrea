@@ -155,6 +155,10 @@ type AgentConfig struct {
 	// Defaults to "". It must be a host string or a host:port pair of the DNS server (e.g. 10.96.0.10,
 	// 10.96.0.10:53, [fd00:10:96::a]:53).
 	DNSServerOverride string `yaml:"dnsServerOverride,omitempty"`
+	// The FQDNCacheMinTTL setting helps address the problem of applications caching DNS response IPs indefinitely.
+	// The Cluster administrators should configure this value, ideally setting it to be equal to or greater than the maximum TTL
+	// value of the application's DNS cache.
+	FQDNCacheMinTTL int `yaml:"fqdnCacheMinTTL,omitempty"`
 	// Cipher suites to use.
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.

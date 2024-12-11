@@ -196,7 +196,8 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 	gwPort, tunPort uint32,
 	nodeConfig *config.NodeConfig,
 	podNetworkWait *utilwait.Group,
-	l7Reconciler *l7engine.Reconciler) (*Controller, error) {
+	l7Reconciler *l7engine.Reconciler,
+	fqdnCacheMinTTL uint32) (*Controller, error) {
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
@@ -227,7 +228,7 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 
 	var err error
 	if antreaPolicyEnabled {
-		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled, gwPort, clock.RealClock{}); err != nil {
+		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled, gwPort, clock.RealClock{}, fqdnCacheMinTTL); err != nil {
 			return nil, err
 		}
 
