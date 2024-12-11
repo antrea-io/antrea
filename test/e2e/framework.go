@@ -255,7 +255,7 @@ type TestData struct {
 	KubeConfig         *restclient.Config
 	clientset          kubernetes.Interface
 	aggregatorClient   aggregatorclientset.Interface
-	crdClient          crdclientset.Interface
+	CRDClient          crdclientset.Interface
 	logsDirForTestCase string
 	testNamespace      string
 }
@@ -1320,7 +1320,7 @@ func (data *TestData) CreateClient(kubeconfigPath string) error {
 	data.KubeConfig = kubeConfig
 	data.clientset = clientset
 	data.aggregatorClient = aggregatorClient
-	data.crdClient = crdClient
+	data.CRDClient = crdClient
 	return nil
 }
 
@@ -3187,7 +3187,7 @@ func retryOnConnectionLostError(backoff wait.Backoff, fn func() error) error {
 
 func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.Duration, name string) error {
 	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, true, func(ctx context.Context) (bool, error) {
-		aai, err := data.crdClient.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), name, metav1.GetOptions{})
+		aai, err := data.CRDClient.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
