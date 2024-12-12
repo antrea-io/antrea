@@ -587,7 +587,8 @@ type SupportBundleCollectionNodeStatus struct {
 }
 
 type BundleFileServer struct {
-	URL string `json:"url" protobuf:"bytes,1,opt,name=url"`
+	URL           string `json:"url" protobuf:"bytes,1,opt,name=url"`
+	HostPublicKey []byte `json:"hostPublicKey,omitempty" protobuf:"bytes,2,opt,name=hostPublicKey"`
 }
 
 type BasicAuthentication struct {

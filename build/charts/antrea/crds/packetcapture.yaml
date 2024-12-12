@@ -161,6 +161,9 @@ spec:
                     url:
                       type: string
                       pattern: 'sftp:\/\/[\w-_./]+:\d+'
+                    hostPublicKey:
+                      type: string
+                      format: byte
             status:
               type: object
               properties:
