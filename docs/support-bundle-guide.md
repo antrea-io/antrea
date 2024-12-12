@@ -135,6 +135,10 @@ spec:
   sinceTime: 2h # Collect the logs in the latest 2 hours. Collect all available logs if the time is not set.
   fileServer:
     url: sftp://yourtestdomain.com:22/root/test
+    # Host public key (as a base64-encoded string) that will be accepted when connecting to the file server.
+    # Get this key from your SSH server configuration, or from a known_hosts file.
+    # If omitted, any host key will be accepted, which is insecure and not recommended.
+    # hostPublicKey: ...
   authentication:
     authType: "BasicAuthentication"
     authSecret:
@@ -159,6 +163,10 @@ spec:
     namespace: vm-ns # namespace is mandatory when collecting support bundle from external Nodes.
   fileServer:
     url: yourtestdomain.com:22/root/test # Scheme sftp can be omitted. The url of "$controlplane_node_ip:30010/upload" is used if deployed with sftp-deployment.yml.
+    # Host public key (as a base64-encoded string) that will be accepted when connecting to the file server.
+    # Get this key from your SSH server configuration, or from a known_hosts file.
+    # If omitted, any host key will be accepted, which is insecure and not recommended.
+    # hostPublicKey: ...
   authentication:
     authType: "BasicAuthentication"
     authSecret:

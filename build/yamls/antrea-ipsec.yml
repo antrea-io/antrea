@@ -3061,6 +3061,9 @@ spec:
                     url:
                       type: string
                       pattern: 'sftp:\/\/[\w-_./]+:\d+'
+                    hostPublicKey:
+                      type: string
+                      format: byte
             status:
               type: object
               properties:
@@ -3197,6 +3200,9 @@ spec:
                   properties:
                     url:
                       type: string
+                    hostPublicKey:
+                      type: string
+                      format: byte
                 authentication:
                   type: object
                   properties:
@@ -6056,7 +6062,7 @@ webhooks:
         namespace: kube-system
         path: "/validate/supportbundlecollection"
     rules:
-      - operations: ["UPDATE", "DELETE"]
+      - operations: ["CREATE", "UPDATE", "DELETE"]
         apiGroups: ["crd.antrea.io"]
         apiVersions: ["v1alpha1"]
         resources: ["supportbundlecollections"]
