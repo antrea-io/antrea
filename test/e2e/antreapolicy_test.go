@@ -2677,6 +2677,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 // tests both Allow traffic by K8s NP and Drop traffic by implicit K8s policy drop
 func testAuditLoggingEnableK8s(t *testing.T, data *TestData) {
 	failOnError(data.updateNamespaceWithAnnotations(getNS("x"), map[string]string{networkpolicy.EnableNPLoggingAnnotationKey: "true"}), t)
+	failOnError(data.updateNamespaceWithAnnotations(getNS("y"), map[string]string{networkpolicy.EnableNPLoggingAnnotationKey: "true"}), t)
 	// Add a K8s namespaced NetworkPolicy in ns x that allow ingress traffic from
 	// Pod x/b to x/a which default denies other ingress including from Pod x/c to x/a
 	npName := "allow-x-b-to-x-a"
@@ -2692,21 +2693,38 @@ func testAuditLoggingEnableK8s(t *testing.T, data *TestData) {
 	failOnError(err, t)
 	failOnError(waitForResourceReady(t, timeout, knp), t)
 
+	// Add a K8s namespaced NetworkPolicy with no ingress rule that triggers the
+	// default deny all ingress traffic.
+	npName2 := "default-deny-all-y"
+	k8sNPBuilder2 := &NetworkPolicySpecBuilder{}
+	k8sNPBuilder2 = k8sNPBuilder2.SetName(getNS("y"), npName2).SetTypeIngress()
+
+	knp2, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNPBuilder2.Get())
+	failOnError(err, t)
+	failOnError(waitForResourceReady(t, timeout, knp2), t)
+
 	podXA, err := k8sUtils.GetPodByLabel(getNS("x"), "a")
 	if err != nil {
 		t.Errorf("Failed to get Pod in Namespace x with label 'pod=a': %v", err)
 	}
+	podYA, err := k8sUtils.GetPodByLabel(getNS("y"), "a")
+	if err != nil {
+		t.Errorf("Failed to get Pod in Namespace y with label 'pod=a': %v", err)
+	}
 
-	// matcher1 is for connections allowed by the K8s NP
-	matcher1 := NewAuditLogMatcher(npRef, "<nil>", "Ingress", "Allow")
-	// matcher2 is for connections dropped by the isolated behavior of the K8s NP
-	matcher2 := NewAuditLogMatcher("K8sNetworkPolicy", "<nil>", "Ingress", "Drop")
+	// matcherX1 is for connections allowed by the K8s NP1
+	matcherX1 := NewAuditLogMatcher(npRef, "<nil>", "Ingress", "Allow")
+	// matcherX2 is for connections dropped by the isolated behavior of the K8s NP1
+	matcherX2 := NewAuditLogMatcher("K8sNetworkPolicy", "<nil>", "Ingress", "Drop")
+	// matcherY is for connections dropped by the default deny all behavior of the K8s NP2
+	matcherY := NewAuditLogMatcher("K8sNetworkPolicy", "<nil>", "Ingress", "Drop")
 
-	appliedToRef := fmt.Sprintf("%s/%s", podXA.Namespace, podXA.Name)
+	appliedToRefX := fmt.Sprintf("%s/%s", podXA.Namespace, podXA.Name)
+	appliedToRefY := fmt.Sprintf("%s/%s", podYA.Namespace, podYA.Name)
 
 	// generate some traffic that will be dropped by implicit K8s policy drop
 	var wg sync.WaitGroup
-	oneProbe := func(ns1, pod1, ns2, pod2 string, matcher *auditLogMatcher) {
+	oneProbe := func(appliedToRef, ns1, pod1, ns2, pod2 string, matcher *auditLogMatcher) {
 		matcher.AddProbe(appliedToRef, ns1, pod1, ns2, pod2, p80)
 		wg.Add(1)
 		go func() {
@@ -2714,16 +2732,21 @@ func testAuditLoggingEnableK8s(t *testing.T, data *TestData) {
 			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP, nil, nil)
 		}()
 	}
-	oneProbe(getNS("x"), "b", getNS("x"), "a", matcher1)
-	oneProbe(getNS("x"), "c", getNS("x"), "a", matcher2)
+	oneProbe(appliedToRefX, getNS("x"), "b", getNS("x"), "a", matcherX1)
+	oneProbe(appliedToRefX, getNS("x"), "c", getNS("x"), "a", matcherX2)
+	oneProbe(appliedToRefY, getNS("y"), "b", getNS("y"), "a", matcherY)
 	wg.Wait()
 
-	// nodeName is guaranteed to be set at this stage, since the framework waits for all Pods to be in Running phase
-	nodeName := podXA.Spec.NodeName
-	checkAuditLoggingResult(t, data, nodeName, "K8sNetworkPolicy", append(matcher1.Matchers(), matcher2.Matchers()...))
+	// pod NodeName is guaranteed to be set at this stage, since the framework waits for all Pods to be in Running phase
+	checkAuditLoggingResult(t, data, podXA.Spec.NodeName, "K8sNetworkPolicy", append(matcherX1.Matchers(), matcherX2.Matchers()...))
+	checkAuditLoggingResult(t, data, podYA.Spec.NodeName, "K8sNetworkPolicy", matcherY.Matchers())
 
-	failOnError(k8sUtils.DeleteNetworkPolicy(getNS("x"), "allow-x-b-to-x-a"), t)
+	failOnError(k8sUtils.DeleteNetworkPolicy(getNS("x"), npName), t)
+	failOnError(k8sUtils.DeleteNetworkPolicy(getNS("y"), npName2), t)
 	failOnError(data.UpdateNamespace(getNS("x"), func(namespace *v1.Namespace) {
+		delete(namespace.Annotations, networkpolicy.EnableNPLoggingAnnotationKey)
+	}), t)
+	failOnError(data.UpdateNamespace(getNS("y"), func(namespace *v1.Namespace) {
 		delete(namespace.Annotations, networkpolicy.EnableNPLoggingAnnotationKey)
 	}), t)
 }
