@@ -82,83 +82,43 @@ func TestVMAgent(t *testing.T) {
 	t.Run("testExternalNodeSupportBundleCollection", func(t *testing.T) { testExternalNodeSupportBundleCollection(t, data, vmList) })
 }
 
-func (data *TestData) waitForDeploymentReady(t *testing.T, namespace string, name string, timeout time.Duration) error {
-	t.Logf("Waiting for Deployment '%s/%s' to be ready", namespace, name)
-	err := wait.PollUntilContextTimeout(context.Background(), 1*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
-		dp, err := data.clientset.AppsV1().Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-		return dp.Status.ObservedGeneration == dp.Generation && dp.Status.ReadyReplicas == *dp.Spec.Replicas, nil
-	})
-	if wait.Interrupted(err) {
-		_, stdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod -l app=sftp", namespace))
-		return fmt.Errorf("some replicas for Deployment '%s/%s' are not ready after %v:\n%v", namespace, name, timeout, stdout)
-	} else if err != nil {
-		return fmt.Errorf("error when waiting for Deployment '%s/%s' to be ready: %w", namespace, name, err)
-	}
-	return nil
-}
-
 func (data *TestData) waitForSupportBundleCollectionRealized(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for SupportBundleCollection '%s' to be realized", name)
-	var sbc *crdv1alpha1.SupportBundleCollection
-	if err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
-		var getErr error
-		sbc, getErr = data.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.TODO(), name, metav1.GetOptions{})
-		if getErr != nil {
-			return false, getErr
-		}
-		for _, cond := range sbc.Status.Conditions {
-			if cond.Status == metav1.ConditionTrue && cond.Type == crdv1alpha1.CollectionCompleted {
-				return sbc.Status.DesiredNodes == sbc.Status.CollectedNodes, nil
-			}
-		}
-		return false, nil
-	}); err != nil {
-		if sbc != nil {
-			t.Logf("The conditions of SupportBundleCollection for the vms are %v", sbc.Status.Conditions)
-		}
-		return fmt.Errorf("error when waiting for SupportBundleCollection '%s' to be realized: %v", name, err)
+	_, err := data.waitForSupportBundleCollection(t, name, timeout, func(sbc *crdv1alpha1.SupportBundleCollection) bool {
+		cond := findSupportBundleCollectionCondition(sbc.Status.Conditions, crdv1alpha1.CollectionCompleted)
+		return cond != nil && cond.Status == metav1.ConditionTrue && sbc.Status.DesiredNodes == sbc.Status.CollectedNodes
+	})
+	if err != nil {
+		return fmt.Errorf("error when waiting for SupportBundleCollection '%s' to be realized: %w", name, err)
 	}
 	return nil
 }
 
 func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmList []vmInfo) {
-	sftpServiceYAML := "sftp-deployment.yml"
-	secretUserName := "foo"
-	secretPassword := "pass"
-	uploadFolder := "upload"
-	uploadPath := path.Join("/home", secretUserName, uploadFolder)
+	const sftpNodePort = 30010
+	deployment, _, _, err := data.deploySFTPServer(context.TODO(), 30010)
+	require.NoError(t, err, "failed to deploy SFTP server")
+	require.NoError(t, data.waitForDeploymentReady(t, deployment.Namespace, deployment.Name, defaultTimeout))
+
 	secretName := "support-bundle-secret"
-	vmNames := make([]string, 0, len(vmList))
-	for _, vm := range vmList {
-		vmNames = append(vmNames, vm.nodeName)
-	}
-	applySFTPYamlCommand := fmt.Sprintf("kubectl apply -f %s -n %s", sftpServiceYAML, data.testNamespace)
-	code, stdout, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), applySFTPYamlCommand)
-	require.NoError(t, err)
-	defer func() {
-		deleteSFTPYamlCommand := fmt.Sprintf("kubectl delete -f %s -n %s", sftpServiceYAML, data.testNamespace)
-		data.RunCommandOnNode(controlPlaneNodeName(), deleteSFTPYamlCommand)
-	}()
-	t.Logf("Stdout of the command '%s': %s", applySFTPYamlCommand, stdout)
-	if code != 0 {
-		t.Errorf("Error when applying %s: %v", sftpServiceYAML, stderr)
-	}
-	failOnError(data.waitForDeploymentReady(t, data.testNamespace, "sftp", defaultTimeout), t)
 	sec := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: secretName,
 		},
 		Data: map[string][]byte{
-			"username": []byte(secretUserName),
-			"password": []byte(secretPassword),
+			"username": []byte(sftpUser),
+			"password": []byte(sftpPassword),
 		},
 	}
 	_, err = data.clientset.CoreV1().Secrets(namespace).Create(context.TODO(), sec, metav1.CreateOptions{})
 	require.NoError(t, err)
-	defer data.clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+	defer data.clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), sec.Name, metav1.DeleteOptions{})
+
+	vmNames := make([]string, 0, len(vmList))
+	for _, vm := range vmList {
+		vmNames = append(vmNames, vm.nodeName)
+	}
+
 	bundleName := "support-bundle-collection-external-node"
 	sbc := &crdv1alpha1.SupportBundleCollection{
 		ObjectMeta: metav1.ObjectMeta{
@@ -172,7 +132,7 @@ func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmLis
 			},
 			ExpirationMinutes: 300,
 			FileServer: crdv1alpha1.BundleFileServer{
-				URL: fmt.Sprintf("%s:30010/upload", controlPlaneNodeIPv4()),
+				URL: fmt.Sprintf("%s:%d/%s", controlPlaneNodeIPv4(), sftpNodePort, sftpUploadDir),
 			},
 			Authentication: crdv1alpha1.BundleServerAuthConfiguration{
 				AuthType: "BasicAuthentication",
@@ -191,6 +151,7 @@ func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmLis
 	require.NoError(t, err)
 	require.Len(t, pods.Items, 1)
 	pod := pods.Items[0]
+	uploadPath := path.Join("/home", sftpUser, sftpUploadDir)
 	for _, vm := range vmList {
 		extractPath := path.Join(uploadPath, vm.nodeName)
 		mkdirCommand := fmt.Sprintf("mkdir %s", extractPath)
