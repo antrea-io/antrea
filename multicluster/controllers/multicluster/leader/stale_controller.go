@@ -63,36 +63,6 @@ func NewStaleResCleanupController(
 	return reconciler
 }
 
-// cleanUpExpiredMemberClusterAnnounces will delete any MemberClusterAnnounce if its
-// last update timestamp is over 24 hours.
-func (c *StaleResCleanupController) cleanUpExpiredMemberClusterAnnounces(ctx context.Context) {
-	memberClusterAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
-	if err := c.List(ctx, memberClusterAnnounceList, &client.ListOptions{}); err != nil {
-		klog.ErrorS(err, "Fail to get MemberClusterAnnounces")
-		return
-	}
-
-	for _, m := range memberClusterAnnounceList.Items {
-		memberClusterAnnounce := m
-		lastUpdateTime, err := time.Parse(time.RFC3339, memberClusterAnnounce.Annotations[commonarea.TimestampAnnotationKey])
-		if err == nil && time.Since(lastUpdateTime) < memberClusterAnnounceStaleTime {
-			continue
-		}
-		if err == nil {
-			klog.InfoS("Cleaning up stale MemberClusterAnnounce. It has not been updated within the agreed period",
-				"MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce), "agreedPeriod", memberClusterAnnounceStaleTime)
-		} else {
-			klog.InfoS("Cleaning up stale MemberClusterAnnounce. The latest update time is not in RFC3339 format",
-				"MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
-		}
-
-		if err := c.Client.Delete(ctx, &memberClusterAnnounce, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "Failed to delete stale MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
-			return
-		}
-	}
-}
-
 func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting StaleResCleanupController")
 	defer klog.InfoS("Shutting down StaleResCleanupController")
@@ -156,6 +126,36 @@ func (c *StaleResCleanupController) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: 1,
 		}).
 		Complete(c)
+}
+
+// cleanUpExpiredMemberClusterAnnounces will delete any MemberClusterAnnounce if its
+// last update timestamp is over 24 hours.
+func (c *StaleResCleanupController) cleanUpExpiredMemberClusterAnnounces(ctx context.Context) {
+	memberClusterAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
+	if err := c.List(ctx, memberClusterAnnounceList, &client.ListOptions{}); err != nil {
+		klog.ErrorS(err, "Fail to get MemberClusterAnnounces")
+		return
+	}
+
+	for _, m := range memberClusterAnnounceList.Items {
+		memberClusterAnnounce := m
+		lastUpdateTime, err := time.Parse(time.RFC3339, memberClusterAnnounce.Annotations[commonarea.TimestampAnnotationKey])
+		if err == nil && time.Since(lastUpdateTime) < memberClusterAnnounceStaleTime {
+			continue
+		}
+		if err == nil {
+			klog.InfoS("Cleaning up stale MemberClusterAnnounce. It has not been updated within the agreed period",
+				"MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce), "agreedPeriod", memberClusterAnnounceStaleTime)
+		} else {
+			klog.InfoS("Cleaning up stale MemberClusterAnnounce. The latest update time is not in RFC3339 format",
+				"MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
+		}
+
+		if err := c.Client.Delete(ctx, &memberClusterAnnounce, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "Failed to delete stale MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
+			return
+		}
+	}
 }
 
 func deleteResourceExports(ctx context.Context, mgrClient client.Client, resouceExports []mcv1alpha1.ResourceExport) bool {
