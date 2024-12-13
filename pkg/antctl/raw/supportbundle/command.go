@@ -120,13 +120,10 @@ func init() {
 	}
 }
 
-var getSupportBundleClient func(cmd *cobra.Command) (systemclientset.SupportBundleInterface, error) = setupSupportBundleClient
+var getSupportBundleClient func() (systemclientset.SupportBundleInterface, error) = setupSupportBundleClient
 
-func setupSupportBundleClient(cmd *cobra.Command) (systemclientset.SupportBundleInterface, error) {
-	kubeconfig, err := raw.ResolveKubeconfig(cmd)
-	if err != nil {
-		return nil, err
-	}
+func setupSupportBundleClient() (systemclientset.SupportBundleInterface, error) {
+	kubeconfig := &rest.Config{}
 	raw.SetupLocalKubeconfig(kubeconfig)
 	client, err := systemclientset.NewForConfig(kubeconfig)
 	return client.SupportBundles(), err
@@ -134,7 +131,7 @@ func setupSupportBundleClient(cmd *cobra.Command) (systemclientset.SupportBundle
 
 func localSupportBundleRequest(cmd *cobra.Command, mode string, writer io.Writer) error {
 	ctx := cmd.Context()
-	client, err := getSupportBundleClient(cmd)
+	client, err := getSupportBundleClient()
 	if err != nil {
 		return fmt.Errorf("error when creating system client: %w", err)
 	}
