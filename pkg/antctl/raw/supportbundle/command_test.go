@@ -136,7 +136,7 @@ func createFakeSupportBundleClient() systemclientset.SupportBundleInterface {
 }
 
 func TestLocalSupportBundleRequest(t *testing.T) {
-	getSupportBundleClient = func(cmd *cobra.Command) (systemclientset.SupportBundleInterface, error) {
+	getSupportBundleClient = func() (systemclientset.SupportBundleInterface, error) {
 		return createFakeSupportBundleClient(), nil
 	}
 	defer func() {
