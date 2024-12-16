@@ -41,6 +41,7 @@ import (
 	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	systemclientset "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
+	"antrea.io/antrea/pkg/util/compress"
 )
 
 var (
@@ -58,6 +59,10 @@ var (
 		NodeRef: v1.ObjectReference{
 			Kind: "Node",
 			Name: "node-1",
+		},
+		PodRef: v1.ObjectReference{
+			Name:      "antrea-controller-1",
+			Namespace: "kube-system",
 		},
 	}
 	node1 = v1.Node{
@@ -411,14 +416,26 @@ func TestProcessResults(t *testing.T) {
 			require.NoError(t, err)
 			data := string(b)
 			for node, err := range tt.resultMap {
-				fileName := fmt.Sprintf("agent_%s.tar.gz", node)
+				tgzFileName := fmt.Sprintf("agent_%s.tar.gz", node)
 				if node == "" {
-					fileName = "controller.tar.gz"
+					tgzFileName = "controller_node-1.tar.gz"
 				}
 				if err != nil {
-					ok, checkErr := afero.Exists(defaultFS, filepath.Join(option.dir, fileName))
+					ok, checkErr := afero.Exists(defaultFS, filepath.Join(option.dir, tgzFileName))
 					require.NoError(t, checkErr)
-					assert.True(t, ok, fmt.Sprintf("expected support bundle file %s not found", fileName))
+					assert.True(t, ok, "expected support bundle file %s not found", tgzFileName)
+
+					unpackError := compress.UnpackDir(defaultFS, filepath.Join(option.dir, tgzFileName), option.dir)
+					require.NoError(t, unpackError)
+					expectFileName := "logs/agent/antrea-agent.log"
+					if node == "" {
+						expectFileName = "logs/controller/antrea-controller.log"
+					}
+					ok, checkErr = afero.Exists(defaultFS, filepath.Join(option.dir, expectFileName))
+					require.NoError(t, checkErr)
+					assert.True(t, ok, "expected log file %s not found", expectFileName)
+					deleteErr := defaultFS.Remove(filepath.Join(option.dir, expectFileName))
+					require.NoError(t, deleteErr)
 				}
 
 				if node == "" {
