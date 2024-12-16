@@ -282,7 +282,7 @@ func testSupportBundleCollection(
 	sftpURL := fmt.Sprintf("sftp://%s/%s", sftpServerIP, sftpUploadDir)
 
 	// First, create a dedicated upload directory for this test case.
-	cmd := []string{"curl", "--insecure", "--user", fmt.Sprintf("%s:%s", sftpUser, sftpPassword), "-Q", fmt.Sprintf("mkdir %s/%s", sftpUploadDir, bundleName), sftpURL}
+	cmd := []string{"curl", "--insecure", "--user", fmt.Sprintf("%s:%s", sftpUser, sftpPassword), "-Q", fmt.Sprintf("mkdir %s/%s", sftpUploadDir, bundleName), sftpURL + "/"}
 	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPod, toolboxContainerName, cmd)
 	require.NoErrorf(t, err, "failed to create upload directory with sftp, stdout: %s, stderr: %s", stdout, stderr)
 
@@ -353,7 +353,6 @@ func (data *TestData) waitForSupportBundleCollection(
 		}
 		sbc = c
 		if condition(sbc) {
-			t.Logf("Status for SupportBundleCollection: %+v", sbc.Status)
 			return true, nil
 		}
 		return false, nil
