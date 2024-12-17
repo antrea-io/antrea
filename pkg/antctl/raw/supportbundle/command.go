@@ -728,7 +728,6 @@ func processResults(ctx context.Context, antreaClientset antrea.Interface, k8sCl
 }
 
 func downloadFallbackControllerBundleFromKubernetes(ctx context.Context, antreaClientset antrea.Interface, k8sClient kubernetes.Interface, dir string) error {
-	var errors []error
 	tmpDir, err := afero.TempDir(defaultFS, "", "bundle_tmp_")
 	if err != nil {
 		return err
@@ -751,17 +750,19 @@ func downloadFallbackControllerBundleFromKubernetes(ctx context.Context, antreaC
 		}
 		return nil
 	}(); err != nil {
-		errors = append(errors, err)
+		return err
 	}
-	errors = append(errors, err)
-	if podRef != nil {
-		pod, err := k8sClient.CoreV1().Pods(podRef.Namespace).Get(ctx, podRef.Name, metav1.GetOptions{})
-		if err == nil {
-			err = downloadAndPackPodLogs(ctx, k8sClient, pod, dir, tmpDir)
-			errors = append(errors, err)
-		}
+	if podRef == nil {
+		return fmt.Errorf("no podRef found in antrea controllerInfo")
 	}
-	return utilerror.NewAggregate(errors)
+	pod, err := k8sClient.CoreV1().Pods(podRef.Namespace).Get(ctx, podRef.Name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	if err := downloadPodLogs(ctx, k8sClient, pod.Namespace, pod.Name, k8s.GetPodContainerNames(pod), tmpDir); err != nil {
+		return err
+	}
+	return packPodLogs(pod, dir, tmpDir)
 }
 
 func downloadFallbackAgentBundleFromKubernetes(ctx context.Context, antreaClientset antrea.Interface, k8sClient kubernetes.Interface, failedNodes []string, dir string) error {
@@ -787,33 +788,34 @@ func downloadFallbackAgentBundleFromKubernetes(ctx context.Context, antreaClient
 		if !failedNodeSet.Has(pod.Spec.NodeName) {
 			continue
 		}
-		tmpDir, err := afero.TempDir(defaultFS, "", "bundle_tmp_")
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-		defer defaultFS.RemoveAll(tmpDir)
-
-		if agentInfo, ok := agentInfoMap[pod.Spec.NodeName]; ok {
-			data, err := yaml.Marshal(agentInfo)
-			errors = append(errors, err)
-			if err == nil {
-				err = afero.WriteFile(defaultFS, filepath.Join(tmpDir, "agentinfo"), data, 0644)
-				errors = append(errors, err)
+		if err := func() error {
+			tmpDir, err := afero.TempDir(defaultFS, "", "bundle_tmp_")
+			if err != nil {
+				return err
 			}
+			defer defaultFS.RemoveAll(tmpDir)
+			if agentInfo, ok := agentInfoMap[pod.Spec.NodeName]; ok {
+				data, err := yaml.Marshal(agentInfo)
+				if err != nil {
+					return err
+				}
+				if err = afero.WriteFile(defaultFS, filepath.Join(tmpDir, "agentinfo"), data, 0644); err != nil {
+					return err
+				}
+			}
+			err = downloadPodLogs(ctx, k8sClient, pod.Namespace, pod.Name, k8s.GetPodContainerNames(&pod), tmpDir)
+			if err != nil {
+				return err
+			}
+			return packPodLogs(&pod, dir, tmpDir)
+		}(); err != nil {
+			errors = append(errors, err)
 		}
-		err = downloadAndPackPodLogs(ctx, k8sClient, &pod, dir, tmpDir)
-		errors = append(errors, err)
 	}
 	return utilerror.NewAggregate(errors)
 }
 
-// downloadAndPackPodLogs download pod's logs and compress them to the target dir. `tmpDir` is used to store the logs file momentarily.
-func downloadAndPackPodLogs(ctx context.Context, k8sClient kubernetes.Interface, pod *corev1.Pod, dir string, tmpDir string) error {
-	err := downloadPodLogs(ctx, k8sClient, pod.Namespace, pod.Name, k8s.GetPodContainerNames(pod), tmpDir)
-	if err != nil {
-		return err
-	}
+func packPodLogs(pod *corev1.Pod, dir string, logsDir string) error {
 	prefix := "agent_"
 	if strings.Contains(pod.Name, "controller") {
 		prefix = "controller_"
@@ -824,7 +826,7 @@ func downloadAndPackPodLogs(ctx context.Context, k8sClient kubernetes.Interface,
 		return err
 	} else {
 		defer f.Close()
-		_, err := compress.PackDir(defaultFS, tmpDir, f)
+		_, err := compress.PackDir(defaultFS, logsDir, f)
 		return err
 	}
 }

@@ -423,7 +423,7 @@ func TestProcessResults(t *testing.T) {
 				if err != nil {
 					ok, checkErr := afero.Exists(defaultFS, filepath.Join(option.dir, tgzFileName))
 					require.NoError(t, checkErr)
-					assert.True(t, ok, "expected support bundle file %s not found", tgzFileName)
+					require.True(t, ok, "expected support bundle file %s not found", tgzFileName)
 
 					unpackError := compress.UnpackDir(defaultFS, filepath.Join(option.dir, tgzFileName), option.dir)
 					require.NoError(t, unpackError)
