@@ -51,6 +51,7 @@ The labels in this list originated within Kubernetes at
 | area/network-policy/match          | Issues or PRs related to matching packets | Any |
 | area/network-policy/precedence     | Issues or PRs related to network policy precedence | Any |
 | area/ops                           | Issues or PRs related to features which support network operations and troubleshooting | Any |
+| area/ops/packetcapture             | Issues or PRs related to the PacketCapture feature | Any |
 | area/ops/traceflow                 | Issues or PRs related to the Traceflow feature | Any |
 | area/ovs/openflow                  | Issues or PRs related to Open vSwitch Open Flow | Any |
 | area/ovs/ovsdb                     | Issues or PRs related to Open vSwitch database | Any |
