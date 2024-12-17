@@ -104,6 +104,7 @@ type flowAggregator struct {
 	clusterUUID                 uuid.UUID
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
+	preprocessor                *preprocessor
 	aggregationProcess          ipfix.IPFIXAggregationProcess
 	activeFlowRecordTimeout     time.Duration
 	inactiveFlowRecordTimeout   time.Duration
@@ -175,13 +176,15 @@ func NewFlowAggregator(
 		APIServer:                   opt.Config.APIServer,
 		logTickerDuration:           time.Minute,
 	}
-	err = fa.InitCollectingProcess()
-	if err != nil {
-		return nil, fmt.Errorf("error when creating collecting process: %v", err)
+	if err := fa.InitCollectingProcess(); err != nil {
+		return nil, fmt.Errorf("error when creating collecting process: %w", err)
 	}
-	err = fa.InitAggregationProcess()
-	if err != nil {
-		return nil, fmt.Errorf("error when creating aggregation process: %v", err)
+	recordCh := make(chan ipfixentities.Record)
+	if err := fa.InitPreprocessor(recordCh); err != nil {
+		return nil, fmt.Errorf("error when creating preprocessor: %w", err)
+	}
+	if err := fa.InitAggregationProcess(recordCh); err != nil {
+		return nil, fmt.Errorf("error when creating aggregation process: %w", err)
 	}
 	if opt.Config.ClickHouse.Enable {
 		var err error
@@ -261,15 +264,72 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 		len(infoelements.AntreaFlowEndSecondsElementList) + len(infoelements.AntreaThroughputElementList) + len(infoelements.AntreaSourceThroughputElementList) + len(infoelements.AntreaDestinationThroughputElementList)
 	// clusterId
 	cpInput.NumExtraElements += 1
+	// Tell the collector to accept IEs which are not part of the IPFIX registry (hardcoded in
+	// the go-ipfix library). The preprocessor will take care of removing these elements.
+	cpInput.DecodingMode = collector.DecodingModeLenientKeepUnknown
 	var err error
 	fa.collectingProcess, err = collector.InitCollectingProcess(cpInput)
 	return err
 }
 
-func (fa *flowAggregator) InitAggregationProcess() error {
+func (fa *flowAggregator) InitPreprocessor(recordCh chan<- ipfixentities.Record) error {
+	getInfoElementFromRegistry := func(ieName string, enterpriseID uint32) (*ipfixentities.InfoElement, error) {
+		ie, err := fa.registry.GetInfoElement(ieName, enterpriseID)
+		if err != nil {
+			return nil, fmt.Errorf("error when looking up IE %q in registry: %w", ieName, err)
+		}
+		return ie, err
+	}
+
+	getInfoElements := func(isIPv4 bool) ([]*ipfixentities.InfoElement, error) {
+		ianaInfoElements := infoelements.IANAInfoElementsIPv4
+		ianaReverseInfoElements := infoelements.IANAReverseInfoElements
+		antreaInfoElements := infoelements.AntreaInfoElementsIPv4
+		if !isIPv4 {
+			ianaInfoElements = infoelements.IANAInfoElementsIPv6
+			antreaInfoElements = infoelements.AntreaInfoElementsIPv6
+		}
+		infoElements := make([]*ipfixentities.InfoElement, 0)
+		for _, ieName := range ianaInfoElements {
+			ie, err := getInfoElementFromRegistry(ieName, ipfixregistry.IANAEnterpriseID)
+			if err != nil {
+				return nil, err
+			}
+			infoElements = append(infoElements, ie)
+		}
+		for _, ieName := range ianaReverseInfoElements {
+			ie, err := getInfoElementFromRegistry(ieName, ipfixregistry.IANAReversedEnterpriseID)
+			if err != nil {
+				return nil, err
+			}
+			infoElements = append(infoElements, ie)
+		}
+		for _, ieName := range antreaInfoElements {
+			ie, err := getInfoElementFromRegistry(ieName, ipfixregistry.AntreaEnterpriseID)
+			if err != nil {
+				return nil, err
+			}
+			infoElements = append(infoElements, ie)
+		}
+		return infoElements, nil
+	}
+
+	infoElementsIPv4, err := getInfoElements(true)
+	if err != nil {
+		return err
+	}
+	infoElementsIPv6, err := getInfoElements(false)
+	if err != nil {
+		return err
+	}
+	fa.preprocessor, err = newPreprocessor(infoElementsIPv4, infoElementsIPv6, fa.collectingProcess.GetMsgChan(), recordCh)
+	return err
+}
+
+func (fa *flowAggregator) InitAggregationProcess(recordCh <-chan ipfixentities.Record) error {
 	var err error
 	apInput := ipfixintermediate.AggregationInput{
-		MessageChan:           fa.collectingProcess.GetMsgChan(),
+		RecordChan:            recordCh,
 		WorkerNum:             aggregationWorkerNum,
 		CorrelateFields:       correlateFields,
 		ActiveExpiryTimeout:   fa.activeFlowRecordTimeout,
@@ -291,6 +351,11 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		defer ipfixProcessesWg.Done()
 		// blocking function, will return when fa.collectingProcess.Stop() is called
 		fa.collectingProcess.Start()
+	}()
+	ipfixProcessesWg.Add(1)
+	go func() {
+		defer ipfixProcessesWg.Done()
+		fa.preprocessor.Run(stopCh)
 	}()
 	ipfixProcessesWg.Add(1)
 	go func() {
