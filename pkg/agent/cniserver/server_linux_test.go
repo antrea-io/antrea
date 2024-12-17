@@ -95,7 +95,7 @@ func TestValidatePrevResult(t *testing.T) {
 		cniConfig.Ifname = ifname
 		cniConfig.Netns = "invalid_netns"
 		sriovVFDeviceID := ""
-		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", false, false, channel.NewSubscribableChannel("PodUpdate", 100))
+		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, nil, "", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
@@ -106,7 +106,7 @@ func TestValidatePrevResult(t *testing.T) {
 		cniConfig.Netns = "invalid_netns"
 		sriovVFDeviceID := "0000:03:00.6"
 		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", true, false, channel.NewSubscribableChannel("PodUpdate", 100))
+		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, nil, "", true, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
@@ -119,7 +119,7 @@ func TestRemoveInterface(t *testing.T) {
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
-	podConfigurator, err := newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100))
+	podConfigurator, err := newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	require.Nil(t, err, "No error expected in podConfigurator constructor")
 
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
@@ -201,7 +201,7 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ip
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
 	gateway := &config.GatewayConfig{Name: "", IPv4: gwIPv4, MAC: gwMAC}
 	cniServer.nodeConfig = &config.NodeConfig{Name: "node1", PodIPv4CIDR: nodePodCIDRv4, GatewayConfig: gateway}
-	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100))
+	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	cniServer.enableSecondaryNetworkIPAM = enableSecondaryNetworkIPAM
 	cniServer.isChaining = isChaining
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
@@ -612,18 +612,18 @@ func TestCmdCheck(t *testing.T) {
 
 func TestReconcile(t *testing.T) {
 	controller := gomock.NewController(t)
+	kubeClient := fakeclientset.NewClientset(pod1, pod2, pod3)
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
 	cniServer := newCNIServer(t)
 	cniServer.routeClient = mockRoute
-	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100))
+	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	cniServer.podConfigurator.ifConfigurator = newTestInterfaceConfigurator()
 	cniServer.nodeConfig = &config.NodeConfig{
 		Name: nodeName,
 	}
-	kubeClient := fakeclientset.NewSimpleClientset(pod1, pod2, pod3)
 	cniServer.kubeClient = kubeClient
 	for _, containerIface := range []*interfacestore.InterfaceConfig{normalInterface, staleInterface, unconnectedInterface} {
 		ifaceStore.AddInterface(containerIface)

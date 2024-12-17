@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -111,6 +112,7 @@ type CNIServer struct {
 	serverVersion      string
 	nodeConfig         *config.NodeConfig
 	hostProcPathPrefix string
+	podInformer        cache.SharedIndexInformer
 	kubeClient         clientset.Interface
 	containerAccess    *containerAccessArbitrator
 	podConfigurator    *podConfigurator
@@ -628,6 +630,7 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 func New(
 	cniSocket, hostProcPathPrefix string,
 	nodeConfig *config.NodeConfig,
+	podInformer cache.SharedIndexInformer,
 	kubeClient clientset.Interface,
 	routeClient route.Interface,
 	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
@@ -639,6 +642,7 @@ func New(
 		serverVersion:              cni.AntreaCNIVersion,
 		nodeConfig:                 nodeConfig,
 		hostProcPathPrefix:         hostProcPathPrefix,
+		podInformer:                podInformer,
 		kubeClient:                 kubeClient,
 		containerAccess:            newContainerAccessArbitrator(),
 		routeClient:                routeClient,
@@ -660,9 +664,9 @@ func (s *CNIServer) Initialize(
 ) error {
 	var err error
 	s.podConfigurator, err = newPodConfigurator(
-		ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
+		s.kubeClient, ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
 		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(),
-		s.disableTXChecksumOffload, podUpdateNotifier)
+		s.disableTXChecksumOffload, podUpdateNotifier, s.podInformer, s.containerAccess)
 	if err != nil {
 		return fmt.Errorf("error during initialize podConfigurator: %v", err)
 	}
@@ -675,6 +679,8 @@ func (s *CNIServer) Initialize(
 func (s *CNIServer) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting CNI server")
 	defer klog.InfoS("Shutting down CNI server")
+
+	go s.podConfigurator.Run(stopCh)
 
 	listener, err := util.ListenLocalSocket(s.cniSocket)
 	if err != nil {

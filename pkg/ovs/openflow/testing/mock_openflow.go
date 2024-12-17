@@ -341,6 +341,18 @@ func (mr *MockBridgeMockRecorder) SubscribePacketIn(arg0, arg1 any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePacketIn", reflect.TypeOf((*MockBridge)(nil).SubscribePacketIn), arg0, arg1)
 }
 
+// SubscribePortStatusConsumer mocks base method.
+func (m *MockBridge) SubscribePortStatusConsumer(statusCh chan *openflow15.PortStatus) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SubscribePortStatusConsumer", statusCh)
+}
+
+// SubscribePortStatusConsumer indicates an expected call of SubscribePortStatusConsumer.
+func (mr *MockBridgeMockRecorder) SubscribePortStatusConsumer(statusCh any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePortStatusConsumer", reflect.TypeOf((*MockBridge)(nil).SubscribePortStatusConsumer), statusCh)
+}
+
 // MockTable is a mock of Table interface.
 type MockTable struct {
 	ctrl     *gomock.Controller
