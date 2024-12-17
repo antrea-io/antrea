@@ -119,10 +119,6 @@ var (
 	matchAllPodsPeer = networkingv1.NetworkPolicyPeer{
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
-	// denyAllIngressRule is a NetworkPolicyRule which denies all ingress traffic.
-	denyAllIngressRule = controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}
-	// denyAllEgressRule is a NetworkPolicyRule which denies all egress traffic.
-	denyAllEgressRule = controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}
 	// defaultAction is a RuleAction which sets the default Action for the NetworkPolicy rule.
 	defaultAction = secv1beta1.RuleActionAllow
 )
@@ -772,12 +768,12 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	// If ingress isolation is specified explicitly and there's no ingress rule, append a deny-all ingress rule.
 	// See https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic
 	if ingressIsolated && !ingressRuleExists {
-		rules = append(rules, denyAllIngressRule)
+		rules = append(rules, denyAllRule(controlplane.DirectionIn, enableLogging))
 	}
 	// If egress isolation is specified explicitly and there's no egress rule, append a deny-all egress rule.
 	// See https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-egress-traffic
 	if egressIsolated && !egressRuleExists {
-		rules = append(rules, denyAllEgressRule)
+		rules = append(rules, denyAllRule(controlplane.DirectionOut, enableLogging))
 	}
 
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
@@ -1723,6 +1719,14 @@ func (n *NetworkPolicyController) cleanupOrphanGroups(internalNetworkPolicy *ant
 			n.addressGroupStore.Delete(agName)
 			n.groupingInterface.DeleteGroup(addressGroupType, agName)
 		}
+	}
+}
+
+// denyAllRule returns a NetworkPolicyRule which denies all traffic in the given direction.
+func denyAllRule(direction controlplane.Direction, enableLogging bool) controlplane.NetworkPolicyRule {
+	return controlplane.NetworkPolicyRule{
+		Direction:     direction,
+		EnableLogging: enableLogging,
 	}
 }
 
