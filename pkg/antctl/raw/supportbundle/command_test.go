@@ -41,6 +41,7 @@ import (
 	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	systemclientset "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
+	"antrea.io/antrea/pkg/util/compress"
 )
 
 var (
@@ -58,6 +59,10 @@ var (
 		NodeRef: v1.ObjectReference{
 			Kind: "Node",
 			Name: "node-1",
+		},
+		PodRef: v1.ObjectReference{
+			Name:      "antrea-controller-1",
+			Namespace: "kube-system",
 		},
 	}
 	node1 = v1.Node{
@@ -117,6 +122,60 @@ var (
 		NodeRef: v1.ObjectReference{
 			Kind: "Node",
 			Name: "node-3",
+		},
+	}
+	controllerPod = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "antrea-controller-1",
+			Namespace: "kube-system",
+			Labels: map[string]string{
+				"app":       "antrea",
+				"component": "antrea-controller",
+			},
+		},
+		Spec: v1.PodSpec{
+			NodeName: "node-1",
+			Containers: []v1.Container{
+				{
+					Name: "antrea-controller",
+				},
+			},
+		},
+	}
+	pod1 = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "antrea-agent-1",
+			Namespace: "kube-system",
+			Labels: map[string]string{
+				"app":       "antrea",
+				"component": "antrea-agent",
+			},
+		},
+		Spec: v1.PodSpec{
+			NodeName: "node-1",
+			Containers: []v1.Container{
+				{
+					Name: "antrea-agent",
+				},
+			},
+		},
+	}
+	pod2 = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "antrea-agent-2",
+			Namespace: "kube-system",
+			Labels: map[string]string{
+				"app":       "antrea",
+				"component": "antrea-agent",
+			},
+		},
+		Spec: v1.PodSpec{
+			NodeName: "node-2",
+			Containers: []v1.Container{
+				{
+					Name: "antrea-agent",
+				},
+			},
 		},
 	}
 	nameList = []string{"node-1", "node-3"}
@@ -320,9 +379,8 @@ func TestProcessResults(t *testing.T) {
 		option.dir = path
 	}()
 	tests := []struct {
-		name        string
-		resultMap   map[string]error
-		expectedErr string
+		name      string
+		resultMap map[string]error
 	}{
 		{
 			name: "All nodes failed",
@@ -331,7 +389,6 @@ func TestProcessResults(t *testing.T) {
 				"node-1": fmt.Errorf("error-1"),
 				"node-2": fmt.Errorf("error-2"),
 			},
-			expectedErr: "no data was collected:",
 		},
 		{
 			name: "Not all nodes failed",
@@ -351,17 +408,36 @@ func TestProcessResults(t *testing.T) {
 				defaultFS = afero.NewOsFs()
 			}()
 
-			err := processResults(tt.resultMap, option.dir)
-			if tt.expectedErr != "" {
-				require.ErrorContains(t, err, tt.expectedErr)
-			} else {
-				require.NoError(t, err)
-			}
-			// Both test cases above have failed Nodes, hence this file should always be created/
+			antreaInterface := fakeclientset.NewSimpleClientset(&controllerInfo, agentInfo1, agentInfo2)
+			k8sClient := fake.NewSimpleClientset(controllerPod, pod1, pod2)
+			err := processResults(context.TODO(), antreaInterface, k8sClient, tt.resultMap, option.dir)
+			require.NoError(t, err)
 			b, err := afero.ReadFile(defaultFS, filepath.Join(option.dir, "failed_nodes"))
 			require.NoError(t, err)
 			data := string(b)
 			for node, err := range tt.resultMap {
+				tgzFileName := fmt.Sprintf("agent_%s.tar.gz", node)
+				if node == "" {
+					tgzFileName = "controller_node-1.tar.gz"
+				}
+				if err != nil {
+					ok, checkErr := afero.Exists(defaultFS, filepath.Join(option.dir, tgzFileName))
+					require.NoError(t, checkErr)
+					require.True(t, ok, "expected support bundle file %s not found", tgzFileName)
+
+					unpackError := compress.UnpackDir(defaultFS, filepath.Join(option.dir, tgzFileName), option.dir)
+					require.NoError(t, unpackError)
+					expectFileName := "logs/agent/antrea-agent.log"
+					if node == "" {
+						expectFileName = "logs/controller/antrea-controller.log"
+					}
+					ok, checkErr = afero.Exists(defaultFS, filepath.Join(option.dir, expectFileName))
+					require.NoError(t, checkErr)
+					assert.True(t, ok, "expected log file %s not found", expectFileName)
+					deleteErr := defaultFS.Remove(filepath.Join(option.dir, expectFileName))
+					require.NoError(t, deleteErr)
+				}
+
 				if node == "" {
 					continue
 				}
