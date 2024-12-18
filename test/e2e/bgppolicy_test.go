@@ -20,6 +20,7 @@ import (
 	"log"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -38,14 +39,7 @@ import (
 )
 
 const (
-	externalASN = int32(65000)
-
-	nodeASN        = int32(64512)
-	updatedNodeASN = int32(64513)
-
 	bgpPeerPassword = "password"
-
-	bgpPolicyName = "test-policy"
 )
 
 func getAllNodeIPs() []string {
@@ -86,24 +80,21 @@ func TestBGPPolicy(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	t.Log("Configure the remote FRR router with BGP")
-	configureExternalBGPRouter(t, externalASN, nodeASN, true)
-
-	t.Log("Update the specific Secret storing the passwords of BGP peers")
+	t.Log("Updating the specific Secret storing the passwords of BGP peers")
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: kubeNamespace,
 			Name:      types.BGPPolicySecretName,
 		},
 		Data: map[string][]byte{
-			fmt.Sprintf("%s-%d", externalInfo.externalFRRIPv4, externalASN): []byte(bgpPeerPassword),
+			fmt.Sprintf("%s-%d", externalInfo.externalFRRIPv4, int32(65000)): []byte(bgpPeerPassword),
 		},
 	}
 	_, err = data.clientset.CoreV1().Secrets(kubeNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 	require.NoError(t, err)
 	defer data.clientset.CoreV1().Secrets(kubeNamespace).Delete(context.TODO(), types.BGPPolicySecretName, metav1.DeleteOptions{})
 
-	t.Log("Create a test agnhost Pod")
+	t.Log("Creating a test agnhost Pod")
 	podName, podIPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string, hostNetwork bool) error {
 		args := []string{"netexec", "--http-port=8080"}
 		ports := []corev1.ContainerPort{
@@ -123,84 +114,181 @@ func TestBGPPolicy(t *testing.T) {
 	defer cleanupFunc()
 	podIP := podIPs.IPv4.String()
 
-	t.Log("Create a test Service")
+	t.Log("Creating a test Service")
 	svcClusterIP, err := data.createAgnhostClusterIPService("agnhost-svc", false, ptr.To[corev1.IPFamily](corev1.IPv4Protocol))
-	defer data.deleteService(svcClusterIP.Namespace, svcClusterIP.Name)
 	require.NoError(t, err)
 	require.NotEqual(t, "", svcClusterIP.Spec.ClusterIP, "ClusterIP should not be empty")
+	defer data.deleteService(svcClusterIP.Namespace, svcClusterIP.Name)
 	clusterIP := svcClusterIP.Spec.ClusterIP
 
-	t.Log("Create a test BGPPolicy selecting all Nodes as well as advertising ClusterIPs and Pod CIDRs")
-	bgpPolicy := &crdv1alpha1.BGPPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: bgpPolicyName,
-		},
-		Spec: crdv1alpha1.BGPPolicySpec{
-			NodeSelector: metav1.LabelSelector{
-				MatchLabels: map[string]string{},
+	checkFRRRouterBGPRouteConnectivity := func(ip string) {
+		cmd := fmt.Sprintf("/usr/bin/wget -O - http://%s:8080/hostname -T 5", ip)
+		rc, stdout, _, err := exec.RunDockerExecCommand(externalInfo.externalFRRCID, cmd, "/", nil, "")
+		require.NoError(t, err)
+		require.Equal(t, 0, rc)
+		require.Equal(t, podName, stdout)
+	}
+
+	t.Run("One BGPPolicy applied to all Nodes", func(t *testing.T) {
+		t.Log("Configuring the remote FRR router with BGP")
+		configureExternalBGPRouter(t, int32(65000), int32(64512), true)
+
+		t.Log("Creating a test BGPPolicy, applied to all Nodes, advertising ClusterIPs and Pod CIDRs")
+		bgpPolicyName := "test-policy"
+		bgpPolicy := &crdv1alpha1.BGPPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: bgpPolicyName,
 			},
-			LocalASN:   nodeASN,
-			ListenPort: ptr.To[int32](179),
-			Advertisements: crdv1alpha1.Advertisements{
-				Service: &crdv1alpha1.ServiceAdvertisement{
-					IPTypes: []crdv1alpha1.ServiceIPType{crdv1alpha1.ServiceIPTypeClusterIP},
+			Spec: crdv1alpha1.BGPPolicySpec{
+				NodeSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{},
 				},
-				Pod: &crdv1alpha1.PodAdvertisement{},
+				LocalASN:   int32(64512),
+				ListenPort: ptr.To[int32](179),
+				Advertisements: crdv1alpha1.Advertisements{
+					Service: &crdv1alpha1.ServiceAdvertisement{
+						IPTypes: []crdv1alpha1.ServiceIPType{crdv1alpha1.ServiceIPTypeClusterIP},
+					},
+					Pod: &crdv1alpha1.PodAdvertisement{},
+				},
+				BGPPeers: []crdv1alpha1.BGPPeer{
+					{Address: externalInfo.externalFRRIPv4, ASN: int32(65000)},
+				},
 			},
-			BGPPeers: []crdv1alpha1.BGPPeer{
-				{Address: externalInfo.externalFRRIPv4, ASN: externalASN},
-			},
-		},
-	}
-	bgpPolicy, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Create(context.TODO(), bgpPolicy, metav1.CreateOptions{})
-	defer data.CRDClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
-	require.NoError(t, err)
-
-	t.Log("Get the routes installed on remote FRR router and verify them")
-	expectedRoutes := make([]FRRRoute, 0)
-	for _, node := range clusterInfo.nodes {
-		expectedRoutes = append(expectedRoutes, FRRRoute{Prefix: node.podV4NetworkCIDR, Nexthops: []string{node.ipv4Addr}})
-	}
-	expectedRoutes = append(expectedRoutes, FRRRoute{Prefix: clusterIP + "/32", Nexthops: getAllNodeIPs()})
-	checkFRRRouterBGPRoutes(t, expectedRoutes, nil)
-
-	t.Log("Verify the connectivity of the installed routes on remote FRR route")
-	ipsToConnect := []string{podIP, clusterIP}
-	for _, ip := range ipsToConnect {
-		cmd := fmt.Sprintf("/usr/bin/wget -O - http://%s:8080/hostname -T 5", ip)
-		rc, stdout, _, err := exec.RunDockerExecCommand(externalInfo.externalFRRCID, cmd, "/", nil, "")
+		}
+		bgpPolicy, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Create(context.TODO(), bgpPolicy, metav1.CreateOptions{})
 		require.NoError(t, err)
-		require.Equal(t, 0, rc)
-		require.Equal(t, podName, stdout)
-	}
+		defer data.CRDClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
 
-	t.Log("Update the BGP configuration on the remote FRR router")
-	configureExternalBGPRouter(t, externalASN, updatedNodeASN, false)
+		t.Log("Getting the routes installed on the remote FRR router and verifying them")
+		expectedRoutes := make([]FRRRoute, 0)
+		for _, node := range clusterInfo.nodes {
+			expectedRoutes = append(expectedRoutes, FRRRoute{Prefix: node.podV4NetworkCIDR, Nexthops: []string{node.ipv4Addr}})
+		}
+		expectedRoutes = append(expectedRoutes, FRRRoute{Prefix: clusterIP + "/32", Nexthops: getAllNodeIPs()})
+		checkFRRRouterBGPRoutes(t, expectedRoutes, nil)
 
-	_, err = data.updateServiceInternalTrafficPolicy("agnhost-svc", true)
-	require.NoError(t, err)
+		t.Log("Verifying the connectivity of the installed routes on the remote FRR route")
+		ipsToConnect := []string{podIP, clusterIP}
+		for _, ip := range ipsToConnect {
+			checkFRRRouterBGPRouteConnectivity(ip)
+		}
 
-	t.Log("Update the test BGPPolicy with a new local ASN")
-	updatedBGPPolicy := bgpPolicy.DeepCopy()
-	updatedBGPPolicy.Spec.LocalASN = updatedNodeASN
-	updatedBGPPolicy.Spec.Advertisements.Pod = nil
-	_, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), updatedBGPPolicy, metav1.UpdateOptions{})
-	require.NoError(t, err)
+		t.Log("Updating the BGP configuration on the remote FRR router")
+		configureExternalBGPRouter(t, int32(65000), int32(64513), false)
 
-	t.Log("Get routes installed on remote FRR router and verify them")
-	expectedRoutes = []FRRRoute{{Prefix: clusterIP + "/32", Nexthops: []string{nodeIPv4(0)}}}
-	notExpectedRoutes := []FRRRoute{{Prefix: clusterIP + "/32", Nexthops: getAllNodeIPs()}}
-	checkFRRRouterBGPRoutes(t, expectedRoutes, notExpectedRoutes)
-
-	t.Log("verify the connectivity of the installed routes on remote FRR route")
-	ipsToConnect = []string{clusterIP}
-	for _, ip := range ipsToConnect {
-		cmd := fmt.Sprintf("/usr/bin/wget -O - http://%s:8080/hostname -T 5", ip)
-		rc, stdout, _, err := exec.RunDockerExecCommand(externalInfo.externalFRRCID, cmd, "/", nil, "")
+		t.Log("Updating InternalTrafficPolicy of the test Service from Cluster to Local")
+		_, err = data.updateServiceInternalTrafficPolicy("agnhost-svc", true)
 		require.NoError(t, err)
-		require.Equal(t, 0, rc)
-		require.Equal(t, podName, stdout)
-	}
+		defer data.updateServiceInternalTrafficPolicy("agnhost-svc", false)
+
+		t.Logf("Updating the test BGPPolicy %q: setting a new local ASN and removing Pod CIDR advertisement", bgpPolicy.Name)
+		updatedBGPPolicy := bgpPolicy.DeepCopy()
+		updatedBGPPolicy.Spec.LocalASN = int32(64513)
+		updatedBGPPolicy.Spec.Advertisements.Pod = nil
+		_, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), updatedBGPPolicy, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		t.Log("Getting routes installed on the remote FRR router and verifying them")
+		expectedRoutes = []FRRRoute{{Prefix: clusterIP + "/32", Nexthops: []string{nodeIPv4(0)}}}
+		notExpectedRoutes := []FRRRoute{{Prefix: clusterIP + "/32", Nexthops: getAllNodeIPs()}}
+		checkFRRRouterBGPRoutes(t, expectedRoutes, notExpectedRoutes)
+
+		t.Log("Verifying the connectivity of the installed routes on the remote FRR route")
+		ipsToConnect = []string{clusterIP}
+		for _, ip := range ipsToConnect {
+			checkFRRRouterBGPRouteConnectivity(ip)
+		}
+	})
+
+	t.Run("Multiple BGPPolicies applied to different Nodes within a confederation", func(t *testing.T) {
+		t.Log("Configuring the remote FRR router with BGP")
+
+		asnStart := int32(60000)
+		confederationID1 := int32(64512)
+		confederationID2 := int32(64513)
+
+		configureExternalBGPRouter(t, int32(65000), confederationID1, true)
+
+		var bgpPolicies []*crdv1alpha1.BGPPolicy
+		for i := 0; i < len(clusterInfo.nodes); i++ {
+			bgpPolicyName := "test-policy-" + strconv.Itoa(i)
+			localASN := asnStart + int32(i)
+			bgpPolicy := &crdv1alpha1.BGPPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: bgpPolicyName,
+				},
+				Spec: crdv1alpha1.BGPPolicySpec{
+					NodeSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							labelNodeHostname: clusterInfo.nodes[i].name,
+						},
+					},
+					LocalASN:   localASN,
+					ListenPort: ptr.To[int32](179),
+					Confederation: &crdv1alpha1.Confederation{
+						Identifier: confederationID1,
+					},
+					Advertisements: crdv1alpha1.Advertisements{
+						Service: &crdv1alpha1.ServiceAdvertisement{
+							IPTypes: []crdv1alpha1.ServiceIPType{crdv1alpha1.ServiceIPTypeClusterIP},
+						},
+						Pod: &crdv1alpha1.PodAdvertisement{},
+					},
+					BGPPeers: []crdv1alpha1.BGPPeer{
+						{Address: externalInfo.externalFRRIPv4, ASN: int32(65000)},
+					},
+				},
+			}
+			t.Logf("Creating a test BGPPolicy %q with ASN %d, the confederation ID %d, applied to Node %s", bgpPolicy.Name, localASN, confederationID1, clusterInfo.nodes[i].name)
+			bgpPolicy, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Create(context.TODO(), bgpPolicy, metav1.CreateOptions{})
+			require.NoError(t, err)
+			defer data.CRDClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
+			bgpPolicies = append(bgpPolicies, bgpPolicy)
+		}
+
+		t.Log("Getting the routes installed on the remote FRR router and verifying them")
+		expectedRoutes := make([]FRRRoute, 0)
+		for _, node := range clusterInfo.nodes {
+			expectedRoutes = append(expectedRoutes, FRRRoute{Prefix: node.podV4NetworkCIDR, Nexthops: []string{node.ipv4Addr}})
+		}
+		expectedRoutes = append(expectedRoutes, FRRRoute{Prefix: clusterIP + "/32", Nexthops: getAllNodeIPs()})
+		checkFRRRouterBGPRoutes(t, expectedRoutes, nil)
+
+		t.Log("Verifying the connectivity of the installed routes on the remote FRR route")
+		ipsToConnect := []string{podIP, clusterIP}
+		for _, ip := range ipsToConnect {
+			checkFRRRouterBGPRouteConnectivity(ip)
+		}
+
+		t.Log("Updating the BGP configuration on the remote FRR router")
+		configureExternalBGPRouter(t, int32(65000), confederationID2, false)
+
+		t.Log("Updating InternalTrafficPolicy of the test Service from Cluster to Local")
+		_, err = data.updateServiceInternalTrafficPolicy("agnhost-svc", true)
+		require.NoError(t, err)
+		defer data.updateServiceInternalTrafficPolicy("agnhost-svc", false)
+
+		for _, bgpPolicy := range bgpPolicies {
+			t.Logf("Updating the test BGPPolicy %q: setting a new confederation ID %d and removing Pod CIDR advertisement", bgpPolicy.Name, confederationID2)
+			updatedBGPPolicy := bgpPolicy.DeepCopy()
+			updatedBGPPolicy.Spec.Confederation.Identifier = confederationID2
+			updatedBGPPolicy.Spec.Advertisements.Pod = nil
+			_, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), updatedBGPPolicy, metav1.UpdateOptions{})
+			require.NoError(t, err)
+		}
+
+		t.Log("Getting routes installed on the remote FRR router and verifying them")
+		expectedRoutes = []FRRRoute{{Prefix: clusterIP + "/32", Nexthops: []string{nodeIPv4(0)}}}
+		notExpectedRoutes := []FRRRoute{{Prefix: clusterIP + "/32", Nexthops: getAllNodeIPs()}}
+		checkFRRRouterBGPRoutes(t, expectedRoutes, notExpectedRoutes)
+
+		t.Log("Verifying the connectivity of the installed routes on the remote FRR route")
+		ipsToConnect = []string{clusterIP}
+		for _, ip := range ipsToConnect {
+			checkFRRRouterBGPRouteConnectivity(ip)
+		}
+	})
 }
 
 func checkFRRRouterBGPRoutes(t *testing.T, expectedRoutes, notExpectedRoutes []FRRRoute) {
