@@ -9,6 +9,7 @@
   - [NodeSelector](#nodeselector)
   - [LocalASN](#localasn)
   - [ListenPort](#listenport)
+  - [Confederation](#confederation)
   - [Advertisements](#advertisements)
   - [BGPPeers](#bgppeers)
 - [BGP router ID](#bgp-router-id)
@@ -16,6 +17,7 @@
 - [Example Usage](#example-usage)
   - [Combined Advertisements of Service, Pod, and Egress IPs](#combined-advertisements-of-service-pod-and-egress-ips)
   - [Advertise Egress IPs to external BGP peers with more than one hop](#advertise-egress-ips-to-external-bgp-peers-with-more-than-one-hop)
+  - [Confederation](#confederation-1)
 - [Using antctl](#using-antctl)
 - [Limitations](#limitations)
 <!-- /toc -->
@@ -92,6 +94,15 @@ provider to avoid issues caused by private ASN usage.
 
 The `listenPort` field specifies the port on which the BGP process listens. The default value is 179. The valid port
 range is `1-65535`.
+
+### Confederation
+
+The `confederation` field specifies that the BGP process operates within a confederation.
+
+- `identifier`: Specifies the ASN of the confederation, serving as its identifier.
+- `memberASNs`: Specifies the ASNs of other members that are part of the confederation.
+
+See example [BGP Confederation].
 
 ### Advertisements
 
@@ -219,6 +230,41 @@ spec:
       multihopTTL: 2
 ```
 
+### Confederation
+
+In this example, we configure a BGPPolicy to advertise Pod IPs from selected Nodes to remote BGP peers. The BGP process
+operates within a confederation identified by ASN `65000`, which includes another member with ASN `64513`. When
+communicating with the peer at IP address `192.168.77.200`, which is outside the confederation, the ASN `65000` is used
+as the identifier, to represent the confederation. Conversely, when communicating with the peer at IP address
+`192.168.77.103`, which is within the confederation, the private ASN `64512` is used. This configuration ensures that the
+BGP process correctly identifies and communicates with peers both inside and outside the confederation.
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: BGPPolicy
+metadata:
+  name: example-bgp-policy
+spec:
+  nodeSelector:
+    matchLabels:
+      bgp: enabled
+  localASN: 64512
+  listenPort: 179
+  confederation:
+    identifier: 65000
+    memberASNs:
+      - 64513
+  advertisements:
+    pod: {}
+  bgpPeers:
+    - address: 192.168.77.200
+      asn: 65001
+      port: 179
+    - address: 192.168.77.103
+      asn: 64513
+      port: 179
+```
+
 ## Using antctl
 
 Please refer to the corresponding [antctl page](antctl.md#bgp-commands).
@@ -232,3 +278,5 @@ Please refer to the corresponding [antctl page](antctl.md#bgp-commands).
   with Windows Nodes.
 - Advanced BGP features such as BGP communities, route filtering, route reflection, confederations, and other BGP policy
   mechanisms defined in BGP RFCs are not supported.
+
+[BGP Confederation]: #confederation-1

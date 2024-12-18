@@ -93,6 +93,11 @@ type RouteMetadata struct {
 	K8sObjRef string
 }
 
+type confederationConfig struct {
+	identifier int32
+	peers      sets.Set[uint32]
+}
+
 type bgpPolicyState struct {
 	// The local BGP server.
 	bgpServer bgp.Interface
@@ -104,6 +109,8 @@ type bgpPolicyState struct {
 	localASN int32
 	// The router ID used by the local BGP server.
 	routerID string
+	// The confederation config used by the local BGP server.
+	confederationConfig *confederationConfig
 	// routes stores all BGP routes advertised to BGP peers.
 	routes map[bgp.Route]RouteMetadata
 	// peerConfigs is a map that stores configurations of BGP peers. The map keys are the concatenated strings of BGP
@@ -322,6 +329,24 @@ func (c *Controller) getEffectiveBGPPolicy() *v1alpha1.BGPPolicy {
 	return oldestPolicy
 }
 
+func getConfederationConfig(conf *v1alpha1.Confederation) *confederationConfig {
+	if conf == nil {
+		return nil
+	}
+	peers := sets.New[uint32]()
+	for _, v := range conf.MemberASNs {
+		peers.Insert(uint32(v))
+	}
+	return &confederationConfig{
+		identifier: conf.Identifier,
+		peers:      peers,
+	}
+}
+
+func confederationConfigNotChanged(a, b *confederationConfig) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && a.identifier == b.identifier && a.peers.Equal(b.peers))
+}
+
 func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 	ctx, cancel := context.WithTimeoutCause(ctx, 60*time.Second, fmt.Errorf("BGPPolicy took too long to sync"))
 	defer cancel()
@@ -362,16 +387,18 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 	bgpPolicyName := effectivePolicy.Name
 	listenPort := *effectivePolicy.Spec.ListenPort
 	localASN := effectivePolicy.Spec.LocalASN
+	confederationConfig := getConfederationConfig(effectivePolicy.Spec.Confederation)
 
 	// If the BGPPolicy state is nil, a new BGP server should be started, initialize the BGPPolicy state to store the
 	// new BGP server, BGP policy name, listen port, local ASN, and router ID.
-	// If the BGPPolicy is not nil, any of the listen port, local AS number, or router ID have changed, stop the current
-	// BGP server first and reset the BGPPolicy state to nil; then start a new BGP server and initialize the BGPPolicy
-	// state to store the new BGP server, listen port, local ASN, and router ID.
+	// If the BGPPolicy is not nil, any of the listen port, local AS number, router ID or confederation configuration
+	// has changed, stop the current BGP server first and reset the BGPPolicy state to nil; then start a new BGP server
+	// and initialize the BGPPolicy state to store the new BGP server, listen port, local ASN, and router ID.
 	needUpdateBGPServer := c.bgpPolicyState == nil ||
 		c.bgpPolicyState.listenPort != listenPort ||
 		c.bgpPolicyState.localASN != localASN ||
-		c.bgpPolicyState.routerID != routerID
+		c.bgpPolicyState.routerID != routerID ||
+		!confederationConfigNotChanged(c.bgpPolicyState.confederationConfig, confederationConfig)
 
 	if needUpdateBGPServer {
 		if c.bgpPolicyState != nil {
@@ -384,11 +411,18 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 		}
 
 		// Create a new BGP server.
-		bgpServer := c.newBGPServerFn(&bgp.GlobalConfig{
+		bgpConfig := &bgp.GlobalConfig{
 			ASN:        uint32(localASN),
 			RouterID:   routerID,
 			ListenPort: listenPort,
-		})
+		}
+		if confederationConfig != nil {
+			bgpConfig.Confederation = &bgp.Confederation{
+				Identifier: uint32(confederationConfig.identifier),
+				Peers:      confederationConfig.peers.UnsortedList(),
+			}
+		}
+		bgpServer := c.newBGPServerFn(bgpConfig)
 
 		// Start the new BGP server.
 		if err := bgpServer.Start(ctx); err != nil {
@@ -397,13 +431,14 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 
 		// Initialize the BGPPolicy state to store the new BGP server, BGP policy name, listen port, local ASN, and router ID.
 		c.bgpPolicyState = &bgpPolicyState{
-			bgpServer:     bgpServer,
-			bgpPolicyName: bgpPolicyName,
-			routerID:      routerID,
-			listenPort:    listenPort,
-			localASN:      localASN,
-			routes:        make(map[bgp.Route]RouteMetadata),
-			peerConfigs:   make(map[string]bgp.PeerConfig),
+			bgpServer:           bgpServer,
+			bgpPolicyName:       bgpPolicyName,
+			routerID:            routerID,
+			listenPort:          listenPort,
+			localASN:            localASN,
+			confederationConfig: confederationConfig,
+			routes:              make(map[bgp.Route]RouteMetadata),
+			peerConfigs:         make(map[string]bgp.PeerConfig),
 		}
 	} else if c.bgpPolicyState.bgpPolicyName != bgpPolicyName {
 		// It may happen that only BGP policy name has changed in effective BGP policy.

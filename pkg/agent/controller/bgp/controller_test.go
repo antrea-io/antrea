@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -328,6 +329,44 @@ func TestBGPPolicyAdd(t *testing.T) {
 			},
 		},
 		{
+			name:        "IPv4, as effective BGPPolicy configured with confederation, advertise ClusterIP",
+			ipv4Enabled: true,
+			policiesToAdd: []runtime.Object{generateBGPPolicy(bgpPolicyName1,
+				creationTimestamp,
+				nodeLabels1,
+				179,
+				65000,
+				true,
+				false,
+				true,
+				true,
+				false,
+				[]v1alpha1.BGPPeer{ipv4Peer1},
+				func(bgpPolicy *v1alpha1.BGPPolicy) {
+					bgpPolicy.Spec.Confederation = &v1alpha1.Confederation{Identifier: 100, MemberASNs: []int32{65001}}
+				}),
+			},
+			objects: []runtime.Object{
+				ipv4ClusterIP1,
+				ipv4ClusterIP1Eps,
+				node,
+			},
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
+				65000,
+				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				[]bgp.Route{clusterIPv4Route1},
+				[]bgp.PeerConfig{ipv4Peer1Config},
+				func(state *bgpPolicyState) {
+					state.confederationConfig = &confederationConfig{100, sets.New[uint32](uint32(65001))}
+				}),
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				mockBGPServer.Start(gomock.Any())
+				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route1})
+			},
+		},
+		{
 			name:        "IPv6, as effective BGPPolicy, advertise ExternalIP",
 			ipv6Enabled: true,
 			policiesToAdd: []runtime.Object{generateBGPPolicy(bgpPolicyName1,
@@ -567,6 +606,24 @@ func TestBGPPolicyAdd(t *testing.T) {
 }
 
 func TestBGPPolicyUpdate(t *testing.T) {
+	patchBGPPolicyConfederationFn1 := func(bgpPolicy *v1alpha1.BGPPolicy) {
+		bgpPolicy.Spec.Confederation = &v1alpha1.Confederation{Identifier: 100, MemberASNs: []int32{65001}}
+	}
+	patchBGPPolicyConfederationFn2 := func(bgpPolicy *v1alpha1.BGPPolicy) {
+		bgpPolicy.Spec.Confederation = &v1alpha1.Confederation{Identifier: 100, MemberASNs: []int32{65002}}
+	}
+	patchBGPPolicyConfederationFn3 := func(bgpPolicy *v1alpha1.BGPPolicy) {
+		bgpPolicy.Spec.Confederation = &v1alpha1.Confederation{Identifier: 101, MemberASNs: []int32{65001}}
+	}
+	patchBGPPolicyStateConfederationFn1 := func(state *bgpPolicyState) {
+		state.confederationConfig = &confederationConfig{100, sets.New[uint32](uint32(65001))}
+	}
+	patchBGPPolicyStateConfederationFn2 := func(state *bgpPolicyState) {
+		state.confederationConfig = &confederationConfig{100, sets.New[uint32](uint32(65002))}
+	}
+	patchBGPPolicyStateConfederationFn3 := func(state *bgpPolicyState) {
+		state.confederationConfig = &confederationConfig{101, sets.New[uint32](uint32(65001))}
+	}
 	effectivePolicy := generateBGPPolicy(bgpPolicyName1,
 		creationTimestamp,
 		nodeLabels1,
@@ -581,7 +638,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			ipv4Peer2,
 			ipv6Peer1,
 			ipv6Peer2,
-		})
+		}, patchBGPPolicyConfederationFn1)
 	effectivePolicyState := generateBGPPolicyState(bgpPolicyName1,
 		179,
 		65000,
@@ -592,6 +649,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			ipv4Peer2Config,
 			ipv6Peer2Config,
 		},
+		patchBGPPolicyStateConfederationFn1,
 	)
 	alternativePolicy := generateBGPPolicy(bgpPolicyName2,
 		creationTimestampAdd1s,
@@ -607,7 +665,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			ipv4Peer2,
 			ipv6Peer1,
 			ipv6Peer2,
-		})
+		}, patchBGPPolicyConfederationFn1)
 	unrelatedPolicy := generateBGPPolicy(bgpPolicyName3,
 		creationTimestampAdd2s,
 		nodeLabels2,
@@ -622,7 +680,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			ipv4Peer2,
 			ipv6Peer1,
 			ipv6Peer2,
-		})
+		}, patchBGPPolicyConfederationFn1)
 	objects := []runtime.Object{
 		ipv4ClusterIP2,
 		ipv4ClusterIP2Eps,
@@ -666,7 +724,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
-				}),
+				}, patchBGPPolicyConfederationFn1),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Stop(gomock.Any())
 				mockBGPServer.Start(gomock.Any())
@@ -698,6 +756,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer2Config,
 					ipv6Peer2Config,
 				},
+				patchBGPPolicyStateConfederationFn1,
 			),
 		},
 		{
@@ -716,7 +775,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
-				}),
+				}, patchBGPPolicyConfederationFn1),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Stop(gomock.Any()).Return(fmt.Errorf("failed to stop"))
 			},
@@ -739,7 +798,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
-				}),
+				}, patchBGPPolicyConfederationFn1),
 			expectedState: generateBGPPolicyState(bgpPolicyName1,
 				179,
 				65000,
@@ -755,6 +814,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer2Config,
 					ipv6Peer2Config,
 				},
+				patchBGPPolicyStateConfederationFn1,
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
@@ -786,7 +846,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
-				}),
+				}, patchBGPPolicyConfederationFn1),
 			expectedState: generateBGPPolicyState(bgpPolicyName1,
 				179,
 				65001,
@@ -802,6 +862,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer2Config,
 					ipv6Peer2Config,
 				},
+				patchBGPPolicyStateConfederationFn1,
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.Start(gomock.Any())
@@ -832,9 +893,162 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
-				}),
+				}, patchBGPPolicyConfederationFn1),
 			expectedState: generateBGPPolicyState(bgpPolicyName1,
 				1179,
+				65000,
+				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				[]bgp.Route{
+					clusterIPv4Route2,
+					clusterIPv6Route2,
+					loadBalancerIPv4Route,
+					loadBalancerIPv6Route,
+					podIPv4CIDRRoute,
+					podIPv6CIDRRoute,
+				},
+				[]bgp.PeerConfig{ipv4Peer1Config,
+					ipv6Peer1Config,
+					ipv4Peer2Config,
+					ipv6Peer2Config,
+				},
+				patchBGPPolicyStateConfederationFn1,
+			),
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				mockBGPServer.Start(gomock.Any())
+				mockBGPServer.Stop(gomock.Any())
+				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer2Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer2Config)
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv6Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv6Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
+			},
+		},
+		{
+			name: "Effective BGPPolicy, update confederation peers",
+			policyToUpdate: generateBGPPolicy(bgpPolicyName1,
+				creationTimestamp,
+				nodeLabels1,
+				1179,
+				65000,
+				true,
+				false,
+				true,
+				false,
+				true,
+				[]v1alpha1.BGPPeer{ipv4Peer1,
+					ipv4Peer2,
+					ipv6Peer1,
+					ipv6Peer2,
+				}, patchBGPPolicyConfederationFn3),
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				1179,
+				65000,
+				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				[]bgp.Route{
+					clusterIPv4Route2,
+					clusterIPv6Route2,
+					loadBalancerIPv4Route,
+					loadBalancerIPv6Route,
+					podIPv4CIDRRoute,
+					podIPv6CIDRRoute,
+				},
+				[]bgp.PeerConfig{ipv4Peer1Config,
+					ipv6Peer1Config,
+					ipv4Peer2Config,
+					ipv6Peer2Config,
+				},
+				patchBGPPolicyStateConfederationFn3,
+			),
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				mockBGPServer.Start(gomock.Any())
+				mockBGPServer.Stop(gomock.Any())
+				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer2Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer2Config)
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv6Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv6Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
+			},
+		},
+		{
+			name: "Effective BGPPolicy, update confederation identifier",
+			policyToUpdate: generateBGPPolicy(bgpPolicyName1,
+				creationTimestamp,
+				nodeLabels1,
+				179,
+				65000,
+				true,
+				false,
+				true,
+				false,
+				true,
+				[]v1alpha1.BGPPeer{ipv4Peer1,
+					ipv4Peer2,
+					ipv6Peer1,
+					ipv6Peer2,
+				}, patchBGPPolicyConfederationFn2),
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
+				65000,
+				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				[]bgp.Route{
+					clusterIPv4Route2,
+					clusterIPv6Route2,
+					loadBalancerIPv4Route,
+					loadBalancerIPv6Route,
+					podIPv4CIDRRoute,
+					podIPv6CIDRRoute,
+				},
+				[]bgp.PeerConfig{ipv4Peer1Config,
+					ipv6Peer1Config,
+					ipv4Peer2Config,
+					ipv6Peer2Config,
+				},
+				patchBGPPolicyStateConfederationFn2,
+			),
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				mockBGPServer.Start(gomock.Any())
+				mockBGPServer.Stop(gomock.Any())
+				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer2Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer1Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv6Peer2Config)
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv6Route2})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv6Route})
+				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv6CIDRRoute})
+			},
+		},
+		{
+			name: "Effective BGPPolicy, remove confederation",
+			policyToUpdate: generateBGPPolicy(bgpPolicyName1,
+				creationTimestamp,
+				nodeLabels1,
+				179,
+				65000,
+				true,
+				false,
+				true,
+				false,
+				true,
+				[]v1alpha1.BGPPeer{ipv4Peer1,
+					ipv4Peer2,
+					ipv6Peer1,
+					ipv6Peer2,
+				}),
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
 				65000,
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				[]bgp.Route{
@@ -881,7 +1095,8 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				[]v1alpha1.BGPPeer{updatedIPv4Peer2,
 					updatedIPv6Peer2,
 					ipv4Peer3,
-					ipv6Peer3}),
+					ipv6Peer3},
+				patchBGPPolicyConfederationFn1),
 			expectedState: generateBGPPolicyState(bgpPolicyName1,
 				179,
 				65000,
@@ -899,6 +1114,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer3Config,
 					ipv6Peer3Config,
 				},
+				patchBGPPolicyStateConfederationFn1,
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer3Config)
@@ -925,7 +1141,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
-				}),
+				}, patchBGPPolicyConfederationFn1),
 			existingState: deepCopyBGPPolicyState(effectivePolicyState),
 			expectedState: deepCopyBGPPolicyState(effectivePolicyState),
 		},
@@ -945,7 +1161,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 					updatedIPv4Peer2,
 					ipv6Peer1,
 					updatedIPv6Peer2,
-				}),
+				}, patchBGPPolicyConfederationFn1),
 			existingState: deepCopyBGPPolicyState(effectivePolicyState),
 			expectedState: deepCopyBGPPolicyState(effectivePolicyState),
 		},
@@ -1890,7 +2106,8 @@ func generateBGPPolicyState(bgpPolicyName string,
 	localASN int32,
 	routerID string,
 	bgpRoutes []bgp.Route,
-	peerConfigs []bgp.PeerConfig) *bgpPolicyState {
+	peerConfigs []bgp.PeerConfig,
+	patchFns ...func(*bgpPolicyState)) *bgpPolicyState {
 	routes := map[bgp.Route]RouteMetadata{}
 	peerConfigMap := make(map[string]bgp.PeerConfig)
 	for _, route := range bgpRoutes {
@@ -1900,7 +2117,7 @@ func generateBGPPolicyState(bgpPolicyName string,
 		peerKey := generateBGPPeerKey(peerConfig.Address, peerConfig.ASN)
 		peerConfigMap[peerKey] = peerConfig
 	}
-	return &bgpPolicyState{
+	state := &bgpPolicyState{
 		bgpPolicyName: bgpPolicyName,
 		listenPort:    listenPort,
 		localASN:      localASN,
@@ -1908,6 +2125,10 @@ func generateBGPPolicyState(bgpPolicyName string,
 		routes:        routes,
 		peerConfigs:   peerConfigMap,
 	}
+	for _, fn := range patchFns {
+		fn(state)
+	}
+	return state
 }
 
 func deepCopyBGPPolicyState(in *bgpPolicyState) *bgpPolicyState {
@@ -1920,14 +2141,22 @@ func deepCopyBGPPolicyState(in *bgpPolicyState) *bgpPolicyState {
 	for routeType := range in.routes {
 		routes[routeType] = in.routes[routeType]
 	}
+	var confederationConf *confederationConfig
+	if in.confederationConfig != nil {
+		confederationConf = &confederationConfig{
+			identifier: in.confederationConfig.identifier,
+			peers:      in.confederationConfig.peers.Clone(),
+		}
+	}
 
 	return &bgpPolicyState{
-		bgpPolicyName: in.bgpPolicyName,
-		listenPort:    in.listenPort,
-		localASN:      in.localASN,
-		routerID:      in.routerID,
-		routes:        routes,
-		peerConfigs:   peerConfigMap,
+		bgpPolicyName:       in.bgpPolicyName,
+		listenPort:          in.listenPort,
+		localASN:            in.localASN,
+		routerID:            in.routerID,
+		confederationConfig: confederationConf,
+		routes:              routes,
+		peerConfigs:         peerConfigMap,
 	}
 }
 
@@ -1940,6 +2169,7 @@ func checkBGPPolicyState(t *testing.T, expected, got *bgpPolicyState) {
 		assert.Equal(t, expected.routerID, got.routerID)
 		assert.Equal(t, expected.routes, got.routes)
 		assert.Equal(t, expected.peerConfigs, got.peerConfigs)
+		assert.Equal(t, expected.confederationConfig, got.confederationConfig)
 	}
 }
 
@@ -1953,7 +2183,8 @@ func generateBGPPolicy(name string,
 	advertiseLoadBalancerIP bool,
 	advertiseEgressIP bool,
 	advertisePodCIDR bool,
-	externalPeers []v1alpha1.BGPPeer) *v1alpha1.BGPPolicy {
+	externalPeers []v1alpha1.BGPPeer,
+	patchFns ...func(*v1alpha1.BGPPolicy)) *v1alpha1.BGPPolicy {
 	var advertisement v1alpha1.Advertisements
 	advertisement.Service = &v1alpha1.ServiceAdvertisement{}
 	if advertiseClusterIP {
@@ -1972,7 +2203,7 @@ func generateBGPPolicy(name string,
 	if advertisePodCIDR {
 		advertisement.Pod = &v1alpha1.PodAdvertisement{}
 	}
-	return &v1alpha1.BGPPolicy{
+	bgpPolicy := &v1alpha1.BGPPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			UID:               "test-uid",
@@ -1986,6 +2217,10 @@ func generateBGPPolicy(name string,
 			BGPPeers:       externalPeers,
 		},
 	}
+	for _, fn := range patchFns {
+		fn(bgpPolicy)
+	}
+	return bgpPolicy
 }
 
 func generateService(name string,
