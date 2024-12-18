@@ -173,8 +173,10 @@ func generateTenantRulesData(policyName string, protoKeywords map[string]sets.Se
 	rulesData := bytes.NewBuffer(nil)
 	sid := 1
 
-	// Generate default reject rule.
-	allKeywords := fmt.Sprintf(`msg: "Reject by %s"; flow: to_server, established; sid: %d;`, policyName, sid)
+	// Generate default reject rule. The keyword `only_stream` is used to match on packets that have been reassembled by
+	// the Suricata stream engine. Without this keyword, reassembled packets, such as those from HTTP requests split
+	// across multiple packets, would be rejected by the default rule, causing an otherwise allowed connection to fail.
+	allKeywords := fmt.Sprintf(`msg: "Reject by %s"; flow: to_server, established, only_stream; sid: %d;`, policyName, sid)
 	rule := fmt.Sprintf("reject ip any any -> any any (%s)\n", allKeywords)
 	rulesData.WriteString(rule)
 	sid++
