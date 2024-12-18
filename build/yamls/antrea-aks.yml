@@ -359,6 +359,19 @@ spec:
                   minimum: 1
                   maximum: 65535
                   default: 179
+                confederation:
+                  type: object
+                  properties:
+                    enable:
+                      type: boolean
+                      default: false
+                    identifier:
+                      type: integer
+                      format: int32
+                    peers:
+                      type: array
+                      items:
+                        type: integer
                 advertisements:
                   type: object
                   properties:
