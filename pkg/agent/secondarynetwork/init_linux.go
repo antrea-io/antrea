@@ -40,7 +40,6 @@ func (c *Controller) Initialize() error {
 		phyInterfaces := make([]string, len(c.secNetConfig.OVSBridges[0].PhysicalInterfaces))
 		copy(phyInterfaces, c.secNetConfig.OVSBridges[0].PhysicalInterfaces)
 		if len(phyInterfaces) == 1 {
-
 			bridgedName, _, err := util.PrepareHostInterfaceConnection(
 				c.ovsBridgeClient,
 				phyInterfaces[0],
