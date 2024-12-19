@@ -26,6 +26,7 @@ import (
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -47,6 +48,7 @@ type AgentQuerier interface {
 	GetMemberlistCluster() memberlist.Interface
 	GetNodeLister() corelisters.NodeLister
 	GetBGPPolicyInfoQuerier() querier.AgentBGPPolicyInfoQuerier
+	GetFqdnCache() []types.DnsCacheEntry
 }
 
 type agentQuerier struct {
@@ -95,6 +97,12 @@ func NewAgentQuerier(
 		nodeLister:               nodeLister,
 		bgpPolicyInfoQuerier:     bgpPolicyInfoQuerier,
 	}
+}
+
+// GetFQDNCache returns dnsEntryCache within fqdnController
+func (aq agentQuerier) GetFqdnCache() []types.DnsCacheEntry {
+	klog.InfoS("DBUG: fqdn agent querier GetFqdnCache() called")
+	return aq.networkPolicyInfoQuerier.GetFqdnCache()
 }
 
 // GetNodeLister returns NodeLister.
