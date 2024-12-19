@@ -327,6 +327,13 @@ function delete_networks {
     docker network rm $networks > /dev/null 2>&1
     echo "deleted networks $networks"
   fi
+
+  if [[ $FLEXIBLE_IPAM == true ]]; then
+     networks=$(docker network ls -f name=kind --format '{{.Name}}')
+     networks="$(echo $networks)"
+     docker network rm $networks > /dev/null 2>&1
+     echo "deleted networks $networks"
+  fi 
 }
 
 function load_images {
@@ -711,7 +718,6 @@ if [[ $ACTION == "destroy" ]]; then
       exit
 fi
 
-
 kind_version=$(kind version | awk  '{print $2}')
 kind_version=${kind_version:1} # strip leading 'v'
 function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
@@ -727,6 +733,32 @@ if [[ $ACTION == "create" ]]; then
     if [[ ! -z $SUBNETS ]] && [[ ! -z $EXTRA_NETWORKS ]]; then
         echoerr "Only one of '--subnets' and '--extra-networks' can be specified"
         exit 1
+    fi
+    if [[ $FLEXIBLE_IPAM == true ]]; then
+        docker network create -d bridge --subnet 192.168.240.0/24 kind
+        # chmod +x ./ci/kind/install-ipset.sh
+        # ./ci/kind/install-ipset.sh 
+        uname -a
+        sudo apt update
+        sudo apt install -y ipset
+        sudo dmesg | grep ip_set 
+        sudo modprobe ip_set
+        sudo modprobe xt_set
+        sudo ipset create excluded_subnets hash:net
+        sudo ipset add excluded_subnets 192.168.241.0/24
+        sudo ipset add excluded_subnets 192.168.242.0/24
+        sudo ipset list excluded_subnets
+
+        bridge_id=$(docker network inspect kind -f {{.ID}})
+        bridge_interface="br-${bridge_id:0:12}"
+        sudo iptables -t nat -A POSTROUTING  ! -o  $bridge_interface -s 192.168.240.0/24 -m set ! --match-set excluded_subnets dst -j MASQUERADE
+
+        sudo ipset create excluded_ipam_subnets hash:net
+        sudo ipset add excluded_ipam_subnets 192.168.241.0/24
+        sudo ipset add excluded_ipam_subnets 192.168.242.0/24
+        sudo ipset add excluded_ipam_subnets 192.168.240.0/24
+        sudo ipset list excluded_ipam_subnets
+        sudo iptables -t nat -A POSTROUTING  ! -o  $bridge_interface -s 10.244.0.0/16 -m set ! --match-set excluded_ipam_subnets dst -j MASQUERADE
     fi
     create
 fi
