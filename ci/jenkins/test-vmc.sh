@@ -447,7 +447,7 @@ function deliver_antrea {
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
 
     IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
-    antrea_images=("registry.k8s.io/e2e-test-images/agnhost:2.40" "antrea/nginx:1.21.6-alpine" "antrea/sonobuoy:v0.56.16" "antrea/toolbox:1.3-0" "antrea/systemd-logs:v0.4")
+    antrea_images=("registry.k8s.io/e2e-test-images/agnhost:2.40" "antrea/nginx:1.21.6-alpine" "antrea/sonobuoy:v0.56.16" "antrea/toolbox:1.5-1" "antrea/systemd-logs:v0.4")
     k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
     e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
     for image in "${antrea_images[@]}"; do

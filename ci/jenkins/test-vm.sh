@@ -179,7 +179,6 @@ function configure_vm_agent {
     cp ./build/yamls/externalnode/support-bundle-collection-rbac.yml ${WORKDIR}/support-bundle-collection-rbac.yml
     echo "Applying support-bundle-collection rbac yaml"
     kubectl apply -f ${WORKDIR}/support-bundle-collection-rbac.yml -n $TEST_NAMESPACE
-    cp ./hack/externalnode/sftp-deployment.yml ${WORKDIR}/sftp-deployment.yml
     cp ./hack/externalnode/install-vm.sh ${WORKDIR}/install-vm.sh
     cp ./hack/externalnode/install-vm.ps1 ${WORKDIR}/install-vm.ps1
     create_kubeconfig_files
