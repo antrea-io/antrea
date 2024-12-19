@@ -18,7 +18,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/url"
 	"strings"
 	"testing"
@@ -95,7 +95,7 @@ func BenchmarkCustomizeRealizeNetworkPolicy(b *testing.B) {
 
 func randCidr(rnd *rand.Rand) string {
 	getByte := func() int {
-		return rnd.Intn(255) + 1
+		return rnd.IntN(255) + 1
 	}
 	return fmt.Sprintf("%d.%d.%d.%d/32", getByte(), getByte(), getByte(), getByte())
 }
@@ -150,11 +150,20 @@ func setupTestPodsConnection(data *TestData) error {
 func generateWorkloadNetworkPolicy(policyRules int) *networkv1.NetworkPolicy {
 	ingressRules := make([]networkv1.NetworkPolicyPeer, policyRules)
 	// #nosec G404: random number generator not used for security purposes
-	rnd := rand.New(rand.NewSource(seed))
-	existingCIDRs := make(map[string]struct{}) // ensure no duplicated cidrs
+
+	// Initialize the PCG generator
+	pcg := rand.PCG{}
+	// Provide both 'state' and 'sequence' seeds
+	pcg.Seed(uint64(seed), uint64(1))
+	rnd := rand.New(&pcg)
+
+	existingCIDRs := make(map[string]struct{}) // ensure no duplicated CIDRs
 	for i := 0; i < policyRules; i++ {
 		cidr := randCidr(rnd)
-		for _, ok := existingCIDRs[cidr]; ok; {
+		for {
+			if _, ok := existingCIDRs[cidr]; !ok {
+				break
+			}
 			cidr = randCidr(rnd)
 		}
 		existingCIDRs[cidr] = struct{}{}

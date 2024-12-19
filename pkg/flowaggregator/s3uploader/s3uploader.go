@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -136,7 +136,7 @@ func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, er
 
 	buf := &bytes.Buffer{}
 	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	nameRand := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0)) // Updated initialization
 
 	s3ExportProcess := &S3UploadProcess{
 		bucketName:       config.BucketName,
@@ -374,7 +374,7 @@ func randSeq(randSrc *rand.Rand, n int) string {
 	var alphabet = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 	b := make([]rune, n)
 	for i := range b {
-		randIdx := randSrc.Intn(len(alphabet))
+		randIdx := randSrc.IntN(len(alphabet))
 		b[i] = alphabet[randIdx]
 	}
 	return string(b)
