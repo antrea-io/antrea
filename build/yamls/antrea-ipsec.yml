@@ -4141,9 +4141,13 @@ data:
     # `trafficEncapMode` is `noEncap`, and `noSNAT` is true.
     enableBridgingMode: false
 
-    # Disable TX checksum offloading for container network interfaces. It's supposed to be set to true when the
-    # datapath doesn't support TX checksum offloading, which causes packets to be dropped due to bad checksum.
-    # It affects Pods running on Linux Nodes only.
+    # Disable TX checksum offloading for container network interfaces and the host gateway interface (default:
+    # antrea-gw0). It's supposed to be set to true when the datapath doesn't support TX checksum offloading,
+    # which causes packets to be dropped due to bad checksum.
+    # If this option is later set to false, Antrea does nothing to the affected container network interfaces
+    # and the host gateway interface. To restore the default TX checksum state of the affected interfaces,
+    # it is recommended to delete them and recreate.
+    # This option affects Linux Nodes only.
     disableTXChecksumOffload: false
 
     # Default MTU to use for the host gateway interface and the network interface of each Pod.
@@ -5419,7 +5423,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4b9bbfbbda1ab405ade14e797ea88fbd6f3795bb6aae9df0496409d542799145
+        checksum/config: 6b5ad7dcc2e54f41aab252cc9c3e81bf2c059ea717ca250c4fac21affde5fd3d
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5701,7 +5705,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4b9bbfbbda1ab405ade14e797ea88fbd6f3795bb6aae9df0496409d542799145
+        checksum/config: 6b5ad7dcc2e54f41aab252cc9c3e81bf2c059ea717ca250c4fac21affde5fd3d
       labels:
         app: antrea
         component: antrea-controller
