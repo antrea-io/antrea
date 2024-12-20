@@ -213,13 +213,6 @@ func (ic *ifConfigurator) configureContainerSriovLink(
 	containerIface := &current.Interface{Name: containerIfaceName, Sandbox: containerNetNS}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 
-	// Get rest of the VF information
-	pfName, vfID, err := ic.getVFInfo(pciAddress)
-	klog.V(2).InfoS("Get pfName and vfID of pciAddress", "pfName", pfName, "vfID", vfID, "pciAddress", pciAddress)
-	if err != nil {
-		return fmt.Errorf("failed to get VF information: %v", err)
-	}
-
 	vfIFName, err := ic.getVFLinkName(pciAddress)
 	if err != nil || vfIFName == "" {
 		return fmt.Errorf("VF interface not found for pciAddress %s: %v", pciAddress, err)
