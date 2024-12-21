@@ -33,6 +33,7 @@ import (
 
 type trafficControlTestConfig struct {
 	nodeName         string
+	podLabels        map[string]string
 	podName          string
 	podIPs           map[corev1.IPFamily]string
 	collectorPodName string
@@ -42,9 +43,9 @@ type trafficControlTestConfig struct {
 var (
 	vni          = int32(1)
 	dstVXLANPort = int32(1111)
-	labels       = map[string]string{"tc-e2e": "agnhost"}
 
 	tcTestConfig = trafficControlTestConfig{
+		podLabels:        map[string]string{"tc-e2e": "agnhost"},
 		podName:          "test-tc-pod",
 		podIPs:           map[corev1.IPFamily]string{},
 		collectorPodName: "test-packets-collector-pod",
@@ -64,7 +65,7 @@ func TestTrafficControl(t *testing.T) {
 
 	tcTestConfig.nodeName = controlPlaneNodeName()
 
-	createTrafficControlTestPod(t, data, tcTestConfig.podName)
+	createTrafficControlTestPod(t, data, tcTestConfig.podName, tcTestConfig.podLabels)
 	createTrafficControlPacketsCollectorPod(t, data, tcTestConfig.collectorPodName)
 
 	t.Run("TestMirrorToRemote", func(t *testing.T) { testMirrorToRemote(t, data) })
@@ -72,7 +73,7 @@ func TestTrafficControl(t *testing.T) {
 	t.Run("TestRedirectToLocal", func(t *testing.T) { testRedirectToLocal(t, data) })
 }
 
-func createTrafficControlTestPod(t *testing.T, data *TestData, podName string) {
+func createTrafficControlTestPod(t *testing.T, data *TestData, podName string, labels map[string]string) {
 	args := []string{"netexec", "--http-port=8080"}
 	ports := []corev1.ContainerPort{
 		{
@@ -229,7 +230,7 @@ ip link set %[3]s up`, vni, dstVXLANPort, tunnelPeer)
 	// Create a TrafficControl whose target port is VXLAN.
 	targetPort := &v1alpha2.UDPTunnel{RemoteIP: tcTestConfig.collectorPodIPs[corev1.IPv4Protocol], VNI: &vni, DestinationPort: &dstVXLANPort}
 
-	tc := data.createTrafficControl(t, "tc-", nil, labels, v1alpha2.DirectionBoth, v1alpha2.ActionMirror, targetPort, true, nil)
+	tc := data.createTrafficControl(t, "tc-", nil, tcTestConfig.podLabels, v1alpha2.DirectionBoth, v1alpha2.ActionMirror, targetPort, true, nil)
 	defer data.crdClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
 	// Wait flows of the TrafficControl to be realized.
 	time.Sleep(time.Second)
@@ -242,7 +243,7 @@ func testMirrorToLocal(t *testing.T, data *TestData) {
 	// Create a TrafficControl whose target port is OVS internal port.
 	portName := "test-port"
 	targetPort := &v1alpha2.OVSInternalPort{Name: portName}
-	tc := data.createTrafficControl(t, "tc-", nil, labels, v1alpha2.DirectionBoth, v1alpha2.ActionMirror, targetPort, false, nil)
+	tc := data.createTrafficControl(t, "tc-", nil, tcTestConfig.podLabels, v1alpha2.DirectionBoth, v1alpha2.ActionMirror, targetPort, false, nil)
 	defer data.crdClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
 	// Wait flows of the TrafficControl to be realized.
 	time.Sleep(time.Second)
@@ -310,7 +311,7 @@ ip link set dev %[2]s up`, targetPortName, returnPortName)
 	targetPort := &v1alpha2.NetworkDevice{Name: targetPortName}
 	returnPort := &v1alpha2.NetworkDevice{Name: returnPortName}
 
-	tc := data.createTrafficControl(t, "tc-", nil, labels, v1alpha2.DirectionBoth, v1alpha2.ActionRedirect, targetPort, false, returnPort)
+	tc := data.createTrafficControl(t, "tc-", nil, tcTestConfig.podLabels, v1alpha2.DirectionBoth, v1alpha2.ActionRedirect, targetPort, false, returnPort)
 	defer data.crdClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
 	// Wait flows of TrafficControl to be realized.
 	time.Sleep(time.Second)
