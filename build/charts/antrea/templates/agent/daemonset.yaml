@@ -260,6 +260,8 @@ spec:
             mountPropagation: HostToContainer
           - name: xtables-lock
             mountPath: /run/xtables.lock
+          - name: host-pod-resources
+            mountPath: /var/lib/kubelet/pod-resources
           {{- with .Values.agent.antreaAgent.extraVolumeMounts }}
           {{- toYaml . | trim | nindent 10 }}
           {{- end }}
@@ -397,6 +399,10 @@ spec:
           hostPath:
             path: /run/xtables.lock
             type: FileOrCreate
+        - name: host-pod-resources
+          hostPath:
+            path: /var/lib/kubelet/pod-resources
+            type: Directory
         {{- with .Values.agent.extraVolumes }}
         {{- toYaml . | trim | nindent 8 }}
         {{- end }}
