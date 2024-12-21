@@ -29,6 +29,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -40,6 +41,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -121,7 +123,7 @@ const (
 	flowAggregatorConfName   = "flow-aggregator.conf"
 
 	agnhostImage        = "registry.k8s.io/e2e-test-images/agnhost:2.40"
-	ToolboxImage        = "antrea/toolbox:1.3-0"
+	ToolboxImage        = "antrea/toolbox:1.5-1"
 	mcjoinImage         = "antrea/mcjoin:v2.9"
 	nginxImage          = "antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
@@ -3298,5 +3300,33 @@ func (data *TestData) setPodAnnotation(namespace, podName, annotationKey string,
 	}
 
 	log.Infof("Successfully patched Pod %s in Namespace %s", podName, namespace)
+	return nil
+}
+
+func (data *TestData) waitForDeploymentReady(t *testing.T, namespace string, name string, timeout time.Duration) error {
+	t.Logf("Waiting for Deployment '%s/%s' to be ready", namespace, name)
+	var labelSelector *metav1.LabelSelector
+	err := wait.PollUntilContextTimeout(context.Background(), 1*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
+		dp, err := data.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		labelSelector = dp.Spec.Selector
+		return dp.Status.ObservedGeneration == dp.Generation && dp.Status.ReadyReplicas == *dp.Spec.Replicas, nil
+	})
+	if wait.Interrupted(err) {
+		labelMap, err := metav1.LabelSelectorAsMap(labelSelector)
+		var stdout string
+		if err != nil {
+			t.Logf("Cannot convert Selector for Deployment into kubectl label query: %v", err)
+			stdout = "<no debug output available>"
+		} else {
+			labelQuery := labels.SelectorFromSet(labelMap).String()
+			_, stdout, _, _ = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod -l %s", namespace, labelQuery))
+		}
+		return fmt.Errorf("some replicas for Deployment '%s/%s' are not ready after %v:\n%s", namespace, name, timeout, stdout)
+	} else if err != nil {
+		return fmt.Errorf("error when waiting for Deployment '%s/%s' to be ready: %w", namespace, name, err)
+	}
 	return nil
 }

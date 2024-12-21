@@ -251,7 +251,7 @@ fi
 
 COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
                     "antrea/nginx:1.21.6-alpine" \
-                    "antrea/toolbox:1.3-0")
+                    "antrea/toolbox:1.5-1")
 
 FLOW_VISIBILITY_IMAGE_LIST=("antrea/ipfix-collector:v0.11.0" \
                             "antrea/clickhouse-operator:0.21.0" \

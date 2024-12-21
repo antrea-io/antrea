@@ -90,7 +90,7 @@ fi
 
 trap "quit" INT EXIT
 
-IMAGE_LIST=("antrea/toolbox:1.3-0" \
+IMAGE_LIST=("antrea/toolbox:1.5-1" \
             "antrea/antrea-agent-ubuntu:latest" \
             "antrea/antrea-controller-ubuntu:latest")
 
