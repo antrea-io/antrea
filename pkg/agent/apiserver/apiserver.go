@@ -40,6 +40,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgppolicy"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgproute"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/fqdncache"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/networkpolicy"
@@ -104,6 +105,7 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/bgppolicy", bgppolicy.HandleFunc(bgpq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/bgppeers", bgppeer.HandleFunc(bgpq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/bgproutes", bgproute.HandleFunc(bgpq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/fqdncache", fqdncache.HandleFunc(aq))
 }
 
 func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool) error {

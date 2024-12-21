@@ -424,6 +424,9 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 			return fmt.Errorf("error when decoding response %v: %w", resp, err)
 		}
 	} else {
+		// var testobj []types.DnsCacheEntry
+		// err := json.NewDecoder(resp).Decode(&testobj)
+		// fmt.Printf("DBUG: about to transform %v via function %v\n", testobj, addonTransform)
 		obj, err = addonTransform(resp, single, args)
 		if err != nil {
 			return fmt.Errorf("error when doing local transform: %w", err)
