@@ -754,11 +754,11 @@
               # Prevent exposing credentials in the console output by adding set +x
               # This is to avoid other developers removing this set+x by accident
               set +x
-              sudo gcloud auth login --cred-file=${CREDENTIAL_PATH}
+              sudo gcloud auth login --cred-file=${{CREDENTIAL_PATH}}
+              sudo gcloud config set project ${GKE_PROJECT}
               sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
                 --svc-account ${{SERVICE_ACCOUNT}} --gcloud-sdk-path ${{GCLOUD_PATH}} \
-                --log-mode detail --setup-only --gke-project ${GKE_PROJECT} --shared-network \
-                --gke-network ${{GKE_NETWORK}} --gke-subnet ${{GKE_SUBNET}}
+                --log-mode detail --setup-only
           triggers:
           - timed: H H */2 * *
           publishers:
@@ -780,20 +780,14 @@
           wrappers:
           - credentials-binding:
             - text:
-                credential-id: SERVICE_ACCOUNT # Jenkins secret that stores the cloud service account
-                variable: SERVICE_ACCOUNT
-            - text:
                 credential-id: GKE_PROJECT
                 variable: GKE_PROJECT
             - text:
-                credential-id: GKE_NETWORK
-                variable: GKE_NETWORK
-            - text:
-                credential-id: GKE_SUBNET
-                variable: GKE_SUBNET
-            - text:
                 credential-id: CREDENTIAL_PATH
                 variable: CREDENTIAL_PATH
+            - text:
+                credential-id: SERVICE_ACCOUNT
+                variable: SERVICE_ACCOUNT
             - text:
                 credential-id: GCLOUD_PATH
                 variable: GCLOUD_PATH
@@ -873,6 +867,53 @@
               recipients: projectantrea-dev@googlegroups.com rahulj@vmware.com
           triggers: []
           wrappers: []
+      - 'cloud-{name}-{test_name}':
+          test_name: auto-scaling-agents
+          node: antrea-cloud
+          description: 'This is a cloud job of auto scaling agents for antrea.'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          only_trigger_phrase: false
+          trigger_permit_all: false
+          builders:
+          - shell: |-
+              #!/bin/bash
+              sudo gcloud auth login --cred-file=${{CREDENTIAL_PATH}}
+              sudo gcloud config set project antrea
+              sudo ./ci/jenkins/scale-agent.sh --kind --jenkins-user ${{JENKINS_USER}} --jenkins-token ${{JENKINS_API_TOKEN}} --gke-project {GKE_PROJECT} --gke-network ${{GKE_NETWORK}} --gke-subnet ${{GKE_SUBNET}}
+          concurrent: false
+          trigger_phrase: ^(?!Thanks for your PR).*/scale-agent.*  
+          triggers:
+          - timed: "*/15 * * * *"
+          publishers:
+          - archive:
+              artifacts: ""
+              allow-empty: true
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: JENKINS_USER
+                variable: JENKINS_USER
+            - text:
+                credential-id: JENKINS_API_TOKEN
+                variable: JENKINS_API_TOKEN
+            - text:
+                credential-id: CREDENTIAL_PATH
+                variable: CREDENTIAL_PATH
+            - text:
+                credential-id: GKE_PROJECT
+                variable: GKE_PROJECT
+            - text:
+                credential-id: GKE_NETWORK
+                variable: GKE_NETWORK
+            - text:
+                credential-id: GKE_SUBNET
+                variable: GKE_SUBNET
       - '{name}-{test_name}-matrix-compatibility-test':
           test_name: weekly
           node: 'antrea-test-node'
