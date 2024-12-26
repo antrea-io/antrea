@@ -861,6 +861,44 @@
               recipients: projectantrea-dev@googlegroups.com rahulj@vmware.com
           triggers: []
           wrappers: []
+      - 'cloud-{name}-{test_name}':
+          test_name: auto-scaling-agents
+          node: antrea-cloud
+          description: 'This is a cloud job of auto scaling agents for antrea.'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          only_trigger_phrase: false
+          trigger_permit_all: false
+          builders:
+          - shell: |-
+              #!/bin/bash
+              sudo gcloud auth login --cred-file=${{CREDENTIAL_PATH}}
+              sudo gcloud config set project antrea
+              sudo ./ci/jenkins/scale-agent.sh --kind --jenkins-user ${{JENKINS_USER}} --jenkins-token ${{JENKINS_TOKEN}}
+          concurrent: false
+          trigger_phrase: ^(?!Thanks for your PR).*/scale-agent.*  
+          triggers:
+          - timed: "*/15 * * * *"
+          publishers:
+          - archive:
+              artifacts: ""
+              allow-empty: true
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: JENKINS_USER
+                variable: JENKINS_USER
+            - text:
+                credential-id: JENKINS_TOKEN
+                variable: JENKINS_TOKEN
+            - text:
+                credential-id: CREDENTIAL_PATH
+                variable: CREDENTIAL_PATH
       - '{name}-{test_name}-matrix-compatibility-test':
           test_name: weekly
           node: 'antrea-test-node'
