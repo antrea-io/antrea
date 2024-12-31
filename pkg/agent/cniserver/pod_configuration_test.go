@@ -393,7 +393,7 @@ func TestProcessPortStatusMessage(t *testing.T) {
 					PortNo: 1,
 					Length: 72,
 					Name:   []byte(fmt.Sprintf("%s\x00", podIfName)),
-					State:  openflow15.PS_LINK_DOWN,
+					State:  openflow15.PS_BLOCKED,
 				},
 			},
 			ovsPortName:     podIfName,

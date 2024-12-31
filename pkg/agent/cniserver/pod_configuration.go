@@ -677,12 +677,26 @@ func (pc *podConfigurator) recordPodEvent(ifConfig *interfacestore.InterfaceConf
 }
 
 func (pc *podConfigurator) processPortStatusMessage(status *openflow15.PortStatus) {
-	// Update Pod OpenFlow entries only after the OpenFlow port state is live.
-	if status.Desc.State != openflow15.PS_LIVE {
+	ofPort := status.Desc.PortNo
+	state := status.Desc.State
+	// Update Pod OpenFlow entries only after the OpenFlow port state is live or down.
+	// Accepting Port state "openflow15.PS_LINK_DOWN" is a workaround for Windows OVS issue https://github.com/openvswitch/ovs-issues/issues/351.
+	// In which OVS does not correctly implement function netdev_windows_update_flags, so OVS doesn't update ifp_flags
+	// after a new OpenFlow port is successfully installed. Since this OVS issue doesn't have side impact on datapath
+	// packets forwarding, antrea-agent will ignore the bad state to ensure the Pod's OpenFlow entries are installed as
+	// long as the port number is allocated.
+	if state != openflow15.PS_LIVE && state != openflow15.PS_LINK_DOWN {
+		klog.InfoS("Ignoring the OVS port status message with undesired state", "ofPort", ofPort, "state", state)
 		return
 	}
+
+	if ofPort == 0 {
+		klog.InfoS("Ignoring the OVS port status message with undesired port number", "ofPort", ofPort, "state", state)
+		return
+	}
+
 	ovsPort := string(bytes.Trim(status.Desc.Name, "\x00"))
-	ofPort := status.Desc.PortNo
+	klog.InfoS("Processing OVS port status message", "ovsPort", ovsPort, "ofPort", ofPort, "state", state)
 
 	ifConfig, found := pc.ifaceStore.GetInterfaceByName(ovsPort)
 	if !found {
