@@ -50,6 +50,7 @@ type featureService struct {
 	enableProxy           bool
 	proxyAll              bool
 	enableDSR             bool
+	proxyLoadBalancerIPs  bool
 	connectUplinkToBridge bool
 	ctZoneSrcField        *binding.RegField
 
@@ -72,6 +73,7 @@ func newFeatureService(
 	enableProxy,
 	proxyAll,
 	enableDSR,
+	proxyLoadBalancerIPs,
 	connectUplinkToBridge bool) *featureService {
 	gatewayIPs := make(map[binding.Protocol]net.IP)
 	virtualIPs := make(map[binding.Protocol]net.IP)
@@ -125,6 +127,7 @@ func newFeatureService(
 		enableProxy:            enableProxy,
 		proxyAll:               proxyAll,
 		enableDSR:              enableDSR,
+		proxyLoadBalancerIPs:   proxyLoadBalancerIPs,
 		connectUplinkToBridge:  connectUplinkToBridge,
 		ctZoneSrcField:         getZoneSrcField(connectUplinkToBridge),
 		category:               cookie.Service,
@@ -140,6 +143,16 @@ func (f *featureService) serviceNoEndpointFlow() binding.Flow {
 		Done()
 }
 
+// loadBalancerSourceRangesDropFlow generates a flow to match packets destined for LoadBalancer services, which will be
+// dropped if their source is not within the defined loadBalancerSourceRanges.
+func (f *featureService) loadBalancerSourceRangesDropFlow() binding.Flow {
+	return ServiceLBTable.ofTable.BuildFlow(priorityLow).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchRegMark(LoadBalancerSourceRangesDropRegMark).
+		Action().Drop().
+		Done()
+}
+
 func (f *featureService) initFlows() []*openflow15.FlowMod {
 	var flows []binding.Flow
 	if f.enableProxy {
@@ -152,6 +165,9 @@ func (f *featureService) initFlows() []*openflow15.FlowMod {
 		flows = append(flows, f.sessionAffinityReselectFlow())
 		flows = append(flows, f.serviceNoEndpointFlow())
 		flows = append(flows, f.l2ForwardOutputHairpinServiceFlow())
+		if f.proxyLoadBalancerIPs {
+			flows = append(flows, f.loadBalancerSourceRangesDropFlow())
+		}
 		if f.proxyAll {
 			// This installs the flows to match the first packet of NodePort connection. The flows set a bit of a register
 			// to mark the Service type of the packet as NodePort, and the mark is consumed in table serviceLBTable.
