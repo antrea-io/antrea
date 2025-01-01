@@ -34,9 +34,10 @@ var (
 
 func TestCalculateInstructionsSize(t *testing.T) {
 	tt := []struct {
-		name   string
-		packet *crdv1alpha1.Packet
-		count  int
+		name        string
+		packet      *crdv1alpha1.Packet
+		count       int
+		bidirection bool
 	}{
 		{
 			name: "proto and host and port",
@@ -92,7 +93,7 @@ func TestCalculateInstructionsSize(t *testing.T) {
 
 	for _, item := range tt {
 		t.Run(item.name, func(t *testing.T) {
-			assert.Equal(t, item.count, calculateInstructionsSize(item.packet))
+			assert.Equal(t, item.count, calculateInstructionsSize(item.packet, item.bidirection))
 		})
 	}
 }
@@ -177,7 +178,7 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 
 	for _, item := range tt {
 		t.Run(item.name, func(t *testing.T) {
-			result := compilePacketFilter(item.spec.Packet, item.srcIP, item.dstIP)
+			result := compilePacketFilter(item.spec.Packet, item.srcIP, item.dstIP, item.spec.Bidirection)
 			assert.Equal(t, item.inst, result)
 		})
 	}

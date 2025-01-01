@@ -41,9 +41,9 @@ func zeroFilter() []bpf.Instruction {
 	return []bpf.Instruction{returnDrop}
 }
 
-func (p *pcapCapture) Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error) {
+func (p *pcapCapture) Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet, bidirection bool) (chan gopacket.Packet, error) {
 	// Compile the BPF filter in advance to reduce the time window between starting the capture and applying the filter.
-	inst := compilePacketFilter(packet, srcIP, dstIP)
+	inst := compilePacketFilter(packet, srcIP, dstIP, bidirection)
 	klog.V(5).InfoS("Generated bpf instructions for PacketCapture", "device", device, "srcIP", srcIP, "dstIP", dstIP, "packetSpec", packet, "bpf", inst)
 	rawInst, err := bpf.Assemble(inst)
 	if err != nil {

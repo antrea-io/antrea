@@ -3035,7 +3035,9 @@ spec:
                               type: integer
                               minimum: 1
                               maximum: 65535
-
+                bidirection:
+                  type: boolean
+                  default: false
                 timeout:
                   type: integer
                   minimum: 1

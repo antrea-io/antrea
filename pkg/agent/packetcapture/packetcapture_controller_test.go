@@ -193,7 +193,7 @@ func craftTestPacket() gopacket.Packet {
 type testCapture struct {
 }
 
-func (p *testCapture) Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet) (chan gopacket.Packet, error) {
+func (p *testCapture) Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet, bidirection bool) (chan gopacket.Packet, error) {
 	ch := make(chan gopacket.Packet, testCaptureNum)
 	for i := 0; i < 15; i++ {
 		ch <- craftTestPacket()
