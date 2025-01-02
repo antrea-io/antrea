@@ -32,6 +32,7 @@ import (
 	memberlist "antrea.io/antrea/pkg/agent/memberlist"
 	openflow "antrea.io/antrea/pkg/agent/openflow"
 	proxy "antrea.io/antrea/pkg/agent/proxy"
+	types "antrea.io/antrea/pkg/agent/types"
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	ovsctl "antrea.io/antrea/pkg/ovs/ovsctl"
 	querier "antrea.io/antrea/pkg/querier"
@@ -88,6 +89,20 @@ func (m *MockAgentQuerier) GetBGPPolicyInfoQuerier() querier.AgentBGPPolicyInfoQ
 func (mr *MockAgentQuerierMockRecorder) GetBGPPolicyInfoQuerier() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBGPPolicyInfoQuerier", reflect.TypeOf((*MockAgentQuerier)(nil).GetBGPPolicyInfoQuerier))
+}
+
+// GetFqdnCache mocks base method.
+func (m *MockAgentQuerier) GetFqdnCache() []types.DnsCacheEntry {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFqdnCache")
+	ret0, _ := ret[0].([]types.DnsCacheEntry)
+	return ret0
+}
+
+// GetFqdnCache indicates an expected call of GetFqdnCache.
+func (mr *MockAgentQuerierMockRecorder) GetFqdnCache() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFqdnCache", reflect.TypeOf((*MockAgentQuerier)(nil).GetFqdnCache))
 }
 
 // GetInterfaceStore mocks base method.
