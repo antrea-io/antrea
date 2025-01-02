@@ -112,9 +112,9 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaIE)+len(IANAReverseInfoElements)].GetInfoElement(), nil)
 	}
 	if !isIPv6 {
-		mockTempSet.EXPECT().AddRecord(elemList, testTemplateIDv4).Return(nil)
+		mockTempSet.EXPECT().AddRecordV2(elemList, testTemplateIDv4).Return(nil)
 	} else {
-		mockTempSet.EXPECT().AddRecord(elemList, testTemplateIDv6).Return(nil)
+		mockTempSet.EXPECT().AddRecordV2(elemList, testTemplateIDv6).Return(nil)
 	}
 	// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
 	// above elements: IANAInfoElements, IANAReverseInfoElements and AntreaInfoElements.
@@ -248,7 +248,7 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	sendDataSet := func(elemList []ipfixentities.InfoElementWithValue, templateID uint16, conn flowexporter.Connection) {
 		mockDataSet.EXPECT().ResetSet()
 		mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, templateID).Return(nil)
-		mockDataSet.EXPECT().AddRecord(ElementListMatcher(elemList), templateID).Return(nil)
+		mockDataSet.EXPECT().AddRecordV2(ElementListMatcher(elemList), templateID).Return(nil)
 		mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
 
 		err := flowExp.addConnToSet(&conn)
@@ -702,10 +702,10 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 			mockDataSet.EXPECT().ResetSet()
 			if !isIPv6 {
 				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv4).Return(nil)
-				mockDataSet.EXPECT().AddRecord(flowExp.elementsListv4, flowExp.templateIDv4).Return(nil)
+				mockDataSet.EXPECT().AddRecordV2(flowExp.elementsListv4, flowExp.templateIDv4).Return(nil)
 			} else {
 				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv6).Return(nil)
-				mockDataSet.EXPECT().AddRecord(flowExp.elementsListv6, flowExp.templateIDv6).Return(nil)
+				mockDataSet.EXPECT().AddRecordV2(flowExp.elementsListv6, flowExp.templateIDv6).Return(nil)
 			}
 			mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
 			_, err := flowExp.sendFlowRecords()
