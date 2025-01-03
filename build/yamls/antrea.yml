@@ -4128,9 +4128,13 @@ data:
     # `trafficEncapMode` is `noEncap`, and `noSNAT` is true.
     enableBridgingMode: false
 
-    # Disable TX checksum offloading for container network interfaces. It's supposed to be set to true when the
-    # datapath doesn't support TX checksum offloading, which causes packets to be dropped due to bad checksum.
-    # It affects Pods running on Linux Nodes only.
+    # Disable TX checksum offloading for container network interfaces and the host gateway interface (default:
+    # antrea-gw0). It's supposed to be set to true when the datapath doesn't support TX checksum offloading,
+    # which causes packets to be dropped due to bad checksum.
+    # If this option is later set to false, Antrea does nothing to the affected container network interfaces
+    # and the host gateway interface. To restore the default TX checksum state of the affected interfaces,
+    # it is recommended to delete them and recreate.
+    # This option affects Linux Nodes only.
     disableTXChecksumOffload: false
 
     # Default MTU to use for the host gateway interface and the network interface of each Pod.
@@ -5406,7 +5410,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e4e94ba89524d8fdc7eb3ad6e0f6948767f3d92ef767f17c47da348f08b5c2e0
+        checksum/config: 066c4105578a251da2b0ee3928df4ec469a7ba113764f9206a5b97b789713d0c
       labels:
         app: antrea
         component: antrea-agent
@@ -5642,7 +5646,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e4e94ba89524d8fdc7eb3ad6e0f6948767f3d92ef767f17c47da348f08b5c2e0
+        checksum/config: 066c4105578a251da2b0ee3928df4ec469a7ba113764f9206a5b97b789713d0c
       labels:
         app: antrea
         component: antrea-controller
