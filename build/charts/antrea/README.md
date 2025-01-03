@@ -46,6 +46,7 @@ Kubernetes: `>= 1.19.0-0`
 | agent.installCNI.resources | object | `{"requests":{"cpu":"100m"}}` | Resource requests and limits for the install-cni initContainer. |
 | agent.installCNI.securityContext.capabilities | list | `["SYS_MODULE"]` | Capabilities for the install-cni initContainer. |
 | agent.installCNI.securityContext.privileged | bool | `false` | Run the install-cni container as privileged. |
+| agent.kubeletRootDir | string | `"/var/lib/kubelet"` | The root directory where kubelet stores its files. This is required to access the pod resources API, which is used to retrieve SR-IOV device allocation details for Pods. By default, the subdirectory containing the pod resources socket is mounted into antrea-agent Pods. Setting it to an empty value disables the mounting. |
 | agent.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for the antrea-agent Pods. |
 | agent.podAnnotations | object | `{}` | Annotations to be added to antrea-agent Pods. |
 | agent.podLabels | object | `{}` | Labels to be added to antrea-agent Pods. |

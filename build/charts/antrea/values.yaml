@@ -264,6 +264,12 @@ agent:
   # Note that we will never try to load a module if we can detect that it is
   # "built-in", regardless of this value.
   dontLoadKernelModules: false
+  # -- The root directory where kubelet stores its files. This is required to
+  # access the pod resources API, which is used to retrieve SR-IOV device
+  # allocation details for Pods. By default, the subdirectory containing the pod
+  # resources socket is mounted into antrea-agent Pods. Setting it to an empty
+  # value disables the mounting.
+  kubeletRootDir: "/var/lib/kubelet"
   installCNI:
     # -- Extra environment variables to be injected into install-cni.
     extraEnv: {}
