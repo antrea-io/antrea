@@ -68,10 +68,14 @@ data:
 ```
 
 At the moment, Antrea supports only a single OVS bridge for secondary networks,
-and supports up to eight physical interfaces on the bridge. The physical
-interfaces cannot be the Node's management interface, otherwise the Node's
-management network connectivity can be broken after `antrea-agent` creates the
-OVS bridge and moves the management interface to the bridge.
+and supports up to eight physical interfaces on the bridge.
+
+Note: when you set the Node's primary NIC as a secondary bridge physical interface,
+if the Node IP is assigned via DHCP and the DNS server is auto-configured by a DNS
+manager (e.g. system-resolved), you may lose the DNS configuration after the interface
+is moved to the OVS bridge, because of the interface state change. Please consider providing
+a static DNS configuration in `/etc/systemd/resolved.conf` before installing Antrea to
+use the primary NIC as a physical interface. Check more details on [issue 6558](https://github.com/antrea-io/antrea/issues/6558).
 
 ## Secondary VLAN network configuration
 
