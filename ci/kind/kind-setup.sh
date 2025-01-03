@@ -528,19 +528,28 @@ function destroy_external_servers {
 
 function clean_kind {
     echo "=== Cleaning up stale kind clusters ==="
-    read -a all_kind_clusters <<< $(kind get clusters)
-    for kind_cluster_name in "${all_kind_clusters[@]}"; do
-        creationTimestamp=$(kubectl get nodes --context kind-$kind_cluster_name -o json -l node-role.kubernetes.io/control-plane | \
-        jq -r '.items[0].metadata.creationTimestamp')
+    LOCK_FILE="$THIS_DIR/.kube/config.lock"
+    (
+      flock -x 200
+
+      for context in $(kubectl config get-contexts -o name | grep 'kind-'); do
+        cluster_name=$(echo $context | sed 's/^kind-//')
+        creationTimestamp=$(kubectl get nodes --context $context -o json -l node-role.kubernetes.io/control-plane | \
+        jq -r '.items[0].metadata.creationTimestamp' || true)
+        if [[ -z $creationTimestamp ]]; then
+          continue
+        fi
         creation=$(printUnixTimestamp "$creationTimestamp")
         now=$(date -u '+%s')
         diff=$((now-creation))
         timeout=$(($UNTIL_TIME_IN_MINS*60))
         if [[ $diff -gt $timeout ]]; then
-           echo "=== kind ${kind_cluster_name} present from more than $UNTIL_TIME_IN_MINS minutes ==="
-           kind delete cluster --name $kind_cluster_name
+          echo "=== Cluster ${cluster_name} is present for more than $UNTIL_TIME_IN_MINS minutes ==="
+          kind delete cluster --name $cluster_name
         fi
-    done
+      done
+    )200>>"$LOCK_FILE"
+    rm -rf $LOCK_FILE
 }
 
 if ! command -v kind &> /dev/null
