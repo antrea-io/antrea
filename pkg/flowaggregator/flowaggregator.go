@@ -259,6 +259,8 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 	}
 	cpInput.NumExtraElements = len(infoelements.AntreaSourceStatsElementList) + len(infoelements.AntreaDestinationStatsElementList) + len(infoelements.AntreaLabelsElementList) +
 		len(infoelements.AntreaFlowEndSecondsElementList) + len(infoelements.AntreaThroughputElementList) + len(infoelements.AntreaSourceThroughputElementList) + len(infoelements.AntreaDestinationThroughputElementList)
+	// clusterId
+	cpInput.NumExtraElements += 1
 	var err error
 	fa.collectingProcess, err = collector.InitCollectingProcess(cpInput)
 	return err
@@ -424,6 +426,9 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	// Even if fa.includePodLabels is false, we still need to add an empty IE to match the template.
 	if !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
 		fa.fillPodLabels(key, record.Record, *startTime)
+		if err := fa.fillClusterID(record.Record); err != nil {
+			klog.ErrorS(err, "Failed to add clusterId")
+		}
 		fa.aggregationProcess.SetExternalFieldsFilled(record, true)
 	}
 	if fa.ipfixExporter != nil {
@@ -557,6 +562,17 @@ func (fa *flowAggregator) fillPodLabels(key ipfixintermediate.FlowKey, record ip
 	if err := fa.fillPodLabelsForSide(key.DestinationAddress, record, startTime, "destinationPodNamespace", "destinationPodName", "destinationPodLabels"); err != nil {
 		klog.ErrorS(err, "Error when filling Pod labels", "side", "destination")
 	}
+}
+
+func (fa *flowAggregator) fillClusterID(record ipfixentities.Record) error {
+	ie, err := fa.registry.GetInfoElement("clusterId", ipfixregistry.AntreaEnterpriseID)
+	if err != nil {
+		return fmt.Errorf("error when getting clusterId InfoElement: %w", err)
+	}
+	if err := record.AddInfoElement(ipfixentities.NewStringInfoElement(ie, fa.clusterUUID.String())); err != nil {
+		return fmt.Errorf("error when adding clusterId InfoElement with value: %w", err)
+	}
+	return nil
 }
 
 func (fa *flowAggregator) GetFlowRecords(flowKey *ipfixintermediate.FlowKey) []map[string]interface{} {
