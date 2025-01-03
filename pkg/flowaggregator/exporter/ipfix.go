@@ -168,7 +168,7 @@ func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 boo
 	if err := e.set.PrepareSet(ipfixentities.Data, templateID); err != nil {
 		return err
 	}
-	if err := e.set.AddRecord(record.GetOrderedElementList(), templateID); err != nil {
+	if err := e.set.AddRecordV2(record.GetOrderedElementList(), templateID); err != nil {
 		return err
 	}
 	sentBytes, err := e.exportingProcess.SendSet(e.set)
@@ -331,7 +331,7 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	if err := e.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
 		return 0, err
 	}
-	err := e.set.AddRecord(elements, templateID)
+	err := e.set.AddRecordV2(elements, templateID)
 	if err != nil {
 		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
 	}

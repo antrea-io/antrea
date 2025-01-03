@@ -76,7 +76,7 @@ func TestIPFIXExporter_sendTemplateSet(t *testing.T) {
 		}
 		mockTempSet.EXPECT().ResetSet()
 		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateID).Return(nil)
-		mockTempSet.EXPECT().AddRecord(elemList, testTemplateID).Return(nil)
+		mockTempSet.EXPECT().AddRecordV2(elemList, testTemplateID).Return(nil)
 		// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
 		// above elements: ianaInfoElements, ianaReverseInfoElements and antreaInfoElements.
 		mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
@@ -93,7 +93,7 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
-	mockTempSet := ipfixentitiestesting.NewMockSet(ctrl)
+	mockSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 
 	// we override the initIPFIXExportingProcess var function: it will
@@ -124,17 +124,17 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 		externalFlowCollectorProto: "",
 		templateIDv4:               testTemplateIDv4,
 		templateIDv6:               testTemplateIDv6,
-		set:                        mockTempSet,
+		set:                        mockSet,
 		observationDomainID:        testObservationDomainID,
 	}
 	testTemplateID := testTemplateIDv4
 
 	setCount := 0
-	mockTempSet.EXPECT().ResetSet().Times(2)
-	mockTempSet.EXPECT().PrepareSet(gomock.Any(), testTemplateID).Return(nil).Times(2)
+	mockSet.EXPECT().ResetSet().Times(2)
+	mockSet.EXPECT().PrepareSet(gomock.Any(), testTemplateID).Return(nil).Times(2)
 	mockRecord.EXPECT().GetOrderedElementList().Return(nil).Times(2)
-	mockTempSet.EXPECT().AddRecord(gomock.Any(), testTemplateID).Return(nil).Times(2)
-	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Do(func(set interface{}) {
+	mockSet.EXPECT().AddRecordV2(gomock.Any(), testTemplateID).Return(nil).Times(2)
+	mockIPFIXExpProc.EXPECT().SendSet(mockSet).Do(func(set interface{}) {
 		setCount += 1
 	}).Return(0, nil).Times(2)
 	// connection will be closed when updating the external flow collector address
@@ -170,7 +170,7 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
-	mockTempSet := ipfixentitiestesting.NewMockSet(ctrl)
+	mockSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 
 	initIPFIXExportingProcessSaved := initIPFIXExportingProcess
@@ -187,16 +187,16 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 		externalFlowCollectorProto: "",
 		templateIDv4:               testTemplateIDv4,
 		templateIDv6:               testTemplateIDv6,
-		set:                        mockTempSet,
+		set:                        mockSet,
 		observationDomainID:        testObservationDomainID,
 	}
 	testTemplateID := testTemplateIDv4
 
-	mockTempSet.EXPECT().ResetSet()
-	mockTempSet.EXPECT().PrepareSet(gomock.Any(), testTemplateID).Return(nil)
+	mockSet.EXPECT().ResetSet()
+	mockSet.EXPECT().PrepareSet(gomock.Any(), testTemplateID).Return(nil)
 	mockRecord.EXPECT().GetOrderedElementList().Return(nil)
-	mockTempSet.EXPECT().AddRecord(gomock.Any(), testTemplateID).Return(nil)
-	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
+	mockSet.EXPECT().AddRecordV2(gomock.Any(), testTemplateID).Return(nil)
+	mockIPFIXExpProc.EXPECT().SendSet(mockSet).Return(0, nil)
 
 	assert.NoError(t, ipfixExporter.AddRecord(mockRecord, false))
 }
@@ -228,7 +228,7 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
-	mockTempSet := ipfixentitiestesting.NewMockSet(ctrl)
+	mockSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 
 	ipfixExporter := IPFIXExporter{
@@ -237,16 +237,16 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 		exportingProcess:           mockIPFIXExpProc,
 		templateIDv4:               testTemplateIDv4,
 		templateIDv6:               testTemplateIDv6,
-		set:                        mockTempSet,
+		set:                        mockSet,
 		observationDomainID:        testObservationDomainID,
 	}
 	testTemplateID := testTemplateIDv4
 
-	mockTempSet.EXPECT().ResetSet()
-	mockTempSet.EXPECT().PrepareSet(gomock.Any(), testTemplateID).Return(nil)
+	mockSet.EXPECT().ResetSet()
+	mockSet.EXPECT().PrepareSet(gomock.Any(), testTemplateID).Return(nil)
 	mockRecord.EXPECT().GetOrderedElementList().Return(nil)
-	mockTempSet.EXPECT().AddRecord(gomock.Any(), testTemplateID).Return(nil)
-	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, fmt.Errorf("send error"))
+	mockSet.EXPECT().AddRecordV2(gomock.Any(), testTemplateID).Return(nil)
+	mockIPFIXExpProc.EXPECT().SendSet(mockSet).Return(0, fmt.Errorf("send error"))
 	mockIPFIXExpProc.EXPECT().CloseConnToCollector()
 
 	assert.Error(t, ipfixExporter.AddRecord(mockRecord, false))

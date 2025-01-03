@@ -421,7 +421,7 @@ func (exp *FlowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	if err := exp.ipfixSet.PrepareSet(ipfixentities.Template, templateID); err != nil {
 		return 0, err
 	}
-	err := exp.ipfixSet.AddRecord(elements, templateID)
+	err := exp.ipfixSet.AddRecordV2(elements, templateID)
 	if err != nil {
 		return 0, fmt.Errorf("error in adding record to template set: %v", err)
 	}
@@ -596,7 +596,7 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 			ie.SetStringValue(conn.EgressNodeName)
 		}
 	}
-	err := exp.ipfixSet.AddRecord(eL, templateID)
+	err := exp.ipfixSet.AddRecordV2(eL, templateID)
 	if err != nil {
 		return fmt.Errorf("error in adding record to data set: %v", err)
 	}
