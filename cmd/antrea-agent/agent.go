@@ -185,6 +185,7 @@ func run(o *Options) error {
 		enableFlowExporter,
 		o.config.AntreaProxy.ProxyAll,
 		features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR),
+		*o.config.AntreaProxy.ProxyLoadBalancerIPs,
 		connectUplinkToBridge,
 		multicastEnabled,
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
