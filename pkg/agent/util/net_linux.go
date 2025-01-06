@@ -354,6 +354,11 @@ func EnsureRPFilterOnInterface(ifaceName string, value int) error {
 	return sysctl.EnsureSysctlNetValue(path, value)
 }
 
+func EnsurePromoteSecondariesOnInterface(ifaceName string) error {
+	path := fmt.Sprintf("ipv4/conf/%s/promote_secondaries", ifaceName)
+	return sysctl.EnsureSysctlNetValue(path, 1)
+}
+
 func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
 	link, err := netlinkUtil.LinkByIndex(linkIndex)
 	if err != nil {
