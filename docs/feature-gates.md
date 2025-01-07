@@ -329,9 +329,7 @@ This feature is only supported:
 ### SecondaryNetwork
 
 The `SecondaryNetwork` feature enables support for provisioning secondary network interfaces for Pods, by annotating
-them appropriately.
-
-More documentation will be coming in the future.
+them appropriately. Refer to this [document](secondary-network.md) for more information
 
 #### Requirements for this Feature
 
