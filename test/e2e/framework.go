@@ -3333,15 +3333,14 @@ func (data *TestData) waitForDeploymentReady(t *testing.T, namespace string, nam
 	return nil
 }
 
-func (data *TestData) getAntreaClusterUUID() (uuid.UUID, error) {
+func (data *TestData) getAntreaClusterUUID(timeout time.Duration) (uuid.UUID, error) {
 	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
 		antreaNamespace,
 		clusteridentity.DefaultClusterIdentityConfigMapName,
 		data.clientset,
 	)
 
-	const retryInterval = time.Second
-	const timeout = 10 * time.Second
+	const retryInterval = 1 * time.Second
 	var clusterUUID uuid.UUID
 	err := wait.PollUntilContextTimeout(context.Background(), retryInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		clusterIdentity, _, err := clusterIdentityProvider.Get()

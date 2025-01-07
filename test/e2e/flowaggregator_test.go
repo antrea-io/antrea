@@ -195,7 +195,7 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 	teardownFuncs = append(teardownFuncs, func() { teardownTest(t, data) })
 	// Make sure that antreaClusterUUID is set if this function is called for the first time.
 	if antreaClusterUUID == "" {
-		if uuid, err := data.getAntreaClusterUUID(); err != nil {
+		if uuid, err := data.getAntreaClusterUUID(10 * time.Second); err != nil {
 			t.Fatalf("Error when retrieving Antrea Cluster UUID: %v", err)
 		} else {
 			antreaClusterUUID = uuid.String()

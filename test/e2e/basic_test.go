@@ -866,7 +866,8 @@ func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 // testClusterIdentity verifies that the antrea-cluster-identity ConfigMap is
 // populated correctly by the Antrea Controller.
 func testClusterIdentity(t *testing.T, data *TestData) {
-	clusterUUID, err := data.getAntreaClusterUUID()
+	const timeout = 10 * time.Second
+	clusterUUID, err := data.getAntreaClusterUUID(timeout)
 	require.NoError(t, err, "Failed to retrieve cluster identity information within %v", timeout)
 	assert.NotEqual(t, uuid.Nil, clusterUUID)
 	t.Logf("Cluster UUID: %v", clusterUUID)
