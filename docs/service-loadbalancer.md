@@ -63,9 +63,9 @@ no extra configuration change is needed.
 
 #### Enable Service external IP management feature
 
-At this moment, external IP management for Services is an alpha feature of
-Antrea. The `ServiceExternalIP` feature gate of `antrea-agent` and
-`antrea-controller` must be enabled for the feature to work. You can enable
+The `ServiceExternalIP` feature is enabled by default since Antrea 2.3. If you are
+using an earlier version, the `ServiceExternalIP` feature gate of `antrea-agent`
+and `antrea-controller` must be enabled for the feature to work. You can enable
 the `ServiceExternalIP` feature gate in the `antrea-config` ConfigMap in
 the Antrea deployment YAML:
 
@@ -292,6 +292,9 @@ LoadBalancer, and it sets the allocated IP to the `loadBalancer.ingress` field
 in the Service resource `status`. MetalLB also supports user specified `loadBalancerIP`
 in the Service spec. For more information, please refer to the [MetalLB usage](https://metallb.universe.tf/usage).
 
+To avoid conflicts, make sure not to use the `service.antrea.io/external-ip-pool`
+annotation (Antrea ServiceExternalIP feature) when using MetallLB to allocate LoadBalancer IPs.
+
 To learn more about MetalLB concepts and functionalities, you can read the
 [MetalLB concepts](https://metallb.universe.tf/concepts).
 
@@ -306,14 +309,8 @@ kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.11/conf
 The commands will deploy MetalLB version 0.13.11 into Namespace
 `metallb-system`. You can also refer to this [MetalLB installation
 guide](https://metallb.universe.tf/installation) for other ways of installing
-MetalLB.
-
-As MetalLB will allocate external IPs for all Services of type LoadBalancer,
-once it is running, the Service external IP management feature of Antrea should
-not be enabled to avoid conflicts with MetalLB. You can deploy Antrea with the
-default configuration (in which the `ServiceExternalIP` feature gate of
-`antrea-agent` is set to `false`). MetalLB can work with both Antrea Proxy and
-`kube-proxy` configurations of `antrea-agent`.
+MetalLB. MetalLB can work with both Antrea Proxy and `kube-proxy`
+configurations of `antrea-agent`.
 
 ### Configure MetalLB with layer 2 mode
 
