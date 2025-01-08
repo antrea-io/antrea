@@ -146,7 +146,6 @@ func TestConfigureContainerLink(t *testing.T) {
 	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
 	fakeNetlink := netlinktest.NewMockInterface(controller)
 
-	sriovPfName := "pf"
 	sriovVfNetdeviceName := "vfDevice"
 	vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVfNetdeviceName, Flags: net.FlagUp}}
 
@@ -237,8 +236,6 @@ func TestConfigureContainerLink(t *testing.T) {
 				}
 			}
 			if tc.podSriovVFDeviceID != "" {
-				fakeSriovNet.EXPECT().GetPfName(tc.podSriovVFDeviceID).Return(sriovPfName, nil).Times(1)
-				fakeSriovNet.EXPECT().GetVfid(tc.podSriovVFDeviceID, sriovPfName).Return(sriovVfIndex, nil).Times(1)
 				fakeSriovNet.EXPECT().GetVFLinkNames(tc.podSriovVFDeviceID).Return(sriovVfNetdeviceName, nil).Times(1)
 				fakeNetlink.EXPECT().LinkByName(sriovVfNetdeviceName).Return(vfDeviceLink, nil).Times(1)
 				moveVFtoNS = true

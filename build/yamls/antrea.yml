@@ -5548,6 +5548,8 @@ spec:
             mountPropagation: HostToContainer
           - name: xtables-lock
             mountPath: /run/xtables.lock
+          - name: host-pod-resources
+            mountPath: /var/lib/kubelet/pod-resources
         - name: antrea-ovs
           image: "antrea/antrea-agent-ubuntu:latest"
           imagePullPolicy: IfNotPresent
@@ -5618,6 +5620,10 @@ spec:
           hostPath:
             path: /run/xtables.lock
             type: FileOrCreate
+        - name: host-pod-resources
+          hostPath:
+            path: /var/lib/kubelet/pod-resources
+            type: Directory
 ---
 # Source: antrea/templates/controller/deployment.yaml
 apiVersion: apps/v1

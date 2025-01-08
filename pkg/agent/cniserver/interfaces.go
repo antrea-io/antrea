@@ -39,7 +39,5 @@ type SriovNet interface {
 	GetUplinkRepresentor(pciAddress string) (string, error)
 	GetVfIndexByPciAddress(vfPciAddress string) (int, error)
 	GetVfRepresentor(uplink string, vfIndex int) (string, error)
-	GetPfName(vf string) (string, error)
-	GetVfid(addr string, pfName string) (int, error)
 	GetVFLinkNames(pciAddr string) (string, error)
 }
