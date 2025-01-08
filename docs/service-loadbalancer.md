@@ -63,9 +63,9 @@ no extra configuration change is needed.
 
 #### Enable Service external IP management feature
 
-At this moment, external IP management for Services is an alpha feature of
-Antrea. The `ServiceExternalIP` feature gate of `antrea-agent` and
-`antrea-controller` must be enabled for the feature to work. You can enable
+The `ServiceExternalIP` feature is enabled by default since Antrea 2.3. If you are
+using previous versions, the `ServiceExternalIP` feature gate of `antrea-agent`
+and `antrea-controller` must be enabled for the feature to work. You can enable
 the `ServiceExternalIP` feature gate in the `antrea-config` ConfigMap in
 the Antrea deployment YAML:
 
@@ -311,7 +311,7 @@ MetalLB.
 As MetalLB will allocate external IPs for all Services of type LoadBalancer,
 once it is running, the Service external IP management feature of Antrea should
 not be enabled to avoid conflicts with MetalLB. You can deploy Antrea with the
-default configuration (in which the `ServiceExternalIP` feature gate of
+ServiceExternalIP feature disabled (in which the `ServiceExternalIP` feature gate of
 `antrea-agent` is set to `false`). MetalLB can work with both Antrea Proxy and
 `kube-proxy` configurations of `antrea-agent`.
 
