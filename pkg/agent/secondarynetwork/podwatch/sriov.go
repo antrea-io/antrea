@@ -17,7 +17,6 @@ package podwatch
 import (
 	"context"
 	"fmt"
-	"net"
 	"path"
 	"time"
 
@@ -60,11 +59,8 @@ type podSriovVFDeviceIDInfo struct {
 // getPodContainerDeviceIDs returns the device IDs assigned to a Pod's containers.
 func getPodContainerDeviceIDs(podName string, podNamespace string) ([]string, error) {
 	conn, err := grpc.NewClient(
-		path.Join(kubeletPodResourcesPath, kubeletSocket),
+		"unix:///"+path.Join(kubeletPodResourcesPath, kubeletSocket),
 		grpc.WithTransportCredentials(grpcinsecure.NewCredentials()),
-		grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
-			return net.Dial("unix", addr)
-		}),
 	)
 	if err != nil {
 		return []string{}, fmt.Errorf("error getting the gRPC client for Pod resources: %v", err)
