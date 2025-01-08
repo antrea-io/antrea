@@ -508,6 +508,15 @@ func (a *ipAssigner) getAssignee(subnetInfo *crdv1b1.SubnetInfo, createIfNotExis
 			return nil, fmt.Errorf("error creating VLAN sub-interface for VLAN %d", subnetInfo.VLAN)
 		}
 	}
+	as, err := a.addVLANAssignee(vlan, subnetInfo.VLAN)
+	if err != nil {
+		return nil, err
+	}
+	return as, nil
+}
+
+func (a *ipAssigner) addVLANAssignee(link netlink.Link, vlan int32) (*assignee, error) {
+	name := link.Attrs().Name
 	// Loose mode is needed because incoming traffic received on the interface is expected to be received on the parent
 	// external interface when looking up the main table. To make it look up the custom table, we will need to restore
 	// the mark on the reply traffic and turn on src_valid_mark on this interface, which is more complicated.
@@ -521,18 +530,10 @@ func (a *ipAssigner) getAssignee(subnetInfo *crdv1b1.SubnetInfo, createIfNotExis
 	if err := util.EnsurePromoteSecondariesOnInterface(name); err != nil {
 		return nil, err
 	}
-	as, err := a.addVLANAssignee(vlan, subnetInfo.VLAN)
-	if err != nil {
-		return nil, err
-	}
-	return as, nil
-}
-
-func (a *ipAssigner) addVLANAssignee(link netlink.Link, vlan int32) (*assignee, error) {
 	if err := netlink.LinkSetUp(link); err != nil {
 		return nil, fmt.Errorf("error setting up interface %v", link)
 	}
-	iface, err := net.InterfaceByName(link.Attrs().Name)
+	iface, err := net.InterfaceByName(name)
 	if err != nil {
 		return nil, err
 	}
