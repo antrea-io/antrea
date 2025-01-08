@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v2"
@@ -60,6 +61,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/clusteridentity"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
@@ -127,7 +129,7 @@ const (
 	mcjoinImage         = "antrea/mcjoin:v2.9"
 	nginxImage          = "antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
-	ipfixCollectorImage = "antrea/ipfix-collector:v0.11.0"
+	ipfixCollectorImage = "antrea/ipfix-collector:v0.12.0"
 
 	nginxLBService = "nginx-loadbalancer"
 
@@ -3329,4 +3331,24 @@ func (data *TestData) waitForDeploymentReady(t *testing.T, namespace string, nam
 		return fmt.Errorf("error when waiting for Deployment '%s/%s' to be ready: %w", namespace, name, err)
 	}
 	return nil
+}
+
+func (data *TestData) getAntreaClusterUUID(timeout time.Duration) (uuid.UUID, error) {
+	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
+		antreaNamespace,
+		clusteridentity.DefaultClusterIdentityConfigMapName,
+		data.clientset,
+	)
+
+	const retryInterval = 1 * time.Second
+	var clusterUUID uuid.UUID
+	err := wait.PollUntilContextTimeout(context.Background(), retryInterval, timeout, true, func(ctx context.Context) (bool, error) {
+		clusterIdentity, _, err := clusterIdentityProvider.Get()
+		if err != nil {
+			return false, nil
+		}
+		clusterUUID = clusterIdentity.UUID
+		return true, nil
+	})
+	return clusterUUID, err
 }

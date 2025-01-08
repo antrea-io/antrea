@@ -36,7 +36,6 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/clusteridentity"
 )
 
 // TestBasic is the top-level test which contains some subtests for
@@ -867,27 +866,11 @@ func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 // testClusterIdentity verifies that the antrea-cluster-identity ConfigMap is
 // populated correctly by the Antrea Controller.
 func testClusterIdentity(t *testing.T, data *TestData) {
-	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
-		antreaNamespace,
-		clusteridentity.DefaultClusterIdentityConfigMapName,
-		data.clientset,
-	)
-
-	const retryInterval = time.Second
 	const timeout = 10 * time.Second
-	var clusterUUID uuid.UUID
-	err := wait.PollUntilContextTimeout(context.Background(), retryInterval, timeout, true, func(ctx context.Context) (bool, error) {
-		clusterIdentity, _, err := clusterIdentityProvider.Get()
-		if err != nil {
-			return false, nil
-		}
-		clusterUUID = clusterIdentity.UUID
-		t.Logf("Cluster UUID: %v", clusterUUID)
-		return true, nil
-	})
-
-	assert.NoError(t, err, "Failed to retrieve cluster identity information within %v", timeout)
+	clusterUUID, err := data.getAntreaClusterUUID(timeout)
+	require.NoError(t, err, "Failed to retrieve cluster identity information within %v", timeout)
 	assert.NotEqual(t, uuid.Nil, clusterUUID)
+	t.Logf("Cluster UUID: %v", clusterUUID)
 }
 
 func testLogRotate(t *testing.T, data *TestData) {
