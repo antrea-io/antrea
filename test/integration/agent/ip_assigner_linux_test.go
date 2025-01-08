@@ -25,10 +25,28 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/ipassigner"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 const dummyDeviceName = "antrea-dummy0"
+
+func checkSysctl(t *testing.T, path string, expected int) {
+	t.Helper()
+	v, err := sysctl.GetSysctlNet(path)
+	require.NoError(t, err)
+	assert.Equalf(t, expected, v, "Wrong value for %s", path)
+}
+
+func checkRPFilterOnInterface(t *testing.T, ifaceName string, expected int) {
+	t.Helper()
+	checkSysctl(t, fmt.Sprintf("ipv4/conf/%s/rp_filter", ifaceName), expected)
+}
+
+func checkPromoteSecondariesOnInterface(t *testing.T, ifaceName string, expected int) {
+	t.Helper()
+	checkSysctl(t, fmt.Sprintf("ipv4/conf/%s/promote_secondaries", ifaceName), expected)
+}
 
 func TestIPAssigner(t *testing.T) {
 	nodeLinkName := nodeIntf.Name
@@ -40,6 +58,7 @@ func TestIPAssigner(t *testing.T) {
 	dummyDevice, err := netlink.LinkByName(dummyDeviceName)
 	require.NoError(t, err, "Failed to find the dummy device")
 	defer netlink.LinkDel(dummyDevice)
+	checkPromoteSecondariesOnInterface(t, dummyDeviceName, 1)
 
 	_, err = ipAssigner.AssignIP("x", nil, false)
 	assert.Error(t, err, "Assigning an invalid IP should fail")
@@ -103,9 +122,13 @@ func TestIPAssigner(t *testing.T) {
 	vlan20Device, err := netlink.LinkByName("antrea-ext.20")
 	require.NoError(t, err, "Failed to find the VLAN 20 device")
 	defer netlink.LinkDel(vlan20Device)
+	checkRPFilterOnInterface(t, "antrea-ext.20", 2)
+	checkPromoteSecondariesOnInterface(t, "antrea-ext.20", 1)
 	vlan30Device, err := netlink.LinkByName("antrea-ext.30")
 	require.NoError(t, err, "Failed to find the VLAN 30 device")
 	defer netlink.LinkDel(vlan30Device)
+	checkRPFilterOnInterface(t, "antrea-ext.30", 2)
+	checkPromoteSecondariesOnInterface(t, "antrea-ext.30", 1)
 
 	actualIPs, err := listIPAddresses(dummyDevice)
 	require.NoError(t, err, "Failed to list IP addresses")
