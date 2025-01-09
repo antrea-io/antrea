@@ -179,7 +179,10 @@ func NewFlowAggregator(
 	if err := fa.InitCollectingProcess(); err != nil {
 		return nil, fmt.Errorf("error when creating collecting process: %w", err)
 	}
-	recordCh := make(chan ipfixentities.Record)
+	// Use a buffered channel which ideally should be large enough to accommodate all the records
+	// included in a given IPFIX message. It would be unusual to have more than 128 records in
+	// an IPFIX message.
+	recordCh := make(chan ipfixentities.Record, 128)
 	if err := fa.InitPreprocessor(recordCh); err != nil {
 		return nil, fmt.Errorf("error when creating preprocessor: %w", err)
 	}

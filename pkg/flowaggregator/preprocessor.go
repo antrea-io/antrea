@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net"
 
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	"github.com/vmware/go-ipfix/pkg/entities"
 	"k8s.io/klog/v2"
 )
 
@@ -32,65 +32,65 @@ import (
 // field list. This assumption is based on implementation knowledge of the FlowExporter and the
 // FlowAggregator.
 type preprocessor struct {
-	inCh  <-chan *ipfixentities.Message
-	outCh chan<- ipfixentities.Record
+	inCh  <-chan *entities.Message
+	outCh chan<- entities.Record
 
 	expectedElementsV4 int
 	expectedElementsV6 int
 
-	defaultElementsWithValueV4 []ipfixentities.InfoElementWithValue
-	defaultElementsWithValueV6 []ipfixentities.InfoElementWithValue
+	defaultElementsWithValueV4 []entities.InfoElementWithValue
+	defaultElementsWithValueV6 []entities.InfoElementWithValue
 }
 
-func makeDefaultElementWithValue(ie *ipfixentities.InfoElement) (ipfixentities.InfoElementWithValue, error) {
+func makeDefaultElementWithValue(ie *entities.InfoElement) (entities.InfoElementWithValue, error) {
 	switch ie.DataType {
-	case ipfixentities.OctetArray:
+	case entities.OctetArray:
 		var val []byte
-		if ie.Len < ipfixentities.VariableLength {
+		if ie.Len < entities.VariableLength {
 			val = make([]byte, ie.Len)
 		}
-		return ipfixentities.NewOctetArrayInfoElement(ie, val), nil
-	case ipfixentities.Unsigned8:
-		return ipfixentities.NewUnsigned8InfoElement(ie, 0), nil
-	case ipfixentities.Unsigned16:
-		return ipfixentities.NewUnsigned16InfoElement(ie, 0), nil
-	case ipfixentities.Unsigned32:
-		return ipfixentities.NewUnsigned32InfoElement(ie, 0), nil
-	case ipfixentities.Unsigned64:
-		return ipfixentities.NewUnsigned64InfoElement(ie, 0), nil
-	case ipfixentities.Signed8:
-		return ipfixentities.NewSigned8InfoElement(ie, 0), nil
-	case ipfixentities.Signed16:
-		return ipfixentities.NewSigned16InfoElement(ie, 0), nil
-	case ipfixentities.Signed32:
-		return ipfixentities.NewSigned32InfoElement(ie, 0), nil
-	case ipfixentities.Signed64:
-		return ipfixentities.NewSigned64InfoElement(ie, 0), nil
-	case ipfixentities.Float32:
-		return ipfixentities.NewFloat32InfoElement(ie, 0), nil
-	case ipfixentities.Float64:
-		return ipfixentities.NewFloat64InfoElement(ie, 0), nil
-	case ipfixentities.Boolean:
-		return ipfixentities.NewBoolInfoElement(ie, false), nil
-	case ipfixentities.DateTimeSeconds:
-		return ipfixentities.NewDateTimeSecondsInfoElement(ie, 0), nil
-	case ipfixentities.DateTimeMilliseconds:
-		return ipfixentities.NewDateTimeMillisecondsInfoElement(ie, 0), nil
-	case ipfixentities.MacAddress:
-		return ipfixentities.NewMacAddressInfoElement(ie, make([]byte, 6)), nil
-	case ipfixentities.Ipv4Address:
-		return ipfixentities.NewIPAddressInfoElement(ie, net.IPv4zero), nil
-	case ipfixentities.Ipv6Address:
-		return ipfixentities.NewIPAddressInfoElement(ie, net.IPv6zero), nil
-	case ipfixentities.String:
-		return ipfixentities.NewStringInfoElement(ie, ""), nil
+		return entities.NewOctetArrayInfoElement(ie, val), nil
+	case entities.Unsigned8:
+		return entities.NewUnsigned8InfoElement(ie, 0), nil
+	case entities.Unsigned16:
+		return entities.NewUnsigned16InfoElement(ie, 0), nil
+	case entities.Unsigned32:
+		return entities.NewUnsigned32InfoElement(ie, 0), nil
+	case entities.Unsigned64:
+		return entities.NewUnsigned64InfoElement(ie, 0), nil
+	case entities.Signed8:
+		return entities.NewSigned8InfoElement(ie, 0), nil
+	case entities.Signed16:
+		return entities.NewSigned16InfoElement(ie, 0), nil
+	case entities.Signed32:
+		return entities.NewSigned32InfoElement(ie, 0), nil
+	case entities.Signed64:
+		return entities.NewSigned64InfoElement(ie, 0), nil
+	case entities.Float32:
+		return entities.NewFloat32InfoElement(ie, 0), nil
+	case entities.Float64:
+		return entities.NewFloat64InfoElement(ie, 0), nil
+	case entities.Boolean:
+		return entities.NewBoolInfoElement(ie, false), nil
+	case entities.DateTimeSeconds:
+		return entities.NewDateTimeSecondsInfoElement(ie, 0), nil
+	case entities.DateTimeMilliseconds:
+		return entities.NewDateTimeMillisecondsInfoElement(ie, 0), nil
+	case entities.MacAddress:
+		return entities.NewMacAddressInfoElement(ie, make([]byte, 6)), nil
+	case entities.Ipv4Address:
+		return entities.NewIPAddressInfoElement(ie, net.IPv4zero), nil
+	case entities.Ipv6Address:
+		return entities.NewIPAddressInfoElement(ie, net.IPv6zero), nil
+	case entities.String:
+		return entities.NewStringInfoElement(ie, ""), nil
 	default:
 		return nil, fmt.Errorf("unexpected Information Element data type: %d", ie.DataType)
 	}
 }
 
-func makeDefaultElementsWithValue(infoElements []*ipfixentities.InfoElement) ([]ipfixentities.InfoElementWithValue, error) {
-	elementsWithValue := make([]ipfixentities.InfoElementWithValue, len(infoElements))
+func makeDefaultElementsWithValue(infoElements []*entities.InfoElement) ([]entities.InfoElementWithValue, error) {
+	elementsWithValue := make([]entities.InfoElementWithValue, len(infoElements))
 	for idx := range infoElements {
 		var err error
 		if elementsWithValue[idx], err = makeDefaultElementWithValue(infoElements[idx]); err != nil {
@@ -100,7 +100,7 @@ func makeDefaultElementsWithValue(infoElements []*ipfixentities.InfoElement) ([]
 	return elementsWithValue, nil
 }
 
-func newPreprocessor(infoElementsV4, infoElementsV6 []*ipfixentities.InfoElement, inCh <-chan *ipfixentities.Message, outCh chan<- ipfixentities.Record) (*preprocessor, error) {
+func newPreprocessor(infoElementsV4, infoElementsV6 []*entities.InfoElement, inCh <-chan *entities.Message, outCh chan<- entities.Record) (*preprocessor, error) {
 	defaultElementsWithValueV4, err := makeDefaultElementsWithValue(infoElementsV4)
 	if err != nil {
 		return nil, fmt.Errorf("error when generating default values for IPv4 Information Elements expected from exporter: %w", err)
@@ -133,14 +133,14 @@ func (p *preprocessor) Run(stopCh <-chan struct{}) {
 	}
 }
 
-func isRecordIPv4(record ipfixentities.Record) bool {
+func isRecordIPv4(record entities.Record) bool {
 	_, _, exist := record.GetInfoElementWithValue("sourceIPv4Address")
 	return exist
 }
 
-func (p *preprocessor) processMsg(msg *ipfixentities.Message) {
+func (p *preprocessor) processMsg(msg *entities.Message) {
 	set := msg.GetSet()
-	if set.GetSetType() != ipfixentities.Data {
+	if set.GetSetType() != entities.Data {
 		return
 	}
 	records := set.GetRecords()
@@ -161,7 +161,7 @@ func (p *preprocessor) processMsg(msg *ipfixentities.Message) {
 			// Creating a new Record seems like the best option here. By using
 			// NewDataRecordFromElements, we should minimize the number of allocations
 			// required.
-			p.outCh <- ipfixentities.NewDataRecordFromElements(0, elementList[:expectedElements], true)
+			p.outCh <- entities.NewDataRecordFromElements(0, elementList[:expectedElements], true)
 		} else {
 			if klog.V(5).Enabled() {
 				klog.InfoS("Record received from exporter is missing information elements, adding fields with zero values", "expectedElements", expectedElements, "receivedElements", numElements)
@@ -171,7 +171,7 @@ func (p *preprocessor) processMsg(msg *ipfixentities.Message) {
 			} else {
 				elementList = append(elementList, p.defaultElementsWithValueV6[numElements:]...)
 			}
-			p.outCh <- ipfixentities.NewDataRecordFromElements(0, elementList, true)
+			p.outCh <- entities.NewDataRecordFromElements(0, elementList, true)
 		}
 	}
 
