@@ -5315,6 +5315,7 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 	)
 
 	skipIfAntreaPolicyDisabled(t)
+	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)
 	skipIfIPv6Cluster(t)
 	skipIfNotRequired(t, "mode-irrelevant")
