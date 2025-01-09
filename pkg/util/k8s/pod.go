@@ -20,3 +20,15 @@ import v1 "k8s.io/api/core/v1"
 func IsPodTerminated(pod *v1.Pod) bool {
 	return pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodSucceeded
 }
+
+// GetPodContainersNames returns all the container names in a Pod, including init containers.
+func GetPodContainerNames(pod *v1.Pod) []string {
+	var names []string
+	for _, c := range pod.Spec.InitContainers {
+		names = append(names, c.Name)
+	}
+	for _, c := range pod.Spec.Containers {
+		names = append(names, c.Name)
+	}
+	return names
+}
