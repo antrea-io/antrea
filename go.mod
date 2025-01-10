@@ -29,7 +29,7 @@ require (
 	github.com/google/btree v1.1.3
 	github.com/google/uuid v1.6.0
 	github.com/gopacket/gopacket v1.3.1
-	github.com/hashicorp/memberlist v0.5.1
+	github.com/hashicorp/memberlist v0.5.2
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.3.0
 	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
 	github.com/kevinburke/ssh_config v1.2.0
@@ -96,7 +96,7 @@ require (
 	github.com/alexflint/go-filemutex v1.2.0 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
-	github.com/armon/go-metrics v0.4.0 // indirect
+	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.4 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.12.12 // indirect
@@ -155,6 +155,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
+	github.com/hashicorp/go-metrics v0.5.4 // indirect
 	github.com/hashicorp/go-msgpack/v2 v2.1.1 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.0 // indirect
