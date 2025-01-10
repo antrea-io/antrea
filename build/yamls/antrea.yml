@@ -351,8 +351,8 @@ spec:
                 localASN:
                   type: integer
                   format: int32
-                  minimum: 64512
-                  maximum: 65535
+                  minimum: 1
+                  maximum: 4294967295
                 listenPort:
                   type: integer
                   format: int32
@@ -402,7 +402,7 @@ spec:
                         type: integer
                         format: int32
                         minimum: 1
-                        maximum: 65535
+                        maximum: 4294967295
                       multihopTTL:
                         type: integer
                         format: int32
