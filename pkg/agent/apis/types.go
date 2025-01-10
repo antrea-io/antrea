@@ -15,8 +15,10 @@
 package apis
 
 import (
+	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -70,6 +72,28 @@ func (r AntreaAgentInfoResponse) GetTableRow(maxColumnLength int) []string {
 
 func (r AntreaAgentInfoResponse) SortRows() bool {
 	return true
+}
+
+type FqdnCacheResponse struct {
+	fqdnName       string
+	ipAddress      net.IP
+	expirationTime time.Time
+}
+
+func (r FqdnCacheResponse) GetTableHeader() []string {
+	return []string{"FQDN", "ADDRESS", "EXPIRATION TIME"}
+}
+
+func (r FqdnCacheResponse) GetTableRow(maxColumn int) []string {
+	return []string{
+		r.fqdnName,
+		r.ipAddress.String(),
+		r.expirationTime.String(),
+	}
+}
+
+func (r FqdnCacheResponse) SortRows() bool {
+	return false
 }
 
 type FeatureGateResponse struct {

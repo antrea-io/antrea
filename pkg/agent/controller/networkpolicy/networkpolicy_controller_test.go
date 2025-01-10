@@ -903,3 +903,61 @@ func TestValidate(t *testing.T) {
 		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress2, v1beta1.RuleActionDrop, item.RuleAction)
 	}
 }
+
+func TestGetFqdnCache(t *testing.T) {
+	controller, _, _ := newTestController()
+	expectedEntryList := []agenttypes.DnsCacheEntry{}
+	assert.Equal(t, expectedEntryList, controller.GetFqdnCache())
+
+	controller.fqdnController.dnsEntryCache = map[string]dnsMeta{
+		"*.example.com": {
+			responseIPs: map[string]ipWithExpiration{
+				"maps.example.com": {
+					ip:             net.ParseIP("10.0.0.1"),
+					expirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+				},
+				"mail.example.com": {
+					ip:             net.ParseIP("10.0.0.2"),
+					expirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+				},
+				"photos.example.com": {
+					ip:             net.ParseIP("10.0.0.3"),
+					expirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+		"antrea.io": {
+			responseIPs: map[string]ipWithExpiration{
+				"antrea.io": {
+					ip:             net.ParseIP("10.0.0.4"),
+					expirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+	}
+
+	expectedEntryList = []agenttypes.DnsCacheEntry{
+		{
+			FqdnName:       "maps.example.com",
+			IpAddress:      net.ParseIP("10.0.0.1"),
+			ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+		},
+		{
+			FqdnName:       "mail.example.com",
+			IpAddress:      net.ParseIP("10.0.0.2"),
+			ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+		},
+		{
+			FqdnName:       "photos.example.com",
+			IpAddress:      net.ParseIP("10.0.0.3"),
+			ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+		},
+		{
+			FqdnName:       "antrea.io",
+			IpAddress:      net.ParseIP("10.0.0.4"),
+			ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+		},
+	}
+	returnedList := controller.GetFqdnCache()
+	assert.ElementsMatch(t, expectedEntryList, returnedList)
+}

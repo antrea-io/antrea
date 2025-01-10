@@ -31,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
 	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
 	"antrea.io/antrea/pkg/antctl/transform/controllerinfo"
+	"antrea.io/antrea/pkg/antctl/transform/fqdncache"
 	"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
 	"antrea.io/antrea/pkg/antctl/transform/ovstracing"
 	"antrea.io/antrea/pkg/antctl/transform/version"
@@ -725,6 +726,27 @@ $ antctl get podmulticaststats pod -n namespace`,
 			},
 			commandGroup:        get,
 			transformedResponse: reflect.TypeOf(agentapis.BGPRouteResponse{}),
+		},
+		{
+			use:   "fqdncache",
+			short: "Print fqdn cache",
+			long:  "Print effective fqdn cache information including fqdn name, IP addresses, and expiration time",
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/fqdncache",
+					params: []flagInfo{
+						{
+							name:      "domain",
+							usage:     "Get fqdn cache for only a specific domain",
+							shorthand: "d",
+						},
+					},
+					outputType: multiple,
+				},
+				addonTransform: fqdncache.Transform,
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(agentapis.FqdnCacheResponse{}),
 		},
 	},
 	rawCommands: []rawCommand{
