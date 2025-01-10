@@ -5309,7 +5309,6 @@ func TestFQDNCacheMinTTL(t *testing.T) {
 	skipIfIPv6Cluster(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 
-
 	t.Run("minTTLUnset", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 0) })
 	t.Run("minTTL20s", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 20) })
 }
