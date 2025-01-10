@@ -318,7 +318,8 @@ func run(o *Options) error {
 		connectUplinkToBridge,
 		o.enableAntreaProxy,
 		l7NetworkPolicyEnabled,
-		l7FlowExporterEnabled)
+		l7FlowExporterEnabled,
+		o.config.DisableTXChecksumOffload)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
