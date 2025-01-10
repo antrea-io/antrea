@@ -120,6 +120,7 @@ const (
 	SecondaryNetwork featuregate.Feature = "SecondaryNetwork"
 
 	// alpha: v1.5
+	// beta: v2.3
 	// Enable controlling Services with ExternalIP.
 	ServiceExternalIP featuregate.Feature = "ServiceExternalIP"
 
@@ -209,7 +210,7 @@ var (
 		Multicast:                   {Default: true, PreRelease: featuregate.Beta},
 		Multicluster:                {Default: false, PreRelease: featuregate.Alpha},
 		SecondaryNetwork:            {Default: false, PreRelease: featuregate.Alpha},
-		ServiceExternalIP:           {Default: false, PreRelease: featuregate.Alpha},
+		ServiceExternalIP:           {Default: true, PreRelease: featuregate.Beta},
 		TrafficControl:              {Default: false, PreRelease: featuregate.Alpha},
 		IPsecCertAuth:               {Default: false, PreRelease: featuregate.Alpha},
 		ExternalNode:                {Default: false, PreRelease: featuregate.Alpha},

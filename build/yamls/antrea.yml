@@ -4015,7 +4015,7 @@ data:
     #  SecondaryNetwork: false
 
     # Enable managing external IPs of Services of LoadBalancer type.
-    #  ServiceExternalIP: false
+    #  ServiceExternalIP: true
 
     # Enable mirroring or redirecting the traffic Pods send or receive.
     #  TrafficControl: false
@@ -4443,7 +4443,7 @@ data:
     #  AntreaIPAM: false
 
     # Enable managing external IPs of Services of LoadBalancer type.
-    #  ServiceExternalIP: false
+    #  ServiceExternalIP: true
 
     # Enable certificate-based authentication for IPSec tunnel.
     #  IPsecCertAuth: false
@@ -5406,7 +5406,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e4e94ba89524d8fdc7eb3ad6e0f6948767f3d92ef767f17c47da348f08b5c2e0
+        checksum/config: fa14018895e56003a3e9192d0fa164cc40e204091f630edc7e9e74de5b450da7
       labels:
         app: antrea
         component: antrea-agent
@@ -5648,7 +5648,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e4e94ba89524d8fdc7eb3ad6e0f6948767f3d92ef767f17c47da348f08b5c2e0
+        checksum/config: fa14018895e56003a3e9192d0fa164cc40e204091f630edc7e9e74de5b450da7
       labels:
         app: antrea
         component: antrea-controller
