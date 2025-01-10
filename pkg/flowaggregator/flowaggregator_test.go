@@ -548,6 +548,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 		activeFlowRecordTimeout: 1 * time.Hour,
 		logTickerDuration:       1 * time.Hour,
 		collectingProcess:       mockCollectingProcess,
+		preprocessor:            &preprocessor{},
 		aggregationProcess:      mockAggregationProcess,
 		ipfixExporter:           mockIPFIXExporter,
 		configWatcher:           configWatcher,
@@ -858,12 +859,12 @@ func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
 		activeFlowRecordTimeout:     testActiveTimeout,
 		inactiveFlowRecordTimeout:   testInactiveTimeout,
 		aggregatorTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTCP,
+		registry:                    ipfix.NewIPFIXRegistry(),
 	}
-	err := fa.InitCollectingProcess()
-	require.NoError(t, err)
-
-	err = fa.InitAggregationProcess()
-	require.NoError(t, err)
+	require.NoError(t, fa.InitCollectingProcess())
+	recordCh := make(chan ipfixentities.Record)
+	require.NoError(t, fa.InitPreprocessor(recordCh))
+	require.NoError(t, fa.InitAggregationProcess(recordCh))
 }
 
 func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
