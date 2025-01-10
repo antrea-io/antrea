@@ -89,6 +89,7 @@ setup_only=false
 cleanup_only=false
 test_only=false
 run=""
+flexible_ipam=false
 antrea_controller_image="antrea/antrea-controller-ubuntu"
 antrea_agent_image="antrea/antrea-agent-ubuntu"
 use_non_default_images=false
@@ -108,6 +109,10 @@ case $key in
     ;;
     --proxy-all)
     proxy_all=true
+    shift
+    ;;
+    --flexible-ipam)
+    flexible_ipam=true
     shift
     ;;
     --no-kube-proxy)
@@ -249,6 +254,10 @@ if $flow_visibility; then
     manifest_args="$manifest_args --feature-gates FlowExporter=true,L7FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
 fi
 
+if $flexible_ipam; then
+    manifest_args="$manifest_args --flexible-ipam --multicast"
+fi
+
 COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
                     "antrea/nginx:1.21.6-alpine" \
                     "antrea/toolbox:1.5-1")
@@ -302,6 +311,10 @@ if $extra_vlan; then
   fi
 fi
 
+if $flexible_ipam; then
+   vlan_args="$vlan_args --vlan-subnets 11=192.168.241.1/24 --vlan-subnets 12=192.168.242.1/24" 
+fi
+
 function setup_cluster {
   args=$1
 
@@ -330,7 +343,11 @@ function setup_cluster {
   fi
 
   echo "creating test bed with args $args"
-  eval "timeout 600 $TESTBED_CMD create kind $args"
+  if $flexible_ipam; then
+     eval "timeout 600 $TESTBED_CMD --flexible-ipam create kind $args" 
+  else
+     eval "timeout 600 $TESTBED_CMD create kind $args"
+  fi
 }
 
 function run_test {
@@ -348,8 +365,13 @@ function run_test {
       timeout="80m"
       coverage_args="--coverage --coverage-dir $ANTREA_COV_DIR"
   else
-      $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
-      $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec.yml
+      if $flexible_ipam; then
+        $YML_CMD --flexible-ipam --multicast --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+        echo "debug-1"
+      else
+        $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+        $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec.yml
+      fi
       timeout="75m"
   fi
 
@@ -401,7 +423,15 @@ function run_test {
     EXTRA_ARGS="$EXTRA_ARGS --external-frr-cid $external_frr_cid --external-frr-ips $external_frr_ips"
   fi
 
-  go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR $np_evaluation_flag --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
+  if $flexible_ipam; then
+    sudo iptables -t nat -vnL
+    kubectl get pods -o wide -A
+    ip route
+    export GO111MODULE=on
+    go test -v antrea.io/antrea/test/e2e --provider kind -timeout=100m --prometheus --antrea-ipam
+  else
+     go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR $np_evaluation_flag --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
+  fi
 
   if $coverage; then
     pushd $ANTREA_COV_DIR

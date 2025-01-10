@@ -108,7 +108,16 @@ function add_option {
 }
 
 function docker_run_with_host_net {
-  docker run --rm --net=host --privileged antrea/toolbox:latest "$@"
+  local default_image="antrea/toolbox:latest"
+  if [ "$#" -eq 1 ]; then
+    local image=$default_image
+    local command="$@"
+  else 
+    local image="$1"
+    shift
+    local command="$@"
+  fi
+  docker run --rm --net=host --privileged $image $command
 }
 
 function configure_networks {
@@ -123,9 +132,9 @@ function configure_networks {
   # Inject allow all iptables to preempt docker bridge isolation rules
   if [[ ! -z $SUBNETS ]]; then
     set +e
-    docker_run_with_host_net iptables -C DOCKER-USER -j ACCEPT > /dev/null 2>&1
+    docker_run_with_host_net "iptables -C DOCKER-USER -j ACCEPT" > /dev/null 2>&1
     if [[ $? -ne 0 ]]; then
-      docker_run_with_host_net iptables -I DOCKER-USER -j ACCEPT
+      docker_run_with_host_net "iptables -I DOCKER-USER -j ACCEPT"
     fi
     set -e
   fi
@@ -257,7 +266,7 @@ function update_kind_ipam_routes {
     return
   fi
   echo "$node_data"| while read pod_cidr node_ip; do
-    docker_run_with_host_net ip route "$operation" "$pod_cidr" via "$node_ip" >/dev/null 2>&1 || true
+    docker_run_with_host_net "ip route "$operation" "$pod_cidr" via "$node_ip"" >/dev/null 2>&1 || true
   done
 }
 
@@ -279,27 +288,48 @@ function configure_vlan_subnets {
     vlan_interface="br-${bridge_id:0:7}.$vlan_id"
     vlan_interfaces+=("$vlan_interface")
 
-    docker_run_with_host_net ip link add link $bridge_interface name $vlan_interface type vlan id $vlan_id
-    docker_run_with_host_net ip link set $vlan_interface up
+    docker_run_with_host_net "ip link add link $bridge_interface name $vlan_interface type vlan id $vlan_id"
+    docker_run_with_host_net "ip link set $vlan_interface up"
     
     IFS=',' read -r -a subnet_array <<< "$subnets"
     for subnet in "${subnet_array[@]}" ; do
       echo "Configuring extra IP $subnet to VLAN interface $vlan_interface"
-      docker_run_with_host_net ip addr add dev $vlan_interface $subnet
+      docker_run_with_host_net "ip addr add dev $vlan_interface $subnet"
     done
 
-    docker_run_with_host_net iptables -t filter -A FORWARD -i $bridge_interface -o $vlan_interface -j ACCEPT
-    docker_run_with_host_net iptables -t filter -A FORWARD -i $vlan_interface -o $bridge_interface -j ACCEPT
-    docker_run_with_host_net iptables -t filter -A FORWARD -i $vlan_interface -o $vlan_interface -j ACCEPT
+    docker_run_with_host_net "iptables -t filter -A FORWARD -i $bridge_interface -o $vlan_interface -j ACCEPT"
+    docker_run_with_host_net "iptables -t filter -A FORWARD -i $vlan_interface -o $bridge_interface -j ACCEPT"
+    docker_run_with_host_net "iptables -t filter -A FORWARD -i $vlan_interface -o $vlan_interface -j ACCEPT"
   done
 
   # Allow traffic between VLANs
   for ((i=0; i<${#vlan_interfaces[@]}; i++)); do
     for ((j=i+1; j<${#vlan_interfaces[@]}; j++)); do
-      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[i]} -o ${vlan_interfaces[j]} -j ACCEPT
-      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[j]} -o ${vlan_interfaces[i]} -j ACCEPT
+      docker_run_with_host_net "iptables -t filter -A FORWARD -i ${vlan_interfaces[i]} -o ${vlan_interfaces[j]} -j ACCEPT"
+      docker_run_with_host_net "iptables -t filter -A FORWARD -i ${vlan_interfaces[j]} -o ${vlan_interfaces[i]} -j ACCEPT"
     done
   done
+
+  # Adding ipset rules to prevent SNAT based on flexibleIPAM e2e tests
+  if [[ $FLEXIBLE_IPAM == true ]]; then
+    docker_run_with_host_net "iptables -t nat -D POSTROUTING ! -o $bridge_interface -s 192.168.240.0/24 -j MASQUERADE"
+    docker buildx build -t antrea/toolbox:ipset -f ./ci/kind/Dockerfile.ipset .
+    IMAGE="antrea/toolbox:ipset"
+
+    docker_run_with_host_net "$IMAGE" "ipset create excluded_subnets hash:net"
+    docker_run_with_host_net "$IMAGE" "ipset add excluded_subnets 192.168.241.0/24"
+    docker_run_with_host_net "$IMAGE" "ipset add excluded_subnets 192.168.242.0/24"
+    docker_run_with_host_net "$IMAGE" "ipset list excluded_subnets"
+    docker_run_with_host_net "$IMAGE" "iptables -t nat -A POSTROUTING  ! -o  $bridge_interface -s 192.168.240.0/24 -m set ! --match-set excluded_subnets dst -j MASQUERADE"
+
+    docker_run_with_host_net "$IMAGE" "ipset create excluded_ipam_subnets hash:net"
+    docker_run_with_host_net "$IMAGE" "ipset add excluded_ipam_subnets 192.168.241.0/24"
+    docker_run_with_host_net "$IMAGE" "ipset add excluded_ipam_subnets 192.168.242.0/24"
+    docker_run_with_host_net "$IMAGE" "ipset add excluded_ipam_subnets 192.168.240.0/24"
+    docker_run_with_host_net "$IMAGE" "ipset list excluded_ipam_subnets"
+    docker_run_with_host_net "$IMAGE" "iptables -t nat -A POSTROUTING  ! -o  $bridge_interface -s 10.244.0.0/16 -m set ! --match-set excluded_ipam_subnets dst -j MASQUERADE"
+  fi 
+       
 }
 
 function delete_vlan_subnets {
@@ -309,13 +339,13 @@ function delete_vlan_subnets {
   bridge_interface="br-${bridge_id:0:12}"
   vlan_interface_prefix="br-${bridge_id:0:7}."
 
-  found_vlan_interfaces=$(docker_run_with_host_net ip -br link show type vlan | cut -d " " -f 1)
+  found_vlan_interfaces=$(docker_run_with_host_net "ip -br link show type vlan" | cut -d " " -f 1)
   for interface in $found_vlan_interfaces ; do
     if [[ $interface =~ ${vlan_interface_prefix}[0-9]+@${bridge_interface} ]]; then
       interface_name=${interface%@*}
-      docker_run_with_host_net iptables -t filter -D FORWARD -i $bridge_interface -o $interface_name -j ACCEPT || true
-      docker_run_with_host_net iptables -t filter -D FORWARD -o $bridge_interface -i $interface_name -j ACCEPT || true
-      docker_run_with_host_net ip link del $interface_name
+      docker_run_with_host_net "iptables -t filter -D FORWARD -i $bridge_interface -o $interface_name -j ACCEPT" || true
+      docker_run_with_host_net "iptables -t filter -D FORWARD -o $bridge_interface -i $interface_name -j ACCEPT" || true
+      docker_run_with_host_net "ip link del $interface_name"
     fi
   done
 }
@@ -327,6 +357,13 @@ function delete_networks {
     docker network rm $networks > /dev/null 2>&1
     echo "deleted networks $networks"
   fi
+
+  if [[ $FLEXIBLE_IPAM == true ]]; then
+     networks=$(docker network ls -f name=kind --format '{{.Name}}')
+     networks="$(echo $networks)"
+     docker network rm $networks > /dev/null 2>&1
+     echo "deleted networks $networks"
+  fi 
 }
 
 function load_images {
@@ -711,7 +748,6 @@ if [[ $ACTION == "destroy" ]]; then
       exit
 fi
 
-
 kind_version=$(kind version | awk  '{print $2}')
 kind_version=${kind_version:1} # strip leading 'v'
 function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
@@ -727,6 +763,11 @@ if [[ $ACTION == "create" ]]; then
     if [[ ! -z $SUBNETS ]] && [[ ! -z $EXTRA_NETWORKS ]]; then
         echoerr "Only one of '--subnets' and '--extra-networks' can be specified"
         exit 1
+    fi
+
+    # To run FlexibleIPAM e2e tests, kind network should be in 192.168.240.0/24 subnet.  
+    if [[ $FLEXIBLE_IPAM == true ]]; then
+        docker network create -d bridge --subnet 192.168.240.0/24 kind
     fi
     create
 fi
