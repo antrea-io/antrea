@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -431,21 +432,26 @@ func TestProcessResults(t *testing.T) {
 			},
 		},
 	}
+	defaultFS = afero.NewMemMapFs()
+	defer func() {
+		defaultFS = afero.NewOsFs()
+		option.dir = ""
+	}()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defaultFS = afero.NewMemMapFs()
+			option.dir = strings.ReplaceAll(tt.name, " ", "-")
 			defaultFS.MkdirAll(option.dir, 0755)
-			defer func() {
-				defaultFS = afero.NewOsFs()
-			}()
-
 			antreaInterface := fakeclientset.NewSimpleClientset(&controllerInfo, agentInfo1, agentInfo2)
 			k8sClient := fake.NewSimpleClientset(controllerPod, pod1, pod2)
 			require.NoError(t, processResults(context.TODO(), antreaInterface, k8sClient, tt.resultMap, option.dir))
 			b, err := afero.ReadFile(defaultFS, filepath.Join(option.dir, "failed_nodes"))
 			require.NoError(t, err)
 			data := string(b)
+			ok, checkErr := afero.Exists(defaultFS, filepath.Join(option.dir, "controllerinfo"))
+			require.NoError(t, checkErr)
+			assert.True(t, ok)
+
 			for node, err := range tt.resultMap {
 				tgzFileName := fmt.Sprintf("agent_%s.tar.gz", node)
 				if node == "" {
@@ -464,7 +470,6 @@ func TestProcessResults(t *testing.T) {
 						ok, checkErr = afero.Exists(defaultFS, filepath.Join(option.dir, expectFileName))
 						require.NoError(t, checkErr)
 						assert.True(t, ok, "expected bundle file %s for %s not found", expectFileName, node)
-						defaultFS.Remove(filepath.Join(option.dir, expectFileName))
 					}
 
 				}
