@@ -81,8 +81,12 @@ as the effective BGPPolicy.
 
 ### LocalASN
 
-The `localASN` field defines the Autonomous System Number (ASN) that the local BGP process uses. The available private
-ASN range is `64512-65535`. The field is mandatory.
+The `localASN` field defines the Autonomous System Number (ASN) that the local BGP process uses. This field is mandatory
+and accepts values in the range of `1-65535`.
+
+Private ASNs, which are within the ranges 64512-65534 (16-bit), should be strictly limited to private networks or
+environments that do not peer with public ASNs. If public network connectivity is required, coordinate with your upstream
+provider to avoid issues caused by private ASN usage.
 
 ### ListenPort
 

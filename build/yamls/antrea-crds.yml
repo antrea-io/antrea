@@ -346,7 +346,7 @@ spec:
                 localASN:
                   type: integer
                   format: int32
-                  minimum: 64512
+                  minimum: 1
                   maximum: 65535
                 listenPort:
                   type: integer
