@@ -27,6 +27,8 @@ import (
 type Options struct {
 	// The configuration object
 	Config *flowaggregatorconfig.FlowAggregatorConfig
+	// Mode is the mode in which to run the flow aggregator (with aggregation or just as a proxy)
+	AggregatorMode flowaggregatorconfig.AggregatorMode
 	// Expiration timeout for active flow records in the flow aggregator
 	ActiveFlowRecordTimeout time.Duration
 	// Expiration timeout for inactive flow records in the flow aggregator
@@ -51,7 +53,7 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 		return nil, fmt.Errorf("failed to unmarshal FlowAggregator config from ConfigMap: %v", err)
 	}
 	flowaggregatorconfig.SetConfigDefaults(opt.Config)
-	// validate all the required options.
+	// Validate all the required options.
 	if opt.Config.FlowCollector.Enable && opt.Config.FlowCollector.Address == "" {
 		return nil, fmt.Errorf("external flow collector enabled without providing address")
 	}
@@ -59,9 +61,18 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 		return nil, fmt.Errorf("s3Uploader enabled without specifying bucket name")
 	}
 	if !opt.Config.FlowCollector.Enable && !opt.Config.ClickHouse.Enable && !opt.Config.S3Uploader.Enable && !opt.Config.FlowLogger.Enable {
-		return nil, fmt.Errorf("external flow collector or ClickHouse or S3Uploader should be configured")
+		return nil, fmt.Errorf("at least one collector / sink should be configured")
 	}
 	// Validate common parameters
+	if opt.Config.Mode != flowaggregatorconfig.AggregatorModeAggregate && opt.Config.Mode != flowaggregatorconfig.AggregatorModeProxy {
+		return nil, fmt.Errorf("unsupported FlowAggregator mode %s", opt.Config.Mode)
+	}
+	opt.AggregatorMode = opt.Config.Mode
+	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeProxy {
+		if opt.Config.ClickHouse.Enable || opt.Config.S3Uploader.Enable || opt.Config.FlowLogger.Enable {
+			return nil, fmt.Errorf("only flow collector is supported in Proxy mode")
+		}
+	}
 	var err error
 	opt.ActiveFlowRecordTimeout, err = time.ParseDuration(opt.Config.ActiveFlowRecordTimeout)
 	if err != nil {

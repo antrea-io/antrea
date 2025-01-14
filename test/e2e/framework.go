@@ -233,6 +233,7 @@ type TestOptions struct {
 }
 
 type flowVisibilityTestOptions struct {
+	mode             flowaggregatorconfig.AggregatorMode
 	databaseURL      string
 	secureConnection bool
 }
@@ -1020,7 +1021,6 @@ func (data *TestData) deleteClickHouseOperator() error {
 
 // deployFlowAggregator deploys the Flow Aggregator with ipfix collector and clickHouse address.
 func (data *TestData) deployFlowAggregator(ipfixCollector string, o flowVisibilityTestOptions) error {
-
 	flowAggYaml := flowAggregatorYML
 	if testOptions.enableCoverage {
 		flowAggYaml = flowAggregatorCovYML
@@ -1072,6 +1072,10 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string, o flowVisibili
 }
 
 func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o flowVisibilityTestOptions) error {
+	if o.mode == flowaggregatorconfig.AggregatorModeProxy && o.databaseURL != "" {
+		return fmt.Errorf("cannot use Proxy mode with ClickHouse")
+	}
+
 	configMap, err := data.GetFlowAggregatorConfigMap()
 	if err != nil {
 		return err
@@ -1082,21 +1086,29 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 		return fmt.Errorf("failed to unmarshal FlowAggregator config from ConfigMap: %v", err)
 	}
 
+	flowAggregatorConf.Mode = o.mode
 	flowAggregatorConf.FlowCollector = flowaggregatorconfig.FlowCollectorConfig{
 		Enable:  true,
 		Address: ipfixCollectorAddr,
 	}
-	flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
-		Enable:         true,
-		CommitInterval: aggregatorClickHouseCommitInterval.String(),
+	if o.databaseURL != "" {
+		flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
+			Enable:         true,
+			CommitInterval: aggregatorClickHouseCommitInterval.String(),
+			DatabaseURL:    o.databaseURL,
+			TLS: flowaggregatorconfig.TLSConfig{
+				CACert: o.secureConnection,
+			},
+		}
+
+	} else {
+		flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
+			Enable: false,
+		}
 	}
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
-	flowAggregatorConf.ClickHouse.DatabaseURL = o.databaseURL
-	if o.secureConnection {
-		flowAggregatorConf.ClickHouse.TLS.CACert = true
-	}
 
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {

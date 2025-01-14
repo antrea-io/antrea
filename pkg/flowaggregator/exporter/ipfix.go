@@ -45,6 +45,7 @@ type IPFIXExporter struct {
 	externalFlowCollectorProto string
 	exportingProcess           ipfix.IPFIXExportingProcess
 	sendJSONRecord             bool
+	aggregatorMode             flowaggregatorconfig.AggregatorMode
 	observationDomainID        uint32
 	templateRefreshTimeout     time.Duration
 	templateIDv4               uint16
@@ -88,6 +89,7 @@ func NewIPFIXExporter(
 		externalFlowCollectorAddr:  opt.ExternalFlowCollectorAddr,
 		externalFlowCollectorProto: opt.ExternalFlowCollectorProto,
 		sendJSONRecord:             sendJSONRecord,
+		aggregatorMode:             opt.AggregatorMode,
 		observationDomainID:        observationDomainID,
 		templateRefreshTimeout:     opt.TemplateRefreshTimeout,
 		registry:                   registry,
@@ -274,53 +276,55 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 		}
 		elements = append(elements, ie)
 	}
-	// The order of source and destination stats elements needs to match the order specified in
-	// addFieldsForStatsAggregation method in go-ipfix aggregation process.
-	for i := range infoelements.StatsElementList {
-		// Add Antrea source stats fields
-		ieName := infoelements.AntreaSourceStatsElementList[i]
-		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
+	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
+		// The order of source and destination stats elements needs to match the order specified in
+		// addFieldsForStatsAggregation method in go-ipfix aggregation process.
+		for i := range infoelements.StatsElementList {
+			// Add Antrea source stats fields
+			ieName := infoelements.AntreaSourceStatsElementList[i]
+			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			if err != nil {
+				return 0, err
+			}
+			elements = append(elements, ie)
+			// Add Antrea destination stats fields
+			ieName = infoelements.AntreaDestinationStatsElementList[i]
+			ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			if err != nil {
+				return 0, err
+			}
+			elements = append(elements, ie)
 		}
-		elements = append(elements, ie)
-		// Add Antrea destination stats fields
-		ieName = infoelements.AntreaDestinationStatsElementList[i]
-		ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
+		for _, ie := range infoelements.AntreaFlowEndSecondsElementList {
+			ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
+			if err != nil {
+				return 0, err
+			}
+			elements = append(elements, ie)
 		}
-		elements = append(elements, ie)
-	}
-	for _, ie := range infoelements.AntreaFlowEndSecondsElementList {
-		ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
+		for i := range infoelements.AntreaThroughputElementList {
+			// Add common throughput fields
+			ieName := infoelements.AntreaThroughputElementList[i]
+			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			if err != nil {
+				return 0, err
+			}
+			elements = append(elements, ie)
+			// Add source node specific throughput fields
+			ieName = infoelements.AntreaSourceThroughputElementList[i]
+			ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			if err != nil {
+				return 0, err
+			}
+			elements = append(elements, ie)
+			// Add destination node specific throughput fields
+			ieName = infoelements.AntreaDestinationThroughputElementList[i]
+			ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			if err != nil {
+				return 0, err
+			}
+			elements = append(elements, ie)
 		}
-		elements = append(elements, ie)
-	}
-	for i := range infoelements.AntreaThroughputElementList {
-		// Add common throughput fields
-		ieName := infoelements.AntreaThroughputElementList[i]
-		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-		// Add source node specific throughput fields
-		ieName = infoelements.AntreaSourceThroughputElementList[i]
-		ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-		// Add destination node specific throughput fields
-		ieName = infoelements.AntreaDestinationThroughputElementList[i]
-		ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
 	}
 	for _, ie := range infoelements.AntreaLabelsElementList {
 		ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
@@ -334,6 +338,23 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 		return 0, err
 	}
 	elements = append(elements, ie)
+	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeProxy {
+		ie, err := e.createInfoElementForTemplateSet("originalObservationDomainId", ipfixregistry.IANAEnterpriseID)
+		if err != nil {
+			return 0, err
+		}
+		elements = append(elements, ie)
+		ie, err = e.createInfoElementForTemplateSet("originalExporterIPv4Address", ipfixregistry.IANAEnterpriseID)
+		if err != nil {
+			return 0, err
+		}
+		elements = append(elements, ie)
+		ie, err = e.createInfoElementForTemplateSet("originalExporterIPv6Address", ipfixregistry.IANAEnterpriseID)
+		if err != nil {
+			return 0, err
+		}
+		elements = append(elements, ie)
+	}
 	e.set.ResetSet()
 	if err := e.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
 		return 0, err
