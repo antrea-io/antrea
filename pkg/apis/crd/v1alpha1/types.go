@@ -263,7 +263,7 @@ type BGPPolicySpec struct {
 	// will be effective and enforced; others serve as alternatives.
 	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
 
-	// LocalASN is the AS number used by the BGP process. The available private AS number range is 64512-65535.
+	// LocalASN is the AS number used by the BGP process. It accepts values in the range of 1-65535.
 	LocalASN int32 `json:"localASN"`
 
 	// ListenPort is the port on which the BGP process listens, and the default value is 179.
