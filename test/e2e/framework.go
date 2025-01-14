@@ -252,7 +252,7 @@ type PodInfo struct {
 type TestData struct {
 	ClusterName        string
 	provider           providers.ProviderInterface
-	kubeConfig         *restclient.Config
+	KubeConfig         *restclient.Config
 	clientset          kubernetes.Interface
 	aggregatorClient   aggregatorclientset.Interface
 	crdClient          crdclientset.Interface
@@ -1317,7 +1317,7 @@ func (data *TestData) CreateClient(kubeconfigPath string) error {
 	if err != nil {
 		return fmt.Errorf("error when creating CRD client: %v", err)
 	}
-	data.kubeConfig = kubeConfig
+	data.KubeConfig = kubeConfig
 	data.clientset = clientset
 	data.aggregatorClient = aggregatorClient
 	data.crdClient = crdClient
@@ -2290,7 +2290,7 @@ func (data *TestData) RunCommandFromPod(podNamespace string, podName string, con
 			Stderr:  true,
 			TTY:     false,
 		}, scheme.ParameterCodec)
-	exec, err := remotecommand.NewSPDYExecutor(data.kubeConfig, "POST", request.URL())
+	exec, err := remotecommand.NewSPDYExecutor(data.KubeConfig, "POST", request.URL())
 	if err != nil {
 		return "", "", err
 	}
@@ -2716,7 +2716,7 @@ func (data *TestData) mutateAntreaConfigMap(
 		}
 		configMap.Data["antrea-controller.conf"] = string(b)
 	}
-	//getAgentConf should be able to process both windows and linux configmap.
+	// getAgentConf should be able to process both windows and linux configmap.
 	getAgentConf := func(cm *corev1.ConfigMap) (*agentconfig.AgentConfig, error) {
 		var agentConf agentconfig.AgentConfig
 		if err := yaml.Unmarshal([]byte(cm.Data["antrea-agent.conf"]), &agentConf); err != nil {

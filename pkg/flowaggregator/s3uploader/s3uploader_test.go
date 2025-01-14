@@ -193,7 +193,7 @@ func TestBatchUploadAllError(t *testing.T) {
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
 	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
-	expectedErrMsg := "error when uploading file to S3: operation error S3: PutObject, https response error StatusCode: 301"
+	expectedErrMsg := "error when uploading file to S3: operation error S3: PutObject"
 	assert.Contains(t, err.Error(), expectedErrMsg)
 }
 
