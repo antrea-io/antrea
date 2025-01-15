@@ -293,13 +293,12 @@ printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 
 vlan_args=""
 if $extra_vlan; then
-  vlan_args="$vlan_args --vlan-id 10"
   if [[ "$ipfamily" == "v4" ]]; then
-    vlan_args="$vlan_args --vlan-subnets 172.100.10.1/24"
+    vlan_args="$vlan_args --vlan-subnets 10=172.100.10.1/24"
   elif [[ "$ipfamily" == "v6" ]]; then
-    vlan_args="$vlan_args --vlan-subnets fd00:172:100:10::1/96"
+    vlan_args="$vlan_args --vlan-subnets 10=fd00:172:100:10::1/96"
   elif [[ "$ipfamily" == "dual" ]]; then
-    vlan_args="$vlan_args --vlan-subnets 172.100.10.1/24,fd00:172:100:10::1/96"
+    vlan_args="$vlan_args --vlan-subnets 10=172.100.10.1/24,fd00:172:100:10::1/96"
   fi
 fi
 
