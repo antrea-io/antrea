@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func getInt32Sets(start, end int) sets.Set[int32] {
+func getInt32Sets(start, end int32) sets.Set[int32] {
 	s := sets.New[int32]()
 	for i := start; i < end; i++ {
 		s.Insert(int32(i))

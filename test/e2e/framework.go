@@ -590,7 +590,8 @@ func (data *TestData) collectClusterInfo() error {
 	workerIdx := 1
 	clusterInfo.nodes = make(map[int]*ClusterNode)
 	clusterInfo.nodesOS = make(map[string]string)
-	for _, node := range nodes.Items {
+	for idx := range nodes.Items {
+		node := &nodes.Items[idx]
 		isControlPlaneNode := func() bool {
 			_, ok := node.Labels[labelNodeRoleControlPlane()]
 			return ok

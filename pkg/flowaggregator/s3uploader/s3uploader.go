@@ -69,7 +69,7 @@ type S3UploadProcess struct {
 	// currentBuffer caches flow record
 	currentBuffer *bytes.Buffer
 	// cachedRecordCount keeps track of the number of flow records written into currentBuffer
-	cachedRecordCount int
+	cachedRecordCount int32
 	// bufferQueue caches currentBuffer when it is full
 	bufferQueue []*bytes.Buffer
 	// buffersToUpload stores all the buffers to be uploaded for the current uploadFile() call

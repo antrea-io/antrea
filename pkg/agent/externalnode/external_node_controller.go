@@ -202,7 +202,7 @@ func (c *ExternalNodeController) reconcilePolicyBypassFlows() error {
 		klog.V(2).InfoS("Installing policy bypass flows", "protocol", rule.Protocol, "CIDR", rule.CIDR, "port", rule.Port, "direction", rule.Direction)
 		protocol := parseProtocol(rule.Protocol)
 		_, ipNet, _ := net.ParseCIDR(rule.CIDR)
-		if err := c.ofClient.InstallPolicyBypassFlows(protocol, ipNet, uint16(rule.Port), rule.Direction == "ingress"); err != nil {
+		if err := c.ofClient.InstallPolicyBypassFlows(protocol, ipNet, util.PortToUint16(rule.Port), rule.Direction == "ingress"); err != nil {
 			return err
 		}
 	}

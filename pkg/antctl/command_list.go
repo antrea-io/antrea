@@ -105,7 +105,8 @@ func (cl *commandList) validate() []error {
 	if len(cl.definitions) == 0 {
 		return []error{fmt.Errorf("no command found in the command list")}
 	}
-	for i, c := range cl.definitions {
+	for i := range cl.definitions {
+		c := &cl.definitions[i]
 		for _, err := range c.validate() {
 			errs = append(errs, fmt.Errorf("#%d command<%s>: %w", i, c.use, err))
 		}

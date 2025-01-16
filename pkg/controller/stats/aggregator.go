@@ -371,7 +371,8 @@ func (a *Aggregator) Run(stopCh <-chan struct{}) {
 }
 
 func (a *Aggregator) doCollect(summary *controlplane.NodeStatsSummary) {
-	for _, stats := range summary.NetworkPolicies {
+	for idx := range summary.NetworkPolicies {
+		stats := &summary.NetworkPolicies[idx]
 		// The policy might have been removed, skip processing it if missing.
 		objs, _ := a.networkPolicyStats.ByIndex(uidIndex, string(stats.NetworkPolicy.UID))
 		if len(objs) > 0 {
@@ -410,7 +411,8 @@ func (a *Aggregator) doCollect(summary *controlplane.NodeStatsSummary) {
 		a.groupNodePodsMapMutex.Unlock()
 	}
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		for _, stats := range summary.AntreaClusterNetworkPolicies {
+		for idx := range summary.AntreaClusterNetworkPolicies {
+			stats := &summary.AntreaClusterNetworkPolicies[idx]
 			// The policy have might been removed, skip processing it if missing.
 			objs, _ := a.antreaClusterNetworkPolicyStats.ByIndex(uidIndex, string(stats.NetworkPolicy.UID))
 			if len(objs) > 0 {
@@ -426,10 +428,10 @@ func (a *Aggregator) doCollect(summary *controlplane.NodeStatsSummary) {
 			}
 		}
 
-		for _, stats := range summary.AntreaNetworkPolicies {
+		for idx := range summary.AntreaNetworkPolicies {
+			stats := &summary.AntreaNetworkPolicies[idx]
 			// The policy have might been removed, skip processing it if missing.
 			objs, _ := a.antreaNetworkPolicyStats.ByIndex(uidIndex, string(stats.NetworkPolicy.UID))
-
 			if len(objs) > 0 {
 				// The object returned by cache is supposed to be read only, create a new object and update it.
 				curStats := objs[0].(*statsv1alpha1.AntreaNetworkPolicyStats).DeepCopy()

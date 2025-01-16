@@ -18,10 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,6 +71,7 @@ func RegisterTest(name string, test Test) {
 }
 
 type testContext struct {
+	check.Logger
 	client      kubernetes.Interface
 	config      *rest.Config
 	clusterName string
@@ -87,6 +86,7 @@ func Run() error {
 	}
 	ctx := context.Background()
 	testContext := NewTestContext(client, config, clusterName)
+	defer check.Teardown(ctx, testContext.Logger, testContext.client, testContext.namespace)
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
@@ -107,7 +107,6 @@ func Run() error {
 		}
 	}
 	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were uncertain", numSuccess, numFailure, numUncertain)
-	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
 	if numFailure > 0 {
 		return fmt.Errorf("%v/%v tests failed", numFailure, len(testsRegistry))
 	}
@@ -206,27 +205,12 @@ func getAntreaAgentImage() string {
 
 func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName string) *testContext {
 	return &testContext{
+		Logger:      check.NewLogger(fmt.Sprintf("[%s] ", clusterName)),
 		client:      client,
 		config:      config,
 		clusterName: clusterName,
 		namespace:   check.GenerateRandomNamespace(testNamespacePrefix),
 	}
-}
-
-func (t *testContext) Log(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+format+"\n", a...)
-}
-
-func (t *testContext) Success(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.GreenString(format, a...)+"\n")
-}
-
-func (t *testContext) Fail(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.RedString(format, a...)+"\n")
-}
-
-func (t *testContext) Warning(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.YellowString(format, a...)+"\n")
 }
 
 func (t *testContext) Header(format string, a ...interface{}) {

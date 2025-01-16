@@ -352,7 +352,7 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 		svcResExport := &mcsv1alpha1.ResourceExport{}
 		err := r.Client.Get(context.Background(), svcResExportName, svcResExport)
 		if err != nil && apierrors.IsNotFound(err) {
-			return newResImport, false, fmt.Errorf("failed to get corresponding Service type of ResourceExport: " + svcResExportName.String())
+			return newResImport, false, fmt.Errorf("failed to get ResourceExport %s: %w", svcResExportName.String(), err)
 		}
 		if len(svcResExport.Status.Conditions) > 0 {
 			if svcResExport.Status.Conditions[0].Status != corev1.ConditionTrue {

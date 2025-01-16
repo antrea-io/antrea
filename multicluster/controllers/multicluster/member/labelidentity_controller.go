@@ -158,12 +158,13 @@ func (r *LabelIdentityReconciler) clusterSetMapFunc(ctx context.Context, a clien
 			podList := &v1.PodList{}
 			r.Client.List(ctx, podList)
 			requests = make([]reconcile.Request, len(podList.Items))
-			for i, pod := range podList.Items {
+			for idx := range podList.Items {
+				pod := &podList.Items[idx]
 				podNamespacedName := types.NamespacedName{
 					Name:      pod.GetName(),
 					Namespace: pod.GetNamespace(),
 				}
-				requests[i] = reconcile.Request{
+				requests[idx] = reconcile.Request{
 					NamespacedName: podNamespacedName,
 				}
 			}
@@ -183,8 +184,9 @@ func (r *LabelIdentityReconciler) namespaceMapFunc(ctx context.Context, ns clien
 	podList := &v1.PodList{}
 	r.Client.List(context.TODO(), podList, client.InNamespace(ns.GetName()))
 	requests := make([]reconcile.Request, len(podList.Items))
-	for i, pod := range podList.Items {
-		requests[i] = reconcile.Request{
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+		requests[idx] = reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Name:      pod.GetName(),
 				Namespace: pod.GetNamespace(),

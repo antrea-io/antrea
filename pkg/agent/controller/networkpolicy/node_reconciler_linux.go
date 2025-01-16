@@ -592,7 +592,8 @@ func groupMembersToIPNets(groups v1beta2.GroupMemberSet, isIPv6 bool) sets.Set[s
 
 func ipBlocksToIPNets(ipBlocks []v1beta2.IPBlock, isIPv6 bool) []string {
 	var ipnets []string
-	for _, b := range ipBlocks {
+	for idx := range ipBlocks {
+		b := &ipBlocks[idx]
 		blockCIDR := ip.IPNetToNetIPNet(&b.CIDR)
 		if isIPv6 != utilnet.IsIPv6CIDR(blockCIDR) {
 			continue

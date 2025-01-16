@@ -18,8 +18,8 @@ package member
 
 import (
 	"context"
+	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -562,17 +562,17 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	q := workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter())
-	numInitialResImp := 50
-	for i := 1; i <= numInitialResImp; i++ {
+	const numInitialResImp = 50
+	for i := uint32(1); i <= numInitialResImp; i++ {
 		resImp := &mcv1alpha1.ResourceImport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "label-identity-" + strconv.Itoa(i),
+				Name:      fmt.Sprintf("label-identity-%d", i),
 				Namespace: "antrea-mcs",
 			},
 			Spec: mcv1alpha1.ResourceImportSpec{
 				LabelIdentity: &mcv1alpha1.LabelIdentitySpec{
-					Label: "ns:kubernetes.io/metadata.name=ns&pod:seq=" + strconv.Itoa(i),
-					ID:    uint32(i),
+					Label: fmt.Sprintf("ns:kubernetes.io/metadata.name=ns&pod:seq=%d", i),
+					ID:    i,
 				},
 			},
 		}

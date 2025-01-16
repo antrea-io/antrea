@@ -337,7 +337,8 @@ func (r *podReconciler) getRuleType(rule *CompletedRule) ruleType {
 		}
 	}
 
-	for _, ipBlock := range rule.To.IPBlocks {
+	for idx := range rule.To.IPBlocks {
+		ipBlock := &rule.To.IPBlocks[idx]
 		ipAddr := ip.IPNetToNetIPNet(&ipBlock.CIDR)
 		if ipAddr.IP.IsMulticast() {
 			return multicast
@@ -1197,7 +1198,8 @@ func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet) []types.Ad
 func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled, ctMatch bool) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0)
-	for _, b := range ipBlocks {
+	for idx := range ipBlocks {
+		b := &ipBlocks[idx]
 		blockCIDR := ip.IPNetToNetIPNet(&b.CIDR)
 		if !isIPNetSupportedByAF(blockCIDR, ipv4Enabled, ipv6Enabled) {
 			// This is part of normal operations: "allow all" in a policy is represented
@@ -1285,7 +1287,8 @@ func resolveService(service *v1beta2.Service, member *v1beta2.GroupMember) *v1be
 	if service.Port == nil || service.Port.Type == intstr.Int {
 		return service
 	}
-	for _, port := range member.Ports {
+	for idx := range member.Ports {
+		port := &member.Ports[idx]
 		// For K8s NetworkPolicy and Antrea-native policies, the Service.Protocol field will never be nil since TCP
 		// will be filled as default. However, for AdminNetworkPolicy and BaselineAdminNetworkPolicy, the Protocol
 		// field will be nil for ports written as named ports. In that case, the member port will match as long

@@ -19,12 +19,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,6 +95,7 @@ func RegisterTest(name string, test Test) {
 }
 
 type testContext struct {
+	check.Logger
 	client               kubernetes.Interface
 	config               *rest.Config
 	clusterName          string
@@ -144,13 +143,13 @@ func Run(o *options) error {
 	}
 	ctx := context.Background()
 	testContext := NewTestContext(client, config, clusterName, o.antreaNamespace, runFilterRegex)
+	defer check.Teardown(ctx, testContext.Logger, testContext.client, testContext.namespace)
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
 	stats := testContext.runTests(ctx)
 
 	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were skipped", stats.numSuccess, stats.numFailure, stats.numSkipped)
-	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
 	if stats.numFailure > 0 {
 		return fmt.Errorf("%v/%v tests failed", stats.numFailure, stats.numTotal())
 	}
@@ -162,7 +161,7 @@ func agnhostConnectCommand(ip string, port string) []string {
 	return []string{"/agnhost", "connect", hostPort, "--timeout=3s"}
 }
 
-func newService(name string, selector map[string]string, port int) *corev1.Service {
+func newService(name string, selector map[string]string, port int32) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -170,7 +169,7 @@ func newService(name string, selector map[string]string, port int) *corev1.Servi
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
 			Ports: []corev1.ServicePort{
-				{Name: name, Port: int32(port)},
+				{Name: name, Port: port},
 			},
 			Selector:       selector,
 			IPFamilyPolicy: ptr.To(corev1.IPFamilyPolicyPreferDualStack),
@@ -186,6 +185,7 @@ func NewTestContext(
 	runFilterRegex *regexp.Regexp,
 ) *testContext {
 	return &testContext{
+		Logger:          check.NewLogger(fmt.Sprintf("[%s] ", clusterName)),
 		client:          client,
 		config:          config,
 		clusterName:     clusterName,
@@ -368,22 +368,6 @@ func (t *testContext) runAgnhostConnect(ctx context.Context, clientPodName strin
 		}
 	}
 	return err
-}
-
-func (t *testContext) Log(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+format+"\n", a...)
-}
-
-func (t *testContext) Success(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.GreenString(format, a...)+"\n")
-}
-
-func (t *testContext) Fail(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.RedString(format, a...)+"\n")
-}
-
-func (t *testContext) Warning(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.YellowString(format, a...)+"\n")
 }
 
 func (t *testContext) Header(format string, a ...interface{}) {

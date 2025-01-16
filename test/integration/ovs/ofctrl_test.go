@@ -214,7 +214,7 @@ func TestOFctrlFlow(t *testing.T) {
 		// Test: DumpTableStatus
 		for _, tableStates := range bridge.DumpTableStatus() {
 			if tableStates.ID == uint(myTable.GetID()) {
-				if int(tableStates.FlowCount) != len(flowList) {
+				if tableStates.FlowCount != uint(len(flowList)) {
 					t.Errorf("Flow count of table %d in the cache is incorrect, expect: %d, actual %d", dumpTable, len(flowList), tableStates.FlowCount)
 				}
 			}
