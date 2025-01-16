@@ -1,5 +1,57 @@
 # Antrea OVS Pipeline
 
+## Table of Contents
+
+<!-- toc -->
+- [Introduction](#introduction)
+- [Terminology](#terminology)
+- [Dumping the Flows / Groups](#dumping-the-flows--groups)
+- [OVS Registers and Conntrack](#ovs-registers-and-conntrack)
+  - [OVS Registers](#ovs-registers)
+  - [OVS Ct Mark](#ovs-ct-mark)
+  - [OVS Ct Label](#ovs-ct-label)
+  - [OVS Ct Zone](#ovs-ct-zone)
+- [Antrea Features](#antrea-features)
+  - [Kubernetes NetworkPolicy Implementation](#kubernetes-networkpolicy-implementation)
+  - [Kubernetes Service Implementation](#kubernetes-service-implementation)
+  - [Antrea-native NetworkPolicy Implementation](#antrea-native-networkpolicy-implementation)
+  - [Antrea-native L7 NetworkPolicy Implementation](#antrea-native-l7-networkpolicy-implementation)
+  - [TrafficControl Implementation](#trafficcontrol-implementation)
+  - [Egress Implementation](#egress-implementation)
+- [OVS Tables](#ovs-tables)
+  - [PipelineRootClassifier](#pipelinerootclassifier)
+  - [ARPSpoofGuard](#arpspoofguard)
+  - [ARPResponder](#arpresponder)
+  - [Classifier](#classifier)
+  - [SpoofGuard](#spoofguard)
+  - [UnSNAT](#unsnat)
+  - [ConntrackZone](#conntrackzone)
+  - [ConntrackState](#conntrackstate)
+  - [PreRoutingClassifier](#preroutingclassifier)
+  - [NodePortMark](#nodeportmark)
+  - [SessionAffinity](#sessionaffinity)
+  - [ServiceLB](#servicelb)
+  - [EndpointDNAT](#endpointdnat)
+  - [AntreaPolicyEgressRule](#antreapolicyegressrule)
+  - [EgressRule](#egressrule)
+  - [EgressDefaultRule](#egressdefaultrule)
+  - [EgressMetric](#egressmetric)
+  - [L3Forwarding](#l3forwarding)
+  - [EgressMark](#egressmark)
+  - [L3DecTTL](#l3decttl)
+  - [SNATMark](#snatmark)
+  - [SNAT](#snat)
+  - [L2ForwardingCalc](#l2forwardingcalc)
+  - [TrafficControl](#trafficcontrol)
+  - [IngressSecurityClassifier](#ingresssecurityclassifier)
+  - [AntreaPolicyIngressRule](#antreapolicyingressrule)
+  - [IngressRule](#ingressrule)
+  - [IngressDefaultRule](#ingressdefaultrule)
+  - [IngressMetric](#ingressmetric)
+  - [ConntrackCommit](#conntrackcommit)
+  - [Output](#output)
+<!-- toc -->
+
 ## Introduction
 
 This document outlines the Open vSwitch (OVS) pipeline Antrea uses to implement its networking functionalities. The
@@ -103,7 +155,9 @@ kubectl exec -n kube-system <ANTREA_AGENT_POD_NAME> -c antrea-ovs -- ovs-ofctl d
 
 where `<TABLE_NAME>` is the name of a table in the pipeline, and `<GROUP_ID>` is the ID of a group.
 
-## OVS Registers
+## OVS Registers and Conntrack
+
+### OVS Registers
 
 We use some OVS registers to carry information throughout the pipeline. To enhance usability, we assign friendly names
 to the registers we use.
@@ -168,7 +222,7 @@ to the registers we use.
 
 Note that reg marks that have overlapped bits will not be used at the same time, such as `SwapField` and `PacketInTableField`.
 
-## OVS Ct Mark
+### OVS Ct Mark
 
 We use some bits of the `ct_mark` field of OVS conntrack to carry information throughout the pipeline. To enhance
 usability, we assign friendly names to the bits we use.
@@ -183,7 +237,7 @@ usability, we assign friendly names to the bits we use.
 | bit 6       |                       | 0b1           | HairpinCTMark      | Hair-pin connection.                                            |
 | bit 7       |                       | 0b1           | L7NPRedirectCTMark | Connection should be redirected to an application-aware engine. |
 
-## OVS Ct Label
+### OVS Ct Label
 
 We use some bits of the `ct_label` field of OVS conntrack to carry information throughout the pipeline. To enhance
 usability, we assign friendly names to the bits we use.
@@ -194,7 +248,7 @@ usability, we assign friendly names to the bits we use.
 | bits 32-63  | EgressRuleCTLabel     | Egress rule ID.                    |
 | bits 64-75  | L7NPRuleVlanIDCTLabel | VLAN ID for L7 NetworkPolicy rule. |
 
-## OVS Ct Zone
+### OVS Ct Zone
 
 We use some OVS conntrack zones to isolate connection tracking rules. To enhance usability, we assign friendly names to
 the ct zones.
@@ -204,7 +258,9 @@ the ct zones.
 | 65520   | CtZone       | Tracking IPv4 connections that don't require SNAT. |
 | 65521   | SNATCtZone   | Tracking IPv4 connections that require SNAT.       |
 
-## Kubernetes NetworkPolicy Implementation
+## Antrea Features
+
+### Kubernetes NetworkPolicy Implementation
 
 Several tables of the pipeline are dedicated to [Kubernetes
 NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/) implementation (tables
@@ -251,7 +307,7 @@ spec:
           port: 3306
 ```
 
-## Kubernetes Service Implementation
+### Kubernetes Service Implementation
 
 Like K8s NetworkPolicy, several tables of the pipeline are dedicated to [Kubernetes
 Service](https://kubernetes.io/docs/concepts/services-networking/service/) implementation (tables [NodePortMark],
@@ -261,24 +317,7 @@ By enabling `proxyAll`, ClusterIP, NodePort, LoadBalancer, and ExternalIP are al
 only in-cluster ClusterIP is handled. In this document, we use the sample K8s Services below. These Services select Pods
 with the label `app: web` as Endpoints.
 
-### ClusterIP without Endpoint
-
-A sample Service with `clusterIP` set to `10.101.255.29` does not have any associated Endpoint.
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: sample-clusterip-no-ep
-spec:
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 80
-  clusterIP: 10.101.255.29
-```
-
-### ClusterIP
+#### ClusterIP
 
 A sample ClusterIP Service with `clusterIP` set to `10.105.31.235`.
 
@@ -297,7 +336,24 @@ spec:
   clusterIP: 10.105.31.235
 ```
 
-### NodePort
+#### ClusterIP without Endpoint
+
+A sample Service with `clusterIP` set to `10.101.255.29` does not have any associated Endpoint.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-clusterip-no-ep
+spec:
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  clusterIP: 10.101.255.29
+```
+
+#### NodePort
 
 A sample NodePort Service with `nodePort` set to `30004`.
 
@@ -317,7 +373,7 @@ spec:
   type: NodePort
 ```
 
-### LoadBalancer
+#### LoadBalancer
 
 A sample LoadBalancer Service with ingress IP `192.168.77.150` assigned by an ingress controller.
 
@@ -340,7 +396,7 @@ status:
       - ip: 192.168.77.150
 ```
 
-### Service with ExternalIP
+#### Service with ExternalIP
 
 A sample Service with external IP `192.168.77.200`.
 
@@ -360,7 +416,7 @@ spec:
     - 192.168.77.200
 ```
 
-### Service with Session Affinity
+#### Service with Session Affinity
 
 A sample Service configured with session affinity.
 
@@ -383,7 +439,7 @@ spec:
       timeoutSeconds: 300
 ```
 
-### Service with ExternalTrafficPolicy Local
+#### Service with ExternalTrafficPolicy Local
 
 A sample Service configured `externalTrafficPolicy` to `Local`. Only `externalTrafficPolicy` of NodePort/LoadBalancer
 Service can be configured with `Local`.
@@ -408,7 +464,7 @@ status:
       - ip: 192.168.77.151
 ```
 
-## Antrea-native NetworkPolicy Implementation
+### Antrea-native NetworkPolicy Implementation
 
 In addition to the tables created for K8s NetworkPolicy, Antrea creates additional dedicated tables to support
 [Antrea-native NetworkPolicy](../antrea-network-policy.md) (tables [AntreaPolicyEgressRule] and
@@ -462,7 +518,7 @@ spec:
     - action: Drop
 ```
 
-## Antrea-native L7 NetworkPolicy Implementation
+### Antrea-native L7 NetworkPolicy Implementation
 
 In addition to layer 3 and layer 4 policies mentioned above, [Antrea-native Layer 7
 NetworkPolicy](../antrea-l7-network-policy.md) is also supported in Antrea. The main difference is that Antrea-native L7
@@ -503,13 +559,13 @@ spec:
             method: "GET"
 ```
 
-## TrafficControl Implementation
+### TrafficControl Implementation
 
 [TrafficControl](../traffic-control.md) is a CRD API that manages and manipulates the transmission of Pod traffic.
 Antrea creates a dedicated table [TrafficControl] to implement feature `TrafficControl`. We will use the following
 TrafficControls as examples for the remainder of this document.
 
-### TrafficControl for Packet Redirecting
+#### TrafficControl for Packet Redirecting
 
 This is a TrafficControl applied to Pods with the label `app: web`. For these Pods, both ingress and egress traffic will
 be redirected to port `antrea-tc-tap0`, and returned through port `antrea-tc-tap1`.
@@ -534,7 +590,7 @@ spec:
       name: antrea-tc-tap1
 ```
 
-### TrafficControl for Packet Mirroring
+#### TrafficControl for Packet Mirroring
 
 This is a TrafficControl applied to Pods with the label `app: db`. For these Pods, both ingress and egress will be
 mirrored (duplicated) to port `antrea-tc-tap2`.
@@ -556,13 +612,13 @@ spec:
       name: antrea-tc-tap2
 ```
 
-## Egress Implementation
+### Egress Implementation
 
 Table [EgressMark] is dedicated to the implementation of feature `Egress`.
 
 Consider the following Egresses as examples for the remainder of this document.
 
-### Egress Applied to Web Pods
+#### Egress Applied to Web Pods
 
 This is an Egress applied to Pods with the label `app: web`. For these Pods, all egress traffic (traffic leaving the
 cluster) will be SNAT'd on the Node `k8s-node-control-plane` using Egress IP `192.168.77.112`. In this context,
@@ -586,7 +642,7 @@ status:
   egressNode: k8s-node-control-plane
 ```
 
-### Egress Applied to Client Pods
+#### Egress Applied to Client Pods
 
 This is an Egress applied to Pods with the label `app: client`. For these Pods, all egress traffic will be SNAT'd on the
 Node `k8s-node-worker-1` using Egress IP `192.168.77.113`.
