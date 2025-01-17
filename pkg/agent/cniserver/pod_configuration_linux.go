@@ -99,20 +99,13 @@ func (pc *podConfigurator) configureInterfaces(
 		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess)
 }
 
+// reconcileMissingPods is never called on Linux, see reconcile logic.
 func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) {
-	for i := range ifConfigs {
-		// This should not happen since OVSDB is persisted on the Node.
-		// TODO: is there anything else we should be doing? Assuming that the Pod's
-		// interface still exists, we can repair the interface store since we can
-		// retrieve the name of the host interface for the Pod by calling
-		// GenerateContainerInterfaceName. One thing we would not be able to
-		// retrieve is the container ID which is part of the container configuration
-		// we store in the cache, but this ID is not used for anything at the
-		// moment. However, if the interface does not exist, there is nothing we can
-		// do since we do not have the original CNI parameters.
-		ifaceConfig := ifConfigs[i]
-		klog.Warningf("Interface for Pod %s/%s not found in the interface store", ifaceConfig.PodNamespace, ifaceConfig.PodName)
-	}
+}
+
+// isInterfaceInvalid returns true if the OVS interface's ofport is "-1" which means the host interface is disconnected.
+func (pc *podConfigurator) isInterfaceInvalid(ifaceConfig *interfacestore.InterfaceConfig) bool {
+	return ifaceConfig.OFPort == -1
 }
 
 func (pc *podConfigurator) initPortStatusMonitor(_ cache.SharedIndexInformer) {
