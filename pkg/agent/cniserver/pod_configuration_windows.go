@@ -42,6 +42,7 @@ var (
 
 const (
 	podNotReadyTimeInSeconds = 30 * time.Second
+	ovsInterfaceTypeForPod   = "internal"
 )
 
 // connectInterfaceToOVSAsync waits for an interface to be created and connects it to OVS br-int asynchronously
@@ -56,7 +57,7 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 	// before the time, then the library shall merge the event.
 	pc.unreadyPortQueue.AddAfter(ovsPortName, podNotReadyTimeInSeconds)
 	return pc.ifConfigurator.addPostInterfaceCreateHook(ifConfig.ContainerID, ovsPortName, containerAccess, func() error {
-		if err := pc.ovsBridgeClient.SetInterfaceType(ovsPortName, "internal"); err != nil {
+		if err := pc.ovsBridgeClient.SetInterfaceType(ovsPortName, ovsInterfaceTypeForPod); err != nil {
 			return err
 		}
 		return nil
@@ -125,6 +126,14 @@ func (pc *podConfigurator) configureInterfaces(
 
 	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
 		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess)
+}
+
+// isInterfaceInvalid returns false because we now don't support detecting the disconnected host interface on Windows
+// due to the OVS issue (https://github.com/openvswitch/ovs-issues/issues/353), by which we can't differentiate from
+// the case that a Pod's host interface is created during agent downtime and is expected to re-connect after agent
+// is restarted.
+func (pc *podConfigurator) isInterfaceInvalid(ifaceConfig *interfacestore.InterfaceConfig) bool {
+	return false
 }
 
 func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) {
