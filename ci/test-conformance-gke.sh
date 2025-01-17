@@ -128,6 +128,10 @@ case $key in
     RUN_ALL=false
     shift
     ;;
+    --cleanup-all)
+    RUN_CLEANUP_ALL=true
+    shift
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -329,6 +333,29 @@ function cleanup_cluster() {
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
 
+function cleanup_all_clusters() {
+    echo '=== Cleaning up all unprotected GKE clusters ==='
+    gcloud container clusters list --zone "${GKE_ZONE}" --format="json(name, location, resourceLabels)" | \
+        jq -r '.[] | select(.resourceLabels.protected != "true") | "\(.name) \(.location)"' | \
+        while read CLUSTER_NAME ZONE; do
+            echo "Deleting cluster ${CLUSTER_NAME} in zone '${GKE_ZONE}'..."
+            retry=5
+            while [[ "${retry}" -gt 0 ]]; do
+                gcloud container clusters delete ${CLUSTER_NAME} --zone ${GKE_ZONE}
+                if [[ $? -eq 0 ]]; then
+                    break
+                fi
+                sleep 10
+                retry=$((retry-1))
+            done
+            if [[ "${retry}" -eq 0 ]]; then
+                echo "=== Failed to delete GKE cluster ${CLUSTER}! ==="
+                continue
+            fi
+        done
+    echo "=== Cleanup GKE clusters succeeded ==="
+}
+
 if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
     setup_gke
     deliver_antrea_to_gke
@@ -337,6 +364,10 @@ fi
 
 if [[ "$RUN_ALL" == true || "$RUN_CLEANUP_ONLY" == true ]]; then
     cleanup_cluster
+fi
+
+if [[ "$RUN_CLEANUP_ALL" == true ]]; then
+    cleanup_all_clusters
 fi
 
 if [[ "$RUN_CLEANUP_ONLY" == false && $TEST_SCRIPT_RC -ne 0 ]]; then

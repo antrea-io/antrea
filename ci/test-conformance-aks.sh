@@ -34,7 +34,7 @@ KUBE_CONFORMANCE_IMAGE_VERSION=auto
 
 _usage="Usage: $0 [--cluster-name <AKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--azure-app-id <AppID>] [--azure-tenant-id <TenantID>] [--azure-password <Password>] \
-                  [--aks-region <Region>] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--cleanup-only]
+                  [--aks-region <Region>] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--cleanup-only] [--cleanup-all]
 
 Setup a AKS cluster to run K8s e2e community tests (Conformance & Network Policy).
 
@@ -47,7 +47,8 @@ Setup a AKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --aks-region             The Azure region where the cluster will be initiated. Defaults to westus.
         --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --setup-only             Only perform setting up the cluster and run test.
-        --cleanup-only           Only perform cleaning up the cluster."
+        --cleanup-only           Only perform cleaning up the cluster.
+        --cleanup-all            Cleaning up all clusters without protected tag."
 
 function print_usage {
     echoerr "$_usage"
@@ -102,6 +103,10 @@ case $key in
     --cleanup-only)
     RUN_CLEANUP_ONLY=true
     RUN_ALL=false
+    shift
+    ;;
+    --cleanup-all)
+    RUN_CLEANUP_ALL=true
     shift
     ;;
     -h|--help)
@@ -300,6 +305,29 @@ function cleanup_cluster() {
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
 
+function cleanup_all_clusters() {
+    echo '=== Cleaning up all AKS clusters without tag protected ==='
+    clusters=$(az aks list \
+      --query "[!(tags.protected && tags.protected=='true') && resourceGroup=='${RESOURCE_GROUP}'].{name:name,rg:resourceGroup}" \
+      -o tsv)
+    if [[ -z "$clusters" ]]; then
+      echo "Unprotected cluster not found."
+      exit
+    fi
+    while read -r clusterName resourceGroup; do
+        [[ -z "$clusterName" ]] && continue
+        echo "Deleting Cluster: $clusterName in $resourceGroup"
+        az aks delete --name "$clusterName" --resource-group "$resourceGroup" --yes
+    done <<< "$clusters"
+    resource=$(az aks list \
+      --query "[resourceGroup=='${RESOURCE_GROUP}'].{name:name,rg:resourceGroup}" \
+      -o tsv)
+    if [[ -z "$resource" ]]; then
+        az group delete --name ${RESOURCE_GROUP} --yes --no-wait
+    fi
+    echo "=== Cleanup AKS clusters succeeded ==="
+}
+
 # ensures that the script can be run from anywhere
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/..
@@ -315,6 +343,10 @@ fi
 
 if [[ "$RUN_ALL" == true || "$RUN_CLEANUP_ONLY" == true ]]; then
     cleanup_cluster
+fi
+
+if [[ "$RUN_CLEANUP_ALL" == true ]]; then
+    cleanup_all_clusters
 fi
 
 if [[ "$RUN_CLEANUP_ONLY" == false && $TEST_SCRIPT_RC -ne 0 ]]; then

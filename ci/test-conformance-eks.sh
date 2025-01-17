@@ -40,7 +40,7 @@ AWS_SERVICE_USER_NAME=""
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--aws-service-user <ServiceUserName>]\
                   [--aws-service-user-role-arn <ServiceUserRoleARN>] [--ssh-key <SSHKey] [--ssh-private-key <SSHPrivateKey] [--log-mode <SonobuoyResultLogLevel>]\
-                  [--setup-only] [--cleanup-only]
+                  [--setup-only] [--cleanup-only] [--cleanup-all]
 
 Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy).
 
@@ -56,6 +56,7 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --log-mode                    Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --setup-only                  Only perform setting up the cluster and run test.
         --cleanup-only                Only perform cleaning up the cluster.
+        --cleanup-all                 Cleaning up all clusters without protected tag.
         --skip-eksctl-install         Do not install the latest eksctl version. Eksctl must be installed already."
 
 function print_usage {
@@ -123,6 +124,10 @@ case $key in
     --cleanup-only)
     RUN_CLEANUP_ONLY=true
     RUN_ALL=false
+    shift
+    ;;
+    --cleanup-all)
+    RUN_CLEANUP_ALL=true
     shift
     ;;
     --skip-eksctl-install)
@@ -354,6 +359,32 @@ function cleanup_cluster() {
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
 
+function cleanup_all_clusters() {
+    echo '=== Cleaning up all EKS clusters without tag protected ==='
+    clusters=$(eksctl get cluster --output json | jq -r '.[].metadata.name')
+    if [[ -z "$clusters" ]]; then
+      echo "Unprotected cluster not found."
+      exit
+    fi
+    for cluster in $clusters; do
+        cluster_arn=$(aws eks describe-cluster --name "$cluster" --query "cluster.arn" --output text 2>/dev/null)
+        if [[ "$cluster_arn" == "None" ]] || [[ -z "$cluster_arn" ]]; then
+            log "Warning: Unable to retrieve ARN for cluster '$cluster'. Skipping this cluster."
+            continue
+        fi
+        tags=$(aws eks list-tags-for-resource --resource-arn "$cluster_arn" --query "tags" --output json 2>/dev/null)
+        if [[ $? -ne 0 ]]; then
+            echo "Warning: Unable to retrieve tags for cluster '$cluster'. Skipping this cluster."
+            continue
+        fi
+        has_tag=$(echo "$tags" | jq -r --arg key "protected" '. | has($key)')
+        if [[ "$has_tag" == "false" ]]; then
+            eksctl delete cluster --name ${cluster} --region $REGION
+        fi
+    done
+    echo "=== Cleanup cluster ${cluster} succeeded ==="
+}
+
 # ensures that the script can be run from anywhere
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/..
@@ -369,6 +400,10 @@ fi
 
 if [[ "$RUN_ALL" == true || "$RUN_CLEANUP_ONLY" == true ]]; then
     cleanup_cluster
+fi
+
+if [[ "$RUN_CLEANUP_ALL" == true ]]; then
+    cleanup_all_clusters
 fi
 
 if [[ "$RUN_CLEANUP_ONLY" == false && $TEST_SCRIPT_RC -ne 0 ]]; then
