@@ -1653,6 +1653,9 @@ func (f *featureNetworkPolicy) replayFlows() []*openflow15.FlowMod {
 	for _, ctx := range f.globalConjMatchFlowCache {
 		addMatchFlows(ctx)
 	}
+
+	flows = append(flows, getCachedFlowMessages(f.cachedFlows)...)
+
 	return flows
 }
 
@@ -2081,8 +2084,10 @@ type featureNetworkPolicy struct {
 	// egressTables map records all IDs of tables related to egress rules.
 	egressTables map[uint8]struct{}
 
+	cachedFlows *flowCategoryCache
+
 	// loggingGroupCache is a storage for the logging groups, each one includes 2 buckets: one is to send the packet
-	// to antrea-agent using the packetIn mechanism, the other is to force the packet to continue forwardingin the
+	// to antrea-agent using the packetIn mechanism, the other is to force the packet to continue forwarding in the
 	// OVS pipeline. The key is the next table used in the second bucket, and the value is the Openflow group.
 	loggingGroupCache sync.Map
 	groupAllocator    GroupAllocator
@@ -2137,6 +2142,7 @@ func newFeatureNetworkPolicy(
 		category:                 cookie.NetworkPolicy,
 		ctZoneSrcField:           getZoneSrcField(connectUplinkToBridge),
 		loggingGroupCache:        sync.Map{},
+		cachedFlows:              newFlowCategoryCache(),
 		groupAllocator:           grpAllocator,
 	}
 }
@@ -2152,9 +2158,6 @@ func (f *featureNetworkPolicy) initFlows() []*openflow15.FlowMod {
 	var flows []binding.Flow
 	if f.nodeType == config.K8sNode {
 		flows = append(flows, f.ingressClassifierFlows()...)
-		if f.enableL7NetworkPolicy {
-			flows = append(flows, f.l7NPTrafficControlFlows()...)
-		}
 	}
 	flows = append(flows, f.skipPolicyRuleCheckFlows()...)
 	flows = append(flows, f.initLoggingFlows()...)
@@ -2213,37 +2216,120 @@ func (f *featureNetworkPolicy) skipPolicyRuleCheckFlows() []binding.Flow {
 func (f *featureNetworkPolicy) l7NPTrafficControlFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	vlanMask := uint16(openflow15.OFPVID_PRESENT)
-	return []binding.Flow{
+	flows := []binding.Flow{
+		// This generates the flow to output the packets returned from an application-aware engine return port to their
+		// original target ofPort. It has the highest priority to prevent these packets from being matched by other
+		// flows in this table that redirect packets to an application-aware engine target ofPort again.
+		OutputTable.ofTable.BuildFlow(priorityHigh + 3).
+			Cookie(cookieID).
+			MatchRegMark(FromL7NPReturnRegMark).
+			Action().OutputToRegField(TargetOFPortField).
+			Done(),
 		// This generates the flow to output the packets marked with L7NPRedirectCTMark to an application-aware engine
 		// via the target ofPort. Note that, before outputting the packets, VLAN ID stored on field L7NPRuleVlanIDCTMarkField
 		// will be copied to VLAN ID register (OXM_OF_VLAN_VID) to set VLAN ID of the packets.
 		OutputTable.ofTable.BuildFlow(priorityHigh+2).
 			Cookie(cookieID).
-			MatchRegMark(OutputToOFPortRegMark).
 			MatchCTMark(L7NPRedirectCTMark).
 			Action().PushVLAN(EtherTypeDot1q).
 			Action().MoveRange(binding.NxmFieldCtLabel, binding.OxmFieldVLANVID, *L7NPRuleVlanIDCTLabel.GetRange(), *binding.VLANVIDRange).
 			Action().Output(f.l7NetworkPolicyConfig.TargetOFPort).
 			Done(),
 		// This generates the flow to mark the packets from an application-aware engine via the return ofPort and forward
-		// the packets to stageRouting directly. Note that, for the packets which are originally to be output to a tunnel
-		// port, value of NXM_NX_TUN_IPV4_DST needs to be loaded in L3ForwardingTable of stageRouting.
+		// the packets to stageConntrackState directly. Note that, for the packets which are originally destined for a
+		// tunnel port, value of NXM_NX_TUN_IPV4_DST needs to be loaded in L3ForwardingTable of stageRouting.
 		ClassifierTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			Cookie(cookieID).
 			MatchInPort(f.l7NetworkPolicyConfig.ReturnOFPort).
 			MatchVLAN(false, 0, &vlanMask).
 			Action().PopVLAN().
-			Action().LoadRegMark(FromTCReturnRegMark).
-			Action().GotoStage(stageRouting).
+			Action().LoadRegMark(FromL7NPReturnRegMark).
+			Action().GotoStage(stageConntrackState).
 			Done(),
-		// This generates the flow to forward the returned packets (with FromTCReturnRegMark) to stageOutput directly
+		// This generates the flow to forward the returned packets (with FromL7NPReturnRegMark) to stageOutput directly
 		// after loading output port number to reg1 in L2ForwardingCalcTable.
 		TrafficControlTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
-			MatchRegMark(OutputToOFPortRegMark, FromTCReturnRegMark).
+			MatchRegMark(FromL7NPReturnRegMark).
 			Action().GotoStage(stageOutput).
 			Done(),
 	}
+	for _, ipProtocol := range f.ipProtocols {
+		ctZone := CtZone
+		if ipProtocol == binding.ProtocolIPv6 {
+			ctZone = CtZoneV6
+		}
+		flows = append(flows,
+			// This generates the flow to restore the corresponding connection tracking (CT) state, excluding NAT, of
+			// packets and resubmit them back to the ConntrackTable. CtStateNotRestoredRegMark and CtStateRestoredRegMark
+			// are used to prevent packets from being resubmitted in a cyclic manner, ensuring that the packets are
+			// resubmitted only once.
+			ConntrackTable.ofTable.BuildFlow(priorityHigh+2).
+				MatchProtocol(ipProtocol).
+				MatchRegMark(CtStateNotRestoredRegMark).
+				Action().LoadRegMark(CtStateRestoredRegMark).
+				Action().CT(false, ConntrackTable.GetID(), ctZone, f.ctZoneSrcField).
+				CTDone().
+				Cookie(cookieID).
+				Done(),
+			// This generates the flow to match the reply packets returning from the application-aware engine. If the
+			// packets belong to a Service connection, DNAT is applied to restore the original source IP (Service IP) with
+			// a connection tracking (CT) action. If the packets don't belong to a Service connection, the CT action is
+			// harmless and will have no effect on those packets.
+			// The reason why the target table is L3ForwardingTable is that for the packets which are originally destined
+			// for a tunnel port, the value of NXM_NX_TUN_IPV4_DST needs to be loaded in L3ForwardingTable in stageRouting.
+			// This ensures that the correct tunnel destination IP is used for these packets, enabling proper forwarding
+			// through the tunnel.
+			ConntrackTable.ofTable.BuildFlow(priorityHigh+1).
+				MatchProtocol(ipProtocol).
+				MatchRegMark(FromL7NPReturnRegMark).
+				MatchCTStateRpl(true).
+				MatchCTStateTrk(true).
+				Action().CT(false, L3ForwardingTable.GetID(), ctZone, f.ctZoneSrcField).
+				NAT().
+				CTDone().
+				Cookie(cookieID).
+				Done(),
+			// This generates the flow to match the request packets returning from the application-aware engine. A
+			// connection tracking (CT) action with NAT is not needed because the DNAT has been done before they are
+			// redirected to the application-aware engine. The reason why the target table is L3ForwardingTable is the
+			// same as above.
+			ConntrackTable.ofTable.BuildFlow(priorityHigh+1).
+				MatchProtocol(ipProtocol).
+				MatchRegMark(FromL7NPReturnRegMark).
+				MatchCTStateRpl(false).
+				MatchCTStateTrk(true).
+				Action().GotoStage(stageRouting).
+				Cookie(cookieID).
+				Done(),
+			// This generates the flow to match the reply packets that should be redirected to the application-aware engine.
+			// A connection tracking (CT) action with NAT is not needed because the DNAT will be done after they are returned
+			// from the application-aware engine.
+			ConntrackTable.ofTable.BuildFlow(priorityHigh).
+				MatchProtocol(ipProtocol).
+				MatchCTStateRpl(true).
+				MatchCTStateTrk(true).
+				MatchCTMark(L7NPRedirectCTMark).
+				Action().GotoStage(stageOutput).
+				Cookie(cookieID).
+				Done(),
+			// This generates the flow to match request packets that are going to be redirected to the application-aware
+			// engine. A connection tracking (CT) action with NAT is needed because the DNAT should be done before they
+			// are redirected to the application-aware engine.
+			ConntrackTable.ofTable.BuildFlow(priorityHigh).
+				MatchProtocol(ipProtocol).
+				MatchCTStateRpl(false).
+				MatchCTStateTrk(true).
+				MatchCTMark(L7NPRedirectCTMark).
+				Action().CT(false, ConntrackTable.GetNext(), ctZone, f.ctZoneSrcField).
+				NAT().
+				CTDone().
+				Cookie(cookieID).
+				Done(),
+		)
+	}
+
+	return flows
 }
 
 func (f *featureNetworkPolicy) loggingNPPacketFlowWithOperations(cookieID uint64, operations uint8) binding.Flow {

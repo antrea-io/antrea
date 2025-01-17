@@ -20,12 +20,13 @@ import (
 
 // Fields using reg.
 var (
-	tunnelVal   = uint32(1)
-	gatewayVal  = uint32(2)
-	localVal    = uint32(3)
-	uplinkVal   = uint32(4)
-	bridgeVal   = uint32(5)
-	tcReturnVal = uint32(6)
+	tunnelVal     = uint32(1)
+	gatewayVal    = uint32(2)
+	localVal      = uint32(3)
+	uplinkVal     = uint32(4)
+	bridgeVal     = uint32(5)
+	tcReturnVal   = uint32(6)
+	l7NPReturnVal = uint32(7)
 
 	outputToPortVal       = uint32(1)
 	outputToControllerVal = uint32(2)
@@ -37,14 +38,16 @@ var (
 	//   - 3: from local Pods.
 	//   - 4: from uplink port.
 	//   - 5: from bridge local port.
-	//   - 6: from traffic control return port.
-	PktSourceField      = binding.NewRegField(0, 0, 3)
-	FromTunnelRegMark   = binding.NewRegMark(PktSourceField, tunnelVal)
-	FromGatewayRegMark  = binding.NewRegMark(PktSourceField, gatewayVal)
-	FromPodRegMark      = binding.NewRegMark(PktSourceField, localVal)
-	FromUplinkRegMark   = binding.NewRegMark(PktSourceField, uplinkVal)
-	FromBridgeRegMark   = binding.NewRegMark(PktSourceField, bridgeVal)
-	FromTCReturnRegMark = binding.NewRegMark(PktSourceField, tcReturnVal)
+	//   - 6: from TrafficControl return port.
+	//   - 7: from application-aware engine (L7 NetworkPolicy return port).
+	PktSourceField        = binding.NewRegField(0, 0, 3)
+	FromTunnelRegMark     = binding.NewRegMark(PktSourceField, tunnelVal)
+	FromGatewayRegMark    = binding.NewRegMark(PktSourceField, gatewayVal)
+	FromPodRegMark        = binding.NewRegMark(PktSourceField, localVal)
+	FromUplinkRegMark     = binding.NewRegMark(PktSourceField, uplinkVal)
+	FromBridgeRegMark     = binding.NewRegMark(PktSourceField, bridgeVal)
+	FromTCReturnRegMark   = binding.NewRegMark(PktSourceField, tcReturnVal)
+	FromL7NPReturnRegMark = binding.NewRegMark(PktSourceField, l7NPReturnVal)
 	// reg0[4..7]: Field to store the packet destination. Marks in this field include:
 	//   - 1: to tunnel port.
 	//   - 2: to Antrea gateway port.
@@ -85,6 +88,9 @@ var (
 	OutputRegField            = binding.NewRegField(0, 21, 22)
 	OutputToOFPortRegMark     = binding.NewRegMark(OutputRegField, outputToPortVal)
 	OutputToControllerRegMark = binding.NewRegMark(OutputRegField, outputToControllerVal)
+	// reg0[23]:
+	CtStateNotRestoredRegMark = binding.NewOneBitZeroRegMark(0, 23)
+	CtStateRestoredRegMark    = binding.NewOneBitRegMark(0, 23)
 	// reg0[25..32]: Field to indicate Antrea-native policy packetIn operations
 	PacketInOperationField = binding.NewRegField(0, 25, 32)
 

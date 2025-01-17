@@ -2719,7 +2719,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 
 	expectedFlows := append(pipelineDefaultFlows(true /* egressTrafficShapingEnabled */, false /* externalNodeEnabled */, true /* isEncap */, true /* isIPv4 */), egressInitFlows(true)...)
 	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
-	expectedFlows = append(expectedFlows, networkPolicyInitFlows(true, false, false)...)
+	expectedFlows = append(expectedFlows, networkPolicyInitFlows(true, false)...)
 	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeNone, false, true, true, true)...)
 	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
 
@@ -2916,4 +2916,31 @@ func TestSubscribeOFPortStatusMessage(t *testing.T) {
 	}
 	bridge.EXPECT().SubscribePortStatusConsumer(ch).Times(1)
 	c.SubscribeOFPortStatusMessage(ch)
+}
+
+func Test_client_InstallL7NetworkPolicyFlows(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := opstest.NewMockOFEntryOperations(ctrl)
+
+	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, enableL7NetworkPolicy)
+	defer resetPipelines()
+
+	expectedFlows := []string{
+		"cookie=0x1020000000000, table=Classifier, priority=200,in_port=11,vlan_tci=0x1000/0x1000 actions=pop_vlan,set_field:0x7/0xf->reg0,goto_table:UnSNAT",
+		"cookie=0x1020000000000, table=ConntrackZone, priority=212,ip,reg0=0x0/0x800000 actions=set_field:0x800000/0x800000->reg0,ct(table=ConntrackZone,zone=65520)",
+		"cookie=0x1020000000000, table=ConntrackZone, priority=210,ct_state=+rpl+trk,ct_mark=0x80/0x80,ip actions=goto_table:Output",
+		"cookie=0x1020000000000, table=ConntrackZone, priority=211,ct_state=+rpl+trk,ip,reg0=0x7/0xf actions=ct(table=L3Forwarding,zone=65520,nat)",
+		"cookie=0x1020000000000, table=ConntrackZone, priority=211,ct_state=-rpl+trk,ip,reg0=0x7/0xf actions=goto_table:L3Forwarding",
+		"cookie=0x1020000000000, table=ConntrackZone, priority=210,ct_state=-rpl+trk,ct_mark=0x80/0x80,ip actions=ct(table=ConntrackState,zone=65520,nat)",
+		"cookie=0x1020000000000, table=TrafficControl, priority=210,reg0=0x7/0xf actions=goto_table:Output",
+		"cookie=0x1020000000000, table=Output, priority=213,reg0=0x7/0xf actions=output:NXM_NX_REG1[]",
+		"cookie=0x1020000000000, table=Output, priority=212,ct_mark=0x80/0x80 actions=push_vlan:0x8100,move:NXM_NX_CT_LABEL[64..75]->OXM_OF_VLAN_VID[0..11],output:10",
+	}
+
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+	cacheKey := "l7_np_flows"
+	require.NoError(t, fc.InstallL7NetworkPolicyFlows())
+	fCacheI, ok := fc.featureNetworkPolicy.cachedFlows.Load(cacheKey)
+	require.True(t, ok)
+	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI))
 }

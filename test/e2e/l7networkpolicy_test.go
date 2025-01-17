@@ -29,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -132,8 +133,8 @@ func createL7NetworkPolicy(t *testing.T,
 	assert.NoError(t, err)
 }
 
-func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clientPodName string, serverIPs []*net.IP, allowHTTPPathHostname, allowHTTPPathClientIP bool) {
-	for _, ip := range serverIPs {
+func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clientPodName string, targetIPs []*net.IP, allowHTTPPathHostname, allowHTTPPathClientIP bool) {
+	for _, ip := range targetIPs {
 		baseURL := net.JoinHostPort(ip.String(), "8080")
 
 		// Verify that access to path /clientip is as expected.
@@ -216,7 +217,26 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 	require.NoError(t, NewPodBuilder(serverPodName, data.testNamespace, agnhostImage).OnNode(nodeName(0)).WithCommand(cmd).WithLabels(serverPodLabels).Create(data))
 	podIPs, err := data.podWaitForIPs(defaultTimeout, serverPodName, data.testNamespace)
 	require.NoError(t, err, "Expected IP for Pod '%s'", serverPodName)
-	serverIPs := podIPs.AsSlice()
+	dstPodIPs := podIPs.AsSlice()
+
+	// Create a Service whose backend is the above backend Pod.
+	var ipFamilies []corev1.IPFamily
+	if len(clusterInfo.podV4NetworkCIDR) != 0 {
+		ipFamilies = append(ipFamilies, corev1.IPv4Protocol)
+	}
+	if len(clusterInfo.podV6NetworkCIDR) != 0 {
+		ipFamilies = append(ipFamilies, corev1.IPv6Protocol)
+	}
+	mutator := func(service *corev1.Service) {
+		service.Spec.IPFamilies = ipFamilies
+	}
+	svc, err := data.CreateServiceWithAnnotations("svc-agnhost", data.testNamespace, p8080, p8080, corev1.ProtocolTCP, serverPodLabels, false, false, corev1.ServiceTypeClusterIP, nil, nil, mutator)
+	require.NoError(t, err)
+	var serviceIPs []*net.IP
+	for _, clusterIP := range svc.Spec.ClusterIPs {
+		serviceIP := net.ParseIP(clusterIP)
+		serviceIPs = append(serviceIPs, &serviceIP)
+	}
 
 	l7ProtocolAllowsPathHostname := []crdv1beta1.L7Protocol{
 		{
@@ -250,7 +270,8 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		// the first L7 NetworkPolicy has higher priority, matched packets will be only matched by the first L7 NetworkPolicy.
 		// As a result, only HTTP path 'hostname' is allowed by the first L7 NetworkPolicy, other HTTP path like 'clientip'
 		// will be rejected.
-		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, false)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, dstPodIPs, true, false)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, false)
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
 		data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
@@ -258,7 +279,8 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 
 		// Since the fist L7 NetworkPolicy has been deleted, corresponding packets will be matched by the second L7 NetworkPolicy,
 		// and the second L7 NetworkPolicy allows any HTTP path, then both path 'hostname' and 'clientip' are allowed.
-		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, true)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, dstPodIPs, true, true)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, true)
 
 		data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowAnyPath, metav1.DeleteOptions{})
 	})
@@ -277,7 +299,8 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		// the first L7 NetworkPolicy has higher priority, matched packets will be only matched by the first L7 NetworkPolicy.
 		// As a result, only HTTP path 'hostname' is allowed by the first L7 NetworkPolicy, other HTTP path like 'clientip'
 		// will be rejected.
-		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, false)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, dstPodIPs, true, false)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, false)
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
 		data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
@@ -285,7 +308,8 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 
 		// Since the fist L7 NetworkPolicy has been deleted, corresponding packets will be matched by the second L7 NetworkPolicy,
 		// and the second L7 NetworkPolicy allows any HTTP path, then both path 'hostname' and 'clientip' are allowed.
-		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, true)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, dstPodIPs, true, true)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serviceIPs, true, true)
 	})
 }
 

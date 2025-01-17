@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -294,6 +294,20 @@ func (m *MockClient) InstallEndpointFlows(protocol openflow0.Protocol, endpoints
 func (mr *MockClientMockRecorder) InstallEndpointFlows(protocol, endpoints any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), protocol, endpoints)
+}
+
+// InstallL7NetworkPolicyFlows mocks base method.
+func (m *MockClient) InstallL7NetworkPolicyFlows() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallL7NetworkPolicyFlows")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallL7NetworkPolicyFlows indicates an expected call of InstallL7NetworkPolicyFlows.
+func (mr *MockClientMockRecorder) InstallL7NetworkPolicyFlows() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallL7NetworkPolicyFlows", reflect.TypeOf((*MockClient)(nil).InstallL7NetworkPolicyFlows))
 }
 
 // InstallMulticastFlexibleIPAMFlows mocks base method.
