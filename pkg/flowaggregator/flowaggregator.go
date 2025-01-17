@@ -498,7 +498,7 @@ func (fa *flowAggregator) proxyRecord(record ipfixentities.Record, obsDomainID u
 		destinationAddress = destinationIPv6Address
 	default:
 		// All other cases are invalid.
-		return fmt.Errorf("invalid format for record: source and destination must be present and IPv4 / IPv6 fields are mutually-exclusive")
+		return fmt.Errorf("invalid format for record: source and destination must be present and IPv4 / IPv6 fields are mutually exclusive")
 	}
 	startTime, err := fa.getRecordStartTime(record)
 	if err != nil {
