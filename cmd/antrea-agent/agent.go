@@ -498,7 +498,7 @@ func run(o *Options) error {
 	}
 	var l7Reconciler *l7engine.Reconciler
 	if l7NetworkPolicyEnabled || l7FlowExporterEnabled {
-		l7Reconciler = l7engine.NewReconciler()
+		l7Reconciler = l7engine.NewReconciler(ofClient)
 	}
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,

@@ -15,12 +15,18 @@
 package l7engine
 
 import (
+	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	oftesting "antrea.io/antrea/pkg/agent/openflow/testing"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
@@ -124,7 +130,7 @@ func TestStartSuricata(t *testing.T) {
 	_, err := defaultFS.Create(defaultSuricataConfigPath)
 	assert.NoError(t, err)
 
-	fe := NewReconciler()
+	fe := NewReconciler(nil)
 	fs := newFakeSuricata()
 	fe.suricataScFn = fs.suricataScFunc
 	fe.startSuricataFn = fs.startSuricataFn
@@ -183,10 +189,14 @@ func TestRuleLifecycle(t *testing.T) {
 			_, err := defaultFS.Create(defaultSuricataConfigPath)
 			assert.NoError(t, err)
 
-			fe := NewReconciler()
+			ctrl := gomock.NewController(t)
+			mockOfClient := oftesting.NewMockClient(ctrl)
+			fe := NewReconciler(mockOfClient)
 			fs := newFakeSuricata()
 			fe.suricataScFn = fs.suricataScFunc
 			fe.startSuricataFn = fs.startSuricataFn
+
+			mockOfClient.EXPECT().InstallL7NetworkPolicyFlows().Times(1)
 
 			// Test add a L7 NetworkPolicy.
 			assert.NoError(t, fe.AddRule(ruleID, policyName, vlanID, tc.l7Protocols))
@@ -224,4 +234,28 @@ func TestRuleLifecycle(t *testing.T) {
 			assert.False(t, exists)
 		})
 	}
+}
+
+func TestInitializeL7FlowsOnce(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockOfClient := oftesting.NewMockClient(ctrl)
+	fe := NewReconciler(mockOfClient)
+
+	mockOfClient.EXPECT().InstallL7NetworkPolicyFlows().Return(fmt.Errorf("error"))
+	mockOfClient.EXPECT().InstallL7NetworkPolicyFlows().Return(nil)
+
+	var wg sync.WaitGroup
+	var errOccurred int32
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := fe.initializeL7FlowsOnce.Do(fe.initializeL7Flows)
+			if err != nil {
+				atomic.AddInt32(&errOccurred, 1)
+			}
+		}()
+	}
+	wg.Wait()
+	require.Equal(t, int32(1), errOccurred)
 }
