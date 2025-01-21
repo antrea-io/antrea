@@ -634,11 +634,15 @@ func TestReconcile(t *testing.T) {
 			close(podFlowsInstalled)
 		}).Times(1)
 	mockOFClient.EXPECT().UninstallPodFlows(staleInterface.InterfaceName).Return(nil).Times(1)
+	mockOFClient.EXPECT().UninstallPodFlows(unconnectedInterface.InterfaceName).Return(nil).Times(1)
 	mockOVSBridgeClient.EXPECT().DeletePort(staleInterface.PortUUID).Return(nil).Times(1)
-	mockRoute.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(nil).Times(1)
+	mockOVSBridgeClient.EXPECT().DeletePort(unconnectedInterface.PortUUID).Return(nil).Times(1)
+	mockRoute.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(nil).Times(2)
 	err := cniServer.reconcile()
 	assert.NoError(t, err)
 	_, exists := ifaceStore.GetInterfaceByName(staleInterface.InterfaceName)
+	assert.False(t, exists)
+	_, exists = ifaceStore.GetInterfaceByName(unconnectedInterface.InterfaceName)
 	assert.False(t, exists)
 	select {
 	case <-podFlowsInstalled:
