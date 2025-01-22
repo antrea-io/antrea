@@ -55,6 +55,21 @@ spec:
                   minimum: 1
                   maximum: 65535
                   default: 179
+                confederation:
+                  type: object
+                  properties:
+                    identifier:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 65535
+                    memberASNs:
+                      type: array
+                      items:
+                        type: integer
+                        format: int32
+                        minimum: 1
+                        maximum: 65535
                 advertisements:
                   type: object
                   properties:
