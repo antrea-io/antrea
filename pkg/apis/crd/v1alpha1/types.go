@@ -269,6 +269,9 @@ type BGPPolicySpec struct {
 	// ListenPort is the port on which the BGP process listens, and the default value is 179.
 	ListenPort *int32 `json:"listenPort,omitempty"`
 
+	// Confederation specifies BGP confederation configuration.
+	Confederation *Confederation `json:"confederation,omitempty"`
+
 	// Advertisements configures IPs or CIDRs to be advertised to BGP peers.
 	Advertisements Advertisements `json:"advertisements,omitempty"`
 
@@ -287,6 +290,14 @@ type Advertisements struct {
 	// Egress specifies how to advertise Egress IPs. Currently, if this is set, all Egress IPs will be advertised since
 	// Egress selector is not added yet.
 	Egress *EgressAdvertisement `json:"egress,omitempty"`
+}
+
+type Confederation struct {
+	// Identifier specifies the confederation's ASN.
+	Identifier int32 `json:"identifier,omitempty"`
+
+	// MemberASNs lists the ASNs of other members in the confederation.
+	MemberASNs []int32 `json:"memberASNs,omitempty"`
 }
 
 type ServiceIPType string
