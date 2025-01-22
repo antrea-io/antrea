@@ -77,7 +77,7 @@ E0117 19:38:17.586328       1 service_health.go:145] "Failed to start healthchec
 
 These log messages will keep repeating periodically, as kube-proxy handles
 Service updates. While the messages are harmless, they can create a lot of
-necessary noise. You may want to set `antreaProxy.disableServiceHealthCheckServer: true`
+unnecessary noise. You may want to set `antreaProxy.disableServiceHealthCheckServer: true`
 in the `antrea-config` ConfigMap to avoid such logs. It will instruct Antrea Proxy
 to stop running health check servers and shift this responsibility to
 kube-proxy. This is not a perfect solution as ideally the component responsible

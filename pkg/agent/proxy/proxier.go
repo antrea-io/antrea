@@ -1383,13 +1383,13 @@ func newProxier(
 
 	var serviceHealthServer healthcheck.ServiceHealthServer
 	if proxyAllEnabled {
-		nodePortAddressesString := make([]string, len(nodePortAddresses))
-		for i, address := range nodePortAddresses {
-			nodePortAddressesString[i] = address.String()
-		}
 		if serviceHealthServerDisabled {
 			klog.V(2).InfoS("Service health check server will not be run")
 		} else {
+			nodePortAddressesString := make([]string, len(nodePortAddresses))
+			for i, address := range nodePortAddresses {
+				nodePortAddressesString[i] = address.String()
+			}
 			serviceHealthServer = healthcheck.NewServiceHealthServer(hostname, nil, nodePortAddressesString)
 		}
 	}
