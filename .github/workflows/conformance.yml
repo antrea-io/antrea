@@ -1,4 +1,4 @@
-name: Manually run upstream conformance test on Linux
+name: Run upstream conformance tests on Linux
 run-name: Run ${{ inputs.test-suite }} test with Antrea ${{ inputs.antrea-version }} and K8s ${{ inputs.k8s-version }}
 
 on:
