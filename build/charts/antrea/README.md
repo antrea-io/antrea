@@ -55,6 +55,7 @@ Kubernetes: `>= 1.19.0-0`
 | agent.updateStrategy | object | `{"type":"RollingUpdate"}` | Update strategy for the antrea-agent DaemonSet. |
 | agentImage | object | `{"pullPolicy":"IfNotPresent","repository":"antrea/antrea-agent-ubuntu","tag":""}` | Container image to use for the antrea-agent component. |
 | antreaProxy.defaultLoadBalancerMode | string | `"nat"` | Determines how external traffic is processed when it's load balanced across Nodes by default. It must be one of "nat" or "dsr". |
+| antreaProxy.disableServiceHealthCheckServer | bool | `false` | Disables the health check server run by Antrea Proxy, which provides health information about Services of type LoadBalancer with externalTrafficPolicy set to Local, when proxyAll is enabled. This avoids race conditions between kube-proxy and Antrea proxy, with both trying to bind to the same addresses, when proxyAll is enabled while kube-proxy has not been removed. |
 | antreaProxy.enable | bool | `true` | To disable AntreaProxy, set this to false. |
 | antreaProxy.nodePortAddresses | list | `[]` | String array of values which specifies the host IPv4/IPv6 addresses for NodePort. By default, all host addresses are used. |
 | antreaProxy.proxyAll | bool | `false` | Proxy all Service traffic, for all Service types, regardless of where it comes from. |

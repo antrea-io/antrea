@@ -1353,7 +1353,9 @@ func newProxier(
 	proxyLoadBalancerIPs bool,
 	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
 	groupCounter types.GroupCounter,
-	supportNestedService bool) (*proxier, error) {
+	supportNestedService bool,
+	serviceHealthServerDisabled bool,
+) (*proxier, error) {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
@@ -1381,11 +1383,15 @@ func newProxier(
 
 	var serviceHealthServer healthcheck.ServiceHealthServer
 	if proxyAllEnabled {
-		nodePortAddressesString := make([]string, len(nodePortAddresses))
-		for i, address := range nodePortAddresses {
-			nodePortAddressesString[i] = address.String()
+		if serviceHealthServerDisabled {
+			klog.V(2).InfoS("Service health check server will not be run")
+		} else {
+			nodePortAddressesString := make([]string, len(nodePortAddresses))
+			for i, address := range nodePortAddresses {
+				nodePortAddressesString[i] = address.String()
+			}
+			serviceHealthServer = healthcheck.NewServiceHealthServer(hostname, nil, nodePortAddressesString)
 		}
-		serviceHealthServer = healthcheck.NewServiceHealthServer(hostname, nil, nodePortAddressesString)
 	}
 
 	// TODO: The label selector nonHeadlessServiceSelector was added to pass the Kubernetes e2e test
@@ -1496,8 +1502,9 @@ func newDualStackProxier(
 	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
 	v4groupCounter types.GroupCounter,
 	v6groupCounter types.GroupCounter,
-	nestedServiceSupport bool) (*metaProxierWrapper, error) {
-
+	nestedServiceSupport bool,
+	serviceHealthServerDisabled bool,
+) (*metaProxierWrapper, error) {
 	// Create an IPv4 instance of the single-stack proxier.
 	ipv4Proxier, err := newProxier(hostname,
 		serviceProxyName,
@@ -1516,7 +1523,9 @@ func newDualStackProxier(
 		proxyLoadBalancerIPs,
 		defaultLoadBalancerMode,
 		v4groupCounter,
-		nestedServiceSupport)
+		nestedServiceSupport,
+		serviceHealthServerDisabled,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error when creating IPv4 proxier: %v", err)
 	}
@@ -1538,7 +1547,9 @@ func newDualStackProxier(
 		proxyLoadBalancerIPs,
 		defaultLoadBalancerMode,
 		v6groupCounter,
-		nestedServiceSupport)
+		nestedServiceSupport,
+		serviceHealthServerDisabled,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error when creating IPv6 proxier: %v", err)
 	}
@@ -1571,6 +1582,7 @@ func NewProxier(hostname string,
 	skipServices := proxyConfig.SkipServices
 	proxyLoadBalancerIPs := *proxyConfig.ProxyLoadBalancerIPs
 	serviceProxyName := proxyConfig.ServiceProxyName
+	serviceHealthServerDisabled := proxyConfig.DisableServiceHealthCheckServer
 
 	var proxier Proxier
 	var err error
@@ -1594,7 +1606,9 @@ func NewProxier(hostname string,
 			defaultLoadBalancerMode,
 			v4GroupCounter,
 			v6GroupCounter,
-			nestedServiceSupport)
+			nestedServiceSupport,
+			serviceHealthServerDisabled,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating dual-stack proxier: %v", err)
 		}
@@ -1616,7 +1630,9 @@ func NewProxier(hostname string,
 			proxyLoadBalancerIPs,
 			defaultLoadBalancerMode,
 			v4GroupCounter,
-			nestedServiceSupport)
+			nestedServiceSupport,
+			serviceHealthServerDisabled,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating IPv4 proxier: %v", err)
 		}
@@ -1638,7 +1654,9 @@ func NewProxier(hostname string,
 			proxyLoadBalancerIPs,
 			defaultLoadBalancerMode,
 			v6GroupCounter,
-			nestedServiceSupport)
+			nestedServiceSupport,
+			serviceHealthServerDisabled,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating IPv6 proxier: %v", err)
 		}

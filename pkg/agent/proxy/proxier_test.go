@@ -420,6 +420,7 @@ type proxyOptions struct {
 	serviceProxyNameSet         bool
 	cleanupStaleUDPSvcConntrack bool
 	defaultLoadBalancerMode     agentconfig.LoadBalancerMode
+	serviceHealthServerDisabled bool
 }
 
 type proxyOptionsFn func(*proxyOptions)
@@ -450,6 +451,10 @@ func withDSRMode(o *proxyOptions) {
 
 func withCleanupStaleUDPSvcConntrack(o *proxyOptions) {
 	o.cleanupStaleUDPSvcConntrack = true
+}
+
+func withoutServiceHealthServer(o *proxyOptions) {
+	o.serviceHealthServerDisabled = true
 }
 
 func getMockClients(ctrl *gomock.Controller) (*ofmock.MockClient, *routemock.MockInterface) {
@@ -495,7 +500,10 @@ func newFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 		[]string{skippedServiceNN, skippedClusterIP},
 		o.proxyLoadBalancerIPs,
 		o.defaultLoadBalancerMode,
-		types.NewGroupCounter(groupIDAllocator, make(chan string, 100)), o.supportNestedService)
+		types.NewGroupCounter(groupIDAllocator, make(chan string, 100)),
+		o.supportNestedService,
+		o.serviceHealthServerDisabled,
+	)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	p.endpointsChanges = newEndpointsChangesTracker(hostname, o.endpointSliceEnabled, isIPv6)
 	p.cleanupStaleUDPSvcConntrack = o.cleanupStaleUDPSvcConntrack
@@ -3891,5 +3899,20 @@ func TestServiceLabelSelector(t *testing.T) {
 		})
 		fp.syncProxyRules()
 		assert.Contains(t, fp.serviceInstalledMap, svcPortName1)
+	})
+}
+
+func TestServiceHealthServer(t *testing.T) {
+	t.Run("proxyAll disabled", func(t *testing.T) {
+		fp := newFakeProxier(nil, nil, nil, nil, false)
+		assert.Nil(t, fp.serviceHealthServer)
+	})
+	t.Run("enabled", func(t *testing.T) {
+		fp := newFakeProxier(nil, nil, nil, nil, false, withProxyAll)
+		assert.NotNil(t, fp.serviceHealthServer)
+	})
+	t.Run("force disabled", func(t *testing.T) {
+		fp := newFakeProxier(nil, nil, nil, nil, false, withProxyAll, withoutServiceHealthServer)
+		assert.Nil(t, fp.serviceHealthServer)
 	})
 }

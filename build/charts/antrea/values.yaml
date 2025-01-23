@@ -153,6 +153,12 @@ antreaProxy:
   # -- Determines how external traffic is processed when it's load balanced
   # across Nodes by default. It must be one of "nat" or "dsr".
   defaultLoadBalancerMode: "nat"
+  # -- Disables the health check server run by Antrea Proxy, which provides health
+  # information about Services of type LoadBalancer with externalTrafficPolicy set to
+  # Local, when proxyAll is enabled. This avoids race conditions between kube-proxy
+  # and Antrea proxy, with both trying to bind to the same addresses, when proxyAll
+  # is enabled while kube-proxy has not been removed.
+  disableServiceHealthCheckServer: false
 
 nodeIPAM:
   # -- Enable Node IPAM in Antrea
