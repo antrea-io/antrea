@@ -238,6 +238,11 @@ type AntreaProxyConfig struct {
 	//                  can reply to clients directly, bypassing the ingress Node.
 	// A Service's load balancer mode can be overridden by annotating it with `service.antrea.io/load-balancer-mode`.
 	DefaultLoadBalancerMode string `yaml:"defaultLoadBalancerMode,omitempty"`
+	// Disables the health check server run by Antrea Proxy, which provides health information about Services of
+	// type LoadBalancer with externalTrafficPolicy set to Local, when proxyAll is enabled. This avoids race
+	// conditions between kube-proxy and Antrea proxy, with both trying to bind to the same addresses, when proxyAll
+	// is enabled while kube-proxy has not been removed.
+	DisableServiceHealthCheckServer bool `yaml:"disableServiceHealthCheckServer,omitempty"`
 }
 
 type WireGuardConfig struct {

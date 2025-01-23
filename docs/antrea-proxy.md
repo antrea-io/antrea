@@ -59,6 +59,32 @@ prioritizing the rules installed by Antrea Proxy over those installed by
 kube-proxy, thus it works only with kube-proxy iptables mode. Support for other
 kube-proxy modes may be added in the future.
 
+Note that running both kube-proxy and Antrea Proxy with `proxyAll` can trigger
+some error logs for Services of type LoadBalancer with `externalTrafficPolicy`
+set to `Local`. For such Services, the proxy is in charge of running a health
+check server on each Node, in order to report the number of local Endpoints
+which implement the Service. The server port is determined by the value of
+[`.spec.healthCheckNodePort`](https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip).
+Because both kube-proxy and Antrea Proxy (with `proxyAll`) will try to run the
+health check servers on the same ports, one of them will fail to bind to the
+desired address. In practice, we typically observe that Antrea Proxy tries to
+bind to the address first (and succeeds), while kube-proxy fails and logs the
+following error message:
+
+```text
+E0117 19:38:17.586328       1 service_health.go:145] "Failed to start healthcheck" err="listen tcp 0.0.0.0:31653: bind: address already in use" node="kind-worker" service="default/nginx" port=31653
+```
+
+These log messages will keep repeating periodically, as kube-proxy handles
+Service updates. While the messages are harmless, they can create a lot of
+unnecessary noise. You may want to set `antreaProxy.disableServiceHealthCheckServer: true`
+in the `antrea-config` ConfigMap to avoid such logs. It will instruct Antrea Proxy
+to stop running health check servers and shift this responsibility to
+kube-proxy. This is not a perfect solution as ideally the component responsible
+for the proxy implementation (Antrea Proxy) should also be responsible for
+providing health check information. We still recommend removing kube-proxy
+whenever possible.
+
 ### Removing kube-proxy
 
 In this section, we will provide steps to run a K8s cluster without kube-proxy,
