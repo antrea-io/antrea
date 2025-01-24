@@ -5303,6 +5303,12 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 // by TestFQDNCacheMinTTL with 2 fqdnCacheMinTTL values where `0` represents a default value
 // when fqdnCacheMinTTL is unset .
 func TestFQDNCacheMinTTL(t *testing.T) {
+	skipIfAntreaPolicyDisabled(t)
+	skipIfHasWindowsNodes(t)
+	skipIfNotIPv4Cluster(t)
+	skipIfIPv6Cluster(t)
+	skipIfNotRequired(t, "mode-irrelevant")
+
 	t.Run("minTTLUnset", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 0) })
 	t.Run("minTTL20s", func(t *testing.T) { testWithFQDNCacheMinTTL(t, 20) })
 }
@@ -5313,11 +5319,6 @@ func testWithFQDNCacheMinTTL(t *testing.T, fqdnCacheMinTTL int) {
 		dnsPort  = 53
 		dnsTTL   = 5
 	)
-
-	skipIfAntreaPolicyDisabled(t)
-	skipIfNotIPv4Cluster(t)
-	skipIfIPv6Cluster(t)
-	skipIfNotRequired(t, "mode-irrelevant")
 
 	data, err := setupTest(t)
 	if err != nil {
