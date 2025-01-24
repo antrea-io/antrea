@@ -2129,6 +2129,7 @@ func (f *featurePodConnectivity) localProbeFlows() []binding.Flow {
 			flows = append(flows, IngressSecurityClassifierTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
+				MatchRegMark(FromGatewayRegMark).
 				MatchCTStateRpl(false).
 				MatchCTStateTrk(true).
 				MatchPktMark(types.HostLocalSourceMark, &types.HostLocalSourceMark).
