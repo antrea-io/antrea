@@ -22,7 +22,20 @@ const (
 	AggregatorTransportProtocolUDP AggregatorTransportProtocol = "UDP"
 )
 
+type AggregatorMode string
+
+const (
+	// In Aggregate mode, flow records received from source and destination are aggregated and
+	// sent as one flow record.
+	AggregatorModeAggregate AggregatorMode = "Aggregate"
+	// In Proxy mode, flow records are enhanced with some additional information, then sent
+	// directly without buffering or aggregation.
+	AggregatorModeProxy AggregatorMode = "Proxy"
+)
+
 type FlowAggregatorConfig struct {
+	// Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy".
+	Mode AggregatorMode `yaml:"mode,omitempty"`
 	// Provide the active flow record timeout as a duration string. This determines
 	// how often the flow aggregator exports the active flow records to the flow
 	// collector. Thus, for flows with a continuous stream of packets, a flow record

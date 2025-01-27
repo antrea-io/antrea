@@ -4,6 +4,11 @@ image:
   pullPolicy: "IfNotPresent"
   tag: ""
 
+# -- Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy". In Aggregate
+# mode, flow records received from source and destination are aggregated and sent as one flow
+# record. In Proxy mode, flow records are enhanced with some additional information, then sent
+# directly without buffering or aggregation.
+mode: "Aggregate"
 # -- Provide the active flow record timeout as a duration string.
 # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 activeFlowRecordTimeout: 60s

@@ -40,6 +40,7 @@ import (
 	"antrea.io/antrea/pkg/antctl"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/flowaggregator/apis"
 	"antrea.io/antrea/test/e2e/utils"
@@ -166,6 +167,10 @@ var (
 	// We use a global variable for this to avoid having to pass it down to all helper functions.
 	// It will be initialized the first time setupFlowAggregatorTest is called.
 	antreaClusterUUID = ""
+
+	// In the ToExternalFlows test, flow record will arrive 5.5s (exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout) after executing wget command
+	// We set the timeout to 9s (5.5s plus one more aggregatorActiveFlowRecordTimeout) to make the ToExternalFlows test more stable
+	getCollectorOutputDefaultTimeout = exporterActiveFlowExportTimeout + 2*aggregatorActiveFlowRecordTimeout
 )
 
 type testFlow struct {
@@ -273,7 +278,7 @@ func TestFlowAggregator(t *testing.T) {
 	data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
 		databaseURL: defaultCHDatabaseURL,
 	})
-	if err := getAndCheckFlowAggregatorMetrics(t, data); err != nil {
+	if err := getAndCheckFlowAggregatorMetrics(t, data, true); err != nil {
 		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
 	}
 
@@ -301,6 +306,66 @@ func TestFlowAggregator(t *testing.T) {
 		})
 	}
 
+}
+
+func TestFlowAggregatorProxyMode(t *testing.T) {
+	skipIfNotFlowVisibilityTest(t)
+	skipIfHasWindowsNodes(t)
+
+	var err error
+	data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
+		mode: flowaggregatorconfig.AggregatorModeProxy,
+	})
+	require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
+
+	k8sUtils, err = NewKubernetesUtils(data)
+	require.NoError(t, err, "Error when creating Kubernetes utils client")
+
+	podAIPs, podBIPs, _, _, _, err = createPerftestPods(data)
+	require.NoError(t, err, "Error when creating perftest Pods")
+
+	if v4Enabled {
+		t.Run("IPv4", func(t *testing.T) { testHelperProxyMode(t, data, false) })
+	}
+
+	if v6Enabled {
+		t.Run("IPv6", func(t *testing.T) { testHelperProxyMode(t, data, true) })
+	}
+
+}
+
+func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool) {
+	label := "Proxy-IntraNodeFlows"
+	addLabelToTestPods(t, data, label, []string{"perftest-a", "perftest-b"})
+
+	var srcIP, dstIP string
+	var cmd []string
+	if !isIPv6 {
+		srcIP = podAIPs.IPv4.String()
+		dstIP = podBIPs.IPv4.String()
+		cmd = []string{"iperf3", "-c", dstIP, "-t", "5"}
+	} else {
+		srcIP = podAIPs.IPv6.String()
+		dstIP = podBIPs.IPv6.String()
+		cmd = []string{"iperf3", "-6", "-c", dstIP, "-t", "5"}
+	}
+	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", cmd)
+	require.NoError(t, err, "Error when running iperf3 client")
+	_, srcPort, _ := getBandwidthAndPorts(stdout)
+
+	// should be larger than exporterActiveFlowExportTimeout (+ safety margin).
+	const timeout = 10 * time.Second
+	records := getCollectorOutput(t, srcIP, dstIP, srcPort, false /* isDstService */, true /* lookForFlowEnd */, isIPv6, data, label /* labelFilter */, timeout)
+	require.NotEmpty(t, records)
+	record := records[len(records)-1]
+	assert.Contains(t, record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace")
+	assert.Contains(t, record, fmt.Sprintf("destinationPodNamespace: %s", data.testNamespace), "Record does not have correct destinationPodNamespace")
+	assert.Contains(t, record, fmt.Sprintf("sourcePodName: %s", "perftest-a"), "Record does not have correct sourcePodName")
+	assert.Contains(t, record, fmt.Sprintf("destinationPodName: %s", "perftest-b"), "Record does not have correct destinationPodName")
+	assert.Contains(t, record, fmt.Sprintf("clusterId: %s", antreaClusterUUID), "Record does not have the correct clusterId")
+	assert.Contains(t, record, "originalObservationDomainId", "Record does not have originalObservationDomainId")
+	assert.Contains(t, record, "originalExporterIPv4Address", "Record does not have originalExporterIPv4Address")
+	assert.Contains(t, record, "originalExporterIPv6Address", "Record does not have originalExporterIPv6Address")
 }
 
 func checkIntraNodeFlows(t *testing.T, data *TestData, podAIPs, podBIPs *PodIPs, isIPv6 bool, labelFilter string) {
@@ -1015,7 +1080,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 }
 
 func checkRecordsForFlowsCollector(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, isIPv6, isIntraNode, checkService, checkK8sNetworkPolicy, checkAntreaNetworkPolicy bool, bandwidthInMbps float64, labelFilter string) {
-	records := getCollectorOutput(t, srcIP, dstIP, srcPort, checkService, true, isIPv6, data, labelFilter)
+	records := getCollectorOutput(t, srcIP, dstIP, srcPort, checkService, true, isIPv6, data, labelFilter, getCollectorOutputDefaultTimeout)
 	// Checking only data records as data records cannot be decoded without template
 	// record.
 	assert.GreaterOrEqualf(t, len(records), expectedNumDataRecords, "IPFIX collector should receive expected number of flow records, filtered records: %v", records)
@@ -1164,7 +1229,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 	}
 	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, srcPodName, toolboxContainerName, strings.Fields(cmd))
 	require.NoErrorf(t, err, "Error when running wget command, stdout: %s, stderr: %s", stdout, stderr)
-	records := getCollectorOutput(t, srcIP, dstIP, "", false, false, isIPv6, data, labelFilter)
+	records := getCollectorOutput(t, srcIP, dstIP, "", false, false, isIPv6, data, labelFilter, getCollectorOutputDefaultTimeout)
 	for _, record := range records {
 		checkPodAndNodeData(t, record, srcPodName, srcNodeName, "", "", data.testNamespace)
 		checkFlowType(t, record, ipfixregistry.FlowTypeToExternal)
@@ -1213,8 +1278,8 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 }
 
 func checkRecordsForDenyFlowsCollector(t *testing.T, data *TestData, testFlow1, testFlow2 testFlow, isIPv6, isIntraNode, isANP bool, labelFilter string) {
-	records1 := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data, labelFilter)
-	records2 := getCollectorOutput(t, testFlow2.srcIP, testFlow2.dstIP, "", false, false, isIPv6, data, labelFilter)
+	records1 := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data, labelFilter, getCollectorOutputDefaultTimeout)
+	records2 := getCollectorOutput(t, testFlow2.srcIP, testFlow2.dstIP, "", false, false, isIPv6, data, labelFilter, getCollectorOutputDefaultTimeout)
 	records := append(records1, records2...)
 	src_flow1, dst_flow1 := matchSrcAndDstAddress(testFlow1.srcIP, testFlow1.dstIP, false, isIPv6)
 	src_flow2, dst_flow2 := matchSrcAndDstAddress(testFlow2.srcIP, testFlow2.dstIP, false, isIPv6)
@@ -1419,7 +1484,7 @@ func checkL7FlowExporterDataClickHouse(t *testing.T, record *ClickHouseFullRow, 
 	assert.NotEmpty(t, record.HttpVals, "Record does not have httpVals")
 }
 
-func getUint64FieldFromRecord(t *testing.T, record string, field string) uint64 {
+func getUint64FieldFromRecord(t require.TestingT, record string, field string) uint64 {
 	if strings.Contains(record, "TEMPLATE SET") {
 		return 0
 	}
@@ -1439,11 +1504,9 @@ func getUint64FieldFromRecord(t *testing.T, record string, field string) uint64 
 // received all the expected records for a given flow with source IP, destination IP
 // and source port. We send source port to ignore the control flows during the
 // iperf test.
-func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService bool, lookForFlowEnd bool, isIPv6 bool, data *TestData, labelFilter string) []string {
+func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstService bool, lookForFlowEnd bool, isIPv6 bool, data *TestData, labelFilter string, timeout time.Duration) []string {
 	var allRecords, records []string
-	// In the ToExternalFlows test, flow record will arrive 5.5s (exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout) after executing wget command
-	// We set the timeout to 9s (5.5s plus one more aggregatorActiveFlowRecordTimeout) to make the ToExternalFlows test more stable
-	err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout*2, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
 		var rc int
 		var err error
 		var cmd string
@@ -1484,8 +1547,8 @@ func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService
 	if err == context.DeadlineExceeded {
 		const numRecordsToPrint = 20
 		fmt.Printf("Last %d records received by IPFIX collector:\n", numRecordsToPrint)
-		for i := 0; i < len(records) && i < numRecordsToPrint; i++ {
-			fmt.Println(records[i])
+		for i := 0; i < len(allRecords) && i < numRecordsToPrint; i++ {
+			fmt.Println(allRecords[i])
 		}
 	}
 	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records, source IP: %s, dest IP: %s, source port: %s, total records count: %d, filtered records count: %d", srcIP, dstIP, srcPort, len(allRecords), len(records))
@@ -1873,7 +1936,7 @@ func createToExternalTestServer(t *testing.T, data *TestData) *PodIPs {
 	return serverIPs
 }
 
-func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData) error {
+func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHouseExporter bool) error {
 	flowAggPod, err := data.getFlowAggregator()
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %w", err)
@@ -1890,7 +1953,7 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData) error {
 		if err := json.Unmarshal([]byte(stdout), metrics); err != nil {
 			return false, fmt.Errorf("error when decoding recordmetrics: %w", err)
 		}
-		if metrics.NumConnToCollector != int64(clusterInfo.numNodes) || !metrics.WithClickHouseExporter || !metrics.WithIPFIXExporter || metrics.NumRecordsExported == 0 {
+		if metrics.NumConnToCollector != int64(clusterInfo.numNodes) || (withClickHouseExporter != metrics.WithClickHouseExporter) || !metrics.WithIPFIXExporter || metrics.NumRecordsExported == 0 {
 			t.Logf("Metrics are not correct. Current metrics: NumConnToCollector=%d, ClickHouseExporter=%v, IPFIXExporter=%v, NumRecordsExported=%d", metrics.NumConnToCollector, metrics.WithClickHouseExporter, metrics.WithIPFIXExporter, metrics.NumRecordsExported)
 			return false, nil
 		}
@@ -1931,7 +1994,7 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 	cmd := []string{"curl", getHTTPURLFromIPPort(testFlow1.dstIP, serverPodPort)}
 	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, testFlow1.srcPodName, "l7flowexporter", cmd)
 	require.NoErrorf(t, err, "Error when running curl command, stdout: %s, stderr: %s", stdout, stderr)
-	records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, true, isIPv6, data, "")
+	records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, true, isIPv6, data, "", getCollectorOutputDefaultTimeout)
 	for _, record := range records {
 		assert := assert.New(t)
 		assert.Contains(record, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
