@@ -50,6 +50,7 @@ Kubernetes: `>= 1.19.0-0`
 | image | object | `{"pullPolicy":"IfNotPresent","repository":"antrea/flow-aggregator","tag":""}` | Container image used by Flow Aggregator. |
 | inactiveFlowRecordTimeout | string | `"90s"` | Provide the inactive flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | logVerbosity | int | `0` | Log verbosity switch for Flow Aggregator. |
+| mode | string | `"Aggregate"` | Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy". In Aggregate mode, flow records received from source and destination are aggregated and sent as one flow record. In Proxy mode, flow records are enhanced with some additional information, then sent directly without buffering or aggregation. |
 | recordContents.podLabels | bool | `false` | Determine whether source and destination Pod labels will be included in the flow records. |
 | s3Uploader.awsCredentials | object | `{"aws_access_key_id":"changeme","aws_secret_access_key":"changeme","aws_session_token":""}` | Credentials to authenticate to AWS. They will be stored in a Secret and injected into the Pod as environment variables. |
 | s3Uploader.bucketName | string | `""` | BucketName is the name of the S3 bucket to which flow records will be uploaded. It is required. |

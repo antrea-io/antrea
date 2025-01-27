@@ -23,17 +23,17 @@ import (
 )
 
 // preprocessor is in charge of processing messages received from the IPFIX collector, prior to
-// handling records over to the aggregation process. At the moment, its only task is to ensure that
-// all records have the expected fields. If a record has extra fields, they will be discarded. If
-// some fields are missing, they will be "appended" to the record with a "zero" value. For example,
-// we will use 0 for integral types, "" for strings, 0.0.0.0 for IPv4 address, etc. Note that we are
-// able to keep the implementation simple by assuming that a record either has missing fields or
-// extra fields (not a combination of both), and that such fields are always at the tail of the
-// field list. This assumption is based on implementation knowledge of the FlowExporter and the
-// FlowAggregator.
+// proxying them to another collector of handing them over to the aggregation process. At the
+// moment, its only task is to ensure that all records have the expected fields. If a record has
+// extra fields, they will be discarded. If some fields are missing, they will be "appended" to the
+// record with a "zero" value. For example, we will use 0 for integral types, "" for strings,
+// 0.0.0.0 for IPv4 address, etc. Note that we are able to keep the implementation simple by
+// assuming that a record either has missing fields or extra fields (not a combination of both), and
+// that such fields are always at the tail of the field list. This assumption is based on
+// implementation knowledge of the FlowExporter and the FlowAggregator.
 type preprocessor struct {
 	inCh  <-chan *entities.Message
-	outCh chan<- entities.Record
+	outCh chan<- *entities.Message
 
 	expectedElementsV4 int
 	expectedElementsV6 int
@@ -100,7 +100,7 @@ func makeDefaultElementsWithValue(infoElements []*entities.InfoElement) ([]entit
 	return elementsWithValue, nil
 }
 
-func newPreprocessor(infoElementsV4, infoElementsV6 []*entities.InfoElement, inCh <-chan *entities.Message, outCh chan<- entities.Record) (*preprocessor, error) {
+func newPreprocessor(infoElementsV4, infoElementsV6 []*entities.InfoElement, inCh <-chan *entities.Message, outCh chan<- *entities.Message) (*preprocessor, error) {
 	defaultElementsWithValueV4, err := makeDefaultElementsWithValue(infoElementsV4)
 	if err != nil {
 		return nil, fmt.Errorf("error when generating default values for IPv4 Information Elements expected from exporter: %w", err)
@@ -144,24 +144,39 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 		return
 	}
 	records := set.GetRecords()
+	if len(records) == 0 {
+		return
+	}
+	// All the records in the data set must match a given template, so we only need to look at
+	// the first one to decide how to proceed.
+	firstRecord := records[0]
+	elementList := firstRecord.GetOrderedElementList()
+	numElements := len(elementList)
+	isIPv4 := isRecordIPv4(firstRecord)
+	expectedElements := p.expectedElementsV4
+	if !isIPv4 {
+		expectedElements = p.expectedElementsV6
+	}
+	// Fast path: everything matches so we can just forward the message as is.
+	if numElements == expectedElements {
+		p.outCh <- msg
+		return
+	}
+	newSet := entities.NewSet(true)
+	// Set templateID to 0: the set records will not match the template any more.
+	if err := newSet.PrepareSet(entities.Data, 0); err != nil {
+		klog.ErrorS(err, "Failed to prepare modified set")
+		return
+	}
 	for _, record := range records {
 		elementList := record.GetOrderedElementList()
-		numElements := len(elementList)
-		isIPv4 := isRecordIPv4(record)
-		expectedElements := p.expectedElementsV4
-		if !isIPv4 {
-			expectedElements = p.expectedElementsV6
-		}
-		if numElements == expectedElements {
-			p.outCh <- record
-		} else if numElements > expectedElements {
+		if numElements > expectedElements {
 			if klog.V(5).Enabled() {
 				klog.InfoS("Record received from exporter includes unexpected elements, truncating", "expectedElements", expectedElements, "receivedElements", numElements)
 			}
 			// Creating a new Record seems like the best option here. By using
-			// NewDataRecordFromElements, we should minimize the number of allocations
-			// required.
-			p.outCh <- entities.NewDataRecordFromElements(0, elementList[:expectedElements], true)
+			// AddRecordV2, we should minimize the number of allocations required.
+			newSet.AddRecordV2(elementList[:expectedElements], 0)
 		} else {
 			if klog.V(5).Enabled() {
 				klog.InfoS("Record received from exporter is missing information elements, adding fields with zero values", "expectedElements", expectedElements, "receivedElements", numElements)
@@ -171,8 +186,11 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 			} else {
 				elementList = append(elementList, p.defaultElementsWithValueV6[numElements:]...)
 			}
-			p.outCh <- entities.NewDataRecordFromElements(0, elementList, true)
+			newSet.AddRecordV2(elementList, 0)
 		}
 	}
-
+	// This will overwrite the existing set with the new one.
+	// Note that the message length will no longer be correct, but this should not matter.
+	msg.AddSet(newSet)
+	p.outCh <- msg
 }

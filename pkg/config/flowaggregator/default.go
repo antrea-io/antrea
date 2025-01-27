@@ -48,6 +48,9 @@ const (
 )
 
 func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
+	if flowAggregatorConf.Mode == "" {
+		flowAggregatorConf.Mode = AggregatorModeAggregate
+	}
 	if flowAggregatorConf.ActiveFlowRecordTimeout == "" {
 		flowAggregatorConf.ActiveFlowRecordTimeout = DefaultActiveFlowRecordTimeout
 	}
