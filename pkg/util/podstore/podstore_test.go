@@ -33,6 +33,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	clock "k8s.io/utils/clock/testing"
+
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 var (
@@ -101,6 +103,24 @@ var (
 			UID:               "pod4",
 			CreationTimestamp: metav1.Time{Time: refTime2},
 			DeletionTimestamp: &metav1.Time{Time: refTime},
+		},
+	}
+	hostNetworkPod = &v1.Pod{
+		Spec: v1.PodSpec{
+			HostNetwork: true,
+		},
+		Status: v1.PodStatus{
+			PodIPs: []v1.PodIP{
+				{
+					IP: "172.18.0.1",
+				},
+			},
+			Phase: v1.PodSucceeded,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "hnpod",
+			UID:               "hnpod",
+			CreationTimestamp: metav1.Time{Time: refTime2},
 		},
 	}
 	timestampMap = map[types.UID]*podTimestamps{
@@ -191,10 +211,22 @@ func Test_onPodCreate(t *testing.T) {
 	}
 }
 
+func getPodInformer(k8sClient kubernetes.Interface) cache.SharedIndexInformer {
+	podInformer := coreinformers.NewPodInformer(
+		k8sClient,
+		metav1.NamespaceAll,
+		0, // no resync
+		cache.Indexers{},
+	)
+	// Trim Pod objects to match antrea-agent / flow-aggregator.
+	podInformer.SetTransform(k8s.NewTrimmer(k8s.TrimPod))
+	return podInformer
+}
+
 func Test_onPodDelete(t *testing.T) {
 	t.Run("object is neither Pod nor DeletedFinalStateUnknown", func(t *testing.T) {
 		k8sClient := fake.NewSimpleClientset()
-		podInformer := coreinformers.NewPodInformer(k8sClient, metav1.NamespaceAll, 0, cache.Indexers{})
+		podInformer := getPodInformer(k8sClient)
 		podStore := NewPodStore(podInformer)
 		require.NoError(t, podStore.pods.Add(pod1))
 		podStore.timestampMap = map[types.UID]*podTimestamps{"pod1": {CreationTimestamp: refTime}}
@@ -203,7 +235,7 @@ func Test_onPodDelete(t *testing.T) {
 	})
 	t.Run("Pod is in prevPod and podsToDelete", func(t *testing.T) {
 		k8sClient := fake.NewSimpleClientset()
-		podInformer := coreinformers.NewPodInformer(k8sClient, metav1.NamespaceAll, 0, cache.Indexers{})
+		podInformer := getPodInformer(k8sClient)
 		fakeClock := clock.NewFakeClock(refTime)
 		podStore := NewPodStoreWithClock(podInformer, fakeClock)
 		require.NoError(t, podStore.pods.Add(pod1))
@@ -309,7 +341,7 @@ func Test_GetPodByIPAndTime(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k8sClient := fake.NewSimpleClientset()
-			podInformer := coreinformers.NewPodInformer(k8sClient, metav1.NamespaceAll, 0, cache.Indexers{})
+			podInformer := getPodInformer(k8sClient)
 			podStore := NewPodStore(podInformer)
 			require.NoError(t, podStore.pods.Add(pod1))
 			require.NoError(t, podStore.pods.Add(pod2))
@@ -408,6 +440,20 @@ func Test_podIPIndexFunc(t *testing.T) {
 	}
 }
 
+func Test_noHostNetworkPod(t *testing.T) {
+	k8sClient := fake.NewSimpleClientset(hostNetworkPod)
+	podInformer := getPodInformer(k8sClient)
+	podStore := NewPodStore(podInformer)
+	stopCh := make(chan struct{})
+	go podInformer.Run(stopCh)
+	cache.WaitForCacheSync(stopCh, podInformer.HasSynced)
+	assert.Never(t, func() bool {
+		podStore.mutex.RLock()
+		defer podStore.mutex.RUnlock()
+		return len(podStore.timestampMap) > 0
+	}, 100*time.Millisecond, 10*time.Millisecond, "host-network Pods should be filtered out by informer")
+}
+
 /*
 Sample output:
 goos: darwin
@@ -451,7 +497,7 @@ func BenchmarkGetPodByIPAndTime(b *testing.B) {
 		success := 0
 		total := 0
 		k8sClient := fake.NewSimpleClientset()
-		podInformer := coreinformers.NewPodInformer(k8sClient, metav1.NamespaceAll, 0, cache.Indexers{})
+		podInformer := getPodInformer(k8sClient)
 		podStore := NewPodStore(podInformer)
 		stopCh := make(chan struct{})
 		go podInformer.Run(stopCh)
