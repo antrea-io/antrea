@@ -23,13 +23,15 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/netip"
 	"strings"
 
+	"github.com/containernetworking/plugins/pkg/ip"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/util/ip"
+	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
 const (
@@ -137,7 +139,7 @@ func listenUnix(address string) (net.Listener, error) {
 
 // GetIPNetDeviceFromIP returns local IPs/masks and associated device from IP, and ignores the interfaces which have
 // names in the ignoredInterfaces.
-func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs, ignoredInterfaces sets.Set[string]) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
+func GetIPNetDeviceFromIP(localIPs *utilip.DualStackIPs, ignoredInterfaces sets.Set[string]) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	linkList, err := netInterfaces()
 	if err != nil {
 		return nil, nil, nil, err
@@ -437,4 +439,15 @@ func GenerateOVSDatapathID(macString string) string {
 		macString = GenerateRandomMAC().String()
 	}
 	return "0000" + strings.Replace(macString, ":", "", -1)
+}
+
+// GetGatewayIPForPodCIDR returns the gateway IP for a given Pod CIDR.
+func GetGatewayIPForPodCIDR(cidr *net.IPNet) net.IP {
+	return ip.NextIP(cidr.IP.Mask(cidr.Mask))
+}
+
+// GetGatewayIPForPodPrefix acts like GetGatewayIPForPodCIDR but takes a netip.Prefix as a parameter
+// and returns a netip.Addr value.
+func GetGatewayIPForPodPrefix(prefix netip.Prefix) netip.Addr {
+	return prefix.Masked().Addr().Next()
 }

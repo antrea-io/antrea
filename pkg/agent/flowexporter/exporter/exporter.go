@@ -26,6 +26,7 @@ import (
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -34,7 +35,6 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/metrics"
-	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ipfix"
@@ -224,6 +224,14 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 
 	// Start the goroutine to poll conntrack flows.
 	go exp.conntrackConnStore.Run(stopCh)
+
+	if exp.nodeRouteController != nil {
+		// Wait for NodeRouteController to have processed the initial list of Nodes so that
+		// the list of Pod subnets is up-to-date.
+		if !cache.WaitForCacheSync(stopCh, exp.nodeRouteController.HasSynced) {
+			return
+		}
+	}
 
 	defaultTimeout := exp.conntrackPriorityQueue.ActiveFlowTimeout
 	expireTimer := time.NewTimer(defaultTimeout)
@@ -608,9 +616,19 @@ func (exp *FlowExporter) sendDataSet() (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("error when sending data set: %v", err)
 	}
-	klog.V(4).InfoS("Data set sent successfully", "Bytes sent", sentBytes)
+	if klog.V(5).Enabled() {
+		klog.InfoS("Data set sent successfully", "Bytes sent", sentBytes)
+	}
 	return sentBytes, nil
 }
+
+const (
+	// flowTypeUnknown indicates that we are unable to determine the flow type.
+	flowTypeUnknown = uint8(0)
+	// flowTypeUnsupported indicates that this type of flow is not supported and that we should
+	// skip exporting it.
+	flowTypeUnsupported = uint8(0xff)
+)
 
 func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 	// TODO: support Pod-To-External flows in network policy only mode.
@@ -622,21 +640,34 @@ func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 	}
 
 	if exp.nodeRouteController == nil {
-		klog.V(4).InfoS("Can't find flowType without nodeRouteController")
-		return 0
-	}
-	if exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.SourceAddress.AsSlice()) {
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.DestinationAddress.AsSlice()) {
-			if conn.SourcePodName == "" || conn.DestinationPodName == "" {
-				return ipfixregistry.FlowTypeInterNode
-			}
-			return ipfixregistry.FlowTypeIntraNode
+		if klog.V(5).Enabled() {
+			klog.InfoS("Can't find flowType without nodeRouteController")
 		}
+		return flowTypeUnknown
+	}
+	srcIsPod, srcIsGw := exp.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.SourceAddress)
+	dstIsPod, dstIsGw := exp.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.DestinationAddress)
+	if srcIsGw || dstIsGw {
+		// This matches what we do in filterAntreaConns, but not sure whether this is the right thing to do.
+		// This ignores all flows to / from hostNetwork Pods.
+		if klog.V(5).Enabled() {
+			klog.InfoS("Flows where the source or destination IP is a gateway IP are not exported")
+		}
+		return flowTypeUnsupported
+	}
+	if !srcIsPod {
+		if klog.V(5).Enabled() {
+			klog.InfoS("Flows where the source is not a Pod are not exported")
+		}
+		return flowTypeUnsupported
+	}
+	if !dstIsPod {
 		return ipfixregistry.FlowTypeToExternal
 	}
-	// We do not support External-To-Pod flows for now.
-	klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", conn.FlowKey.SourceAddress.String())
-	return 0
+	if conn.SourcePodName == "" || conn.DestinationPodName == "" {
+		return ipfixregistry.FlowTypeInterNode
+	}
+	return ipfixregistry.FlowTypeIntraNode
 }
 
 func (exp *FlowExporter) fillEgressInfo(conn *flowexporter.Connection) {
@@ -648,11 +679,16 @@ func (exp *FlowExporter) fillEgressInfo(conn *flowexporter.Connection) {
 	conn.EgressName = egressName
 	conn.EgressIP = egressIP
 	conn.EgressNodeName = egressNodeName
-	klog.V(4).InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "EgressNode", conn.EgressNodeName, "SourcePod", klog.KRef(conn.SourcePodNamespace, conn.SourcePodName))
+	if klog.V(5).Enabled() {
+		klog.InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "EgressNode", conn.EgressNodeName, "SourcePod", klog.KRef(conn.SourcePodNamespace, conn.SourcePodName))
+	}
 }
 
 func (exp *FlowExporter) exportConn(conn *flowexporter.Connection) error {
 	conn.FlowType = exp.findFlowType(*conn)
+	if conn.FlowType == flowTypeUnsupported {
+		return nil
+	}
 	if conn.FlowType == ipfixregistry.FlowTypeToExternal {
 		if conn.SourcePodNamespace != "" && conn.SourcePodName != "" {
 			exp.fillEgressInfo(conn)
@@ -669,7 +705,9 @@ func (exp *FlowExporter) exportConn(conn *flowexporter.Connection) error {
 		return err
 	}
 	exp.numDataSetsSent = exp.numDataSetsSent + 1
-	klog.V(4).InfoS("Record for connection sent successfully", "flowKey", conn.FlowKey, "connection", conn)
+	if klog.V(5).Enabled() {
+		klog.InfoS("Record for connection sent successfully", "flowKey", conn.FlowKey, "connection", conn)
+	}
 	return nil
 }
 
