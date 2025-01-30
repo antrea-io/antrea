@@ -753,6 +753,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 
 	makeOptions := func(config *flowaggregatorconfig.FlowAggregatorConfig) *options.Options {
 		return &options.Options{
+			AggregatorMode:          flowAggregator.aggregatorMode,
 			ActiveFlowRecordTimeout: flowAggregator.activeFlowRecordTimeout,
 			Config:                  config,
 		}
