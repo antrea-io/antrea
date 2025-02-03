@@ -29,7 +29,6 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"google.golang.org/grpc"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -756,14 +755,15 @@ func (s *CNIServer) interceptCheck(cniConfig *CNIConfig) (*cnipb.CniCmdResponse,
 // reconcile performs startup reconciliation for the CNI server. The CNI server is in charge of
 // installing Pod flows, so as part of this reconciliation process we retrieve the Pod list from the
 // K8s apiserver and replay the necessary flows.
+// The Pods are processed in reconcile as below,
+// | Pod Type                         | Spec.HostNetwork | windowsOptions.hostProcess | OVS interface needed? | List Pods in reconcile     |
+// | Normal Pod (non-HostNetwork)     | false            | false or N/A               | Yes                   | Yes                        |
+// | Linux HostNetwork Pod            | true             | N/A                        | No                    | No                         |
+// | Windows HostNetwork Pod          | true             | false                      | Yes                   | Yes                        |
+// | Windows HostProcess Pod          | true             | true                       | No                    | Yes                        |
 func (s *CNIServer) reconcile() error {
 	klog.InfoS("Starting reconciliation for CNI server")
-	// For performance reasons, use ResourceVersion="0" in the ListOptions to ensure the request is served from
-	// the watch cache in kube-apiserver.
-	pods, err := s.kubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
-		FieldSelector:   "spec.nodeName=" + s.nodeConfig.Name,
-		ResourceVersion: "0",
-	})
+	pods, err := s.kubeClient.CoreV1().Pods("").List(context.TODO(), s.getPodsListOptions())
 	if err != nil {
 		return fmt.Errorf("failed to list Pods running on Node %s: %v", s.nodeConfig.Name, err)
 	}
