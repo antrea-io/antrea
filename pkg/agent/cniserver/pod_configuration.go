@@ -445,10 +445,6 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	var podWg sync.WaitGroup
 
 	for _, pod := range pods {
-		// Skip Pods for which we are not in charge of the networking.
-		if pod.Spec.HostNetwork {
-			continue
-		}
 		desiredPods.Insert(k8s.NamespacedName(pod.Namespace, pod.Name))
 		for _, podIP := range pod.Status.PodIPs {
 			desiredPodIPs.Insert(podIP.IP)
