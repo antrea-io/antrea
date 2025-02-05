@@ -550,13 +550,17 @@ func TestGroupEntityIndexEventHandlers(t *testing.T) {
 			}
 			tt.inputEvent(index)
 
-			time.Sleep(100 * time.Millisecond)
-			lock.Lock()
-			defer lock.Unlock()
-			assert.Equal(t, len(tt.expectedGroupsCalled), len(actualGroupsCalled))
-			for groupType, expected := range tt.expectedGroupsCalled {
-				assert.ElementsMatch(t, expected, actualGroupsCalled[groupType])
-			}
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				lock.Lock()
+				defer lock.Unlock()
+				if !assert.Equal(t, len(tt.expectedGroupsCalled), len(actualGroupsCalled)) {
+					// If the lengths don't match, don't bother checking the contents, return early.
+					return
+				}
+				for groupType, expected := range tt.expectedGroupsCalled {
+					assert.ElementsMatch(t, expected, actualGroupsCalled[groupType])
+				}
+			}, 1*time.Second, 50*time.Millisecond)
 		})
 	}
 }
