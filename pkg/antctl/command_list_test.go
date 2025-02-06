@@ -65,12 +65,12 @@ func TestGetDebugCommands(t *testing.T) {
 		{
 			name:     "Antctl running against controller mode",
 			mode:     "controller",
-			expected: [][]string{{"version"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "controllerinfo"}, {"supportbundle"}, {"traceflow"}, {"get", "featuregates"}},
+			expected: [][]string{{"version"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "controllerinfo"}, {"supportbundle"}, {"traceflow"}, {"packetcapture"}, {"get", "featuregates"}},
 		},
 		{
 			name:     "Antctl running against agent mode",
 			mode:     "agent",
-			expected: [][]string{{"version"}, {"get", "podmulticaststats"}, {"log-level"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "agentinfo"}, {"get", "podinterface"}, {"get", "ovsflows"}, {"trace-packet"}, {"get", "serviceexternalip"}, {"get", "memberlist"}, {"get", "bgppolicy"}, {"get", "bgppeers"}, {"get", "bgproutes"}, {"supportbundle"}, {"traceflow"}, {"get", "featuregates"}},
+			expected: [][]string{{"version"}, {"get", "podmulticaststats"}, {"log-level"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "agentinfo"}, {"get", "podinterface"}, {"get", "ovsflows"}, {"trace-packet"}, {"get", "serviceexternalip"}, {"get", "memberlist"}, {"get", "bgppolicy"}, {"get", "bgppeers"}, {"get", "bgproutes"}, {"supportbundle"}, {"traceflow"}, {"packetcapture"}, {"get", "featuregates"}},
 		},
 		{
 			name:     "Antctl running against flow-aggregator mode",
