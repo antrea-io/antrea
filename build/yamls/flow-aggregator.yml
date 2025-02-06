@@ -400,6 +400,8 @@ spec:
       app: flow-aggregator
   template:
     metadata:
+      annotations:
+        checksum/config: 5ba1a6d1b9d3b40e2ea26e37aa2bea38fda2558c20564873936472136651de37
       labels:
         app: flow-aggregator
     spec:
