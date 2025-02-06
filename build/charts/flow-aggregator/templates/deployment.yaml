@@ -12,6 +12,10 @@ spec:
       app: flow-aggregator
   template:
     metadata:
+      annotations:
+        # Automatically restart Pod if the ConfigMap changes
+        # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         app: flow-aggregator
     spec:
