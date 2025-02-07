@@ -148,7 +148,7 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetControllerConnection
 }
 
 // GetFQDNCache mocks base method.
-func (m *MockAgentNetworkPolicyInfoQuerier) GetFQDNCache(fqdnFilter querier.FQDNCacheFilter) []types.DnsCacheEntry {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetFQDNCache(fqdnFilter *querier.FQDNCacheFilter) []types.DnsCacheEntry {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetFQDNCache", fqdnFilter)
 	ret0, _ := ret[0].([]types.DnsCacheEntry)
