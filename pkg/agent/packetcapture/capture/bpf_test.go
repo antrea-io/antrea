@@ -51,6 +51,7 @@ func TestCalculateInstructionsSize(t *testing.T) {
 				},
 			},
 			count: 17,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 		},
 		{
 			name: "proto and host and port and DestinationToSource",
@@ -77,7 +78,7 @@ func TestCalculateInstructionsSize(t *testing.T) {
 					},
 				},
 			},
-			count:     27,
+			count:     28,
 			direction: crdv1alpha1.CaptureDirectionBoth,
 		},
 		{
@@ -86,6 +87,7 @@ func TestCalculateInstructionsSize(t *testing.T) {
 				Protocol: &testTCPProtocol,
 			},
 			count: 10,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 		},
 		{
 			name: "proto with src port",
@@ -98,6 +100,7 @@ func TestCalculateInstructionsSize(t *testing.T) {
 				},
 			},
 			count: 15,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 		},
 		{
 			name: "proto with dst port",
@@ -110,12 +113,14 @@ func TestCalculateInstructionsSize(t *testing.T) {
 				},
 			},
 			count: 15,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 		},
 
 		{
 			name:   "any proto",
 			packet: &crdv1alpha1.Packet{},
 			count:  8,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 		},
 	}
 

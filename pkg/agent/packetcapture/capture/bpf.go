@@ -94,11 +94,18 @@ func calculateSkipFalse(srcPort, dstPort uint16) uint8 {
 	return count
 }
 
-func compareIPPort(srcAddrVal, dstAddrVal uint32, size, curLen uint8, srcPort, dstPort uint16, useSkipFalse bool) []bpf.Instruction {
+// Generates IP address and port matching instructions
+func compileIPPortFilter(srcAddrVal, dstAddrVal uint32, size, curLen uint8, srcPort, dstPort uint16, skipRequestCheck bool) []bpf.Instruction {
 	inst := []bpf.Instruction{}
 
 	// from here we need to check the inst length to calculate skipFalse. If no protocol is set, there will be no related bpf instructions.
-	if useSkipFalse {
+	
+	// In the previous instruction, we load the packet's source IP. We then compare it with the source IP from the packet spec to determine if 
+	// the packet is a request (from source to destination). When capturing packets in Both directions, if the source IPs do not match, 
+	// we need to check if the packet is a response (from destination to source). In this case, we skip to the instruction where we compare the 
+	// loaded source IP with the destination IP from the packet spec. The skipRequestCheck flag indicates whether we need to call calculateSkipFalse 
+	// to determine how many instructions to skip before checking for response packets or just skip to the last instruction (drop packet).
+	if skipRequestCheck {
 		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: srcAddrVal, SkipTrue: 0, SkipFalse: calculateSkipFalse(srcPort, dstPort)})
 	} else {
 		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: srcAddrVal, SkipTrue: 0, SkipFalse: size - curLen - uint8(len(inst)) - 2})
@@ -178,16 +185,15 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 		}
 	}
 
-	// ip address and port check
 	inst = append(inst, loadIPv4SourceAddress)
 
 	if direction == crdv1alpha1.CaptureDirectionSourceToDestination {
-		inst = append(inst, compareIPPort(srcAddrVal, dstAddrVal, size, uint8(len(inst)), srcPort, dstPort, false)...)
+		inst = append(inst, compileIPPortFilter(srcAddrVal, dstAddrVal, size, uint8(len(inst)), srcPort, dstPort, false)...)
 	} else if direction == crdv1alpha1.CaptureDirectionDestinationToSource {
-		inst = append(inst, compareIPPort(dstAddrVal, srcAddrVal, size, uint8(len(inst)), dstPort, srcPort, false)...)
+		inst = append(inst, compileIPPortFilter(dstAddrVal, srcAddrVal, size, uint8(len(inst)), dstPort, srcPort, false)...)
 	} else {
-		inst = append(inst, compareIPPort(srcAddrVal, dstAddrVal, size, uint8(len(inst)), srcPort, dstPort, true)...)
-		inst = append(inst, compareIPPort(dstAddrVal, srcAddrVal, size, uint8(len(inst)), dstPort, srcPort, false)...)
+		inst = append(inst, compileIPPortFilter(srcAddrVal, dstAddrVal, size, uint8(len(inst)), srcPort, dstPort, true)...)
+		inst = append(inst, compileIPPortFilter(dstAddrVal, srcAddrVal, size, uint8(len(inst)), dstPort, srcPort, false)...)
 	}
 
 	// return (drop)
@@ -253,31 +259,31 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 // For simpler code generation in 'Both' direction, an extra instruction to accept the packet is added after instruction 014.
 // The final instruction set looks like this:
 // (000) ldh      [12]									   # Load 2B at 12 (Ethertype)
-// (001) jeq      #0x800           jt 2	jf 27			   # Ethertype: If IPv4, goto #2, else #26
+// (001) jeq      #0x800           jt 2	jf 27			   # Ethertype: If IPv4, goto #2, else #27
 // (002) ldb      [23]									   # Load 1B at 23 (IPv4 Protocol)
-// (003) jeq      #0x6             jt 4	jf 27			   # IPv4 Protocol: If TCP, goto #4, #26
+// (003) jeq      #0x6             jt 4	jf 27			   # IPv4 Protocol: If TCP, goto #4, #27
 // (004) ld       [26]									   # Load 4B at 26 (source address)
-// (005) jeq      #0xaf40102       jt 6	jf 16			   # If bytes match(10.244.1.2), goto #6, else #15
+// (005) jeq      #0xaf40102       jt 6	jf 16			   # If bytes match(10.244.1.2), goto #6, else #16
 // (006) ld       [30]									   # Load 4B at 30 (dest address)
-// (007) jeq      #0xaf40103       jt 8	jf 27			   # If bytes match(10.244.1.3), goto #8, else #26
+// (007) jeq      #0xaf40103       jt 8	jf 27			   # If bytes match(10.244.1.3), goto #8, else #27
 // (008) ldh      [20]									   # Load 2B at 20 (13b Fragment Offset)
-// (009) jset     #0x1fff          jt 27	jf 10		   # Use 0x1fff as a mask for fragment offset; If fragment offset != 0, #10, else #26
+// (009) jset     #0x1fff          jt 27	jf 10		   # Use 0x1fff as a mask for fragment offset; If fragment offset != 0, #10, else #27
 // (010) ldxb     4*([14]&0xf)							   # x = IP header length
 // (011) ldh      [x + 14]								   # Load 2B at x+14 (TCP Source Port)
-// (012) jeq      #0x7b            jt 13	jf 27		   # TCP Source Port: If 123, goto #13, else #26
+// (012) jeq      #0x7b            jt 13	jf 27		   # TCP Source Port: If 123, goto #13, else #27
 // (013) ldh      [x + 16]								   # Load 2B at x+16 (TCP dst port)
-// (014) jeq      #0x7c            jt 15	jf 27		   # TCP dst port: If 123, goto #15, else #26
+// (014) jeq      #0x7c            jt 15	jf 27		   # TCP dst port: If 123, goto #15, else #27
 // (015) ret      #262144								   # MATCH
-// (016) jeq      #0xaf40103       jt 17	jf 27		   # If bytes match(10.244.1.3), goto #16, else #26
+// (016) jeq      #0xaf40103       jt 17	jf 27		   # If bytes match(10.244.1.3), goto #17, else #27
 // (017) ld       [30]									   # Load 4B at 30 (return traffic dest address)
-// (018) jeq      #0xaf40102       jt 19	jf 27		   # If bytes match(10.244.1.2), goto #18, else #26
+// (018) jeq      #0xaf40102       jt 19	jf 27		   # If bytes match(10.244.1.2), goto #19, else #27
 // (019) ldh      [20]									   # Load 2B at 20 (13b Fragment Offset)
-// (020) jset     #0x1fff          jt 27	jf 21		   # Use 0x1fff as a mask for fragment offset; If fragment offset != 0, #20, else #26
+// (020) jset     #0x1fff          jt 27	jf 21		   # Use 0x1fff as a mask for fragment offset; If fragment offset != 0, #21, else #27
 // (021) ldxb     4*([14]&0xf)							   # x = IP header length
 // (022) ldh      [x + 14]								   # Load 2B at x+14 (TCP Source Port)
-// (023) jeq      #0x7c            jt 24	jf 27		   # TCP Source Port: If 124, goto #23, else #26
+// (023) jeq      #0x7c            jt 24	jf 27		   # TCP Source Port: If 124, goto #24, else #27
 // (024) ldh      [x + 16]								   # Load 2B at x+16 (TCP dst port)
-// (025) jeq      #0x7b            jt 26	jf 27		   # TCP dst port: If 123, goto #25, else #26
+// (025) jeq      #0x7b            jt 26	jf 27		   # TCP dst port: If 123, goto #26, else #27
 // (026) ret      #262144								   # MATCH
 // (027) ret      #0									   # NOMATCH
 
