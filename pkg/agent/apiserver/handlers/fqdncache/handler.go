@@ -22,14 +22,13 @@ import (
 	"k8s.io/klog/v2"
 
 	agentapi "antrea.io/antrea/pkg/agent/apis"
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/querier"
 )
 
-func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
+func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fqdnFilter := newFilterFromURLQuery(r.URL.Query())
-		dnsEntryCache := aq.GetNetworkPolicyInfoQuerier().GetFQDNCache(fqdnFilter)
+		dnsEntryCache := npq.GetFQDNCache(fqdnFilter)
 		resp := []agentapi.FQDNCacheResponse{}
 		for _, entry := range dnsEntryCache {
 			resp = append(resp, agentapi.FQDNCacheResponse{
@@ -45,6 +44,6 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	}
 }
 
-func newFilterFromURLQuery(query url.Values) querier.FQDNCacheFilter {
-	return querier.FQDNCacheFilter{DomainName: query.Get("domain")}
+func newFilterFromURLQuery(query url.Values) *querier.FQDNCacheFilter {
+	return &querier.FQDNCacheFilter{Domain: query.Get("domain")}
 }

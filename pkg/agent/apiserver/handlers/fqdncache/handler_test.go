@@ -26,9 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	queriertest "antrea.io/antrea/pkg/agent/querier/testing"
 	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/querier"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
 func TestFqdnCacheQuery(t *testing.T) {
@@ -67,8 +66,8 @@ func TestFqdnCacheQuery(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			q := queriertest.NewMockAgentQuerier(ctrl)
-			q.EXPECT().GetFqdnCache(querier.FQDNCacheFilter{}).Return(tt.expectedResponse)
+			q := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+			q.EXPECT().GetFQDNCache(nil).Return(tt.expectedResponse)
 			handler := HandleFunc(q)
 			req, err := http.NewRequest(http.MethodGet, "", nil)
 			require.NoError(t, err)

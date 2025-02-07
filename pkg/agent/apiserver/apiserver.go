@@ -105,7 +105,7 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/bgppolicy", bgppolicy.HandleFunc(bgpq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/bgppeers", bgppeer.HandleFunc(bgpq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/bgproutes", bgproute.HandleFunc(bgpq))
-	s.Handler.NonGoRestfulMux.HandleFunc("/fqdncache", fqdncache.HandleFunc(aq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/fqdncache", fqdncache.HandleFunc(npq))
 }
 
 func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool) error {

@@ -99,7 +99,7 @@ func NewAgentQuerier(
 }
 
 // GetFQDNCache returns dnsEntryCache within fqdnController
-func (aq agentQuerier) GetFqdnCache(fqdnFilter querier.FQDNCacheFilter) []types.DnsCacheEntry {
+func (aq agentQuerier) GetFqdnCache(fqdnFilter *querier.FQDNCacheFilter) []types.DnsCacheEntry {
 	return aq.networkPolicyInfoQuerier.GetFQDNCache(fqdnFilter)
 }
 
