@@ -43,7 +43,10 @@ func UnpackDir(fs afero.Fs, fileName string, targetDir string) error {
 		return err
 	}
 	defer file.Close()
+	return UnpackReader(fs, file, targetDir)
+}
 
+func UnpackReader(fs afero.Fs, file io.Reader, targetDir string) error {
 	reader, err := gzip.NewReader(file)
 	if err != nil {
 		return err

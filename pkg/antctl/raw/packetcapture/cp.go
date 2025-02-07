@@ -15,17 +15,17 @@
 package packetcapture
 
 import (
-	"archive/tar"
 	"context"
 	"io"
 	"os"
-	"path/filepath"
 	_ "unsafe"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+
+	"antrea.io/antrea/pkg/util/compress"
 )
 
 type PodFileCopy interface {
@@ -71,31 +71,6 @@ func (p *podFile) CopyFromPod(ctx context.Context, namespace, name, containerNam
 			panic(err)
 		}
 	}()
-	err = untarAll(reader, dstDir)
+	err = compress.UnpackReader(defaultFS, reader, dstDir)
 	return err
-}
-
-// TODO: wait for https://github.com/antrea-io/antrea/pull/3659 got merged and reuse its function.
-// nolint: gosec
-func untarAll(reader io.Reader, dstDir string) error {
-	tarReader := tar.NewReader(reader)
-	for {
-		header, err := tarReader.Next()
-		if err != nil {
-			if err != io.EOF {
-				return err
-			}
-			break
-		}
-		baseName := filepath.Base(header.Name)
-		outFile, err := defaultFS.Create(filepath.Join(dstDir, baseName))
-		if err != nil {
-			return err
-		}
-		defer outFile.Close()
-		if _, err := io.Copy(outFile, tarReader); err != nil {
-			return err
-		}
-	}
-	return nil
 }
