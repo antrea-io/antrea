@@ -18,6 +18,8 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"crypto/sha256"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,6 +27,68 @@ import (
 
 	"github.com/spf13/afero"
 )
+
+// Sanitize archive file pathing from "G305: Zip Slip vulnerability"
+func sanitizeArchivePath(d, t string) (string, error) {
+	v := filepath.Join(d, t)
+	if strings.HasPrefix(v, filepath.Clean(d)) {
+		return v, nil
+	}
+	return "", fmt.Errorf("%s: %s", "content filepath is tainted", t)
+}
+
+func UnpackDir(fs afero.Fs, fileName string, targetDir string) error {
+	file, err := fs.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	reader, err := gzip.NewReader(file)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	tarReader := tar.NewReader(reader)
+
+	for true {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		targetPath, err := sanitizeArchivePath(targetDir, header.Name)
+		if err != nil {
+			return err
+		}
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := fs.Mkdir(targetPath, 0755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			outFile, err := fs.Create(targetPath)
+			defer outFile.Close()
+			if err != nil {
+				return err
+			}
+			for {
+				// to resolve G110: Potential DoS vulnerability via decompression bomb
+				if _, err := io.CopyN(outFile, tarReader, 1024); err != nil {
+					if err == io.EOF {
+						break
+					}
+					return err
+				}
+			}
+		default:
+			return errors.New("unknown type found when reading tgz file")
+		}
+	}
+	return nil
+}
 
 func PackDir(fs afero.Fs, dir string, writer io.Writer) ([]byte, error) {
 	hash := sha256.New()

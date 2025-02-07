@@ -2954,6 +2954,23 @@ spec:
         - jsonPath: .metadata.creationTimestamp
           name: Age
           type: date
+        - jsonPath: .status.numberCaptured
+          description: Number of packets captured so far.
+          name: Captured-Packets
+          type: integer
+        - jsonPath: .status.conditions[?(@.type=="PacketCaptureStarted")].status
+          description: Whether the capture has been started.
+          name: Started
+          type: string
+        - jsonPath: .status.conditions[?(@.type=="PacketCaptureComplete")].status
+          description: Whether the capture has completed.
+          name: Complete
+          type: string
+        - jsonPath: .status.conditions[?(@.type=="PacketCaptureFileUploaded")].status
+          description: Whether the capture file has been uploaded to the file server.
+          name: Uploaded
+          type: string
+          priority: 10
       schema:
         openAPIV3Schema:
           type: object

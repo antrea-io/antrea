@@ -217,6 +217,7 @@ func NewFlowAggregator(
 	if opt.Config.FlowCollector.Enable {
 		fa.ipfixExporter = newIPFIXExporter(clusterUUID, opt, registry)
 	}
+	klog.InfoS("FlowAggregator initialized", "mode", opt.AggregatorMode)
 	return fa, nil
 }
 
@@ -901,6 +902,13 @@ func (fa *flowAggregator) handleWatcherEvent() error {
 }
 
 func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
+	// If user tries to change the mode dynamically, it makes sense to error out immediately and
+	// ignore other updates, as this is such a major configuration parameter.
+	// Unsupported "minor" updates are handled at the end of this function.
+	if opt.AggregatorMode != fa.aggregatorMode {
+		klog.ErrorS(nil, "FlowAggregator mode cannot be changed without restarting")
+		return
+	}
 	if opt.Config.FlowCollector.Enable {
 		if fa.ipfixExporter == nil {
 			klog.InfoS("Enabling Flow-Collector")

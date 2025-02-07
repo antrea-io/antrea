@@ -46,6 +46,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/channel"
+	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
 var (
@@ -53,6 +54,22 @@ var (
 	dnsSearches     = []string{"a.b.c.d"}
 
 	mockWinnet *winnettest.MockInterface
+
+	interfaceForHostNetworkPod = &interfacestore.InterfaceConfig{
+		InterfaceName: "iface2",
+		Type:          interfacestore.ContainerInterface,
+		IPs:           []net.IP{net.ParseIP("1.1.1.2")},
+		MAC:           utilip.MustParseMAC("00:11:22:33:44:02"),
+		OVSPortConfig: &interfacestore.OVSPortConfig{
+			PortUUID: generateUUID(),
+			OFPort:   int32(4),
+		},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
+			PodName:      pod2.Name,
+			PodNamespace: testPodNamespace,
+			ContainerID:  generateUUID(),
+		},
+	}
 )
 
 func TestUpdateResultDNSConfig(t *testing.T) {
@@ -732,7 +749,7 @@ func TestReconcile(t *testing.T) {
 	cniServer := newCNIServer(t)
 	cniServer.routeClient = mockRoute
 	cniServer.kubeClient = kubeClient
-	for _, containerIface := range []*interfacestore.InterfaceConfig{normalInterface, staleInterface, unconnectedInterface} {
+	for _, containerIface := range []*interfacestore.InterfaceConfig{normalInterface, staleInterface, unconnectedInterface, interfaceForHostNetworkPod} {
 		ifaceStore.AddInterface(containerIface)
 	}
 	waiter := newAsyncWaiter(unconnectedInterface.PodName, unconnectedInterface.ContainerID, stopCh)
@@ -741,11 +758,19 @@ func TestReconcile(t *testing.T) {
 	go cniServer.podConfigurator.Run(stopCh)
 
 	// Re-install Pod1 flows
-	podFlowsInstalled := make(chan string, 2)
+	expReinstalledPodCount := 3
+	podFlowsInstalled := make(chan string, expReinstalledPodCount)
 	mockOFClient.EXPECT().InstallPodFlows(normalInterface.InterfaceName, normalInterface.IPs, normalInterface.MAC, uint32(normalInterface.OFPort), uint16(0), nil).
 		Do(func(interfaceName string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
 			podFlowsInstalled <- interfaceName
 		}).Times(1)
+
+	// Re-install host-network Pod (Pod2) flows
+	mockOFClient.EXPECT().InstallPodFlows(interfaceForHostNetworkPod.InterfaceName, interfaceForHostNetworkPod.IPs, interfaceForHostNetworkPod.MAC, uint32(interfaceForHostNetworkPod.OFPort), uint16(0), nil).
+		Do(func(interfaceName string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
+			podFlowsInstalled <- interfaceName
+		}).Times(1)
+
 	// Uninstall Pod3 flows which is deleted.
 	mockOFClient.EXPECT().UninstallPodFlows(staleInterface.InterfaceName).Return(nil).Times(1)
 	mockOVSBridgeClient.EXPECT().DeletePort(staleInterface.PortUUID).Return(nil).Times(1)
@@ -778,7 +803,7 @@ func TestReconcile(t *testing.T) {
 	assert.NoError(t, err)
 	_, exists := ifaceStore.GetInterfaceByName("iface3")
 	assert.False(t, exists)
-	for i := 0; i < 2; i++ {
+	for i := 0; i < expReinstalledPodCount; i++ {
 		select {
 		case <-podFlowsInstalled:
 		case <-time.After(500 * time.Millisecond):

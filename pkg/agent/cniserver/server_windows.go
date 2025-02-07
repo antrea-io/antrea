@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -97,4 +98,16 @@ func getInfraContainer(containerID, netNS string) string {
 // "container_id" and have infra container ID in "netns" in the form of "container:<INFRA CONTAINER ID>".
 func (c *CNIConfig) getInfraContainer() string {
 	return getInfraContainer(c.ContainerId, c.Netns)
+}
+
+// getPodsListOptions returns the Pods running on the current Node. Note, the host-network Pods are not filtered
+// out on Windows because they are also managed by antrea as long as "spec.SecurityContext.windowsOptions.hostProcess"
+// is not configured.
+func (s *CNIServer) getPodsListOptions() metav1.ListOptions {
+	return metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", s.nodeConfig.Name),
+		// For performance reasons, use ResourceVersion="0" in the ListOptions to ensure the request is served from
+		// the watch cache in kube-apiserver.
+		ResourceVersion: "0",
+	}
 }

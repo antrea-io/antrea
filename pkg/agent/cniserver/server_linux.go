@@ -14,7 +14,12 @@
 
 package cniserver
 
-import current "github.com/containernetworking/cni/pkg/types/100"
+import (
+	"fmt"
+
+	current "github.com/containernetworking/cni/pkg/types/100"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // updateResultDNSConfig updates the DNS config from CNIConfig.
 func updateResultDNSConfig(result *current.Result, cniConfig *CNIConfig) {
@@ -47,4 +52,14 @@ func validateRuntime(netNS string) error {
 // On Linux, it's always the ContainerID in the request.
 func (c *CNIConfig) getInfraContainer() string {
 	return c.ContainerId
+}
+
+// getPodsListOptions returns the none host-network Pods running on the current Node.
+func (s *CNIServer) getPodsListOptions() metav1.ListOptions {
+	return metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s,spec.hostNetwork=false", s.nodeConfig.Name),
+		// For performance reasons, use ResourceVersion="0" in the ListOptions to ensure the request is served from
+		// the watch cache in kube-apiserver.
+		ResourceVersion: "0",
+	}
 }

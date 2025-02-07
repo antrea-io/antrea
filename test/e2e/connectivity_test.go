@@ -70,6 +70,10 @@ func TestConnectivity(t *testing.T) {
 		skipIfNumNodesLessThan(t, 2)
 		testPingLargeMTU(t, data)
 	})
+	t.Run("testWindowsPodConnectivityAfterAntreaRestart", func(t *testing.T) {
+		skipIfNoWindowsNodes(t)
+		testWindowsPodConnectivityAfterAntreaRestart(t, data)
+	})
 }
 
 func waitForPodIPs(t *testing.T, data *TestData, podInfos []PodInfo) map[string]*PodIPs {
@@ -119,6 +123,100 @@ func (data *TestData) runPingMesh(t *testing.T, podInfos []PodInfo, ctrname stri
 			}
 		}
 	}
+}
+
+// verifyWindowsPodConnectivity checks Pod connectivity after antrea-agent is restarted on Windows.
+// We test both the generic Pod case and the host-network Pod case, because CNI on Windows is also
+// responsible for the host-network Pod's networking as long as it is not using host-process containers.
+func testWindowsPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData) {
+	linuxWorkerNode := clusterInfo.controlPlaneNodeName
+	linuxPodName := randName("test-pod-")
+	clientPod := PodInfo{
+		Name:      linuxPodName,
+		Namespace: data.testNamespace,
+		NodeName:  linuxWorkerNode,
+		OS:        "linux",
+	}
+
+	t.Logf("Creating Linux Pod %s on Node '%s'", linuxPodName, linuxWorkerNode)
+	if err := data.createToolboxPodOnNode(clientPod.Name, clientPod.Namespace, clientPod.NodeName, false); err != nil {
+		t.Fatalf("Error when creating Pod '%s': %v", clientPod.Name, err)
+	}
+	defer deletePodWrapper(t, data, clientPod.Namespace, clientPod.Name)
+
+	t.Run("testGenericPodConnectivity", func(t *testing.T) {
+		data.verifyWindowsPodConnectivity(t, clientPod, false)
+	})
+	t.Run("testHostNetworkPodConnectivity", func(t *testing.T) {
+		data.verifyWindowsPodConnectivity(t, clientPod, true)
+	})
+}
+
+func (data *TestData) dumpOVSFlows(t *testing.T, workerNode string) []string {
+	ovsOfctlCmd := "ovs-ofctl"
+	if clusterInfo.nodesOS[workerNode] == "windows" {
+		ovsOfctlCmd = `c:/openvswitch/usr/bin/ovs-ofctl.exe`
+	}
+	cmd := []string{ovsOfctlCmd, "dump-flows", defaultBridgeName, "--names"}
+	antreaPodName, err := data.getAntreaPodOnNode(workerNode)
+	if err != nil {
+		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", workerNode, err)
+	}
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+	if err != nil {
+		t.Fatalf("error when dumping flows: <%v>, err: <%v>", stderr, err)
+	}
+	flows := make([]string, 0)
+	for _, flow := range strings.Split(stdout, "\n") {
+		flow = strings.TrimSpace(flow)
+		if flow == "" {
+			continue
+		}
+		flows = append(flows, flow)
+	}
+	t.Logf("Counted %d flow in OVS bridge '%s' for Node '%s'", len(flows), defaultBridgeName, workerNode)
+	return flows
+}
+
+func (data *TestData) verifyWindowsPodConnectivity(t *testing.T, clientPod PodInfo, useHostNetwork bool) {
+	winPodName := randName("test-pod-")
+	winWorkerNode := workerNodeName(clusterInfo.windowsNodes[0])
+	winPod := PodInfo{
+		Name:      winPodName,
+		Namespace: data.testNamespace,
+		NodeName:  winWorkerNode,
+		OS:        "windows",
+	}
+	t.Logf("Creating Windows Pod %s on Node '%s'", winPodName, winWorkerNode)
+	if err := data.createToolboxPodOnNode(winPod.Name, winPod.Namespace, winPod.NodeName, useHostNetwork); err != nil {
+		t.Fatalf("Error when creating Pod '%s': %v", winPodName, err)
+	}
+	defer deletePodWrapper(t, data, winPod.Namespace, winPod.Name)
+
+	testPodInfos := []PodInfo{clientPod, winPod}
+
+	// Verify Pod connectivity before agent restart
+	data.runPingMesh(t, testPodInfos, toolboxContainerName, true)
+
+	// Count the OVS flows.
+	initialOVSFlows := data.dumpOVSFlows(t, winWorkerNode)
+
+	// Restart Antrea agent Pods
+	err := data.RestartAntreaAgentPods(defaultTimeout)
+	assert.NoError(t, err)
+
+	// Wait until Agent completes reconcile and OpenFlows replay.
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 1*time.Minute, false, func(ctx context.Context) (done bool, err error) {
+		newOVSFlows := data.dumpOVSFlows(t, winWorkerNode)
+		if len(newOVSFlows) != len(initialOVSFlows) {
+			return false, nil
+		}
+		return true, nil
+	})
+	assert.NoErrorf(t, err, "The Openflow entries should be consistent after Antrea agent restarts on Windows Node %s", winWorkerNode)
+
+	// Verify Pod connectivity after agent restart
+	data.runPingMesh(t, testPodInfos, toolboxContainerName, true)
 }
 
 func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
@@ -411,24 +509,6 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", workerNode, antreaPodName)
 
-	dumpFlows := func() []string {
-		cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "--names"}
-		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
-		if err != nil {
-			t.Fatalf("error when dumping flows: <%v>, err: <%v>", stderr, err)
-		}
-		flows := make([]string, 0)
-		for _, flow := range strings.Split(stdout, "\n") {
-			flow = strings.TrimSpace(flow)
-			if flow == "" {
-				continue
-			}
-			flows = append(flows, flow)
-		}
-		count := len(flows)
-		t.Logf("Counted %d flow in OVS bridge '%s' for Node '%s'", count, defaultBridgeName, workerNode)
-		return flows
-	}
 	dumpGroups := func() []string {
 		cmd := []string{"ovs-ofctl", "dump-groups", defaultBridgeName}
 		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
@@ -449,7 +529,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 		return groups
 	}
 
-	flows1, groups1 := dumpFlows(), dumpGroups()
+	flows1, groups1 := data.dumpOVSFlows(t, workerNode), dumpGroups()
 	numFlows1, numGroups1 := len(flows1), len(groups1)
 
 	// This is necessary because "ovs-ctl restart" saves and restores OpenFlow flows for the
@@ -486,7 +566,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	t.Logf("Running second ping mesh to check that flows have been restored")
 	data.runPingMesh(t, podInfos, toolboxContainerName, true)
 
-	flows2, groups2 := dumpFlows(), dumpGroups()
+	flows2, groups2 := data.dumpOVSFlows(t, workerNode), dumpGroups()
 	numFlows2, numGroups2 := len(flows2), len(groups2)
 	if !assert.Equal(t, numFlows1, numFlows2, "Mismatch in OVS flow count after flow replay") {
 		fmt.Println("Flows before replay:")
