@@ -123,12 +123,26 @@ func NewServiceExternalIPController(
 	})
 
 	c.serviceInformer.AddEventHandlerWithResyncPeriod(
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: c.enqueueService,
-			UpdateFunc: func(old, cur interface{}) {
-				c.enqueueService(cur)
+		cache.FilteringResourceEventHandler{
+			FilterFunc: func(obj interface{}) bool {
+				svc, ok := obj.(*corev1.Service)
+				if ok {
+					return getServiceExternalIPPool(svc) != ""
+				}
+				if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+					if cast, ok := tombstone.Obj.(*corev1.Service); ok {
+						return getServiceExternalIPPool(cast) != ""
+					}
+				}
+				return false
 			},
-			DeleteFunc: c.enqueueService,
+			Handler: cache.ResourceEventHandlerFuncs{
+				AddFunc: c.enqueueService,
+				UpdateFunc: func(_, obj interface{}) {
+					c.enqueueService(obj)
+				},
+				DeleteFunc: c.enqueueService,
+			},
 		},
 		resyncPeriod,
 	)
@@ -499,7 +513,7 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 	}
 
 	if currentIPPool == "" {
-		klog.V(2).InfoS("Ignored Service as required annotation is not found", "service", key)
+		klog.V(2).InfoS("Ignored Service as the required annotation no longer exists", "service", key)
 		if released {
 			return c.updateServiceLoadBalancerIP(service, nil)
 		}
