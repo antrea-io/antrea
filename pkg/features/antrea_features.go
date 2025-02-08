@@ -159,6 +159,7 @@ const (
 	EgressTrafficShaping featuregate.Feature = "EgressTrafficShaping"
 
 	// alpha: v1.15
+	// beta: v2.3
 	// Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
 	EgressSeparateSubnet featuregate.Feature = "EgressSeparateSubnet"
 
@@ -219,7 +220,7 @@ var (
 		LoadBalancerModeDSR:         {Default: false, PreRelease: featuregate.Alpha},
 		AdminNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 		EgressTrafficShaping:        {Default: false, PreRelease: featuregate.Alpha},
-		EgressSeparateSubnet:        {Default: false, PreRelease: featuregate.Alpha},
+		EgressSeparateSubnet:        {Default: true, PreRelease: featuregate.Beta},
 		NodeNetworkPolicy:           {Default: false, PreRelease: featuregate.Alpha},
 		L7FlowExporter:              {Default: false, PreRelease: featuregate.Alpha},
 		NodeLatencyMonitor:          {Default: false, PreRelease: featuregate.Alpha},
