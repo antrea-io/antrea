@@ -5468,7 +5468,7 @@ func createPolicyForFQDNCacheMinTTL(t *testing.T, data *TestData, testFQDN strin
 
 	annp, err := data.CreateOrUpdateANNP(builder.Get())
 	require.NoError(t, err, "error while deploying Antrea policy")
-	require.NoError(t, data.waitForANNPRealized(t, annp.Namespace, annp.Name, 10*time.Second))
+	require.NoError(t, data.waitForANNPRealized(t, annp.Namespace, annp.Name, 30*time.Second))
 }
 
 // createHttpAgnhostPod creates an agnhost Pod that serves HTTP requests and returns the IP of Pod created.

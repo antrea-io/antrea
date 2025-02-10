@@ -300,6 +300,22 @@ function configure_vlan_subnets {
       docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[j]} -o ${vlan_interfaces[i]} -j ACCEPT
     done
   done
+
+  if [[ $FLEXIBLE_IPAM == true ]]; then
+    docker_run_with_host_net ipset create excluded_subnets hash:net
+    docker_run_with_host_net ipset add excluded_subnets 192.168.241.0/24
+    docker_run_with_host_net ipset add excluded_subnets 192.168.242.0/24
+    docker_run_with_host_net ipset add excluded_subnets 192.168.240.0/24
+    docker_run_with_host_net ipset list excluded_subnets
+    
+    # Bypass default Docker SNAT rule for FlexibleIPAM traffic from the untagged subnet (192.168.240.0/24, which is the subnet for the Docker bridge network)
+    # and destined to the VLAN subnets (192.168.241.0/24, 192.168.242.0/24).
+    docker_run_with_host_net iptables -t nat -I POSTROUTING 1 ! -o $bridge_interface -s 192.168.240.0/24 -m set --match-set excluded_subnets dst -j RETURN
+
+    # With FlexibleIPAM, Antrea SNAT is disabled (noSNAT: true) so Pods don't have access to the external network by default (including regular / NodeIPAM Pods).
+    # Our e2e tests require external network access for regular Pods, so we need to add a custom SNAT rule.
+    docker_run_with_host_net iptables -t nat -A POSTROUTING ! -o $bridge_interface -s 10.244.0.0/16 -m set ! --match-set excluded_subnets dst -j MASQUERADE
+  fi
 }
 
 function delete_vlan_subnets {
@@ -318,15 +334,27 @@ function delete_vlan_subnets {
       docker_run_with_host_net ip link del $interface_name
     fi
   done
+
+  if [[ $FLEXIBLE_IPAM == true ]]; then
+    docker_run_with_host_net iptables -t nat -D POSTROUTING ! -o $bridge_interface -s 192.168.240.0/24 -m set --match-set excluded_subnets dst -j RETURN || true
+    docker_run_with_host_net iptables -t nat -D POSTROUTING ! -o $bridge_interface -s 10.244.0.0/16 -m set ! --match-set excluded_subnets dst -j MASQUERADE || true
+    docker_run_with_host_net ipset destroy excluded_subnets || true  
+  fi
+}
+
+function delete_network_by_filter {
+  local networks=$(docker network ls -f name="$1" --format '{{.Name}}')
+  if [[ -n $networks ]]; then
+    docker network rm $networks > /dev/null 2>&1
+    echo "Deleted networks: $networks"
+  fi
 }
 
 function delete_networks {
-  networks=$(docker network ls -f name=antrea --format '{{.Name}}')
-  networks="$(echo $networks)"
-  if [[ ! -z $networks ]]; then
-    docker network rm $networks > /dev/null 2>&1
-    echo "deleted networks $networks"
+  if [[ $FLEXIBLE_IPAM == true ]]; then
+    delete_network_by_filter "kind"
   fi
+  delete_network_by_filter "antrea"
 }
 
 function load_images {
@@ -711,7 +739,6 @@ if [[ $ACTION == "destroy" ]]; then
       exit
 fi
 
-
 kind_version=$(kind version | awk  '{print $2}')
 kind_version=${kind_version:1} # strip leading 'v'
 function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
@@ -727,6 +754,11 @@ if [[ $ACTION == "create" ]]; then
     if [[ ! -z $SUBNETS ]] && [[ ! -z $EXTRA_NETWORKS ]]; then
         echoerr "Only one of '--subnets' and '--extra-networks' can be specified"
         exit 1
+    fi
+
+   # Reserve IPs after 192.168.240.63 for e2e tests.
+    if [[ $FLEXIBLE_IPAM == true ]]; then
+        docker network create -d bridge --subnet 192.168.240.0/24 --gateway 192.168.240.1 --ip-range 192.168.240.0/26 kind
     fi
     create
 fi
