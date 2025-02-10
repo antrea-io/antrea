@@ -84,46 +84,54 @@ func NewPodStore(podInformer cache.SharedIndexInformer) *PodStore {
 }
 
 func (s *PodStore) onPodUpdate(oldObj interface{}, newObj interface{}) {
+	oldPod, ok := oldObj.(*corev1.Pod)
+	if !ok {
+		klog.ErrorS(nil, "Received unexpected object", "oldObj", oldObj)
+		return
+	}
 	newPod, ok := newObj.(*corev1.Pod)
 	if !ok {
 		klog.ErrorS(nil, "Received unexpected object", "newObj", newObj)
 		return
 	}
-	err := s.pods.Update(newPod)
-	if err != nil {
-		klog.ErrorS(err, "Error when updating Pod in index")
-		return
+
+	// From https://pkg.go.dev/k8s.io/client-go/tools/cache#SharedInformer:
+	// Because `ObjectMeta.UID` has no role in identifying objects, it is possible that when (1)
+	// object O1 with ID (e.g. namespace and name) X and `ObjectMeta.UID` U1 in the
+	// SharedInformer's local cache is deleted and later (2) another object O2 with ID X and
+	// ObjectMeta.UID U2 is created the informer's clients are not notified of (1) and (2) but
+	// rather are notified only of an update from O1 to O2. Clients that need to detect such
+	// cases might do so by comparing the `ObjectMeta.UID` field of the old and the new object
+	// in the code that handles update notifications (i.e. `OnUpdate` method of
+	// ResourceEventHandler).
+	if oldPod.UID != newPod.UID {
+		if err := s.deletePod(oldPod); err != nil {
+			klog.ErrorS(err, "Error when deleting Pod from store", "Pod", klog.KObj(oldPod), "UID", oldPod.UID)
+		}
+		if err := s.addPod(newPod); err != nil {
+			klog.ErrorS(err, "Error when adding Pod to store", "Pod", klog.KObj(newPod), "UID", newPod.UID)
+		}
+	} else {
+		if err := s.updatePod(newPod); err != nil {
+			klog.ErrorS(err, "Error when updating Pod in store", "Pod", klog.KObj(newPod), "UID", newPod.UID)
+		}
 	}
 	klog.V(4).InfoS("Processed Pod Update Event", "Pod", klog.KObj(newPod))
 }
 
 func (s *PodStore) onPodCreate(obj interface{}) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	timeNow := s.clock.Now()
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 		return
 	}
-	err := s.pods.Add(pod)
-	if err != nil {
-		klog.ErrorS(err, "Error when adding Pod to index")
-		return
-	}
-	switch pod.Status.Phase {
-	case corev1.PodPending:
-		s.timestampMap[pod.UID] = &podTimestamps{CreationTimestamp: timeNow}
-	default:
-		s.timestampMap[pod.UID] = &podTimestamps{CreationTimestamp: pod.CreationTimestamp.Time}
+	if err := s.addPod(pod); err != nil {
+		klog.ErrorS(err, "Error when adding Pod to store", "Pod", klog.KObj(pod), "UID", pod.UID)
 	}
 	klog.V(4).InfoS("Processed Pod Create Event", "Pod", klog.KObj(pod))
 }
 
 func (s *PodStore) onPodDelete(obj interface{}) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	timeNow := s.clock.Now()
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		var err error
@@ -133,14 +141,47 @@ func (s *PodStore) onPodDelete(obj interface{}) {
 			return
 		}
 	}
+	if err := s.deletePod(pod); err != nil {
+		klog.ErrorS(err, "Error when deleting Pod from store", "Pod", klog.KObj(pod), "UID", pod.UID)
+	}
+	klog.V(4).InfoS("Processed Pod Delete Event", "Pod", klog.KObj(pod))
+}
+
+func (s *PodStore) addPod(pod *corev1.Pod) error {
+	timeNow := s.clock.Now()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	err := s.pods.Add(pod)
+	if err != nil {
+		return fmt.Errorf("error when adding Pod to index: %w", err)
+	}
+	switch pod.Status.Phase {
+	case corev1.PodPending:
+		s.timestampMap[pod.UID] = &podTimestamps{CreationTimestamp: timeNow}
+	default:
+		s.timestampMap[pod.UID] = &podTimestamps{CreationTimestamp: pod.CreationTimestamp.Time}
+	}
+	return nil
+}
+
+func (s *PodStore) updatePod(pod *corev1.Pod) error {
+	if err := s.pods.Update(pod); err != nil {
+		return fmt.Errorf("error when updating Pod in index: %w", err)
+	}
+	return nil
+}
+
+func (s *PodStore) deletePod(pod *corev1.Pod) error {
+	timeNow := s.clock.Now()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	timestamp, ok := s.timestampMap[pod.UID]
 	if !ok {
-		klog.ErrorS(nil, "Cannot find podTimestamps in timestampMap", "UID", pod.UID)
-		return
+		return fmt.Errorf("cannot find podTimestamps in timestampMap")
 	}
 	timestamp.DeletionTimestamp = &timeNow
 	s.podsToDelete.AddAfter(pod.UID, s.delayTime)
-	klog.V(4).InfoS("Processed Pod Delete Event", "Pod", klog.KObj(pod))
+	return nil
 }
 
 func (s *PodStore) checkDeletedPod(obj interface{}) (*corev1.Pod, error) {

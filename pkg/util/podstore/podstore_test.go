@@ -112,46 +112,70 @@ var (
 )
 
 func Test_onPodUpdate(t *testing.T) {
-	newPod1 := &v1.Pod{
-		Status: v1.PodStatus{
-			PodIPs: []v1.PodIP{
-				{
-					IP: "4.5.6.7",
-				},
-			},
-		},
+	fakeClock := clock.NewFakeClock(time.Now())
+	oldPod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pod1",
 			Namespace: "pod1_ns",
 			UID:       "pod1",
 		},
 	}
+	newPod1 := oldPod.DeepCopy()
+	newPod1.Status.PodIPs = []v1.PodIP{
+		{
+			IP: "4.5.6.7",
+		},
+	}
+	newPod2 := oldPod.DeepCopy()
+	newPod2.UID = "pod1_new"
 	tests := []struct {
-		name        string
-		oldObj      interface{}
-		newObj      interface{}
-		expectedPod *v1.Pod
+		name          string
+		newObj        interface{}
+		expectedPods  []*v1.Pod
+		oldPodDeleted bool
 	}{
 		{
-			name:        "newObj is not Pod",
-			newObj:      node,
-			expectedPod: pod1,
+			name:         "newObj is not Pod",
+			newObj:       node,
+			expectedPods: []*v1.Pod{oldPod},
 		},
 		{
-			name:        "valid case",
-			newObj:      newPod1,
-			expectedPod: newPod1,
+			name:         "Pod IP update",
+			newObj:       newPod1,
+			expectedPods: []*v1.Pod{newPod1},
+		},
+		{
+			name:          "same name, new UID",
+			newObj:        newPod2,
+			expectedPods:  []*v1.Pod{oldPod, newPod2},
+			oldPodDeleted: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			podStore := &PodStore{
-				pods: cache.NewIndexer(podKeyFunc, cache.Indexers{podIPIndex: podIPIndexFunc}),
+				timestampMap: map[types.UID]*podTimestamps{},
+				clock:        fakeClock,
+				pods:         cache.NewIndexer(podKeyFunc, cache.Indexers{podIPIndex: podIPIndexFunc}),
+				podsToDelete: workqueue.NewTypedDelayingQueueWithConfig(workqueue.TypedDelayingQueueConfig[types.UID]{
+					Name:  deleteQueueName,
+					Clock: fakeClock,
+				}),
 			}
-			require.NoError(t, podStore.pods.Add(pod1))
-			podStore.onPodUpdate(tt.oldObj, tt.newObj)
-			require.Len(t, podStore.pods.List(), 1)
-			assert.Equal(t, tt.expectedPod, podStore.pods.List()[0].(*v1.Pod))
+			require.NoError(t, podStore.addPod(oldPod))
+			podStore.onPodUpdate(oldPod, tt.newObj)
+			pods := make([]*v1.Pod, 0)
+			for _, obj := range podStore.pods.List() {
+				pods = append(pods, obj.(*v1.Pod))
+			}
+			assert.ElementsMatch(t, tt.expectedPods, pods)
+			if tt.oldPodDeleted {
+				require.Equal(t, 1, podStore.podsToDelete.Len())
+				uid, _ := podStore.podsToDelete.Get()
+				assert.Equal(t, oldPod.UID, uid)
+			} else {
+				assert.Equal(t, 0, podStore.podsToDelete.Len())
+			}
 		})
 	}
 }
