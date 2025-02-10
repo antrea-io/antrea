@@ -552,9 +552,6 @@ func (c *Controller) GetFQDNCache(fqdnFilter *querier.FQDNCacheFilter) []types.D
 			// this pattern will match no strings if there is an error with the regex formatting or usage with the user specified --domain flag
 			pattern = regexp.MustCompile(`a\A`)
 		}
-	} else {
-		// this pattern will match all strings if the filter is unset
-		pattern = regexp.MustCompile(`.*`)
 	}
 	for fqdn, dnsMeta := range c.fqdnController.dnsEntryCache {
 		for _, ipWithExpiration := range dnsMeta.responseIPs {

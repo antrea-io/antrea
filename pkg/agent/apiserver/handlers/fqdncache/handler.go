@@ -29,7 +29,7 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fqdnFilter := newFilterFromURLQuery(r.URL.Query())
 		dnsEntryCache := npq.GetFQDNCache(fqdnFilter)
-		resp := []agentapi.FQDNCacheResponse{}
+		resp := make([]agentapi.FQDNCacheResponse, 0, len(dnsEntryCache))
 		for _, entry := range dnsEntryCache {
 			resp = append(resp, agentapi.FQDNCacheResponse{
 				FQDNName:       entry.FQDNName,
@@ -45,5 +45,8 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 }
 
 func newFilterFromURLQuery(query url.Values) *querier.FQDNCacheFilter {
+	if len(query) == 0 {
+		return nil
+	}
 	return &querier.FQDNCacheFilter{Domain: query.Get("domain")}
 }

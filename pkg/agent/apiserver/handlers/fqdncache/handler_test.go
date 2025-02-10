@@ -26,20 +26,22 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/types"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
 func TestFqdnCacheQuery(t *testing.T) {
 	tests := []struct {
-		name             string
-		expectedStatus   int
-		expectedResponse []types.DnsCacheEntry
+		name                 string
+		expectedStatus       int
+		filteredCacheEntries []types.DnsCacheEntry
+		expectedResponse     []apis.FQDNCacheResponse
 	}{
 		{
 			name:           "FQDN cache exists - multiple addresses multiple domains",
 			expectedStatus: http.StatusOK,
-			expectedResponse: []types.DnsCacheEntry{
+			filteredCacheEntries: []types.DnsCacheEntry{
 				{
 					FQDNName:       "example.com",
 					IPAddress:      net.ParseIP("10.0.0.1"),
@@ -56,18 +58,35 @@ func TestFqdnCacheQuery(t *testing.T) {
 					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
 				},
 			},
+			expectedResponse: []apis.FQDNCacheResponse{
+				{
+					FQDNName:       "example.com",
+					IPAddress:      net.ParseIP("10.0.0.1").String(),
+					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+				},
+				{
+					FQDNName:       "foo.com",
+					IPAddress:      net.ParseIP("10.0.0.4").String(),
+					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+				},
+				{
+					FQDNName:       "bar.com",
+					IPAddress:      net.ParseIP("10.0.0.5").String(),
+					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+				},
+			},
 		},
 		{
-			name:             "FQDN cache does not exist",
-			expectedStatus:   http.StatusOK,
-			expectedResponse: []types.DnsCacheEntry{},
+			name:                 "FQDN cache does not exist",
+			expectedStatus:       http.StatusOK,
+			filteredCacheEntries: []types.DnsCacheEntry{},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			q := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-			q.EXPECT().GetFQDNCache(nil).Return(tt.expectedResponse)
+			q.EXPECT().GetFQDNCache(nil).Return(tt.filteredCacheEntries)
 			handler := HandleFunc(q)
 			req, err := http.NewRequest(http.MethodGet, "", nil)
 			require.NoError(t, err)
@@ -80,9 +99,9 @@ func TestFqdnCacheQuery(t *testing.T) {
 			for i, rec := range receivedResponse {
 				parsedTime, err := time.Parse(time.RFC3339, rec["expirationTime"].(string))
 				require.NoError(t, err)
-				assert.Equal(t, tt.expectedResponse[i], types.DnsCacheEntry{
+				assert.Equal(t, tt.expectedResponse[i], apis.FQDNCacheResponse{
 					FQDNName:       rec["fqdnName"].(string),
-					IPAddress:      net.ParseIP(rec["ipAddress"].(string)),
+					IPAddress:      rec["ipAddress"].(string),
 					ExpirationTime: parsedTime,
 				})
 			}
