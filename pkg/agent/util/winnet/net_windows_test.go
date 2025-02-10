@@ -727,7 +727,7 @@ func TestAddVMSwitch(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			mockRunCommand(t, []string{fmt.Sprintf(`New-VMSwitch -Name "%s" -NetAdapterName "%s" -EnableEmbeddedTeaming $true -AllowManagementOS $true -ComputerName $(hostname)| Enable-VMSwitchExtension "%s"`, testVMSwitchName, testSwitchName, ovsExtensionName)}, "", tc.commandErr, false)
+			mockRunCommand(t, []string{fmt.Sprintf(`New-VMSwitch -Name "%s" -NetAdapterName "%s" -EnableEmbeddedTeaming $true -AllowManagementOS $true -ComputerName localhost| Enable-VMSwitchExtension "%s"`, testVMSwitchName, testSwitchName, ovsExtensionName)}, "", tc.commandErr, false)
 			gotErr := h.AddVMSwitch(testSwitchName, testVMSwitchName)
 			assert.Equal(t, tc.wantErr, gotErr)
 		})
@@ -752,7 +752,7 @@ func TestEnableVMSwitchOVSExtension(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			mockRunCommand(t, []string{fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName $(hostname)| Enable-VMSwitchExtension "%s"`, testVMSwitchName, ovsExtensionName)}, "", tc.commandErr, false)
+			mockRunCommand(t, []string{fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName localhost| Enable-VMSwitchExtension "%s"`, testVMSwitchName, ovsExtensionName)}, "", tc.commandErr, false)
 			gotErr := h.EnableVMSwitchOVSExtension(testVMSwitchName)
 			assert.Equal(t, tc.wantErr, gotErr)
 		})
@@ -786,7 +786,7 @@ func TestIsVMSwitchOVSExtensionEnabled(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			mockRunCommand(t, []string{fmt.Sprintf(`Get-VMSwitchExtension -VMSwitchName "%s" -ComputerName $(hostname) | ? Id -EQ "%s"`, testVMSwitchName, OVSExtensionID)}, tc.commandOut, tc.commandErr, false)
+			mockRunCommand(t, []string{fmt.Sprintf(`Get-VMSwitchExtension -VMSwitchName "%s" -ComputerName localhost | ? Id -EQ "%s"`, testVMSwitchName, OVSExtensionID)}, tc.commandOut, tc.commandErr, false)
 			res, gotErr := h.IsVMSwitchOVSExtensionEnabled(testVMSwitchName)
 			assert.Equal(t, tc.wantRes, res)
 			assert.Equal(t, tc.wantErr, gotErr)
@@ -795,7 +795,7 @@ func TestIsVMSwitchOVSExtensionEnabled(t *testing.T) {
 }
 
 func TestGetVMSwitchInterfaceName(t *testing.T) {
-	getVMCmd := fmt.Sprintf(`Get-VMSwitchTeam -Name "%s" | select NetAdapterInterfaceDescription |  Format-Table -HideTableHeaders`, testVMSwitchName)
+	getVMCmd := fmt.Sprintf(`Get-VMSwitchTeam -Name "%s" -ComputerName localhost | select NetAdapterInterfaceDescription |  Format-Table -HideTableHeaders`, testVMSwitchName)
 	getAdapterCmd := fmt.Sprintf(`Get-NetAdapter -InterfaceDescription "%s" | select Name | Format-Table -HideTableHeaders`, "test")
 	tests := []struct {
 		name       string
@@ -830,8 +830,8 @@ func TestGetVMSwitchInterfaceName(t *testing.T) {
 }
 
 func TestRemoveVMSwitch(t *testing.T) {
-	getCmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName $(hostname)`, testVMSwitchName)
-	removeCmd := fmt.Sprintf(`Remove-VMSwitch -Name "%s" -ComputerName $(hostname) -Force`, testVMSwitchName)
+	getCmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName localhost`, testVMSwitchName)
+	removeCmd := fmt.Sprintf(`Remove-VMSwitch -Name "%s" -ComputerName localhost -Force`, testVMSwitchName)
 	tests := []struct {
 		name       string
 		commandOut string
