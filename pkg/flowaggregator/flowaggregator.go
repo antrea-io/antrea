@@ -275,8 +275,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 		cpInput.NumExtraElements += len(infoelements.AntreaSourceStatsElementList) + len(infoelements.AntreaDestinationStatsElementList) +
 			len(infoelements.AntreaFlowEndSecondsElementList) + len(infoelements.AntreaThroughputElementList) + len(infoelements.AntreaSourceThroughputElementList) + len(infoelements.AntreaDestinationThroughputElementList)
 	} else {
-		// originalObservationDomainId, originalExporterIPv4Address, originalExporterIPv6Address, flowDirection
-		cpInput.NumExtraElements += 4
+		cpInput.NumExtraElements += len(infoelements.IANAProxyModeElementList)
 	}
 	// Tell the collector to accept IEs which are not part of the IPFIX registry (hardcoded in
 	// the go-ipfix library). The preprocessor will take care of removing these elements.

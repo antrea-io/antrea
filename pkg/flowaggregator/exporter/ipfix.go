@@ -255,22 +255,22 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 		antreaInfoElements = infoelements.AntreaInfoElementsIPv6
 		templateID = e.templateIDv6
 	}
-	for _, ie := range ianaInfoElements {
-		ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.IANAEnterpriseID)
+	for _, ieName := range ianaInfoElements {
+		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
 			return 0, err
 		}
 		elements = append(elements, ie)
 	}
-	for _, ie := range infoelements.IANAReverseInfoElements {
-		ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.IANAReversedEnterpriseID)
+	for _, ieName := range infoelements.IANAReverseInfoElements {
+		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAReversedEnterpriseID)
 		if err != nil {
 			return 0, err
 		}
 		elements = append(elements, ie)
 	}
-	for _, ie := range antreaInfoElements {
-		ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
+	for _, ieName := range antreaInfoElements {
+		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
 			return 0, err
 		}
@@ -295,8 +295,8 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 			}
 			elements = append(elements, ie)
 		}
-		for _, ie := range infoelements.AntreaFlowEndSecondsElementList {
-			ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
+		for _, ieName := range infoelements.AntreaFlowEndSecondsElementList {
+			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
 				return 0, err
 			}
@@ -326,8 +326,8 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 			elements = append(elements, ie)
 		}
 	}
-	for _, ie := range infoelements.AntreaLabelsElementList {
-		ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
+	for _, ieName := range infoelements.AntreaLabelsElementList {
+		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
 			return 0, err
 		}
@@ -339,26 +339,13 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	}
 	elements = append(elements, ie)
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeProxy {
-		ie, err := e.createInfoElementForTemplateSet("originalObservationDomainId", ipfixregistry.IANAEnterpriseID)
-		if err != nil {
-			return 0, err
+		for _, ieName := range infoelements.IANAProxyModeElementList {
+			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAEnterpriseID)
+			if err != nil {
+				return 0, err
+			}
+			elements = append(elements, ie)
 		}
-		elements = append(elements, ie)
-		ie, err = e.createInfoElementForTemplateSet("originalExporterIPv4Address", ipfixregistry.IANAEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-		ie, err = e.createInfoElementForTemplateSet("originalExporterIPv6Address", ipfixregistry.IANAEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-		ie, err = e.createInfoElementForTemplateSet("flowDirection", ipfixregistry.IANAEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
 	}
 	e.set.ResetSet()
 	if err := e.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
