@@ -26,8 +26,8 @@ import (
 )
 
 type DnsCacheEntry struct {
-	FqdnName       string
-	IpAddress      net.IP
+	FQDNName       string
+	IPAddress      net.IP
 	ExpirationTime time.Time
 }
 

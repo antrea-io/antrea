@@ -938,23 +938,23 @@ func TestGetFqdnCache(t *testing.T) {
 
 	expectedEntryList = []agenttypes.DnsCacheEntry{
 		{
-			FqdnName:       "example.com",
-			IpAddress:      net.ParseIP("10.0.0.1"),
+			FQDNName:       "example.com",
+			IPAddress:      net.ParseIP("10.0.0.1"),
 			ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
 		},
 		{
-			FqdnName:       "example.com",
-			IpAddress:      net.ParseIP("10.0.0.2"),
+			FQDNName:       "example.com",
+			IPAddress:      net.ParseIP("10.0.0.2"),
 			ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
 		},
 		{
-			FqdnName:       "example.com",
-			IpAddress:      net.ParseIP("10.0.0.3"),
+			FQDNName:       "example.com",
+			IPAddress:      net.ParseIP("10.0.0.3"),
 			ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
 		},
 		{
-			FqdnName:       "antrea.io",
-			IpAddress:      net.ParseIP("10.0.0.4"),
+			FQDNName:       "antrea.io",
+			IPAddress:      net.ParseIP("10.0.0.4"),
 			ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
 		},
 	}

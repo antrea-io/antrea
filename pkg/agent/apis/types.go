@@ -74,8 +74,8 @@ func (r AntreaAgentInfoResponse) SortRows() bool {
 }
 
 type FQDNCacheResponse struct {
-	FqdnName       string    `json:"fqdnName,omitempty"`
-	IpAddress      string    `json:"ipAddress,omitempty"`
+	FQDNName       string    `json:"fqdnName,omitempty"`
+	IPAddress      string    `json:"ipAddress,omitempty"`
 	ExpirationTime time.Time `json:"expirationTime,omitempty"`
 }
 
@@ -85,8 +85,8 @@ func (r FQDNCacheResponse) GetTableHeader() []string {
 
 func (r FQDNCacheResponse) GetTableRow(maxColumn int) []string {
 	return []string{
-		r.FqdnName,
-		r.IpAddress,
+		r.FQDNName,
+		r.IPAddress,
 		r.ExpirationTime.String(),
 	}
 }

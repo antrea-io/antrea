@@ -41,18 +41,18 @@ func TestFqdnCacheQuery(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedResponse: []types.DnsCacheEntry{
 				{
-					FqdnName:       "example.com",
-					IpAddress:      net.ParseIP("10.0.0.1"),
+					FQDNName:       "example.com",
+					IPAddress:      net.ParseIP("10.0.0.1"),
 					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
 				},
 				{
-					FqdnName:       "foo.com",
-					IpAddress:      net.ParseIP("10.0.0.4"),
+					FQDNName:       "foo.com",
+					IPAddress:      net.ParseIP("10.0.0.4"),
 					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
 				},
 				{
-					FqdnName:       "bar.com",
-					IpAddress:      net.ParseIP("10.0.0.5"),
+					FQDNName:       "bar.com",
+					IPAddress:      net.ParseIP("10.0.0.5"),
 					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
 				},
 			},
@@ -81,8 +81,8 @@ func TestFqdnCacheQuery(t *testing.T) {
 				parsedTime, err := time.Parse(time.RFC3339, rec["expirationTime"].(string))
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedResponse[i], types.DnsCacheEntry{
-					FqdnName:       rec["fqdnName"].(string),
-					IpAddress:      net.ParseIP(rec["ipAddress"].(string)),
+					FQDNName:       rec["fqdnName"].(string),
+					IPAddress:      net.ParseIP(rec["ipAddress"].(string)),
 					ExpirationTime: parsedTime,
 				})
 			}

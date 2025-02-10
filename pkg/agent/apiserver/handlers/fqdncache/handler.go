@@ -32,8 +32,8 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 		resp := []agentapi.FQDNCacheResponse{}
 		for _, entry := range dnsEntryCache {
 			resp = append(resp, agentapi.FQDNCacheResponse{
-				FqdnName:       entry.FqdnName,
-				IpAddress:      entry.IpAddress.String(),
+				FQDNName:       entry.FQDNName,
+				IPAddress:      entry.IPAddress.String(),
 				ExpirationTime: entry.ExpirationTime,
 			})
 		}
