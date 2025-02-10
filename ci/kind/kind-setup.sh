@@ -365,6 +365,13 @@ function delete_networks {
   delete_network_by_filter "antrea"
 }
 
+function delete_networks {
+  if [[ $FLEXIBLE_IPAM == true ]]; then
+    delete_network_by_filter "kind"
+  fi
+  delete_network_by_filter "antrea"
+}
+
 function load_images {
   echo "load images"
   set +e
