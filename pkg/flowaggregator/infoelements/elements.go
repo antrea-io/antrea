@@ -123,4 +123,11 @@ var (
 		"throughputFromDestinationNode",
 		"reverseThroughputFromDestinationNode",
 	}
+
+	IANAProxyModeElementList = []string{
+		"originalObservationDomainId",
+		"originalExporterIPv4Address",
+		"originalExporterIPv6Address",
+		"flowDirection",
+	}
 )
