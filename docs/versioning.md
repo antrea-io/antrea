@@ -64,7 +64,7 @@ more structured way in [feature-gates.md](feature-gates.md).
 
 ## Release cycle
 
-New Antrea minor releases are currently shipped every 6 to 8 weeks. This fast
+New Antrea minor releases are currently shipped every 12 to 14 weeks. This
 release cadence enables us to ship new features quickly and frequently. It may
 change in the future. Compared to deploying the top-of-tree of the Antrea main
 branch, using a released version should provide more stability
@@ -81,7 +81,7 @@ Antrea maintains release branches for the two most recent minor releases
 0.12 is released). As part of this maintenance process, patch versions are
 released as frequently as needed, following these
 [guidelines](#minor-releases-and-patch-releases). With the current release
-cadence, this means that each minor release receives approximately 3 months of
+cadence, this means that each minor release receives approximately 6 months of
 patch support. This may seem short, but was done on purpose to encourage users
 to upgrade Antrea often and avoid potential incompatibility issues. In the
 future, we may reduce our release cadence for minor releases and simultaneously
