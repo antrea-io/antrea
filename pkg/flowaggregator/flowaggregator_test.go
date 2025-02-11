@@ -356,6 +356,9 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 			originalExporterIPv4AddressIE := ipfixentities.NewInfoElement("originalExporterIPv4Address", 0, 0, ipfixregistry.IANAEnterpriseID, 4)
 			mockIPFIXRegistry.EXPECT().GetInfoElement("originalExporterIPv4Address", ipfixregistry.IANAEnterpriseID).Return(originalExporterIPv4AddressIE, nil)
 			mockRecord.EXPECT().AddInfoElement(ipfixentities.NewIPAddressInfoElement(originalExporterIPv4AddressIE, exporterAddressIPv4))
+			flowDirectionIE := ipfixentities.NewInfoElement("flowDirection", 0, 0, ipfixregistry.IANAEnterpriseID, 1)
+			mockIPFIXRegistry.EXPECT().GetInfoElement("flowDirection", ipfixregistry.IANAEnterpriseID).Return(flowDirectionIE, nil)
+			mockRecord.EXPECT().AddInfoElement(ipfixentities.NewUnsigned8InfoElement(flowDirectionIE, uint8(0xff)))
 
 			err := fa.proxyRecord(mockRecord, obsDomainID, exporterAddress)
 			assert.NoError(t, err, "Error when proxying flow record")

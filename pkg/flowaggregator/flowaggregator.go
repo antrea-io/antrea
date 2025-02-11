@@ -275,8 +275,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 		cpInput.NumExtraElements += len(infoelements.AntreaSourceStatsElementList) + len(infoelements.AntreaDestinationStatsElementList) +
 			len(infoelements.AntreaFlowEndSecondsElementList) + len(infoelements.AntreaThroughputElementList) + len(infoelements.AntreaSourceThroughputElementList) + len(infoelements.AntreaDestinationThroughputElementList)
 	} else {
-		// originalObservationDomainId, originalExporterIPv4Address, originalExporterIPv6Address
-		cpInput.NumExtraElements += 3
+		cpInput.NumExtraElements += len(infoelements.IANAProxyModeElementList)
 	}
 	// Tell the collector to accept IEs which are not part of the IPFIX registry (hardcoded in
 	// the go-ipfix library). The preprocessor will take care of removing these elements.
@@ -505,7 +504,36 @@ func (fa *flowAggregator) proxyRecord(record ipfixentities.Record, obsDomainID u
 	if err != nil {
 		return fmt.Errorf("cannot find record start time: %w", err)
 	}
-	if getFlowType(record) == ipfixregistry.FlowTypeInterNode {
+	flowType := getFlowType(record)
+	var withSource, withDestination bool
+	if sourcePodName, _, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
+		withSource = sourcePodName.GetStringValue() != ""
+	}
+	if destinationPodName, _, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
+		withDestination = destinationPodName.GetStringValue() != ""
+	}
+	var direction uint8
+	switch {
+	// !withDestination should be redundant here
+	case flowType == ipfixregistry.FlowTypeInterNode && withSource && !withDestination:
+		// egress
+		direction = 0x01
+	// !withSource should be redundant here
+	case flowType == ipfixregistry.FlowTypeInterNode && !withSource && withDestination:
+		// ingress
+		direction = 0x00
+	case flowType == ipfixregistry.FlowTypeToExternal && withSource:
+		// egress
+		direction = 0x01
+	case flowType == ipfixregistry.FlowTypeFromExternal && withDestination:
+		// ingress
+		direction = 0x00
+	default:
+		// not a valid value for the IE, we use it as a reserved value (unknown)
+		// this covers the IntraNode case
+		direction = 0xff
+	}
+	if flowType == ipfixregistry.FlowTypeInterNode {
 		// This is the only case where K8s metadata could be missing
 		fa.fillK8sMetadata(sourceAddress, destinationAddress, record, startTime)
 	}
@@ -522,6 +550,9 @@ func (fa *flowAggregator) proxyRecord(record ipfixentities.Record, obsDomainID u
 	}
 	if err := fa.addOriginalExporterIPv6Address(record, originalExporterAddress); err != nil {
 		klog.ErrorS(err, "Failed to add originalExporterIPv6Address")
+	}
+	if err := fa.addFlowDirection(record, direction); err != nil {
+		klog.ErrorS(err, "Failed to add flowDirection")
 	}
 	return fa.sendRecord(record, isIPv6)
 }
@@ -820,6 +851,17 @@ func (fa *flowAggregator) addOriginalExporterIPv6Address(record ipfixentities.Re
 	}
 	if err := record.AddInfoElement(ipfixentities.NewIPAddressInfoElement(ie, address)); err != nil {
 		return fmt.Errorf("error when adding originalExporterIPv6Address InfoElement with value: %w", err)
+	}
+	return nil
+}
+
+func (fa *flowAggregator) addFlowDirection(record ipfixentities.Record, direction uint8) error {
+	ie, err := fa.registry.GetInfoElement("flowDirection", ipfixregistry.IANAEnterpriseID)
+	if err != nil {
+		return fmt.Errorf("error when getting flowDirection InfoElement: %w", err)
+	}
+	if err := record.AddInfoElement(ipfixentities.NewUnsigned8InfoElement(ie, direction)); err != nil {
+		return fmt.Errorf("error when adding flowDirection InfoElement with value: %w", err)
 	}
 	return nil
 }
