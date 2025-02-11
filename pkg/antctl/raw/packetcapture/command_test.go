@@ -96,7 +96,7 @@ func TestRun(t *testing.T) {
 			name: "pod-2-pod",
 			src:  srcPod,
 			dst:  dstPod,
-			flow: "tcp,tcp_src=500060,tcp_dst=80",
+			flow: "tcp,tcp_src=50060,tcp_dst=80",
 		},
 		{
 			name:   "pod-2-ip",

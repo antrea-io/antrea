@@ -73,7 +73,7 @@ func init() {
 	Command = &cobra.Command{
 		Use:     "packetcapture",
 		Short:   "Start capture packets",
-		Long:    "Start capture packets on the target flow.",
+		Long:    "Start capturing packets on the target flow",
 		Aliases: []string{"pc", "packetcaptures"},
 		Example: packetCaptureExample,
 		RunE:    packetCaptureRunE,
@@ -81,8 +81,8 @@ func init() {
 
 	Command.Flags().StringVarP(&option.source, "source", "S", "", "source of the the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().StringVarP(&option.dest, "destination", "D", "", "destination of the PacketCapture: Namespace/Pod, Pod, or IP")
-	Command.Flags().Int32VarP(&option.number, "number", "n", 0, "target packets number")
-	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture , including tcp_src, tcp_dst, udp_src, udp_dst")
+	Command.Flags().Int32VarP(&option.number, "number", "n", 0, "target number of packets to capture, the capture will stop when it is reached")
+	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture, including tcp_src, tcp_dst, udp_src, udp_dst")
 	Command.Flags().BoolVarP(&option.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 	Command.Flags().StringVarP(&option.outputDir, "output-dir", "o", ".", "save the packets file to the target directory")
 }
@@ -155,7 +155,7 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	}
 	pc, err := newPacketCapture()
 	if err != nil {
-		return fmt.Errorf("error when filling up PacketCapture config: %w", err)
+		return fmt.Errorf("error when constructing a PacketCapture CR: %w", err)
 	}
 	createCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -172,7 +172,7 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	}()
 
 	if option.nowait {
-		fmt.Fprintf(cmd.OutOrStdout(), "PacketCapture Name:  %s\n", pc.Name)
+		fmt.Fprintf(cmd.OutOrStdout(), "PacketCapture Name: %s\n", pc.Name)
 		return nil
 	}
 
@@ -193,7 +193,7 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	})
 
 	if wait.Interrupted(err) {
-		err = errors.New("timeout waiting for PacketCapture done")
+		err = errors.New("timeout while waiting for PacketCapture to complete")
 		if latestPC == nil {
 			return err
 		}
@@ -206,7 +206,7 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	copier, _ := getCopier(cmd)
 	err = copier.CopyFromPod(context.TODO(), env.GetAntreaNamespace(), splits[0], "antrea-agent", splits[1], option.outputDir)
 	if err == nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "Packet File: %s\n", filepath.Join(option.outputDir, fileName))
+		fmt.Fprintf(cmd.OutOrStdout(), "Captured packets file: %s\n", filepath.Join(option.outputDir, fileName))
 	}
 	return err
 }
@@ -244,7 +244,7 @@ func getPCName(src, dest string) string {
 }
 
 func parseFlow() (*v1alpha1.Packet, error) {
-	cleanFlow := strings.ReplaceAll(option.flow, " ", "")
+	trimFlow := strings.ReplaceAll(option.flow, " ", "")
 	fields, err := getFlowFields(cleanFlow)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing the flow: %w", err)
@@ -272,7 +272,7 @@ func parseFlow() (*v1alpha1.Packet, error) {
 		pkt.TransportHeader.UDP.SrcPort = ptr.To(int32(r))
 	}
 	if r, ok := fields["udp_dst"]; ok {
-		if pkt.TransportHeader.UDP != nil {
+		if pkt.TransportHeader.UDP == nil {
 			pkt.TransportHeader.UDP = new(v1alpha1.UDPHeader)
 		}
 		pkt.TransportHeader.UDP.DstPort = ptr.To(int32(r))
