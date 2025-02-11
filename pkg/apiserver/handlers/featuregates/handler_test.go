@@ -36,6 +36,7 @@ var (
 	egressStatus                      string
 	multicastStatus                   string
 	cleanupStaleUDPSvcConntrackStatus string
+	serviceExternalIPStatus           string
 )
 
 func Test_getGatesResponse(t *testing.T) {
@@ -75,7 +76,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "NodePortLocal", Status: "Enabled", Version: "GA"},
 				{Component: "agent", Name: "PacketCapture", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "SecondaryNetwork", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "ServiceExternalIP", Status: serviceExternalIPStatus, Version: "BETA"},
 				{Component: "agent", Name: "ServiceTrafficDistribution", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "SupportBundleCollection", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "TopologyAwareHints", Status: "Enabled", Version: "BETA"},
@@ -207,7 +208,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 				{Component: "controller", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NodeIPAM", Status: "Enabled", Version: "BETA"},
-				{Component: "controller", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "ServiceExternalIP", Status: serviceExternalIPStatus, Version: "BETA"},
 				{Component: "controller", Name: "SupportBundleCollection", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 			},
@@ -225,9 +226,11 @@ func init() {
 	egressStatus = "Enabled"
 	multicastStatus = "Enabled"
 	cleanupStaleUDPSvcConntrackStatus = "Enabled"
+	serviceExternalIPStatus = "Enabled"
 	if runtime.IsWindowsPlatform() {
 		egressStatus = "Disabled"
 		multicastStatus = "Disabled"
 		cleanupStaleUDPSvcConntrackStatus = "Disabled"
+		serviceExternalIPStatus = "Disabled"
 	}
 }
