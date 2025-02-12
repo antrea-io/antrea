@@ -34,6 +34,7 @@ import (
 )
 
 func TestFqdnCacheQuery(t *testing.T) {
+	expirationTime := time.Now().Add(1 * time.Hour).UTC()
 	tests := []struct {
 		name                 string
 		expectedStatus       int
@@ -47,34 +48,34 @@ func TestFqdnCacheQuery(t *testing.T) {
 				{
 					FQDNName:       "example.com",
 					IPAddress:      net.ParseIP("10.0.0.1"),
-					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+					ExpirationTime: expirationTime,
 				},
 				{
 					FQDNName:       "foo.com",
 					IPAddress:      net.ParseIP("10.0.0.4"),
-					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+					ExpirationTime: expirationTime,
 				},
 				{
 					FQDNName:       "bar.com",
 					IPAddress:      net.ParseIP("10.0.0.5"),
-					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+					ExpirationTime: expirationTime,
 				},
 			},
 			expectedResponse: []apis.FQDNCacheResponse{
 				{
 					FQDNName:       "example.com",
-					IPAddress:      net.ParseIP("10.0.0.1").String(),
-					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+					IPAddress:      "10.0.0.1",
+					ExpirationTime: expirationTime,
 				},
 				{
 					FQDNName:       "foo.com",
-					IPAddress:      net.ParseIP("10.0.0.4").String(),
-					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+					IPAddress:      "10.0.0.4",
+					ExpirationTime: expirationTime,
 				},
 				{
 					FQDNName:       "bar.com",
-					IPAddress:      net.ParseIP("10.0.0.5").String(),
-					ExpirationTime: time.Date(2025, 12, 25, 15, 0, 0, 0, time.UTC),
+					IPAddress:      "10.0.0.5",
+					ExpirationTime: expirationTime,
 				},
 			},
 		},
@@ -82,6 +83,7 @@ func TestFqdnCacheQuery(t *testing.T) {
 			name:                 "FQDN cache does not exist",
 			expectedStatus:       http.StatusOK,
 			filteredCacheEntries: []types.DnsCacheEntry{},
+			expectedResponse:     []apis.FQDNCacheResponse{},
 		},
 	}
 	for _, tt := range tests {
@@ -95,18 +97,19 @@ func TestFqdnCacheQuery(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, req)
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
-			var receivedResponse []map[string]interface{}
+			var receivedResponse []apis.FQDNCacheResponse
 			err = json.Unmarshal(recorder.Body.Bytes(), &receivedResponse)
 			require.NoError(t, err)
-			for i, rec := range receivedResponse {
-				parsedTime, err := time.Parse(time.RFC3339, rec["expirationTime"].(string))
-				require.NoError(t, err)
-				assert.Equal(t, tt.expectedResponse[i], apis.FQDNCacheResponse{
-					FQDNName:       rec["fqdnName"].(string),
-					IPAddress:      rec["ipAddress"].(string),
-					ExpirationTime: parsedTime,
-				})
-			}
+			assert.Equal(t, tt.expectedResponse, receivedResponse)
+			// for i, rec := range receivedResponse {
+			// 	parsedTime, err := time.Parse(time.RFC3339, rec["expirationTime"].(string))
+			// 	require.NoError(t, err)
+			// 	assert.Equal(t, tt.expectedResponse[i], apis.FQDNCacheResponse{
+			// 		FQDNName:       rec["fqdnName"].(string),
+			// 		IPAddress:      rec["ipAddress"].(string),
+			// 		ExpirationTime: parsedTime,
+			// 	})
+			// }
 		})
 	}
 }
