@@ -309,6 +309,7 @@ jobs:
           ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-ipam-e2e-coverage ./ci/kind/test-e2e-kind.sh \
            --encap-mode noEncap \
            --coverage \
+           --skip mode-irrelevant \
            --multicast \
            --flexible-ipam \
       - name: Tar coverage files

@@ -144,16 +144,6 @@
           ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
 
 - builder:
-    name: builder-flexible-ipam-e2e
-    builders:
-      - shell: |-
-          #!/bin/bash
-          set -e
-          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          [ "$DOCKER_REGISTRY" != "docker.io" ] || ./ci/jenkins/docker_login.sh --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
-          ./ci/jenkins/test.sh --testcase e2e --registry ${{DOCKER_REGISTRY}} --workdir "/home/ubuntu" --kubeconfig "/home/ubuntu/kube.conf" --testbed-type "flexible-ipam"
-
-- builder:
     name: builder-flow-visibility
     builders:
       - shell: |-
@@ -254,28 +244,6 @@
           ./ci/kind/kind-setup.sh destroy "${{FULL_CLUSTER_NAME}}"
           exit $return_code
                    
-- builder:
-    name: builder-kind-flexible-ipam-e2e
-    builders:
-      - shell: |-
-          #!/bin/bash
-          set -ex
-          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          KIND_TIMEOUT=135
-          FIRST_VLAN_SUBNET='11=192.168.241.1/24'
-          SECOND_VLAN_SUBNET='12=192.168.242.1/24'
-          FULL_CLUSTER_NAME='{kind_cluster_name}'-"${{BUILD_NUMBER}}"
-          ./ci/kind/kind-setup.sh destroy --all --until ${{KIND_TIMEOUT}}
-          ./ci/kind/kind-install.sh 
-          ./ci/kind/kind-setup.sh --flexible-ipam create "${{FULL_CLUSTER_NAME}}" --vlan-subnets $FIRST_VLAN_SUBNET --vlan-subnets $SECOND_VLAN_SUBNET
-          kind export kubeconfig -n "${{FULL_CLUSTER_NAME}}" --kubeconfig ${{PWD}}/.kube/config
-          set +e
-          ./ci/jenkins/test.sh --testcase e2e --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind-flexible-ipam" --kind-cluster-name "${{FULL_CLUSTER_NAME}}"
-          return_code=$?
-          set -e
-          ./ci/kind/kind-setup.sh destroy "${{FULL_CLUSTER_NAME}}"
-          exit $return_code  
-
 - builder:
     name: builder-rancher-e2e
     builders:
