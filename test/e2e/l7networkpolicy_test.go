@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +60,9 @@ func TestL7NetworkPolicy(t *testing.T) {
 		}
 	}()
 
+	t.Run("HTTP with large response", func(t *testing.T) {
+		testL7NetworkPolicyHTTPLargeResponse(t, data)
+	})
 	t.Run("HTTP", func(t *testing.T) {
 		testL7NetworkPolicyHTTP(t, data)
 	})
@@ -287,6 +291,71 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		// and the second L7 NetworkPolicy allows any HTTP path, then both path 'hostname' and 'clientip' are allowed.
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, true)
 	})
+}
+
+func testL7NetworkPolicyHTTPLargeResponse(t *testing.T, data *TestData) {
+	skipIfNumNodesLessThan(t, 2)
+	clientPodName := "test-l7-http-large-resp-client-selected"
+	clientPodLabels := map[string]string{"test-l7-http-large-resp-e2e": "client"}
+
+	// Create a client Pod, with the Pod being selected by the test L7 NetworkPolicy as target.
+	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, agnhostImage).OnNode(nodeName(0)).WithLabels(clientPodLabels).Create(data))
+	_, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoError(t, err, "Expected IP for Pod '%s'", clientPodName)
+
+	// Create a hostNetwork server Pod as the destination selected by the test L7 NetworkPolicy, ensuring test traffic
+	// traverses antrea-gw0.
+	serverPodName := "test-l7-http-large-resp-server"
+	cmd := []string{"/agnhost", "netexec", "--http-port=8081"}
+	require.NoError(t, NewPodBuilder(serverPodName, data.testNamespace, agnhostImage).
+		WithHostNetwork(true).
+		OnNode(nodeName(1)).
+		WithCommand(cmd).
+		Create(data))
+	podIPs, err := data.podWaitForIPs(defaultTimeout, serverPodName, data.testNamespace)
+	require.NoError(t, err, "Expected IP for Pod '%s'", serverPodName)
+	serverIPs := podIPs.AsSlice()
+
+	l7ProtocolAllowsPathShell := []crdv1beta1.L7Protocol{
+		{
+			HTTP: &crdv1beta1.HTTPProtocol{
+				Path: "/shell*",
+			},
+		},
+	}
+	// Create a test egress L7NetworkPolicy allowing HTTP path "shell*".
+	policyAllowPathShellName := "test-l7-http-allow-path-shell"
+	createL7NetworkPolicy(t, data, false, policyAllowPathShellName, 1, nil, clientPodLabels, ProtocolTCP, 8081, l7ProtocolAllowsPathShell)
+	time.Sleep(networkPolicyDelay)
+
+	// Get the MTU of the test client Pod, assuming it's the MTU of the K8s cluster.
+	mtuStdout, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, []string{"cat", "/sys/class/net/eth0/mtu"})
+	require.NoError(t, err)
+	mtu, err := strconv.Atoi(strings.TrimSpace(mtuStdout))
+	require.NoError(t, err)
+
+	for _, ip := range serverIPs {
+		baseURL := net.JoinHostPort(ip.String(), "8081")
+		// Verify that the test L7 NetworkPolicy denies access to the "/hostname" path.
+		assert.Eventually(t, func() bool {
+			cmd := []string{"wget", "-O", "-", fmt.Sprintf("%s/%s", baseURL, "hostname"), "-T", "1", "-t", "1"}
+			_, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, cmd)
+			return err != nil
+		}, 5*time.Second, time.Second)
+
+		// Verify that the test L7 NetworkPolicy allows access to the "/shell" path with large body payload.
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			// Run the command that makes the test server send an HTTP response with a body larger than the MTU on the
+			// test client Pod.
+			testBodySize := mtu * 2
+			cmd := []string{"curl", "--data-urlencode", fmt.Sprintf(`cmd=head -c %d </dev/zero | tr '\0' 'A'`, testBodySize), fmt.Sprintf("http://%s/shell?cmd", baseURL)}
+			stdout, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, cmd)
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.Contains(t, stdout, strings.Repeat("A", testBodySize))
+		}, 5*time.Second, time.Second)
+	}
 }
 
 func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {

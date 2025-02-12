@@ -29,6 +29,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/ethtool"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/pkg/util/ip"
@@ -259,6 +260,16 @@ func (i *Initializer) prepareL7EngineInterfaces() error {
 	// is 4096). If the calculated MTU value is greater than 32678, Suricata may fail to start.
 	if i.networkConfig.InterfaceMTU > maxMTUSupportedBySuricata {
 		klog.ErrorS(nil, "L7 NetworkPolicy engine Suricata may fail to start since the interface MTU is greater than the maximum MTU supported by Suricata", "interfaceMTU", i.networkConfig.InterfaceMTU, "maximumMTU", maxMTUSupportedBySuricata)
+	}
+	return nil
+}
+
+func (i *Initializer) setTXChecksumOffloadOnGateway() error {
+	if i.disableTXChecksumOffload {
+		if err := ethtool.EthtoolTXHWCsumOff(i.hostGateway); err != nil {
+			return fmt.Errorf("error when disabling TX checksum offload on %s: %v", i.hostGateway, err)
+		}
+		klog.InfoS("Disabled TX checksum offload on host gateway interface", "hostGateway", i.hostGateway)
 	}
 	return nil
 }
