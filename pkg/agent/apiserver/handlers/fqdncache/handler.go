@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"regexp"
 
 	"k8s.io/klog/v2"
 
@@ -27,7 +28,7 @@ import (
 
 func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fqdnFilter := newFilterFromURLQuery(r.URL.Query())
+		fqdnFilter := newFilterFromURLQuery(w, r.URL.Query())
 		dnsEntryCache := npq.GetFQDNCache(fqdnFilter)
 		resp := make([]agentapi.FQDNCacheResponse, 0, len(dnsEntryCache))
 		for _, entry := range dnsEntryCache {
@@ -44,9 +45,14 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 	}
 }
 
-func newFilterFromURLQuery(query url.Values) *querier.FQDNCacheFilter {
+func newFilterFromURLQuery(w http.ResponseWriter, query url.Values) *querier.FQDNCacheFilter {
 	if len(query) == 0 {
 		return nil
+	}
+	_, err := regexp.Compile(query.Get("domain"))
+	if err != nil {
+		http.Error(w, "Regex formatted incorrectly to parse: "+err.Error(), http.StatusPreconditionFailed)
+		klog.ErrorS(err, "Regex formatted incorrectly to parse")
 	}
 	return &querier.FQDNCacheFilter{Domain: query.Get("domain")}
 }

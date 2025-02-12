@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/querier"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
@@ -104,6 +106,52 @@ func TestFqdnCacheQuery(t *testing.T) {
 					IPAddress:      rec["ipAddress"].(string),
 					ExpirationTime: parsedTime,
 				})
+			}
+		})
+	}
+}
+
+func TestNewFilterFromURLQuery(t *testing.T) {
+	tests := []struct {
+		name           string
+		queryParams    url.Values
+		expectedFilter *querier.FQDNCacheFilter
+		expectedStatus int
+	}{
+		{
+			name:           "Empty query",
+			queryParams:    url.Values{},
+			expectedFilter: nil,
+			expectedStatus: http.StatusOK, // No HTTP error
+		},
+		{
+			name: "Valid regex domain",
+			queryParams: url.Values{
+				"domain": {"^example\\.com$"},
+			},
+			expectedFilter: &querier.FQDNCacheFilter{Domain: "^example\\.com$"},
+			expectedStatus: http.StatusOK, // No HTTP error
+		},
+		{
+			name: "Invalid regex domain",
+			queryParams: url.Values{
+				"domain": {"[invalid("},
+			},
+			expectedFilter: &querier.FQDNCacheFilter{Domain: "[invalid("}, // Should still return filter, despite error
+			expectedStatus: http.StatusPreconditionFailed,                 // HTTP error expected
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			result := newFilterFromURLQuery(recorder, tt.queryParams)
+
+			assert.Equal(t, tt.expectedFilter, result)
+			assert.Equal(t, tt.expectedStatus, recorder.Code)
+
+			if tt.expectedStatus != http.StatusOK {
+				require.Contains(t, recorder.Body.String(), "Regex formatted incorrectly to parse")
 			}
 		})
 	}
