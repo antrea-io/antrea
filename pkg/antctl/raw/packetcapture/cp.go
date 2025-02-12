@@ -16,16 +16,16 @@ package packetcapture
 
 import (
 	"context"
-	"io"
-	"os"
-	_ "unsafe"
+	"fmt"
+	"path/filepath"
+	"strings"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
 
+	"antrea.io/antrea/pkg/antctl/raw/check"
 	"antrea.io/antrea/pkg/util/compress"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 type PodFileCopy interface {
@@ -33,44 +33,16 @@ type PodFileCopy interface {
 }
 
 type podFile struct {
-	restConfig    *rest.Config
-	restInterface rest.Interface
+	restConfig *rest.Config
+	client     kubernetes.Interface
 }
 
 func (p *podFile) CopyFromPod(ctx context.Context, namespace, name, containerName, srcPath, dstDir string) error {
-	reader, outStream := io.Pipe()
-	cmdArr := []string{"tar", "cf", "-", srcPath}
-	req := p.restInterface.
-		Get().
-		Namespace(namespace).
-		Resource("pods").
-		Name(name).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Container: containerName,
-			Command:   cmdArr,
-			Stdin:     true,
-			Stdout:    true,
-			Stderr:    true,
-			TTY:       false,
-		}, scheme.ParameterCodec)
-
-	exec, err := remotecommand.NewSPDYExecutor(p.restConfig, "POST", req.URL())
+	dir, fileName := filepath.Split(srcPath)
+	cmdArr := []string{"/bin/sh", "-c", fmt.Sprintf("cd %s; tar cf - %s", dir, fileName)}
+	output, _, err := check.ExecInPod(ctx, p.client, p.restConfig, env.GetAntreaNamespace(), name, "antrea-agent", cmdArr)
 	if err != nil {
 		return err
 	}
-	go func() {
-		defer outStream.Close()
-		err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-			Stdin:  os.Stdin,
-			Stdout: outStream,
-			Stderr: os.Stderr,
-			Tty:    false,
-		})
-		if err != nil {
-			panic(err)
-		}
-	}()
-	err = compress.UnpackReader(defaultFS, reader, dstDir)
-	return err
+	return compress.UnpackReader(defaultFS, strings.NewReader(output), false, option.outputDir)
 }

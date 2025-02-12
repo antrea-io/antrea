@@ -110,14 +110,14 @@ func TestRun(t *testing.T) {
 			src:       srcPod,
 			dst:       dstPod,
 			flow:      "icmp",
-			expectErr: "timeout waiting for PacketCapture done",
+			expectErr: "timeout while waiting for PacketCapture to complete",
 		},
 		{
 			name:      "invalid-packetcapture",
 			src:       ipv4,
 			dst:       ipv4,
 			flow:      "icmp",
-			expectErr: "error when filling up PacketCapture config: one of source and destination must be a Pod",
+			expectErr: "error when constructing a PacketCapture CR: one of source and destination must be a Pod",
 		},
 	}
 	for _, tt := range tcs {
@@ -150,7 +150,6 @@ func TestRun(t *testing.T) {
 			getCopier = func(cmd *cobra.Command) (PodFileCopy, error) {
 				return &testPodFile{}, nil
 			}
-
 			defer func() {
 				getClients = getConfigAndClients
 				getCopier = getPodFile
@@ -159,6 +158,7 @@ func TestRun(t *testing.T) {
 			Command.SetOutput(buf)
 			Command.SetOut(buf)
 			Command.SetErr(buf)
+			Command.SetContext(context.Background())
 
 			err := packetCaptureRunE(Command, nil)
 			if tt.expectErr == "" {

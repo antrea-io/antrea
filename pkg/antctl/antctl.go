@@ -753,7 +753,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 		},
 		{
 			cobraCommand:      packetcapture.Command,
-			supportAgent:      true,
+			supportAgent:      false,
 			supportController: true,
 		},
 		{

@@ -31,7 +31,7 @@ import (
 // Sanitize archive file pathing from "G305: Zip Slip vulnerability"
 func sanitizeArchivePath(d, t string) (string, error) {
 	v := filepath.Join(d, t)
-	if strings.HasPrefix(v, filepath.Clean(d)) {
+	if strings.HasPrefix(v, filepath.Clean(d)) || (filepath.Clean(d) == "." && v == t) {
 		return v, nil
 	}
 	return "", fmt.Errorf("%s: %s", "content filepath is tainted", t)
@@ -43,15 +43,21 @@ func UnpackDir(fs afero.Fs, fileName string, targetDir string) error {
 		return err
 	}
 	defer file.Close()
-	return UnpackReader(fs, file, targetDir)
+	return UnpackReader(fs, file, true, targetDir)
 }
 
-func UnpackReader(fs afero.Fs, file io.Reader, targetDir string) error {
-	reader, err := gzip.NewReader(file)
-	if err != nil {
-		return err
+func UnpackReader(fs afero.Fs, file io.Reader, useGzip bool, targetDir string) error {
+	reader := file
+	var err error
+	var gzipReader *gzip.Reader
+	if useGzip {
+		gzipReader, err = gzip.NewReader(file)
+		if err != nil {
+			return err
+		}
+		defer gzipReader.Close()
+		reader = gzipReader
 	}
-	defer reader.Close()
 	tarReader := tar.NewReader(reader)
 
 	for true {
@@ -73,10 +79,10 @@ func UnpackReader(fs afero.Fs, file io.Reader, targetDir string) error {
 			}
 		case tar.TypeReg:
 			outFile, err := fs.Create(targetPath)
-			defer outFile.Close()
 			if err != nil {
 				return err
 			}
+			defer outFile.Close()
 			for {
 				// to resolve G110: Potential DoS vulnerability via decompression bomb
 				if _, err := io.CopyN(outFile, tarReader, 1024); err != nil {

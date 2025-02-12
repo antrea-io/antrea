@@ -48,6 +48,7 @@ var (
 	getCopier      = getPodFile
 	defaultFS      = afero.NewOsFs()
 )
+
 var option = &struct {
 	source    string
 	dest      string
@@ -59,11 +60,11 @@ var option = &struct {
 }{}
 
 var packetCaptureExample = strings.TrimSpace(`
-  Start capture packets from pod1 to pod2, both Pods are in Namespace default
+  Start capturing packets from pod1 to pod2, both Pods are in Namespace default
   $ antctl packetcaputre -S pod1 -D pod2
-  Start capture packets from pod1 in Namespace ns1 to a destination IP
+  Start capturing packets from pod1 in Namespace ns1 to a destination IP
   $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
-  Start capture UDP packets from pod1 to pod2, with destination port 1234
+  Start capturing UDP packets from pod1 to pod2, with destination port 1234
   $ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
   Save the packets file to a specified directory
   $ antctl packetcapture -S 192.168.123.123 -D pod2 -f tcp,tcp_dst=80 -o /tmp
@@ -114,6 +115,17 @@ func getFlowFields(flow string) (map[string]int, error) {
 	return fields, nil
 }
 
+func getPodFile(cmd *cobra.Command) (PodFileCopy, error) {
+	config, client, _, err := getClients(cmd)
+	if err != nil {
+		return nil, err
+	}
+	return &podFile{
+		restConfig: config,
+		client:     client,
+	}, nil
+}
+
 func getConfigAndClients(cmd *cobra.Command) (*rest.Config, kubernetes.Interface, antrea.Interface, error) {
 	kubeConfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
@@ -126,20 +138,20 @@ func getConfigAndClients(cmd *cobra.Command) (*rest.Config, kubernetes.Interface
 	return kubeConfig, k8sClientset, client, nil
 }
 
-func getPodFile(cmd *cobra.Command) (PodFileCopy, error) {
-	config, client, _, err := getClients(cmd)
-	if err != nil {
-		return nil, err
+func getPCName(src, dest string) string {
+	replace := func(s string) string {
+		return strings.ReplaceAll(s, "/", "-")
 	}
-	return &podFile{
-		restConfig:    config,
-		restInterface: client.CoreV1().RESTClient(),
-	}, nil
+	prefix := fmt.Sprintf("%s-%s", replace(src), replace(dest))
+	if option.nowait {
+		return prefix
+	}
+	return fmt.Sprintf("%s-%s", prefix, rand.String(8))
 }
 
 func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	option.timeout, _ = cmd.Flags().GetDuration("timeout")
-	if option.timeout > time.Hour {
+	if option.timeout > 300*time.Second {
 		return errors.New("timeout cannot be longer than 1 hour")
 	}
 	if option.timeout == 0 {
@@ -157,7 +169,7 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("error when constructing a PacketCapture CR: %w", err)
 	}
-	createCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	createCtx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
 	defer cancel()
 
 	if _, err := antreaClient.CrdV1alpha1().PacketCaptures().Create(createCtx, pc, metav1.CreateOptions{}); err != nil {
@@ -189,7 +201,6 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 			}
 		}
 		return false, nil
-
 	})
 
 	if wait.Interrupted(err) {
@@ -204,14 +215,16 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	splits := strings.Split(latestPC.Status.FilePath, ":")
 	fileName := filepath.Base(splits[1])
 	copier, _ := getCopier(cmd)
-	err = copier.CopyFromPod(context.TODO(), env.GetAntreaNamespace(), splits[0], "antrea-agent", splits[1], option.outputDir)
-	if err == nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "Captured packets file: %s\n", filepath.Join(option.outputDir, fileName))
+	if err := copier.CopyFromPod(cmd.Context(), env.GetAntreaNamespace(), splits[0], "antrea-agent", splits[1], option.outputDir); err != nil {
+		return err
 	}
-	return err
+	fmt.Fprintf(cmd.OutOrStdout(), "Captured packets file: %s\n", filepath.Join(option.outputDir, fileName))
+	return nil
 }
 
-func parseEndpoint(endpoint string) (pod *v1alpha1.PodReference, ip *string) {
+func parseEndpoint(endpoint string) (*v1alpha1.PodReference, *string) {
+	var pod *v1alpha1.PodReference
+	var ip *string
 	parsedIP := net.ParseIP(endpoint)
 	if parsedIP != nil && parsedIP.To4() != nil {
 		ip = ptr.To(parsedIP.String())
@@ -229,23 +242,12 @@ func parseEndpoint(endpoint string) (pod *v1alpha1.PodReference, ip *string) {
 			}
 		}
 	}
-	return
-}
-
-func getPCName(src, dest string) string {
-	replace := func(s string) string {
-		return strings.ReplaceAll(s, "/", "-")
-	}
-	prefix := fmt.Sprintf("%s-%s", replace(src), replace(dest))
-	if option.nowait {
-		return prefix
-	}
-	return fmt.Sprintf("%s-%s", prefix, rand.String(8))
+	return pod, ip
 }
 
 func parseFlow() (*v1alpha1.Packet, error) {
 	trimFlow := strings.ReplaceAll(option.flow, " ", "")
-	fields, err := getFlowFields(cleanFlow)
+	fields, err := getFlowFields(trimFlow)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing the flow: %w", err)
 	}
