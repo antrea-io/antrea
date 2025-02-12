@@ -560,7 +560,7 @@ func (fa *flowAggregator) proxyRecord(record ipfixentities.Record, obsDomainID u
 func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 	logTicker := time.NewTicker(fa.logTickerDuration)
 	defer logTicker.Stop()
-	msgCh := fa.collectingProcess.GetMsgChan()
+	msgCh := fa.preprocessorOutCh
 
 	proxyRecords := func(msg *ipfixentities.Message) {
 		set := msg.GetSet()

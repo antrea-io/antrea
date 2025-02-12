@@ -315,8 +315,7 @@ func setupFlowAggregator(tb testing.TB, testData *TestData, o flowVisibilityTest
 		return err
 	}
 	tb.Logf("ClickHouse Service created with ClusterIP: %v", chSvcIP)
-	tb.Logf("Applying flow aggregator YAML with ipfix collector: %s and clickHouse enabled",
-		ipfixCollectorAddr)
+	tb.Logf("Deploying FlowAggregator with ipfix collector: %s and options: %+v", ipfixCollectorAddr, o)
 
 	if err := testData.deployFlowAggregator(ipfixCollectorAddr, o); err != nil {
 		return err
