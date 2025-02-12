@@ -34,8 +34,12 @@ This guide demonstrates how to configure layer 7 NetworkPolicy.
 
 Layer 7 NetworkPolicy was introduced in v1.10 as an alpha feature and is disabled by default. A feature gate,
 `L7NetworkPolicy`, must be enabled in antrea-controller.conf and antrea-agent.conf in the `antrea-config` ConfigMap.
-Additionally, due to the constraint of the application detection engine, TX checksum offloading must be disabled via the
-`disableTXChecksumOffload` option in antrea-agent.conf for the feature to work. An example configuration is as below:
+Additionally, to ensure proper functionality, TX checksum offloading must be disabled for container network interfaces
+and the host gateway interface (default: antrea-gw0) due to the constraint of the application detection engine. Ths can
+be configured using the `disableTXChecksumOffload` option in antrea-agent.conf. Disabling TX checksum offloading ensures
+that TCP connections traverse these interfaces correctly, preventing connection failures and packet loss.
+
+An example configuration is as below:
 
 ```yaml
 apiVersion: v1
