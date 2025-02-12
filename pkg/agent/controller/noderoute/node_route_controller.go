@@ -829,7 +829,7 @@ func (c *Controller) findPodSubnetForIP(ip netip.Addr) (netip.Prefix, bool) {
 
 // LookupIPInPodSubnets returns two boolean values. The first one indicates whether the IP can be
 // found in a PodCIDR for one of the cluster Nodes. The second one indicates whether the IP is used
-// as a gwateway IP. The second boolean value can only be true if the first one is true.
+// as a gateway IP. The second boolean value can only be true if the first one is true.
 func (c *Controller) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
 	prefix, ok := c.findPodSubnetForIP(ip)
 	if !ok {
@@ -854,7 +854,7 @@ func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 func cidrToPrefix(cidr *net.IPNet) (netip.Prefix, error) {
 	addr, ok := netip.AddrFromSlice(cidr.IP)
 	if !ok {
-		return netip.Prefix{}, fmt.Errorf("invalid IP in cidr: %v", cidr)
+		return netip.Prefix{}, fmt.Errorf("invalid IP in CIDR: %v", cidr)
 	}
 	size, _ := cidr.Mask.Size()
 	return addr.Prefix(size)
