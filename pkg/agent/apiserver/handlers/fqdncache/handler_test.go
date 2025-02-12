@@ -101,15 +101,6 @@ func TestFqdnCacheQuery(t *testing.T) {
 			err = json.Unmarshal(recorder.Body.Bytes(), &receivedResponse)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedResponse, receivedResponse)
-			// for i, rec := range receivedResponse {
-			// 	parsedTime, err := time.Parse(time.RFC3339, rec["expirationTime"].(string))
-			// 	require.NoError(t, err)
-			// 	assert.Equal(t, tt.expectedResponse[i], apis.FQDNCacheResponse{
-			// 		FQDNName:       rec["fqdnName"].(string),
-			// 		IPAddress:      rec["ipAddress"].(string),
-			// 		ExpirationTime: parsedTime,
-			// 	})
-			// }
 		})
 	}
 }
