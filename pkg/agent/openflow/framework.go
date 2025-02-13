@@ -263,8 +263,8 @@ func (f *featureService) getRequiredTables() []*Table {
 		ConntrackCommitTable,
 		OutputTable,
 	}
-	if f.proxyAll {
-		tables = append(tables, NodePortMarkTable)
+	if f.proxyAll || f.proxyLoadBalancerIPs {
+		tables = append(tables, ServiceMarkTable)
 	}
 	if f.enableDSR {
 		tables = append(tables, DSRServiceMarkTable)
