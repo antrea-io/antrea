@@ -57,7 +57,7 @@ edit the Agent configuration in the
 | `L7NetworkPolicy`             | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
 | `AdminNetworkPolicy`          | Controller         | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |                                               |
 | `EgressTrafficShaping`        | Agent              | `false` | Alpha | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                |
-| `EgressSeparateSubnet`        | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | No                 |                                               |
+| `EgressSeparateSubnet`        | Agent              | `true`  | Beta  | v1.15         | v2.3         | N/A        | No                 |                                               |
 | `NodeNetworkPolicy`           | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
 | `L7FlowExporter`              | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
 | `BGPPolicy`                   | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |

@@ -4082,7 +4082,7 @@ data:
     #  EgressTrafficShaping: false
 
     # Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
-    #  EgressSeparateSubnet: false
+    #  EgressSeparateSubnet: true
 
     # Allow users to apply ClusterNetworkPolicy to Kubernetes Nodes.
     #  NodeNetworkPolicy: false
@@ -5459,7 +5459,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: d7a27b42825a5fb89da24f0e2ba23b6672d3c62ac9bba4507722d6a57bfffaca
+        checksum/config: 00850eea62819cbe3c83a8a8915dba2f0d91d380c1b8566c80b691c3a909b258
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5747,7 +5747,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: d7a27b42825a5fb89da24f0e2ba23b6672d3c62ac9bba4507722d6a57bfffaca
+        checksum/config: 00850eea62819cbe3c83a8a8915dba2f0d91d380c1b8566c80b691c3a909b258
       labels:
         app: antrea
         component: antrea-controller
