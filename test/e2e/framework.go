@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"path"
@@ -73,6 +73,8 @@ var AntreaConfigMap *corev1.ConfigMap
 
 var (
 	connectionLostError = fmt.Errorf("http2: client connection lost")
+	// Initialize random number generator with a seed
+	ran = rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0))
 )
 
 const (
@@ -2242,7 +2244,7 @@ func randSeq(n int) string {
 	b := make([]rune, n)
 	for i := range b {
 		// #nosec G404: random number generator not used for security purposes
-		randIdx := rand.Intn(len(lettersAndDigits))
+		randIdx := ran.IntN(len(lettersAndDigits))
 		b[i] = lettersAndDigits[randIdx]
 	}
 	return string(b)
