@@ -90,7 +90,7 @@ MOCKGEN_TARGETS=(
   "pkg/controller/networkpolicy EndpointQuerier,PolicyRuleQuerier testing"
   "pkg/controller/querier ControllerQuerier testing"
   "pkg/flowaggregator/exporter Interface testing"
-  "pkg/ipfix IPFIXExportingProcess,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXBufferedExporter,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
   "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder,Group,BucketBuilder,PacketOutBuilder,Meter,MeterBandBuilder testing"
   "pkg/ovs/ovsconfig OVSBridgeClient testing"
   "pkg/ovs/ovsctl OVSCtlClient testing"

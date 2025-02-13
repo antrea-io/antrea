@@ -85,3 +85,7 @@ func (e *S3Exporter) UpdateOptions(opt *options.Options) {
 	}
 	klog.InfoS("New S3Uploader configuration", "bucketName", s3Input.Config.BucketName, "bucketPrefix", s3Input.Config.BucketPrefix, "region", s3Input.Config.Region, "recordFormat", s3Input.Config.RecordFormat, "compress", *s3Input.Config.Compress, "maxRecordsPerFile", s3Input.Config.MaxRecordsPerFile, "uploadInterval", s3Input.Config.UploadInterval)
 }
+
+func (e *S3Exporter) Flush() error {
+	return nil
+}

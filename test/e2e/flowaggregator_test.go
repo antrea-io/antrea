@@ -182,8 +182,12 @@ type testFlow struct {
 	checkDstSvc bool
 }
 
+type flowRecord struct {
+	Data string `json:"data"`
+}
+
 type IPFIXCollectorResponse struct {
-	FlowRecords []string `json:"flowRecords"`
+	FlowRecords []flowRecord `json:"flowRecords"`
 }
 
 func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*TestData, bool, bool) {
@@ -1485,9 +1489,6 @@ func checkL7FlowExporterDataClickHouse(t *testing.T, record *ClickHouseFullRow, 
 }
 
 func getUint64FieldFromRecord(t require.TestingT, record string, field string) uint64 {
-	if strings.Contains(record, "TEMPLATE SET") {
-		return 0
-	}
 	splitLines := strings.Split(record, "\n")
 	for _, line := range splitLines {
 		if strings.Contains(line, field) {
@@ -1529,7 +1530,10 @@ func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstS
 		if err := json.Unmarshal([]byte(collectorOutput), &response); err != nil {
 			return false, fmt.Errorf("error when unmarshalling output from IPFIX collector Pod: %w", err)
 		}
-		allRecords = response.FlowRecords
+		allRecords := make([]string, len(response.FlowRecords))
+		for idx := range response.FlowRecords {
+			allRecords[idx] = response.FlowRecords[idx].Data
+		}
 		records = filterCollectorRecords(allRecords, labelFilter, src, dst, srcPort)
 		if lookForFlowEnd {
 			for _, record := range records {
