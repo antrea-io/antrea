@@ -441,16 +441,23 @@ func Test_podIPIndexFunc(t *testing.T) {
 }
 
 func Test_noHostNetworkPod(t *testing.T) {
-	k8sClient := fake.NewSimpleClientset(hostNetworkPod)
+	k8sClient := fake.NewSimpleClientset(hostNetworkPod, pod1)
 	podInformer := getPodInformer(k8sClient)
 	podStore := NewPodStore(podInformer)
 	stopCh := make(chan struct{})
 	go podInformer.Run(stopCh)
 	cache.WaitForCacheSync(stopCh, podInformer.HasSynced)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		podStore.mutex.RLock()
+		defer podStore.mutex.RUnlock()
+		assert.Contains(t, podStore.timestampMap, pod1.UID)
+	}, 1*time.Second, 10*time.Millisecond)
+	// hostNetworkPod should never be added to the store.
 	assert.Never(t, func() bool {
 		podStore.mutex.RLock()
 		defer podStore.mutex.RUnlock()
-		return len(podStore.timestampMap) > 0
+		// pod1 should stay the only Pod in the store.
+		return len(podStore.timestampMap) != 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "host-network Pods should be filtered out by informer")
 }
 
