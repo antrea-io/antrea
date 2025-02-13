@@ -42,11 +42,12 @@ import (
 )
 
 var (
-	defaultTimeout = time.Second * 60
-	Command        *cobra.Command
-	getClients     = getConfigAndClients
-	getCopier      = getPodFile
-	defaultFS      = afero.NewOsFs()
+	defaultTimeout          = time.Second * 60
+	maxPacketCaptureTimeout = time.Second * 300
+	Command                 *cobra.Command
+	getClients              = getConfigAndClients
+	getCopier               = getPodFile
+	defaultFS               = afero.NewOsFs()
 )
 
 var option = &struct {
@@ -115,14 +116,14 @@ func getFlowFields(flow string) (map[string]int, error) {
 	return fields, nil
 }
 
-func getPodFile(cmd *cobra.Command) (PodFileCopy, error) {
+func getPodFile(cmd *cobra.Command) (raw.PodFileCopy, error) {
 	config, client, _, err := getClients(cmd)
 	if err != nil {
 		return nil, err
 	}
-	return &podFile{
-		restConfig: config,
-		client:     client,
+	return &raw.PodFile{
+		RestConfig: config,
+		Client:     client,
 	}, nil
 }
 
@@ -151,8 +152,8 @@ func getPCName(src, dest string) string {
 
 func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	option.timeout, _ = cmd.Flags().GetDuration("timeout")
-	if option.timeout > 300*time.Second {
-		return errors.New("timeout cannot be longer than 1 hour")
+	if option.timeout > maxPacketCaptureTimeout {
+		return fmt.Errorf("timeout cannot be longer than %v", maxPacketCaptureTimeout)
 	}
 	if option.timeout == 0 {
 		option.timeout = defaultTimeout
@@ -189,7 +190,7 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	}
 
 	var latestPC *v1alpha1.PacketCapture
-	err = wait.PollUntilContextTimeout(context.TODO(), 1*time.Second, option.timeout, false, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(cmd.Context(), 1*time.Second, option.timeout+time.Second*5, false, func(ctx context.Context) (bool, error) {
 		res, err := antreaClient.CrdV1alpha1().PacketCaptures().Get(ctx, pc.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -213,9 +214,12 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	}
 
 	splits := strings.Split(latestPC.Status.FilePath, ":")
+	if len(splits) < 2 {
+		return errors.New("no packets file generated, this maybe caused by timeout")
+	}
 	fileName := filepath.Base(splits[1])
 	copier, _ := getCopier(cmd)
-	if err := copier.CopyFromPod(cmd.Context(), env.GetAntreaNamespace(), splits[0], "antrea-agent", splits[1], option.outputDir); err != nil {
+	if err := copier.CopyFromPod(cmd.Context(), defaultFS, env.GetAntreaNamespace(), splits[0], "antrea-agent", splits[1], option.outputDir); err != nil {
 		return err
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Captured packets file: %s\n", filepath.Join(option.outputDir, fileName))
@@ -308,6 +312,7 @@ func newPacketCapture() (*v1alpha1.PacketCapture, error) {
 	}
 
 	name := getPCName(option.source, option.dest)
+	timeout := int32(option.timeout.Seconds())
 	pc := &v1alpha1.PacketCapture{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -315,6 +320,7 @@ func newPacketCapture() (*v1alpha1.PacketCapture, error) {
 		Spec: v1alpha1.PacketCaptureSpec{
 			Source:      src,
 			Destination: dst,
+			Timeout:     &timeout,
 			Packet:      pkt,
 			CaptureConfig: v1alpha1.CaptureConfig{
 				FirstN: &v1alpha1.PacketCaptureFirstNConfig{

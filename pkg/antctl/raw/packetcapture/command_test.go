@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,16 +35,18 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
 
+	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 )
 
 const (
-	srcPod        = "default/pod-1"
-	dstPod        = "pod-2"
-	ipv4          = "192.168.10.10"
-	testNum int32 = 10
+	srcPod            = "default/pod-1"
+	dstPod            = "pod-2"
+	ipv4              = "192.168.10.10"
+	testNum     int32 = 10
+	testTimeout       = 3 * time.Second
 )
 
 var (
@@ -71,7 +74,7 @@ var (
 type testPodFile struct {
 }
 
-func (p *testPodFile) CopyFromPod(ctx context.Context, namespace, name, containerName, srcPath, dstDir string) error {
+func (p *testPodFile) CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name, containerName, srcPath, dstDir string) error {
 	return nil
 }
 
@@ -120,10 +123,12 @@ func TestRun(t *testing.T) {
 			expectErr: "error when constructing a PacketCapture CR: one of source and destination must be a Pod",
 		},
 	}
+
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			setCommandOptions(tt.src, tt.dst, tt.nowait, tt.flow)
-			defaultTimeout = 3 * time.Second
+			defaultTimeout = testTimeout
+
 			defer func() {
 				setCommandOptions("", "", "", "")
 				defaultTimeout = 60 * time.Second
@@ -147,7 +152,7 @@ func TestRun(t *testing.T) {
 			getClients = func(cmd *cobra.Command) (*rest.Config, kubernetes.Interface, antrea.Interface, error) {
 				return nil, k8sClient, client, nil
 			}
-			getCopier = func(cmd *cobra.Command) (PodFileCopy, error) {
+			getCopier = func(cmd *cobra.Command) (raw.PodFileCopy, error) {
 				return &testPodFile{}, nil
 			}
 			defer func() {
@@ -199,6 +204,7 @@ func TestNewPacketCapture(t *testing.T) {
 							Name:      "pod-2",
 						},
 					},
+					Timeout: ptr.To(int32(3)),
 					CaptureConfig: v1alpha1.CaptureConfig{
 						FirstN: &v1alpha1.PacketCaptureFirstNConfig{
 							Number: testNum,
@@ -243,6 +249,7 @@ func TestNewPacketCapture(t *testing.T) {
 		option.dest = ""
 		option.flow = ""
 		option.number = 0
+		defaultTimeout = 60 * time.Second
 	}()
 
 	for _, tt := range tcs {
@@ -251,6 +258,7 @@ func TestNewPacketCapture(t *testing.T) {
 			option.dest = tt.dst
 			option.flow = tt.flow
 			option.number = testNum
+			defaultTimeout = testTimeout
 
 			pc, err := newPacketCapture()
 			if tt.expectErr != "" {
