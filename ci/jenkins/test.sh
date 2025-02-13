@@ -51,7 +51,7 @@ NETWORKPOLICY_SKIP="NetworkPolicyLegacy|should allow egress access to server in 
 
 CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
-CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=4h"
+CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
 CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
 PRINT_DOCKER_STATUS="docker system df -v"
 PRINT_CONTAINERD_STATUS="crictl ps --state Exited"
@@ -201,8 +201,13 @@ function clean_antrea {
     for antrea_yml in ${WORKDIR}/*.yml; do
         kubectl delete -f $antrea_yml --ignore-not-found=true || true
     done
-    docker images --format "{{.Repository}}:{{.Tag}}" | grep 'antrea'| xargs -r docker rmi -f || true
-    docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+    if [[ $TESTBED_TYPE == "kind-flexible-ipam" || $TESTBED_TYPE == "kind" ]]; then
+        docker images --format "{{.Repository}}:{{.Tag}}" | grep 'antrea' | grep -Ev 'antrea/toolbox:latest|antrea/ubuntu:24.04|antrea/golang:1.23|\
+        antrea/nginx:1.21.6-alpine|registry.k8s.io/e2e-test-images/agnhost:2.40|antrea/toolbox:1.3-0|antrea/mcjoin:v2.9|antrea/systemd-logs:v0.4|' | xargs -r docker rmi || true
+    else
+        docker images --format "{{.Repository}}:{{.Tag}}" | grep 'antrea'| xargs -r docker rmi -f || true
+        docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+    fi 
     check_and_cleanup_docker_build_cache
 }
 
@@ -511,6 +516,25 @@ function deliver_antrea_windows {
     echo "==== Finish building and delivering Windows images ===="
 }
 
+function copy_kind_test_image {
+    common_images=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
+    "antrea/nginx:1.21.6-alpine" "antrea/systemd-logs:v0.4" \
+    "antrea/toolbox:1.3-0" "antrea/mcjoin:v2.9" \
+    "antrea/antrea-agent-ubuntu:$BUILD_TAG" \
+    "antrea/antrea-controller-ubuntu:$BUILD_TAG" \
+    "antrea/flow-aggregator:$BUILD_TAG")
+    for image in "${common_images[@]}"; do
+        set +e
+        docker image inspect "$image" > /dev/null 2>&1 
+        status=$?
+        set -e
+        if [[ $status -ne 0 ]]; then
+            docker pull $image
+        fi
+        kind load docker-image $image --name ${KIND_CLUSTER}
+    done
+}
+
 function deliver_antrea {
     echo "====== Cleanup Antrea Installation Before Delivering Antrea ======"
     clean_antrea
@@ -597,9 +621,7 @@ function deliver_antrea {
             ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     elif [[ $TESTBED_TYPE == "kind" || $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
-            kind load docker-image antrea/antrea-agent-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
-            kind load docker-image antrea/antrea-controller-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
-            kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER} 
+            copy_kind_test_image 
             kubectl config use-context kind-${KIND_CLUSTER}
             docker cp ./build/yamls/antrea.yml ${KIND_CLUSTER}-control-plane:/root/antrea.yml
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
