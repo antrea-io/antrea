@@ -494,6 +494,25 @@ func controlPlaneNoScheduleTolerations() []corev1.Toleration {
 	}
 }
 
+func (data *TestData) getDefaultLoadBalancerMode() (config.LoadBalancerMode, error) {
+	featureGate, err := GetAgentFeatures()
+	if err != nil {
+		return config.LoadBalancerModeInvalid, err
+	}
+	if !featureGate.Enabled(features.LoadBalancerModeDSR) {
+		return config.LoadBalancerModeNAT, nil
+	}
+	agentConf, err := data.GetAntreaAgentConf()
+	if err != nil {
+		return config.LoadBalancerModeInvalid, err
+	}
+	valid, mode := config.GetLoadBalancerModeFromStr(agentConf.AntreaProxy.DefaultLoadBalancerMode)
+	if !valid {
+		return config.LoadBalancerModeInvalid, fmt.Errorf("invalid LoadBalancer mode %s", agentConf.AntreaProxy.DefaultLoadBalancerMode)
+	}
+	return mode, nil
+}
+
 func (data *TestData) InitProvider(providerName, providerConfigPath string) error {
 	providerFactory := map[string]func(string) (providers.ProviderInterface, error){
 		"vagrant": providers.NewVagrantProvider,
