@@ -447,8 +447,23 @@ func (c *Controller) performCapture(
 	file afero.File,
 	device string,
 ) (bool, error) {
-	srcIP, dstIP, err := c.parseIPs(ctx, pc)
+
+	// here is the IP parsing when both source and destination pod is specified
+	/* srcIP, dstIP, err := c.parseIPs(ctx, pc)
 	if err != nil {
+		return false, err
+	} */
+
+	var sourceIP, destIP net.IP
+	// Parse only one IP either source or destination
+	podIP, isSource, err := c.parseOneIP(ctx, pc)
+	if isSource {
+		sourceIP = podIP
+		destIP = nil
+	} else if !isSource && err == nil {
+		destIP = podIP
+		sourceIP = nil
+	} else {
 		return false, err
 	}
 
@@ -464,7 +479,7 @@ func (c *Controller) performCapture(
 	}
 	defer pcapngWriter.Flush()
 	updateRateLimiter := rate.NewLimiter(rate.Every(captureStatusUpdatePeriod), 1)
-	packets, err := c.captureInterface.Capture(ctx, device, snapLen, srcIP, dstIP, pc.Spec.Packet)
+	packets, err := c.captureInterface.Capture(ctx, device, snapLen, sourceIP, destIP, pc.Spec.Packet)
 	if err != nil {
 		return false, err
 	}
@@ -525,7 +540,8 @@ func (c *Controller) getPodIP(ctx context.Context, podRef *crdv1alpha1.PodRefere
 	return podIP, nil
 }
 
-func (c *Controller) parseIPs(ctx context.Context, pc *crdv1alpha1.PacketCapture) (srcIP, dstIP net.IP, err error) {
+// Here is the code when you need to parse both SOURCE and DESTINATION IP to capture the traffic
+/* func (c *Controller) parseIPs(ctx context.Context, pc *crdv1alpha1.PacketCapture) (srcIP, dstIP net.IP, err error) {
 	if pc.Spec.Source.Pod != nil {
 		srcIP, err = c.getPodIP(ctx, pc.Spec.Source.Pod)
 		if err != nil {
@@ -550,6 +566,40 @@ func (c *Controller) parseIPs(ctx context.Context, pc *crdv1alpha1.PacketCapture
 		}
 	}
 	return
+}*/
+
+// New function for getting one IP either source or destination based on user CRD
+func (c *Controller) parseOneIP(ctx context.Context, pc *crdv1alpha1.PacketCapture) (podIP net.IP, isSrcIP bool, err error) {
+
+	if pc.Spec.Source.Pod != nil {
+		podIP, err = c.getPodIP(ctx, pc.Spec.Source.Pod)
+		if err != nil {
+			return
+		}
+		isSrcIP = true
+	} else if pc.Spec.Source.IP != nil {
+		podIP = net.ParseIP(*pc.Spec.Source.IP)
+		if podIP == nil {
+			err = fmt.Errorf("invalid source IP address: %s", *pc.Spec.Source.IP)
+			return
+		}
+		isSrcIP = true
+	} else if pc.Spec.Destination.Pod != nil {
+		podIP, err = c.getPodIP(ctx, pc.Spec.Destination.Pod)
+		if err != nil {
+			return
+		}
+		isSrcIP = false
+	} else if pc.Spec.Destination.IP != nil {
+		podIP = net.ParseIP(*pc.Spec.Destination.IP)
+		if podIP == nil {
+			err = fmt.Errorf("invalid destination IP address: %s", *pc.Spec.Destination.IP)
+			return
+		}
+		isSrcIP = false
+	}
+	return
+
 }
 
 func (c *Controller) getUploaderByProtocol(protocol storageProtocolType) (sftp.Uploader, error) {

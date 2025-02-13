@@ -76,7 +76,14 @@ func compareProtocol(protocol uint32, skipTrue, skipFalse uint8) bpf.Instruction
 // ipv4 traffic. Compared to the raw BPF filter supported by libpcap, we only need to support
 // limited use cases, so an expression parser is not needed.
 func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP) []bpf.Instruction {
-	size := uint8(calculateInstructionsSize(packetSpec))
+	//size := uint8(calculateInstructionsSize(packetSpec))
+
+	var size uint8
+	if srcIP != nil {
+		size = uint8(calculateInstructionsSize(packetSpec, true, false))
+	} else if dstIP != nil {
+		size = uint8(calculateInstructionsSize(packetSpec, false, true))
+	}
 
 	// ipv4 check
 	inst := []bpf.Instruction{loadEtherKind}
@@ -178,7 +185,7 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP) []
 // (015) ret      #262144                                  # MATCH
 // (016) ret      #0                                       # NOMATCH
 
-func calculateInstructionsSize(packet *crdv1alpha1.Packet) int {
+func calculateInstructionsSize(packet *crdv1alpha1.Packet, filterSource bool, filterDest bool) int {
 	count := 0
 	// load ethertype
 	count++
@@ -212,8 +219,16 @@ func calculateInstructionsSize(packet *crdv1alpha1.Packet) int {
 		}
 	}
 	// src and dst ip
-	count += 4
+	//count += 4
 
+	// generate traffic for source pod (egress)
+	if filterSource {
+		count += 2
+	}
+	// generate traffic for destination pod (ingress)
+	if filterDest {
+		count += 2
+	}
 	// ret command
 	count += 2
 	return count
