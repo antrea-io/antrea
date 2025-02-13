@@ -37,6 +37,7 @@ var (
 	multicastStatus                   string
 	cleanupStaleUDPSvcConntrackStatus string
 	serviceExternalIPStatus           string
+	egressSeparateSubnetStatus        string
 )
 
 func Test_getGatesResponse(t *testing.T) {
@@ -59,7 +60,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "BGPPolicy", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "CleanupStaleUDPSvcConntrack", Status: cleanupStaleUDPSvcConntrackStatus, Version: "BETA"},
 				{Component: "agent", Name: "Egress", Status: egressStatus, Version: "BETA"},
-				{Component: "agent", Name: "EgressSeparateSubnet", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "EgressSeparateSubnet", Status: egressSeparateSubnetStatus, Version: "BETA"},
 				{Component: "agent", Name: "EgressTrafficShaping", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "EndpointSlice", Status: "Enabled", Version: "GA"},
 				{Component: "agent", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
@@ -224,11 +225,13 @@ func Test_getControllerGatesResponse(t *testing.T) {
 
 func init() {
 	egressStatus = "Enabled"
+	egressSeparateSubnetStatus = "Enabled"
 	multicastStatus = "Enabled"
 	cleanupStaleUDPSvcConntrackStatus = "Enabled"
 	serviceExternalIPStatus = "Enabled"
 	if runtime.IsWindowsPlatform() {
 		egressStatus = "Disabled"
+		egressSeparateSubnetStatus = "Disabled"
 		multicastStatus = "Disabled"
 		cleanupStaleUDPSvcConntrackStatus = "Disabled"
 		serviceExternalIPStatus = "Disabled"

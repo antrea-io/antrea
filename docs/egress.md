@@ -251,12 +251,12 @@ spec:
       network-role: egress-gateway
 ```
 
-**Note**: Specifying different subnets is currently in alpha version. To use
-this feature, users should enable the `EgressSeparateSubnet` feature gate.
-Currently, the maximum number of different subnets that can be supported in a
-cluster is 20, which should be sufficient for most cases. If you need to have
-more subnets, please raise an issue with your use case, and we will consider
-revising the limit based on that.
+**Note**: Specifying different subnets is enabled by default since Antrea v2.3.
+To use this feature with an earlier release, users should enable the `EgressSeparateSubnet`
+feature gate. Currently, the maximum number of different subnets that can be
+supported in a cluster is 20, which should be sufficient for most cases. If you
+need to have more subnets, please raise an issue with your use case, and we will
+consider revising the limit based on that.
 
 ### NodeSelector
 
