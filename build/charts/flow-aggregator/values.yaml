@@ -52,6 +52,9 @@ flowCollector:
   # -- Template retransmission interval when using the udp protocol to export records.
   # The value must be provided as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
   templateRefreshTimeout: "600s"
+  # -- Maximum message size to use for IPFIX records. If set to 0 (recommended), a reasonable
+  # default value will be used based on the protocol (tcp or udp) used to connect to the collector.
+  maxIPFIXMsgSize: 0
 # clickHouse contains ClickHouse related configuration options.
 clickHouse:
   # -- Determine whether to enable exporting flow records to ClickHouse.
