@@ -70,12 +70,26 @@ func NewPodStoreWithClock(podInformer cache.SharedIndexInformer, clock clock.Wit
 		timestampMap: map[types.UID]*podTimestamps{},
 		mutex:        sync.RWMutex{},
 	}
-	podInformer.AddEventHandler(
-		cache.ResourceEventHandlerFuncs{
+	podInformer.AddEventHandler(cache.FilteringResourceEventHandler{
+		// Ignore hostNetwork Pods
+		FilterFunc: func(obj interface{}) bool {
+			if pod, ok := obj.(*corev1.Pod); ok {
+				return !pod.Spec.HostNetwork
+			}
+			if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+				if pod, ok := tombstone.Obj.(*corev1.Pod); ok {
+					return !pod.Spec.HostNetwork
+				}
+			}
+			// Invalid objects will be rejected by event handlers
+			return true
+		},
+		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc:    s.onPodCreate,
 			UpdateFunc: s.onPodUpdate,
 			DeleteFunc: s.onPodDelete,
-		})
+		},
+	})
 	return s
 }
 
@@ -98,14 +112,14 @@ func (s *PodStore) onPodUpdate(oldObj interface{}, newObj interface{}) {
 }
 
 func (s *PodStore) onPodCreate(obj interface{}) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	timeNow := s.clock.Now()
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 		return
 	}
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	timeNow := s.clock.Now()
 	err := s.pods.Add(pod)
 	if err != nil {
 		klog.ErrorS(err, "Error when adding Pod to index")
@@ -121,9 +135,6 @@ func (s *PodStore) onPodCreate(obj interface{}) {
 }
 
 func (s *PodStore) onPodDelete(obj interface{}) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	timeNow := s.clock.Now()
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		var err error
@@ -133,6 +144,9 @@ func (s *PodStore) onPodDelete(obj interface{}) {
 			return
 		}
 	}
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	timeNow := s.clock.Now()
 	timestamp, ok := s.timestampMap[pod.UID]
 	if !ok {
 		klog.ErrorS(nil, "Cannot find podTimestamps in timestampMap", "UID", pod.UID)
