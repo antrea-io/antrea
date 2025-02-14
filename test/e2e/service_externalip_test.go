@@ -35,6 +35,7 @@ import (
 	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/config"
 	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
@@ -778,6 +779,32 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 
 					externalIP, host, err := waitExternalIPConfigured(service)
 					require.NoError(t, err)
+
+					lbMode, err := data.getDefaultLoadBalancerMode()
+					require.NoError(t, err)
+					// A route to the client IP is required in DSR mode.
+					if lbMode == config.LoadBalancerModeDSR {
+						nodeInfo := getNodeByName(host)
+						workerNodeIP := clusterInfo.nodes[nodeInfo.idx].ip()
+						addRouteToClientIPCmd := []string{"ip", "route", "replace", tt.clientIP, "via", workerNodeIP}
+						delRouteToClientIPCmd := []string{"ip", "route", "del", tt.clientIP, "via", workerNodeIP}
+						// We run backend Pods for the Service on two Nodes,
+						// so we need the route to be installed on the Node
+						// where the client is not running.
+						for idx := range nodes {
+							node := nodes[idx]
+							if node == host {
+								continue
+							}
+							stdout, stderr, err := data.RunCommandFromAntreaPodOnNode(node, addRouteToClientIPCmd)
+							require.NoError(t, err, "Failed to add route to client IP on Node %s, stdout: %s, stderr: %s: cmd: %q", node, stdout, stderr, addRouteToClientIPCmd)
+
+							defer func() {
+								stdout, stderr, err := data.RunCommandFromAntreaPodOnNode(node, delRouteToClientIPCmd)
+								assert.NoError(t, err, "Failed to delete route to client IP on Node %s, stdout: %s, stderr: %s", node, stdout, stderr)
+							}()
+						}
+					}
 
 					// Create a pod in a different netns with the same subnet of the external IP to mock as another Node in the same subnet.
 					cmd, netns := getCommandInFakeExternalNetwork("sleep 3600", tt.clientIPMaskLen, tt.clientIP, tt.localIP)
