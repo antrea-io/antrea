@@ -79,9 +79,11 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP) []
 	//size := uint8(calculateInstructionsSize(packetSpec))
 
 	var size uint8
-	if srcIP != nil {
+	if srcIP != nil && dstIP != nil {
+		size = uint8(calculateInstructionsSize(packetSpec, true, true))
+	} else if srcIP != nil && dstIP == nil {
 		size = uint8(calculateInstructionsSize(packetSpec, true, false))
-	} else if dstIP != nil {
+	} else if srcIP == nil && dstIP != nil {
 		size = uint8(calculateInstructionsSize(packetSpec, false, true))
 	}
 

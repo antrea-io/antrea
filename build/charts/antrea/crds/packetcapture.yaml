@@ -66,15 +66,17 @@ spec:
               type: object
               required:
                 - captureConfig
-              oneOf:
-                - properties:
-                    source:
-                      required: [pod]
-                  required: [source]
-                - properties:
-                    destination:
-                      required: [pod]
-                  required: [destination]  
+              allOf:
+                - anyOf:
+                  - required: [source]
+                  - required: [destination]
+                - anyOf:
+                  - properties:
+                      source:
+                        required: [pod]
+                  - properties:
+                      destination:
+                        required: [pod] 
               properties:
                 source:
                   type: object
