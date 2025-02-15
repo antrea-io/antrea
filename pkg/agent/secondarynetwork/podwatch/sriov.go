@@ -46,30 +46,27 @@ var (
 	getPodContainerDeviceIDsFn = getPodContainerDeviceIDs
 )
 
-type kubeletPodResources struct {
-	resources []*podresourcesv1alpha1.PodResources
-}
-
 // Structure to associate a unique VF's PCI Address to the Linux ethernet interface.
 type podSriovVFDeviceIDInfo struct {
-	vfDeviceID string
-	ifName     string
+	resourceName string
+	vfDeviceID   string
+	ifName       string
 }
 
 // getPodContainerDeviceIDs returns the device IDs assigned to a Pod's containers.
-func getPodContainerDeviceIDs(podName string, podNamespace string) ([]string, error) {
+func getPodContainerDeviceIDs(podName string, podNamespace string) (map[string][]string, error) {
 	conn, err := grpc.NewClient(
 		"unix:///"+path.Join(kubeletPodResourcesPath, kubeletSocket),
 		grpc.WithTransportCredentials(grpcinsecure.NewCredentials()),
 	)
 	if err != nil {
-		return []string{}, fmt.Errorf("error getting the gRPC client for Pod resources: %v", err)
+		return nil, fmt.Errorf("error getting the gRPC client for Pod resources: %v", err)
 	}
 	defer conn.Close()
 
 	client := podresourcesv1alpha1.NewPodResourcesListerClient(conn)
 	if client == nil {
-		return []string{}, fmt.Errorf("error getting the lister client for Pod resources")
+		return nil, fmt.Errorf("error getting the lister client for Pod resources")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
@@ -77,22 +74,21 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 
 	podResources, err := client.List(ctx, &podresourcesv1alpha1.ListPodResourcesRequest{})
 	if err != nil {
-		return []string{}, fmt.Errorf("error getting the Pod resources: %v %v", podResources, err)
+		return nil, fmt.Errorf("error getting the Pod resources: %v %v", podResources, err)
 	}
 
-	var podDeviceIDs []string
-	var kpr kubeletPodResources
-	kpr.resources = podResources.GetPodResources()
-	for _, pr := range kpr.resources {
+	podDeviceIDs := make(map[string][]string)
+	resources := podResources.GetPodResources()
+	for _, pr := range resources {
 		if pr.Name == podName && pr.Namespace == podNamespace {
 			for _, ctr := range pr.Containers {
 				for _, dev := range ctr.Devices {
-					podDeviceIDs = append(podDeviceIDs, dev.DeviceIds...)
+					podDeviceIDs[dev.ResourceName] = append(podDeviceIDs[dev.ResourceName], dev.DeviceIds...)
 				}
 			}
 		}
 	}
-	klog.V(2).Infof("Pod container device IDs of %s/%s are: %v", podNamespace, podName, podDeviceIDs)
+	klog.V(2).InfoS("Retrieved Pod container device IDs", "pod", klog.KRef(podNamespace, podName), "deviceIDs", podDeviceIDs)
 	return podDeviceIDs, nil
 }
 
@@ -109,14 +105,19 @@ func (pc *PodController) buildVFDeviceIDListPerPod(podName, podNamespace string)
 	if cacheFound {
 		return deviceCache.([]podSriovVFDeviceIDInfo), nil
 	}
-	podSriovVFDeviceIDs, err := getPodContainerDeviceIDsFn(podName, podNamespace)
+	deviceIDsByResourceName, err := getPodContainerDeviceIDsFn(podName, podNamespace)
 	if err != nil {
-		return nil, fmt.Errorf("getPodContainerDeviceIDs failed: %v", err)
+		return nil, fmt.Errorf("getPodContainerDeviceIDs failed: %w", err)
 	}
 	var vfDeviceIDInfoCache []podSriovVFDeviceIDInfo
-	for _, pciAddress := range podSriovVFDeviceIDs {
-		initSriovVfDeviceID := podSriovVFDeviceIDInfo{vfDeviceID: pciAddress, ifName: ""}
-		vfDeviceIDInfoCache = append(vfDeviceIDInfoCache, initSriovVfDeviceID)
+	for resourceName, deviceIDs := range deviceIDsByResourceName {
+		for _, deviceID := range deviceIDs {
+			vfDeviceIDInfoCache = append(vfDeviceIDInfoCache, podSriovVFDeviceIDInfo{
+				resourceName: resourceName,
+				vfDeviceID:   deviceID,
+				ifName:       "", // we will set this field when allocating the device
+			})
+		}
 	}
 	pc.vfDeviceIDUsageMap.Store(podKey, vfDeviceIDInfoCache)
 	klog.V(2).InfoS("Pod specific SRIOV VF cache created", "Key", podKey)
@@ -140,32 +141,39 @@ func (pc *PodController) releaseSriovVFDeviceID(podName, podNamespace, interface
 		return
 	}
 	cache := obj.([]podSriovVFDeviceIDInfo)
-	for idx := 0; idx < len(cache); idx++ {
+	for idx := range cache {
 		if cache[idx].ifName == interfaceName {
 			cache[idx].ifName = ""
 		}
 	}
 }
 
-func (pc *PodController) assignUnusedSriovVFDeviceID(podName, podNamespace, interfaceName string) (string, error) {
+func (pc *PodController) assignUnusedSriovVFDeviceID(podName, podNamespace, resourceName, interfaceName string) (string, error) {
 	var cache []podSriovVFDeviceIDInfo
 	cache, err := pc.buildVFDeviceIDListPerPod(podName, podNamespace)
 	if err != nil {
 		return "", err
 	}
-	for idx := 0; idx < len(cache); idx++ {
-		if cache[idx].ifName == "" {
+	for idx := range cache {
+		if cache[idx].resourceName == resourceName && cache[idx].ifName == "" {
 			// Unused PCI address found. Associate PCI address to the interface.
 			cache[idx].ifName = interfaceName
 			return cache[idx].vfDeviceID, nil
 		}
 	}
-	return "", err
+	return "", fmt.Errorf("no available device")
 }
 
 // Configure SRIOV VF as a Secondary Network Interface.
-func (pc *PodController) configureSriovAsSecondaryInterface(pod *corev1.Pod, network *netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo, mtu int, result *current.Result) error {
-	podSriovVFDeviceID, err := pc.assignUnusedSriovVFDeviceID(pod.Name, pod.Namespace, network.InterfaceRequest)
+func (pc *PodController) configureSriovAsSecondaryInterface(
+	pod *corev1.Pod,
+	network *netdefv1.NetworkSelectionElement,
+	resourceName string,
+	podCNIInfo *podCNIInfo,
+	mtu int,
+	result *current.Result,
+) error {
+	podSriovVFDeviceID, err := pc.assignUnusedSriovVFDeviceID(pod.Name, pod.Namespace, resourceName, network.InterfaceRequest)
 	if err != nil {
 		return err
 	}
