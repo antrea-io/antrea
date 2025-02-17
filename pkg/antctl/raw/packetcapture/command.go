@@ -60,8 +60,7 @@ var option = &struct {
 	outputDir string
 }{}
 
-var packetCaptureExample = strings.TrimSpace(`
-  Start capturing packets from pod1 to pod2, both Pods are in Namespace default
+var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Pods are in Namespace default
   $ antctl packetcaputre -S pod1 -D pod2
   Start capturing packets from pod1 in Namespace ns1 to a destination IP
   $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
@@ -69,7 +68,7 @@ var packetCaptureExample = strings.TrimSpace(`
   $ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
   Save the packets file to a specified directory
   $ antctl packetcapture -S 192.168.123.123 -D pod2 -f tcp,tcp_dst=80 -o /tmp
-`)
+`
 
 func init() {
 	Command = &cobra.Command{
