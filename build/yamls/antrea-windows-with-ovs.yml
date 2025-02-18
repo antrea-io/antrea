@@ -107,10 +107,10 @@ data:
         switch ($VMSwitchExtension)
         {
             "enable" {
-                Enable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName
+                Enable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName -ComputerName localhost
             }
             "disable" {
-                Disable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName
+                Disable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName -ComputerName localhost
             }
         }
     }
@@ -305,7 +305,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/agent-windows: 86f999cb18501659a52d982f20b3df5cdf666ffd849f50ed183c366e75d01ac5
+        checksum/agent-windows: cd61458cbe274d2d6117702c6220c55ae75b38b71806d18e569682998ff83d79
         checksum/windows-config: 4f07164f32afc61e20b4aef984a8781142e5d99f7c58f7581e4ccfeabb34855f
         microsoft.com/hostprocess-inherit-user: "true"
       labels:

@@ -7,10 +7,10 @@ if ($net -ne $null) {
     switch ($VMSwitchExtension)
     {
         "enable" {
-            Enable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName
+            Enable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName -ComputerName localhost
         }
         "disable" {
-            Disable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName
+            Disable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName -ComputerName localhost
         }
     }
 }
