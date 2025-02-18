@@ -97,7 +97,7 @@ function clearOVSBridge() {
 }
 
 function ClearHnsNetwork() {
-    $vmSwitch = Get-VMSwitch -Name $AntreaHnsNetworkName -ErrorAction SilentlyContinue
+    $vmSwitch = Get-VMSwitch -Name $AntreaHnsNetworkName -ComputerName localhost -ErrorAction SilentlyContinue
     if ($vmSwitch -ne $null) {
         Write-Host "Remove vNICs"
         Remove-VMNetworkAdapter -SwitchName $AntreaHnsNetworkName -ManagementOS -Confirm:$false -ErrorAction SilentlyContinue
@@ -108,7 +108,7 @@ function ClearHnsNetwork() {
             Get-HnsNetwork -Id $hnsNetwork.Id | Remove-HnsNetwork -ErrorAction Continue
             Set-NetAdapterBinding -Name $uplink -ComponentID vms_pp -Enabled $false
         }
-        Remove-VMSwitch -Name $AntreaHnsNetworkName -Force -ErrorAction SilentlyContinue
+        Remove-VMSwitch -Name $AntreaHnsNetworkName -ComputerName localhost -Force -ErrorAction SilentlyContinue
     }
 }
 
