@@ -207,7 +207,7 @@ function Log($Info) {
 function ClearOVSConfig() {
     Log "Deleting OVS bridge $OVSBridge"
     try {
-        $adapterName = (Get-VMNetworkAdapter -ComputerName $(hostname.exe) -SwitchName $AntreaSwitch -ManagementOS).Name
+        $adapterName = (Get-VMNetworkAdapter -ComputerName localhost -SwitchName $AntreaSwitch -ManagementOS).Name
         ovs-vsctl.exe del-br $OVSBridge
     }  catch {
         Log "Failed to get VMSwitch $AntreaSwitch, rc $_"
@@ -215,7 +215,7 @@ function ClearOVSConfig() {
     }
 
     try {
-        Remove-VMSwitch -ComputerName $(hostname.exe) $AntreaSwitch  -Force
+        Remove-VMSwitch -ComputerName localhost $AntreaSwitch  -Force
     } catch {
         Log "Ignore error while removing VMSwitch, rc $_"
     }
