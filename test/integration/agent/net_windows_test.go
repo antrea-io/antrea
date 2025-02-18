@@ -72,7 +72,7 @@ func skipIfOVSExtensionNotInstalled(t *testing.T) {
 func createTestInterface(t *testing.T, name string) string {
 	skipIfHyperVDisabled(t)
 	t.Logf("Creating test vSwitch and adapter '%s'", name)
-	cmd := fmt.Sprintf("New-VMSwitch %s -SwitchType Internal", name)
+	cmd := fmt.Sprintf("New-VMSwitch %s -SwitchType Internal -ComputerName localhost", name)
 	_, err := ps.RunCommand(cmd)
 	require.NoError(t, err)
 	return adapterName(name)
@@ -86,7 +86,7 @@ func setTestInterfaceUp(t *testing.T, name string) int {
 
 func deleteTestInterface(t *testing.T, name string) {
 	t.Logf("Deleting test vSwitch '%s'", name)
-	cmd := fmt.Sprintf(`Remove-VMSwitch "%s" -Force`, name)
+	cmd := fmt.Sprintf(`Remove-VMSwitch "%s" -ComputerName localhost -Force`, name)
 	_, err := ps.RunCommand(cmd)
 	assert.NoError(t, err)
 }
