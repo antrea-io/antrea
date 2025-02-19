@@ -78,26 +78,33 @@ const (
     "vlan": {{.VLAN}}
 }`
 
-	defaultCNIVersion = "0.3.0"
-	defaultMTU        = 1500
-	sriovDeviceID     = "sriov-device-id"
-	podName           = "pod1"
-	containerID       = "container1"
-	podIP             = "1.2.3.4"
-	networkName       = "net"
-	interfaceName     = "eth2"
+	defaultCNIVersion  = "0.3.0"
+	defaultMTU         = 1500
+	sriovResourceName1 = "intel.com/intel_sriov_netdevice"
+	sriovResourceName2 = "mellanox.com/mlnx_connectx5"
+	sriovDeviceID11    = "sriov-device-id-11"
+	sriovDeviceID12    = "sriov-device-id-12"
+	sriovDeviceID21    = "sriov-device-id-21"
+	podName            = "pod1"
+	containerID        = "container1"
+	podIP              = "1.2.3.4"
+	networkName        = "net"
+	interfaceName      = "eth2"
 )
 
 func testNetwork(name string, networkType networkType) *netdefv1.NetworkAttachmentDefinition {
-	return testNetworkExt(name, "", "", string(networkType), "", 0, 0, false)
+	return testNetworkExt(name, "", "", networkType, "", "", 0, 0, false)
 }
 
-func testNetworkExt(name, cniVersion, cniType, networkType, ipamType string, mtu, vlan int, noIPAM bool) *netdefv1.NetworkAttachmentDefinition {
+func testNetworkExt(name, cniVersion, cniType string, networkType networkType, resourceName, ipamType string, mtu, vlan int, noIPAM bool) *netdefv1.NetworkAttachmentDefinition {
 	if cniVersion == "" {
 		cniVersion = defaultCNIVersion
 	}
 	if cniType == "" {
 		cniType = "antrea"
+	}
+	if networkType == sriovNetworkType && resourceName == "" {
+		resourceName = sriovResourceName1
 	}
 	if ipamType == "" {
 		ipamType = ipam.AntreaIPAMType
@@ -109,7 +116,7 @@ func testNetworkExt(name, cniVersion, cniType, networkType, ipamType string, mtu
 		IPAMType    string
 		MTU         int
 		VLAN        int
-	}{cniVersion, cniType, networkType, ipamType, mtu, vlan}
+	}{cniVersion, cniType, string(networkType), ipamType, mtu, vlan}
 
 	var tmpl *template.Template
 	if !noIPAM {
@@ -119,9 +126,14 @@ func testNetworkExt(name, cniVersion, cniType, networkType, ipamType string, mtu
 	}
 	var b bytes.Buffer
 	tmpl.Execute(&b, &data)
+	annotations := make(map[string]string)
+	if resourceName != "" {
+		annotations[resourceNameAnnotationKey] = resourceName
+	}
 	return &netdefv1.NetworkAttachmentDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:        name,
+			Annotations: annotations,
 		},
 		Spec: netdefv1.NetworkAttachmentDefinitionSpec{
 			Config: b.String(),
@@ -189,8 +201,11 @@ func testIPAMResult(cidr string, vlan int) *ipam.IPAMResult {
 }
 
 func init() {
-	getPodContainerDeviceIDsFn = func(name string, namespace string) ([]string, error) {
-		return []string{sriovDeviceID}, nil
+	getPodContainerDeviceIDsFn = func(name string, namespace string) (map[string][]string, error) {
+		return map[string][]string{
+			sriovResourceName1: {sriovDeviceID11, sriovDeviceID12},
+			sriovResourceName2: {sriovDeviceID21},
+		}, nil
 	}
 }
 
@@ -258,7 +273,7 @@ func TestPodControllerRun(t *testing.T) {
 		containerNetNs(containerID),
 		interfaceName,
 		defaultMTU,
-		sriovDeviceID,
+		sriovDeviceID11,
 		&ipamResult.Result,
 	).Do(func(string, string, string, string, string, int, string, *current.Result) {
 		atomic.AddInt32(&interfaceConfigured, 1)
@@ -277,7 +292,7 @@ func TestPodControllerRun(t *testing.T) {
 	_, err = client.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
 	require.NoError(t, err, "error when creating test Pod")
 
-	// Wait for ConfigureSriovSecondaryInterface is called.
+	// Wait for ConfigureSriovSecondaryInterface to be called.
 	assert.Eventually(t, func() bool {
 		return atomic.LoadInt32(&interfaceConfigured) == 1
 	}, 1*time.Second, 10*time.Millisecond)
@@ -292,7 +307,8 @@ func TestPodControllerRun(t *testing.T) {
 		containerNetNs(containerID),
 		interfaceName,
 		defaultMTU,
-		"",
+		// We haven't updated the vfDeviceIDUsageMap, so a different device will be allocated.
+		sriovDeviceID12,
 		&ipamResult.Result,
 	).Do(func(string, string, string, string, string, int, string, *current.Result) {
 		atomic.AddInt32(&interfaceConfigured, 1)
@@ -329,7 +345,7 @@ func TestPodControllerRun(t *testing.T) {
 	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
 	// CNI Del event.
 	event.IsAdd = false
-	// Interfac is not deleted from the interface store, so CNI Del should trigger interface
+	// Interface is not deleted from the interface store, so CNI Del should trigger interface
 	// deletion again.
 	podController.processCNIUpdate(event)
 	_, exists = cniCache.Load(podKey)
@@ -455,7 +471,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					containerNetNs(containerID),
 					interfaceName,
 					1500,
-					sriovDeviceID,
+					sriovDeviceID11,
 					&testIPAMResult("148.14.24.100/24", 0).Result,
 				)
 			},
@@ -561,7 +577,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 
 			if !tc.doNotCreateNetwork {
 				network1 := testNetworkExt(networkName, tc.cniVersion, tc.cniType,
-					string(tc.networkType), tc.ipamType, tc.mtu, tc.vlan, tc.noIPAM)
+					tc.networkType, "", tc.ipamType, tc.mtu, tc.vlan, tc.noIPAM)
 				pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(),
 					network1, metav1.CreateOptions{})
 			}
@@ -577,6 +593,74 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		})
 	}
 
+}
+
+func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
+	ctx := context.Background()
+	element1 := netdefv1.NetworkSelectionElement{
+		Namespace:        testNamespace,
+		Name:             "net1",
+		InterfaceRequest: "eth10",
+	}
+	element2 := netdefv1.NetworkSelectionElement{
+		Namespace:        testNamespace,
+		Name:             "net2",
+		InterfaceRequest: "eth11",
+	}
+	pod, cniInfo := testPod(podName, containerID, podIP, element1, element2)
+	ctrl := gomock.NewController(t)
+	pc, _, interfaceConfigurator := testPodControllerStart(ctrl)
+
+	network1 := testNetworkExt("net1", "", "", sriovNetworkType, sriovResourceName1, "", 1500, 0, true /* noIPAM */)
+	pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(ctx, network1, metav1.CreateOptions{})
+	network2 := testNetworkExt("net2", "", "", sriovNetworkType, sriovResourceName2, "", 1500, 0, true /* noIPAM */)
+	pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(ctx, network2, metav1.CreateOptions{})
+
+	gomock.InOrder(
+		interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
+			podName,
+			testNamespace,
+			containerID,
+			containerNetNs(containerID),
+			element2.InterfaceRequest,
+			1500,
+			sriovDeviceID21,
+			gomock.Any(),
+		),
+		interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
+			podName,
+			testNamespace,
+			containerID,
+			containerNetNs(containerID),
+			element1.InterfaceRequest,
+			1500,
+			sriovDeviceID11,
+			gomock.Any(),
+		),
+	)
+	assert.NoError(t, pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element2, &element1}, cniInfo))
+
+	podKey := podKeyGet(pod.Name, pod.Namespace)
+	deviceCache, ok := pc.vfDeviceIDUsageMap.Load(podKey)
+	require.True(t, ok)
+	expectedDeviceCache := []podSriovVFDeviceIDInfo{
+		{
+			resourceName: sriovResourceName1,
+			vfDeviceID:   sriovDeviceID11,
+			ifName:       element1.InterfaceRequest,
+		},
+		{
+			resourceName: sriovResourceName1,
+			vfDeviceID:   sriovDeviceID12,
+			ifName:       "",
+		},
+		{
+			resourceName: sriovResourceName2,
+			vfDeviceID:   sriovDeviceID21,
+			ifName:       element2.InterfaceRequest,
+		},
+	}
+	assert.ElementsMatch(t, expectedDeviceCache, deviceCache.([]podSriovVFDeviceIDInfo))
 }
 
 func TestPodControllerAddPod(t *testing.T) {
@@ -623,7 +707,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		)
 		network1 := testNetwork("net1", sriovNetworkType)
 		testVLAN := 100
-		network2 := testNetworkExt("net2", "", "", string(vlanNetworkType), "", defaultMTU, testVLAN, false)
+		network2 := testNetworkExt("net2", "", "", vlanNetworkType, "", "", defaultMTU, testVLAN, false)
 
 		podOwner1 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: containerID, IFName: "eth10"}
@@ -771,7 +855,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			containerNetNs(containerID),
 			interfaceName,
 			defaultMTU,
-			sriovDeviceID,
+			sriovDeviceID11,
 			gomock.Any(),
 		)
 		mockIPAM.EXPECT().SecondaryNetworkAllocate(gomock.Any(), gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 0), nil)
@@ -885,7 +969,7 @@ func TestPodControllerAddPod(t *testing.T) {
 	t.Run("updating deviceID cache per Pod", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		podController, _, _ := testPodController(ctrl)
-		_, err := podController.assignUnusedSriovVFDeviceID(podName, testNamespace, interfaceName)
+		_, err := podController.assignUnusedSriovVFDeviceID(podName, testNamespace, sriovResourceName1, interfaceName)
 		_, exists := podController.vfDeviceIDUsageMap.Load(podKey)
 		assert.True(t, exists)
 		require.NoError(t, err, "error while assigning unused VfDevice ID")
