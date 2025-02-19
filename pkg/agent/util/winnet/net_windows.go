@@ -158,7 +158,7 @@ func (h *Handle) EnableIPForwarding(adapterName string) error {
 }
 
 func (h *Handle) RenameVMNetworkAdapter(networkName, macStr, newName string, renameNetAdapter bool) error {
-	cmd := fmt.Sprintf(`Get-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -SwitchName "%s" | ? MacAddress -EQ "%s" | Select-Object -Property Name | Format-Table -HideTableHeaders`, networkName, macStr)
+	cmd := fmt.Sprintf(`Get-VMNetworkAdapter -ManagementOS -ComputerName localhost -SwitchName "%s" | ? MacAddress -EQ "%s" | Select-Object -Property Name | Format-Table -HideTableHeaders`, networkName, macStr)
 	stdout, err := runCommand(cmd)
 	if err != nil {
 		return err
@@ -168,7 +168,7 @@ func (h *Handle) RenameVMNetworkAdapter(networkName, macStr, newName string, ren
 		return fmt.Errorf("unable to find vmnetwork adapter configured with uplink MAC address %s", macStr)
 	}
 	vmNetworkAdapterName := stdout
-	cmd = fmt.Sprintf(`Get-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -Name "%s" | Rename-VMNetworkAdapter -NewName "%s"`, vmNetworkAdapterName, newName)
+	cmd = fmt.Sprintf(`Get-VMNetworkAdapter -ManagementOS -ComputerName localhost -Name "%s" | Rename-VMNetworkAdapter -NewName "%s"`, vmNetworkAdapterName, newName)
 	if _, err := runCommand(cmd); err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func (h *Handle) RenameVMNetworkAdapter(networkName, macStr, newName string, ren
 // EnableRSCOnVSwitch enables RSC in the vSwitch to reduce host CPU utilization and increase throughput for virtual
 // workloads by coalescing multiple TCP segments into fewer, but larger segments.
 func (h *Handle) EnableRSCOnVSwitch(vSwitch string) error {
-	cmd := fmt.Sprintf("Get-VMSwitch -ComputerName $(hostname) -Name %s | Select-Object -Property SoftwareRscEnabled | Format-Table -HideTableHeaders", vSwitch)
+	cmd := fmt.Sprintf("Get-VMSwitch -ComputerName localhost -Name %s | Select-Object -Property SoftwareRscEnabled | Format-Table -HideTableHeaders", vSwitch)
 	stdout, err := runCommand(cmd)
 	if err != nil {
 		return err
@@ -202,7 +202,7 @@ func (h *Handle) EnableRSCOnVSwitch(vSwitch string) error {
 		klog.Infof("Receive Segment Coalescing (RSC) for vSwitch %s is already enabled", vSwitch)
 		return nil
 	}
-	cmd = fmt.Sprintf("Set-VMSwitch -ComputerName $(hostname) -Name %s -EnableSoftwareRsc $True", vSwitch)
+	cmd = fmt.Sprintf("Set-VMSwitch -ComputerName localhost -Name %s -EnableSoftwareRsc $True", vSwitch)
 	_, err = runCommand(cmd)
 	if err != nil {
 		return err
@@ -571,7 +571,7 @@ func (h *Handle) ReplaceNetNeighbor(neighbor *Neighbor) error {
 }
 
 func (h *Handle) GetVMSwitchNetAdapterName(vmSwitch string) (string, error) {
-	cmd := fmt.Sprintf(`Get-VMSwitchTeam -Name "%s" | select NetAdapterInterfaceDescription |  Format-Table -HideTableHeaders`, vmSwitch)
+	cmd := fmt.Sprintf(`Get-VMSwitchTeam -Name "%s" -ComputerName localhost | select NetAdapterInterfaceDescription |  Format-Table -HideTableHeaders`, vmSwitch)
 	out, err := runCommand(cmd)
 	if err != nil {
 		return "", err
@@ -589,7 +589,7 @@ func (h *Handle) GetVMSwitchNetAdapterName(vmSwitch string) (string, error) {
 }
 
 func (h *Handle) VMSwitchExists(vmSwitch string) (bool, error) {
-	cmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName $(hostname)`, vmSwitch)
+	cmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName localhost`, vmSwitch)
 	_, err := runCommand(cmd)
 	if err == nil {
 		return true, nil
@@ -603,7 +603,7 @@ func (h *Handle) VMSwitchExists(vmSwitch string) (bool, error) {
 // AddVMSwitch creates a VMSwitch and enables OVS extension. Connection to VMSwitch is lost for few seconds.
 // TODO: Handle for multiple interfaces
 func (h *Handle) AddVMSwitch(adapterName, vmSwitch string) error {
-	cmd := fmt.Sprintf(`New-VMSwitch -Name "%s" -NetAdapterName "%s" -EnableEmbeddedTeaming $true -AllowManagementOS $true -ComputerName $(hostname)| Enable-VMSwitchExtension "%s"`, vmSwitch, adapterName, ovsExtensionName)
+	cmd := fmt.Sprintf(`New-VMSwitch -Name "%s" -NetAdapterName "%s" -EnableEmbeddedTeaming $true -AllowManagementOS $true -ComputerName localhost| Enable-VMSwitchExtension "%s"`, vmSwitch, adapterName, ovsExtensionName)
 	_, err := runCommand(cmd)
 	if err != nil {
 		return err
@@ -617,7 +617,7 @@ func (h *Handle) RemoveVMSwitch(vmSwitch string) error {
 		return err
 	}
 	if exists {
-		cmd := fmt.Sprintf(`Remove-VMSwitch -Name "%s" -ComputerName $(hostname) -Force`, vmSwitch)
+		cmd := fmt.Sprintf(`Remove-VMSwitch -Name "%s" -ComputerName localhost -Force`, vmSwitch)
 		_, err = runCommand(cmd)
 		if err != nil {
 			return err
@@ -696,7 +696,7 @@ func getAdapterInAllCompartmentsByName(name string) (*adapter, error) {
 }
 
 func (h *Handle) EnableVMSwitchOVSExtension(vmSwitch string) error {
-	cmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName $(hostname)| Enable-VMSwitchExtension "%s"`, vmSwitch, ovsExtensionName)
+	cmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName localhost| Enable-VMSwitchExtension "%s"`, vmSwitch, ovsExtensionName)
 	_, err := runCommand(cmd)
 	if err != nil {
 		return err
@@ -721,7 +721,7 @@ func parseOVSExtensionOutput(s string) bool {
 }
 
 func (h *Handle) IsVMSwitchOVSExtensionEnabled(vmSwitch string) (bool, error) {
-	cmd := fmt.Sprintf(`Get-VMSwitchExtension -VMSwitchName "%s" -ComputerName $(hostname) | ? Id -EQ "%s"`, vmSwitch, OVSExtensionID)
+	cmd := fmt.Sprintf(`Get-VMSwitchExtension -VMSwitchName "%s" -ComputerName localhost | ? Id -EQ "%s"`, vmSwitch, OVSExtensionID)
 	out, err := runCommand(cmd)
 	if err != nil {
 		return false, err
