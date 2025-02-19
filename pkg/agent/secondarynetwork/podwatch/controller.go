@@ -57,6 +57,7 @@ const (
 
 const (
 	networkAttachDefAnnotationKey = "k8s.v1.cni.cncf.io/networks"
+	resourceNameAnnotationKey     = "k8s.v1.cni.cncf.io/resourceName"
 	cniPath                       = "/opt/cni/bin/"
 	startIfaceIndex               = 1
 	endIfaceIndex                 = 101
@@ -324,8 +325,10 @@ func (pc *PodController) processNextWorkItem() bool {
 func (pc *PodController) configureSecondaryInterface(
 	pod *corev1.Pod,
 	network *netdefv1.NetworkSelectionElement,
+	resourceName string,
 	podCNIInfo *podCNIInfo,
-	networkConfig *SecondaryNetworkConfig) error {
+	networkConfig *SecondaryNetworkConfig,
+) error {
 	var ipamResult *ipam.IPAMResult
 	var ifConfigErr error
 	if networkConfig.IPAM != nil {
@@ -357,7 +360,7 @@ func (pc *PodController) configureSecondaryInterface(
 
 	switch networkConfig.NetworkType {
 	case sriovNetworkType:
-		ifConfigErr = pc.configureSriovAsSecondaryInterface(pod, network, podCNIInfo, int(networkConfig.MTU), &ipamResult.Result)
+		ifConfigErr = pc.configureSriovAsSecondaryInterface(pod, network, resourceName, podCNIInfo, int(networkConfig.MTU), &ipamResult.Result)
 	case vlanNetworkType:
 		if networkConfig.VLAN > 0 {
 			// Let VLAN ID in the CNI network configuration override the IPPool subnet
@@ -384,7 +387,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 	interfacesConfigured := 0
 	for _, network := range networkList {
 		klog.V(2).InfoS("Secondary Network attached to Pod", "network", network, "Pod", klog.KObj(pod))
-		netDefCRD, err := pc.netAttachDefClient.NetworkAttachmentDefinitions(network.Namespace).Get(context.TODO(), network.Name, metav1.GetOptions{})
+		netAttachDef, err := pc.netAttachDefClient.NetworkAttachmentDefinitions(network.Namespace).Get(context.TODO(), network.Name, metav1.GetOptions{})
 		if err != nil {
 			klog.ErrorS(err, "Failed to get NetworkAttachmentDefinition",
 				"network", network, "Pod", klog.KRef(pod.Namespace, pod.Name))
@@ -392,7 +395,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			continue
 		}
 
-		cniConfig, err := netdefutils.GetCNIConfig(netDefCRD, "")
+		cniConfig, err := netdefutils.GetCNIConfig(netAttachDef, "")
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse NetworkAttachmentDefinition",
 				"network", network, "Pod", klog.KRef(pod.Namespace, pod.Name))
@@ -405,12 +408,28 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			if networkConfig != nil && networkConfig.Type != cniserver.AntreaCNIType {
 				// Ignore non-Antrea CNI type.
 				klog.InfoS("Not Antrea CNI type in NetworkAttachmentDefinition, ignoring",
-					"NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KRef(pod.Namespace, pod.Name))
+					"NetworkAttachmentDefinition", klog.KObj(netAttachDef), "Pod", klog.KRef(pod.Namespace, pod.Name))
 			} else {
 				klog.ErrorS(err, "NetworkConfig validation failed",
-					"NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KRef(pod.Namespace, pod.Name))
+					"NetworkAttachmentDefinition", klog.KObj(netAttachDef), "Pod", klog.KRef(pod.Namespace, pod.Name))
 			}
 			continue
+		}
+
+		var resourceName string
+		if networkConfig.NetworkType == sriovNetworkType {
+			v, ok := netAttachDef.Annotations[resourceNameAnnotationKey]
+			if !ok {
+				// This annotation is required for SRIOV devices, otherwise there is
+				// no way to make sure that we allocate the "right" type of device.
+				err := fmt.Errorf("missing annotation: %s", resourceNameAnnotationKey)
+				klog.ErrorS(err, "Invalid NetworkAttachmentDefinition", "NetworkAttachmentDefinition", klog.KObj(netAttachDef))
+				// It is probably worth retrying as the NetworkAttachmentDefinition
+				// may eventually be updated with the missing annotation.
+				savedErr = err
+				continue
+			}
+			resourceName = v
 		}
 
 		// Generate a new interface name, if the secondary interface name was not provided in the
@@ -425,7 +444,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		}
 
 		// Secondary network information retrieved from API server. Proceed to configure secondary interface now.
-		if err = pc.configureSecondaryInterface(pod, network, podCNIInfo, networkConfig); err != nil {
+		if err = pc.configureSecondaryInterface(pod, network, resourceName, podCNIInfo, networkConfig); err != nil {
 			klog.ErrorS(err, "Secondary interface configuration failed",
 				"Pod", klog.KRef(pod.Namespace, pod.Name), "interface", network.InterfaceRequest,
 				"networkType", networkConfig.NetworkType)
