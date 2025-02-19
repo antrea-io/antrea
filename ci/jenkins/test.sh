@@ -378,6 +378,10 @@ function revert_snapshot_windows {
         exit 1
     fi
     IP=${winVMIPs#*,}
+    # Since Windows cannot perform time synchronization when there is a significant time gap,
+    # we need to adjust the time based on the Linux time after reverting the snapshot to prevent time synchronization failures on Windows.
+    LinuxDate=$(date -d "$(date)" "+%Y-%m-%d %H:%M:%S")
+    ssh -o StrictHostKeyChecking=no -n Administrator@${IP} 'powershell.exe \"Set-Date -Date '$LinuxDate'\"'
     # Windows VM is reverted to an old snapshot so computer date needs updating.
     for i in `seq 24`; do
         sleep 5
