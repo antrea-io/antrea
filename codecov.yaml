@@ -37,10 +37,9 @@ coverage:
         flags:
           - unit-tests
 
-
 flag_management:
   default_rules:
-    carryforward: true
+    carryforward: false
 
 # Exclude files from being collected by Codecov. Ignored files will be skipped during processing.
 ignore:
