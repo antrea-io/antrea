@@ -174,7 +174,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 		return p
 	}
 
-	getPacketCaptureCR := func(name string, destinationPodName string, packet *crdv1alpha1.Packet, options ...packetCaptureOption) *crdv1alpha1.PacketCapture {
+	getPacketCaptureCR := func(name string, destinationPodName string, packet *crdv1alpha1.Packet, direction crdv1alpha1.CaptureDirection, options ...packetCaptureOption) *crdv1alpha1.PacketCapture {
 		pc := &crdv1alpha1.PacketCapture{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
@@ -200,7 +200,8 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				FileServer: &crdv1alpha1.PacketCaptureFileServer{
 					URL: sftpURL,
 				},
-				Packet: packet,
+				Packet:    packet,
+				Direction: direction,
 			},
 		}
 		for _, option := range options {
@@ -220,6 +221,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					Protocol: &icmpProto,
 					IPFamily: v1.IPv4Protocol,
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureTimeout(ptr.To[int32](15)),
 				packetCaptureFirstN(500),
 			),
@@ -253,6 +255,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				nonExistingPodName,
 				nonExistingPodName,
 				nil,
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
@@ -285,6 +288,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						},
 					},
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureHostPublicKey(pubKey1),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
@@ -324,6 +328,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						},
 					},
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureHostPublicKey(pubKey2),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
@@ -358,6 +363,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					Protocol: &icmpProto,
 					IPFamily: v1.IPv4Protocol,
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
@@ -392,6 +398,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					Protocol: &icmpProto,
 					IPFamily: v1.IPv4Protocol,
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureHostPublicKey(invalidPubKey.Marshal()),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
@@ -413,6 +420,46 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Status:  metav1.ConditionStatus(v1.ConditionFalse),
 						Reason:  "Failed",
 						Message: "failed to upload file after 5 attempts",
+					},
+				},
+			},
+		},
+		{
+			name:      "ipv4-tcp-both",
+			ipVersion: 4,
+			pc: getPacketCaptureCR(
+				"ipv4-tcp-both",
+				tcpServerPodName,
+				&crdv1alpha1.Packet{
+					Protocol: &tcpProto,
+					IPFamily: v1.IPv4Protocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						TCP: &crdv1alpha1.TCPHeader{
+							DstPort: ptr.To(serverPodPort),
+						},
+					},
+				},
+				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureHostPublicKey(pubKey1),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 10,
+				FilePath:       getPcapURL("ipv4-tcp"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
 					},
 				},
 			},
