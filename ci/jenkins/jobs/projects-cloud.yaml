@@ -1608,3 +1608,149 @@
                 default-excludes: true
                 fingerprint: false
                 only-if-success: false
+      - 'cloud-{name}-{test_name}-aws-cleanup':
+          test_name: sriov-secondary-network
+          description: This is for deleting AWS resources for SRIOV secondary-network test.
+          parameters:
+          - string:
+              default: https://github.com/antrea-io/antrea/
+              description: The repository to checkout Antrea for this test.
+              name: ANTREA_REPO
+              trim: 'true'
+          - string:
+              default: main
+              description: The branch or SHA commit ID to checkout and build Antrea for this test.
+              name: ANTREA_GIT_REVISION
+              trim: 'true'
+          - string:
+              default: ''
+              description: The ec2 instance id of control-plane Node.
+              name: CONTROLPLANE_INSTANCE_ID
+              trim: 'true'
+          - string:
+              default: ''
+              description: The ec2 instance id of worker Node.
+              name: WORKER_INSTANCE_ID
+              trim: 'true'
+          - string:
+              default: ''
+              description: The ec2 secondary network-interface id of control-plane Node.
+              name: CONTROLPLANE_NODE_ENI
+              trim: 'true'
+          - string:
+              default: ''
+              description: The ec2 secondary network-interface id of worker Node.
+              name: WORKER_NODE_ENI
+              trim: 'true'
+          - string:
+              default: ''
+              description: The subnet CIDR reservation id created in the subnet during test.
+              name: SUBNET_CIDR_RESERVATION_ID
+              trim: 'true'
+          builders:
+          - shell: |-
+              #!/bin/bash
+              set -ex
+              export CONTROLPLANE_INSTANCE_ID=${{CONTROLPLANE_INSTANCE_ID}}
+              export WORKER_INSTANCE_ID=${{WORKER_INSTANCE_ID}}
+              export CONTROLPLANE_NODE_ENI=${{CONTROLPLANE_NODE_ENI}}
+              export WORKER_NODE_ENI=${{WORKER_NODE_ENI}}
+              export SUBNET_CIDR_RES_ID=${{SUBNET_CIDR_RESERVATION_ID}}
+              source ./ci/test-sriov-secondary-network-aws.sh --cleanup-only \
+                --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --aws-service-user ${{AWS_SERVICE_USER_NAME}} \
+                --CONTROLPLANE_INSTANCE_ID ${{CONTROLPLANE_INSTANCE_ID}}
+          concurrent: false
+          disabled: false
+          node: antrea-cloud
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          publishers:
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com rahulj@vmware.com
+          triggers: []
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: AWS_ACCESS_KEY # Jenkins secret that stores aws access key
+                variable: AWS_ACCESS_KEY
+            - text:
+                credential-id: AWS_SECRET_KEY # Jenkins secret that stores aws secret key
+                variable: AWS_SECRET_KEY
+            - text:
+                credential-id: AWS_SERVICE_USER_ROLE_ARN
+                variable: AWS_SERVICE_USER_ROLE_ARN
+            - text:
+               credential-id: AWS_SERVICE_USER_NAME
+               variable: AWS_SERVICE_USER_NAME
+      - '{name}-{test_name}-for-pull-request':
+          disabled: false
+          test_name: sriov-secondary-network-e2e
+          node: antrea-cloud-test
+          description: 'Test SR-IOV secondary network in AWS for antrea.'
+          branches:
+          - ${{sha1}}
+          trigger_phrase: '^(?!Thanks for your PR).*/test-sriov-secondary-network-e2e.*'
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          status_context: sriov-secondary-network-e2e
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-sriov-secondary-network-e2e to re-trigger.
+          error_status: Failed. Add comment /test-sriov-secondary-network-e2e to re-trigger.
+          triggered_status: null
+          started_status: null
+          builders:
+          - shell: |-
+              #!/bin/bash
+              cat ${{AWS_EC2_SSH_KEY}} > ./${{AWS_EC2_SSH_KEY_NAME}}
+              chmod 400 ${{AWS_EC2_SSH_KEY_NAME}}
+              DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+              [ "$DOCKER_REGISTRY" != "docker.io" ] || ./ci/jenkins/docker_login.sh --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
+              sudo ./ci/test-sriov-secondary-network-aws.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
+                --aws-security-group-id ${{AWS_SECURITY_GROUP}} --aws-subnet-id ${{AWS_SUBNET_ID}} \
+                --aws-ec2-ssh-key-name ${{AWS_EC2_SSH_KEY_NAME}} --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --aws-service-user ${{AWS_SERVICE_USER_NAME}}
+          publishers:
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: AWS_ACCESS_KEY # Jenkins secret that stores aws access key
+                variable: AWS_ACCESS_KEY
+            - text:
+                credential-id: AWS_SECRET_KEY # Jenkins secret that stores aws secret key
+                variable: AWS_SECRET_KEY
+            - text:
+                credential-id: DOCKER_USERNAME
+                variable: DOCKER_USERNAME
+            - text:
+                credential-id: DOCKER_PASSWORD
+                variable: DOCKER_PASSWORD
+            - text:
+                credential-id: AWS_EC2_SSH_KEY_NAME
+                variable: AWS_EC2_SSH_KEY_NAME
+            - text:
+                credential-id: AWS_SECURITY_GROUP
+                variable: AWS_SECURITY_GROUP
+            - text:
+                credential-id: AWS_SUBNET_ID
+                variable: AWS_SUBNET_ID
+            - text:
+                credential-id: AWS_SERVICE_USER_ROLE_ARN
+                variable: AWS_SERVICE_USER_ROLE_ARN
+            - text:
+               credential-id: AWS_SERVICE_USER_NAME
+               variable: AWS_SERVICE_USER_NAME
+            - ssh-user-private-key:
+                credential-id: AWS_EC2_SSH_KEY
+                key-file-variable: AWS_EC2_SSH_KEY
+                username-variable: AWS_EC2_SSH_USER_NAME
+                passphrase-variable: AWS_EC2_SSH_PASSPHRASE

@@ -90,7 +90,7 @@ func testSupportBundle(name string, t *testing.T) {
 
 func getAndCheckSupportBundle(t *testing.T, name, podIP string, podPort int, token string, podName string, data *TestData) {
 	// Setup clients.
-	localConfig := rest.CopyConfig(data.kubeConfig)
+	localConfig := rest.CopyConfig(data.KubeConfig)
 	pf, err := portforwarder.NewPortForwarder(localConfig, metav1.NamespaceSystem, podName, podPort, "localhost", 8080)
 	require.NoError(t, err)
 	pf.Start()
