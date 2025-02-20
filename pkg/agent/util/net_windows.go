@@ -28,7 +28,6 @@ import (
 
 	"github.com/Microsoft/go-winio"
 	"github.com/Microsoft/hcsshim"
-	"github.com/containernetworking/plugins/pkg/ip"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
@@ -64,7 +63,7 @@ func GetNSPath(containerNetNS string) (string, error) {
 func CreateHNSNetwork(hnsNetName string, subnetCIDR *net.IPNet, nodeIP *net.IPNet, adapter *net.Interface) (*hcsshim.HNSNetwork, error) {
 	adapterMAC := adapter.HardwareAddr
 	adapterName := adapter.Name
-	gateway := ip.NextIP(subnetCIDR.IP.Mask(subnetCIDR.Mask))
+	gateway := GetGatewayIPForPodCIDR(subnetCIDR)
 	network := &hcsshim.HNSNetwork{
 		Name:               hnsNetName,
 		Type:               HNSNetworkType,
