@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -536,6 +538,25 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 	c.rejectRequestAction = c.rejectRequest
 	c.storeDenyConnectionAction = c.storeDenyConnection
 	return c, nil
+}
+
+func (c *Controller) GetFQDNCache(fqdnFilter *querier.FQDNCacheFilter) []types.DnsCacheEntry {
+	cacheEntryList := []types.DnsCacheEntry{}
+	var pattern *regexp.Regexp
+	if fqdnFilter != nil {
+		// have to convert human readable regex, i.e. *.example.com into regex that can be used
+		regexPattern := "^" + strings.ReplaceAll(regexp.QuoteMeta(fqdnFilter.Domain), `\*`, ".*") + "$"
+		pattern, _ = regexp.Compile(regexPattern)
+	}
+	for fqdn, dnsMeta := range c.fqdnController.dnsEntryCache {
+		for _, ipWithExpiration := range dnsMeta.responseIPs {
+			if fqdnFilter == nil || pattern.MatchString(fqdn) {
+				entry := types.DnsCacheEntry{FQDNName: fqdn, IPAddress: ipWithExpiration.ip, ExpirationTime: ipWithExpiration.expirationTime}
+				cacheEntryList = append(cacheEntryList, entry)
+			}
+		}
+	}
+	return cacheEntryList
 }
 
 func (c *Controller) GetNetworkPolicyNum() int {
