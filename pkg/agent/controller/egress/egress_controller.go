@@ -88,6 +88,8 @@ var emptyWatch = watch.NewEmptyWatch()
 
 var newIPAssigner = ipassigner.NewIPAssigner
 
+var egressNodeAvailability = hasEgressNode
+
 // egressState keeps the actual state of an Egress that has been realized.
 type egressState struct {
 	// The actual egress IP of the Egress. If it's different from the desired IP, there is an update to EgressIP, and we
@@ -989,6 +991,12 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 	return nil
 }
 
+func hasEgressNode(egress *crdv1b1.Egress) bool {
+	if egress.Status.EgressNode == "" {
+		return false
+	}
+	return true
+}
 func (c *EgressController) syncEgress(egressName string) error {
 	startTime := time.Now()
 	defer func() {
@@ -1118,39 +1126,41 @@ func (c *EgressController) syncEgress(egressName string) error {
 	}()
 
 	egressIP := net.ParseIP(eState.egressIP)
-	// Install SNAT flows for desired Pods.
-	for pod := range pods {
-		eState.pods.Insert(pod)
-		stalePods.Delete(pod)
+	if egressNodeAvailability(egress) {
+		// Install SNAT flows for desired Pods.
+		for pod := range pods {
+			eState.pods.Insert(pod)
+			stalePods.Delete(pod)
 
-		// If the Egress is not the effective one for the Pod, do nothing.
-		if !c.bindPodEgress(pod, egressName) {
-			continue
+			// If the Egress is not the effective one for the Pod, do nothing.
+			if !c.bindPodEgress(pod, egressName) {
+				continue
+			}
+
+			// Get the Pod's openflow port.
+			parts := strings.Split(pod, "/")
+			podNamespace, podName := parts[0], parts[1]
+			ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
+			if len(ifaces) == 0 {
+				klog.Infof("Interfaces of Pod %s/%s not found", podNamespace, podName)
+				continue
+			}
+
+			ofPort := ifaces[0].OFPort
+			if eState.ofPorts.Has(ofPort) {
+				staleOFPorts.Delete(ofPort)
+				continue
+			}
+			if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+				return err
+			}
+			eState.ofPorts.Insert(ofPort)
 		}
 
-		// Get the Pod's openflow port.
-		parts := strings.Split(pod, "/")
-		podNamespace, podName := parts[0], parts[1]
-		ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
-		if len(ifaces) == 0 {
-			klog.Infof("Interfaces of Pod %s/%s not found", podNamespace, podName)
-			continue
-		}
-
-		ofPort := ifaces[0].OFPort
-		if eState.ofPorts.Has(ofPort) {
-			staleOFPorts.Delete(ofPort)
-			continue
-		}
-		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+		// Uninstall SNAT flows for stale Pods.
+		if err := c.uninstallPodFlows(egressName, eState, staleOFPorts, stalePods); err != nil {
 			return err
 		}
-		eState.ofPorts.Insert(ofPort)
-	}
-
-	// Uninstall SNAT flows for stale Pods.
-	if err := c.uninstallPodFlows(egressName, eState, staleOFPorts, stalePods); err != nil {
-		return err
 	}
 	return nil
 }
