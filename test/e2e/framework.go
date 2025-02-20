@@ -1683,6 +1683,30 @@ func (data *TestData) PatchPod(namespace, name string, patch []byte) error {
 	return nil
 }
 
+func (data *TestData) PatchDaemonSet(namespace, name string, patch []byte) error {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := data.clientset.AppsV1().DaemonSets(namespace).Patch(context.TODO(), name, types.JSONPatchType, patch, metav1.PatchOptions{})
+		return err
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (data *TestData) GetCRDClient() (crdclientset.Interface, error) {
+	if data.crdClient == nil {
+		return nil, fmt.Errorf("CRD client is not initialized")
+	}
+	return data.crdClient, nil
+}
+
+func (data *TestData) GetKubeConfig() (*restclient.Config, error) {
+	if data.kubeConfig == nil {
+		return nil, fmt.Errorf("kubeconfig is not initialized")
+	}
+	return data.kubeConfig, nil
+}
+
 // DeletePod deletes a Pod in the test namespace.
 func (data *TestData) DeletePod(namespace, name string) error {
 	var gracePeriodSeconds int64 = 5
