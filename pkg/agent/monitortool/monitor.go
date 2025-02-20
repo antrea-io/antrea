@@ -183,6 +183,7 @@ func (m *NodeLatencyMonitor) onNodeDelete(obj interface{}) {
 
 // onNodeLatencyMonitorAdd is the event handler for adding NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) onNodeLatencyMonitorAdd(obj interface{}) {
+	// TODO maybe add the change here
 	nlm := obj.(*v1alpha1.NodeLatencyMonitor)
 	klog.V(4).InfoS("NodeLatencyMonitor added", "NodeLatencyMonitor", klog.KObj(nlm))
 

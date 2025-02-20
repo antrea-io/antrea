@@ -122,12 +122,13 @@ type Client struct {
 	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
 	markToSNATIP sync.Map
 	// iptablesInitialized is used to notify when iptables initialization is done.
-	iptablesInitialized      chan struct{}
-	proxyAll                 bool
-	connectUplinkToBridge    bool
-	multicastEnabled         bool
-	isCloudEKS               bool
-	nodeNetworkPolicyEnabled bool
+	iptablesInitialized       chan struct{}
+	proxyAll                  bool
+	connectUplinkToBridge     bool
+	multicastEnabled          bool
+	isCloudEKS                bool
+	nodeNetworkPolicyEnabled  bool
+	nodeLatencyMonitorEnabled bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
 	// serviceExternalIPReferences tracks the references of Service IP. The key is the Service IP and the value is
@@ -170,6 +171,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 	proxyAll bool,
 	connectUplinkToBridge bool,
 	nodeNetworkPolicyEnabled bool,
+	nodeLatencyMonitorEnabled bool,
 	multicastEnabled bool,
 	nodeSNATRandomFully bool,
 	egressSNATRandomFully bool,
@@ -678,6 +680,11 @@ func (c *Client) syncIPTables() error {
 	if c.nodeNetworkPolicyEnabled {
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false})
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false})
+	}
+	// TODO add jumprules for icmp if nodeLatencyMonitorEnabled is true
+	klog.Infof("DBUG: latency monitor enabled: %v", c.nodeLatencyMonitorEnabled)
+	if c.nodeLatencyMonitorEnabled {
+		klog.InfoS("DBUG: NODE LATENCY MONITOR ENABLED")
 	}
 	for _, rule := range jumpRules {
 		if err := c.iptables.EnsureChain(ipProtocol, rule.table, rule.dstChain); err != nil {
