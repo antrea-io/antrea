@@ -28,4 +28,7 @@ type Interface interface {
 	Stop()
 	AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error
 	UpdateOptions(opt *options.Options)
+	// Some exporters may be buffered, in which case the FlowAggregator
+	// should call this method periodically.
+	Flush() error
 }

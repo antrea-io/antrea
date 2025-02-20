@@ -159,3 +159,8 @@ func (e *LogExporter) UpdateOptions(opt *options.Options) {
 	e.buildFilters()
 	e.start()
 }
+
+func (e *LogExporter) Flush() error {
+	// TODO: replace FlushLoop in flowlogger.FlowLogger?
+	return nil
+}
