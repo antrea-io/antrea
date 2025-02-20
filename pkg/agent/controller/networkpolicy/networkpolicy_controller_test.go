@@ -78,7 +78,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	groupIDAllocator := openflow.NewGroupAllocator()
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch2)}
 	fs := afero.NewMemMapFs()
-	l7reconciler := l7engine.NewReconciler()
+	l7reconciler := l7engine.NewReconciler(nil)
 	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset},
 		nil,
 		nil,

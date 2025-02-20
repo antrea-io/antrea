@@ -63,7 +63,7 @@ type L7FlowExporterController struct {
 	namespaceLister       corelisters.NamespaceLister
 	namespaceListerSynced cache.InformerSynced
 
-	l7Reconciler           *l7engine.Reconciler
+	startSuricataOnceFn    func() error
 	podToDirectionMap      map[string]v1alpha2.Direction
 	podToDirectionMapMutex sync.RWMutex
 
@@ -87,7 +87,7 @@ func NewL7FlowExporterController(
 		namespaceInformer:     namespaceInformer.Informer(),
 		namespaceLister:       namespaceInformer.Lister(),
 		namespaceListerSynced: namespaceInformer.Informer().HasSynced,
-		l7Reconciler:          l7Reconciler,
+		startSuricataOnceFn:   l7Reconciler.StartSuricataOnce,
 		podToDirectionMap:     make(map[string]v1alpha2.Direction),
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
@@ -324,7 +324,9 @@ func (l7c *L7FlowExporterController) syncPod(podNN string) error {
 	sourceOfPort := []uint32{uint32(podInterfaces[0].OFPort)}
 
 	// Start Suricata before starting traffic control mark flows
-	l7c.l7Reconciler.StartSuricataOnce()
+	if err := l7c.startSuricataOnceFn(); err != nil {
+		return err
+	}
 
 	oldDirection, exists := l7c.getMirroredDirection(podNN)
 	if exists {

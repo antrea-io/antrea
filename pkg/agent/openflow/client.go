@@ -411,6 +411,9 @@ type Client interface {
 
 	// SubscribeOFPortStatusMessage registers a channel to listen the OpenFlow PortStatus message.
 	SubscribeOFPortStatusMessage(statusCh chan *openflow15.PortStatus)
+
+	// InstallL7NetworkPolicyFlows will be called only when at least one L7 NetworkPolicy is applied locally.
+	InstallL7NetworkPolicyFlows() error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -1703,4 +1706,14 @@ func (c *client) getMeterStats() {
 
 func (c *client) SubscribeOFPortStatusMessage(statusCh chan *openflow15.PortStatus) {
 	c.bridge.SubscribePortStatusConsumer(statusCh)
+}
+
+// InstallL7NetworkPolicyFlows will be called only when at least one L7 NetworkPolicy is applied locally.
+func (c *client) InstallL7NetworkPolicyFlows() error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	cacheKey := "l7_np_flows"
+	flows := c.featureNetworkPolicy.l7NPTrafficControlFlows()
+	return c.addFlows(c.featureNetworkPolicy.cachedFlows, cacheKey, flows)
 }
