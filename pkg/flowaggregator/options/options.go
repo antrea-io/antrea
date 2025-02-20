@@ -19,6 +19,8 @@ import (
 	"net"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/util/flowexport"
 	"antrea.io/antrea/pkg/util/yaml"
@@ -61,7 +63,7 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 		return nil, fmt.Errorf("s3Uploader enabled without specifying bucket name")
 	}
 	if !opt.Config.FlowCollector.Enable && !opt.Config.ClickHouse.Enable && !opt.Config.S3Uploader.Enable && !opt.Config.FlowLogger.Enable {
-		return nil, fmt.Errorf("at least one collector / sink should be configured")
+		klog.InfoS("No collector / sink has been configured, so no flow data will be exported")
 	}
 	// Validate common parameters
 	if opt.Config.Mode != flowaggregatorconfig.AggregatorModeAggregate && opt.Config.Mode != flowaggregatorconfig.AggregatorModeProxy {
