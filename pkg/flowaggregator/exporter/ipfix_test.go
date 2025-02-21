@@ -130,6 +130,7 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 		setCount += 1
 	}).Return(nil).Times(2)
 	// connection will be closed when updating the external flow collector address
+	mockIPFIXBufferedExp.EXPECT().Flush()
 	mockIPFIXExpProc.EXPECT().CloseConnToCollector()
 
 	require.NoError(t, ipfixExporter.AddRecord(mockRecord, false))

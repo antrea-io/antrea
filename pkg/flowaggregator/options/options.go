@@ -116,7 +116,7 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 		}
 		if opt.Config.FlowCollector.MaxIPFIXMsgSize > 0 {
 			if opt.Config.FlowCollector.MaxIPFIXMsgSize < flowaggregatorconfig.MinValidIPFIXMsgSize {
-				return nil, fmt.Errorf("maxIPFIXMsgSize cannot be smaller than minimum valid IPFIX mesage size %d", flowaggregatorconfig.MinValidIPFIXMsgSize)
+				return nil, fmt.Errorf("maxIPFIXMsgSize cannot be smaller than the minimum valid IPFIX mesage size %d", flowaggregatorconfig.MinValidIPFIXMsgSize)
 			}
 			if opt.Config.FlowCollector.MaxIPFIXMsgSize > flowaggregatorconfig.MaxValidIPFIXMsgSize {
 				return nil, fmt.Errorf("maxIPFIXMsgSize cannot be greater than the maximum valid IPFIX mesage size %d", flowaggregatorconfig.MaxValidIPFIXMsgSize)

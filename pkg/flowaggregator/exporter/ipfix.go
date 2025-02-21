@@ -154,6 +154,9 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "templateRefreshTimeout", e.templateRefreshTimeout, "maxIPFIXMsgSize", e.maxIPFIXMsgSize)
 
 	if e.exportingProcess != nil {
+		if err := e.bufferedExporter.Flush(); err != nil {
+			klog.ErrorS(err, "Error when flushing buffered IPFIX exporter")
+		}
 		e.exportingProcess.CloseConnToCollector()
 		e.exportingProcess = nil
 	}
@@ -255,6 +258,7 @@ func (e *IPFIXExporter) createAndSendTemplate(isRecordIPv6 bool) error {
 		e.templateIDv4 = templateID
 	}
 	if err := e.sendTemplateSet(isRecordIPv6); err != nil {
+		// No need to flush first, as no data records should have been sent yet.
 		e.exportingProcess.CloseConnToCollector()
 		e.exportingProcess = nil
 		return fmt.Errorf("sending %s template set failed, err: %v", recordIPFamily, err)
