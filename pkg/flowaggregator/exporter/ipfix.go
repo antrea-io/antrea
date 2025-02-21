@@ -17,6 +17,7 @@ package exporter
 import (
 	"fmt"
 	"hash/fnv"
+	"net"
 	"reflect"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/ipfix"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 // this is used for unit testing
@@ -44,6 +46,7 @@ type IPFIXExporter struct {
 	externalFlowCollectorAddr  string
 	externalFlowCollectorProto string
 	exportingProcess           ipfix.IPFIXExportingProcess
+	bufferedExporter           ipfix.IPFIXBufferedExporter
 	sendJSONRecord             bool
 	aggregatorMode             flowaggregatorconfig.AggregatorMode
 	observationDomainID        uint32
@@ -51,8 +54,8 @@ type IPFIXExporter struct {
 	templateIDv4               uint16
 	templateIDv6               uint16
 	registry                   ipfix.IPFIXRegistry
-	set                        ipfixentities.Set
 	clusterUUID                uuid.UUID
+	maxIPFIXMsgSize            int
 }
 
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
@@ -93,8 +96,8 @@ func NewIPFIXExporter(
 		observationDomainID:        observationDomainID,
 		templateRefreshTimeout:     opt.TemplateRefreshTimeout,
 		registry:                   registry,
-		set:                        ipfixentities.NewSet(false),
 		clusterUUID:                clusterUUID,
+		maxIPFIXMsgSize:            int(opt.Config.FlowCollector.MaxIPFIXMsgSize),
 	}
 
 	return exporter
@@ -107,6 +110,9 @@ func (e *IPFIXExporter) Start() {
 
 func (e *IPFIXExporter) Stop() {
 	if e.exportingProcess != nil {
+		if err := e.bufferedExporter.Flush(); err != nil {
+			klog.ErrorS(err, "Error when flushing buffered IPFIX exporter")
+		}
 		e.exportingProcess.CloseConnToCollector()
 		e.exportingProcess = nil
 	}
@@ -144,9 +150,13 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 		e.observationDomainID = genObservationDomainID(e.clusterUUID)
 	}
 	e.templateRefreshTimeout = opt.TemplateRefreshTimeout
-	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "templateRefreshTimeout", e.templateRefreshTimeout)
+	e.maxIPFIXMsgSize = int(opt.Config.FlowCollector.MaxIPFIXMsgSize)
+	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "templateRefreshTimeout", e.templateRefreshTimeout, "maxIPFIXMsgSize", e.maxIPFIXMsgSize)
 
 	if e.exportingProcess != nil {
+		if err := e.bufferedExporter.Flush(); err != nil {
+			klog.ErrorS(err, "Error when flushing buffered IPFIX exporter")
+		}
 		e.exportingProcess.CloseConnToCollector()
 		e.exportingProcess = nil
 	}
@@ -159,33 +169,26 @@ func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 boo
 			return fmt.Errorf("error when initializing IPFIX exporting process: %v", err)
 		}
 	}
-
-	templateID := e.templateIDv4
-	if isRecordIPv6 {
-		templateID = e.templateIDv6
-	}
-
-	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
-	e.set.ResetSet()
-	if err := e.set.PrepareSet(ipfixentities.Data, templateID); err != nil {
+	if err := e.bufferedExporter.AddRecord(record); err != nil {
 		return err
 	}
-	if err := e.set.AddRecordV2(record.GetOrderedElementList(), templateID); err != nil {
-		return err
-	}
-	sentBytes, err := e.exportingProcess.SendSet(e.set)
-	if err != nil {
-		return err
-	}
-	if klog.V(7).Enabled() {
-		klog.InfoS("Data set sent successfully", "bytes sent", sentBytes)
-	}
+	klog.V(7).InfoS("Data record added successfully")
 	return nil
 }
 
+func inPod() bool {
+	return env.GetPodNamespace() != ""
+}
+
+func getMTU(ifaceName string) (int, error) {
+	iface, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return 0, err
+	}
+	return iface.MTU, nil
+}
+
 func (e *IPFIXExporter) initExportingProcess() error {
-	// TODO: This code can be further simplified by changing the go-ipfix API to accept
-	// externalFlowCollectorAddr and externalFlowCollectorProto instead of net.Addr input.
 	var expInput exporter.ExporterInput
 	if e.externalFlowCollectorProto == "tcp" {
 		expInput = exporter.ExporterInput{
@@ -206,12 +209,32 @@ func (e *IPFIXExporter) initExportingProcess() error {
 			TLSClientConfig:     nil,
 			SendJSONRecord:      e.sendJSONRecord,
 		}
+		if inPod() {
+			// In a Pod, the primary network interface is always "eth0", and we assume
+			// this is the interface used to connect to the IPFIX collector.
+			// The FlowAggregator is not meant to be run in the host network.
+			mtu, err := getMTU("eth0")
+			if err != nil {
+				klog.ErrorS(err, "Failed to determine uplink MTU")
+			} else {
+				// In practice the only guarantee we have is that PMTU <=
+				// MTU. However, this is a reasonable approximation for most
+				// scenarios. Note that MaxMessageSize is an available override in
+				// the config.
+				expInput.PathMTU = mtu
+			}
+		} else {
+			klog.InfoS("Not running as Pod, cannot determine interface MTU")
+		}
 	}
+	expInput.MaxMsgSize = e.maxIPFIXMsgSize
+
 	ep, err := exporter.InitExportingProcess(expInput)
 	if err != nil {
-		return fmt.Errorf("got error when initializing IPFIX exporting process: %v", err)
+		return fmt.Errorf("got error when initializing IPFIX exporting process: %w", err)
 	}
 	e.exportingProcess = ep
+	e.bufferedExporter = exporter.NewBufferedIPFIXExporter(ep)
 	// Currently, we send two templates for IPv4 and IPv6 regardless of the IP families supported by cluster
 	if err = e.createAndSendTemplate(false); err != nil {
 		return err
@@ -234,18 +257,17 @@ func (e *IPFIXExporter) createAndSendTemplate(isRecordIPv6 bool) error {
 	} else {
 		e.templateIDv4 = templateID
 	}
-	bytesSent, err := e.sendTemplateSet(isRecordIPv6)
-	if err != nil {
+	if err := e.sendTemplateSet(isRecordIPv6); err != nil {
+		// No need to flush first, as no data records should have been sent yet.
 		e.exportingProcess.CloseConnToCollector()
 		e.exportingProcess = nil
-		e.set.ResetSet()
 		return fmt.Errorf("sending %s template set failed, err: %v", recordIPFamily, err)
 	}
-	klog.V(2).InfoS("Exporting process initialized", "bytesSent", bytesSent, "templateSetIPFamily", recordIPFamily)
+	klog.V(2).InfoS("Exporting process initialized", "templateSetIPFamily", recordIPFamily)
 	return nil
 }
 
-func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
+func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) error {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
 	ianaInfoElements := infoelements.IANAInfoElementsIPv4
 	antreaInfoElements := infoelements.AntreaInfoElementsIPv4
@@ -258,21 +280,21 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	for _, ieName := range ianaInfoElements {
 		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		elements = append(elements, ie)
 	}
 	for _, ieName := range infoelements.IANAReverseInfoElements {
 		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAReversedEnterpriseID)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		elements = append(elements, ie)
 	}
 	for _, ieName := range antreaInfoElements {
 		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		elements = append(elements, ie)
 	}
@@ -284,21 +306,21 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 			ieName := infoelements.AntreaSourceStatsElementList[i]
 			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return 0, err
+				return err
 			}
 			elements = append(elements, ie)
 			// Add Antrea destination stats fields
 			ieName = infoelements.AntreaDestinationStatsElementList[i]
 			ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return 0, err
+				return err
 			}
 			elements = append(elements, ie)
 		}
 		for _, ieName := range infoelements.AntreaFlowEndSecondsElementList {
 			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return 0, err
+				return err
 			}
 			elements = append(elements, ie)
 		}
@@ -307,21 +329,21 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 			ieName := infoelements.AntreaThroughputElementList[i]
 			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return 0, err
+				return err
 			}
 			elements = append(elements, ie)
 			// Add source node specific throughput fields
 			ieName = infoelements.AntreaSourceThroughputElementList[i]
 			ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return 0, err
+				return err
 			}
 			elements = append(elements, ie)
 			// Add destination node specific throughput fields
 			ieName = infoelements.AntreaDestinationThroughputElementList[i]
 			ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return 0, err
+				return err
 			}
 			elements = append(elements, ie)
 		}
@@ -329,33 +351,28 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	for _, ieName := range infoelements.AntreaLabelsElementList {
 		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		elements = append(elements, ie)
 	}
 	ie, err := e.createInfoElementForTemplateSet("clusterId", ipfixregistry.AntreaEnterpriseID)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	elements = append(elements, ie)
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeProxy {
 		for _, ieName := range infoelements.IANAProxyModeElementList {
 			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAEnterpriseID)
 			if err != nil {
-				return 0, err
+				return err
 			}
 			elements = append(elements, ie)
 		}
 	}
-	e.set.ResetSet()
-	if err := e.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
-		return 0, err
-	}
-	if err := e.set.AddRecordV2(elements, templateID); err != nil {
-		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
-	}
-	bytesSent, err := e.exportingProcess.SendSet(e.set)
-	return bytesSent, err
+	record := ipfixentities.NewTemplateRecordFromElements(templateID, elements, false)
+	// Ideally we would not have to do it explicitly, it would be taken care of by the go-ipfix library.
+	record.PrepareRecord()
+	return e.bufferedExporter.AddRecord(record)
 }
 
 func (e *IPFIXExporter) createInfoElementForTemplateSet(ieName string, enterpriseID uint32) (ipfixentities.InfoElementWithValue, error) {
@@ -368,4 +385,11 @@ func (e *IPFIXExporter) createInfoElementForTemplateSet(ieName string, enterpris
 		return nil, err
 	}
 	return ie, nil
+}
+
+func (e *IPFIXExporter) Flush() error {
+	if e.exportingProcess == nil {
+		return nil
+	}
+	return e.bufferedExporter.Flush()
 }

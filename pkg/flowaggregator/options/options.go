@@ -89,7 +89,7 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 		return nil, err
 	}
 	// Validate flow collector specific parameters
-	if opt.Config.FlowCollector.Enable && len(opt.Config.FlowCollector.Address) > 0 {
+	if opt.Config.FlowCollector.Enable {
 		host, port, proto, err := flowexport.ParseFlowCollectorAddr(
 			opt.Config.FlowCollector.Address, flowaggregatorconfig.DefaultExternalFlowCollectorPort,
 			flowaggregatorconfig.DefaultExternalFlowCollectorTransport)
@@ -109,6 +109,18 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 		}
 		if opt.TemplateRefreshTimeout < 0 {
 			return nil, fmt.Errorf("templateRefreshTimeout cannot be a negative duration")
+		}
+
+		if opt.Config.FlowCollector.MaxIPFIXMsgSize < 0 {
+			return nil, fmt.Errorf("maxIPFIXMsgSize cannot be negative")
+		}
+		if opt.Config.FlowCollector.MaxIPFIXMsgSize > 0 {
+			if opt.Config.FlowCollector.MaxIPFIXMsgSize < flowaggregatorconfig.MinValidIPFIXMsgSize {
+				return nil, fmt.Errorf("maxIPFIXMsgSize cannot be smaller than the minimum valid IPFIX mesage size %d", flowaggregatorconfig.MinValidIPFIXMsgSize)
+			}
+			if opt.Config.FlowCollector.MaxIPFIXMsgSize > flowaggregatorconfig.MaxValidIPFIXMsgSize {
+				return nil, fmt.Errorf("maxIPFIXMsgSize cannot be greater than the maximum valid IPFIX mesage size %d", flowaggregatorconfig.MaxValidIPFIXMsgSize)
+			}
 		}
 	}
 	// Validate clickhouse specific parameters
