@@ -169,9 +169,7 @@ func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 boo
 	if err := e.bufferedExporter.AddRecord(record); err != nil {
 		return err
 	}
-	if klog.V(7).Enabled() {
-		klog.InfoS("Data record added successfully")
-	}
+	klog.V(7).InfoS("Data record added successfully")
 	return nil
 }
 

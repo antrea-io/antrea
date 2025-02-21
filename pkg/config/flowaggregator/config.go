@@ -107,6 +107,7 @@ type FlowCollectorConfig struct {
 	TemplateRefreshTimeout string `yaml:"templateRefreshTimeout,omitempty"`
 	// Maximum message size to use for IPFIX records. If set to 0 (recommended), a reasonable
 	// default value will be used based on the protocol (tcp or udp) used to connect to the collector.
+	// Min valid value is 512 and max valid value is 65535.
 	MaxIPFIXMsgSize int32 `yaml:"maxIPFIXMsgSize,omitempty"`
 }
 
