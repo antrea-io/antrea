@@ -20,12 +20,9 @@ import (
 	"sync"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	coreinformers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	aggregator "antrea.io/antrea/pkg/flowaggregator"
@@ -33,7 +30,6 @@ import (
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/cipher"
-	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/util/podstore"
 	"antrea.io/antrea/pkg/version"
 )
@@ -59,17 +55,9 @@ func run(configFile string) error {
 		return fmt.Errorf("error when creating K8s client: %v", err)
 	}
 
-	podInformer := coreinformers.NewFilteredPodInformer(
-		k8sClient,
-		metav1.NamespaceAll,
-		informerDefaultResync,
-		cache.Indexers{},
-		func(options *metav1.ListOptions) {
-			options.FieldSelector = fields.OneTermEqualSelector("spec.hostNetwork", "false").String()
-		},
-	)
-	podInformer.SetTransform(k8s.NewTrimmer(k8s.TrimPod))
-	podStore := podstore.NewPodStore(podInformer)
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
+	podInformer := informerFactory.Core().V1().Pods()
+	podStore := podstore.NewPodStore(podInformer.Informer())
 
 	klog.InfoS("Retrieving Antrea cluster UUID")
 	clusterUUID, err := aggregator.GetClusterUUID(ctx, k8sClient)
@@ -109,7 +97,7 @@ func run(configFile string) error {
 	}
 	go apiServer.Run(ctx)
 
-	go podInformer.Run(stopCh)
+	informerFactory.Start(stopCh)
 
 	<-stopCh
 	klog.InfoS("Stopping Flow Aggregator")
