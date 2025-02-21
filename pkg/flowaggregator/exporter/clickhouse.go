@@ -122,3 +122,7 @@ func (e *ClickHouseExporter) UpdateOptions(opt *options.Options) {
 	}
 	klog.InfoS("New ClickHouse configuration", "database", chConfig.Database, "databaseURL", chConfig.DatabaseURL, "debug", chConfig.Debug, "compress", *chConfig.Compress, "commitInterval", chConfig.CommitInterval)
 }
+
+func (e *ClickHouseExporter) Flush() error {
+	return nil
+}

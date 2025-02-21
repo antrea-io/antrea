@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,4 +23,10 @@ type IPFIXExportingProcess interface {
 	NewTemplateID() uint16
 	SendSet(set ipfixentities.Set) (int, error)
 	CloseConnToCollector()
+}
+
+// IPFIXBufferedExporter interface is added to facilitate unit testing without involving the code from go-ipfix library.
+type IPFIXBufferedExporter interface {
+	AddRecord(record ipfixentities.Record) error
+	Flush() error
 }

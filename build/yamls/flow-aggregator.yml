@@ -227,6 +227,11 @@ data:
       # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
       templateRefreshTimeout: "600s"
 
+      # Maximum message size to use for IPFIX records. If set to 0 (recommended), a reasonable default
+      # value will be used based on the protocol (tcp or udp) used to connect to the collector.
+      # Min valid value is 512 and max valid value is 65535.
+      maxIPFIXMsgSize: 0
+
     # clickHouse contains ClickHouse related configuration options.
     clickHouse:
       # Enable is the switch to enable exporting flow records to ClickHouse.
@@ -401,7 +406,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 5ba1a6d1b9d3b40e2ea26e37aa2bea38fda2558c20564873936472136651de37
+        checksum/config: 13cccea100703f4180b6b432d44ec50b97c0508f9bdf06dd1ef4fbad08b4bed6
       labels:
         app: flow-aggregator
     spec:

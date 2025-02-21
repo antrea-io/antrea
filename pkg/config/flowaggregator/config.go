@@ -105,6 +105,10 @@ type FlowCollectorConfig struct {
 	// The value must be provided as a duration string. Defaults to 600s.
 	// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 	TemplateRefreshTimeout string `yaml:"templateRefreshTimeout,omitempty"`
+	// Maximum message size to use for IPFIX records. If set to 0 (recommended), a reasonable
+	// default value will be used based on the protocol (tcp or udp) used to connect to the collector.
+	// Min valid value is 512 and max valid value is 65535.
+	MaxIPFIXMsgSize int32 `yaml:"maxIPFIXMsgSize,omitempty"`
 }
 
 type ClickHouseConfig struct {

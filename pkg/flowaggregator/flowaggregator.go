@@ -560,6 +560,9 @@ func (fa *flowAggregator) proxyRecord(record ipfixentities.Record, obsDomainID u
 func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 	logTicker := time.NewTicker(fa.logTickerDuration)
 	defer logTicker.Stop()
+	const flushTickerDuration = 1 * time.Second
+	flushTicker := time.NewTicker(flushTickerDuration)
+	defer flushTicker.Stop()
 	msgCh := fa.preprocessorOutCh
 
 	proxyRecords := func(msg *ipfixentities.Message) {
@@ -587,6 +590,10 @@ func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 				break
 			}
 			proxyRecords(msg)
+		case <-flushTicker.C:
+			if err := fa.flushExporters(); err != nil {
+				klog.ErrorS(err, "Error when flushing exporters")
+			}
 		case <-logTicker.C:
 			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
@@ -627,6 +634,9 @@ func (fa *flowAggregator) flowExportLoopAggregate(stopCh <-chan struct{}) {
 			}
 			// Get the new expiry and reset the timer.
 			expireTimer.Reset(fa.aggregationProcess.GetExpiryFromExpirePriorityQueue())
+			if err := fa.flushExporters(); err != nil {
+				klog.ErrorS(err, "Error when flushing exporters")
+			}
 		case <-logTicker.C:
 			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
@@ -669,6 +679,16 @@ func (fa *flowAggregator) sendRecord(record ipfixentities.Record, isRecordIPv6 b
 		}
 	}
 	fa.numRecordsExported = fa.numRecordsExported + 1
+	return nil
+}
+
+func (fa *flowAggregator) flushExporters() error {
+	if fa.ipfixExporter != nil {
+		if err := fa.ipfixExporter.Flush(); err != nil {
+			return err
+		}
+	}
+	// Other exporters don't leverage Flush for now, so we skip them.
 	return nil
 }
 

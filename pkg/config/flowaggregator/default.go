@@ -30,6 +30,8 @@ const (
 	DefaultAggregatorTransportProtocol    = "TLS"
 	DefaultRecordFormat                   = "IPFIX"
 	DefaultTemplateRefreshTimeout         = "600s"
+	MinValidIPFIXMsgSize                  = 512
+	MaxValidIPFIXMsgSize                  = 65535
 
 	DefaultClickHouseDatabase       = "default"
 	DefaultClickHouseCommitInterval = "8s"
