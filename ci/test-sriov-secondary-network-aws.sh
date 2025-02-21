@@ -234,12 +234,13 @@ function install_kubernetes() {
     done
     echo "Installing Kubernetes on node $node_ip..."
     ssh -o StrictHostKeyChecking=no -i "$AWS_EC2_SSH_KEY_NAME" ubuntu@"$node_ip" << EOF
+        set -x
         sudo apt update && sudo apt upgrade -y
         sudo apt install -y docker.io
         sudo docker --version
 
         sudo apt-get update
-        sudo apt-get install apt-transport-https ca-certificates curl gpg
+        sudo apt-get install apt-transport-https ca-certificates curl gpg -y
 
         sudo install -m 0755 -d /etc/apt/keyrings
         sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
@@ -262,6 +263,7 @@ function install_kubernetes() {
         sudo apt-mark hold kubelet kubeadm kubectl
         sudo swapoff -a
         sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+        sudo kubeadm version
 EOF
 }
 
@@ -335,18 +337,8 @@ function setup_cluster {
     install_kubernetes "$CONTROLPLANE_IP"
     install_kubernetes "$WORKER_IP"
 
-    # Initialize Kubernetes control-plane Node, if it fails, it will not exit
-    initialize_control_plane_node "$CONTROLPLANE_IP" || {
-        echo "Failed to initialize control-plane Node. Re-running installation for both nodes."
-        # Re-run the install commands for both control-plane and worker nodes
-        install_kubernetes "$CONTROLPLANE_IP"
-        install_kubernetes "$WORKER_IP"
-        # After re-installing, attempt the initialization again
-        initialize_control_plane_node "$CONTROLPLANE_IP" || {
-            echo "Initialization ControlPlane failed again, please check logs."
-            exit 1
-        }
-    }
+    # Initialize Kubernetes on control-plane Node
+    initialize_control_plane_node "$CONTROLPLANE_IP"
 
     # Get the join command and join the worker node to the cluster
     JOIN_COMMAND=$(get_join_command "$CONTROLPLANE_IP")
@@ -479,6 +471,7 @@ function run_test() {
      kubectl get nodes -o go-template='{{range .items}}{{.metadata.name}}{{" "}}{{.status.allocatable}}{{"\n"}}{{end}}'
      kubectl apply -f https://github.com/k8snetworkplumbingwg/network-attachment-definition-client/raw/master/artifacts/networks-crd.yaml
      create_ippool_and_network_attachment_definition
+     kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
      CONTROLPLANE_NODE=$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].metadata.name}')
      WORKER_NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}')
      kubectl label node "$CONTROLPLANE_NODE" eni-id="$CONTROLPLANE_NODE_ENI"
