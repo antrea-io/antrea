@@ -32,8 +32,10 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/util/logdir"
+	utilsync "antrea.io/antrea/pkg/util/sync"
 )
 
 const (
@@ -153,10 +155,13 @@ type Reconciler struct {
 	suricataTenantCache        *threadSafeSet[uint32]
 	suricataTenantHandlerCache *threadSafeSet[uint32]
 
-	once sync.Once
+	ofClient openflow.Client
+
+	startSuricataOnce     utilsync.OnceWithNoError
+	initializeL7FlowsOnce utilsync.OnceWithNoError
 }
 
-func NewReconciler() *Reconciler {
+func NewReconciler(ofClient openflow.Client) *Reconciler {
 	return &Reconciler{
 		suricataScFn:    suricataSc,
 		startSuricataFn: startSuricata,
@@ -166,6 +171,7 @@ func NewReconciler() *Reconciler {
 		suricataTenantHandlerCache: &threadSafeSet[uint32]{
 			cached: sets.New[uint32](),
 		},
+		ofClient: ofClient,
 	}
 }
 
@@ -260,10 +266,15 @@ func convertProtocolTLS(tls *v1beta.TLSProtocol) string {
 	return strings.Join(keywords, " ")
 }
 
-func (r *Reconciler) StartSuricataOnce() {
-	r.once.Do(func() {
-		r.startSuricata()
-	})
+func (r *Reconciler) StartSuricataOnce() error {
+	return r.startSuricataOnce.Do(r.startSuricata)
+}
+
+func (r *Reconciler) initializeL7Flows() error {
+	if err := r.ofClient.InstallL7NetworkPolicyFlows(); err != nil {
+		return fmt.Errorf("failed to install L7 NetworkPolicy flows: %w", err)
+	}
+	return nil
 }
 
 func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta.L7Protocol) error {
@@ -272,7 +283,12 @@ func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protoco
 		klog.V(5).Infof("AddRule took %v", time.Since(start))
 	}()
 
-	r.StartSuricataOnce()
+	if err := r.StartSuricataOnce(); err != nil {
+		return err
+	}
+	if err := r.initializeL7FlowsOnce.Do(r.initializeL7Flows); err != nil {
+		return err
+	}
 
 	// Generate the keyword part used in Suricata rules.
 	protoKeywords := make(map[string]sets.Set[string])
@@ -461,29 +477,25 @@ func (r *Reconciler) unregisterSuricataTenantHandler(tenantID, vlanID uint32) (*
 	return r.suricataScFn(scCmd)
 }
 
-func (r *Reconciler) startSuricata() {
+func (r *Reconciler) startSuricata() error {
 	f, err := defaultFS.Create(antreaSuricataConfigPath)
 	if err != nil {
-		klog.ErrorS(err, "Failed to create Suricata config file", "FilePath", antreaSuricataConfigPath)
-		return
+		return fmt.Errorf("failed to create Suricata config file %s: %w", antreaSuricataConfigPath, err)
 	}
 	defer f.Close()
 	if _, err = f.WriteString(suricataAntreaConfigData); err != nil {
-		klog.ErrorS(err, "Failed to write Suricata config file", "FilePath", antreaSuricataConfigPath)
-		return
+		return fmt.Errorf("failed to write Suricata config file %s: %w", antreaSuricataConfigPath, err)
 	}
 
 	// Open the default Suricata config file /etc/suricata/suricata.yaml.
 	f, err = defaultFS.OpenFile(defaultSuricataConfigPath, os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		klog.ErrorS(err, "Failed to open default Suricata config file", "FilePath", defaultSuricataConfigPath)
-		return
+		return fmt.Errorf("failed to open default Suricata config file %s: %w", defaultSuricataConfigPath, err)
 	}
 	defer f.Close()
 	// Include the config file /etc/suricata/antrea.yaml for Antrea in the default Suricata config file /etc/suricata/suricata.yaml.
 	if _, err = f.WriteString(fmt.Sprintf("include: %s\n", antreaSuricataConfigPath)); err != nil {
-		klog.ErrorS(err, "Failed to update default Suricata config file", "FilePath", defaultSuricataConfigPath)
-		return
+		return fmt.Errorf("failed to update default Suricata config file %s: %w", defaultSuricataConfigPath, err)
 	}
 
 	r.startSuricataFn()
@@ -496,10 +508,10 @@ func (r *Reconciler) startSuricata() {
 		return true, nil
 	})
 	if err != nil {
-		klog.ErrorS(err, "Failed to find Suricata command socket file")
-	} else {
-		klog.InfoS("Started Suricata instance successfully")
+		return fmt.Errorf("failed to find Suricata command socket file: %w", err)
 	}
+	klog.InfoS("Started Suricata instance successfully")
+	return nil
 }
 
 func startSuricata() {
