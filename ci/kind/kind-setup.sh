@@ -565,7 +565,7 @@ function clean_kind {
       flock -x 200
 
       current_timestamp=$(date +%s)
-      touch ~/.antrea/.clusters.swp
+      > ~/.antrea/.clusters.swp
       while IFS=' ' read -r name creationTimestamp; do
           if [[ -z "$name" || -z "$creationTimestamp" ]]; then
               continue
