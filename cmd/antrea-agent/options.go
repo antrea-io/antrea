@@ -275,7 +275,10 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 }
 
 func (o *Options) validateFlowExporterConfig() error {
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {
+		if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+			klog.InfoS("The FlowExporter feature does not support AntreaIPAM Pods")
+		}
 		host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowExporter.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
 		if err != nil {
 			return err
