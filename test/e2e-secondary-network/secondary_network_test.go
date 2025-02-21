@@ -84,7 +84,7 @@ func (data *testData) createPods(t *testing.T, ns string) error {
 	for _, pod := range data.pods {
 		err := data.createPodForSecondaryNetwork(ns, pod)
 		if err != nil {
-			return fmt.Errorf("error in creating pods.., err: %v", err)
+			return fmt.Errorf("error in creating pods.., err: %w", err)
 		}
 	}
 	return err
@@ -192,7 +192,7 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 			return true, nil
 		})
 		if err != nil {
-			return fmt.Errorf("error when waiting for secondary IPs for Pod %+v: %v", testPod, err)
+			return fmt.Errorf("error when waiting for secondary IPs for Pod %+v: %w", testPod, err)
 		}
 	}
 
@@ -212,7 +212,7 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 					}
 					if err := e2eTestData.RunPingCommandFromTestPod(antreae2e.PodInfo{Name: sourcePod.podName, OS: osType, NodeName: sourcePod.nodeName, Namespace: namespace},
 						namespace, &IPToPing, containerName, pingCount, pingSize, false); err != nil {
-						return fmt.Errorf("ping '%s' -> '%s'(Interface: %s, IP Address: %s) failed: %v", sourcePod.podName, targetPod.podName, targetAttachment.iface, targetAttachment.ip, err)
+						return fmt.Errorf("ping '%s' -> '%s'(Interface: %s, IP Address: %s) failed: %w", sourcePod.podName, targetPod.podName, targetAttachment.iface, targetAttachment.ip, err)
 					}
 					logs.Infof("ping '%s' -> '%s'( Interface: %s, IP Address: %s): OK", sourcePod.podName, targetPod.podName, targetAttachment.iface, targetAttachment.ip)
 				}
@@ -275,10 +275,10 @@ func (data *testData) assignIP(clientset *kubernetes.Clientset) error {
 	for _, testPod := range data.pods {
 		node, err := clientset.CoreV1().Nodes().Get(context.TODO(), testPod.nodeName, metav1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("error when getting the cluster Node %s: %v", testPod.nodeName, err)
+			return fmt.Errorf("error when getting the cluster Node %s: %w", testPod.nodeName, err)
 		}
-		eni, has := node.Labels["eni-id"]
-		if !has {
+		eni, exists := node.Labels["eni-id"]
+		if !exists {
 			return fmt.Errorf("the label `eni-id` not found in the cluster Node: %s", testPod.nodeName)
 		}
 		var podIP net.IP
@@ -317,17 +317,15 @@ func TestSRIOVNetwork(t *testing.T) {
 	}
 	defer antreae2e.TeardownTest(t, e2eTestData)
 
-	node0Name := antreae2e.NodeName(0)
-	node1Name := antreae2e.NodeName(1)
 	pods := []*testPodInfo{
 		{
 			podName:           "sriov-pod1",
-			nodeName:          node0Name,
+			nodeName:          antreae2e.NodeName(0),
 			interfaceNetworks: map[string]string{"eth1": "sriov-net1"},
 		},
 		{
 			podName:           "sriov-pod2",
-			nodeName:          node1Name,
+			nodeName:          antreae2e.NodeName(1),
 			interfaceNetworks: map[string]string{"eth1": "sriov-net1"},
 		},
 	}

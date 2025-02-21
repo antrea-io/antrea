@@ -142,7 +142,7 @@ ANTREA_TAR="antrea-ubuntu.tar"
 DOCKER_IMAGE_PATH="$THIS_DIR/../$ANTREA_TAR"
 SRIOV_SECONDARY_NETWORKS_YAML="$THIS_DIR/../test/e2e-secondary-network/infra/sriov-secondary-networks.yml"
 IP_POOL_YAML="pool1.yaml"
-NAD_YAML="$THIS_DIR/../test/e2e-secondary-network/infra/sriov-network-attachment-definition.yml"
+NETATTACH_YAML="$THIS_DIR/../test/e2e-secondary-network/infra/sriov-network-attachment-definition.yml"
 
 CONTROLPLANE_IP=""
 WORKER_IP=""
@@ -469,7 +469,7 @@ EOF
     kubectl apply -f $IP_POOL_YAML
 
      # Create NetworkAttachmentDefinition
-    kubectl apply -f "$NAD_YAML"
+    kubectl apply -f "$NETATTACH_YAML"
     echo "Created NetworkAttachmentDefinition"
 }
 
@@ -479,7 +479,6 @@ function run_test() {
      kubectl get nodes -o go-template='{{range .items}}{{.metadata.name}}{{" "}}{{.status.allocatable}}{{"\n"}}{{end}}'
      kubectl apply -f https://github.com/k8snetworkplumbingwg/network-attachment-definition-client/raw/master/artifacts/networks-crd.yaml
      create_ippool_and_network_attachment_definition
-     kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
      CONTROLPLANE_NODE=$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].metadata.name}')
      WORKER_NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}')
      kubectl label node "$CONTROLPLANE_NODE" eni-id="$CONTROLPLANE_NODE_ENI"
