@@ -17,10 +17,10 @@ package noderoute
 import (
 	"context"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
-	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -45,27 +45,27 @@ import (
 )
 
 var (
-	gatewayMAC, _   = net.ParseMAC("00:00:00:00:00:01")
-	_, podCIDR, _   = net.ParseCIDR("1.1.1.0/24")
-	_, podCIDR2, _  = net.ParseCIDR("1.1.2.0/24")
-	_, podCIDR3, _  = net.ParseCIDR("2001:4860:4860::8888/32")
-	podCIDRGateway  = ip.NextIP(podCIDR.IP)
-	podCIDR2Gateway = ip.NextIP(podCIDR2.IP)
-	podCIDR3Gateway = ip.NextIP(podCIDR3.IP)
-	nodeIP1         = net.ParseIP("10.10.10.10")
-	dsIPs1          = utilip.DualStackIPs{IPv4: nodeIP1}
-	nodeIP2         = net.ParseIP("10.10.10.11")
-	dsIPs2          = utilip.DualStackIPs{IPv4: nodeIP2}
-	nodeIP3         = net.ParseIP("2001:db8::68")
-	dsIPs3          = utilip.DualStackIPs{IPv6: nodeIP3}
+	gatewayMAC, _ = net.ParseMAC("00:00:00:00:00:01")
+	// podCIDRs of "local" Node
+	_, podCIDR, _   = net.ParseCIDR("1.1.0.0/24")
+	_, podCIDRv6, _ = net.ParseCIDR("2001:4860:0000::/48")
+	// podCIDRs of "remote" Node
+	_, podCIDR1, _    = net.ParseCIDR("1.1.1.0/24")
+	_, podCIDR1v6, _  = net.ParseCIDR("2001:4860:0001::/48")
+	podCIDR1Gateway   = util.GetGatewayIPForPodCIDR(podCIDR1)
+	podCIDR1v6Gateway = util.GetGatewayIPForPodCIDR(podCIDR1v6)
+	nodeIP1           = net.ParseIP("10.10.10.10")
+	dsIPs1            = utilip.DualStackIPs{IPv4: nodeIP1}
+	nodeIP2           = net.ParseIP("10.10.10.11")
+	dsIPs2            = utilip.DualStackIPs{IPv4: nodeIP2}
 
 	node1 = &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node1",
 		},
 		Spec: corev1.NodeSpec{
-			PodCIDR:  podCIDR.String(),
-			PodCIDRs: []string{podCIDR.String()},
+			PodCIDR:  podCIDR1.String(),
+			PodCIDRs: []string{podCIDR1.String(), podCIDR1v6.String()},
 		},
 		Status: corev1.NodeStatus{
 			Addresses: []corev1.NodeAddress{
@@ -74,6 +74,15 @@ var (
 					Address: nodeIP1.String(),
 				},
 			},
+		},
+	}
+
+	nodeConfig = &config.NodeConfig{
+		PodIPv4CIDR: podCIDR,
+		PodIPv6CIDR: podCIDRv6,
+		GatewayConfig: &config.GatewayConfig{
+			IPv4: nil,
+			MAC:  gatewayMAC,
 		},
 	}
 )
@@ -96,7 +105,7 @@ func (f *fakeIPsecCertificateManager) HasSynced() bool {
 	return true
 }
 
-func newController(t *testing.T, networkConfig *config.NetworkConfig, objects ...runtime.Object) *fakeController {
+func newController(t testing.TB, networkConfig *config.NetworkConfig, objects ...runtime.Object) *fakeController {
 	clientset := fake.NewSimpleClientset(objects...)
 	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
 	ctrl := gomock.NewController(t)
@@ -107,10 +116,11 @@ func newController(t *testing.T, networkConfig *config.NetworkConfig, objects ..
 	ipsecCertificateManager := &fakeIPsecCertificateManager{}
 	ovsCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
 	wireguardClient := wgtest.NewMockInterface(ctrl)
-	c := NewNodeRouteController(informerFactory.Core().V1().Nodes(), ofClient, ovsCtlClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
-		IPv4: nil,
-		MAC:  gatewayMAC,
-	}}, wireguardClient, ipsecCertificateManager, utilwait.NewGroup())
+	c := NewNodeRouteController(informerFactory.Core().V1().Nodes(), ofClient, ovsCtlClient, ovsClient, routeClient, interfaceStore, networkConfig, nodeConfig, wireguardClient, ipsecCertificateManager, utilwait.NewGroup())
+	require.Equal(t, 24, c.maskSizeV4)
+	require.Equal(t, 48, c.maskSizeV6)
+	// Check that the podSubnets set already includes local PodCIDRs.
+	require.True(t, c.podSubnets.HasAll(netip.MustParsePrefix(podCIDR.String()), netip.MustParsePrefix(podCIDRv6.String())))
 	return &fakeController{
 		Controller:      c,
 		clientset:       clientset,
@@ -136,13 +146,13 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
 	c.informerFactory.WaitForCacheSync(stopCh)
 
-	node2 := &corev1.Node{
+	otherNode := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "node2",
+			Name: "otherNode",
 		},
 		Spec: corev1.NodeSpec{
-			PodCIDR:  podCIDR.String(),
-			PodCIDRs: []string{podCIDR.String()},
+			PodCIDR:  podCIDR1.String(),
+			PodCIDRs: []string{podCIDR1.String()},
 		},
 		Status: corev1.NodeStatus{
 			Addresses: []corev1.NodeAddress{
@@ -160,22 +170,24 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 
 		c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
 		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
-		c.routeClient.EXPECT().AddRoutes(podCIDR, "node1", nodeIP1, podCIDRGateway).Times(1)
+		c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
+		c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 		c.processNextWorkItem()
 
-		// Since node1 is not deleted yet, routes and flows for node2 shouldn't be installed as its PodCIDR is duplicate.
-		c.clientset.CoreV1().Nodes().Create(context.TODO(), node2, metav1.CreateOptions{})
+		// Since node1 is not deleted yet, routes and flows for otherNode shouldn't be installed as its PodCIDR is duplicate.
+		c.clientset.CoreV1().Nodes().Create(context.TODO(), otherNode, metav1.CreateOptions{})
 		c.processNextWorkItem()
 
 		// node1 is deleted, its routes and flows should be deleted.
 		c.clientset.CoreV1().Nodes().Delete(context.TODO(), node1.Name, metav1.DeleteOptions{})
 		c.ofClient.EXPECT().UninstallNodeFlows("node1").Times(1)
-		c.routeClient.EXPECT().DeleteRoutes(podCIDR).Times(1)
+		c.routeClient.EXPECT().DeleteRoutes(podCIDR1).Times(1)
+		c.routeClient.EXPECT().DeleteRoutes(podCIDR1v6).Times(1)
 		c.processNextWorkItem()
 
-		// After node1 is deleted, routes and flows should be installed for node2 successfully.
-		c.ofClient.EXPECT().InstallNodeFlows("node2", gomock.Any(), &dsIPs2, uint32(0), nil).Times(1)
-		c.routeClient.EXPECT().AddRoutes(podCIDR, "node2", nodeIP2, podCIDRGateway).Times(1)
+		// After node1 is deleted, routes and flows should be installed for otherNode successfully.
+		c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil).Times(1)
+		c.routeClient.EXPECT().AddRoutes(podCIDR1, "otherNode", nodeIP2, podCIDR1Gateway).Times(1)
 		c.processNextWorkItem()
 	}()
 
@@ -186,7 +198,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 	}
 }
 
-func TestIPInPodSubnets(t *testing.T) {
+func TestLookupIPInPodSubnets(t *testing.T) {
 	c := newController(t, &config.NetworkConfig{})
 	defer c.queue.ShutDown()
 
@@ -197,64 +209,92 @@ func TestIPInPodSubnets(t *testing.T) {
 	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
 	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
 	c.informerFactory.WaitForCacheSync(stopCh)
-	c.Controller.nodeConfig.PodIPv4CIDR = podCIDR
-	c.Controller.nodeConfig.PodIPv6CIDR = podCIDR3
-
-	node2 := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "node2",
-		},
-		Spec: corev1.NodeSpec{
-			PodCIDR:  podCIDR2.String(),
-			PodCIDRs: []string{podCIDR2.String()},
-		},
-		Status: corev1.NodeStatus{
-			Addresses: []corev1.NodeAddress{
-				{
-					Type:    corev1.NodeInternalIP,
-					Address: nodeIP2.String(),
-				},
-			},
-		},
-	}
-	node3 := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "node3",
-		},
-		Spec: corev1.NodeSpec{
-			PodCIDR:  podCIDR3.String(),
-			PodCIDRs: []string{podCIDR3.String()},
-		},
-		Status: corev1.NodeStatus{
-			Addresses: []corev1.NodeAddress{
-				{
-					Type:    corev1.NodeInternalIP,
-					Address: nodeIP3.String(),
-				},
-			},
-		},
-	}
 
 	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
-	c.routeClient.EXPECT().AddRoutes(podCIDR, "node1", nodeIP1, podCIDRGateway).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 	c.processNextWorkItem()
 
-	c.clientset.CoreV1().Nodes().Create(context.TODO(), node2, metav1.CreateOptions{})
-	c.ofClient.EXPECT().InstallNodeFlows("node2", gomock.Any(), &dsIPs2, uint32(0), nil).Times(1)
-	c.routeClient.EXPECT().AddRoutes(podCIDR2, "node2", nodeIP2, podCIDR2Gateway).Times(1)
+	testCases := []struct {
+		name           string
+		ips            []string
+		isInPodSubnets bool
+		isGwIP         bool
+	}{
+		{
+			name:           "local gateway IP",
+			ips:            []string{"1.1.0.1", "2001:4860:0000::1"},
+			isInPodSubnets: true,
+			isGwIP:         true,
+		},
+		{
+			name:           "local Pod IP",
+			ips:            []string{"1.1.0.101", "2001:4860:0000::101"},
+			isInPodSubnets: true,
+			isGwIP:         false,
+		},
+		{
+			name:           "remote gateway IP",
+			ips:            []string{"1.1.1.1", "2001:4860:0001::1"},
+			isInPodSubnets: true,
+			isGwIP:         true,
+		},
+		{
+			name:           "remote Pod IP",
+			ips:            []string{"1.1.1.101", "2001:4860:0001::101"},
+			isInPodSubnets: true,
+			isGwIP:         false,
+		},
+		{
+			name:           "unknown IPs",
+			ips:            []string{"1.1.10.101", "2001:4860:0010::101"},
+			isInPodSubnets: false,
+			isGwIP:         false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, ip := range tc.ips {
+				isInPodSubnets, isGwIP := c.Controller.LookupIPInPodSubnets(netip.MustParseAddr(ip))
+				assert.Equal(t, tc.isInPodSubnets, isInPodSubnets)
+				assert.Equal(t, tc.isGwIP, isGwIP)
+			}
+		})
+	}
+}
+
+func BenchmarkLookupIPInPodSubnets(b *testing.B) {
+	c := newController(b, &config.NetworkConfig{})
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created
+	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
+	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 	c.processNextWorkItem()
 
-	c.clientset.CoreV1().Nodes().Create(context.TODO(), node3, metav1.CreateOptions{})
-	c.ofClient.EXPECT().InstallNodeFlows("node3", gomock.Any(), &dsIPs3, uint32(0), nil).Times(1)
-	c.routeClient.EXPECT().AddRoutes(podCIDR3, "node3", nodeIP3, podCIDR3Gateway).Times(1)
-	c.processNextWorkItem()
+	localPodIP := netip.MustParseAddr("1.1.0.99")
+	remotePodIP := netip.MustParseAddr("1.1.1.99")
+	remoteGatewayIP := netip.MustParseAddr("1.1.1.1")
+	unknownIP := netip.MustParseAddr("1.1.2.99")
 
-	assert.Equal(t, true, c.Controller.IPInPodSubnets(net.ParseIP("1.1.1.1")))
-	assert.Equal(t, true, c.Controller.IPInPodSubnets(net.ParseIP("2001:4860:4860::8889")))
-	assert.Equal(t, true, c.Controller.IPInPodSubnets(net.ParseIP("1.1.2.1")))
-	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("10.10.10.10")))
-	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("8.8.8.8")))
+	b.ResetTimer()
+	for range b.N {
+		c.Controller.findPodSubnetForIP(localPodIP)
+		c.Controller.findPodSubnetForIP(remotePodIP)
+		c.Controller.findPodSubnetForIP(remoteGatewayIP)
+		c.Controller.findPodSubnetForIP(unknownIP)
+	}
 }
 
 func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig, authenticationMode config.IPsecAuthenticationMode) *fakeController {
@@ -300,8 +340,8 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 			Name: "xyz-k8s-0-1",
 		},
 		Spec: corev1.NodeSpec{
-			PodCIDR:  podCIDR.String(),
-			PodCIDRs: []string{podCIDR.String()},
+			PodCIDR:  podCIDR1.String(),
+			PodCIDRs: []string{podCIDR1.String()},
 		},
 		Status: corev1.NodeStatus{
 			Addresses: []corev1.NodeAddress{
@@ -630,7 +670,7 @@ func TestRemoveStaleGatewayRoutes(t *testing.T) {
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
 
-	c.routeClient.EXPECT().Reconcile([]string{podCIDR.String()})
+	c.routeClient.EXPECT().Reconcile([]string{podCIDR1.String(), podCIDR1v6.String()})
 	err := c.removeStaleGatewayRoutes()
 	assert.NoError(t, err)
 }
@@ -690,7 +730,7 @@ func TestDeleteNodeRoute(t *testing.T) {
 			expectedCalls: func(ovsClient *ovsconfigtest.MockOVSBridgeClient, routeClient *routetest.MockInterface,
 				ofClient *oftest.MockClient, wgClient *wgtest.MockInterface) {
 				ovsClient.EXPECT().DeletePort("123")
-				routeClient.EXPECT().DeleteRoutes(podCIDR)
+				routeClient.EXPECT().DeleteRoutes(podCIDR1)
 				ofClient.EXPECT().UninstallNodeFlows(node1.Name)
 			},
 		},
@@ -700,7 +740,7 @@ func TestDeleteNodeRoute(t *testing.T) {
 			mode: config.TrafficEncryptionModeWireGuard,
 			expectedCalls: func(ovsClient *ovsconfigtest.MockOVSBridgeClient, routeClient *routetest.MockInterface,
 				ofClient *oftest.MockClient, wgClient *wgtest.MockInterface) {
-				routeClient.EXPECT().DeleteRoutes(podCIDR)
+				routeClient.EXPECT().DeleteRoutes(podCIDR1)
 				ofClient.EXPECT().UninstallNodeFlows(nodeWithWireGuard.Name)
 				wgClient.EXPECT().DeletePeer(nodeWithWireGuard.Name)
 			},
@@ -714,7 +754,7 @@ func TestDeleteNodeRoute(t *testing.T) {
 			}, tt.node)
 			c.installedNodes.Add(&nodeRouteInfo{
 				nodeName: tt.node.Name,
-				podCIDRs: []*net.IPNet{podCIDR},
+				podCIDRs: []*net.IPNet{podCIDR1},
 			})
 
 			defer c.queue.ShutDown()
@@ -747,7 +787,8 @@ func TestInitialListHasSynced(t *testing.T) {
 	require.Error(t, c.flowRestoreCompleteWait.WaitWithTimeout(100*time.Millisecond))
 
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
-	c.routeClient.EXPECT().AddRoutes(podCIDR, "node1", nodeIP1, podCIDRGateway).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 	c.processNextWorkItem()
 
 	assert.True(t, c.hasProcessedInitialList.HasSynced())
@@ -760,7 +801,7 @@ func TestInitialListHasSyncedStopChClosedEarly(t *testing.T) {
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
 
-	c.routeClient.EXPECT().Reconcile([]string{podCIDR.String()})
+	c.routeClient.EXPECT().Reconcile([]string{podCIDR1.String(), podCIDR1v6.String()})
 
 	// We close the stopCh right away, then call Run synchronously and wait for it to
 	// return. The workers will not even start, and the initial list of Nodes should never be
