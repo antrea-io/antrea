@@ -71,142 +71,142 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Push Antrea Ubuntu Docker images to registries
-      run: |
-        targets=(
-          "docker.io antrea"
-          "ghcr.io antrea-io"
-        )
-        for target in "${targets[@]}"; do
-          t=($target)
-          registry="${t[0]}"
-          namespace="${t[1]}"
-          docker tag antrea/antrea-agent-ubuntu:"${DOCKER_TAG}" ${registry}/${namespace}/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
-          docker tag antrea/antrea-controller-ubuntu:"${DOCKER_TAG}" ${registry}/${namespace}/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
-          docker push ${registry}/${namespace}/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
-          docker push ${registry}/${namespace}/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
-        done
-    # Same repository workflow dispatch to run conformance tests
-    - name: Run conformance tests
-      uses: benc-uk/workflow-dispatch@v1
-      with:
-        workflow: .github/workflows/conformance.yml
-        inputs: ${{ format('{{ "antrea-version":"{0}", "antrea-image-distro":"ubuntu", "test-suite":"conformance", "runner":"{1}", "antrea-image-platform":"{2}", "always-upload-logs":true }}', github.ref, matrix.runner, matrix.platform) }}
+    # - name: Push Antrea Ubuntu Docker images to registries
+    #   run: |
+    #     targets=(
+    #       "docker.io antrea"
+    #       "ghcr.io antrea-io"
+    #     )
+    #     for target in "${targets[@]}"; do
+    #       t=($target)
+    #       registry="${t[0]}"
+    #       namespace="${t[1]}"
+    #       docker tag antrea/antrea-agent-ubuntu:"${DOCKER_TAG}" ${registry}/${namespace}/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
+    #       docker tag antrea/antrea-controller-ubuntu:"${DOCKER_TAG}" ${registry}/${namespace}/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
+    #       docker push ${registry}/${namespace}/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
+    #       docker push ${registry}/${namespace}/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
+    #     done
+    # # Same repository workflow dispatch to run conformance tests
+    # - name: Run conformance tests
+    #   uses: benc-uk/workflow-dispatch@v1
+    #   with:
+    #     workflow: .github/workflows/conformance.yml
+    #     inputs: ${{ format('{{ "antrea-version":"{0}", "antrea-image-distro":"ubuntu", "test-suite":"conformance", "runner":"{1}", "antrea-image-platform":"{2}", "always-upload-logs":true }}', github.ref, matrix.runner, matrix.platform) }}
 
-  push-manifest:
-    needs: [get-version, build]
-    strategy:
-      matrix:
-        include:
-        - registry: docker.io
-          namespace: antrea
-        - registry: ghcr.io
-          namespace: antrea-io
-    runs-on: ubuntu-latest
-    env:
-      DOCKER_TAG: ${{ needs.get-version.outputs.version }}
-    steps:
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    - name: Login to Docker Hub
-      if: ${{ matrix.registry == 'docker.io' }}
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-    - name: Login to Github Container Registry
-      if: ${{ matrix.registry == 'ghcr.io' }}
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Create and push manifest for controller image
-      run: |
-        docker manifest create ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm64:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-amd64:"${DOCKER_TAG}"
-        docker manifest push --purge ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu:"${DOCKER_TAG}"
-    - name: Create and push manifest for agent image
-      run: |
-        docker manifest create ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm64:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm:"${DOCKER_TAG}" \
-          ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-amd64:"${DOCKER_TAG}"
-        docker manifest push --purge ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}"
+  # push-manifest:
+  #   needs: [get-version, build]
+  #   strategy:
+  #     matrix:
+  #       include:
+  #       - registry: docker.io
+  #         namespace: antrea
+  #       - registry: ghcr.io
+  #         namespace: antrea-io
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     DOCKER_TAG: ${{ needs.get-version.outputs.version }}
+  #   steps:
+  #   - name: Set up Docker Buildx
+  #     uses: docker/setup-buildx-action@v3
+  #   - name: Login to Docker Hub
+  #     if: ${{ matrix.registry == 'docker.io' }}
+  #     uses: docker/login-action@v3
+  #     with:
+  #       username: ${{ secrets.DOCKER_USERNAME }}
+  #       password: ${{ secrets.DOCKER_PASSWORD }}
+  #   - name: Login to Github Container Registry
+  #     if: ${{ matrix.registry == 'ghcr.io' }}
+  #     uses: docker/login-action@v3
+  #     with:
+  #       registry: ghcr.io
+  #       username: ${{ github.actor }}
+  #       password: ${{ secrets.GITHUB_TOKEN }}
+  #   - name: Create and push manifest for controller image
+  #     run: |
+  #       docker manifest create ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu:"${DOCKER_TAG}" \
+  #         ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm64:"${DOCKER_TAG}" \
+  #         ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm:"${DOCKER_TAG}" \
+  #         ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-amd64:"${DOCKER_TAG}"
+  #       docker manifest push --purge ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu:"${DOCKER_TAG}"
+  #   - name: Create and push manifest for agent image
+  #     run: |
+  #       docker manifest create ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}" \
+  #         ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm64:"${DOCKER_TAG}" \
+  #         ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm:"${DOCKER_TAG}" \
+  #         ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-amd64:"${DOCKER_TAG}"
+  #       docker manifest push --purge ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}"
 
-  build-ubi:
-    runs-on: [ubuntu-latest]
-    needs: get-version
-    steps:
-      - uses: actions/checkout@v4
-        with:
-        ref: ${{ needs.get-version.outputs.antrea_ref }}
-          show-progress: false
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build and push Antrea UBI9 amd64 Docker images to registry
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-          VERSION: ${{ needs.get-version.outputs.version }}
-        run: |
-          ./hack/build-antrea-linux-all.sh --pull --distro ubi
-          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-          docker push antrea/antrea-agent-ubi:"${VERSION}"
-          docker push antrea/antrea-controller-ubi:"${VERSION}"
+  # build-ubi:
+  #   runs-on: [ubuntu-latest]
+  #   needs: get-version
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #       ref: ${{ needs.get-version.outputs.antrea_ref }}
+  #         show-progress: false
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v3
+  #     - name: Build and push Antrea UBI9 amd64 Docker images to registry
+  #       env:
+  #         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #         VERSION: ${{ needs.get-version.outputs.version }}
+  #       run: |
+  #         ./hack/build-antrea-linux-all.sh --pull --distro ubi
+  #         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #         docker push antrea/antrea-agent-ubi:"${VERSION}"
+  #         docker push antrea/antrea-controller-ubi:"${VERSION}"
 
-  build-windows:
-    runs-on: [ubuntu-latest]
-    needs: get-version
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ needs.get-version.outputs.antrea_ref }}
-        show-progress: false
-    - name: Build Antrea Windows Docker image and push to registry
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        VERSION: ${{ needs.get-version.outputs.version }}
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        ./hack/build-antrea-windows-all.sh --pull --push
-      shell: bash
+  # build-windows:
+  #   runs-on: [ubuntu-latest]
+  #   needs: get-version
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       ref: ${{ needs.get-version.outputs.antrea_ref }}
+  #       show-progress: false
+  #   - name: Build Antrea Windows Docker image and push to registry
+  #     env:
+  #       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #       VERSION: ${{ needs.get-version.outputs.version }}
+  #     run: |
+  #       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #       ./hack/build-antrea-windows-all.sh --pull --push
+  #     shell: bash
 
-  build-antrea-mc-controller:
-    runs-on: [ubuntu-latest]
-    needs: get-version
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ needs.get-version.outputs.antrea_ref }}
-        show-progress: false
-    - name: Build antrea-mc-controller Docker image and push to registry
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        VERSION: ${{ needs.get-version.outputs.version }}
-      run: |
-        make build-antrea-mc-controller
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/antrea-mc-controller:"${VERSION}"
+  # build-antrea-mc-controller:
+  #   runs-on: [ubuntu-latest]
+  #   needs: get-version
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       ref: ${{ needs.get-version.outputs.antrea_ref }}
+  #       show-progress: false
+  #   - name: Build antrea-mc-controller Docker image and push to registry
+  #     env:
+  #       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #       VERSION: ${{ needs.get-version.outputs.version }}
+  #     run: |
+  #       make build-antrea-mc-controller
+  #       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #       docker push antrea/antrea-mc-controller:"${VERSION}"
 
-  build-flow-aggregator:
-    runs-on: [ubuntu-latest]
-    needs: get-version
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ needs.get-version.outputs.antrea_ref }}
-        show-progress: false
-    - name: Build flow-aggregator Docker image and push to registry
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        VERSION: ${{ needs.get-version.outputs.version }}
-      run: |
-        make flow-aggregator-image
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/flow-aggregator:"${VERSION}"
+  # build-flow-aggregator:
+  #   runs-on: [ubuntu-latest]
+  #   needs: get-version
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       ref: ${{ needs.get-version.outputs.antrea_ref }}
+  #       show-progress: false
+  #   - name: Build flow-aggregator Docker image and push to registry
+  #     env:
+  #       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  #       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  #       VERSION: ${{ needs.get-version.outputs.version }}
+  #     run: |
+  #       make flow-aggregator-image
+  #       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #       docker push antrea/flow-aggregator:"${VERSION}"
