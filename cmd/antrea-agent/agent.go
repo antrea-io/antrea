@@ -541,7 +541,7 @@ func run(o *Options) error {
 			ifaceStore,
 			localPodInformer.Get(),
 			namespaceInformer,
-			l7Reconciler,
+			l7Reconciler.StartSuricataOnce,
 		)
 		go l7FlowExporterController.Run(stopCh)
 	}

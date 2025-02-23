@@ -38,13 +38,13 @@ func TestOnceWithNoError(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
-		go func(i int) {
+		go func() {
 			defer wg.Done()
 			err := onceWithNoError.Do(f)
 			if err != nil {
 				atomic.AddInt32(&errOccurred, 1)
 			}
-		}(i)
+		}()
 	}
 	wg.Wait()
 

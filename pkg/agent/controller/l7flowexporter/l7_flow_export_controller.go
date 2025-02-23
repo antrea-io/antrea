@@ -30,7 +30,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/types"
@@ -77,7 +76,7 @@ func NewL7FlowExporterController(
 	interfaceStore interfacestore.InterfaceStore,
 	podInformer cache.SharedIndexInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
-	l7Reconciler *l7engine.Reconciler) *L7FlowExporterController {
+	suricataStartFunc func() error) *L7FlowExporterController {
 	l7c := &L7FlowExporterController{
 		ofClient:              ofClient,
 		interfaceStore:        interfaceStore,
@@ -87,7 +86,7 @@ func NewL7FlowExporterController(
 		namespaceInformer:     namespaceInformer.Informer(),
 		namespaceLister:       namespaceInformer.Lister(),
 		namespaceListerSynced: namespaceInformer.Informer().HasSynced,
-		startSuricataOnceFn:   l7Reconciler.StartSuricataOnce,
+		startSuricataOnceFn:   suricataStartFunc,
 		podToDirectionMap:     make(map[string]v1alpha2.Direction),
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
