@@ -92,7 +92,6 @@ type: Opaque
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := NewMemberTokenCmd()
 			buf := new(bytes.Buffer)
-			cmd.SetOutput(buf)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 
