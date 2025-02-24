@@ -15,6 +15,7 @@
 package e2esecondary
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -24,8 +25,11 @@ import (
 	logs "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	antreae2e "antrea.io/antrea/test/e2e"
+	"antrea.io/antrea/test/e2e-secondary-network/aws"
 )
 
 type testPodInfo struct {
@@ -55,7 +59,7 @@ const (
 	pingSize       = 40
 	defaultTimeout = 10 * time.Second
 	sriovReqName   = "intel.com/intel_sriov_netdevice"
-	sriovResNum    = 3
+	sriovResNum    = 1
 )
 
 // formAnnotationStringOfPod forms the annotation string, used in the generation of each Pod YAML file.
@@ -80,7 +84,7 @@ func (data *testData) createPods(t *testing.T, ns string) error {
 	for _, pod := range data.pods {
 		err := data.createPodForSecondaryNetwork(ns, pod)
 		if err != nil {
-			return fmt.Errorf("error in creating pods.., err: %v", err)
+			return fmt.Errorf("error in creating pods.., err: %w", err)
 		}
 	}
 	return err
@@ -188,7 +192,7 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 			return true, nil
 		})
 		if err != nil {
-			return fmt.Errorf("error when waiting for secondary IPs for Pod %+v: %v", testPod, err)
+			return fmt.Errorf("error when waiting for secondary IPs for Pod %+v: %w", testPod, err)
 		}
 	}
 
@@ -208,7 +212,7 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 					}
 					if err := e2eTestData.RunPingCommandFromTestPod(antreae2e.PodInfo{Name: sourcePod.podName, OS: osType, NodeName: sourcePod.nodeName, Namespace: namespace},
 						namespace, &IPToPing, containerName, pingCount, pingSize, false); err != nil {
-						return fmt.Errorf("ping '%s' -> '%s'(Interface: %s, IP Address: %s) failed: %v", sourcePod.podName, targetPod.podName, targetAttachment.iface, targetAttachment.ip, err)
+						return fmt.Errorf("ping '%s' -> '%s'(Interface: %s, IP Address: %s) failed: %w", sourcePod.podName, targetPod.podName, targetAttachment.iface, targetAttachment.ip, err)
 					}
 					logs.Infof("ping '%s' -> '%s'( Interface: %s, IP Address: %s): OK", sourcePod.podName, targetPod.podName, targetAttachment.iface, targetAttachment.ip)
 				}
@@ -228,39 +232,14 @@ func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo)
 
 	testData := &testData{e2eTestData: e2eTestData, networkType: networkType, pods: pods}
 
-	t.Run("testCreateTestPodOnNode", func(t *testing.T) {
-		testData.createPods(t, e2eTestData.GetTestNamespace())
-	})
-	t.Run("testpingBetweenInterfaces", func(t *testing.T) {
-		err := testData.pingBetweenInterfaces(t)
-		if err != nil {
-			t.Fatalf("Error when pinging between interfaces: %v", err)
-		}
-	})
-}
-
-func TestSriovNetwork(t *testing.T) {
-	// Create Pods on the control plane Node, assuming a single Node cluster for the SR-IOV
-	// test.
-	nodeName := antreae2e.NodeName(0)
-	pods := []*testPodInfo{
-		{
-			podName:           "sriov-pod1",
-			nodeName:          nodeName,
-			interfaceNetworks: map[string]string{"eth1": "sriov-net1", "eth2": "sriov-net2"},
-		},
-		{
-			podName:           "sriov-pod2",
-			nodeName:          nodeName,
-			interfaceNetworks: map[string]string{"eth2": "sriov-net1", "eth3": "sriov-net3"},
-		},
-		{
-			podName:           "sriov-pod3",
-			nodeName:          nodeName,
-			interfaceNetworks: map[string]string{"eth4": "sriov-net1"},
-		},
+	err = testData.createPods(t, e2eTestData.GetTestNamespace())
+	if err != nil {
+		t.Fatalf("Error when create test Pods: %v", err)
 	}
-	testSecondaryNetwork(t, networkTypeSriov, pods)
+	err = testData.pingBetweenInterfaces(t)
+	if err != nil {
+		t.Fatalf("Error when pinging between interfaces: %v", err)
+	}
 }
 
 func TestVLANNetwork(t *testing.T) {
@@ -287,4 +266,86 @@ func TestVLANNetwork(t *testing.T) {
 		},
 	}
 	testSecondaryNetwork(t, networkTypeVLAN, pods)
+}
+
+func (data *testData) assignIP(clientset *kubernetes.Clientset) error {
+	e2eTestData := data.e2eTestData
+	namespace := e2eTestData.GetTestNamespace()
+
+	for _, testPod := range data.pods {
+		node, err := clientset.CoreV1().Nodes().Get(context.TODO(), testPod.nodeName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error when getting the cluster Node %s: %w", testPod.nodeName, err)
+		}
+		eni, exists := node.Labels["eni-id"]
+		if !exists {
+			return fmt.Errorf("the label `eni-id` not found in the cluster Node: %s", testPod.nodeName)
+		}
+		var podIP net.IP
+		_, err = e2eTestData.PodWaitFor(defaultTimeout, testPod.podName, namespace, func(pod *corev1.Pod) (bool, error) {
+			if pod.Status.Phase != corev1.PodRunning {
+				return false, nil
+			}
+			podIPs, err := data.listPodIPs(testPod)
+			if err != nil {
+				return false, err
+			}
+			ip, exists := podIPs["eth1"]
+			if !exists || ip == nil {
+				logs.Infof("IP not available for interface 'eth1' in Pod %s, retrying...", testPod.podName)
+				return false, nil
+			}
+			podIP = ip
+
+			return true, nil
+		})
+		if err := aws.AssignIPToEC2ENI(context.TODO(), eni, podIP.String()); err != nil {
+			return err
+		}
+		logs.Infof("assigned private IP address %s to interface %s", podIP, eni)
+		if err != nil {
+			return fmt.Errorf("error when waiting for the secondary IP for Pod %+v: %w", testPod, err)
+		}
+	}
+	return nil
+}
+
+func TestSRIOVNetwork(t *testing.T) {
+	e2eTestData, err := antreae2e.SetupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer antreae2e.TeardownTest(t, e2eTestData)
+
+	pods := []*testPodInfo{
+		{
+			podName:           "sriov-pod1",
+			nodeName:          antreae2e.NodeName(0),
+			interfaceNetworks: map[string]string{"eth1": "sriov-net1"},
+		},
+		{
+			podName:           "sriov-pod2",
+			nodeName:          antreae2e.NodeName(1),
+			interfaceNetworks: map[string]string{"eth1": "sriov-net1"},
+		},
+	}
+
+	testData := &testData{e2eTestData: e2eTestData, networkType: networkTypeSriov, pods: pods}
+
+	err = testData.createPods(t, e2eTestData.GetTestNamespace())
+	if err != nil {
+		t.Fatalf("Error when create test Pods: %v", err)
+	}
+	clientset, err := kubernetes.NewForConfig(e2eTestData.KubeConfig)
+	if err != nil {
+		t.Fatalf("error when creating kubernetes client: %v", err)
+	}
+	err = testData.assignIP(clientset)
+	if err != nil {
+		t.Fatalf("Error when assign IP to ec2 instance: %v", err)
+	}
+	err = testData.pingBetweenInterfaces(t)
+	if err != nil {
+		t.Fatalf("Error when pinging between interfaces: %v", err)
+	}
 }

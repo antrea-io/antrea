@@ -1,0 +1,16 @@
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: sriov-net1
+  annotations:
+    k8s.v1.cni.cncf.io/resourceName: intel.com/intel_sriov_netdevice
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "sriov",
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["pool1"]
+      }
+    }'
