@@ -290,7 +290,6 @@ source: default/pod-1
 			defer func() { getClients = getK8sClient }()
 
 			buf := new(bytes.Buffer)
-			Command.SetOutput(buf)
 			Command.SetOut(buf)
 			Command.SetErr(buf)
 			err := runE(Command, nil)

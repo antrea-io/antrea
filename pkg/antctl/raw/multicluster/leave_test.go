@@ -46,7 +46,6 @@ func TestLeave(t *testing.T) {
 
 	cmd := NewLeaveCommand()
 	buf := new(bytes.Buffer)
-	cmd.SetOutput(buf)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.Flag("clusterset").Value.Set("test-clusterset")
