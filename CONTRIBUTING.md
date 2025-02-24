@@ -174,7 +174,6 @@ Here are the trigger phrases for individual checks:
 * `/test-ipv6-only-e2e`: Linux IPv6 only e2e tests
 * `/test-ipv6-only-conformance`: Linux IPv6 only conformance tests
 * `/test-ipv6-only-networkpolicy`: Linux IPv6 only networkpolicy tests
-* `/test-flexible-ipam-e2e`: Flexible IPAM e2e tests
 * `/test-multicast-e2e`: Multicast e2e tests
 * `/test-multicluster-e2e`: Multicluster e2e tests
 * `/test-vm-e2e`: ExternalNode e2e tests
@@ -192,7 +191,6 @@ Here are the trigger phrases for individual checks:
 * `/test-kind-networkpolicy`: Linux IPv4 networkpolicy tests on Kind cluster.
 * `/test-kind-ipv6-only-networkpolicy`: Linux IPv6 only networkpolicy tests on Kind cluster.
 * `/test-kind-ipv6-networkpolicy`: Linux dual stack networkpolicy tests on Kind cluster.
-* `/test-kind-flexible-ipam-e2e`: Flexible IPAM e2e tests on Kind clusters.
 * `/test-kind-all-features-conformance`: Linux IPv4 conformance tests with all features enabled on Kind cluster.
 * `/test-kind-whole-conformance`: Linux All conformance tests on Kind cluster.
 
