@@ -351,8 +351,6 @@ function setup_cluster {
 }
 
 function build_image() {
-    chmod -R g-w build/images/ovs
-    chmod -R g-w build/images/base
     ./hack/build-antrea-linux-all.sh --pull
     docker save antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest -o $ANTREA_TAR
 }
