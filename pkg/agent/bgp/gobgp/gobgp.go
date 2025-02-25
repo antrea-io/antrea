@@ -39,7 +39,7 @@ type Server struct {
 }
 
 func NewGoBGPServer(globalConfig *bgp.GlobalConfig) *Server {
-	return &Server{
+	s := &Server{
 		server: server.NewBgpServer(server.LoggerOption(newGoBGPLogger())),
 		globalConfig: &gobgpapi.Global{
 			Asn:        globalConfig.ASN,
@@ -47,6 +47,14 @@ func NewGoBGPServer(globalConfig *bgp.GlobalConfig) *Server {
 			ListenPort: globalConfig.ListenPort,
 		},
 	}
+	if globalConfig.Confederation != nil {
+		s.globalConfig.Confederation = &gobgpapi.Confederation{
+			Enabled:      true,
+			Identifier:   globalConfig.Confederation.Identifier,
+			MemberAsList: globalConfig.Confederation.Peers,
+		}
+	}
+	return s
 }
 
 func (s *Server) Start(ctx context.Context) error {
