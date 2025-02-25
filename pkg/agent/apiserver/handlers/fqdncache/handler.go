@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"k8s.io/klog/v2"
 
@@ -28,7 +29,11 @@ import (
 
 func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fqdnFilter := newFilterFromURLQuery(w, r.URL.Query())
+		fqdnFilter, err := newFilterFromURLQuery(w, r.URL.Query())
+		if err != nil {
+			http.Error(w, "Regex formatted incorrectly to parse: "+err.Error(), http.StatusBadRequest)
+			klog.ErrorS(err, "Regex formatted incorrectly to parse")
+		}
 		dnsEntryCache := npq.GetFQDNCache(fqdnFilter)
 		resp := make([]agentapi.FQDNCacheResponse, 0, len(dnsEntryCache))
 		for _, entry := range dnsEntryCache {
@@ -39,20 +44,20 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 			})
 		}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusBadRequest)
 			klog.ErrorS(err, "Failed to encode response")
 		}
 	}
 }
 
-func newFilterFromURLQuery(w http.ResponseWriter, query url.Values) *querier.FQDNCacheFilter {
-	if len(query) == 0 {
-		return nil
+func newFilterFromURLQuery(w http.ResponseWriter, query url.Values) (*querier.FQDNCacheFilter, error) {
+	if len(query) == 0 || len(query.Get("domain")) == 0 {
+		return nil, nil
 	}
-	_, err := regexp.Compile(query.Get("domain"))
+	regexPattern := "^" + strings.ReplaceAll(query.Get("domain"), `\*`, ".*") + "$"
+	pattern, err := regexp.Compile(regexPattern)
 	if err != nil {
-		http.Error(w, "Regex formatted incorrectly to parse: "+err.Error(), http.StatusPreconditionFailed)
-		klog.ErrorS(err, "Regex formatted incorrectly to parse")
+		return nil, err
 	}
-	return &querier.FQDNCacheFilter{Domain: query.Get("domain")}
+	return &querier.FQDNCacheFilter{DomainRegex: pattern}, nil
 }

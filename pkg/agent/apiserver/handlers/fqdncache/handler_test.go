@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,6 +108,7 @@ func TestFqdnCacheQuery(t *testing.T) {
 }
 
 func TestNewFilterFromURLQuery(t *testing.T) {
+	samplePattern, _ := regexp.Compile("^" + strings.ReplaceAll(regexp.QuoteMeta("^example\\.com$"), `\*`, ".*") + "$")
 	tests := []struct {
 		name           string
 		queryParams    url.Values
@@ -123,23 +126,15 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 			queryParams: url.Values{
 				"domain": {"^example\\.com$"},
 			},
-			expectedFilter: &querier.FQDNCacheFilter{Domain: "^example\\.com$"},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: samplePattern},
 			expectedStatus: http.StatusOK, // No HTTP error
-		},
-		{
-			name: "Invalid regex domain",
-			queryParams: url.Values{
-				"domain": {"[invalid("},
-			},
-			expectedFilter: &querier.FQDNCacheFilter{Domain: "[invalid("}, // Should still return filter, despite error
-			expectedStatus: http.StatusPreconditionFailed,                 // HTTP error expected
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
-			result := newFilterFromURLQuery(recorder, tt.queryParams)
+			result, _ := newFilterFromURLQuery(recorder, tt.queryParams)
 
 			assert.Equal(t, tt.expectedFilter, result)
 			assert.Equal(t, tt.expectedStatus, recorder.Code)

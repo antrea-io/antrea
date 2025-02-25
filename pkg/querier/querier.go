@@ -16,6 +16,7 @@ package querier
 
 import (
 	"context"
+	"regexp"
 
 	v1 "k8s.io/api/core/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -105,7 +106,7 @@ func GetVersion() string {
 // FQDNCacheFilter is used to filter the result while retrieving FQDN cache
 type FQDNCacheFilter struct {
 	// The Name or wildcard matching expression of the domain that is being filtered
-	Domain string
+	DomainRegex *regexp.Regexp
 }
 
 // NetworkPolicyQueryFilter is used to filter the result while retrieve network policy

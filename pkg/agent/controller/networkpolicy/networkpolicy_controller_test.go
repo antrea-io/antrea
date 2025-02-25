@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -961,6 +962,8 @@ func TestGetFqdnCache(t *testing.T) {
 	}
 	returnedList := controller.GetFQDNCache(nil)
 	assert.ElementsMatch(t, expectedEntryList, returnedList)
-	returnedList = controller.GetFQDNCache(&querier.FQDNCacheFilter{Domain: "*.io"})
+	regexPattern := "^" + strings.ReplaceAll(regexp.QuoteMeta("*.io"), `\*`, ".*") + "$"
+	pattern, _ := regexp.Compile(regexPattern)
+	returnedList = controller.GetFQDNCache(&querier.FQDNCacheFilter{DomainRegex: pattern})
 	assert.ElementsMatch(t, []agenttypes.DnsCacheEntry{expectedEntryList[3]}, returnedList)
 }
