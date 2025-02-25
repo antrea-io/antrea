@@ -40,6 +40,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/ipset"
 	"antrea.io/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
@@ -100,7 +101,7 @@ type routeClientOptions struct {
 }
 
 func newTestRouteClient(networkConfig *config.NetworkConfig, options routeClientOptions) (*route.Client, error) {
-	return route.NewClient(networkConfig, options.noSNAT, false, false, false, false, options.nodeSNATRandomFully, false, nil)
+	return route.NewClient(networkConfig, options.noSNAT, false, false, false, false, options.nodeSNATRandomFully, false, nil, apis.WireGuardListenPort)
 }
 
 func TestInitialize(t *testing.T) {

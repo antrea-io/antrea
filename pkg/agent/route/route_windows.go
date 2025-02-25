@@ -89,7 +89,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 	multicastEnabled bool,
 	nodeSNATRandomFully bool, // ignored
 	egressSNATRandomFully bool, // ignored
-	serviceCIDRProvider servicecidr.Interface) (*Client, error) {
+	serviceCIDRProvider servicecidr.Interface,
+	wireguardPort int) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		winnet:                      &winnet.Handle{},
