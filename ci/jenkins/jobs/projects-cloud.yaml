@@ -785,6 +785,20 @@
             - text:
                 credential-id: WORKFORCE_POOL # Jenkins secret that stores the cloud resource pool id
                 variable: WORKFORCE_POOL
+      - 'cloud-{name}-cleanup-period':
+          description: This is for deleting remaining clusters on all cloud providers.
+          builders:
+            - builder-cluster-cleanup
+          concurrent: false
+          disabled: false
+          node: antrea-cloud
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          publishers:
+          triggers:
+          - timed: H 22 * * *
+          wrappers: []
       - 'cloud-{name}-{test_name}-cleanup':
           test_name: gke
           description: This is for deleting GKE test clusters.
