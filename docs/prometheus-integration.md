@@ -475,6 +475,10 @@ due to a non-default GODEBUG=gocachetest=... setting. Sourced from
 The number of non-default behaviors executed by the cmd/go package
 due to a non-default GODEBUG=gocacheverify=... setting. Sourced from
 /godebug/non-default-behavior/gocacheverify:events
+- **go_godebug_non_default_behavior_gotestjsonbuildtext_events_total:**
+The number of non-default behaviors executed by the cmd/go package due
+to a non-default GODEBUG=gotestjsonbuildtext=... setting. Sourced from
+/godebug/non-default-behavior/gotestjsonbuildtext:events
 - **go_godebug_non_default_behavior_gotypesalias_events_total:**
 The number of non-default behaviors executed by the go/types package
 due to a non-default GODEBUG=gotypesalias=... setting. Sourced from
@@ -527,6 +531,14 @@ due to a non-default GODEBUG=panicnil=... setting. Sourced from
 The number of non-default behaviors executed by the math/rand package
 due to a non-default GODEBUG=randautoseed=... setting. Sourced from
 /godebug/non-default-behavior/randautoseed:events
+- **go_godebug_non_default_behavior_randseednop_events_total:** The
+number of non-default behaviors executed by the math/rand package
+due to a non-default GODEBUG=randseednop=... setting. Sourced from
+/godebug/non-default-behavior/randseednop:events
+- **go_godebug_non_default_behavior_rsa1024min_events_total:** The
+number of non-default behaviors executed by the crypto/rsa package
+due to a non-default GODEBUG=rsa1024min=... setting. Sourced from
+/godebug/non-default-behavior/rsa1024min:events
 - **go_godebug_non_default_behavior_tarinsecurepath_events_total:**
 The number of non-default behaviors executed by the archive/tar package
 due to a non-default GODEBUG=tarinsecurepath=... setting. Sourced from
@@ -567,10 +579,10 @@ due to a non-default GODEBUG=x509keypairleaf=... setting. Sourced from
 The number of non-default behaviors executed by the crypto/x509 package
 due to a non-default GODEBUG=x509negativeserial=... setting. Sourced from
 /godebug/non-default-behavior/x509negativeserial:events
-- **go_godebug_non_default_behavior_x509sha1_events_total:** The
+- **go_godebug_non_default_behavior_x509rsacrt_events_total:** The
 number of non-default behaviors executed by the crypto/x509 package
-due to a non-default GODEBUG=x509sha1=... setting. Sourced from
-/godebug/non-default-behavior/x509sha1:events
+due to a non-default GODEBUG=x509rsacrt=... setting. Sourced from
+/godebug/non-default-behavior/x509rsacrt:events
 - **go_godebug_non_default_behavior_x509usefallbackroots_events_total:**
 The number of non-default behaviors executed by the crypto/x509 package
 due to a non-default GODEBUG=x509usefallbackroots=... setting. Sourced from
