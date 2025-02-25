@@ -26,6 +26,7 @@ import (
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -95,6 +96,11 @@ func NewAgentQuerier(
 		nodeLister:               nodeLister,
 		bgpPolicyInfoQuerier:     bgpPolicyInfoQuerier,
 	}
+}
+
+// GetFQDNCache returns dnsEntryCache within fqdnController
+func (aq agentQuerier) GetFqdnCache(fqdnFilter *querier.FQDNCacheFilter) []types.DnsCacheEntry {
+	return aq.networkPolicyInfoQuerier.GetFQDNCache(fqdnFilter)
 }
 
 // GetNodeLister returns NodeLister.
