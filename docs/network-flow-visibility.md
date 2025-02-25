@@ -27,9 +27,9 @@
       - [Correlation of Flow Records](#correlation-of-flow-records)
       - [Aggregation of Flow Records](#aggregation-of-flow-records)
     - [Antctl Support](#antctl-support)
-  - [Proxy Mode](#proxy-mode)
+  - [Proxy Mode (v2.3 and above)](#proxy-mode-v23-and-above)
     - [Installation](#installation-1)
-    - [IPFIX Information Elements (IEs) in an Proxied Flow Record](#ipfix-information-elements-ies-in-an-proxied-flow-record)
+    - [IPFIX Information Elements (IEs) in a Proxied Flow Record](#ipfix-information-elements-ies-in-a-proxied-flow-record)
   - [Version skew between Flow Aggregator and Antrea Agent](#version-skew-between-flow-aggregator-and-antrea-agent)
 - [Quick Deployment](#quick-deployment)
   - [Image-building Steps](#image-building-steps)
@@ -255,11 +255,11 @@ modes of operation:
   and aggregates the flow records received from the Flow Exporter of Antrea
   Agents. For more information about this mode, including installation
   instructions, refer to the [Aggregate Mode section](#aggregate-mode).
-* `Proxy`: in this mode, the Flow Aggregator operates statelessly, and the flow
-  records received from the Flow Exporter of Antrea Agents are sent directly to
-  an IPFIX collector, without buffering or correlation / aggregation. For more
-  information about this mode, including installation instructions, refer to the
-  [Proxy Mode section](#proxy-mode).
+* `Proxy` (new in Antrea v2.3): in this mode, the Flow Aggregator operates
+  statelessly, and the flow records received from the Flow Exporter of Antrea
+  Agents are sent directly to an IPFIX collector, without buffering or
+  correlation / aggregation. For more information about this mode, including
+  installation instructions, refer to the [Proxy Mode section](#proxy-mode).
 
 The Flow Aggregator is implemented as an IPFIX mediator. It consists of an IPFIX
 Collector Process, an IPFIX Intermediate Process, and an IPFIX Exporter
@@ -280,7 +280,7 @@ destination. For example, for Pod-to-Service traffic, destination Service
 information will only be included in the source records. See
 [#6773](https://github.com/antrea-io/antrea/issues/6773) for more background on
 why `Proxy` mode was introduced. Note that `Proxy` mode cannot be used with a
-non-IPFIX destination collector.
+non-IPFIX destination collector, and is only available starting with Antrea v2.3.
 
 Otherwise, the default `Aggregate` mode is probably right for you. It supports
 all available destination collectors (e.g., ClickHouse), and its output is
@@ -554,7 +554,7 @@ antctl can access the Flow Aggregator API to dump flow records and print metrics
 about flow record processing. Refer to the
 [antctl documentation](antctl.md#flow-aggregator-commands) for more information.
 
-### Proxy Mode
+### Proxy Mode (v2.3 and above)
 
 #### Installation
 
@@ -586,7 +586,7 @@ In `Proxy` mode, not all configuration parameters are applicable.
 `flowCollector` is the only supported collector, and `activeFlowRecordTimeout` /
 `inactiveFlowRecordTimeout` are not applicable.
 
-#### IPFIX Information Elements (IEs) in an Proxied Flow Record
+#### IPFIX Information Elements (IEs) in a Proxied Flow Record
 
 In addition to IPFIX information elements provided in the [above section](#ipfix-information-elements-ies-in-a-flow-record),
 the Flow Aggregator adds the following fields to the flow records before
@@ -608,8 +608,8 @@ As a rule, we recommend keeping the Flow Aggregator and the Antrea Agent at the
 same (minor) version. During upgrades, there will be a small time windows during
 which this is not possible. Prior to Antrea v2.3, the Flow Aggregator Pod may
 crash (and restart) in case of version mismatch, e.g., because of the
-introduction of new new Information Elements. Starting with Antrea v2.3, the
-Flow Aggregator should be able to handle older or newer Agents gracefully. If
+introduction of new Information Elements. Starting with Antrea v2.3, the Flow
+Aggregator should be able to handle older or newer Agents gracefully. If
 possible, we do recommend upgrading the Flow Aggregator Deployment last (i.e.,
 after all Antrea Agents have been upgraded). The version skew between the Flow
 Aggregator and Antrea Agents should be at most 4 minor versions, which also
