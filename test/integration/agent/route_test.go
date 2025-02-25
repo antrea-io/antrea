@@ -100,7 +100,7 @@ type routeClientOptions struct {
 }
 
 func newTestRouteClient(networkConfig *config.NetworkConfig, options routeClientOptions) (*route.Client, error) {
-	return route.NewClient(networkConfig, options.noSNAT, false, false, false, false, options.nodeSNATRandomFully, false, nil)
+	return route.NewClient(networkConfig, options.noSNAT, false, false, false, false, options.nodeSNATRandomFully, false, nil, 51820)
 }
 
 func TestInitialize(t *testing.T) {
