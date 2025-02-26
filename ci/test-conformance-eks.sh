@@ -186,36 +186,23 @@ function setup_eks() {
     echo "=== Using the following awscli version ==="
     aws --version
 
-    set +e
-    if [[ "$AWS_SERVICE_USER_ROLE_ARN" != "" ]] && [[ "$AWS_SERVICE_USER_NAME" != "" ]]; then
-        mkdir -p ~/.aws
-        cat > ~/.aws/config <<EOF
-[default]
-region = $REGION
-role_arn = $AWS_SERVICE_USER_ROLE_ARN
-source_profile = $AWS_SERVICE_USER_NAME
-output = json
-EOF
-        cat > ~/.aws/credentials <<EOF
-[$AWS_SERVICE_USER_NAME]
-aws_access_key_id = $AWS_ACCESS_KEY
-aws_secret_access_key = $AWS_SECRET_KEY
-EOF
-    elif [[ "$AWS_SERVICE_USER_ROLE_ARN" = "" ]] && [[ "$AWS_SERVICE_USER_NAME" = "" ]]; then
-        mkdir -p ~/.aws
-        cat > ~/.aws/config <<EOF
-[default]
-region = $REGION
-output = json
-EOF
-        cat > ~/.aws/credentials <<EOF
-[default]
-aws_access_key_id = $AWS_ACCESS_KEY
-aws_secret_access_key = $AWS_SECRET_KEY
-EOF
-    else
-        echo "Invalid input either specify both aws-service-user-role-arn and aws-service-user or none."
-        exit 1
+    set +ex
+    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY
+    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
+
+    export AWS_DEFAULT_OUTPUT=json
+    export AWS_DEFAULT_REGION=$REGION
+    if [[ "$AWS_SERVICE_USER_ROLE_ARN" != "" ]]; then
+        TEMP_CRED=$(aws sts assume-role \
+          --role-arn "$AWS_SERVICE_USER_ROLE_ARN" \
+          --role-session-name "cli-session" \
+          --duration-seconds 7200 \
+          --query "Credentials" \
+          --output json)
+
+        export AWS_ACCESS_KEY_ID=$(echo "$TEMP_CRED" | jq -r .AccessKeyId)
+        export AWS_SECRET_ACCESS_KEY=$(echo "$TEMP_CRED" | jq -r .SecretAccessKey)
+        export AWS_SESSION_TOKEN=$(echo "$TEMP_CRED" | jq -r .SessionToken)
     fi
 
     if [[ "$INSTALL_EKSCTL" == true ]]; then
@@ -223,7 +210,7 @@ EOF
         curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
         sudo mv /tmp/eksctl /usr/local/bin
     fi
-    set -e
+    set -ex
     printf "\n"
     echo "=== Using the following eksctl ==="
     which eksctl
