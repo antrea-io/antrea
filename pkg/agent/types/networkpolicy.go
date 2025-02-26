@@ -15,12 +15,21 @@
 package types
 
 import (
+	"net"
+	"time"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
+
+type DnsCacheEntry struct {
+	FQDNName       string
+	IPAddress      net.IP
+	ExpirationTime time.Time
+}
 
 type MatchKey struct {
 	ofProtocol    binding.Protocol
