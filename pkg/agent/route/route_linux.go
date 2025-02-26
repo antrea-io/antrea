@@ -129,6 +129,7 @@ type Client struct {
 	isCloudEKS                bool
 	nodeNetworkPolicyEnabled  bool
 	nodeLatencyMonitorEnabled bool
+	networkPolicyOnlyMode     bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
 	// serviceExternalIPReferences tracks the references of Service IP. The key is the Service IP and the value is
@@ -185,6 +186,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 		multicastEnabled:            multicastEnabled,
 		connectUplinkToBridge:       connectUplinkToBridge,
 		nodeNetworkPolicyEnabled:    nodeNetworkPolicyEnabled,
+		nodeLatencyMonitorEnabled:   nodeLatencyMonitorEnabled,
 		ipset:                       ipset.NewClient(),
 		netlink:                     &netlink.Handle{},
 		isCloudEKS:                  env.IsCloudEKS(),
@@ -266,6 +268,9 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	// Build static iptables rules for NodeNetworkPolicy.
 	if c.nodeNetworkPolicyEnabled {
 		c.initNodeNetworkPolicy()
+	}
+	if c.nodeLatencyMonitorEnabled {
+		c.initNodeLatency()
 	}
 
 	return nil
@@ -677,14 +682,9 @@ func (c *Client) syncIPTables() error {
 	if c.proxyAll {
 		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", true})
 	}
-	if c.nodeNetworkPolicyEnabled {
+	if c.nodeNetworkPolicyEnabled || c.nodeLatencyMonitorEnabled {
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false})
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false})
-	}
-	// TODO add jumprules for icmp if nodeLatencyMonitorEnabled is true
-	klog.Infof("DBUG: latency monitor enabled: %v", c.nodeLatencyMonitorEnabled)
-	if c.nodeLatencyMonitorEnabled {
-		klog.InfoS("DBUG: NODE LATENCY MONITOR ENABLED")
 	}
 	for _, rule := range jumpRules {
 		if err := c.iptables.EnsureChain(ipProtocol, rule.table, rule.dstChain); err != nil {
@@ -1202,6 +1202,38 @@ func (c *Client) initNodeNetworkPolicy() {
 		c.nodeNetworkPolicyIPTablesIPv4.Store(preNodeNetworkPolicyEgressRulesChain, preEgressChainRules)
 		c.nodeNetworkPolicyIPTablesIPv4.Store(config.NodeNetworkPolicyIngressRulesChain, []string{})
 		c.nodeNetworkPolicyIPTablesIPv4.Store(config.NodeNetworkPolicyEgressRulesChain, []string{})
+	}
+}
+
+func (c *Client) initNodeLatency() {
+	gateway := "antrea-gw0"
+	if c.networkConfig.TrafficEncapMode.String() == "networkPolicyOnly" {
+		gateway = "transport"
+	}
+	antreaInputChainRules := []string{
+		iptables.NewRuleBuilder(antreaInputChain).
+			MatchInputInterface(gateway).
+			SetComment("Antrea: allow ICMP packets from NodeLatencyMonitor").
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule(),
+	}
+	antreaOutputChainRules := []string{
+		iptables.NewRuleBuilder(antreaOutputChain).
+			MatchOutputInterface(gateway).
+			SetComment("Antrea: allow egress packets from NodeLatencyMonitor").
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule(),
+	}
+
+	if c.networkConfig.IPv6Enabled {
+		c.nodeNetworkPolicyIPTablesIPv6.Store(antreaInputChain, antreaInputChainRules)
+		c.nodeNetworkPolicyIPTablesIPv6.Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.nodeNetworkPolicyIPTablesIPv4.Store(antreaInputChain, antreaInputChainRules)
+		c.nodeNetworkPolicyIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRules)
 	}
 }
 

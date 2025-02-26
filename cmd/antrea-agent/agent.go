@@ -298,7 +298,6 @@ func run(o *Options) error {
 	}
 
 	// Initialize agent and node network.
-	klog.Infof("DBUG: before initialization: %v", routeClient)
 	agentInitializer := agent.NewInitializer(
 		k8sClient,
 		crdClient,
