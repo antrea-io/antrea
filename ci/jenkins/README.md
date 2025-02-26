@@ -232,6 +232,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 
 * [matrix-test [weekly]](https://jenkins.antrea.io/job/antrea-weekly-matrix-compatibility-test/):
   runs Antrea e2e, K8s Conformance and NetworkPolicy tests, using different combinations of various operating systems and K8s releases.
+
   |  K8s Version   |  Node OS        |  Status  |
   | :------------: | :-------------: | :------: |
   |    1.17.5      |  CentOS 7       |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.17.5%2CTEST_OS%3Dcentos-7%2Clabels%3Dantrea-test-node)](https://jenkins.antrea.io/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.17.5,TEST_OS=centos-7,labels=antrea-test-node/)|
