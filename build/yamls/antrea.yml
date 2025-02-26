@@ -4078,7 +4078,7 @@ data:
     #  L7FlowExporter: false
 
     # Enable NodeLatencyMonitor to monitor the latency between Nodes.
-    #  NodeLatencyMonitor: false
+      NodeLatencyMonitor: true
 
     # Allow users to initiate BGP process on selected Kubernetes Nodes and advertise Service IPs, Pod IPs and Egress IPs to
     # remote BGP peers.
