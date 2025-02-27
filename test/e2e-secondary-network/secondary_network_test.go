@@ -16,17 +16,19 @@ package e2esecondary
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
 	"testing"
 	"time"
 
+	netattdef "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
 	logs "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	antreae2e "antrea.io/antrea/test/e2e"
 	"antrea.io/antrea/test/e2e-secondary-network/aws"
@@ -223,6 +225,110 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 	return nil
 }
 
+// getNetAttachDefClient returns a NetAttachDef client.
+func (data *testData) getNetAttachDefClient() (netattdef.Interface, error) {
+	config, err := data.e2eTestData.GetKubeConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
+	}
+	return netattdef.NewForConfig(config)
+}
+
+// getIPPoolNames retrieves the IPPool names from a NetworkAttachmentDefinition.
+func (data *testData) getIPPoolNames(networkName, namespace string) ([]string, error) {
+	client, err := data.getNetAttachDefClient()
+	if err != nil {
+		return nil, err
+	}
+
+	nad, err := client.K8sCniCncfIoV1().NetworkAttachmentDefinitions(namespace).Get(context.TODO(), networkName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NetworkAttachmentDefinition %s: %w", networkName, err)
+	}
+
+	var nadConfig struct {
+		IPAM struct {
+			IPPools []string `json:"ippools"`
+		} `json:"ipam"`
+	}
+
+	if err := json.Unmarshal([]byte(nad.Spec.Config), &nadConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse NAD config JSON: %w", err)
+	}
+
+	return nadConfig.IPAM.IPPools, nil
+}
+
+// checkIPReleased verifies if the VLAN IP is released.
+func (data *testData) checkIPReleased(ipPoolName, podIPString string) error {
+	crdClient, err := data.e2eTestData.GetCRDClient()
+	if err != nil {
+		return fmt.Errorf("failed to get CRD client: %w", err)
+	}
+
+	// Poll every 5 seconds for up to 40 seconds
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 40*time.Second, true, func(ctx context.Context) (bool, error) {
+		ipPool, err := crdClient.CrdV1beta1().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("failed to get IPPool %s: %w", ipPoolName, err)
+		}
+
+		for _, ipAddress := range ipPool.Status.IPAddresses {
+			if podIPString == ipAddress.IPAddress {
+				return false, nil
+			}
+		}
+
+		return true, nil
+	})
+}
+
+// reconcilationAfterAgentRestart verifies OVS cleanup and IP release.
+func (data *testData) reconcilationAfterAgentRestart(t *testing.T) error {
+	vlanPod := data.pods[1]
+	iface := "eth1"
+
+	beforeIPs, err := data.listPodIPs(vlanPod)
+	if err != nil {
+		return fmt.Errorf("failed to get Pod IP before agent restart: %w", err)
+	}
+
+	beforeIP, exists := beforeIPs[iface]
+	if !exists || beforeIP == nil {
+		return fmt.Errorf("no IP found for interface %s before agent restart", iface)
+	}
+
+	// Restarting the Antrea agent
+	if err := data.e2eTestData.RestartAntreaAgentPods(30 * time.Second); err != nil {
+		t.Fatalf("Failed to restart Antrea agent pods: %v", err)
+	}
+
+	afterIPs, err := data.listPodIPs(vlanPod)
+	if err != nil {
+		return fmt.Errorf("failed to get Pod IP after agent restart: %w", err)
+	}
+
+	afterIP, exists := afterIPs[iface]
+	if !exists || afterIP == nil || !beforeIP.Equal(afterIP) {
+		return fmt.Errorf("OVS port/IP mismatch after agent restart: before=%v, after=%v, iface=%v", beforeIP, afterIP, iface)
+	}
+
+	ipPools, err := data.getIPPoolNames(vlanPod.interfaceNetworks[iface], "default")
+	if err != nil {
+		return fmt.Errorf("failed to get IPPool: %w", err)
+	}
+
+	// Remove Pod and check IP released or not.
+	if err := data.e2eTestData.DeletePodAndWait(defaultTimeout, vlanPod.podName, data.e2eTestData.GetTestNamespace()); err != nil {
+		return fmt.Errorf("failed to delete Pod %s: %w", vlanPod.podName, err)
+	}
+
+	return data.checkIPReleased(ipPools[0], beforeIP.String())
+}
+
 func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo) {
 	e2eTestData, err := antreae2e.SetupTest(t)
 	if err != nil {
@@ -232,13 +338,42 @@ func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo)
 
 	testData := &testData{e2eTestData: e2eTestData, networkType: networkType, pods: pods}
 
-	err = testData.createPods(t, e2eTestData.GetTestNamespace())
-	if err != nil {
-		t.Fatalf("Error when create test Pods: %v", err)
-	}
-	err = testData.pingBetweenInterfaces(t)
-	if err != nil {
-		t.Fatalf("Error when pinging between interfaces: %v", err)
+	t.Run("testCreateTestPodOnNode", func(t *testing.T) {
+		testData.createPods(t, e2eTestData.GetTestNamespace())
+	})
+	t.Run("testpingBetweenInterfaces", func(t *testing.T) {
+		err := testData.pingBetweenInterfaces(t)
+		if err != nil {
+			t.Fatalf("Error when pinging between interfaces: %v", err)
+		}
+	})
+	t.Run("testreconcilationAfterAgentRestart", func(t *testing.T) {
+		if err := testData.reconcilationAfterAgentRestart(t); err != nil {
+			t.Fatalf("Error when restarting antrea-agent: %v", err)
+		}
+	})
+}
+
+func TestSriovNetwork(t *testing.T) {
+	// Create Pods on the control plane Node, assuming a single Node cluster for the SR-IOV
+	// test.
+	nodeName := antreae2e.NodeName(0)
+	pods := []*testPodInfo{
+		{
+			podName:           "sriov-pod1",
+			nodeName:          nodeName,
+			interfaceNetworks: map[string]string{"eth1": "sriov-net1", "eth2": "sriov-net2"},
+		},
+		{
+			podName:           "sriov-pod2",
+			nodeName:          nodeName,
+			interfaceNetworks: map[string]string{"eth2": "sriov-net1", "eth3": "sriov-net3"},
+		},
+		{
+			podName:           "sriov-pod3",
+			nodeName:          nodeName,
+			interfaceNetworks: map[string]string{"eth4": "sriov-net1"},
+		},
 	}
 }
 
