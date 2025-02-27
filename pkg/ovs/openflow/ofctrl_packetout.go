@@ -16,7 +16,7 @@ package openflow
 
 import (
 	"encoding/binary"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"time"
 
@@ -28,7 +28,7 @@ import (
 )
 
 // #nosec G404: random number generator not used for security purposes
-var pktRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+var pktRand = rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0))
 
 type ofPacketOutBuilder struct {
 	pktOut  *ofctrl.PacketOut
