@@ -28,6 +28,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
@@ -158,10 +159,17 @@ type Client struct {
 	nodeNetworkPolicyIPTablesIPv4 sync.Map
 	// nodeNetworkPolicyIPTablesIPv6 caches all existing IPv6 iptables chains and rules for NodeNetworkPolicy.
 	nodeNetworkPolicyIPTablesIPv6 sync.Map
+	// wireguardIPTablesIPv4 caches all existing IPv4 iptables chains and rules for Wireguard.
+	wireguardIPTablesIPv4 sync.Map
+	// wireguardIPTablesIPv6 caches all existing IPv6 iptables chains and rules for Wireguard.
+	wireguardIPTablesIPv6 sync.Map
 	// deterministic represents whether to write iptables chains and rules for NodeNetworkPolicy deterministically when
 	// syncIPTables is called. Enabling it may carry a performance impact. It's disabled by default and should only be
 	// used in testing.
 	deterministic bool
+	// wireguardPort is the port at which to listen the Wireguard traffic. The iptables rules are added to accept the UDP
+	// packets destined to the Wireguard port when wireguard is used as the encryption mode.
+	wireguardPort int
 }
 
 // NewClient returns a route client.
@@ -173,7 +181,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 	multicastEnabled bool,
 	nodeSNATRandomFully bool,
 	egressSNATRandomFully bool,
-	serviceCIDRProvider servicecidr.Interface) (*Client, error) {
+	serviceCIDRProvider servicecidr.Interface,
+	wireguardPort int) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		noSNAT:                      noSNAT,
@@ -194,6 +203,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 			antreaExternalIPIPSet:  {},
 			antreaExternalIPIP6Set: {},
 		},
+		wireguardPort: wireguardPort,
 	}, nil
 }
 
@@ -265,7 +275,9 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	if c.nodeNetworkPolicyEnabled {
 		c.initNodeNetworkPolicy()
 	}
-
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+		c.initWireguard()
+	}
 	return nil
 }
 
@@ -675,7 +687,7 @@ func (c *Client) syncIPTables() error {
 	if c.proxyAll {
 		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", true})
 	}
-	if c.nodeNetworkPolicyEnabled {
+	if c.nodeNetworkPolicyEnabled || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false})
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false})
 	}
@@ -711,20 +723,22 @@ func (c *Client) syncIPTables() error {
 		return true
 	})
 
-	nodeNetworkPolicyIPTablesIPv4 := map[string][]string{}
-	nodeNetworkPolicyIPTablesIPv6 := map[string][]string{}
-	c.nodeNetworkPolicyIPTablesIPv4.Range(func(key, value interface{}) bool {
-		chain := key.(string)
-		rules := value.([]string)
-		nodeNetworkPolicyIPTablesIPv4[chain] = rules
-		return true
-	})
-	c.nodeNetworkPolicyIPTablesIPv6.Range(func(key, value interface{}) bool {
-		chain := key.(string)
-		rules := value.([]string)
-		nodeNetworkPolicyIPTablesIPv6[chain] = rules
-		return true
-	})
+	addFilterRulesToChain := func(iptablesRulesByChain map[string][]string, m *sync.Map) {
+		m.Range(func(key, value interface{}) bool {
+			chain := key.(string)
+			rules := value.([]string)
+			iptablesRulesByChain[chain] = append(iptablesRulesByChain[chain], rules...)
+			return true
+		})
+	}
+
+	iptablesFilterRulesByChainV4 := make(map[string][]string)
+	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeNetworkPolicyIPTablesIPv4)
+	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.wireguardIPTablesIPv4)
+
+	iptablesFilterRulesByChainV6 := make(map[string][]string)
+	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeNetworkPolicyIPTablesIPv6)
+	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.wireguardIPTablesIPv6)
 
 	// Use iptables-restore to configure IPv4 settings.
 	if c.networkConfig.IPv4Enabled {
@@ -737,7 +751,7 @@ func (c *Client) syncIPTables() error {
 			config.VirtualNodePortDNATIPv4,
 			config.VirtualServiceIPv4,
 			snatMarkToIPv4,
-			nodeNetworkPolicyIPTablesIPv4,
+			iptablesFilterRulesByChainV4,
 			false)
 
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
@@ -757,7 +771,7 @@ func (c *Client) syncIPTables() error {
 			config.VirtualNodePortDNATIPv6,
 			config.VirtualServiceIPv6,
 			snatMarkToIPv6,
-			nodeNetworkPolicyIPTablesIPv6,
+			iptablesFilterRulesByChainV6,
 			true)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.iptables.Restore(iptablesData.String(), false, true); err != nil {
@@ -777,7 +791,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	nodePortDNATVirtualIP,
 	serviceVirtualIP net.IP,
 	snatMarkToIP map[uint32]net.IP,
-	nodeNetWorkPolicyIPTables map[string][]string,
+	iptablesFiltersRulesByChain map[string][]string,
 	isIPv6 bool) *bytes.Buffer {
 	// Create required rules in the antrea chains.
 	// Use iptables-restore as it flushes the involved chains and creates the desired rules
@@ -897,7 +911,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, iptables.MakeChainLine(antreaForwardChain))
 
 	var nodeNetworkPolicyIPTablesChains []string
-	for chain := range nodeNetWorkPolicyIPTables {
+	for chain := range iptablesFiltersRulesByChain {
 		nodeNetworkPolicyIPTablesChains = append(nodeNetworkPolicyIPTablesChains, chain)
 	}
 	if c.deterministic {
@@ -937,7 +951,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		}...)
 	}
 	for _, chain := range nodeNetworkPolicyIPTablesChains {
-		for _, rule := range nodeNetWorkPolicyIPTables[chain] {
+		for _, rule := range iptablesFiltersRulesByChain[chain] {
 			writeLine(iptablesData, rule)
 		}
 	}
@@ -1195,6 +1209,37 @@ func (c *Client) initNodeNetworkPolicy() {
 		c.nodeNetworkPolicyIPTablesIPv4.Store(preNodeNetworkPolicyEgressRulesChain, preEgressChainRules)
 		c.nodeNetworkPolicyIPTablesIPv4.Store(config.NodeNetworkPolicyIngressRulesChain, []string{})
 		c.nodeNetworkPolicyIPTablesIPv4.Store(config.NodeNetworkPolicyEgressRulesChain, []string{})
+	}
+}
+
+func (c *Client) initWireguard() {
+	wireguardPort := intstr.FromInt(c.wireguardPort)
+	antreaInputChainRules := []string{
+		iptables.NewRuleBuilder(antreaInputChain).
+			SetComment("Antrea: allow Wireguard input packets").
+			MatchTransProtocol(iptables.ProtocolUDP).
+			MatchPortDst(&wireguardPort, nil).
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule(),
+	}
+	antreaOutputChainRules := []string{
+		iptables.NewRuleBuilder(antreaOutputChain).
+			SetComment("Antrea: allow Wireguard output packets").
+			MatchTransProtocol(iptables.ProtocolUDP).
+			MatchPortDst(&wireguardPort, nil).
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule(),
+	}
+
+	if c.networkConfig.IPv6Enabled {
+		c.wireguardIPTablesIPv6.Store(antreaInputChain, antreaInputChainRules)
+		c.wireguardIPTablesIPv6.Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.wireguardIPTablesIPv4.Store(antreaInputChain, antreaInputChainRules)
+		c.wireguardIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRules)
 	}
 }
 

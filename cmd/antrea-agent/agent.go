@@ -244,7 +244,9 @@ func run(o *Options) error {
 		multicastEnabled,
 		o.config.SNATFullyRandomPorts,
 		*o.config.Egress.SNATFullyRandomPorts,
-		serviceCIDRProvider)
+		serviceCIDRProvider,
+		wireguardConfig.Port,
+	)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
