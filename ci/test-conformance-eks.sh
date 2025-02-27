@@ -186,7 +186,7 @@ function setup_eks() {
     echo "=== Using the following awscli version ==="
     aws --version
 
-    set +e
+    set +ex
     export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY
     export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
 
@@ -209,7 +209,7 @@ function setup_eks() {
         curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
         sudo mv /tmp/eksctl /usr/local/bin
     fi
-    set -e
+    set -ex
     printf "\n"
     echo "=== Using the following eksctl ==="
     which eksctl
