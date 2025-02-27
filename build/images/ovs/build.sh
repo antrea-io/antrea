@@ -113,6 +113,7 @@ fi
 pushd $THIS_DIR > /dev/null
 
 OVS_VERSION=$(head -n 1 ${OVS_VERSION_FILE})
+DOCKER_REGISTRY=$(head -n 1 ../../../ci/docker-registry)
 
 BUILD_CACHE_TAG=$(../build-tag.sh)
 
@@ -139,7 +140,7 @@ fi
 function docker_build_and_push() {
     local image="$1"
     local dockerfile="$2"
-    local build_args="--build-arg OVS_VERSION=$OVS_VERSION"
+    local build_args="--build-arg OVS_VERSION=$OVS_VERSION --build-arg DOCKER_REGISTRY=$DOCKER_REGISTRY"
     local cache_args=""
     if $PUSH; then
         cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
