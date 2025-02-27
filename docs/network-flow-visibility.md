@@ -259,7 +259,7 @@ modes of operation:
   statelessly, and the flow records received from the Flow Exporter of Antrea
   Agents are sent directly to an IPFIX collector, without buffering or
   correlation / aggregation. For more information about this mode, including
-  installation instructions, refer to the [Proxy Mode section](#proxy-mode).
+  installation instructions, refer to the [Proxy Mode section](#proxy-mode-v23-and-above).
 
 The Flow Aggregator is implemented as an IPFIX mediator. It consists of an IPFIX
 Collector Process, an IPFIX Intermediate Process, and an IPFIX Exporter
