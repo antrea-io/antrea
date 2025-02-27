@@ -196,6 +196,7 @@ function setup_eks() {
         TEMP_CRED=$(aws sts assume-role \
           --role-arn "$AWS_SERVICE_USER_ROLE_ARN" \
           --role-session-name "cli-session" \
+          --duration-seconds 3600 \
           --query "Credentials" \
           --output json)
 
