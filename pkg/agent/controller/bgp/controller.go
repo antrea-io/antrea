@@ -343,7 +343,7 @@ func getConfederationConfig(conf *v1alpha1.Confederation) *confederationConfig {
 	}
 }
 
-func confederationConfigNotChanged(a, b *confederationConfig) bool {
+func confederationConfigEqual(a, b *confederationConfig) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && a.identifier == b.identifier && a.peers.Equal(b.peers))
 }
 
@@ -398,7 +398,7 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 		c.bgpPolicyState.listenPort != listenPort ||
 		c.bgpPolicyState.localASN != localASN ||
 		c.bgpPolicyState.routerID != routerID ||
-		!confederationConfigNotChanged(c.bgpPolicyState.confederationConfig, confederationConfig)
+		!confederationConfigEqual(c.bgpPolicyState.confederationConfig, confederationConfig)
 
 	if needUpdateBGPServer {
 		if c.bgpPolicyState != nil {

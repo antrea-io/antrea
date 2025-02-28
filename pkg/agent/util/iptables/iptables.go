@@ -75,7 +75,7 @@ func (p Protocol) String() string {
 const (
 	ProtocolDual Protocol = iota
 	ProtocolIPv4
-	ProtocolIPv6
+	ProtocolIPv6\
 )
 
 const (

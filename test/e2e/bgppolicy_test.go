@@ -118,9 +118,9 @@ func TestBGPPolicy(t *testing.T) {
 
 	t.Log("Create a test Service")
 	svcClusterIP, err := data.createAgnhostClusterIPService("agnhost-svc", false, ptr.To[corev1.IPFamily](corev1.IPv4Protocol))
-	defer data.deleteService(svcClusterIP.Namespace, svcClusterIP.Name)
 	require.NoError(t, err)
 	require.NotEqual(t, "", svcClusterIP.Spec.ClusterIP, "ClusterIP should not be empty")
+	defer data.deleteService(svcClusterIP.Namespace, svcClusterIP.Name)
 	clusterIP := svcClusterIP.Spec.ClusterIP
 
 	t.Run("One BGPPolicy applied to all Nodes", func(t *testing.T) {
@@ -154,8 +154,8 @@ func TestBGPPolicy(t *testing.T) {
 			},
 		}
 		bgpPolicy, err = data.crdClient.CrdV1alpha1().BGPPolicies().Create(context.TODO(), bgpPolicy, metav1.CreateOptions{})
-		defer data.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
 		require.NoError(t, err)
+		defer data.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
 
 		t.Log("Get the routes installed on remote FRR router and verify them")
 		expectedRoutes := make([]FRRRoute, 0)
@@ -180,10 +180,8 @@ func TestBGPPolicy(t *testing.T) {
 
 		t.Log("Update InternalTrafficPolicy of the test Service Cluster to Local")
 		_, err = data.updateServiceInternalTrafficPolicy("agnhost-svc", true)
-		defer func() {
-			data.updateServiceInternalTrafficPolicy("agnhost-svc", false)
-		}()
 		require.NoError(t, err)
+		defer data.updateServiceInternalTrafficPolicy("agnhost-svc", false)
 
 		t.Log("Update the test BGPPolicy with a new local ASN and removing Pod CIDR advertisement")
 		updatedBGPPolicy := bgpPolicy.DeepCopy()
@@ -208,14 +206,12 @@ func TestBGPPolicy(t *testing.T) {
 		}
 	})
 
-	t.Run("Multiple BGPPolies applied to different Nodes within a confederation", func(t *testing.T) {
+	t.Run("Multiple BGPPolicies applied to different Nodes within a confederation", func(t *testing.T) {
 		t.Log("Create a test BGPPolicy selecting all Nodes as well as advertising ClusterIPs and Pod CIDRs")
-		const confederationIdentifier = int32(60000)
-		const updatedConfederationIdentifier = int32(60001)
 		asnStart := int32(61000)
 
 		t.Log("Configure the remote FRR router with BGP")
-		configureExternalBGPRouter(t, externalASN, confederationIdentifier, true)
+		configureExternalBGPRouter(t, int32(60001), int32(60000), true)
 
 		var bgpPolicies []*crdv1alpha1.BGPPolicy
 		for i := 0; i < len(clusterInfo.nodes); i++ {
@@ -231,7 +227,7 @@ func TestBGPPolicy(t *testing.T) {
 					LocalASN:   asnStart + int32(i),
 					ListenPort: ptr.To[int32](179),
 					Confederation: &crdv1alpha1.Confederation{
-						Identifier: confederationIdentifier,
+						Identifier: int32(60000),
 					},
 					Advertisements: crdv1alpha1.Advertisements{
 						Service: &crdv1alpha1.ServiceAdvertisement{
@@ -253,8 +249,8 @@ func TestBGPPolicy(t *testing.T) {
 				bgpPolicy.Spec.BGPPeers = append(bgpPolicy.Spec.BGPPeers, crdv1alpha1.BGPPeer{Address: clusterInfo.nodes[j].ipv4Addr, ASN: asn})
 			}
 			bgpPolicy, err = data.crdClient.CrdV1alpha1().BGPPolicies().Create(context.TODO(), bgpPolicy, metav1.CreateOptions{})
-			defer data.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
 			require.NoError(t, err)
+			defer data.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
 			bgpPolicies = append(bgpPolicies, bgpPolicy)
 		}
 
@@ -277,19 +273,17 @@ func TestBGPPolicy(t *testing.T) {
 		}
 
 		t.Log("Update the BGP configuration on the remote FRR router")
-		configureExternalBGPRouter(t, externalASN, updatedConfederationIdentifier, false)
+		configureExternalBGPRouter(t, externalASN, int32(60001), false)
 
 		t.Log("Update InternalTrafficPolicy of the test Service Cluster to Local")
 		_, err = data.updateServiceInternalTrafficPolicy("agnhost-svc", true)
-		defer func() {
-			data.updateServiceInternalTrafficPolicy("agnhost-svc", false)
-		}()
 		require.NoError(t, err)
+		defer data.updateServiceInternalTrafficPolicy("agnhost-svc", false)
 
 		for _, bgpPolicy := range bgpPolicies {
 			t.Log("Update the test BGPPolicy with a new confederation identifier and removing Pod CIDR advertisement")
 			updatedBGPPolicy := bgpPolicy.DeepCopy()
-			updatedBGPPolicy.Spec.Confederation.Identifier = updatedConfederationIdentifier
+			updatedBGPPolicy.Spec.Confederation.Identifier = int32(60001)
 			updatedBGPPolicy.Spec.Advertisements.Pod = nil
 			_, err = data.crdClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), updatedBGPPolicy, metav1.UpdateOptions{})
 			require.NoError(t, err)
