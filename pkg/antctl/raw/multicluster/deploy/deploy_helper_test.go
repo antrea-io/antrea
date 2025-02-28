@@ -173,7 +173,8 @@ func TestCreateResources(t *testing.T) {
 	apiGroupResources, _ := restmapper.GetAPIGroupResources(fakeDiscoveryClient)
 	cmd := &cobra.Command{}
 	buf := new(bytes.Buffer)
-	cmd.SetOutput(buf)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
 	file := filepath.Join("..", "..", "..", "..", "..", "multicluster", "build", "yamls", "antrea-multicluster-leader-global.yml")
 	content, err := os.ReadFile(file)
 	if err != nil {
