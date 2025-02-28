@@ -51,13 +51,21 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 }
 
 func newFilterFromURLQuery(w http.ResponseWriter, query url.Values) (*querier.FQDNCacheFilter, error) {
-	if len(query) == 0 || len(query.Get("domain")) == 0 {
+	domain := query.Get("domain")
+	if len(domain) == 0 {
 		return nil, nil
 	}
-	regexPattern := "^" + strings.ReplaceAll(query.Get("domain"), `\*`, ".*") + "$"
-	pattern, err := regexp.Compile(regexPattern)
+	pattern := strings.TrimSpace(domain)
+	// Replace "." as a regex literal, since it's recogized as a separator in FQDN.
+	pattern = strings.Replace(pattern, ".", "[.]", -1)
+	// Replace "*" with ".*".
+	pattern = strings.Replace(pattern, "*", ".*", -1)
+	// Anchor the regex match expression.
+	pattern = "^" + pattern + "$"
+
+	regex, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err
 	}
-	return &querier.FQDNCacheFilter{DomainRegex: pattern}, nil
+	return &querier.FQDNCacheFilter{DomainRegex: regex}, nil
 }

@@ -21,7 +21,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
@@ -108,7 +107,8 @@ func TestFqdnCacheQuery(t *testing.T) {
 }
 
 func TestNewFilterFromURLQuery(t *testing.T) {
-	samplePattern, _ := regexp.Compile("^" + strings.ReplaceAll(regexp.QuoteMeta("^example\\.com$"), `\*`, ".*") + "$")
+	simplePattern, _ := regexp.Compile("^example[.]com$")
+	wildcardPattern, _ := regexp.Compile("^example[.]com[.].*$")
 	tests := []struct {
 		name           string
 		queryParams    url.Values
@@ -124,9 +124,17 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 		{
 			name: "Valid regex domain",
 			queryParams: url.Values{
-				"domain": {"^example\\.com$"},
+				"domain": {"example.com"},
 			},
-			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: samplePattern},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: simplePattern},
+			expectedStatus: http.StatusOK, // No HTTP error
+		},
+		{
+			name: "Valid regex domain",
+			queryParams: url.Values{
+				"domain": {"example.com.*"},
+			},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: wildcardPattern},
 			expectedStatus: http.StatusOK, // No HTTP error
 		},
 	}
