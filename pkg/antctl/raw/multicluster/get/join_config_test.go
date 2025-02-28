@@ -95,7 +95,6 @@ type: Opaque
 func TestJoinConfig(t *testing.T) {
 	cmd := NewJoinConfigCommand()
 	buf := new(bytes.Buffer)
-	cmd.SetOutput(buf)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 

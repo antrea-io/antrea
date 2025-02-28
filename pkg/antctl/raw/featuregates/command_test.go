@@ -878,7 +878,6 @@ Traceflow                   Enabled      BETA
 		t.Run(tt.name, func(t *testing.T) {
 			getRestClient = getFakeFunc(tt.response)
 			buf := new(bytes.Buffer)
-			Command.SetOutput(buf)
 			Command.SetOut(buf)
 			Command.SetErr(buf)
 
