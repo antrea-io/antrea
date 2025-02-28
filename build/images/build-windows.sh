@@ -68,11 +68,12 @@ docker_file=""
 CNI_BINARIES_VERSION=$(head -n 1 deps/cni-binaries-version)
 GO_VERSION=$(head -n 1 deps/go-version)
 OVS_VERSION=$(head -n 1 deps/ovs-version-windows)
+DOCKER_REGISTRY=$(head -n 1 ../../../ci/docker-registry)
 
 registry="antrea"
 image_name="antrea-windows"
 image="${registry}/${image_name}"
-BUILD_ARGS="--build-arg GO_VERSION=${GO_VERSION} --build-arg OVS_VERSION=${OVS_VERSION} --build-arg CNI_BINARIES_VERSION=${CNI_BINARIES_VERSION}"
+BUILD_ARGS="--build-arg GO_VERSION=${GO_VERSION} --build-arg OVS_VERSION=${OVS_VERSION} --build-arg CNI_BINARIES_VERSION=${CNI_BINARIES_VERSION} --build-arg DOCKER_REGISTRY=${DOCKER_REGISTRY}"
 
 ANTREA_DIR=${THIS_DIR}/../../
 pushd $ANTREA_DIR > /dev/null
