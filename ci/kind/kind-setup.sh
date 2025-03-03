@@ -296,8 +296,8 @@ function configure_vlan_subnets {
   # Allow traffic between VLANs
   for ((i=0; i<${#vlan_interfaces[@]}; i++)); do
     for ((j=i+1; j<${#vlan_interfaces[@]}; j++)); do
-      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[i]} -o ${vlan_interfaces[j]} ACCEPT
-      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[j]} -o ${vlan_interfaces[i]} ACCEPT
+      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[i]} -o ${vlan_interfaces[j]} -j ACCEPT
+      docker_run_with_host_net iptables -t filter -A FORWARD -i ${vlan_interfaces[j]} -o ${vlan_interfaces[i]} -j ACCEPT
     done
   done
 
