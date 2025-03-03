@@ -962,8 +962,7 @@ func TestGetFqdnCache(t *testing.T) {
 	}
 	returnedList := controller.GetFQDNCache(nil)
 	assert.ElementsMatch(t, expectedEntryList, returnedList)
-	regexPattern := "^" + strings.ReplaceAll(regexp.QuoteMeta("*.io"), `\*`, ".*") + "$"
-	pattern, _ := regexp.Compile(regexPattern)
+	pattern := regexp.MustCompile("^.*[.]io$")
 	returnedList = controller.GetFQDNCache(&querier.FQDNCacheFilter{DomainRegex: pattern})
 	assert.ElementsMatch(t, []agenttypes.DnsCacheEntry{expectedEntryList[3]}, returnedList)
 }

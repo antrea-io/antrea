@@ -29,7 +29,7 @@ import (
 
 func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fqdnFilter, err := newFilterFromURLQuery(w, r.URL.Query())
+		fqdnFilter, err := newFilterFromURLQuery(r.URL.Query())
 		if err != nil {
 			http.Error(w, "Regex formatted incorrectly to parse: "+err.Error(), http.StatusBadRequest)
 			klog.ErrorS(err, "Regex formatted incorrectly to parse")
@@ -46,11 +46,12 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusBadRequest)
 			klog.ErrorS(err, "Failed to encode response")
+			return
 		}
 	}
 }
 
-func newFilterFromURLQuery(w http.ResponseWriter, query url.Values) (*querier.FQDNCacheFilter, error) {
+func newFilterFromURLQuery(query url.Values) (*querier.FQDNCacheFilter, error) {
 	domain := query.Get("domain")
 	if len(domain) == 0 {
 		return nil, nil

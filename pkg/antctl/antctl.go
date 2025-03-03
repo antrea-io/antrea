@@ -732,9 +732,9 @@ $ antctl get podmulticaststats pod -n namespace`,
 			long:  "Print effective fqdn cache information including fqdn name, IP addresses, and expiration time",
 			example: `	Get the list of all fqdn rules currently applied
 			$ antctl get fqdncache
-			Get the list of all fqdn rules currently applied
-			$ antctl get fqdncache --domain DomainName
-			Get the list of all fqdn rules currently applied for a given domain name
+			Get the list of all fqdn rules currently applied for a given domain name (wildcard supported)
+			$ antctl get fqdncache --domain example.com
+			$ antctl get fqdncache --domain *.antrea.io
 			`,
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{

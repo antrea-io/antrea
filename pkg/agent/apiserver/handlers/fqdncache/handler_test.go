@@ -38,13 +38,11 @@ func TestFqdnCacheQuery(t *testing.T) {
 	expirationTime := time.Now().Add(1 * time.Hour).UTC()
 	tests := []struct {
 		name                 string
-		expectedStatus       int
 		filteredCacheEntries []types.DnsCacheEntry
 		expectedResponse     []apis.FQDNCacheResponse
 	}{
 		{
-			name:           "FQDN cache exists - multiple addresses multiple domains",
-			expectedStatus: http.StatusOK,
+			name: "FQDN cache exists - multiple addresses multiple domains",
 			filteredCacheEntries: []types.DnsCacheEntry{
 				{
 					FQDNName:       "example.com",
@@ -82,7 +80,6 @@ func TestFqdnCacheQuery(t *testing.T) {
 		},
 		{
 			name:                 "FQDN cache does not exist",
-			expectedStatus:       http.StatusOK,
 			filteredCacheEntries: []types.DnsCacheEntry{},
 			expectedResponse:     []apis.FQDNCacheResponse{},
 		},
@@ -97,7 +94,6 @@ func TestFqdnCacheQuery(t *testing.T) {
 			require.NoError(t, err)
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, req)
-			assert.Equal(t, tt.expectedStatus, recorder.Code)
 			var receivedResponse []apis.FQDNCacheResponse
 			err = json.Unmarshal(recorder.Body.Bytes(), &receivedResponse)
 			require.NoError(t, err)
@@ -107,8 +103,6 @@ func TestFqdnCacheQuery(t *testing.T) {
 }
 
 func TestNewFilterFromURLQuery(t *testing.T) {
-	simplePattern, _ := regexp.Compile("^example[.]com$")
-	wildcardPattern, _ := regexp.Compile("^example[.]com[.].*$")
 	tests := []struct {
 		name           string
 		queryParams    url.Values
@@ -126,15 +120,15 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 			queryParams: url.Values{
 				"domain": {"example.com"},
 			},
-			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: simplePattern},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("^example[.]com$")},
 			expectedStatus: http.StatusOK, // No HTTP error
 		},
 		{
 			name: "Valid regex domain",
 			queryParams: url.Values{
-				"domain": {"example.com.*"},
+				"domain": {"*.example.com"},
 			},
-			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: wildcardPattern},
+			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("^.*[.]example[.]com$")},
 			expectedStatus: http.StatusOK, // No HTTP error
 		},
 	}
@@ -142,7 +136,7 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
-			result, _ := newFilterFromURLQuery(recorder, tt.queryParams)
+			result, _ := newFilterFromURLQuery(tt.queryParams)
 
 			assert.Equal(t, tt.expectedFilter, result)
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
