@@ -122,15 +122,6 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase multicast-e2e --registry ${DOCKER_REGISTRY}
 ```
 
-* Flexible-ipam e2e: e2e tests in a flexible-ipam cluster
-
-```shell
-#!/bin/bash
-set -e
-DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-./ci/jenkins/test.sh --testcase e2e --registry ${DOCKER_REGISTRY} --testbed-type "flexible-ipam"
-```
-
 * Kind conformance: conformance tests in a kind cluster
 
 ```shell
