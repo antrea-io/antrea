@@ -1005,7 +1005,21 @@ type EgressSpec struct {
 	ExternalIPPools []string `json:"externalIPPools,omitempty"`
 	// Bandwidth specifies the rate limit of north-south egress traffic of this Egress.
 	Bandwidth *Bandwidth `json:"bandwidth,omitempty"`
+	// FailurePolicy specifies the behaviour of Egress in cases when Egress Node is not available,
+	// it supports two kind of behaviours "Drop" and "NodeSNAT", it is a required field.
+	FailurePolicy FailurePolicyType `json:"failurePolicy"`
 }
+
+type FailurePolicyType string
+
+const (
+	// FailurePolicyDrop defines the behaviour of Egress in situations when Egress Node is not available.
+	// Here, Drop signifies that if Egress Node is not available then the packet should be dropped.
+	FailurePolicyDrop FailurePolicyType = "Drop"
+	// FailurePolicyNodeSNAT defines the behaviour of Egress in situations when Egress Node is not available.
+	// Here, NodeSNAT signifies that if Egress Node is not available then the packet should be sent via local NodeSNAT.
+	FailurePolicyNodeSNAT FailurePolicyType = "NodeSNAT"
+)
 
 type Bandwidth struct {
 	// Rate specifies the maximum traffic rate. e.g. 300k, 10M
