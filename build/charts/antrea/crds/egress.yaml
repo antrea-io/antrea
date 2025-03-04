@@ -20,6 +20,7 @@ spec:
               type: object
               required:
               - appliedTo
+              - strictEnforcement
               oneOf:
               - anyOf:
                 - required:
@@ -118,6 +119,8 @@ spec:
                       type: string
                     burst:
                       type: string
+                strictEnforcement:
+                  type: boolean
             status:
               type: object
               properties:
