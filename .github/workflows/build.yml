@@ -255,23 +255,48 @@ jobs:
   build-flow-aggregator:
     needs: check-env
     if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-latest]
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_TAG: latest
     steps:
     - uses: actions/checkout@v4
       with:
         show-progress: false
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver: ${{ needs.check-env.outputs.docker_driver }}
     - name: Build flow-aggregator Docker image
       run: make flow-aggregator-image
     - name: Check flow-aggregator Docker image
       run: docker run antrea/flow-aggregator --version
-    - name: Push flow-aggregator Docker image to registry
+    - name: Login to Docker Hub
       if: ${{ needs.check-env.outputs.push_needed == 'true' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Login to Github Container Registry
+      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Push flow-aggregator Docker image to registries
+      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
       run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/flow-aggregator:latest
+        targets=(
+          "docker.io antrea"
+          "ghcr.io antrea-io"
+        )
+        for target in "${targets[@]}"; do
+          t=($target)
+          registry="${t[0]}"
+          namespace="${t[1]}"
+          docker tag antrea/flow-aggregator:"${DOCKER_TAG}" ${registry}/${namespace}/flow-aggregator:"${DOCKER_TAG}"
+          docker push ${registry}/${namespace}/flow-aggregator:"${DOCKER_TAG}"
+        done
 
   build-antrea-migrator:
     needs: check-env
