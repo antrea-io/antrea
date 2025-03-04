@@ -493,7 +493,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, testNa
 			}
 		}
 		for _, anp := range mc.igmpANPConfigs {
-			stats, err := data.crdClient.StatsV1alpha1().AntreaNetworkPolicyStats(testNamespace).Get(context.TODO(), anp.name, metav1.GetOptions{})
+			stats, err := data.CRDClient.StatsV1alpha1().AntreaNetworkPolicyStats(testNamespace).Get(context.TODO(), anp.name, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
@@ -514,7 +514,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, testNa
 			}
 		}
 		for _, anp := range mc.multicastANPConfigs {
-			stats, err := data.crdClient.StatsV1alpha1().AntreaNetworkPolicyStats(testNamespace).Get(context.TODO(), anp.name, metav1.GetOptions{})
+			stats, err := data.CRDClient.StatsV1alpha1().AntreaNetworkPolicyStats(testNamespace).Get(context.TODO(), anp.name, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
@@ -530,7 +530,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, testNa
 			}
 		}
 		for _, group := range sets.List(groupAddresses) {
-			multicastGroup, err := data.crdClient.StatsV1alpha1().MulticastGroups().Get(context.TODO(), group, metav1.GetOptions{})
+			multicastGroup, err := data.CRDClient.StatsV1alpha1().MulticastGroups().Get(context.TODO(), group, metav1.GetOptions{})
 			if err != nil && !errors.IsNotFound(err) {
 				t.Logf("Got multicastGroup error %v", err)
 				return false, err
