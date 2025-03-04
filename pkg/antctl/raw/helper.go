@@ -18,8 +18,11 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
 	corev1 "k8s.io/api/core/v1"
@@ -28,11 +31,13 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
+	"antrea.io/antrea/pkg/antctl/raw/check"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/pkg/util/compress"
 	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -219,4 +224,27 @@ func CreateControllerClientCfg(
 
 	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP, fmt.Sprint(controllerInfo.APIPort)))
 	return cfg, nil
+}
+
+type PodFileCopy interface {
+	CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name, containerName, srcPath, dstDir string) error
+}
+
+type PodFile struct {
+	RestConfig *rest.Config
+	Client     kubernetes.Interface
+}
+
+func (p *PodFile) CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name, containerName, srcPath, dstDir string) error {
+	dir, fileName := filepath.Split(srcPath)
+	cmd := fmt.Sprintf("cd %s; tar cf - %s", dir, fileName)
+	if dir == "" {
+		cmd = fmt.Sprintf("tar cf - %s", fileName)
+	}
+	cmdArr := []string{"/bin/sh", "-c", cmd}
+	output, _, err := check.ExecInPod(ctx, p.Client, p.RestConfig, namespace, name, containerName, cmdArr)
+	if err != nil {
+		return err
+	}
+	return compress.UnpackReader(fs, strings.NewReader(output), false, dstDir)
 }
