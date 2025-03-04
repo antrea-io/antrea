@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	discovery "k8s.io/api/discovery/v1"
@@ -33,6 +34,7 @@ import (
 
 	mcclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/util/checks"
 )
 
 const (
@@ -123,6 +125,10 @@ func OverrideKubeAPIServer(kubeAPIServerOverride string) {
 	if host, port, err = net.SplitHostPort(hostPort); err != nil {
 		// if SplitHostPort returns an error, the entire hostport is considered as host
 		host = hostPort
+		port = "443"
+	}
+	portNum, err := strconv.Atoi(port)
+	if !checks.IsValidPort(portNum) || err != nil {
 		port = "443"
 	}
 	os.Setenv(kubeServiceHostEnvKey, host)
