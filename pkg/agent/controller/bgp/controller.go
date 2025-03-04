@@ -976,7 +976,7 @@ func (c *Controller) updateBGPPeerPasswords(secret *corev1.Secret) {
 	defer c.bgpPeerPasswordsMutex.Unlock()
 
 	c.bgpPeerPasswords = make(map[string]string)
-	if secret.Data != nil {
+	if secret != nil && secret.Data != nil {
 		for k, v := range secret.Data {
 			c.bgpPeerPasswords[k] = string(v)
 		}
