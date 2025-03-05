@@ -16,6 +16,7 @@ package querier
 
 import (
 	"context"
+	"regexp"
 
 	v1 "k8s.io/api/core/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -47,6 +48,7 @@ type AgentNetworkPolicyInfoQuerier interface {
 	GetAppliedNetworkPolicies(pod, namespace string, npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
 	GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *cpv1beta.NetworkPolicyReference
 	GetRuleByFlowID(ruleFlowID uint32) *types.PolicyRule
+	GetFQDNCache(fqdnFilter *FQDNCacheFilter) []types.DnsCacheEntry
 }
 
 type AgentMulticastInfoQuerier interface {
@@ -99,6 +101,12 @@ func GetSelfNode(isAgent bool, node string) v1.ObjectReference {
 // GetVersion gets current version.
 func GetVersion() string {
 	return version.GetFullVersion()
+}
+
+// FQDNCacheFilter is used to filter the result while retrieving FQDN cache
+type FQDNCacheFilter struct {
+	// The Name or wildcard matching expression of the domain that is being filtered
+	DomainRegex *regexp.Regexp
 }
 
 // NetworkPolicyQueryFilter is used to filter the result while retrieve network policy
