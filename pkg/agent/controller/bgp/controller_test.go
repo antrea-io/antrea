@@ -1515,7 +1515,7 @@ func TestEgressLifecycle(t *testing.T) {
 	doneDummyEvent(t, c)
 }
 
-func TestBGPSecretUpdate(t *testing.T) {
+func TestBGPPasswordUpdate(t *testing.T) {
 	policy := generateBGPPolicy(bgpPolicyName1,
 		creationTimestamp,
 		nodeLabels1,
@@ -1594,12 +1594,30 @@ func TestBGPSecretUpdate(t *testing.T) {
 
 	// Wait for the dummy event triggered by Secret update event, and mark it done.
 	waitAndGetDummyEvent(t, c)
-	updatedIPv4Peer1Config := ipv4Peer1Config
-	updatedIPv4Peer3Config := ipv4Peer3Config
-	updatedIPv4Peer1Config.Password = "updated-" + peer1AuthPassword
-	updatedIPv4Peer3Config.Password = "updated-" + peer3AuthPassword
-	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), updatedIPv4Peer1Config)
-	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), updatedIPv4Peer3Config)
+	expectedIPv4Peer1Config := ipv4Peer1Config
+	expectedIPv4Peer3Config := ipv4Peer3Config
+	expectedIPv4Peer1Config.Password = "updated-" + peer1AuthPassword
+	expectedIPv4Peer3Config.Password = "updated-" + peer3AuthPassword
+	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), expectedIPv4Peer1Config)
+	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), expectedIPv4Peer3Config)
+	require.NoError(t, c.syncBGPPolicy(ctx))
+	// Done with the dummy event.
+	doneDummyEvent(t, c)
+
+	// Delete the Secret.
+	err = c.client.CoreV1().Secrets(namespaceKubeSystem).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
+	require.NoError(t, err)
+	// Wait for the dummy event triggered by Secret delete event, and mark it done.
+	waitAndGetDummyEvent(t, c)
+	expectedIPv4Peer1Config = ipv4Peer1Config
+	expectedIPv4Peer2Config := ipv4Peer2Config
+	expectedIPv4Peer3Config = ipv4Peer3Config
+	expectedIPv4Peer1Config.Password = ""
+	expectedIPv4Peer2Config.Password = ""
+	expectedIPv4Peer3Config.Password = ""
+	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), expectedIPv4Peer1Config)
+	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), expectedIPv4Peer2Config)
+	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), expectedIPv4Peer3Config)
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
