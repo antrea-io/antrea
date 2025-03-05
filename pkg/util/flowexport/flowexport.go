@@ -17,10 +17,12 @@ package flowexport
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/util/checks"
 )
 
 // ParseFlowCollectorAddr parses the flow collector address input for flow exporter and aggregator
@@ -44,6 +46,10 @@ func ParseFlowCollectorAddr(addr string, defaultPort string, defaultProtocol str
 			port = defaultPort
 		} else {
 			port = strSlice[1]
+			portNum, err := strconv.Atoi(port)
+			if !checks.IsValidPort(portNum) || err != nil {
+				port = defaultPort
+			}
 		}
 		if (strSlice[2] != "tls") && (strSlice[2] != "tcp") && (strSlice[2] != "udp") {
 			return host, port, proto, fmt.Errorf("connection over %s transport proto is not supported", strSlice[2])
