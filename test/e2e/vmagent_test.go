@@ -143,9 +143,9 @@ func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmLis
 			},
 		},
 	}
-	_, err = data.crdClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), sbc, metav1.CreateOptions{})
+	_, err = data.CRDClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), sbc, metav1.CreateOptions{})
 	require.NoError(t, err)
-	defer data.crdClient.CrdV1alpha1().SupportBundleCollections().Delete(context.TODO(), bundleName, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1alpha1().SupportBundleCollections().Delete(context.TODO(), bundleName, metav1.DeleteOptions{})
 	failOnError(data.waitForSupportBundleCollectionRealized(t, bundleName, 30*time.Second), t)
 	pods, err := data.clientset.CoreV1().Pods(data.testNamespace).List(context.TODO(), metav1.ListOptions{LabelSelector: "app=sftp"})
 	require.NoError(t, err)
@@ -255,7 +255,7 @@ func teardownVMAgentTest(t *testing.T, data *TestData, vmList []vmInfo) {
 	}
 	t.Logf("TestVMAgent teardown")
 	for _, vm := range vmList {
-		err := data.crdClient.CrdV1alpha1().ExternalNodes(namespace).Delete(context.TODO(), vm.nodeName, metav1.DeleteOptions{})
+		err := data.CRDClient.CrdV1alpha1().ExternalNodes(namespace).Delete(context.TODO(), vm.nodeName, metav1.DeleteOptions{})
 		assert.NoError(t, err, "Failed to delete ExternalNode %s", vm.nodeName)
 		verifyExternalEntityExistence(t, data, vm.eeName, vm.nodeName, false)
 		verifyUpLinkAfterCleanup(vm)
@@ -265,7 +265,7 @@ func teardownVMAgentTest(t *testing.T, data *TestData, vmList []vmInfo) {
 func verifyExternalEntityExistence(t *testing.T, data *TestData, eeName string, vmNodeName string, expectExists bool) {
 	if err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 1*time.Minute, true, func(ctx context.Context) (done bool, err error) {
 		t.Logf("Verifying ExternalEntity %s, expectExists %t", eeName, expectExists)
-		_, err = data.crdClient.CrdV1alpha2().ExternalEntities(namespace).Get(context.TODO(), eeName, metav1.GetOptions{})
+		_, err = data.CRDClient.CrdV1alpha2().ExternalEntities(namespace).Get(context.TODO(), eeName, metav1.GetOptions{})
 		if err != nil && !errors.IsNotFound(err) {
 			t.Errorf("Failed to get ExternalEntity %s by ExternalNode %s: %v", eeName, vmNodeName, err)
 			return false, err
@@ -453,7 +453,7 @@ func createExternalNodeCRD(data *TestData, nodeName string, ifName string, ip st
 	testEn.AddInterface(ifName, ipList)
 	// Add labels on the VMs.
 	testEn.AddLabels(map[string]string{externalNodeLabelKey: nodeName})
-	return data.crdClient.CrdV1alpha1().ExternalNodes(namespace).Create(context.TODO(), testEn.Get(), metav1.CreateOptions{})
+	return data.CRDClient.CrdV1alpha1().ExternalNodes(namespace).Create(context.TODO(), testEn.Get(), metav1.CreateOptions{})
 }
 
 func testExternalNodeWithANP(t *testing.T, data *TestData, vmList []vmInfo) {
