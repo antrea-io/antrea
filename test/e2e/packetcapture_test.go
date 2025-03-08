@@ -174,7 +174,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 		return p
 	}
 
-	getPacketCaptureCR := func(name string, destinationPodName string, packet *crdv1alpha1.Packet, options ...packetCaptureOption) *crdv1alpha1.PacketCapture {
+	getPacketCaptureCR := func(name string, destinationPodName string, packet *crdv1alpha1.Packet, direction crdv1alpha1.CaptureDirection, options ...packetCaptureOption) *crdv1alpha1.PacketCapture {
 		pc := &crdv1alpha1.PacketCapture{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
@@ -200,7 +200,8 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				FileServer: &crdv1alpha1.PacketCaptureFileServer{
 					URL: sftpURL,
 				},
-				Packet: packet,
+				Packet:    packet,
+				Direction: direction,
 			},
 		}
 		for _, option := range options {
@@ -220,6 +221,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					Protocol: &icmpProto,
 					IPFamily: v1.IPv4Protocol,
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureTimeout(ptr.To[int32](15)),
 				packetCaptureFirstN(500),
 			),
@@ -253,6 +255,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				nonExistingPodName,
 				nonExistingPodName,
 				nil,
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
@@ -285,6 +288,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						},
 					},
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureHostPublicKey(pubKey1),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
@@ -324,6 +328,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						},
 					},
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureHostPublicKey(pubKey2),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
@@ -358,6 +363,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					Protocol: &icmpProto,
 					IPFamily: v1.IPv4Protocol,
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
@@ -392,6 +398,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					Protocol: &icmpProto,
 					IPFamily: v1.IPv4Protocol,
 				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
 				packetCaptureHostPublicKey(invalidPubKey.Marshal()),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
@@ -413,6 +420,46 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Status:  metav1.ConditionStatus(v1.ConditionFalse),
 						Reason:  "Failed",
 						Message: "failed to upload file after 5 attempts",
+					},
+				},
+			},
+		},
+		{
+			name:      "ipv4-tcp-both",
+			ipVersion: 4,
+			pc: getPacketCaptureCR(
+				"ipv4-tcp-both",
+				tcpServerPodName,
+				&crdv1alpha1.Packet{
+					Protocol: &tcpProto,
+					IPFamily: v1.IPv4Protocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						TCP: &crdv1alpha1.TCPHeader{
+							DstPort: ptr.To(serverPodPort),
+						},
+					},
+				},
+				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureHostPublicKey(pubKey1),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 5,
+				FilePath:       getPcapURL("ipv4-tcp-both"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
 					},
 				},
 			},
@@ -649,8 +696,13 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 		ipLayer := packet.Layer(layers.LayerTypeIPv4)
 		require.NotNil(t, ipLayer)
 		ip, _ := ipLayer.(*layers.IPv4)
-		assert.Equal(t, srcIP.String(), ip.SrcIP.String())
-		assert.Equal(t, dstIP.String(), ip.DstIP.String())
+		if pc.Spec.Direction == crdv1alpha1.CaptureDirectionBoth {
+			assert.Contains(t, []string{srcIP.String(), dstIP.String()}, ip.SrcIP.String())
+			assert.Contains(t, []string{srcIP.String(), dstIP.String()}, ip.DstIP.String())
+		} else {
+			assert.Equal(t, srcIP.String(), ip.SrcIP.String())
+			assert.Equal(t, dstIP.String(), ip.DstIP.String())
+		}
 
 		if pc.Spec.Packet == nil {
 			continue
@@ -667,11 +719,20 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 			tcp, _ := tcpLayer.(*layers.TCP)
 			if packetSpec.TransportHeader.TCP != nil {
 				ports := packetSpec.TransportHeader.TCP
-				if ports.DstPort != nil {
-					assert.Equal(t, *ports.DstPort, int32(tcp.DstPort))
-				}
-				if ports.SrcPort != nil {
-					assert.Equal(t, *ports.SrcPort, int32(tcp.SrcPort))
+				if pc.Spec.Direction == crdv1alpha1.CaptureDirectionBoth {
+					if ports.DstPort != nil {
+						assert.Contains(t, []int32{int32(tcp.SrcPort), int32(tcp.DstPort)}, *ports.DstPort)
+					}
+					if ports.SrcPort != nil {
+						assert.Contains(t, []int32{int32(tcp.SrcPort), int32(tcp.DstPort)}, *ports.SrcPort)
+					}
+				} else {
+					if ports.DstPort != nil {
+						assert.Equal(t, *ports.DstPort, int32(tcp.DstPort))
+					}
+					if ports.SrcPort != nil {
+						assert.Equal(t, *ports.SrcPort, int32(tcp.SrcPort))
+					}
 				}
 			}
 		} else if strings.ToUpper(proto.StrVal) == "UDP" || proto.IntVal == 17 {
@@ -680,11 +741,20 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 			udp, _ := udpLayer.(*layers.UDP)
 			if packetSpec.TransportHeader.UDP != nil {
 				ports := packetSpec.TransportHeader.UDP
-				if ports.DstPort != nil {
-					assert.Equal(t, *ports.DstPort, int32(udp.DstPort))
-				}
-				if ports.SrcPort != nil {
-					assert.Equal(t, *ports.SrcPort, int32(udp.SrcPort))
+				if pc.Spec.Direction == crdv1alpha1.CaptureDirectionBoth {
+					if ports.DstPort != nil {
+						assert.Contains(t, []int32{int32(udp.SrcPort), int32(udp.DstPort)}, *ports.DstPort)
+					}
+					if ports.SrcPort != nil {
+						assert.Contains(t, []int32{int32(udp.SrcPort), int32(udp.DstPort)}, *ports.SrcPort)
+					}
+				} else {
+					if ports.DstPort != nil {
+						assert.Equal(t, *ports.DstPort, int32(udp.DstPort))
+					}
+					if ports.SrcPort != nil {
+						assert.Equal(t, *ports.SrcPort, int32(udp.SrcPort))
+					}
 				}
 			}
 		} else if strings.ToUpper(proto.StrVal) == "ICMP" || proto.IntVal == 1 {
