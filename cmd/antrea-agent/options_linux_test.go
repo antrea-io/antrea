@@ -88,6 +88,7 @@ func TestMulticlusterOptions(t *testing.T) {
 				FeatureGates:     map[string]bool{"Multicluster": tt.featureGate},
 				TrafficEncapMode: tt.encapMode,
 				Multicluster:     tt.mcConfig,
+				TunnelPort:       6081,
 			}
 			if tt.encryptionMode != "" {
 				config.TrafficEncryptionMode = tt.encryptionMode
