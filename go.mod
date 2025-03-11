@@ -45,7 +45,7 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/osrg/gobgp/v3 v3.34.0
 	github.com/pkg/sftp v1.13.7
-	github.com/prometheus/client_golang v1.20.5
+	github.com/prometheus/client_golang v1.21.1
 	github.com/prometheus/common v0.62.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/afero v1.12.0
