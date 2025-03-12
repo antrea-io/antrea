@@ -795,18 +795,18 @@ func (data *TestData) CreateTier(name string, tierPriority int32) (*crdv1beta1.T
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec:       crdv1beta1.TierSpec{Priority: tierPriority},
 	}
-	return data.crdClient.CrdV1beta1().Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
+	return data.CRDClient.CrdV1beta1().Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
 }
 
 // GetTier is a convenience function for getting Tier.
 func (data *TestData) GetTier(name string) (*crdv1beta1.Tier, error) {
-	return data.crdClient.CrdV1beta1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+	return data.CRDClient.CrdV1beta1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // UpdateTier is a convenience function for updating an Antrea Policy Tier.
 func (data *TestData) UpdateTier(tier *crdv1beta1.Tier) (*crdv1beta1.Tier, error) {
 	log.Infof("Updating tier %s", tier.Name)
-	return data.crdClient.CrdV1beta1().Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
+	return data.CRDClient.CrdV1beta1().Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
 }
 
 func isReferencedError(err error) bool {
@@ -823,7 +823,7 @@ func isReferencedError(err error) bool {
 func (data *TestData) DeleteTier(name string) error {
 	log.Infof("Deleting tier %s", name)
 	if err := retry.OnError(retry.DefaultRetry, isReferencedError, func() error {
-		return data.crdClient.CrdV1beta1().Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{})
+		return data.CRDClient.CrdV1beta1().Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	}); err != nil {
 		return fmt.Errorf("unable to delete tier %s: %w", name, err)
 	}
@@ -833,9 +833,9 @@ func (data *TestData) DeleteTier(name string) error {
 // CreateOrUpdateCG is a convenience function for idempotent setup of crd/v1beta1 ClusterGroups
 func (data *TestData) CreateOrUpdateCG(cg *crdv1beta1.ClusterGroup) (*crdv1beta1.ClusterGroup, error) {
 	log.Infof("Creating/updating ClusterGroup %s", cg.Name)
-	cgReturned, err := data.crdClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
+	cgReturned, err := data.CRDClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
 	if err != nil {
-		cgr, err := data.crdClient.CrdV1beta1().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
+		cgr, err := data.CRDClient.CrdV1beta1().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
 			log.Infof("Unable to create cluster group %s: %v", cg.Name, err)
 			return nil, err
@@ -844,7 +844,7 @@ func (data *TestData) CreateOrUpdateCG(cg *crdv1beta1.ClusterGroup) (*crdv1beta1
 	} else if cgReturned.Name != "" {
 		log.Debugf("ClusterGroup with name %s already exists, updating", cg.Name)
 		cgReturned.Spec = cg.Spec
-		cgr, err := data.crdClient.CrdV1beta1().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
+		cgr, err := data.CRDClient.CrdV1beta1().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
 		return cgr, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", cg.Name)
@@ -853,9 +853,9 @@ func (data *TestData) CreateOrUpdateCG(cg *crdv1beta1.ClusterGroup) (*crdv1beta1
 // CreateOrUpdateGroup is a convenience function for idempotent setup of crd/v1beta1 Groups
 func (k *KubernetesUtils) CreateOrUpdateGroup(g *crdv1beta1.Group) (*crdv1beta1.Group, error) {
 	log.Infof("Creating/updating Group %s/%s", g.Namespace, g.Name)
-	gReturned, err := k.crdClient.CrdV1beta1().Groups(g.Namespace).Get(context.TODO(), g.Name, metav1.GetOptions{})
+	gReturned, err := k.CRDClient.CrdV1beta1().Groups(g.Namespace).Get(context.TODO(), g.Name, metav1.GetOptions{})
 	if err != nil {
-		gr, err := k.crdClient.CrdV1beta1().Groups(g.Namespace).Create(context.TODO(), g, metav1.CreateOptions{})
+		gr, err := k.CRDClient.CrdV1beta1().Groups(g.Namespace).Create(context.TODO(), g, metav1.CreateOptions{})
 		if err != nil {
 			log.Infof("Unable to create group %s/%s: %v", g.Namespace, g.Name, err)
 			return nil, err
@@ -864,7 +864,7 @@ func (k *KubernetesUtils) CreateOrUpdateGroup(g *crdv1beta1.Group) (*crdv1beta1.
 	} else if gReturned.Name != "" {
 		log.Debugf("Group %s/%s already exists, updating", g.Namespace, g.Name)
 		gReturned.Spec = g.Spec
-		gr, err := k.crdClient.CrdV1beta1().Groups(g.Namespace).Update(context.TODO(), gReturned, metav1.UpdateOptions{})
+		gr, err := k.CRDClient.CrdV1beta1().Groups(g.Namespace).Update(context.TODO(), gReturned, metav1.UpdateOptions{})
 		return gr, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating Group %s/%s", g.Namespace, g.Name)
@@ -872,43 +872,43 @@ func (k *KubernetesUtils) CreateOrUpdateGroup(g *crdv1beta1.Group) (*crdv1beta1.
 
 // GetCG is a convenience function for getting ClusterGroups
 func (k *KubernetesUtils) GetCG(name string) (*crdv1beta1.ClusterGroup, error) {
-	return k.crdClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+	return k.CRDClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // GetGroup is a convenience function for getting Groups
 func (k *KubernetesUtils) GetGroup(namespace, name string) (*crdv1beta1.Group, error) {
-	return k.crdClient.CrdV1beta1().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	return k.CRDClient.CrdV1beta1().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteCG is a convenience function for deleting core/v1beta1 ClusterGroup by name.
 func (data *TestData) DeleteCG(name string) error {
 	log.Infof("Deleting ClusterGroup %s", name)
-	return data.crdClient.CrdV1beta1().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	return data.CRDClient.CrdV1beta1().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // DeleteGroup is a convenience function for deleting core/v1beta1 Group by namespace and name.
 func (k *KubernetesUtils) DeleteGroup(namespace, name string) error {
 	log.Infof("Deleting Group %s/%s", namespace, name)
-	return k.crdClient.CrdV1beta1().Groups(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	return k.CRDClient.CrdV1beta1().Groups(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // CleanCGs is a convenience function for deleting all ClusterGroups in the cluster.
 func (data *TestData) CleanCGs() error {
-	return data.crdClient.CrdV1beta1().ClusterGroups().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
+	return data.CRDClient.CrdV1beta1().ClusterGroups().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 }
 
 // CleanGroups is a convenience function for deleting all Groups in the namespace.
 func (k *KubernetesUtils) CleanGroups(namespace string) error {
-	return k.crdClient.CrdV1beta1().Groups(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
+	return k.CRDClient.CrdV1beta1().Groups(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 }
 
 // CreateOrUpdateACNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
 func (data *TestData) CreateOrUpdateACNP(cnp *crdv1beta1.ClusterNetworkPolicy) (*crdv1beta1.ClusterNetworkPolicy, error) {
 	log.Infof("Creating/updating ClusterNetworkPolicy %s", cnp.Name)
-	cnpReturned, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
+	cnpReturned, err := data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
 	if err != nil {
 		log.Debugf("Creating ClusterNetworkPolicy %s", cnp.Name)
-		cnp, err = data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
+		cnp, err = data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create ClusterNetworkPolicy: %s", err)
 		}
@@ -916,7 +916,7 @@ func (data *TestData) CreateOrUpdateACNP(cnp *crdv1beta1.ClusterNetworkPolicy) (
 	} else if cnpReturned.Name != "" {
 		log.Debugf("ClusterNetworkPolicy with name %s already exists, updating", cnp.Name)
 		cnpReturned.Spec = cnp.Spec
-		cnp, err = data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Update(context.TODO(), cnpReturned, metav1.UpdateOptions{})
+		cnp, err = data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Update(context.TODO(), cnpReturned, metav1.UpdateOptions{})
 		return cnp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)
@@ -924,27 +924,27 @@ func (data *TestData) CreateOrUpdateACNP(cnp *crdv1beta1.ClusterNetworkPolicy) (
 
 // GetACNP is a convenience function for getting AntreaClusterNetworkPolicies.
 func (data *TestData) GetACNP(name string) (*crdv1beta1.ClusterNetworkPolicy, error) {
-	return data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+	return data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteACNP is a convenience function for deleting ACNP by name.
 func (data *TestData) DeleteACNP(name string) error {
 	log.Infof("Deleting AntreaClusterNetworkPolicies %s", name)
-	return data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	return data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // CleanACNPs is a convenience function for deleting all Antrea ClusterNetworkPolicies in the cluster.
 func (data *TestData) CleanACNPs() error {
-	return data.crdClient.CrdV1beta1().ClusterNetworkPolicies().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
+	return data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 }
 
 // CreateOrUpdateANNP is a convenience function for updating/creating Antrea NetworkPolicies.
 func (data *TestData) CreateOrUpdateANNP(annp *crdv1beta1.NetworkPolicy) (*crdv1beta1.NetworkPolicy, error) {
 	log.Infof("Creating/updating Antrea NetworkPolicy %s/%s", annp.Namespace, annp.Name)
-	npReturned, err := data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Get(context.TODO(), annp.Name, metav1.GetOptions{})
+	npReturned, err := data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Get(context.TODO(), annp.Name, metav1.GetOptions{})
 	if err != nil {
 		log.Debugf("Creating Antrea NetworkPolicy %s", annp.Name)
-		annp, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Create(context.TODO(), annp, metav1.CreateOptions{})
+		annp, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Create(context.TODO(), annp, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create Antrea NetworkPolicy: %s", err)
 		}
@@ -952,7 +952,7 @@ func (data *TestData) CreateOrUpdateANNP(annp *crdv1beta1.NetworkPolicy) (*crdv1
 	} else if npReturned.Name != "" {
 		log.Debugf("Antrea NetworkPolicy with name %s already exists, updating", annp.Name)
 		npReturned.Spec = annp.Spec
-		annp, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), npReturned, metav1.UpdateOptions{})
+		annp, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), npReturned, metav1.UpdateOptions{})
 		return annp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", annp.Name)
@@ -960,19 +960,19 @@ func (data *TestData) CreateOrUpdateANNP(annp *crdv1beta1.NetworkPolicy) (*crdv1
 
 // GetANNP is a convenience function for getting AntreaNetworkPolicies.
 func (data *TestData) GetANNP(namespace, name string) (*crdv1beta1.NetworkPolicy, error) {
-	return data.crdClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	return data.CRDClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteANNP is a convenience function for deleting ANNP by name and Namespace.
 func (data *TestData) DeleteANNP(ns, name string) error {
 	log.Infof("Deleting Antrea NetworkPolicy '%s/%s'", ns, name)
-	return data.crdClient.CrdV1beta1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	return data.CRDClient.CrdV1beta1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // CleanANNPs is a convenience function for deleting all Antrea NetworkPolicies in provided namespaces.
 func (data *TestData) CleanANNPs(namespaces []string) error {
 	for _, ns := range namespaces {
-		if err := data.crdClient.CrdV1beta1().NetworkPolicies(ns).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
+		if err := data.CRDClient.CrdV1beta1().NetworkPolicies(ns).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
 			return fmt.Errorf("unable to delete Antrea NetworkPolicies in ns %s: %w", ns, err)
 		}
 	}
@@ -982,7 +982,7 @@ func (data *TestData) CleanANNPs(namespaces []string) error {
 func (data *TestData) WaitForANNPCreationAndRealization(t *testing.T, namespace string, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ANNP '%s/%s' to be realized", namespace, name)
 	if err := wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
-		annp, err := data.crdClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		annp, err := data.CRDClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
@@ -996,7 +996,7 @@ func (data *TestData) WaitForANNPCreationAndRealization(t *testing.T, namespace 
 func (data *TestData) WaitForACNPCreationAndRealization(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ACNP '%s' to be created and realized", name)
 	if err := wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
-		acnp, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+		acnp, err := data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
