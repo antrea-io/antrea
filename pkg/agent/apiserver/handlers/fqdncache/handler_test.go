@@ -21,6 +21,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"regexp/syntax"
 	"testing"
 	"time"
 
@@ -107,13 +108,13 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 		name           string
 		queryParams    url.Values
 		expectedFilter *querier.FQDNCacheFilter
-		expectedStatus int
+		expectedError  error
 	}{
 		{
 			name:           "Empty query",
 			queryParams:    url.Values{},
 			expectedFilter: nil,
-			expectedStatus: http.StatusOK, // No HTTP error
+			expectedError:  nil,
 		},
 		{
 			name: "Valid regex domain",
@@ -121,7 +122,7 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 				"domain": {"example.com"},
 			},
 			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("^example[.]com$")},
-			expectedStatus: http.StatusOK, // No HTTP error
+			expectedError:  nil,
 		},
 		{
 			name: "Valid regex domain",
@@ -129,21 +130,23 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 				"domain": {"*.example.com"},
 			},
 			expectedFilter: &querier.FQDNCacheFilter{DomainRegex: regexp.MustCompile("^.*[.]example[.]com$")},
-			expectedStatus: http.StatusOK, // No HTTP error
+			expectedError:  nil,
+		},
+		{
+			name: "Invalid regex domain",
+			queryParams: url.Values{
+				"domain": {"^example(abc$"},
+			},
+			expectedFilter: nil,
+			expectedError:  &syntax.Error{Code: "missing closing )", Expr: "^^example(abc$$"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder := httptest.NewRecorder()
-			result, _ := newFilterFromURLQuery(tt.queryParams)
-
+			result, err := newFilterFromURLQuery(tt.queryParams)
 			assert.Equal(t, tt.expectedFilter, result)
-			assert.Equal(t, tt.expectedStatus, recorder.Code)
-
-			if tt.expectedStatus != http.StatusOK {
-				require.Contains(t, recorder.Body.String(), "Regex formatted incorrectly to parse")
-			}
+			assert.Equal(t, tt.expectedError, err)
 		})
 	}
 }

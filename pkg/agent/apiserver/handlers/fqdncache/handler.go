@@ -33,6 +33,7 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 		if err != nil {
 			http.Error(w, "Regex formatted incorrectly to parse: "+err.Error(), http.StatusBadRequest)
 			klog.ErrorS(err, "Regex formatted incorrectly to parse")
+			return
 		}
 		dnsEntryCache := npq.GetFQDNCache(fqdnFilter)
 		resp := make([]agentapi.FQDNCacheResponse, 0, len(dnsEntryCache))
