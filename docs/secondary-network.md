@@ -91,9 +91,23 @@ following types:
 A VLAN secondary interface will be connected to a separate OVS bridge on the
 Node. You can specify the secondary OVS bridge configuration in the
 `antrea-agent` configuration, and `antrea-agent` will automatically create the
-OVS bridge based on the configuration. For example, the following configuration
-will create an OVS bridge named `br-secondary`, with a physical interface
-`eth1`.
+OVS bridge based on the configuration. The OVS bridge configuration supports
+the following parameters:
+
+* `bridgeName` - specifies the name of the OVS bridge to be created. This is a
+  required parameter and must be unique on the Node.
+* `physicalInterfaces` - a list of physical network interface names to be added
+  to the bridge. These interfaces will serve as uplinks for the bridge. At
+  least one interface must be specified, and up to eight interfaces are
+  supported.
+* `enableMulticastSnooping` - (supported after v2.4) enable multicast snooping
+  on the bridge, allowing the bridge to learn about multicast group memberships
+  and forward multicast traffic only to ports that have interested receivers.
+  When disabled, multicast traffic is flooded to all ports in the bridge. The
+  default value is `false`.
+
+For example, the following configuration will create an OVS bridge named
+`br-secondary`, with a physical interface `eth1`.
 
 ```yaml
 apiVersion: v1
