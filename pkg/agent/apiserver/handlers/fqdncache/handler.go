@@ -54,7 +54,7 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 
 func newFilterFromURLQuery(query url.Values) (*querier.FQDNCacheFilter, error) {
 	domain := query.Get("domain")
-	if len(domain) == 0 {
+	if domain == "" {
 		return nil, nil
 	}
 	pattern := strings.TrimSpace(domain)
