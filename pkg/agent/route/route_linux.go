@@ -123,12 +123,14 @@ type Client struct {
 	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
 	markToSNATIP sync.Map
 	// iptablesInitialized is used to notify when iptables initialization is done.
-	iptablesInitialized      chan struct{}
-	proxyAll                 bool
-	connectUplinkToBridge    bool
-	multicastEnabled         bool
-	isCloudEKS               bool
-	nodeNetworkPolicyEnabled bool
+	iptablesInitialized       chan struct{}
+	proxyAll                  bool
+	connectUplinkToBridge     bool
+	multicastEnabled          bool
+	isCloudEKS                bool
+	nodeNetworkPolicyEnabled  bool
+	nodeLatencyMonitorEnabled bool
+	networkPolicyOnlyMode     bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
 	// serviceExternalIPReferences tracks the references of Service IP. The key is the Service IP and the value is
@@ -163,6 +165,10 @@ type Client struct {
 	wireguardIPTablesIPv4 sync.Map
 	// wireguardIPTablesIPv6 caches all existing IPv6 iptables chains and rules for WireGuard.
 	wireguardIPTablesIPv6 sync.Map
+	// nodeLatencyMonitorIPTablesIPv4 caches all existing IPv4 iptables chains and rules for NodeLatencyMonitor.
+	nodeLatencyMonitorIPTablesIPv4 sync.Map
+	// nodeLatencyMonitorIPTablesIPv6 caches all existing IPv6 iptables chains and rules for NodeLatencyMonitor.
+	nodeLatencyMonitorIPTablesIPv6 sync.Map
 	// deterministic represents whether to write iptables chains and rules for NodeNetworkPolicy deterministically when
 	// syncIPTables is called. Enabling it may carry a performance impact. It's disabled by default and should only be
 	// used in testing.
@@ -178,6 +184,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 	proxyAll bool,
 	connectUplinkToBridge bool,
 	nodeNetworkPolicyEnabled bool,
+	nodeLatencyMonitorEnabled bool,
 	multicastEnabled bool,
 	nodeSNATRandomFully bool,
 	egressSNATRandomFully bool,
@@ -192,6 +199,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 		multicastEnabled:            multicastEnabled,
 		connectUplinkToBridge:       connectUplinkToBridge,
 		nodeNetworkPolicyEnabled:    nodeNetworkPolicyEnabled,
+		nodeLatencyMonitorEnabled:   nodeLatencyMonitorEnabled,
 		ipset:                       ipset.NewClient(),
 		netlink:                     &netlink.Handle{},
 		isCloudEKS:                  env.IsCloudEKS(),
@@ -278,6 +286,10 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		c.initWireguard()
 	}
+	if c.nodeLatencyMonitorEnabled {
+		c.initNodeLatency()
+	}
+
 	return nil
 }
 
@@ -737,10 +749,12 @@ func (c *Client) syncIPTables() error {
 	// for performance reasons.
 	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.wireguardIPTablesIPv4)
 	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeNetworkPolicyIPTablesIPv4)
+	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeLatencyMonitorIPTablesIPv4)
 
 	iptablesFilterRulesByChainV6 := make(map[string][]string)
 	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.wireguardIPTablesIPv6)
 	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeNetworkPolicyIPTablesIPv6)
+	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeLatencyMonitorIPTablesIPv6)
 
 	// Use iptables-restore to configure IPv4 settings.
 	if c.networkConfig.IPv4Enabled {
@@ -1242,6 +1256,38 @@ func (c *Client) initWireguard() {
 	if c.networkConfig.IPv4Enabled {
 		c.wireguardIPTablesIPv4.Store(antreaInputChain, antreaInputChainRules)
 		c.wireguardIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRules)
+	}
+}
+
+func (c *Client) initNodeLatency() {
+	gateway := "antrea-gw0"
+	if c.networkConfig.TrafficEncapMode.String() == "networkPolicyOnly" {
+		gateway = "transport"
+	}
+	antreaInputChainRules := []string{
+		iptables.NewRuleBuilder(antreaInputChain).
+			MatchInputInterface(gateway).
+			SetComment("Antrea: allow ICMP packets from NodeLatencyMonitor").
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule(),
+	}
+	antreaOutputChainRules := []string{
+		iptables.NewRuleBuilder(antreaOutputChain).
+			MatchOutputInterface(gateway).
+			SetComment("Antrea: allow egress packets from NodeLatencyMonitor").
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule(),
+	}
+
+	if c.networkConfig.IPv6Enabled {
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaInputChain, antreaInputChainRules)
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaInputChain, antreaInputChainRules)
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRules)
 	}
 }
 
