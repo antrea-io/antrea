@@ -425,6 +425,46 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 			},
 		},
 		{
+			name:      "ipv4-udp-dst-to-src",
+			ipVersion: 4,
+			pc: getPacketCaptureCR(
+				"ipv4-udp-dst-to-src",
+				udpServerPodName,
+				&crdv1alpha1.Packet{
+					Protocol: &udpProto,
+					IPFamily: v1.IPv4Protocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						UDP: &crdv1alpha1.UDPHeader{
+							DstPort: ptr.To(serverPodPort),
+						},
+					},
+				},
+				crdv1alpha1.CaptureDirectionDestinationToSource,
+				packetCaptureHostPublicKey(pubKey2),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 5,
+				FilePath:       getPcapURL("ipv4-udp-dst-to-src"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+		},
+		{
 			name:      "ipv4-tcp-both",
 			ipVersion: 4,
 			pc: getPacketCaptureCR(
@@ -696,10 +736,15 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 		ipLayer := packet.Layer(layers.LayerTypeIPv4)
 		require.NotNil(t, ipLayer)
 		ip, _ := ipLayer.(*layers.IPv4)
-		if pc.Spec.Direction == crdv1alpha1.CaptureDirectionBoth {
+		direction := pc.Spec.Direction
+		switch direction {
+		case crdv1alpha1.CaptureDirectionDestinationToSource:
+			assert.Equal(t, srcIP.String(), ip.DstIP.String())
+			assert.Equal(t, dstIP.String(), ip.SrcIP.String())
+		case crdv1alpha1.CaptureDirectionBoth:
 			assert.Contains(t, []string{srcIP.String(), dstIP.String()}, ip.SrcIP.String())
 			assert.Contains(t, []string{srcIP.String(), dstIP.String()}, ip.DstIP.String())
-		} else {
+		default:
 			assert.Equal(t, srcIP.String(), ip.SrcIP.String())
 			assert.Equal(t, dstIP.String(), ip.DstIP.String())
 		}
@@ -713,27 +758,44 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 		if proto == nil {
 			continue
 		}
+
+		// addPortExpectations compares CRD ports with packet header ports based on capture direction
+		addPortExpectations := func(crdSrcPort, crdDstPort *int32, hdrSrcPort, hdrDstPort int32) {
+			t.Helper()
+			switch direction {
+			case crdv1alpha1.CaptureDirectionSourceToDestination:
+				if crdDstPort != nil {
+					assert.Equal(t, *crdDstPort, hdrDstPort)
+				}
+				if crdSrcPort != nil {
+					assert.Equal(t, *crdSrcPort, hdrSrcPort)
+				}
+			case crdv1alpha1.CaptureDirectionDestinationToSource:
+				if crdDstPort != nil {
+					assert.Equal(t, *crdDstPort, hdrSrcPort)
+				}
+				if crdSrcPort != nil {
+					assert.Equal(t, *crdSrcPort, hdrDstPort)
+				}
+			case crdv1alpha1.CaptureDirectionBoth:
+				if crdDstPort != nil {
+					assert.Contains(t, []int32{hdrSrcPort, hdrDstPort}, *crdDstPort)
+				}
+				if crdSrcPort != nil {
+					assert.Contains(t, []int32{hdrSrcPort, hdrDstPort}, *crdSrcPort)
+				}
+			default:
+				require.Fail(t, "Invalid direction value")
+			}
+		}
+
 		if strings.ToUpper(proto.StrVal) == "TCP" || proto.IntVal == 6 {
 			tcpLayer := packet.Layer(layers.LayerTypeTCP)
 			require.NotNil(t, tcpLayer)
 			tcp, _ := tcpLayer.(*layers.TCP)
 			if packetSpec.TransportHeader.TCP != nil {
 				ports := packetSpec.TransportHeader.TCP
-				if pc.Spec.Direction == crdv1alpha1.CaptureDirectionBoth {
-					if ports.DstPort != nil {
-						assert.Contains(t, []int32{int32(tcp.SrcPort), int32(tcp.DstPort)}, *ports.DstPort)
-					}
-					if ports.SrcPort != nil {
-						assert.Contains(t, []int32{int32(tcp.SrcPort), int32(tcp.DstPort)}, *ports.SrcPort)
-					}
-				} else {
-					if ports.DstPort != nil {
-						assert.Equal(t, *ports.DstPort, int32(tcp.DstPort))
-					}
-					if ports.SrcPort != nil {
-						assert.Equal(t, *ports.SrcPort, int32(tcp.SrcPort))
-					}
-				}
+				addPortExpectations(ports.SrcPort, ports.DstPort, int32(tcp.SrcPort), int32(tcp.DstPort))
 			}
 		} else if strings.ToUpper(proto.StrVal) == "UDP" || proto.IntVal == 17 {
 			udpLayer := packet.Layer(layers.LayerTypeUDP)
@@ -741,21 +803,7 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 			udp, _ := udpLayer.(*layers.UDP)
 			if packetSpec.TransportHeader.UDP != nil {
 				ports := packetSpec.TransportHeader.UDP
-				if pc.Spec.Direction == crdv1alpha1.CaptureDirectionBoth {
-					if ports.DstPort != nil {
-						assert.Contains(t, []int32{int32(udp.SrcPort), int32(udp.DstPort)}, *ports.DstPort)
-					}
-					if ports.SrcPort != nil {
-						assert.Contains(t, []int32{int32(udp.SrcPort), int32(udp.DstPort)}, *ports.SrcPort)
-					}
-				} else {
-					if ports.DstPort != nil {
-						assert.Equal(t, *ports.DstPort, int32(udp.DstPort))
-					}
-					if ports.SrcPort != nil {
-						assert.Equal(t, *ports.SrcPort, int32(udp.SrcPort))
-					}
-				}
+				addPortExpectations(ports.SrcPort, ports.DstPort, int32(udp.SrcPort), int32(udp.DstPort))
 			}
 		} else if strings.ToUpper(proto.StrVal) == "ICMP" || proto.IntVal == 1 {
 			icmpLayer := packet.Layer(layers.LayerTypeICMPv4)
