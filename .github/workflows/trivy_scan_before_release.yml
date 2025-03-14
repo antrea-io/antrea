@@ -28,7 +28,7 @@ jobs:
       run: |
         for i in {1..5}; do trivy image --download-db-only --cache-dir $GITHUB_WORKSPACE/.cache/trivy && break || sleep 1; done
     - name: Run Trivy vulnerability scanner on the antrea-agent Docker image
-      uses: aquasecurity/trivy-action@0.29.0
+      uses: aquasecurity/trivy-action@0.30.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-agent-ubuntu:latest'
@@ -39,7 +39,7 @@ jobs:
         TRIVY_SKIP_DB_UPDATE: true
         TRIVY_SKIP_JAVA_DB_UPDATE: true
     - name: Run Trivy vulnerability scanner on the antrea-controller Docker image
-      uses: aquasecurity/trivy-action@0.29.0
+      uses: aquasecurity/trivy-action@0.30.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-controller-ubuntu:latest'
