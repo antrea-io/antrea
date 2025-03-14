@@ -44,7 +44,7 @@ function check_and_upgrade_golang() {
     while read -r i; do
         version=$(echo ${i} | jq .version | tr -d '"')
         if [[ "${version}" =~ "${antrea_golang_version}" ]]; then
-            if [ -d "${GOLANG_RELEASE_DIR}/${antrea_golang_version}" ]; then
+            if [ -f "${GOLANG_RELEASE_DIR}/${antrea_golang_version}/bin/go" ]; then
                 current_version=$(${GOLANG_RELEASE_DIR}/${antrea_golang_version}/bin/go version | awk '{print $3}')
                 if [[ "${version}" == "${current_version}" ]]; then
                     echo "====== Golang ${version} is installed on the testbed, no need to download ======"
