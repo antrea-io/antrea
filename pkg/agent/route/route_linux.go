@@ -130,7 +130,6 @@ type Client struct {
 	isCloudEKS                bool
 	nodeNetworkPolicyEnabled  bool
 	nodeLatencyMonitorEnabled bool
-	networkPolicyOnlyMode     bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
 	// serviceExternalIPReferences tracks the references of Service IP. The key is the Service IP and the value is
