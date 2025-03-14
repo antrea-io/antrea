@@ -538,6 +538,19 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 	return c, nil
 }
 
+func (c *Controller) GetFQDNCache(fqdnFilter *querier.FQDNCacheFilter) []types.DnsCacheEntry {
+	cacheEntryList := []types.DnsCacheEntry{}
+	for fqdn, dnsMeta := range c.fqdnController.dnsEntryCache {
+		for _, ipWithExpiration := range dnsMeta.responseIPs {
+			if fqdnFilter == nil || fqdnFilter.DomainRegex.MatchString(fqdn) {
+				entry := types.DnsCacheEntry{FQDNName: fqdn, IPAddress: ipWithExpiration.ip, ExpirationTime: ipWithExpiration.expirationTime}
+				cacheEntryList = append(cacheEntryList, entry)
+			}
+		}
+	}
+	return cacheEntryList
+}
+
 func (c *Controller) GetNetworkPolicyNum() int {
 	return c.ruleCache.GetNetworkPolicyNum()
 }
