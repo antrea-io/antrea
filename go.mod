@@ -1,7 +1,6 @@
 module antrea.io/antrea
 
 go 1.24.0
-
 require (
 	antrea.io/libOpenflow v0.15.0
 	antrea.io/ofnet v0.14.0
@@ -43,7 +42,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
-	github.com/osrg/gobgp/v3 v3.34.0
+	github.com/osrg/gobgp/v3 v3.35.0
 	github.com/pkg/sftp v1.13.7
 	github.com/prometheus/client_golang v1.20.5
 	github.com/prometheus/common v0.62.0
