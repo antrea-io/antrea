@@ -89,6 +89,7 @@ setup_only=false
 cleanup_only=false
 test_only=false
 run=""
+flexible_ipam=false
 antrea_controller_image="antrea/antrea-controller-ubuntu"
 antrea_agent_image="antrea/antrea-agent-ubuntu"
 use_non_default_images=false
@@ -108,6 +109,10 @@ case $key in
     ;;
     --proxy-all)
     proxy_all=true
+    shift
+    ;;
+    --flexible-ipam)
+    flexible_ipam=true
     shift
     ;;
     --no-kube-proxy)
@@ -248,6 +253,9 @@ fi
 if $flow_visibility; then
     manifest_args="$manifest_args --feature-gates FlowExporter=true,L7FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
 fi
+if $flexible_ipam; then
+    manifest_args="$manifest_args --flexible-ipam"
+fi
 
 COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
                     "antrea/nginx:1.21.6-alpine" \
@@ -302,6 +310,10 @@ if $extra_vlan; then
   fi
 fi
 
+if $flexible_ipam; then
+   vlan_args="$vlan_args --vlan-subnets 11=192.168.241.1/24 --vlan-subnets 12=192.168.242.1/24" 
+fi
+
 function setup_cluster {
   args=$1
 
@@ -328,7 +340,9 @@ function setup_cluster {
   if $bgp_policy; then
     args="$args --deploy-external-frr"
   fi
-
+  if $flexible_ipam; then
+    args="$args --flexible-ipam"
+  fi
   echo "creating test bed with args $args"
   eval "timeout 600 $TESTBED_CMD create kind $args"
 }
@@ -401,6 +415,11 @@ function run_test {
     EXTRA_ARGS="$EXTRA_ARGS --external-frr-cid $external_frr_cid --external-frr-ips $external_frr_ips"
   fi
 
+  if $flexible_ipam; then
+     EXTRA_ARGS="$EXTRA_ARGS --antrea-ipam"
+     timeout="100m"
+  fi
+ 
   go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR $np_evaluation_flag --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
 
   if $coverage; then
