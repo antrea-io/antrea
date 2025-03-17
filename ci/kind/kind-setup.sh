@@ -728,6 +728,8 @@ if [[ $ACTION == "destroy" ]]; then
       exit
 fi
 
+#TODO remove - adding change for test 
+
 kind_version=$(kind version | awk  '{print $2}')
 kind_version=${kind_version:1} # strip leading 'v'
 function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
