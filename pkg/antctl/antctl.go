@@ -726,6 +726,32 @@ $ antctl get podmulticaststats pod -n namespace`,
 			commandGroup:        get,
 			transformedResponse: reflect.TypeOf(agentapis.BGPRouteResponse{}),
 		},
+		{
+			use:   "fqdncache",
+			short: "Print fqdn cache",
+			long:  "Print effective fqdn cache information including fqdn name, IP addresses, and expiration time",
+			example: `	Get the list of all fqdn rules currently applied
+			$ antctl get fqdncache
+			Get the list of all fqdn rules currently applied for a given domain name (wildcard supported)
+			$ antctl get fqdncache --domain example.com
+			$ antctl get fqdncache --domain *.antrea.io
+			`,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/fqdncache",
+					params: []flagInfo{
+						{
+							name:      "domain",
+							usage:     "Get fqdn cache for only a specific domain",
+							shorthand: "d",
+						},
+					},
+					outputType: multiple,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(agentapis.FQDNCacheResponse{}),
+		},
 	},
 	rawCommands: []rawCommand{
 		{
