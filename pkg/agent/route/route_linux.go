@@ -746,14 +746,14 @@ func (c *Client) syncIPTables() error {
 	iptablesFilterRulesByChainV4 := make(map[string][]string)
 	// Install the static rules (WireGuard for now) before the dynamic rules (e.g., NodeNetworkPolicy)
 	// for performance reasons.
+	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeLatencyMonitorIPTablesIPv4)
 	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.wireguardIPTablesIPv4)
 	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeNetworkPolicyIPTablesIPv4)
-	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeLatencyMonitorIPTablesIPv4)
 
 	iptablesFilterRulesByChainV6 := make(map[string][]string)
+	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeLatencyMonitorIPTablesIPv6)
 	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.wireguardIPTablesIPv6)
 	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeNetworkPolicyIPTablesIPv6)
-	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeLatencyMonitorIPTablesIPv6)
 
 	// Use iptables-restore to configure IPv4 settings.
 	if c.networkConfig.IPv4Enabled {
@@ -1259,34 +1259,55 @@ func (c *Client) initWireguard() {
 }
 
 func (c *Client) initNodeLatency() {
-	gateway := "antrea-gw0"
-	if c.networkConfig.TrafficEncapMode.String() == "networkPolicyOnly" {
-		gateway = "transport"
+	gateway := c.nodeConfig.GatewayConfig.Name
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		gateway = c.networkConfig.TransportIface
 	}
-	antreaInputChainRules := []string{
-		iptables.NewRuleBuilder(antreaInputChain).
-			MatchInputInterface(gateway).
-			SetComment("Antrea: allow ICMP packets from NodeLatencyMonitor").
-			SetTarget(iptables.AcceptTarget).
-			Done().
-			GetRule(),
-	}
-	antreaOutputChainRules := []string{
-		iptables.NewRuleBuilder(antreaOutputChain).
-			MatchOutputInterface(gateway).
-			SetComment("Antrea: allow egress packets from NodeLatencyMonitor").
-			SetTarget(iptables.AcceptTarget).
-			Done().
-			GetRule(),
-	}
+	icmpZero := int32(0)
 
 	if c.networkConfig.IPv6Enabled {
-		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaInputChain, antreaInputChainRules)
-		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaOutputChain, antreaOutputChainRules)
+		antreaInputChainRulesIPv6 := []string{
+			iptables.NewRuleBuilder(antreaInputChain).
+				MatchInputInterface(gateway).
+				MatchICMP(&icmpZero, &icmpZero, iptables.ProtocolIPv6).
+				SetComment("Antrea: allow ICMP ingress packets from NodeLatencyMonitor").
+				SetTarget(iptables.AcceptTarget).
+				Done().
+				GetRule(),
+		}
+		antreaOutputChainRulesIPv6 := []string{
+			iptables.NewRuleBuilder(antreaOutputChain).
+				MatchOutputInterface(gateway).
+				MatchICMP(&icmpZero, &icmpZero, iptables.ProtocolIPv6).
+				SetComment("Antrea: allow ICMP egress packets from NodeLatencyMonitor").
+				SetTarget(iptables.AcceptTarget).
+				Done().
+				GetRule(),
+		}
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaInputChain, antreaInputChainRulesIPv6)
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaOutputChain, antreaOutputChainRulesIPv6)
 	}
 	if c.networkConfig.IPv4Enabled {
-		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaInputChain, antreaInputChainRules)
-		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRules)
+		antreaInputChainRulesIPv4 := []string{
+			iptables.NewRuleBuilder(antreaInputChain).
+				MatchInputInterface(gateway).
+				MatchICMP(&icmpZero, &icmpZero, iptables.ProtocolIPv4).
+				SetComment("Antrea: allow ICMP ingress packets from NodeLatencyMonitor").
+				SetTarget(iptables.AcceptTarget).
+				Done().
+				GetRule(),
+		}
+		antreaOutputChainRulesIPv4 := []string{
+			iptables.NewRuleBuilder(antreaOutputChain).
+				MatchOutputInterface(gateway).
+				MatchICMP(&icmpZero, &icmpZero, iptables.ProtocolIPv4).
+				SetComment("Antrea: allow ICMP egress packets from NodeLatencyMonitor").
+				SetTarget(iptables.AcceptTarget).
+				Done().
+				GetRule(),
+		}
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaInputChain, antreaInputChainRulesIPv4)
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRulesIPv4)
 	}
 }
 
