@@ -16,8 +16,10 @@ package e2e
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 	"sync"
@@ -1032,6 +1034,35 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string
 	}
 }
 
+type httpServerReadiness struct {
+	*KubernetesUtils
+	pods              []Pod
+	reachability      *Reachability
+	remoteCluster     *KubernetesUtils
+	protocolPortPairs map[utils.AntreaPolicyProtocol][]int32
+}
+
+func (k *KubernetesUtils) newHttpServerReadiness(pods []Pod, protocolPortPairs map[utils.AntreaPolicyProtocol][]int32) httpServerReadiness {
+	httpServerReadiness := httpServerReadiness{
+		pods:              pods,
+		KubernetesUtils:   k,
+		protocolPortPairs: protocolPortPairs,
+	}
+	return httpServerReadiness
+}
+
+func (hsr *httpServerReadiness) isReady() bool {
+	hsr.reachability = NewReachability(hsr.pods, Connected)
+	for protocol := range hsr.protocolPortPairs {
+		hsr.validateProtocol(protocol)
+		if _, wrong, _ := hsr.reachability.Summary(); wrong != 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	const maxTries = 10
 	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
@@ -1065,22 +1096,83 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	return fmt.Errorf("after %d tries, HTTP servers are not ready", maxTries)
 }
 
-func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
-	numProbes := len(allPods) * len(allPods)
-	resultsCh := make(chan *probeResult, numProbes)
-	// TODO: find better metrics, this is only for POC.
-	oneProbe := func(podFrom, podTo Pod, port int32) {
-		log.Tracef("Probing: %s -> %s", podFrom, podTo)
-		expectedResult := reachability.Expected.Get(podFrom.String(), podTo.String())
-		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, nil, &expectedResult)
-		resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
-	}
-	for _, pod1 := range allPods {
-		for _, pod2 := range allPods {
-			go oneProbe(pod1, pod2, port)
+// Encapsulate the data needed to perform a probe between pods
+type probeVector struct {
+	fromPod Pod
+	toPod   Pod
+	port    int32
+}
+
+// For the specified protocol, populate the channel with all combinations of probes based on the
+// required ports
+func (hsr *httpServerReadiness) buildProbeVectors(protocol utils.AntreaPolicyProtocol, probes chan<- probeVector) {
+	ports := hsr.protocolPortPairs[protocol]
+	for _, fromPod := range hsr.pods {
+		for _, podTo := range hsr.pods {
+			for _, port := range ports {
+				probes <- probeVector{fromPod, podTo, port}
+			}
 		}
 	}
-	for i := 0; i < numProbes; i++ {
+	close(probes)
+}
+
+// For a specified protocol, calculate the number of probes created given the set of
+// pods and required ports
+func (hsr *httpServerReadiness) numProbes(protocol utils.AntreaPolicyProtocol) int {
+	ports := hsr.protocolPortPairs[protocol]
+	podCount := len(hsr.pods)
+	return podCount * podCount * len(ports)
+}
+
+// Spawn a fixed set of workers to complete probing of the servers for a given protocol
+func (hsr *httpServerReadiness) spawnProberPool(protocol utils.AntreaPolicyProtocol, resultsCh chan *probeResult) {
+	probes := make(chan probeVector, hsr.numProbes(protocol))
+	go hsr.buildProbeVectors(protocol, probes)
+
+	var probeWithRetry func(vector probeVector, retries int)
+	probeWithRetry = func(vector probeVector, retries int) {
+		podFrom := vector.fromPod
+		podTo := vector.toPod
+		port := vector.port
+		log.Tracef("Probing: %s -> %s", podFrom, podTo)
+		expectedResult := hsr.reachability.Expected.Get(podFrom.String(), podTo.String())
+		connectivity, err := hsr.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, hsr.remoteCluster, &expectedResult)
+		if err != nil && retries > 1 {
+			randomTimeout, err := rand.Int(rand.Reader, big.NewInt(5))
+			if err != nil {
+				panic(err)
+			}
+			time.Sleep(time.Duration(randomTimeout.Int64()) * time.Second)
+			retries--
+			probeWithRetry(vector, retries)
+
+		} else {
+			resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
+		}
+	}
+
+	startProber := func() {
+		for vector := range probes {
+			probeWithRetry(vector, 3)
+		}
+	}
+
+	// Tested value as the upper limit for running locally with minimal impacts to CI speeds
+	proberRateLimit := 150
+	for range proberRateLimit {
+		go startProber()
+	}
+}
+
+// Validates two way connectivity between all pods on the specified protocol against the given ports
+func (hsr *httpServerReadiness) validateProtocol(protocol utils.AntreaPolicyProtocol) {
+	numProbes := hsr.numProbes(protocol)
+	// TODO: find better metrics, this is only for POC.
+	resultsCh := make(chan *probeResult, numProbes)
+	hsr.spawnProberPool(protocol, resultsCh)
+
+	for range numProbes {
 		r := <-resultsCh
 		if r.err != nil {
 			log.Errorf("unable to perform probe %s -> %s: %v", r.podFrom, r.podTo, r.err)
@@ -1099,22 +1191,6 @@ func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachabil
 		} else if prevConn != r.connectivity {
 			reachability.Observe(r.podFrom, r.podTo, Error)
 		}
-	}
-}
-
-// Validate checks the connectivity between all Pods in both directions with a
-// list of ports and a protocol. The connectivity from a Pod to another Pod should
-// be consistent across all provided ports. Otherwise, this connectivity will be
-// treated as Error.
-func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol utils.AntreaPolicyProtocol) {
-	for _, port := range ports {
-		// we do not run all the probes in parallel as we have experienced that on some
-		// machines, this can cause a fraction of the probes to always fail, despite the
-		// built-in retry (3x) mechanism. Probably because of the large number of probes,
-		// each one being executed in its own goroutine. For example, with 9 Pods and for
-		// ports 80, 81, 8080, 8081, 8082, 8083, 8084 and 8085, we would end up with
-		// potentially 9*9*8 = 648 simultaneous probes.
-		k.validateOnePort(allPods, reachability, port, protocol)
 	}
 }
 
