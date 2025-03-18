@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/checks"
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/flowexport"
 	"antrea.io/antrea/pkg/util/ip"
@@ -193,7 +195,7 @@ func (o *Options) setDefaults() {
 	if o.config.OVSRunDir == "" {
 		o.config.OVSRunDir = ovsconfig.DefaultOVSRunDir
 	}
-	if o.config.APIPort == 0 {
+	if !checks.IsValidPort(o.config.APIPort) {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
 	if o.config.NodeType == "" {
@@ -430,13 +432,13 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if o.config.AntreaProxy.DefaultLoadBalancerMode == "" {
 		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
 	}
-	if o.config.ClusterMembershipPort == 0 {
+	if !checks.IsValidPort(o.config.ClusterMembershipPort) {
 		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
 	}
 	if o.config.EnablePrometheusMetrics == nil {
 		o.config.EnablePrometheusMetrics = ptr.To(true)
 	}
-	if o.config.WireGuard.Port == 0 {
+	if !checks.IsValidPort(o.config.WireGuard.Port) {
 		o.config.WireGuard.Port = apis.WireGuardListenPort
 	}
 
@@ -534,6 +536,10 @@ func (o *Options) validateK8sNodeOptions() error {
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
 		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
 	}
+	// Zero for tunnelPort means Antrea will use the assigned IANA port for a given tunnel protocol.
+	if o.config.TunnelPort != 0 && !checks.IsValidPort(int(o.config.TunnelPort)) {
+		return fmt.Errorf("tunnel port %d is invalid", o.config.TunnelPort)
+	}
 	ok, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
 	if !ok {
 		return fmt.Errorf("TrafficEncryptionMode %s is unknown", o.config.TrafficEncryptionMode)
@@ -605,8 +611,9 @@ func (o *Options) validateK8sNodeOptions() error {
 
 	if o.config.DNSServerOverride != "" {
 		hostPort := ip.AppendPortIfMissing(o.config.DNSServerOverride, "53")
-		_, _, err := net.SplitHostPort(hostPort)
-		if err != nil {
+		_, port, err := net.SplitHostPort(hostPort)
+		portNum, parseErr := strconv.Atoi(port)
+		if err != nil || !checks.IsValidPort(portNum) || parseErr != nil {
 			return fmt.Errorf("dnsServerOverride %s is invalid: %v", o.config.DNSServerOverride, err)
 		}
 		o.dnsServerOverride = hostPort
@@ -706,7 +713,7 @@ func (o *Options) setExternalNodeDefaultOptions() {
 func (o *Options) setMulticlusterDefaultOptions() {
 	_, trafficEncryptionModeType := config.GetTrafficEncryptionModeFromStr(o.config.Multicluster.TrafficEncryptionMode)
 	if trafficEncryptionModeType == config.TrafficEncryptionModeWireGuard {
-		if o.config.Multicluster.WireGuard.Port == 0 {
+		if !checks.IsValidPort(o.config.Multicluster.WireGuard.Port) {
 			o.config.Multicluster.WireGuard.Port = apis.MulticlusterWireGuardListenPort
 		}
 	}

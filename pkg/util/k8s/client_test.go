@@ -105,6 +105,18 @@ func TestOverrideKubeAPIServer(t *testing.T) {
 			expectHost:            "192.168.0.1",
 			expectPort:            "10443",
 		},
+		{
+			name:                  "host with invalid port",
+			kubeAPIServerOverride: "192.168.0.1:70443",
+			expectHost:            "192.168.0.1",
+			expectPort:            "443",
+		},
+		{
+			name:                  "host with invalid string port",
+			kubeAPIServerOverride: "192.168.0.1:abc",
+			expectHost:            "192.168.0.1",
+			expectPort:            "443",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
