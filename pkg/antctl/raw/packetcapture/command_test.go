@@ -160,7 +160,6 @@ func TestRun(t *testing.T) {
 				getCopier = getPodFileCopier
 			}()
 			buf := new(bytes.Buffer)
-			Command.SetOutput(buf)
 			Command.SetOut(buf)
 			Command.SetErr(buf)
 			Command.SetContext(context.Background())

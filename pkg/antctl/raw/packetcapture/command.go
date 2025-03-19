@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"path/filepath"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -165,7 +165,8 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	}
 
 	var latestPC *v1alpha1.PacketCapture
-	// add extra timeout to avoid the wait won't be interrupted before PacketCapture timeout.
+	var errMsg string
+	// add extra timeout to make sure the wait won't be interrupted before PacketCapture timeout.
 	err = wait.PollUntilContextTimeout(cmd.Context(), 1*time.Second, option.timeout+time.Second*5, false, func(ctx context.Context) (bool, error) {
 		res, err := antreaClient.CrdV1alpha1().PacketCaptures().Get(ctx, pc.Name, metav1.GetOptions{})
 		if err != nil {
@@ -174,6 +175,9 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 		for _, cond := range res.Status.Conditions {
 			if cond.Type == v1alpha1.PacketCaptureComplete && cond.Status == metav1.ConditionTrue {
 				latestPC = res
+				if cond.Reason == "Failed" {
+					errMsg = cond.Message
+				}
 				return true, nil
 			}
 		}
@@ -191,14 +195,14 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 
 	splits := strings.Split(latestPC.Status.FilePath, ":")
 	if len(splits) < 2 {
-		return errors.New("no packets file generated, this maybe caused by timeout")
+		return errors.New(errMsg)
 	}
-	path := filepath.Base(splits[1])
+	fileName := path.Base(splits[1])
 	copier, _ := getCopier(cmd)
 	if err := copier.CopyFromPod(cmd.Context(), defaultFS, env.GetAntreaNamespace(), splits[0], "antrea-agent", splits[1], option.outputDir); err != nil {
 		return fmt.Errorf("error when copying pcapng file from container: %w", err)
 	}
-	fmt.Fprintf(out, "Captured packets file: %s\n", filepath.Join(option.outputDir, path))
+	fmt.Fprintf(out, "Captured packets file: %s\n", path.Join(option.outputDir, fileName))
 	return nil
 }
 
