@@ -377,17 +377,18 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	tests := []struct {
-		name               string
-		cniVersion         string
-		cniType            string
-		networkType        networkType
-		ipamType           string
-		mtu                int
-		vlan               int
-		noIPAM             bool
-		doNotCreateNetwork bool
-		expectedErr        string
-		expectedCalls      func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator)
+		name                       string
+		cniVersion                 string
+		cniType                    string
+		networkType                networkType
+		ipamType                   string
+		mtu                        int
+		vlan                       int
+		noIPAM                     bool
+		doNotCreateNetwork         bool
+		expectedNetworkStatusAnnot string
+		expectedErr                string
+		expectedCalls              func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator)
 	}{
 		{
 			name:        "VLAN network",
@@ -406,6 +407,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
+			expectedNetworkStatusAnnot: "[{\n    \"name\": \"net\",\n    \"ips\": [\n        \"148.14.24.0\"\n    ],\n    \"dns\": {}\n}]",
 		},
 		{
 			name:        "VLAN in IPPool",
@@ -424,6 +426,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
+			expectedNetworkStatusAnnot: "[{\n    \"name\": \"net\",\n    \"ips\": [\n        \"148.14.24.0\"\n    ],\n    \"dns\": {}\n}]",
 		},
 		{
 			name:        "network VLAN overrides IPPool VLAN",
@@ -441,6 +444,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
+			expectedNetworkStatusAnnot: "[{\n    \"name\": \"net\",\n    \"ips\": [\n        \"148.14.24.0\"\n    ],\n    \"dns\": {}\n}]",
 		},
 		{
 			name:        "no IPAM",
@@ -475,6 +479,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					&testIPAMResult("148.14.24.100/24", 0).Result,
 				)
 			},
+			expectedNetworkStatusAnnot: "[{\n    \"name\": \"net\",\n    \"ips\": [\n        \"148.14.24.0\"\n    ],\n    \"dns\": {}\n}]",
 		},
 		{
 			name:               "network not found",
@@ -574,6 +579,8 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pod, cniInfo := testPod(podName, containerID, podIP, element1)
 			pc, mockIPAM, interfaceConfigurator := testPodControllerStart(ctrl)
+			_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
+			require.NoError(t, err)
 
 			if !tc.doNotCreateNetwork {
 				network1 := testNetworkExt(networkName, tc.cniVersion, tc.cniType,
@@ -584,11 +591,18 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(mockIPAM, interfaceConfigurator)
 			}
-			err := pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element1}, cniInfo)
+			err = pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element1}, cniInfo)
 			if tc.expectedErr == "" {
 				assert.Nil(t, err)
 			} else {
 				assert.True(t, strings.Contains(err.Error(), tc.expectedErr))
+			}
+			if tc.expectedNetworkStatusAnnot != "" {
+				updatedPod, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				networkStatusAnnot, ok := updatedPod.GetAnnotations()[netdefv1.NetworkStatusAnnot]
+				assert.True(t, ok, "Annotations not contains NetworkStatusAnnot", "res", networkStatusAnnot)
+				assert.Equal(t, tc.expectedNetworkStatusAnnot, networkStatusAnnot)
 			}
 		})
 	}
@@ -610,6 +624,9 @@ func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
 	pod, cniInfo := testPod(podName, containerID, podIP, element1, element2)
 	ctrl := gomock.NewController(t)
 	pc, _, interfaceConfigurator := testPodControllerStart(ctrl)
+
+	_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
+	require.NoError(t, err)
 
 	network1 := testNetworkExt("net1", "", "", sriovNetworkType, sriovResourceName1, "", 1500, 0, true /* noIPAM */)
 	pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(ctx, network1, metav1.CreateOptions{})
