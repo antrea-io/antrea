@@ -21,7 +21,7 @@ func IsPodTerminated(pod *v1.Pod) bool {
 	return pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodSucceeded
 }
 
-// GetPodContainersNames returns all the container names in a Pod, including init containers.
+// GetPodContainerNames returns all the container names in a Pod, including init containers.
 func GetPodContainerNames(pod *v1.Pod) []string {
 	var names []string
 	for _, c := range pod.Spec.InitContainers {

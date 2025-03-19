@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netdefclientfake "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/fake"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -47,6 +48,7 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	cnitypes "antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	podwatchtesting "antrea.io/antrea/pkg/agent/secondarynetwork/podwatch/testing"
 	"antrea.io/antrea/pkg/agent/types"
@@ -228,15 +230,29 @@ func TestPodControllerRun(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	interfaceConfigurator := podwatchtesting.NewMockInterfaceConfigurator(ctrl)
 	mockIPAM := podwatchtesting.NewMockIPAMAllocator(ctrl)
+	gatwayIP := "1.1.1.1"
+	gateway := &config.GatewayConfig{Name: "", IPv4: net.ParseIP(gatwayIP)}
+	nodeConfig := &config.NodeConfig{Name: "", PodIPv4CIDR: nil, GatewayConfig: gateway}
 	podController, _ := NewPodController(
 		client,
 		netdefclient,
 		informerFactory.Core().V1().Pods().Informer(),
-		nil, primaryInterfaceStore, mockOVSBridgeClient)
+		nil, primaryInterfaceStore, mockOVSBridgeClient, nodeConfig)
 	podController.interfaceConfigurator = interfaceConfigurator
 	podController.ipamAllocator = mockIPAM
 	cniCache := &podController.cniCache
 	interfaceStore := podController.interfaceStore
+
+	primaryInterface := &interfacestore.InterfaceConfig{
+		InterfaceName: "primary-interface-name",
+		IPs:           []net.IP{net.IP("192.168.1.2")},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
+			ContainerID:  containerID,
+			PodName:      podName,
+			PodNamespace: testNamespace,
+			IFDev:        "eth0",
+		},
+	}
 
 	stopCh := make(chan struct{})
 	informerFactory.Start(stopCh)
@@ -303,6 +319,7 @@ func TestPodControllerRun(t *testing.T) {
 	require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
 	_, err = client.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
 	require.NoError(t, err, "error when creating test Pod")
+	podController.primaryInterfaceStore.AddInterface(primaryInterface)
 
 	// Wait for ConfigureSriovSecondaryInterface to be called.
 	assert.Eventually(t, func() bool {
@@ -398,7 +415,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		vlan                       int
 		noIPAM                     bool
 		doNotCreateNetwork         bool
-		expectedNetworkStatusAnnot string
+		expectedNetworkStatusAnnot []netdefv1.NetworkStatus
 		expectedErr                string
 		expectedCalls              func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator)
 	}{
@@ -419,13 +436,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "VLAN in IPPool",
@@ -444,13 +459,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "network VLAN overrides IPPool VLAN",
@@ -468,13 +481,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "no IPAM",
@@ -491,10 +502,10 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					&ipam.IPAMResult{},
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "SRIOV network",
@@ -513,13 +524,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					&testIPAMResult("148.14.24.100/24", 0).Result,
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:               "network not found",
@@ -633,22 +642,16 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			}
 			err = pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element1}, cniInfo)
 			if tc.expectedErr == "" {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			} else {
 				assert.True(t, strings.Contains(err.Error(), tc.expectedErr))
 			}
 			updatedPod, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			networkStatusAnnot, ok := updatedPod.GetAnnotations()[netdefv1.NetworkStatusAnnot]
-			assert.Equal(t, tc.expectedNetworkStatusAnnot, networkStatusAnnot)
-			if tc.expectedNetworkStatusAnnot != "" {
-				require.True(t, ok, "Annotations do not contain NetworkStatusAnnot", "res", networkStatusAnnot)
-			} else {
-				require.False(t, ok, "Annotations contain NetworkStatusAnnot", "res", networkStatusAnnot)
-			}
+			networkStatusAnnot, _ := netdefutils.GetNetworkStatus(updatedPod)
+			assert.Subset(t, networkStatusAnnot, tc.expectedNetworkStatusAnnot)
 		})
 	}
-
 }
 
 func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
@@ -729,6 +732,16 @@ func TestPodControllerAddPod(t *testing.T) {
 	})
 	podKey := podKeyGet(podName, testNamespace)
 
+	primaryInterface := &interfacestore.InterfaceConfig{
+		InterfaceName: interfaceName,
+		IPs:           []net.IP{net.IP("192.168.1.2")},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
+			ContainerID:  containerID,
+			PodName:      podName,
+			PodNamespace: testNamespace,
+			IFDev:        "eth0",
+		},
+	}
 	// Create Pod and wait for Informer cache updated.
 	createPodFn := func(pc *PodController, pod *corev1.Pod) {
 		_, err := pc.kubeClient.CoreV1().Pods(testNamespace).Create(context.Background(),
@@ -814,6 +827,7 @@ func TestPodControllerAddPod(t *testing.T) {
 
 		podController.cniCache.Store(podKey, cniConfig)
 		createPodFn(podController, pod)
+		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		assert.NoError(t, podController.syncPod(podKey))
 		podController.interfaceStore.DeleteInterface(staleConfig1)
 		podController.interfaceStore.DeleteInterface(staleConfig2)
@@ -866,6 +880,7 @@ func TestPodControllerAddPod(t *testing.T) {
 
 		podController.cniCache.Store(podKey, cniConfig)
 		createPodFn(podController, pod)
+		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		assert.NoError(t, podController.syncPod(podKey))
 	})
 
@@ -892,7 +907,8 @@ func TestPodControllerAddPod(t *testing.T) {
 		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
 		createPodFn(podController, pod)
 		podController.cniCache.Store(podKey, cniConfig)
-		assert.NoError(t, podController.syncPod(podKey))
+		podController.primaryInterfaceStore.AddInterface(primaryInterface)
+		assert.Error(t, podController.syncPod(podKey), "Should return error when primary network configuration is not complete yet")
 	})
 
 	t.Run("different Namespace for Pod and NetworkAttachmentDefinition", func(t *testing.T) {
@@ -924,6 +940,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			network, metav1.CreateOptions{})
 		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
 		createPodFn(podController, pod)
+		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		podController.cniCache.Store(podKey, cniConfig)
 		assert.NoError(t, podController.syncPod(podKey))
 	})
@@ -974,6 +991,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			network, metav1.CreateOptions{})
 		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
 		createPodFn(podController, pod)
+		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		podController.cniCache.Store(podKey, cniConfig)
 		assert.NoError(t, podController.syncPod(podKey))
 	})
@@ -1003,6 +1021,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			network, metav1.CreateOptions{})
 		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
 		createPodFn(podController, pod)
+		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		podController.cniCache.Store(podKey, cniConfig)
 		// We don't expect an error here, no requeueing.
 		assert.NoError(t, podController.syncPod(podKey))
@@ -1021,6 +1040,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			network, metav1.CreateOptions{})
 		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
 		createPodFn(podController, pod)
+		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		podController.cniCache.Store(podKey, cniConfig)
 		// We don't expect an error here, no requeueing.
 		assert.NoError(t, podController.syncPod(podKey))
@@ -1052,6 +1072,10 @@ func testPodController(ctrl *gomock.Controller) (
 	mockIPAM := podwatchtesting.NewMockIPAMAllocator(ctrl)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 
+	gatwayIP := "1.1.1.1"
+	gateway := &config.GatewayConfig{Name: "", IPv4: net.ParseIP(gatwayIP)}
+	nodeConfig := &config.NodeConfig{Name: "", PodIPv4CIDR: nil, GatewayConfig: gateway}
+
 	// PodController without event handlers.
 	return &PodController{
 		kubeClient:         client,
@@ -1067,6 +1091,8 @@ func testPodController(ctrl *gomock.Controller) (
 		interfaceConfigurator: interfaceConfigurator,
 		ipamAllocator:         mockIPAM,
 		interfaceStore:        interfacestore.NewInterfaceStore(),
+		primaryInterfaceStore: interfacestore.NewInterfaceStore(),
+		nodeConfig:            nodeConfig,
 	}, mockIPAM, interfaceConfigurator, mockOVSBridgeClient
 }
 

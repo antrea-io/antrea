@@ -657,7 +657,7 @@ func run(o *Options) error {
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
 			k8sClient, localPodInformer.Get(),
 			podUpdateChannel, ifaceStore,
-			&o.config.SecondaryNetwork, ovsdbConnection)
+			&o.config.SecondaryNetwork, ovsdbConnection, nodeConfig)
 		if err != nil {
 			return fmt.Errorf("failed to create secondary network controller: %w", err)
 		}
