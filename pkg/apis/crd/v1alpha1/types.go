@@ -381,12 +381,25 @@ type UDPHeader struct {
 	DstPort *int32 `json:"dstPort,omitempty"`
 }
 
+// TCPFlagMatcher describes a TCP flags matching filter with flag and mask.
+type TCPFlagsMatcher struct {
+	// Value is the TCP flag value to match.
+	Value int32 `json:"value"`
+	// Mask is used to specify which bits to consider. Defaults to Value if not specified.
+	// It is applied only to the packet header flags, not to the value provided in the 'Value' field.
+	// Make sure that (Flag & Mask) == Value; otherwise, the match will not succeed.
+	Mask *int32 `json:"mask,omitempty"`
+}
+
 // TCPHeader describes the spec of a TCP header.
 type TCPHeader struct {
 	// SrcPort is the source port.
 	SrcPort *int32 `json:"srcPort,omitempty"`
 	// DstPort is the destination port.
 	DstPort *int32 `json:"dstPort,omitempty"`
+	// Flags is a list of TCP flag match conditions that are logically ORed. When direction is set to Both,
+	// the specified TCP flag matching conditions will be applied to traffic in both directions.
+	Flags []TCPFlagsMatcher `json:"flags,omitempty"`
 }
 
 // Packet includes header info.

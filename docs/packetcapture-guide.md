@@ -32,6 +32,7 @@ the target traffic flow:
 * Destination Pod, or IP address
 * Transport protocol (TCP/UDP/ICMP)
 * Transport ports
+* TCP Flags
 * Direction (SourceToDestination/DestinationToSource/Both)
 
 You can start a new packet capture by creating a `PacketCapture` CR. An optional `fileServer`
@@ -83,12 +84,17 @@ spec:
     transportHeader:
       tcp:
         dstPort: 8080 # Destination port needs to be set when the protocol is TCP/UDP.
+        # List of TCP Flag Matchers. Each specifies a value and optional mask to match against TCP flags in packets.
+        # Equivalent to `tcp[13] & <mask> == <value>` tcpdump filter.
+        flags:
+          - value: 0x2 # SYN
+            mask: 0x2 # defaults to value if not specified
 ```
 
 The CR above starts a new packet capture of TCP flows from a Pod named `frontend`
-to the port 8080 of a Pod named `backend` using TCP protocol. It will capture the first 5 packets
-that meet this criterion and upload them to the specified sftp server. Users can download the
-packet file from the sftp server (or from the local antrea-agent Pod) and analyze its content
-with network diagnose tools like Wireshark or tcpdump.
+to the port 8080 of a Pod named `backend` using TCP protocol and have the TCP SYN flag set. It
+will capture the first 5 packets that meet this criterion and upload them to the specified sftp
+server. Users can download the packet file from the sftp server (or from the local antrea-agent
+Pod) and analyze its content with network diagnose tools like Wireshark or tcpdump.
 
 Note: This feature is not supported on Windows for now.
