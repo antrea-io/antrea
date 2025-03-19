@@ -94,6 +94,7 @@ type PodController struct {
 	// Map from "namespace/pod" to podCNIInfo.
 	cniCache           sync.Map
 	vfDeviceIDUsageMap sync.Map
+	networkStatusMap   sync.Map
 }
 
 func NewPodController(
@@ -191,12 +192,18 @@ func (pc *PodController) enqueuePod(obj interface{}) {
 // processCNIUpdate will be called when CNIServer publishes a Pod update event.
 func (pc *PodController) processCNIUpdate(e interface{}) {
 	event := e.(types.PodUpdate)
+	networkStatus := event.NetworkStatus
 	podKey := podKeyGet(event.PodName, event.PodNamespace)
-	if event.IsAdd {
-		pc.cniCache.Store(podKey, &podCNIInfo{containerID: event.ContainerID, netNS: event.NetNS})
+	if networkStatus == nil {
+		if event.IsAdd {
+			pc.cniCache.Store(podKey, &podCNIInfo{containerID: event.ContainerID, netNS: event.NetNS})
+		} else {
+			pc.cniCache.Delete(podKey)
+		}
 	} else {
-		pc.cniCache.Delete(podKey)
+		pc.networkStatusMap.Store(podKey, networkStatus)
 	}
+
 	pc.queue.Add(podKeyGet(event.PodName, event.PodNamespace))
 }
 
@@ -311,6 +318,15 @@ func (pc *PodController) syncPod(key string) error {
 		pc.deleteVFDeviceIDListPerPod(podName, podNamespace)
 		return nil
 	}
+
+	if obj, primaryNetworkStatusUpdate := pc.networkStatusMap.Load(key); primaryNetworkStatusUpdate {
+		networkStatus := obj.(*netdefv1.NetworkStatus)
+		if err := updatePodNetworkStatusAnnotation(pc.kubeClient, context.TODO(), []netdefv1.NetworkStatus{*networkStatus}, pod.Name, pod.Namespace); err != nil {
+			return fmt.Errorf("error update Pod networkstatus annotation: %w", err)
+		}
+		pc.networkStatusMap.Delete(key)
+	}
+
 	return pc.handleAddUpdatePod(pod, cniInfo, storedInterfaces)
 }
 
@@ -383,7 +399,7 @@ func (pc *PodController) configureSecondaryInterface(
 		ifConfigErr = pc.interfaceConfigurator.ConfigureVLANSecondaryInterface(
 			pod.Name, pod.Namespace,
 			podCNIInfo.containerID, podCNIInfo.netNS, network.InterfaceRequest,
-			int(networkConfig.MTU), ipamResult)
+			networkConfig.MTU, ipamResult)
 	}
 	return &ipamResult.Result, ifConfigErr
 }
@@ -491,16 +507,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		// retry, if at least one secondary network is configured.
 		return savedErr
 	}
-
-	// Update the Pod's network status annotation
-	if netStatus != nil {
-		if err := netdefutils.SetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
-			klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
-		} else {
-			klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
-		}
-	}
-	return nil
+	return updatePodNetworkStatusAnnotation(pc.kubeClient, context.TODO(), netStatus, pod.Name, pod.Namespace)
 }
 
 func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
@@ -513,7 +520,6 @@ func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
 	}
 	if networkConfig.Type != cniserver.AntreaCNIType {
 		return &networkConfig, fmt.Errorf("not Antrea CNI type '%s'", networkConfig.Type)
-
 	}
 	if networkConfig.NetworkType != sriovNetworkType && networkConfig.NetworkType != vlanNetworkType {
 		return &networkConfig, fmt.Errorf("secondary network type '%s' not supported", networkConfig.NetworkType)
@@ -592,7 +598,6 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 			klog.InfoS("Unknown Antrea interface type for the secondary bridge", "type", interfaceType)
 			continue
 		}
-
 		ifaceList = append(ifaceList, intf)
 	}
 
@@ -620,7 +625,7 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 	for _, containerConfig := range secondaryInterfaces {
 		_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
 		if !exists || containerConfig.OFPort == -1 {
-			// Deletes ports not in the CNI cache.
+			// Delete ports not in the CNI cache.
 			staleInterfaces = append(staleInterfaces, containerConfig)
 		}
 	}
@@ -632,5 +637,59 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 		}
 	}
 
+	return nil
+}
+
+var (
+	netdefutilsSetNetworkStatus = netdefutils.SetNetworkStatus
+)
+
+func MergeNetworkStatusLists(oldNetworkStatus []netdefv1.NetworkStatus, netStatus []netdefv1.NetworkStatus) []netdefv1.NetworkStatus {
+	oldKeys := make(map[[3]string]struct{})
+	for _, item := range oldNetworkStatus {
+		key := [3]string{item.Name, item.Interface, item.Mac}
+		oldKeys[key] = struct{}{}
+	}
+
+	var toAdd []netdefv1.NetworkStatus
+	for _, item := range netStatus {
+		key := [3]string{item.Name, item.Interface, item.Mac}
+		if _, exists := oldKeys[key]; !exists {
+			toAdd = append(toAdd, item)
+		}
+	}
+
+	return append(oldNetworkStatus, toAdd...)
+}
+
+// updatePodNetworkStatusAnnotation update the Pod's network status annotation
+func updatePodNetworkStatusAnnotation(kubeClient clientset.Interface, ctx context.Context, netStatus []netdefv1.NetworkStatus, podName, podNamespace string) error {
+	if len(netStatus) == 0 {
+		return nil
+	}
+	podItem, err := kubeClient.CoreV1().Pods(podNamespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get Pod:%w", err)
+	}
+
+	var oldNetworkStatus []netdefv1.NetworkStatus
+	netStatusesJson, ok := podItem.Annotations[netdefv1.NetworkStatusAnnot]
+	if ok {
+		err := json.Unmarshal([]byte(netStatusesJson), &oldNetworkStatus)
+		if err != nil {
+			return fmt.Errorf("error unmarshal Pod network status annotation: %w", err)
+		}
+	}
+
+	mergedNetStatus := MergeNetworkStatusLists(oldNetworkStatus, netStatus)
+	if len(mergedNetStatus) == len(oldNetworkStatus) {
+		klog.V(2).InfoS("Skipping Pod network status annotation update", "Pod", klog.KRef(podNamespace, podName), "NetworkStatus", netStatus)
+		return nil
+	}
+
+	if err := netdefutilsSetNetworkStatus(kubeClient, podItem, mergedNetStatus); err != nil {
+		return fmt.Errorf("error setting Pod network status annotation: %w", err)
+	}
+	klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KRef(podNamespace, podName), "NetworkStatus", netStatus)
 	return nil
 }

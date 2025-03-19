@@ -35,13 +35,17 @@ import (
 	"github.com/google/uuid"
 	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netdefclientfake "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/fake"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/util/workqueue"
 
 	"antrea.io/antrea/pkg/agent/cniserver"
@@ -385,6 +389,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		ContainerID: containerID,
 		IFName:      interfaceName,
 	}
+	primaryNetworkStatus := "[{\n    \"name\": \"eth0\",\n    \"ips\": [\n        \"192.168.1.2\"\n    ],\n    \"dns\": {}\n}]"
 
 	ctrl := gomock.NewController(t)
 
@@ -398,7 +403,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		vlan                       int
 		noIPAM                     bool
 		doNotCreateNetwork         bool
-		expectedNetworkStatusAnnot string
+		expectedNetworkStatusAnnot []netdefv1.NetworkStatus
 		expectedErr                string
 		expectedCalls              func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator)
 	}{
@@ -419,13 +424,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "VLAN in IPPool",
@@ -444,13 +447,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "network VLAN overrides IPPool VLAN",
@@ -468,13 +469,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "no IPAM",
@@ -491,10 +490,10 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					&ipam.IPAMResult{},
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "SRIOV network",
@@ -513,13 +512,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					&testIPAMResult("148.14.24.100/24", 0).Result,
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:               "network not found",
@@ -619,6 +616,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pod, cniInfo := testPod(podName, containerID, podIP, element1)
 			pc, mockIPAM, interfaceConfigurator := testPodControllerStart(ctrl)
+			pod.Annotations[netdefv1.NetworkStatusAnnot] = primaryNetworkStatus
 			_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 			require.NoError(t, err)
 
@@ -633,22 +631,17 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			}
 			err = pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element1}, cniInfo)
 			if tc.expectedErr == "" {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			} else {
 				assert.True(t, strings.Contains(err.Error(), tc.expectedErr))
 			}
 			updatedPod, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			networkStatusAnnot, ok := updatedPod.GetAnnotations()[netdefv1.NetworkStatusAnnot]
-			assert.Equal(t, tc.expectedNetworkStatusAnnot, networkStatusAnnot)
-			if tc.expectedNetworkStatusAnnot != "" {
-				require.True(t, ok, "Annotations do not contain NetworkStatusAnnot", "res", networkStatusAnnot)
-			} else {
-				require.False(t, ok, "Annotations contain NetworkStatusAnnot", "res", networkStatusAnnot)
-			}
+			networkStatusAnnot, err := netdefutils.GetNetworkStatus(updatedPod)
+			assert.NoError(t, err)
+			assert.Subset(t, networkStatusAnnot, tc.expectedNetworkStatusAnnot)
 		})
 	}
-
 }
 
 func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
@@ -666,6 +659,9 @@ func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
 	pod, cniInfo := testPod(podName, containerID, podIP, element1, element2)
 	ctrl := gomock.NewController(t)
 	pc, _, interfaceConfigurator := testPodControllerStart(ctrl)
+
+	primaryNetworkStatus := "[{\n    \"name\": \"eth0\",\n    \"ips\": [\n        \"192.168.1.2\"\n    ],\n    \"dns\": {}\n}]"
+	pod.Annotations[netdefv1.NetworkStatusAnnot] = primaryNetworkStatus
 
 	_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -731,6 +727,8 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	// Create Pod and wait for Informer cache updated.
 	createPodFn := func(pc *PodController, pod *corev1.Pod) {
+		primaryNetworkStatus := "[{\n    \"name\": \"eth0\",\n    \"ips\": [\n        \"192.168.1.2\"\n    ],\n    \"dns\": {}\n}]"
+		pod.Annotations[netdefv1.NetworkStatusAnnot] = primaryNetworkStatus
 		_, err := pc.kubeClient.CoreV1().Pods(testNamespace).Create(context.Background(),
 			pod, metav1.CreateOptions{})
 		require.NoError(t, err, "error when creating test Pod")
@@ -1214,4 +1212,129 @@ func TestReconcileSecondaryInterfaces(t *testing.T) {
 	// Ensure stale interfaces are removed
 	_, foundPod3 := pc.cniCache.Load("nsA/Pod3")
 	assert.False(t, foundPod3, "Stale interface should have been removed")
+}
+
+func TestUpdatePodNetworkStatusAnnotation(t *testing.T) {
+	ctx := context.Background()
+	podName := "test-pod"
+	podNamespace := "default"
+	testPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+	}
+	testCases := []struct {
+		name                   string
+		podAnnot               map[string]string
+		netStatus              []netdefv1.NetworkStatus
+		getPodErr              error
+		getStatusErr           error
+		setNetworkStatusCalled bool
+		setStatusErr           error
+		expectErrStr           string
+		expectStatus           []netdefv1.NetworkStatus
+	}{
+		{
+			name:         "empty status skips update",
+			netStatus:    nil,
+			expectErrStr: "context deadline exceeded",
+		},
+		{
+			name:         "get pod failure",
+			netStatus:    []netdefv1.NetworkStatus{{Name: "eth1"}},
+			getPodErr:    errors.New("api down"),
+			expectErrStr: "api down",
+		},
+		{
+			name:         "get status failure",
+			netStatus:    []netdefv1.NetworkStatus{{Name: "eth1"}},
+			getStatusErr: errors.New("parse error"),
+			expectStatus: []netdefv1.NetworkStatus{{Name: "eth1"}},
+		},
+		{
+			name: "set status failure",
+			podAnnot: map[string]string{"k8s.v1.cni.cncf.io/network-status": `[{
+    "name": "eth0",
+    "ips": [
+        "192.168.1.2"
+    ],
+    "dns": {}
+}]`},
+			netStatus:              []netdefv1.NetworkStatus{{Name: "eth1"}},
+			setNetworkStatusCalled: true,
+			setStatusErr:           errors.New("update conflict"),
+		},
+		{
+			name: "primary update replaces existing",
+			podAnnot: map[string]string{
+				netdefv1.NetworkAttachmentAnnot: `[{"name": "sriov-net1", "namespace": "default", "interface": "eth1"}]`,
+				netdefv1.NetworkStatusAnnot: `[{
+    "name": "eth0",
+    "ips": [
+        "192.168.1.2"
+    ],
+    "dns": {}
+}]`,
+			},
+			netStatus:    []netdefv1.NetworkStatus{{Name: "eth0", IPs: []string{"192.168.1.2"}}},
+			expectStatus: []netdefv1.NetworkStatus{{Name: "eth0", IPs: []string{"192.168.1.2"}}},
+		},
+		{
+			name: "secondary update appends",
+			podAnnot: map[string]string{
+				netdefv1.NetworkAttachmentAnnot: `[{"name": "sriov-net1", "namespace": "default", "interface": "eth1"}]`,
+				netdefv1.NetworkStatusAnnot: `[{
+    "name": "eth0",
+    "ips": [
+        "192.168.1.2"
+    ],
+    "dns": {}
+}]`,
+			},
+			netStatus:    []netdefv1.NetworkStatus{{Name: "eth1"}},
+			expectStatus: []netdefv1.NetworkStatus{{Name: "eth0", IPs: []string{"192.168.1.2"}}, {Name: "eth1"}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testPod.Annotations = tc.podAnnot
+			client := fake.NewSimpleClientset(testPod.DeepCopy())
+
+			var setNetworkStatusCalled bool
+			defer mockNetdefutilsSetNetworkStatus(tc.setStatusErr, &setNetworkStatusCalled)()
+
+			if tc.getPodErr != nil {
+				client.PrependReactor("get", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, tc.getPodErr
+				})
+			}
+
+			err := updatePodNetworkStatusAnnotation(client, ctx, tc.netStatus, "test-pod", "default")
+			if err != nil {
+				assert.Contains(t, err.Error(), tc.expectErrStr)
+			}
+			assert.Equal(t, tc.setNetworkStatusCalled, setNetworkStatusCalled)
+			if err == nil {
+				podItem, err := client.CoreV1().Pods(podNamespace).Get(ctx, podName, metav1.GetOptions{})
+				assert.NoError(t, err)
+				networkStatus, _ := netdefutils.GetNetworkStatus(podItem)
+				assert.ElementsMatch(t, tc.expectStatus, networkStatus)
+			}
+		})
+	}
+}
+
+func mockNetdefutilsSetNetworkStatus(err error, called *bool) func() {
+	origSetStatus := netdefutils.SetNetworkStatus
+	if err != nil {
+		netdefutilsSetNetworkStatus = func(client clientset.Interface, pod *corev1.Pod, status []netdefv1.NetworkStatus) error {
+			*called = true
+			return err
+		}
+	}
+	return func() {
+		netdefutilsSetNetworkStatus = origSetStatus
+	}
 }
