@@ -14,10 +14,13 @@
 
 package types
 
+import v1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+
 type PodUpdate struct {
-	PodNamespace string
-	PodName      string
-	ContainerID  string
-	NetNS        string
-	IsAdd        bool
+	PodNamespace  string
+	PodName       string
+	ContainerID   string
+	NetNS         string
+	IsAdd         bool
+	NetworkStatus *v1.NetworkStatus
 }
