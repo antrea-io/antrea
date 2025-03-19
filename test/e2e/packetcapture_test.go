@@ -59,6 +59,9 @@ type pcTestCase struct {
 
 	// required IP version, skip if not match.
 	ipVersion int
+
+	// number of netcat connections to make from the client to server
+	netcatConnections *int
 }
 
 func createUDPServerPod(name string, ns string, portNum int32, serverNode string) error {
@@ -106,6 +109,9 @@ func TestPacketCapture(t *testing.T) {
 
 	t.Run("testPacketCaptureBasic", func(t *testing.T) {
 		testPacketCaptureBasic(t, data, svc.Spec.ClusterIP, pubKey1.Marshal(), pubKey2.Marshal())
+	})
+	t.Run("testPacketCaptureL4Filters", func(t *testing.T) {
+		testPacketCaptureL4Filters(t, data, svc.Spec.ClusterIP, pubKey1.Marshal())
 	})
 
 }
@@ -476,6 +482,124 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 	})
 }
 
+// testPacketCaptureL4Filters is for test cases involving L4 protocol-specific filters.
+// Separating these from testPacketCaptureBasic ensures isolation of more advanced filtering scenarios, preventing
+// potential interference with other test cases.
+func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP string, pubKey1 []byte) {
+	node1 := nodeName(0)
+	clientPodName := "client-2"
+	tcpServerPodName := "tcp-server-2"
+	sftpURL := fmt.Sprintf("sftp://%s:22/%s", sftpServerIP, sftpUploadDir)
+
+	require.NoError(t, data.createToolboxPodOnNode(clientPodName, data.testNamespace, node1, false))
+	defer data.DeletePodAndWait(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoError(t, data.createServerPodWithLabels(tcpServerPodName, data.testNamespace, serverPodPort, nil))
+	defer data.DeletePodAndWait(defaultTimeout, tcpServerPodName, data.testNamespace)
+
+	waitForPodIPs(t, data, []PodInfo{
+		{Name: clientPodName},
+		{Name: tcpServerPodName},
+	})
+
+	getPcapURL := func(name string) string {
+		p, err := url.JoinPath(sftpURL, name+".pcapng")
+		require.NoError(t, err)
+		return p
+	}
+
+	getPacketCaptureCR := func(name string, destinationPodName string, packet *crdv1alpha1.Packet, direction crdv1alpha1.CaptureDirection, options ...packetCaptureOption) *crdv1alpha1.PacketCapture {
+		pc := &crdv1alpha1.PacketCapture{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+			Spec: crdv1alpha1.PacketCaptureSpec{
+				Source: crdv1alpha1.Source{
+					Pod: &crdv1alpha1.PodReference{
+						Namespace: data.testNamespace,
+						Name:      clientPodName,
+					},
+				},
+				Destination: crdv1alpha1.Destination{
+					Pod: &crdv1alpha1.PodReference{
+						Namespace: data.testNamespace,
+						Name:      destinationPodName,
+					},
+				},
+				CaptureConfig: crdv1alpha1.CaptureConfig{
+					FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
+						Number: 2,
+					},
+				},
+				FileServer: &crdv1alpha1.PacketCaptureFileServer{
+					URL: sftpURL,
+				},
+				Packet:    packet,
+				Direction: direction,
+			},
+		}
+		for _, option := range options {
+			option(pc)
+		}
+		return pc
+	}
+
+	testcases := []pcTestCase{
+		{
+			name:      "ipv4-tcp-syn-both",
+			ipVersion: 4,
+			pc: getPacketCaptureCR(
+				"ipv4-tcp-syn-both",
+				tcpServerPodName,
+				&crdv1alpha1.Packet{
+					Protocol: &tcpProto,
+					IPFamily: v1.IPv4Protocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						TCP: &crdv1alpha1.TCPHeader{
+							DstPort: ptr.To(serverPodPort),
+							Flags: []crdv1alpha1.TCPFlagsMatcher{
+								{Value: 0x2}, // +syn
+							},
+						},
+					},
+				},
+				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureHostPublicKey(pubKey1),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 2,
+				FilePath:       getPcapURL("ipv4-tcp-syn-both"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+			netcatConnections: ptr.To(1), // creating one netcat connection to capture only a syn and a syn+ack packet
+		},
+	}
+	t.Run("testPacketCaptureConflicting", func(t *testing.T) {
+		for _, tc := range testcases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				runPacketCaptureTest(t, data, tc)
+			})
+		}
+	})
+}
+
 func getOSString() string {
 	return "linux"
 }
@@ -541,6 +665,10 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		if err != nil {
 			t.Fatalf("Error: Waiting PacketCapture to Running failed: %v", err)
 		}
+		connections := 10
+		if tc.netcatConnections != nil {
+			connections = *tc.netcatConnections
+		}
 		// Send an ICMP echo packet from the source Pod to the destination.
 		if protocol == icmpProto {
 			if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, getOSString(), "", data.testNamespace},
@@ -548,13 +676,13 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 				t.Logf("Ping(%s) '%s' -> '%v' failed: ERROR (%v)", protocol.StrVal, srcPod, *dstPodIPs, err)
 			}
 		} else if protocol == tcpProto {
-			for i := 1; i <= 10; i++ {
+			for i := 1; i <= connections; i++ {
 				if err := data.runNetcatCommandFromTestPodWithProtocol(srcPod, data.testNamespace, toolboxContainerName, server, serverPodPort, "tcp"); err != nil {
 					t.Logf("Netcat(TCP) '%s' -> '%v' failed: ERROR (%v)", srcPod, server, err)
 				}
 			}
 		} else if protocol == udpProto {
-			for i := 1; i <= 10; i++ {
+			for i := 1; i <= connections; i++ {
 				if err := data.runNetcatCommandFromTestPodWithProtocol(srcPod, data.testNamespace, toolboxContainerName, server, serverPodPort, "udp"); err != nil {
 					t.Logf("Netcat(UDP) '%s' -> '%v' failed: ERROR (%v)", srcPod, server, err)
 				}
@@ -732,6 +860,15 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 					}
 					if ports.SrcPort != nil {
 						assert.Equal(t, *ports.SrcPort, int32(tcp.SrcPort))
+					}
+				}
+				if packetSpec.TransportHeader.TCP.Flags != nil {
+					for _, f := range packetSpec.TransportHeader.TCP.Flags {
+						m := f.Value
+						if f.Mask != nil {
+							m = *f.Mask
+						}
+						assert.Equal(t, uint8(f.Value), tcp.Contents[13]&uint8(m))
 					}
 				}
 			}
