@@ -593,7 +593,7 @@ The `--flow` (or `-f`) argument can be used to specify the PacketCapture packet
 headers with the [ovs-ofctl](http://www.openvswitch.org//support/dist-docs/ovs-ofctl.8.txt)
 flow syntax. This argument works the same way as the one for `antctl traceflow`. The supported flow fields
 include: IP protocol (`icmp`, `tcp`, `udp`), source and destination ports
-(`tcp_src`, `tcp_dst`, `udp_src`, `udp_dst`).
+(`tcp_src`, `tcp_dst`, `udp_src`, `udp_dst`), and TCP flags (`tcp_flags`).
 
 By default, the command will wait for the PacketCapture to succeed or fail, or to
 timeout. The default timeout is 60 seconds, but can be changed with the
@@ -608,6 +608,10 @@ More examples of `antctl packetcapture`:
 $ antctl packetcapture -S pod1 -D pod2
 # Start capturing packets from pod1 in Namespace ns1 to a destination IP
 $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
+# Start capturing TCP FIN packets from pod1 to pod2, with destination port 80
+$ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
+# Start capturing TCP SYNs that are not ACKs from pod1 to pod2, with destination port 80
+$ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+syn-ack
 # Start capturing UDP packets from pod1 to pod2, with destination port 1234
 $ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
 # Save the packets file to a specified directory
