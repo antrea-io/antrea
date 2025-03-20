@@ -649,6 +649,19 @@ func run(o *Options) error {
 		}
 	}
 
+	// Secondary network controller should be created before CNIServer.Run() to make sure no Pod CNI updates will be missed.
+	var secondaryNetworkController *secondarynetwork.Controller
+	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		secondaryNetworkController, err = secondarynetwork.NewController(
+			o.config.ClientConnection, o.config.KubeAPIServerOverride,
+			k8sClient, localPodInformer.Get(),
+			podUpdateChannel, ifaceStore,
+			&o.config.SecondaryNetwork, ovsdbConnection)
+		if err != nil {
+			return fmt.Errorf("failed to create secondary network controller: %w", err)
+		}
+	}
+
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		traceflowController = traceflow.NewTraceflowController(
@@ -761,18 +774,6 @@ func run(o *Options) error {
 			return fmt.Errorf("failed to start Antrea IPAM agent: %v", err)
 		}
 		go ipamController.Run(stopCh)
-	}
-
-	var secondaryNetworkController *secondarynetwork.Controller
-	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-		secondaryNetworkController, err = secondarynetwork.NewController(
-			o.config.ClientConnection, o.config.KubeAPIServerOverride,
-			k8sClient, localPodInformer.Get(),
-			podUpdateChannel,
-			&o.config.SecondaryNetwork, ovsdbConnection)
-		if err != nil {
-			return fmt.Errorf("failed to create secondary network controller: %w", err)
-		}
 	}
 
 	var bgpController *bgp.Controller
