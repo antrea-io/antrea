@@ -1068,22 +1068,14 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 
 	serversAreReady := func() bool {
-		reachability := NewReachability(allPods, Connected)
-		k.Validate(allPods, reachability, []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085}, utils.ProtocolTCP)
-		if _, wrong, _ := reachability.Summary(); wrong != 0 {
-			return false
+		protocolPortPairs := map[utils.AntreaPolicyProtocol][]int32{
+			utils.ProtocolTCP:  []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085},
+			utils.ProtocolUDP:  []int32{80, 81},
+			utils.ProtocolSCTP: []int32{80, 81},
 		}
+		httpServerReadiness := k.newHttpServerReadiness(allPods, protocolPortPairs)
 
-		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolUDP)
-		if _, wrong, _ := reachability.Summary(); wrong != 0 {
-			return false
-		}
-
-		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolSCTP)
-		if _, wrong, _ := reachability.Summary(); wrong != 0 {
-			return false
-		}
-		return true
+		return httpServerReadiness.isReady()
 	}
 
 	for i := 0; i < maxTries; i++ {
@@ -1185,11 +1177,11 @@ func (hsr *httpServerReadiness) validateProtocol(protocol utils.AntreaPolicyProt
 		// If the connectivity from podFrom to podTo has been observed and is different
 		// from the connectivity we received, store Error connectivity in reachability
 		// matrix.
-		prevConn := reachability.Observed.Get(r.podFrom.String(), r.podTo.String())
+		prevConn := hsr.reachability.Observed.Get(r.podFrom.String(), r.podTo.String())
 		if prevConn == Unknown {
-			reachability.Observe(r.podFrom, r.podTo, r.connectivity)
+			hsr.reachability.Observe(r.podFrom, r.podTo, r.connectivity)
 		} else if prevConn != r.connectivity {
-			reachability.Observe(r.podFrom, r.podTo, Error)
+			hsr.reachability.Observe(r.podFrom, r.podTo, Error)
 		}
 	}
 }
