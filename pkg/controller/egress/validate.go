@@ -65,6 +65,10 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 				return false, fmt.Sprintf("Burst %s in Egress %s is invalid: %v", newEgress.Spec.Bandwidth.Burst, newEgress.Name, err)
 			}
 		}
+		// Don't Allow if the FailurePolicy is updated.
+		if oldEgress.Spec.FailurePolicy != "" && newEgress.Spec.FailurePolicy != oldEgress.Spec.FailurePolicy {
+			return false, fmt.Sprint("Field FailurePolicy in Egress Spec is immutable. If you want to update kindly delete and re apply Egress.")
+		}
 		// Allow it if EgressIP and ExternalIPPool don't change.
 		if newEgress.Spec.EgressIP == oldEgress.Spec.EgressIP && newEgress.Spec.ExternalIPPool == oldEgress.Spec.ExternalIPPool {
 			return true, ""
