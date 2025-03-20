@@ -228,7 +228,7 @@ func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer antreae2e.TeardownTest(t, e2eTestData)
+	// defer antreae2e.TeardownTest(t, e2eTestData)
 
 	testData := &testData{e2eTestData: e2eTestData, networkType: networkType, pods: pods}
 
@@ -315,7 +315,7 @@ func TestSRIOVNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer antreae2e.TeardownTest(t, e2eTestData)
+	// defer antreae2e.TeardownTest(t, e2eTestData)
 
 	pods := []*testPodInfo{
 		{

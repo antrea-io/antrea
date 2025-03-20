@@ -56,9 +56,8 @@ const (
 )
 
 const (
-	networkAttachDefAnnotationKey = "k8s.v1.cni.cncf.io/networks"
+	networkAttachDefAnnotationKey = netdefv1.NetworkAttachmentAnnot
 	resourceNameAnnotationKey     = "k8s.v1.cni.cncf.io/resourceName"
-	cniPath                       = "/opt/cni/bin/"
 	startIfaceIndex               = 1
 	endIfaceIndex                 = 101
 
@@ -194,8 +193,8 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 	if len(storedInterfaces) > 0 {
 		// We do not support secondary network update at the moment. Return as long as one
 		// secondary interface has been created for the Pod.
-		klog.V(1).InfoS("Secondary network already configured on this Pod and update not supported, skipping update",
-			"Pod", klog.KObj(pod))
+		klog.V(1).InfoS("Secondary network already configured on this Pod and update not supported, "+
+			"skipping update", "Pod", klog.KObj(pod))
 		return nil
 	}
 
@@ -328,7 +327,7 @@ func (pc *PodController) configureSecondaryInterface(
 	resourceName string,
 	podCNIInfo *podCNIInfo,
 	networkConfig *SecondaryNetworkConfig,
-) error {
+) (*current.Result, error) {
 	var ipamResult *ipam.IPAMResult
 	var ifConfigErr error
 	if networkConfig.IPAM != nil {
@@ -341,7 +340,7 @@ func (pc *PodController) configureSecondaryInterface(
 		}
 		ipamResult, err = pc.ipamAllocator.SecondaryNetworkAllocate(podOwner, &networkConfig.NetworkConfig)
 		if err != nil {
-			return fmt.Errorf("secondary network IPAM failed: %v", err)
+			return nil, fmt.Errorf("secondary network IPAM failed: %v", err)
 		}
 		defer func() {
 			if ifConfigErr != nil {
@@ -372,7 +371,7 @@ func (pc *PodController) configureSecondaryInterface(
 			podCNIInfo.containerID, podCNIInfo.netNS, network.InterfaceRequest,
 			int(networkConfig.MTU), ipamResult)
 	}
-	return ifConfigErr
+	return &ipamResult.Result, ifConfigErr
 }
 
 func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkList []*netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo) error {
@@ -385,6 +384,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 
 	var savedErr error
 	interfacesConfigured := 0
+	var netStatus []netdefv1.NetworkStatus
 	for _, network := range networkList {
 		klog.V(2).InfoS("Secondary Network attached to Pod", "network", network, "Pod", klog.KObj(pod))
 		netAttachDef, err := pc.netAttachDefClient.NetworkAttachmentDefinitions(network.Namespace).Get(context.TODO(), network.Name, metav1.GetOptions{})
@@ -444,7 +444,8 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		}
 
 		// Secondary network information retrieved from API server. Proceed to configure secondary interface now.
-		if err = pc.configureSecondaryInterface(pod, network, resourceName, podCNIInfo, networkConfig); err != nil {
+		res, err := pc.configureSecondaryInterface(pod, network, resourceName, podCNIInfo, networkConfig)
+		if err != nil {
 			klog.ErrorS(err, "Secondary interface configuration failed",
 				"Pod", klog.KRef(pod.Namespace, pod.Name), "interface", network.InterfaceRequest,
 				"networkType", networkConfig.NetworkType)
@@ -452,12 +453,23 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		} else {
 			interfacesConfigured++
 		}
+
+		status, err := netdefutils.CreateNetworkStatus(res, network.Name, false, nil)
+		if err != nil {
+			return fmt.Errorf("error setting network status: %v", err)
+		}
+
+		netStatus = append(netStatus, *status)
 	}
 
 	if savedErr != nil && interfacesConfigured == 0 {
 		// As we do not support secondary network update, do not return error to
 		// retry, if at least one secondary network is configured.
 		return savedErr
+	}
+	// update Pod annotation
+	if err := netdefutils.SetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
+		return err
 	}
 	return nil
 }
@@ -515,9 +527,5 @@ func (pc *PodController) Run(stopCh <-chan struct{}) {
 
 func checkForPodSecondaryNetworkAttachement(pod *corev1.Pod) (string, bool) {
 	netObj, netObjExist := pod.GetAnnotations()[networkAttachDefAnnotationKey]
-	if netObjExist {
-		return netObj, true
-	} else {
-		return netObj, false
-	}
+	return netObj, netObjExist
 }
