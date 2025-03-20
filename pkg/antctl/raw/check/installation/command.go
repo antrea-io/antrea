@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 
+	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/antctl/raw/check"
 )
 
@@ -367,7 +368,7 @@ func (t *testContext) runTests(ctx context.Context) testStats {
 
 func (t *testContext) tcpProbe(ctx context.Context, clientPodName string, container string, target string, targetPort int) error {
 	cmd := tcpProbeCommand(target, targetPort)
-	_, stderr, err := check.ExecInPod(ctx, t.client, t.config, t.namespace, clientPodName, container, cmd)
+	_, stderr, err := raw.ExecInPod(ctx, t.client, t.config, t.namespace, clientPodName, container, cmd)
 	if err != nil {
 		// We log the contents of stderr here for troubleshooting purposes.
 		t.Log("tcp probe command '%s' failed: %v", strings.Join(cmd, " "), err)
