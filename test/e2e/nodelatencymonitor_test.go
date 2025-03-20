@@ -28,7 +28,6 @@ import (
 	"antrea.io/antrea/pkg/features"
 )
 
-// go test -timeout=10m -v antrea.io/antrea/test/e2e -run TestNodeLatencyMonitor -provider=kind -deploy-antrea=false
 func TestNodeLatencyMonitor(t *testing.T) {
 	skipIfFeatureDisabled(t, features.NodeLatencyMonitor, true, false)
 	skipIfHasWindowsNodes(t) // as the feature does not have official Windows support

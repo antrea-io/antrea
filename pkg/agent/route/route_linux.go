@@ -27,6 +27,8 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -1263,51 +1265,41 @@ func (c *Client) initNodeLatency() {
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		gateway = c.networkConfig.TransportIface
 	}
-	icmpZero := int32(0)
+
+	buildInputRule := func(ipProtocol iptables.Protocol, icmpType int32) string {
+		return iptables.NewRuleBuilder(antreaInputChain).
+			MatchInputInterface(gateway).
+			MatchICMP(&icmpType, nil, ipProtocol).
+			SetComment("Antrea: allow ICMP ingress packets from NodeLatencyMonitor").
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule()
+	}
+	buildOutputRule := func(ipProtocol iptables.Protocol, icmpType int32) string {
+		return iptables.NewRuleBuilder(antreaOutputChain).
+			MatchOutputInterface(gateway).
+			MatchICMP(&icmpType, nil, ipProtocol).
+			SetComment("Antrea: allow ICMP egress packets from NodeLatencyMonitor").
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule()
+	}
 
 	if c.networkConfig.IPv6Enabled {
-		antreaInputChainRulesIPv6 := []string{
-			iptables.NewRuleBuilder(antreaInputChain).
-				MatchInputInterface(gateway).
-				MatchICMP(&icmpZero, &icmpZero, iptables.ProtocolIPv6).
-				SetComment("Antrea: allow ICMP ingress packets from NodeLatencyMonitor").
-				SetTarget(iptables.AcceptTarget).
-				Done().
-				GetRule(),
-		}
-		antreaOutputChainRulesIPv6 := []string{
-			iptables.NewRuleBuilder(antreaOutputChain).
-				MatchOutputInterface(gateway).
-				MatchICMP(&icmpZero, &icmpZero, iptables.ProtocolIPv6).
-				SetComment("Antrea: allow ICMP egress packets from NodeLatencyMonitor").
-				SetTarget(iptables.AcceptTarget).
-				Done().
-				GetRule(),
-		}
-		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaInputChain, antreaInputChainRulesIPv6)
-		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaOutputChain, antreaOutputChainRulesIPv6)
+		inputRequestRule := buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest.Protocol()))
+		outputRequestRule := buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest.Protocol()))
+		inputReplyRule := buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply.Protocol()))
+		outputReplyRule := buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply.Protocol()))
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaInputChain, []string{inputRequestRule, inputReplyRule})
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaOutputChain, []string{outputRequestRule, outputReplyRule})
 	}
 	if c.networkConfig.IPv4Enabled {
-		antreaInputChainRulesIPv4 := []string{
-			iptables.NewRuleBuilder(antreaInputChain).
-				MatchInputInterface(gateway).
-				MatchICMP(&icmpZero, &icmpZero, iptables.ProtocolIPv4).
-				SetComment("Antrea: allow ICMP ingress packets from NodeLatencyMonitor").
-				SetTarget(iptables.AcceptTarget).
-				Done().
-				GetRule(),
-		}
-		antreaOutputChainRulesIPv4 := []string{
-			iptables.NewRuleBuilder(antreaOutputChain).
-				MatchOutputInterface(gateway).
-				MatchICMP(&icmpZero, &icmpZero, iptables.ProtocolIPv4).
-				SetComment("Antrea: allow ICMP egress packets from NodeLatencyMonitor").
-				SetTarget(iptables.AcceptTarget).
-				Done().
-				GetRule(),
-		}
-		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaInputChain, antreaInputChainRulesIPv4)
-		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRulesIPv4)
+		inputEchoRule := buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho.Protocol()))
+		outputEchoRule := buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho.Protocol()))
+		inputReplyRule := buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply.Protocol()))
+		outputReplyRule := buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply.Protocol()))
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaInputChain, []string{inputEchoRule, inputReplyRule})
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaOutputChain, []string{outputEchoRule, outputReplyRule})
 	}
 }
 
