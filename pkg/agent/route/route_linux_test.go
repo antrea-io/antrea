@@ -430,11 +430,13 @@ COMMIT
 :ANTREA-POL-PRE-INGRESS-RULES - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
--A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 1 -p icmp --icmp-type 1 -m comment --comment "Antrea: allow ICMP ingress packets from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP echo ingress packets from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP echo reply ingress packets from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
--A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 1 -p icmp --icmp-type 1 -m comment --comment "Antrea: allow ICMP egress packets from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP echo egress packets from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP echo reply egress packets from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
@@ -480,11 +482,13 @@ COMMIT
 :ANTREA-POL-PRE-INGRESS-RULES - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
--A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 58 -p icmpv6 --icmpv6-type 58 -m comment --comment "Antrea: allow ICMP ingress packets from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP echo request ingress packets from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP echo reply ingress packets from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
--A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 58 -p icmpv6 --icmpv6-type 58 -m comment --comment "Antrea: allow ICMP egress packets from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP echo request egress packets from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP echo reply egress packets from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
