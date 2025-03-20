@@ -52,11 +52,17 @@ type Interface interface {
 	GetRoutes(ctx context.Context, routeType RouteType, peerAddress string) ([]Route, error)
 }
 
+type Confederation struct {
+	Identifier uint32
+	Peers      []uint32
+}
+
 // GlobalConfig contains the global configuration to start a BGP server. More attributes might be added later.
 type GlobalConfig struct {
-	ASN        uint32
-	RouterID   string
-	ListenPort int32
+	ASN           uint32
+	RouterID      string
+	ListenPort    int32
+	Confederation *Confederation
 }
 
 type SessionState string
