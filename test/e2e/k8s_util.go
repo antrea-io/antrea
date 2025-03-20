@@ -1152,29 +1152,14 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 }
 
 func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
-	numProbes := len(allPods) * len(allPods)
-	resultsCh := make(chan *probeResult, numProbes)
-	oneProbe := func(podFrom, podTo Pod, port int32) {
-		log.Tracef("Probing: %s -> %s", podFrom, podTo)
-		expectedResult := reachability.Expected.Get(podFrom.String(), podTo.String())
-		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, remoteCluster, &expectedResult)
-		resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
-	}
-	for _, pod1 := range allPods {
-		for _, pod2 := range allPods {
-			go oneProbe(pod1, pod2, port)
-		}
-	}
-	for i := 0; i < numProbes; i++ {
-		r := <-resultsCh
-		if r.err != nil {
-			log.Errorf("unable to perform probe %s -> %s in %s: %v", r.podFrom, r.podTo, k.ClusterName, r.err)
-		}
-		prevConn := reachability.Observed.Get(r.podFrom.String(), r.podTo.String())
-		if prevConn == Unknown {
-			reachability.Observe(r.podFrom, r.podTo, r.connectivity)
-		}
-	}
+	httpServerReadiness := k.newHttpServerReadiness(allPods,
+		map[utils.AntreaPolicyProtocol][]int32{
+			protocol: []int32{port},
+		},
+	)
+	httpServerReadiness.reachability = reachability
+	httpServerReadiness.remoteCluster = remoteCluster
+	httpServerReadiness.validateProtocol(protocol)
 }
 
 func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, podsPerNamespace []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
