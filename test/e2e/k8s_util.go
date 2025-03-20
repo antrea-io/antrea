@@ -1034,27 +1034,54 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string
 	}
 }
 
+type httpServerReadiness struct {
+	*KubernetesUtils
+	pods              []Pod
+	podsShuffled      []Pod
+	reachability      *Reachability
+	remoteCluster     *KubernetesUtils
+	protocolPortPairs map[utils.AntreaPolicyProtocol][]int32
+}
+
+func (k *KubernetesUtils) newHttpServerReadiness(pods []Pod, protocolPortPairs map[utils.AntreaPolicyProtocol][]int32) httpServerReadiness {
+	httpServerReadiness := httpServerReadiness{
+		pods:              pods,
+		KubernetesUtils:   k,
+		protocolPortPairs: protocolPortPairs,
+	}
+	podsShuffled := slices.Clone(pods)
+	rand.Shuffle(len(podsShuffled), func(i, j int) {
+		podsShuffled[i], podsShuffled[j] = podsShuffled[j], podsShuffled[i]
+	})
+	httpServerReadiness.podsShuffled = podsShuffled
+	return httpServerReadiness
+}
+
+func (hsr *httpServerReadiness) isReady() bool {
+	hsr.reachability = NewReachability(hsr.pods, Connected)
+	for protocol, _ := range hsr.protocolPortPairs {
+		hsr.validateProtocol(protocol)
+		if _, wrong, _ := hsr.reachability.Summary(); wrong != 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	const maxTries = 10
 	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 
 	serversAreReady := func() bool {
-		reachability := NewReachability(allPods, Connected)
-		k.Validate(allPods, reachability, []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085}, utils.ProtocolTCP)
-		if _, wrong, _ := reachability.Summary(); wrong != 0 {
-			return false
+		protocolPortPairs := map[utils.AntreaPolicyProtocol][]int32{
+			utils.ProtocolTCP:  []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085},
+			utils.ProtocolUDP:  []int32{80, 81},
+			utils.ProtocolSCTP: []int32{80, 81},
 		}
+		httpServerReadiness := k.newHttpServerReadiness(allPods, protocolPortPairs)
 
-		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolUDP)
-		if _, wrong, _ := reachability.Summary(); wrong != 0 {
-			return false
-		}
-
-		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolSCTP)
-		if _, wrong, _ := reachability.Summary(); wrong != 0 {
-			return false
-		}
-		return true
+		return httpServerReadiness.isReady()
 	}
 
 	for i := 0; i < maxTries; i++ {
@@ -1067,33 +1094,26 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	return fmt.Errorf("after %d tries, HTTP servers are not ready", maxTries)
 }
 
-// Validate checks the connectivity between all Pods in both directions with a
-// list of ports and a protocol. The connectivity from a Pod to another Pod should
-// be consistent across all provided ports. Otherwise, this connectivity will be
-// treated as Error.
-func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol utils.AntreaPolicyProtocol) {
-	podCount := len(allPods)
+// Validates two way connectivity between all pods on the specified protocol against the given ports
+func (hsr *httpServerReadiness) validateProtocol(protocol utils.AntreaPolicyProtocol) {
+	ports := hsr.protocolPortPairs[protocol]
+	podCount := len(hsr.pods)
 	numProbes := podCount * podCount * len(ports)
 	// TODO: find better metrics, this is only for POC.
 	resultsCh := make(chan *probeResult, numProbes)
-	oneProbe := func(podFrom Pod, allPods []Pod, port []int32) {
-		allPods = slices.Clone(allPods)
-		rand.Shuffle(len(allPods), func(i, j int) {
-			allPods[i], allPods[j] = allPods[j], allPods[i]
-		})
-
-		for _, podTo := range allPods {
+	probeAll := func(podFrom Pod, port []int32) {
+		for _, podTo := range hsr.podsShuffled {
 			for _, port := range ports {
 				log.Tracef("Probing: %s -> %s", podFrom, podTo)
-				expectedResult := reachability.Expected.Get(podFrom.String(), podTo.String())
-				connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, nil, &expectedResult)
+				expectedResult := hsr.reachability.Expected.Get(podFrom.String(), podTo.String())
+				connectivity, err := hsr.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, nil, &expectedResult)
 				resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
 			}
 		}
 	}
 
-	for _, fromPod := range allPods {
-		go oneProbe(fromPod, allPods, ports)
+	for _, fromPod := range hsr.pods {
+		go probeAll(fromPod, ports)
 	}
 	for i := 0; i < numProbes; i++ {
 		r := <-resultsCh
@@ -1108,11 +1128,11 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 		// If the connectivity from podFrom to podTo has been observed and is different
 		// from the connectivity we received, store Error connectivity in reachability
 		// matrix.
-		prevConn := reachability.Observed.Get(r.podFrom.String(), r.podTo.String())
+		prevConn := hsr.reachability.Observed.Get(r.podFrom.String(), r.podTo.String())
 		if prevConn == Unknown {
-			reachability.Observe(r.podFrom, r.podTo, r.connectivity)
+			hsr.reachability.Observe(r.podFrom, r.podTo, r.connectivity)
 		} else if prevConn != r.connectivity {
-			reachability.Observe(r.podFrom, r.podTo, Error)
+			hsr.reachability.Observe(r.podFrom, r.podTo, Error)
 		}
 	}
 }
