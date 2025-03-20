@@ -1137,6 +1137,20 @@ func (hsr *httpServerReadiness) validateProtocol(protocol utils.AntreaPolicyProt
 	}
 }
 
+// Validate checks the connectivity between all Pods in both directions with a
+// list of ports and a protocol. The connectivity from a Pod to another Pod should
+// be consistent across all provided ports. Otherwise, this connectivity will be
+// treated as Error.
+func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol utils.AntreaPolicyProtocol) {
+	httpServerReadiness := k.newHttpServerReadiness(allPods,
+		map[utils.AntreaPolicyProtocol][]int32{
+			protocol: ports,
+		},
+	)
+	httpServerReadiness.reachability = reachability
+	httpServerReadiness.validateProtocol(protocol)
+}
+
 func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
 	numProbes := len(allPods) * len(allPods)
 	resultsCh := make(chan *probeResult, numProbes)
