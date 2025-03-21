@@ -255,3 +255,5 @@ require (
 
 // remove this when https://github.com/mdlayher/ndp/pull/32 gets merged
 replace github.com/mdlayher/ndp => github.com/antrea-io/ndp v0.0.0-20241107040829-6f35f2e50f4c
+
+replace github.com/vmware/go-ipfix => github.com/vmware/go-ipfix v0.2.1-0.20250321182203-8c2c7fafced8
