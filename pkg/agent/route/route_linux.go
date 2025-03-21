@@ -1267,55 +1267,43 @@ func (c *Client) initNodeLatency() {
 	}
 
 	buildInputRule := func(ipProtocol iptables.Protocol, icmpType int32) string {
-		var comment string
-		if icmpType == 128 {
-			comment = "Antrea: allow ICMP echo request ingress packets from NodeLatencyMonitor"
-		} else if icmpType == 8 {
-			comment = "Antrea: allow ICMP echo ingress packets from NodeLatencyMonitor"
-		} else {
-			comment = "Antrea: allow ICMP echo reply ingress packets from NodeLatencyMonitor"
-		}
 		return iptables.NewRuleBuilder(antreaInputChain).
 			MatchInputInterface(gateway).
 			MatchICMP(&icmpType, nil, ipProtocol).
-			SetComment(comment).
+			SetComment("Antrea: allow ICMP probes from NodeLatencyMonitor").
 			SetTarget(iptables.AcceptTarget).
 			Done().
 			GetRule()
 	}
 	buildOutputRule := func(ipProtocol iptables.Protocol, icmpType int32) string {
-		var comment string
-		if icmpType == 128 {
-			comment = "Antrea: allow ICMP echo request egress packets from NodeLatencyMonitor"
-		} else if icmpType == 8 {
-			comment = "Antrea: allow ICMP echo egress packets from NodeLatencyMonitor"
-		} else {
-			comment = "Antrea: allow ICMP echo reply egress packets from NodeLatencyMonitor"
-		}
 		return iptables.NewRuleBuilder(antreaOutputChain).
 			MatchOutputInterface(gateway).
 			MatchICMP(&icmpType, nil, ipProtocol).
-			SetComment(comment).
+			SetComment("Antrea: allow ICMP probes from NodeLatencyMonitor").
 			SetTarget(iptables.AcceptTarget).
 			Done().
 			GetRule()
 	}
 
 	if c.networkConfig.IPv6Enabled {
-		inputRequestRule := buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest))
-		outputRequestRule := buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest))
-		inputReplyRule := buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply))
-		outputReplyRule := buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply))
-		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaInputChain, []string{inputRequestRule, inputReplyRule})
-		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaOutputChain, []string{outputRequestRule, outputReplyRule})
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaInputChain, []string{
+			buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest)),
+			buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply)),
+		})
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaOutputChain, []string{
+			buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest)),
+			buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply)),
+		})
 	}
 	if c.networkConfig.IPv4Enabled {
-		inputEchoRule := buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho))
-		outputEchoRule := buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho))
-		inputReplyRule := buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply))
-		outputReplyRule := buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply))
-		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaInputChain, []string{inputEchoRule, inputReplyRule})
-		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaOutputChain, []string{outputEchoRule, outputReplyRule})
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaInputChain, []string{
+			buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho)),
+			buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply)),
+		})
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaOutputChain, []string{
+			buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho)),
+			buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply)),
+		})
 	}
 }
 
