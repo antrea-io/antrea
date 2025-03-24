@@ -746,7 +746,7 @@ func (c *Client) syncIPTables() error {
 	}
 
 	iptablesFilterRulesByChainV4 := make(map[string][]string)
-	// Install the static rules (WireGuard for now) before the dynamic rules (e.g., NodeNetworkPolicy)
+	// Install the static rules (WireGuard + NodeLatencyMonitor) before the dynamic rules (e.g., NodeNetworkPolicy)
 	// for performance reasons.
 	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeLatencyMonitorIPTablesIPv4)
 	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.wireguardIPTablesIPv4)
@@ -1261,14 +1261,16 @@ func (c *Client) initWireguard() {
 }
 
 func (c *Client) initNodeLatency() {
-	gateway := c.nodeConfig.GatewayConfig.Name
+	// the interface on which ICMP probes are sent / received is the Antrea gateway interface, except
+	// in networkPolicyOnly mode, for which it is the Node's transport interface.
+	iface := c.nodeConfig.GatewayConfig.Name
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		gateway = c.networkConfig.TransportIface
+		iface = c.networkConfig.TransportIface
 	}
 
 	buildInputRule := func(ipProtocol iptables.Protocol, icmpType int32) string {
 		return iptables.NewRuleBuilder(antreaInputChain).
-			MatchInputInterface(gateway).
+			MatchInputInterface(iface).
 			MatchICMP(&icmpType, nil, ipProtocol).
 			SetComment("Antrea: allow ICMP probes from NodeLatencyMonitor").
 			SetTarget(iptables.AcceptTarget).
@@ -1277,7 +1279,7 @@ func (c *Client) initNodeLatency() {
 	}
 	buildOutputRule := func(ipProtocol iptables.Protocol, icmpType int32) string {
 		return iptables.NewRuleBuilder(antreaOutputChain).
-			MatchOutputInterface(gateway).
+			MatchOutputInterface(iface).
 			MatchICMP(&icmpType, nil, ipProtocol).
 			SetComment("Antrea: allow ICMP probes from NodeLatencyMonitor").
 			SetTarget(iptables.AcceptTarget).
