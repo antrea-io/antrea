@@ -1064,28 +1064,21 @@ func (hsr *httpServerReadiness) isReady() bool {
 }
 
 func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
-	const maxTries = 10
 	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 
-	serversAreReady := func() bool {
-		protocolPortPairs := map[utils.AntreaPolicyProtocol][]int32{
-			utils.ProtocolTCP:  []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085},
-			utils.ProtocolUDP:  []int32{80, 81},
-			utils.ProtocolSCTP: []int32{80, 81},
-		}
-		httpServerReadiness := k.newHttpServerReadiness(allPods, protocolPortPairs)
-
-		return httpServerReadiness.isReady()
+	protocolPortPairs := map[utils.AntreaPolicyProtocol][]int32{
+		utils.ProtocolTCP:  {80, 81, 8080, 8081, 8082, 8083, 8084, 8085},
+		utils.ProtocolUDP:  {80, 81},
+		utils.ProtocolSCTP: {80, 81},
 	}
+	httpServerReadiness := k.newHttpServerReadiness(allPods, protocolPortPairs)
 
-	for i := 0; i < maxTries; i++ {
-		if serversAreReady() {
-			log.Infof("All HTTP servers are ready")
-			return nil
-		}
-		time.Sleep(defaultInterval)
+	if httpServerReadiness.isReady() {
+		log.Infof("All HTTP servers are ready")
+		return nil
+	} else {
+		return fmt.Errorf("HTTP servers are not ready")
 	}
-	return fmt.Errorf("after %d tries, HTTP servers are not ready", maxTries)
 }
 
 // Encapsulate the data needed to perform a probe between pods
