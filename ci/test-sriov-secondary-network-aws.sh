@@ -366,8 +366,8 @@ function upload_and_load_image() {
 
     # SSH into the node and load the image
     ssh -o StrictHostKeyChecking=no -i "$AWS_EC2_SSH_KEY_NAME" ubuntu@"$node_ip" << EOF
-        sudo ctr images import /home/ubuntu/$(basename "$image_path")
-        sudo ctr images ls
+        sudo ctr -n=k8s.io images import /home/ubuntu/$(basename "$image_path")
+        sudo crictl images | grep antrea
         # remove the tarball after loading
         sudo rm /home/ubuntu/$(basename "$image_path")
 EOF
