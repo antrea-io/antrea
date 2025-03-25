@@ -3294,10 +3294,17 @@ func testACNPStrictNamespacesIsolationByLabels(t *testing.T) {
 		SetTier("securityops").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
-	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		samePurposeTierLabels, nil, crdv1beta1.RuleActionPass, "", "", nil)
-	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil, nil, nil,
-		nil, nil, crdv1beta1.RuleActionDrop, "", "", nil)
+	builder.AddIngressFromBuilder(
+		IngressBuilder{
+			Protoc:     ProtocolTCP,
+			Namespaces: samePurposeTierLabels,
+			Action:     crdv1beta1.RuleActionPass,
+		})
+	builder.AddIngressFromBuilder(
+		IngressBuilder{
+			Protoc: ProtocolTCP,
+			Action: crdv1beta1.RuleActionDrop,
+		})
 	// prod1 and prod2 Namespaces should be able to connect to each other. The same goes for dev1 and
 	// dev2 Namespaces. However, any prod Namespace should not be able to connect to any dev Namespace
 	// due to different "tier" label values. For the "no-tier" Namespace, the first ingress rule will
@@ -3338,10 +3345,17 @@ func testACNPStrictNamespacesIsolationBySingleLabel(t *testing.T, data *TestData
 		SetTier("securityops").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
-	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		samePurposeTierLabels, nil, crdv1beta1.RuleActionPass, "", "", nil)
-	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil, nil, nil,
-		nil, nil, crdv1beta1.RuleActionDrop, "", "", nil)
+	builder.AddIngressFromBuilder(
+		IngressBuilder{
+			Protoc:     ProtocolTCP,
+			Namespaces: samePurposeTierLabels,
+			Action:     crdv1beta1.RuleActionPass,
+		})
+	builder.AddIngressFromBuilder(
+		IngressBuilder{
+			Protoc: ProtocolTCP,
+			Action: crdv1beta1.RuleActionDrop,
+		})
 	// Namespaces are split into two logical groups, purpose=test (prod1,2 and dev1,2) and purpose=test-exclusion
 	// (no-tier). The two groups of Namespace should not be able to connect to each other.
 	reachability := NewReachability(allPods, Connected)
