@@ -1042,15 +1042,6 @@ type httpServerReadiness struct {
 	protocolPortPairs map[utils.AntreaPolicyProtocol][]int32
 }
 
-func (k *KubernetesUtils) newHttpServerReadiness(pods []Pod, protocolPortPairs map[utils.AntreaPolicyProtocol][]int32) httpServerReadiness {
-	httpServerReadiness := httpServerReadiness{
-		pods:              pods,
-		KubernetesUtils:   k,
-		protocolPortPairs: protocolPortPairs,
-	}
-	return httpServerReadiness
-}
-
 func (hsr *httpServerReadiness) isReady() bool {
 	hsr.reachability = NewReachability(hsr.pods, Connected)
 	for protocol := range hsr.protocolPortPairs {
@@ -1066,12 +1057,15 @@ func (hsr *httpServerReadiness) isReady() bool {
 func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 
-	protocolPortPairs := map[utils.AntreaPolicyProtocol][]int32{
-		utils.ProtocolTCP:  {80, 81, 8080, 8081, 8082, 8083, 8084, 8085},
-		utils.ProtocolUDP:  {80, 81},
-		utils.ProtocolSCTP: {80, 81},
+	httpServerReadiness := httpServerReadiness{
+		pods:            allPods,
+		KubernetesUtils: k,
+		protocolPortPairs: map[utils.AntreaPolicyProtocol][]int32{
+			utils.ProtocolTCP:  {80, 81, 8080, 8081, 8082, 8083, 8084, 8085},
+			utils.ProtocolUDP:  {80, 81},
+			utils.ProtocolSCTP: {80, 81},
+		},
 	}
-	httpServerReadiness := k.newHttpServerReadiness(allPods, protocolPortPairs)
 
 	if httpServerReadiness.isReady() {
 		log.Infof("All HTTP servers are ready")
@@ -1184,23 +1178,27 @@ func (hsr *httpServerReadiness) validateProtocol(protocol utils.AntreaPolicyProt
 // be consistent across all provided ports. Otherwise, this connectivity will be
 // treated as Error.
 func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol utils.AntreaPolicyProtocol) {
-	httpServerReadiness := k.newHttpServerReadiness(allPods,
-		map[utils.AntreaPolicyProtocol][]int32{
+	httpServerReadiness := httpServerReadiness{
+		pods:            allPods,
+		KubernetesUtils: k,
+		protocolPortPairs: map[utils.AntreaPolicyProtocol][]int32{
 			protocol: ports,
 		},
-	)
-	httpServerReadiness.reachability = reachability
+		reachability: reachability,
+	}
 	httpServerReadiness.validateProtocol(protocol)
 }
 
 func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
-	httpServerReadiness := k.newHttpServerReadiness(allPods,
-		map[utils.AntreaPolicyProtocol][]int32{
-			protocol: []int32{port},
+	httpServerReadiness := httpServerReadiness{
+		pods:            allPods,
+		KubernetesUtils: k,
+		protocolPortPairs: map[utils.AntreaPolicyProtocol][]int32{
+			protocol: {port},
 		},
-	)
-	httpServerReadiness.reachability = reachability
-	httpServerReadiness.remoteCluster = remoteCluster
+		reachability:  reachability,
+		remoteCluster: remoteCluster,
+	}
 	httpServerReadiness.validateProtocol(protocol)
 }
 
