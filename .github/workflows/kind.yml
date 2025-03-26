@@ -357,6 +357,60 @@ jobs:
         path: log.tar.gz
         retention-days: 30
 
+  test-e2e-wireguard:
+    name: E2e tests on a Kind cluster on Linux with WireGuard encryption
+    needs: [build-antrea-coverage-image]
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        show-progress: false
+    - uses: ./.github/actions/setup-kind-test
+    - name: Run e2e tests
+      run: |
+        mkdir log
+        mkdir test-e2e-wireguard-coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-wireguard-coverage ./ci/kind/test-e2e-kind.sh \
+        --encap-mode encap --coverage \
+        --traffic-encryption-mode wireguard \
+        --skip mode-irrelevant \
+        --setup-only
+    - name: Run antctl check installation
+      run: |
+        make antctl
+        ./bin/antctl check installation --run wireguard
+    - name: Cleanup Kind cluster
+      if: ${{ always() }}
+      run: ./ci/kind/test-e2e-kind.sh --cleanup-only
+    - name: Tar coverage files
+      run: tar -czf test-e2e-wireguard-coverage.tar.gz test-e2e-wireguard-coverage
+    - name: Upload coverage for test-e2e-wireguard-coverage
+      uses: actions/upload-artifact@v6
+      with:
+        name: test-e2e-wireguard-coverage
+        path: test-e2e-wireguard-coverage.tar.gz
+        retention-days: 30
+    - name: Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: '**/*.cov.out'
+        disable_search: true
+        flags: kind-e2e-tests
+        name: codecov-test-e2e-wireguard
+        directory: test-e2e-wireguard-coverage
+        fail_ci_if_error: ${{ github.event_name == 'push' }}
+    - name: Tar log files
+      if: ${{ failure() }}
+      run: tar -czf log.tar.gz log
+    - name: Upload test log
+      uses: actions/upload-artifact@v6
+      if: ${{ failure() }}
+      with:
+        name: e2e-kind-wireguard.tar.gz
+        path: log.tar.gz
+        retention-days: 30
+
   test-e2e-hybrid-non-default:
     name: E2e tests on a Kind cluster on Linux (hybrid) with non default values (proxyAll=true, kube-proxy-mode=nftables)
     needs: [ build-antrea-coverage-image ]
@@ -680,6 +734,7 @@ jobs:
     - test-e2e-noencap
     - test-e2e-hybrid
     - test-e2e-hybrid-non-default
+    - test-e2e-wireguard
     - test-upgrade-from-N-1
     - test-upgrade-from-N-2
     - test-compatible-N-1
