@@ -68,6 +68,20 @@ func TestParseFlowCollectorAddr(t *testing.T) {
 			expectedError: nil,
 		},
 		{
+			addr:          "flow-aggregator/flow-aggregator:str:tcp",
+			expectedHost:  "flow-aggregator/flow-aggregator",
+			expectedPort:  defaultFlowCollectorPort,
+			expectedProto: "tcp",
+			expectedError: nil,
+		},
+		{
+			addr:          "flow-aggregator/flow-aggregator:78900:tcp",
+			expectedHost:  "flow-aggregator/flow-aggregator",
+			expectedPort:  defaultFlowCollectorPort,
+			expectedProto: "tcp",
+			expectedError: nil,
+		},
+		{
 			addr:          ":abbbsctp::",
 			expectedHost:  "",
 			expectedPort:  "",
