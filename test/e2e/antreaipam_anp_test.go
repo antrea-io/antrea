@@ -193,9 +193,9 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 			Port:   &p80,
 			Action: ruleAction,
 		}
-		builder.AddIngressFromBuilder(ingressBuilder)
-		builder2.AddIngressFromBuilder(ingressBuilder)
-		builder3.AddIngressFromBuilder(ingressBuilder)
+		builder.AddIngress(ingressBuilder)
+		builder2.AddIngress(ingressBuilder)
+		builder3.AddIngress(ingressBuilder)
 	} else {
 		builder.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
 			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
