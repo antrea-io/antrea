@@ -484,7 +484,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		if err := netdefutils.SetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
 			klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KRef(pod.Namespace, pod.Name))
 		} else {
-			klog.InfoS("Pod network status annotation updated successfully", "Pod", klog.KRef(pod.Namespace, pod.Name), "NetworkStatus", netStatus)
+			klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KRef(pod.Namespace, pod.Name), "NetworkStatus", netStatus)
 		}
 	}
 	return nil
