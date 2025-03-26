@@ -26,6 +26,7 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --encap-mode (mode)           Traffic encapsulation mode (default is 'encap').
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud.
         --ipsec                       Generate a manifest with IPsec encryption of tunnel traffic enabled.
+        --wireGuard                   Generate a manifest with WireGuard encryption of tunnel traffic enabled.
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. TrafficControl=true,Egress=false.
                                       This option can be specified multiple times.
         --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled.
@@ -89,6 +90,7 @@ MULTICAST_INTERFACES=""
 HELM_VALUES_FILES=()
 HELM_VALUES=()
 FEATURE_GATES=()
+WIREGUARD=false
 
 while [[ $# -gt 0 ]]
 do
@@ -112,6 +114,10 @@ case $key in
     ;;
     --ipsec)
     IPSEC=true
+    shift
+    ;;
+    --wireGuard)
+    WIREGUARD=true
     shift
     ;;
     --feature-gates)
@@ -250,6 +256,11 @@ if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && $IPSEC; then
     exit 1
 fi
 
+if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && $WIREGUARD; then
+    echoerr "Encap mode '$ENCAP_MODE' does not make sense with wireGuard"
+    exit 1
+fi
+
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 source $THIS_DIR/verify-helm.sh
@@ -266,6 +277,10 @@ TMP_DIR=$(mktemp -d $THIS_DIR/../build/yamls/chart-values.XXXXXXXX)
 
 if $IPSEC; then
     HELM_VALUES+=("trafficEncryptionMode=ipsec" "tunnelType=gre")
+fi
+
+if $WIREGUARD; then
+    HELM_VALUES+=("trafficEncryptionMode=wireGuard")
 fi
 
 if $FLEXIBLE_IPAM; then
