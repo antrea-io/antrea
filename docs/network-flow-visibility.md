@@ -151,7 +151,7 @@ There are 34 IPFIX IEs in each exported flow record, which are defined in the
 IANA-assigned IE registry, the Reverse IANA-assigned IE registry and the Antrea
 IE registry. The reverse IEs are used to provide bi-directional information about
 the flow. The Enterprise ID is 0 for IANA-assigned IE registry, 29305 for reverse
-IANA IE registry, 56505 for Antrea IE registry. All the IEs used by the Antrea
+IANA IE registry, 56506 for Antrea IE registry. All the IEs used by the Antrea
 Flow Exporter are listed below:
 
 #### IEs from IANA-assigned IE Registry
