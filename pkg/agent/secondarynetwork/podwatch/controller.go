@@ -315,6 +315,7 @@ func (pc *PodController) processNextWorkItem() bool {
 	if err := pc.syncPod(key); err == nil {
 		pc.queue.Forget(key)
 	} else {
+		klog.ErrorS(err, "Error syncing Pod, requeuing", "key", key)
 		pc.queue.AddRateLimited(key)
 	}
 	return true
@@ -479,13 +480,13 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		return savedErr
 	}
 
-	// update Pod annotation
+	// update Pod network status annotation
 	if netStatus != nil {
 		if err := netdefutils.SetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
-			klog.ErrorS(err, "Update Pod annotation failed", "Pod", klog.KRef(pod.Namespace, pod.Name))
-			return err
+			klog.ErrorS(err, "Update Pod network status annotation failed", "Pod", klog.KRef(pod.Namespace, pod.Name))
+		} else {
+			klog.InfoS("Updated Pod network status annotation successfully", "Pod", klog.KRef(pod.Namespace, pod.Name), "NetworkStatus", netStatus)
 		}
-		klog.InfoS("Update Pod annotation successfully", "Pod", klog.KRef(pod.Namespace, pod.Name), "NetworkStatus", netStatus)
 	}
 	return nil
 }
