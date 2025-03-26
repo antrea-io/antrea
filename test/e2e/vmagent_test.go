@@ -591,11 +591,6 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{ExternalEntitySelector: eeSelector}})
 
-	ruleFunc := builder.AddIngress
-	if !ingress {
-		ruleFunc = builder.AddEgress
-	}
-
 	switch proto {
 	case ProtocolTCP:
 		fallthrough
@@ -611,12 +606,34 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 			cidr = &peerIPCIDR
 		}
 		port := int32(iperfPort)
-		ruleFunc(proto, &port, nil, nil, nil, nil, nil, nil, nil, cidr, nil, nil, peerLabel,
-			nil, nil, nil, nil, ruleAction, "", "")
+		if ingress {
+			builder.AddIngressWithBuilder(
+				IngressBuilder{
+					Protoc:     proto,
+					Port:       &port,
+					Cidr:       cidr,
+					EeSelector: peerLabel,
+					Action:     ruleAction,
+				})
+		} else {
+			builder.AddEgress(proto, &port, nil, nil, nil, nil, nil, nil, nil, cidr, nil, nil, peerLabel,
+				nil, nil, nil, nil, ruleAction, "", "")
+		}
 	case ProtocolICMP:
 		peerIPCIDR := fmt.Sprintf("%s/32", nodeIP(0))
-		ruleFunc(ProtocolICMP, nil, nil, nil, &icmpType, &icmpCode, nil, nil, nil, &peerIPCIDR, nil, nil, nil,
-			nil, nil, nil, nil, ruleAction, "", "")
+		if ingress {
+			builder.AddIngressWithBuilder(
+				IngressBuilder{
+					Protoc:   ProtocolICMP,
+					IcmpType: &icmpType,
+					IcmpCode: &icmpCode,
+					Cidr:     &peerIPCIDR,
+					Action:   ruleAction,
+				})
+		} else {
+			builder.AddEgress(ProtocolICMP, nil, nil, nil, &icmpType, &icmpCode, nil, nil, nil, &peerIPCIDR, nil, nil, nil,
+				nil, nil, nil, nil, ruleAction, "", "")
+		}
 	}
 	anpRule := builder.Get()
 
