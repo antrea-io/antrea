@@ -56,10 +56,9 @@ const (
 )
 
 const (
-	networkAttachDefAnnotationKey = netdefv1.NetworkAttachmentAnnot
-	resourceNameAnnotationKey     = "k8s.v1.cni.cncf.io/resourceName"
-	startIfaceIndex               = 1
-	endIfaceIndex                 = 101
+	resourceNameAnnotationKey = "k8s.v1.cni.cncf.io/resourceName"
+	startIfaceIndex           = 1
+	endIfaceIndex             = 101
 
 	interfaceDefaultMTU = 1500
 	vlanIDMax           = 4094
@@ -205,7 +204,7 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 		return nil
 	}
 
-	secondaryNetwork, ok := checkForPodSecondaryNetworkAttachement(pod)
+	secondaryNetwork, ok := checkForPodSecondaryNetworkAttachment(pod)
 	if !ok {
 		// NOTE: We do not handle Pod annotation deletion/update scenario at present.
 		klog.V(2).InfoS("Pod does not have a NetworkAttachmentDefinition", "Pod", klog.KObj(pod))
@@ -315,7 +314,7 @@ func (pc *PodController) processNextWorkItem() bool {
 	if err := pc.syncPod(key); err == nil {
 		pc.queue.Forget(key)
 	} else {
-		klog.ErrorS(err, "Error syncing Pod, requeuing", "key", key)
+		klog.ErrorS(err, "Error syncing Pod for SecondaryNetwork, requeuing", "key", key)
 		pc.queue.AddRateLimited(key)
 	}
 	return true
@@ -480,12 +479,12 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		return savedErr
 	}
 
-	// update Pod network status annotation
+	// Update the Pod's network status annotation
 	if netStatus != nil {
 		if err := netdefutils.SetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
-			klog.ErrorS(err, "Update Pod network status annotation failed", "Pod", klog.KRef(pod.Namespace, pod.Name))
+			klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KRef(pod.Namespace, pod.Name))
 		} else {
-			klog.InfoS("Updated Pod network status annotation successfully", "Pod", klog.KRef(pod.Namespace, pod.Name), "NetworkStatus", netStatus)
+			klog.InfoS("Pod network status annotation updated successfully", "Pod", klog.KRef(pod.Namespace, pod.Name), "NetworkStatus", netStatus)
 		}
 	}
 	return nil
@@ -542,7 +541,7 @@ func (pc *PodController) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-func checkForPodSecondaryNetworkAttachement(pod *corev1.Pod) (string, bool) {
-	netObj, netObjExist := pod.GetAnnotations()[networkAttachDefAnnotationKey]
+func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
+	netObj, netObjExist := pod.GetAnnotations()[netdefv1.NetworkAttachmentAnnot]
 	return netObj, netObjExist
 }

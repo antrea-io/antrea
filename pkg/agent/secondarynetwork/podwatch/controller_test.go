@@ -149,7 +149,7 @@ func testPod(name string, container string, podIP string, networks ...netdefv1.N
 	annotations := make(map[string]string)
 	if len(networks) > 0 {
 		annotation, _ := json.Marshal(networks)
-		annotations[networkAttachDefAnnotationKey] = string(annotation)
+		annotations[netdefv1.NetworkAttachmentAnnot] = string(annotation)
 	}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -970,7 +970,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		podController, _, _ := testPodControllerStart(ctrl)
 		pod, cniConfig := testPod(podName, containerID, podIP)
 		pod.Annotations = map[string]string{
-			networkAttachDefAnnotationKey: "<invalid>",
+			netdefv1.NetworkAttachmentAnnot: "<invalid>",
 		}
 		network := testNetwork(networkName, sriovNetworkType)
 
