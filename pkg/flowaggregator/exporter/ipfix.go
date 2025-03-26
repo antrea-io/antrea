@@ -369,7 +369,7 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) error {
 			elements = append(elements, ie)
 		}
 	}
-	record := ipfixentities.NewTemplateRecordFromElements(templateID, elements, false)
+	record := ipfixentities.NewTemplateRecordFromElements(templateID, elements)
 	// Ideally we would not have to do it explicitly, it would be taken care of by the go-ipfix library.
 	record.PrepareRecord()
 	return e.bufferedExporter.AddRecord(record)
