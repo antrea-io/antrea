@@ -128,30 +128,37 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 }
 
 type IngressBuilder struct {
-	Protoc   AntreaPolicyProtocol
-	Port     *int32
-	PortName *string
-	EndPort  *int32
-	IcmpType *int32
-	IcmpCode *int32
-	IgmpType *int32
-
-	GroupAddress *string
-	IpBlock      *crdv1beta1.IPBlock
-	PodSelector  map[string]string
-	NodeSelector map[string]string
-	NsSelector   map[string]string
-
+	Protoc               AntreaPolicyProtocol
+	Port                 *int32
+	PortName             *string
+	EndPort              *int32
+	IcmpType             *int32
+	IcmpCode             *int32
+	IgmpType             *int32
+	GroupAddress         *string
+	PodSelector          map[string]string
+	NsSelector           map[string]string
 	PodSelectorMatchExp  []metav1.LabelSelectorRequirement
 	NodeSelectorMatchExp []metav1.LabelSelectorRequirement
-	NsSelectorMatchExp   []metav1.LabelSelectorRequirement
-	Namespaces           *crdv1beta1.PeerNamespaces
+	Action               crdv1beta1.RuleAction
+	Name                 string
 
+	// CNP only
+	IpBlock            *crdv1beta1.IPBlock
+	NodeSelector       map[string]string
+	NsSelectorMatchExp []metav1.LabelSelectorRequirement
+	Namespaces         *crdv1beta1.PeerNamespaces
 	RuleAppliedToSpecs []ACNPAppliedToSpec
-	Action             crdv1beta1.RuleAction
-	RuleClusterGroup   string
-	Name               string
 	ServiceAccount     *crdv1beta1.NamespacedName
+	RuleClusterGroup   string
+
+	// ANP only
+	L7Protocols           []crdv1beta1.L7Protocol
+	RuleGroup             string
+	Cidr                  *string
+	EeSelector            map[string]string
+	EeSelectorMatchExp    []metav1.LabelSelectorRequirement
+	ANPRuleAppliedToSpecs []ANNPAppliedToSpec
 }
 
 func (b *ClusterNetworkPolicySpecBuilder) AddIngress(ib IngressBuilder) *ClusterNetworkPolicySpecBuilder {
