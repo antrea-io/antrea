@@ -78,12 +78,25 @@ if $PULL; then
     ARGS="$ARGS --pull"
 fi
 
+GO_VERSION=$(head -n 1 build/images/deps/go-version)
+
+if [[ "${DOCKER_REGISTRY}" == "" ]]; then
+    docker pull --platform linux/amd64 golang:$GO_VERSION
+else
+    docker pull --platform linux/amd64 ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION
+    docker tag ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION $GO_VERSION
+fi
+
 if $PUSH_BASE; then
    ARGS="$ARGS --push"
 fi
 
 cd build/images/ovs
-./build.sh --distro windows $ARGS
+if [[ "${DOCKER_REGISTRY}" == "" ]]; then
+    ./build.sh --distro windows $ARGS
+else
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./build.sh --distro windows $ARGS
+fi
 cd -
 
 if $PUSH_AGENT; then
