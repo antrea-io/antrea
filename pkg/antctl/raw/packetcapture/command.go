@@ -129,6 +129,10 @@ func getPCName(src, dest string) string {
 
 func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	option.timeout, _ = cmd.Flags().GetDuration("timeout")
+	return packetCaptureRun(cmd, option)
+}
+
+func packetCaptureRun(cmd *cobra.Command, option *options) error {
 	if option.timeout > maxPacketCaptureTimeout {
 		return fmt.Errorf("timeout cannot be longer than %v", maxPacketCaptureTimeout)
 	}
@@ -138,10 +142,6 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	if option.number == 0 {
 		return errors.New("packet number should be larger than 0")
 	}
-	return packetCaptureRun(cmd, option)
-}
-
-func packetCaptureRun(cmd *cobra.Command, option *options) error {
 	out := cmd.OutOrStdout()
 	_, _, antreaClient, err := getClients(cmd)
 	if err != nil {
