@@ -1321,8 +1321,12 @@ func testANNPEgressRulePodsAToGrpWithPodsC(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-deny-xa-to-grp-xc-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, grpName, "")
+	builder.AddEgress(IngressBuilder{
+		Protoc:    ProtocolTCP,
+		Port:      &p80,
+		Action:    crdv1beta1.RuleActionDrop,
+		RuleGroup: grpName,
+	})
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "a"), getPod("x", "c"), Dropped)
@@ -1389,8 +1393,12 @@ func testANNPGroupUpdate(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-deny-xa-to-grp-with-xc-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, grpName, "")
+	builder.AddEgress(IngressBuilder{
+		Protoc:    ProtocolTCP,
+		Port:      &p80,
+		Action:    crdv1beta1.RuleActionDrop,
+		RuleGroup: grpName,
+	})
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "a"), getPod("x", "c"), Dropped)
@@ -1465,8 +1473,13 @@ func testANNPAppliedToRuleGrpWithPodsAToPodsC(t *testing.T) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-deny-grp-with-a-to-c").
 		SetPriority(1.0)
-	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, nil, nil,
-		nil, nil, nil, []ANNPAppliedToSpec{{Group: grpName}}, crdv1beta1.RuleActionDrop, "", "")
+	builder.AddEgress(IngressBuilder{
+		Protoc:                ProtocolTCP,
+		Port:                  &p80,
+		PodSelector:           map[string]string{"pod": "c"},
+		ANPRuleAppliedToSpecs: []ANNPAppliedToSpec{{Group: grpName}},
+		Action:                crdv1beta1.RuleActionDrop,
+	})
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "a"), getPod("x", "c"), Dropped)
@@ -1497,8 +1510,12 @@ func testANNPGroupUpdateAppliedTo(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-deny-grp-xc-to-xa-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grpName}})
-	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, nil, nil,
-		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
+	builder.AddEgress(IngressBuilder{
+		Protoc:      ProtocolTCP,
+		Port:        &p80,
+		PodSelector: map[string]string{"pod": "c"},
+		Action:      crdv1beta1.RuleActionDrop,
+	})
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "a"), getPod("x", "c"), Dropped)
@@ -1535,8 +1552,12 @@ func testANNPGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 	builder = builder.SetName(getNS("x"), "annp-deny-grp-with-xj-to-xd-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grpName}})
-	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "d"}, nil, nil,
-		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
+	builder.AddEgress(IngressBuilder{
+		Protoc:      ProtocolTCP,
+		Port:        &p80,
+		PodSelector: map[string]string{"pod": "d"},
+		Action:      crdv1beta1.RuleActionDrop,
+	})
 	cp := []*CustomProbe{
 		{
 			SourcePod: CustomPod{
@@ -2702,8 +2723,15 @@ func testANNPPortRange(t *testing.T) {
 	builder = builder.SetName(getNS("y"), "annp-deny-yb-to-xc-egress-port-range").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
-	builder.AddEgress(ProtocolTCP, &p8080, nil, &p8082, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": getNS("x")}, nil,
-		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "annp-port-range")
+	builder.AddEgress(IngressBuilder{
+		Protoc:      ProtocolTCP,
+		Port:        &p8080,
+		EndPort:     &p8082,
+		PodSelector: map[string]string{"pod": "c"},
+		NsSelector:  map[string]string{"ns": getNS("x")},
+		Action:      crdv1beta1.RuleActionDrop,
+		Name:        "annp-port-range",
+	})
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("y", "b"), getPod("x", "c"), Dropped)
@@ -5924,14 +5952,18 @@ func createPolicyForFQDNCacheMinTTL(t *testing.T, data *TestData, testFQDN strin
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: podSelectorLabel}})
 	builder.AddFQDNRule(testFQDN, ProtocolTCP, ptr.To[int32](80), nil, nil, "AllowForFQDN", nil,
 		crdv1beta1.RuleActionAllow)
-	builder.AddEgress(ProtocolUDP, ptr.To[int32](53), nil, nil, nil, nil,
-		nil, nil, nil, nil, map[string]string{"app": customDNSLabelValue},
-		nil, nil, nil, nil,
-		nil, nil, crdv1beta1.RuleActionAllow, "", "AllowDnsQueries")
-	builder.AddEgress(ProtocolTCP, nil, nil, nil, nil, nil,
-		nil, nil, nil, nil, nil,
-		nil, nil, nil, nil,
-		nil, nil, crdv1beta1.RuleActionReject, "", "DropAllRemainingTraffic")
+	builder.AddEgress(IngressBuilder{
+		Protoc:      ProtocolUDP,
+		Port:        ptr.To[int32](53),
+		PodSelector: map[string]string{"app": customDNSLabelValue},
+		Action:      crdv1beta1.RuleActionAllow,
+		Name:        "AllowDnsQueries",
+	})
+	builder.AddEgress(IngressBuilder{
+		Protoc: ProtocolTCP,
+		Action: crdv1beta1.RuleActionReject,
+		Name:   "DropAllRemainingTraffic",
+	})
 
 	annp, err := data.CreateOrUpdateANNP(builder.Get())
 	require.NoError(t, err, "error while deploying Antrea policy")

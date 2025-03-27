@@ -99,26 +99,14 @@ func createL7NetworkPolicy(t *testing.T,
 				Action:                crdv1beta1.RuleActionAllow,
 			})
 	} else {
-		annpBuilder.AddEgress(l4Protocol,
-			&port,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			l7Protocols,
-			nil,
-			nil,
-			podSelector,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			[]ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
-			crdv1beta1.RuleActionAllow,
-			"",
-			"")
+		annpBuilder.AddEgress(IngressBuilder{
+			Protoc:                l4Protocol,
+			Port:                  &port,
+			L7Protocols:           l7Protocols,
+			PodSelector:           podSelector,
+			ANPRuleAppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
+			Action:                crdv1beta1.RuleActionAllow,
+		})
 	}
 
 	annp := annpBuilder.Get()

@@ -224,37 +224,32 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
 	return b
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
-	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32, l7Protocols []crdv1beta1.L7Protocol,
-	groupAddress, cidr *string, podSelector map[string]string, nsSelector map[string]string, eeSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, eeSelectorMatchExp []metav1.LabelSelectorRequirement,
-	ruleAppliedToSpecs []ANNPAppliedToSpec, action crdv1beta1.RuleAction, ruleGroup, name string) *AntreaNetworkPolicySpecBuilder {
-
+func (b *AntreaNetworkPolicySpecBuilder) AddEgress(ib IngressBuilder) *AntreaNetworkPolicySpecBuilder {
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &AntreaNetworkPolicySpecBuilder{}
 	c.AddIngressWithBuilder(
 		IngressBuilder{
-			Protoc:                protoc,
-			Port:                  port,
-			PortName:              portName,
-			EndPort:               endPort,
-			IcmpType:              icmpType,
-			IcmpCode:              icmpCode,
-			IgmpType:              igmpType,
-			L7Protocols:           l7Protocols,
-			GroupAddress:          groupAddress,
-			Cidr:                  cidr,
-			PodSelector:           podSelector,
-			NsSelector:            nsSelector,
-			EeSelector:            eeSelector,
-			PodSelectorMatchExp:   podSelectorMatchExp,
-			NsSelectorMatchExp:    nsSelectorMatchExp,
-			EeSelectorMatchExp:    eeSelectorMatchExp,
-			ANPRuleAppliedToSpecs: ruleAppliedToSpecs,
-			Action:                action,
-			RuleGroup:             ruleGroup,
-			Name:                  name,
+			Protoc:                ib.Protoc,
+			Port:                  ib.Port,
+			PortName:              ib.PortName,
+			EndPort:               ib.EndPort,
+			IcmpType:              ib.IcmpType,
+			IcmpCode:              ib.IcmpCode,
+			IgmpType:              ib.IgmpType,
+			L7Protocols:           ib.L7Protocols,
+			GroupAddress:          ib.GroupAddress,
+			Cidr:                  ib.Cidr,
+			PodSelector:           ib.PodSelector,
+			NsSelector:            ib.NsSelector,
+			EeSelector:            ib.EeSelector,
+			PodSelectorMatchExp:   ib.PodSelectorMatchExp,
+			NsSelectorMatchExp:    ib.NsSelectorMatchExp,
+			EeSelectorMatchExp:    ib.EeSelectorMatchExp,
+			ANPRuleAppliedToSpecs: ib.ANPRuleAppliedToSpecs,
+			Action:                ib.Action,
+			RuleGroup:             ib.RuleGroup,
+			Name:                  ib.Name,
 		})
 	theRule := c.Get().Spec.Ingress[0]
 
