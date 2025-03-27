@@ -304,52 +304,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngressForSrcPort(protoc AntreaPoli
 	return b
 }
 
-func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
-	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32,
-	groupAddress *string, ipBlock *crdv1beta1.IPBlock, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement, nodeSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, namespaces *crdv1beta1.PeerNamespaces,
-	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1beta1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
-
-	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
-	// With the exception of calling the rule `To` vs. `From`.
-	c := &ClusterNetworkPolicySpecBuilder{}
-	c.AddIngress(
-		IngressBuilder{
-			Protoc:               protoc,
-			Port:                 port,
-			PortName:             portName,
-			EndPort:              endPort,
-			IcmpType:             icmpType,
-			IcmpCode:             icmpCode,
-			IgmpType:             igmpType,
-			GroupAddress:         groupAddress,
-			IpBlock:              ipBlock,
-			PodSelector:          podSelector,
-			NodeSelector:         nodeSelector,
-			NsSelector:           nsSelector,
-			PodSelectorMatchExp:  podSelectorMatchExp,
-			NodeSelectorMatchExp: nodeSelectorMatchExp,
-			NsSelectorMatchExp:   nsSelectorMatchExp,
-			Namespaces:           namespaces,
-			RuleAppliedToSpecs:   ruleAppliedToSpecs,
-			Action:               action,
-			RuleClusterGroup:     ruleClusterGroup,
-			Name:                 name,
-			ServiceAccount:       serviceAccount,
-		})
-	theRule := c.Get().Spec.Ingress[0]
-
-	b.Spec.Egress = append(b.Spec.Egress, crdv1beta1.Rule{
-		To:        theRule.From,
-		Ports:     theRule.Ports,
-		Action:    theRule.Action,
-		Name:      theRule.Name,
-		AppliedTo: theRule.AppliedTo,
-	})
-	return b
-}
-
-func (b *ClusterNetworkPolicySpecBuilder) AddEgressWithBuilder(ingressBuilder IngressBuilder) *ClusterNetworkPolicySpecBuilder {
+func (b *ClusterNetworkPolicySpecBuilder) AddEgress(ingressBuilder IngressBuilder) *ClusterNetworkPolicySpecBuilder {
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &ClusterNetworkPolicySpecBuilder{}

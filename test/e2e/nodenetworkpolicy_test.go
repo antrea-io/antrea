@@ -161,7 +161,7 @@ func testNodeACNPAllowNoDefaultIsolation(t *testing.T, protocol AntreaPolicyProt
 	builder2 = builder2.SetName("acnp-allow-x-to-y-egress").
 		SetPriority(1.1).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder2.AddEgressWithBuilder(IngressBuilder{
+	builder2.AddEgress(IngressBuilder{
 		Protoc:       protocol,
 		Port:         &p81,
 		NodeSelector: map[string]string{labelNodeHostname: nodes["y"]},
@@ -206,7 +206,7 @@ func testNodeACNPDropEgress(t *testing.T, protocol AntreaPolicyProtocol) {
 	builder = builder.SetName("acnp-drop-x-to-y-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder.AddEgressWithBuilder(IngressBuilder{
+	builder.AddEgress(IngressBuilder{
 		Protoc:       protocol,
 		Port:         &p80,
 		NodeSelector: map[string]string{labelNodeHostname: nodes["y"]},
@@ -275,7 +275,7 @@ func testNodeACNPPortRange(t *testing.T) {
 	builder = builder.SetName("acnp-drop-x-to-y-egress-port-range").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder.AddEgressWithBuilder(IngressBuilder{
+	builder.AddEgress(IngressBuilder{
 		Protoc:       ProtocolTCP,
 		Port:         &p8080,
 		EndPort:      &p8082,
@@ -387,7 +387,7 @@ func testNodeACNPRejectEgress(t *testing.T, protocol AntreaPolicyProtocol) {
 	builder = builder.SetName("acnp-reject-x-to-y-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder.AddEgressWithBuilder(IngressBuilder{
+	builder.AddEgress(IngressBuilder{
 		Protoc:       protocol,
 		Port:         &p80,
 		NodeSelector: map[string]string{labelNodeHostname: nodes["y"]},
@@ -762,7 +762,7 @@ func testNodeACNPNamespaceIsolation(t *testing.T) {
 		SetTier("baseline").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder1.AddEgressWithBuilder(IngressBuilder{
+	builder1.AddEgress(IngressBuilder{
 		Protoc:     ProtocolTCP,
 		NsSelector: map[string]string{"ns": getNS("y")},
 		Action:     crdv1beta1.RuleActionDrop,
@@ -795,7 +795,7 @@ func testNodeACNPClusterGroupUpdate(t *testing.T) {
 	builder = builder.SetName("acnp-deny-a-to-cg-with-z-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder.AddEgressWithBuilder(IngressBuilder{
+	builder.AddEgress(IngressBuilder{
 		Protoc:           ProtocolTCP,
 		Port:             &p80,
 		Action:           crdv1beta1.RuleActionDrop,
@@ -862,13 +862,13 @@ func testNodeACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 	builder = builder.SetName("acnp-deny-x-to-yz-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder.AddEgressWithBuilder(IngressBuilder{
+	builder.AddEgress(IngressBuilder{
 		Protoc:           ProtocolTCP,
 		Port:             &p80,
 		Action:           crdv1beta1.RuleActionDrop,
 		RuleClusterGroup: cgName,
 	})
-	builder.AddEgressWithBuilder(IngressBuilder{
+	builder.AddEgress(IngressBuilder{
 		Protoc:           ProtocolTCP,
 		Port:             &p80,
 		Action:           crdv1beta1.RuleActionDrop,
@@ -904,7 +904,7 @@ func testNodeACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("cnp-nested-cg").SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}}).
-		AddEgressWithBuilder(IngressBuilder{
+		AddEgress(IngressBuilder{
 			Protoc:           ProtocolTCP,
 			Port:             &p80,
 			Action:           crdv1beta1.RuleActionDrop,
@@ -974,7 +974,7 @@ func testNodeACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 	builder = builder.SetName("acnp-deny-x-to-yz-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder.AddEgressWithBuilder(IngressBuilder{
+	builder.AddEgress(IngressBuilder{
 		Protoc:           ProtocolTCP,
 		Port:             &p80,
 		Action:           crdv1beta1.RuleActionDrop,
@@ -1023,7 +1023,7 @@ func testNodeACNPAuditLogging(t *testing.T, data *TestData) {
 	builder = builder.SetName("acnp-drop-x-to-y-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder.AddEgressWithBuilder(IngressBuilder{
+	builder.AddEgress(IngressBuilder{
 		Protoc:       ProtocolTCP,
 		Port:         &p80,
 		NodeSelector: map[string]string{labelNodeHostname: nodes["y"]},

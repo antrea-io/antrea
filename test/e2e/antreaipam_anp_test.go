@@ -197,19 +197,19 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		builder2.AddIngress(ingressBuilder)
 		builder3.AddIngress(ingressBuilder)
 	} else {
-		builder.AddEgressWithBuilder(e2eutils.IngressBuilder{
+		builder.AddEgress(e2eutils.IngressBuilder{
 			Protoc:      protocol,
 			Port:        &p80,
 			PodSelector: map[string]string{},
 			Action:      ruleAction,
 		})
-		builder2.AddEgressWithBuilder(e2eutils.IngressBuilder{
+		builder2.AddEgress(e2eutils.IngressBuilder{
 			Protoc:      protocol,
 			Port:        &p80,
 			PodSelector: map[string]string{},
 			Action:      ruleAction,
 		})
-		builder3.AddEgressWithBuilder(e2eutils.IngressBuilder{
+		builder3.AddEgress(e2eutils.IngressBuilder{
 			Protoc:      protocol,
 			Port:        &p80,
 			PodSelector: map[string]string{},
