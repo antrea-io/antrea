@@ -1004,8 +1004,16 @@ type EgressSpec struct {
 	// Cannot be set with ExternalIPPool.
 	ExternalIPPools []string `json:"externalIPPools,omitempty"`
 	// Bandwidth specifies the rate limit of north-south egress traffic of this Egress.
-	Bandwidth *Bandwidth `json:"bandwidth,omitempty"`
+	Bandwidth     *Bandwidth        `json:"bandwidth,omitempty"`
+	FailurePolicy FailurePolicyType `json:"failurePolicy"`
 }
+
+type FailurePolicyType string
+
+const (
+	FailurePolicyDrop     FailurePolicyType = "Drop"
+	FailurePolicyNodeSNAT FailurePolicyType = "NodeSNAT"
+)
 
 type Bandwidth struct {
 	// Rate specifies the maximum traffic rate. e.g. 300k, 10M
