@@ -197,12 +197,24 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		builder2.AddIngress(ingressBuilder)
 		builder3.AddIngress(ingressBuilder)
 	} else {
-		builder.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
-		builder2.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
-		builder3.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
+		builder.AddEgressWithBuilder(e2eutils.IngressBuilder{
+			Protoc:      protocol,
+			Port:        &p80,
+			PodSelector: map[string]string{},
+			Action:      ruleAction,
+		})
+		builder2.AddEgressWithBuilder(e2eutils.IngressBuilder{
+			Protoc:      protocol,
+			Port:        &p80,
+			PodSelector: map[string]string{},
+			Action:      ruleAction,
+		})
+		builder3.AddEgressWithBuilder(e2eutils.IngressBuilder{
+			Protoc:      protocol,
+			Port:        &p80,
+			PodSelector: map[string]string{},
+			Action:      ruleAction,
+		})
 	}
 
 	reachability := NewReachability(allPods, action)

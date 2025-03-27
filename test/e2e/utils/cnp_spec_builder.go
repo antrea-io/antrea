@@ -349,6 +349,23 @@ func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
 	return b
 }
 
+func (b *ClusterNetworkPolicySpecBuilder) AddEgressWithBuilder(ingressBuilder IngressBuilder) *ClusterNetworkPolicySpecBuilder {
+	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
+	// With the exception of calling the rule `To` vs. `From`.
+	c := &ClusterNetworkPolicySpecBuilder{}
+	c.AddIngress(ingressBuilder)
+	theRule := c.Get().Spec.Ingress[0]
+
+	b.Spec.Egress = append(b.Spec.Egress, crdv1beta1.Rule{
+		To:        theRule.From,
+		Ports:     theRule.Ports,
+		Action:    theRule.Action,
+		Name:      theRule.Name,
+		AppliedTo: theRule.AppliedTo,
+	})
+	return b
+}
+
 func (b *ClusterNetworkPolicySpecBuilder) AddNodeSelectorRule(nodeSelector *metav1.LabelSelector, protoc AntreaPolicyProtocol, port *int32, name string,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, isEgress bool) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1beta1.AppliedTo
