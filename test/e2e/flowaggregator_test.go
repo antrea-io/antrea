@@ -1694,7 +1694,7 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 	builder1 = builder1.SetName(data.testNamespace, ingressAntreaNetworkPolicyName).
 		SetPriority(2.0).
 		SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": dstPod}}})
-	builder1 = builder1.AddIngressWithBuilder(utils.
+	builder1 = builder1.AddIngress(utils.
 		IngressBuilder{
 		Protoc:      utils.ProtocolTCP,
 		PodSelector: map[string]string{"antrea-e2e": srcPod},
@@ -1749,7 +1749,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 		builder1 = builder1.SetName(data.testNamespace, ingressRejectANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": podReject}}})
-		builder1 = builder1.AddIngressWithBuilder(utils.
+		builder1 = builder1.AddIngress(utils.
 			IngressBuilder{
 			Protoc:      utils.ProtocolTCP,
 			PodSelector: map[string]string{"antrea-e2e": srcPod},
@@ -1760,7 +1760,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 		builder2 = builder2.SetName(data.testNamespace, ingressDropANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": podDrop}}})
-		builder2 = builder2.AddIngressWithBuilder(utils.
+		builder2 = builder2.AddIngress(utils.
 			IngressBuilder{
 			Protoc:      utils.ProtocolTCP,
 			PodSelector: map[string]string{"antrea-e2e": srcPod},

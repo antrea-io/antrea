@@ -89,7 +89,7 @@ func createL7NetworkPolicy(t *testing.T,
 	annpBuilder := &AntreaNetworkPolicySpecBuilder{}
 	annpBuilder = annpBuilder.SetName(data.testNamespace, name).SetPriority(priority)
 	if isIngress {
-		annpBuilder.AddIngressWithBuilder(
+		annpBuilder.AddIngress(
 			IngressBuilder{
 				Protoc:                l4Protocol,
 				Port:                  &port,

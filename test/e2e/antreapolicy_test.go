@@ -295,7 +295,7 @@ func testUpdateValidationInvalidANNP(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-applied-to-update").
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
 		SetPriority(1.0)
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:      ProtocolTCP,
 			PodSelector: map[string]string{"pod": "c"},
@@ -306,7 +306,7 @@ func testUpdateValidationInvalidANNP(t *testing.T) {
 	if _, err := k8sUtils.CreateOrUpdateANNP(annp); err != nil {
 		failOnError(fmt.Errorf("create ANNP annp-applied-to-update failed: %v", err), t)
 	}
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:                ProtocolTCP,
 			PodSelector:           map[string]string{"pod": "b"},
@@ -1356,7 +1356,7 @@ func testANNPIngressRuleDenyGrpWithXCtoXA(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-deny-grp-with-xb-to-xa").
 		SetPriority(2.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:    ProtocolTCP,
 			PortName:  &port81Name,
@@ -1437,7 +1437,7 @@ func testANNPAppliedToDenyXBtoGrpWithXA(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-deny-grp-with-xa-from-xb").
 		SetPriority(2.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grpName}})
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:      ProtocolTCP,
 			PortName:    &port81Name,
@@ -1599,7 +1599,7 @@ func testANNPGroupServiceRefPodAdd(t *testing.T, data *TestData) {
 
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-grp-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grp1Name}})
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:    ProtocolTCP,
 			Port:      &p80,
@@ -1664,7 +1664,7 @@ func testANNPGroupServiceRefDelete(t *testing.T) {
 
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-grp-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grp1Name}})
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:    ProtocolTCP,
 			Port:      &p80,
@@ -1710,7 +1710,7 @@ func testANNPGroupServiceRefCreateAndUpdate(t *testing.T) {
 
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-grp-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grp1Name}})
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:    ProtocolTCP,
 			Port:      &p80,
@@ -1770,7 +1770,7 @@ func testANNPGroupRefRuleIPBlocks(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-deny-xb-xc-ips-ingress-for-xa").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:    ProtocolTCP,
 			Port:      &p80,
@@ -1813,7 +1813,7 @@ func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-nested-grp").SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{}}).
-		AddIngressWithBuilder(
+		AddIngress(
 			IngressBuilder{
 				Protoc:    ProtocolTCP,
 				Port:      &p80,
@@ -2758,7 +2758,7 @@ func testANNPBasic(t *testing.T) {
 	builder = builder.SetName(getNS("y"), "np-same-name").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
@@ -2807,7 +2807,7 @@ func testANNPUpdate(t *testing.T, data *TestData) {
 	builder = builder.SetName(getNS("y"), "np-update").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
@@ -2838,7 +2838,7 @@ func testANNPUpdate(t *testing.T, data *TestData) {
 	updatedBuilder = updatedBuilder.SetName(getNS("y"), "np-update").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	updatedBuilder.AddIngressWithBuilder(
+	updatedBuilder.AddIngress(
 		IngressBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
@@ -2877,7 +2877,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	// See https://github.com/antrea-io/antrea/issues/2083.
 	if singleRule {
 		builder.SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}, {PodSelector: map[string]string{tempLabel: ""}}})
-		builder.AddIngressWithBuilder(
+		builder.AddIngress(
 			IngressBuilder{
 				Protoc:      ProtocolTCP,
 				Port:        &p80,
@@ -2886,7 +2886,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 				Action:      crdv1beta1.RuleActionDrop,
 			})
 	} else {
-		builder.AddIngressWithBuilder(
+		builder.AddIngress(
 			IngressBuilder{
 				Protoc:                ProtocolTCP,
 				Port:                  &p80,
@@ -2895,7 +2895,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 				ANPRuleAppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}},
 				Action:                crdv1beta1.RuleActionDrop,
 			})
-		builder.AddIngressWithBuilder(
+		builder.AddIngress(
 			IngressBuilder{
 				Protoc:                ProtocolTCP,
 				Port:                  &p80,
@@ -3261,7 +3261,7 @@ func testAppliedToPerRule(t *testing.T) {
 	builder = builder.SetName(getNS("y"), "np1").SetPriority(1.0)
 	annpATGrp1 := ANNPAppliedToSpec{PodSelector: map[string]string{"pod": "a"}, PodSelectorMatchExp: nil}
 	annpATGrp2 := ANNPAppliedToSpec{PodSelector: map[string]string{"pod": "b"}, PodSelectorMatchExp: nil}
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:                ProtocolTCP,
 			Port:                  &p80,
@@ -3270,7 +3270,7 @@ func testAppliedToPerRule(t *testing.T) {
 			ANPRuleAppliedToSpecs: []ANNPAppliedToSpec{annpATGrp1},
 			Action:                crdv1beta1.RuleActionDrop,
 		})
-	builder.AddIngressWithBuilder(
+	builder.AddIngress(
 		IngressBuilder{
 			Protoc:                ProtocolTCP,
 			Port:                  &p80,
@@ -5234,7 +5234,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 	annpBuilder = annpBuilder.SetName(data.testNamespace, "annp-applied-to-two-nodes").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}})
-	annpBuilder.AddIngressWithBuilder(
+	annpBuilder.AddIngress(
 		IngressBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
@@ -5295,7 +5295,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	annpBuilder := &AntreaNetworkPolicySpecBuilder{}
 	annpBuilder = annpBuilder.SetName(data.testNamespace, "annp-applied-to-per-rule").
 		SetPriority(1.0)
-	annpBuilder.AddIngressWithBuilder(
+	annpBuilder.AddIngress(
 		IngressBuilder{
 			Protoc:                ProtocolTCP,
 			Port:                  &p80,
@@ -5304,7 +5304,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 			ANPRuleAppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": server0Name}}},
 			Action:                crdv1beta1.RuleActionAllow,
 		})
-	annpBuilder.AddIngressWithBuilder(
+	annpBuilder.AddIngress(
 		IngressBuilder{
 			Protoc:                ProtocolTCP,
 			Port:                  &p80,
