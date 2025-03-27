@@ -161,34 +161,44 @@ type IngressBuilder struct {
 	ANPRuleAppliedToSpecs []ANNPAppliedToSpec
 }
 
-func (b *ClusterNetworkPolicySpecBuilder) AddIngress(ib IngressBuilder) *ClusterNetworkPolicySpecBuilder {
-	var podSel *metav1.LabelSelector
-	var nodeSel *metav1.LabelSelector
-	var nsSel *metav1.LabelSelector
-	var appliedTos []crdv1beta1.AppliedTo
-
-	if b.Spec.Ingress == nil {
-		b.Spec.Ingress = []crdv1beta1.Rule{}
-	}
-
+func (ib IngressBuilder) generatePodSelector() (podSel *metav1.LabelSelector) {
 	if ib.PodSelector != nil || ib.PodSelectorMatchExp != nil {
 		podSel = &metav1.LabelSelector{
 			MatchLabels:      ib.PodSelector,
 			MatchExpressions: ib.PodSelectorMatchExp,
 		}
 	}
-	if ib.NodeSelector != nil || ib.NodeSelectorMatchExp != nil {
-		nodeSel = &metav1.LabelSelector{
-			MatchLabels:      ib.NodeSelector,
-			MatchExpressions: ib.NodeSelectorMatchExp,
-		}
-	}
+	return podSel
+}
+
+func (ib IngressBuilder) generateNsSelector() (nsSel *metav1.LabelSelector) {
 	if ib.NsSelector != nil || ib.NsSelectorMatchExp != nil {
 		nsSel = &metav1.LabelSelector{
 			MatchLabels:      ib.NsSelector,
 			MatchExpressions: ib.NsSelectorMatchExp,
 		}
 	}
+	return nsSel
+}
+
+func (b *ClusterNetworkPolicySpecBuilder) AddIngress(ib IngressBuilder) *ClusterNetworkPolicySpecBuilder {
+	var nodeSel *metav1.LabelSelector
+	var appliedTos []crdv1beta1.AppliedTo
+
+	if b.Spec.Ingress == nil {
+		b.Spec.Ingress = []crdv1beta1.Rule{}
+	}
+
+	podSel := ib.generatePodSelector()
+
+	if ib.NodeSelector != nil || ib.NodeSelectorMatchExp != nil {
+		nodeSel = &metav1.LabelSelector{
+			MatchLabels:      ib.NodeSelector,
+			MatchExpressions: ib.NodeSelectorMatchExp,
+		}
+	}
+
+	nsSel := ib.generateNsSelector()
 	for _, at := range ib.RuleAppliedToSpecs {
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector,
 			at.NodeSelector,

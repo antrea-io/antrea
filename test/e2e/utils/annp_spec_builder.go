@@ -103,24 +103,15 @@ func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string
 }
 
 func (b *AntreaNetworkPolicySpecBuilder) AddIngress(ib IngressBuilder) *AntreaNetworkPolicySpecBuilder {
-	var ps, ns, ees *metav1.LabelSelector
+	var ees *metav1.LabelSelector
 	var appliedTos []crdv1beta1.AppliedTo
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []crdv1beta1.Rule{}
 	}
 
-	if len(ib.PodSelector) > 0 || len(ib.PodSelectorMatchExp) > 0 {
-		ps = &metav1.LabelSelector{
-			MatchLabels:      ib.PodSelector,
-			MatchExpressions: ib.PodSelectorMatchExp,
-		}
-	}
-	if len(ib.NsSelector) > 0 || len(ib.NsSelectorMatchExp) > 0 {
-		ns = &metav1.LabelSelector{
-			MatchLabels:      ib.NsSelector,
-			MatchExpressions: ib.NsSelectorMatchExp,
-		}
-	}
+	ps := ib.generatePodSelector()
+	ns := ib.generateNsSelector()
+
 	if len(ib.EeSelector) > 0 || len(ib.EeSelectorMatchExp) > 0 {
 		ees = &metav1.LabelSelector{
 			MatchLabels:      ib.EeSelector,
