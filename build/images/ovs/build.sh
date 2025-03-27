@@ -132,7 +132,12 @@ if $PULL; then
         docker pull $PLATFORM_ARG quay.io/centos/centos:stream9
         docker pull $PLATFORM_ARG registry.access.redhat.com/ubi9
     elif [ "$DISTRO" == "windows" ]; then
-        docker pull --platform linux/amd64 ubuntu:24.04
+        if [[ ${DOCKER_REGISTRY} == "" ]]; then
+            docker pull --platform linux/amd64 ubuntu:24.04
+        else
+            docker pull --platform linux/amd64 ${DOCKER_REGISTRY}/antrea/ubuntu:24.04
+            docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:24.04 ubuntu:24.04
+        fi
     fi
 fi
 
@@ -163,6 +168,9 @@ elif [ "$DISTRO" == "ubi" ]; then
 elif [ "$DISTRO" == "windows" ]; then
     image="antrea/windows-ovs"
     build_args="--build-arg OVS_VERSION=$OVS_VERSION"
+    if [[ ${DOCKER_REGISTRY} != "" ]]; then
+        image="${DOCKER_REGISTRY}/antrea/windows-ovs"
+    fi
     docker_build_and_push_windows "${image}" "Dockerfile.windows" "${build_args}" "${OVS_VERSION}" $PUSH ""
 fi
 
