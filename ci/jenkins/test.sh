@@ -476,7 +476,8 @@ function deliver_antrea_linux {
 function deliver_antrea_windows {
     echo "===== Build Antrea Windows ====="
     rm -f antrea-windows.tar.gz
-    make build-windows
+    # The Windows OVS image needs to be pushed because the Linux host cannot maintain it for the next Antrea image build.
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-windows-all.sh --pull --push-base-images
     if ! (test -f antrea-windows.tar); then
         echo "antrea-windows.tar wasn't built, exiting"
         exit 1

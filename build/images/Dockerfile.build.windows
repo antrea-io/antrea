@@ -14,6 +14,7 @@
 
 ARG GO_VERSION
 ARG OVS_VERSION
+ARG DOCKER_REGISTRY="docker.io"
 
 FROM --platform=linux/amd64 golang:${GO_VERSION} AS antrea-build-windows
 ARG CNI_BINARIES_VERSION
@@ -43,7 +44,7 @@ RUN mkdir -p /go/k/antrea/bin && \
     cp /antrea/bin/antrea-cni.exe /go/k/antrea/cni/antrea.exe && \
     cp /antrea/hack/windows/Install-OVS.ps1 /go/k/antrea/
 
-FROM antrea/windows-ovs:${OVS_VERSION} AS antrea-ovs
+FROM ${DOCKER_REGISTRY}/antrea/windows-ovs:${OVS_VERSION} AS antrea-ovs
 
 FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:v1.0.0
 COPY --from=antrea-build-windows /go/k /k
