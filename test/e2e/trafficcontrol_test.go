@@ -163,7 +163,7 @@ func (data *TestData) createTrafficControl(t *testing.T,
 		tc.Spec.ReturnPort = nil
 	}
 
-	tc, err := data.crdClient.CrdV1alpha2().TrafficControls().Create(context.TODO(), tc, metav1.CreateOptions{})
+	tc, err := data.CRDClient.CrdV1alpha2().TrafficControls().Create(context.TODO(), tc, metav1.CreateOptions{})
 	require.NoError(t, err, "Failed to create TrafficControl")
 	return tc
 }
@@ -231,7 +231,7 @@ ip link set %[3]s up`, vni, dstVXLANPort, tunnelPeer)
 	targetPort := &v1alpha2.UDPTunnel{RemoteIP: tcTestConfig.collectorPodIPs[corev1.IPv4Protocol], VNI: &vni, DestinationPort: &dstVXLANPort}
 
 	tc := data.createTrafficControl(t, "tc-", nil, tcTestConfig.podLabels, v1alpha2.DirectionBoth, v1alpha2.ActionMirror, targetPort, true, nil)
-	defer data.crdClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
 	// Wait flows of the TrafficControl to be realized.
 	time.Sleep(time.Second)
 
@@ -244,7 +244,7 @@ func testMirrorToLocal(t *testing.T, data *TestData) {
 	portName := "test-port"
 	targetPort := &v1alpha2.OVSInternalPort{Name: portName}
 	tc := data.createTrafficControl(t, "tc-", nil, tcTestConfig.podLabels, v1alpha2.DirectionBoth, v1alpha2.ActionMirror, targetPort, false, nil)
-	defer data.crdClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
 	// Wait flows of the TrafficControl to be realized.
 	time.Sleep(time.Second)
 
@@ -312,7 +312,7 @@ ip link set dev %[2]s up`, targetPortName, returnPortName)
 	returnPort := &v1alpha2.NetworkDevice{Name: returnPortName}
 
 	tc := data.createTrafficControl(t, "tc-", nil, tcTestConfig.podLabels, v1alpha2.DirectionBoth, v1alpha2.ActionRedirect, targetPort, false, returnPort)
-	defer data.crdClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
+	defer data.CRDClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
 	// Wait flows of TrafficControl to be realized.
 	time.Sleep(time.Second)
 
