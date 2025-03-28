@@ -103,6 +103,7 @@ func NewPodController(
 	netAttachDefClient netdefclient.K8sCniCncfIoV1Interface,
 	podInformer cache.SharedIndexInformer,
 	podUpdateSubscriber channel.Subscriber,
+	primaryInterfaceStore interfacestore.InterfaceStore,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 ) (*PodController, error) {
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -134,6 +135,19 @@ func NewPodController(
 		},
 		resyncPeriod,
 	)
+
+	// This is the case when secondary bridge is not configured and no VLAN interfaces at all. In this case,
+	// we should skip both initializeSecondaryInterfaceStore and reconcileSecondaryInterfaces.
+	if ovsBridgeClient != nil {
+		if err := pc.initializeSecondaryInterfaceStore(); err != nil {
+			return nil, fmt.Errorf("failed to initialize secondary interface store: %w", err)
+		}
+
+		if err := pc.reconcileSecondaryInterfaces(primaryInterfaceStore); err != nil {
+			return nil, fmt.Errorf("failed to restore CNI cache and reconcile secondary interfaces: %w", err)
+		}
+	}
+
 	// podUpdateSubscriber can be nil with test code.
 	if podUpdateSubscriber != nil {
 		// Subscribe Pod CNI add/del events.
@@ -520,4 +534,75 @@ func checkForPodSecondaryNetworkAttachement(pod *corev1.Pod) (string, bool) {
 	} else {
 		return netObj, false
 	}
+}
+
+// initializeSecondaryInterfaceStore restores secondary interfaceStore when agent restarts.
+func (pc *PodController) initializeSecondaryInterfaceStore() error {
+	ovsPorts, err := pc.ovsBridgeClient.GetPortList()
+	if err != nil {
+		return fmt.Errorf("failed to list OVS ports for the secondary bridge: %w", err)
+	}
+
+	ifaceList := make([]*interfacestore.InterfaceConfig, 0, len(ovsPorts))
+	for index := range ovsPorts {
+		port := &ovsPorts[index]
+		ovsPort := &interfacestore.OVSPortConfig{
+			PortUUID: port.UUID,
+			OFPort:   port.OFPort,
+		}
+
+		interfaceType, ok := port.ExternalIDs[interfacestore.AntreaInterfaceTypeKey]
+		if !ok {
+			klog.InfoS("Interface type is not set for the secondary bridge", "interfaceName", port.Name)
+			continue
+		}
+
+		var intf *interfacestore.InterfaceConfig
+		switch interfaceType {
+		case interfacestore.AntreaContainer:
+			intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
+		default:
+			klog.InfoS("Unknown Antrea interface type for the secondary bridge", "type", interfaceType)
+			continue
+		}
+
+		ifaceList = append(ifaceList, intf)
+	}
+
+	pc.interfaceStore.Initialize(ifaceList)
+	klog.InfoS("Successfully initialized the secondary bridge interface store")
+
+	return nil
+}
+
+// reconcileSecondaryInterfaces restores cniCache when agent restarts using primary interfaceStore.
+func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore interfacestore.InterfaceStore) error {
+	knownInterfaces := primaryInterfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+	for _, containerConfig := range knownInterfaces {
+		config := containerConfig.ContainerInterfaceConfig
+		podKey := podKeyGet(config.PodName, config.PodNamespace)
+		pc.cniCache.Store(podKey, &podCNIInfo{
+			containerID: config.ContainerID,
+		})
+	}
+
+	var staleInterfaces []*interfacestore.InterfaceConfig
+	// secondaryInterfaces is the list of interfaces currently in the secondary local cache.
+	secondaryInterfaces := pc.interfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+	for _, containerConfig := range secondaryInterfaces {
+		_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
+		if !exists || containerConfig.OFPort == -1 {
+			// Deletes ports not in the CNI cache.
+			staleInterfaces = append(staleInterfaces, containerConfig)
+		}
+	}
+
+	// If there are any stale interfaces, pass them to removeInterfaces()
+	if len(staleInterfaces) > 0 {
+		if err := pc.removeInterfaces(staleInterfaces); err != nil {
+			klog.ErrorS(err, "Failed to remove stale secondary interfaces", "staleInterfaces", staleInterfaces)
+		}
+	}
+
+	return nil
 }
