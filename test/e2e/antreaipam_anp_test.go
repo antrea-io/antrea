@@ -188,19 +188,33 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2eutils.ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "c"}}})
 	if isIngress {
-		builder.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
-		builder2.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
-		builder3.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
+		ingressBuilder := e2eutils.IngressBuilder{
+			Protoc: protocol,
+			Port:   &p80,
+			Action: ruleAction,
+		}
+		builder.AddIngress(ingressBuilder)
+		builder2.AddIngress(ingressBuilder)
+		builder3.AddIngress(ingressBuilder)
 	} else {
-		builder.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
-		builder2.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
-		builder3.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
+		builder.AddEgress(e2eutils.IngressBuilder{
+			Protoc:      protocol,
+			Port:        &p80,
+			PodSelector: map[string]string{},
+			Action:      ruleAction,
+		})
+		builder2.AddEgress(e2eutils.IngressBuilder{
+			Protoc:      protocol,
+			Port:        &p80,
+			PodSelector: map[string]string{},
+			Action:      ruleAction,
+		})
+		builder3.AddEgress(e2eutils.IngressBuilder{
+			Protoc:      protocol,
+			Port:        &p80,
+			PodSelector: map[string]string{},
+			Action:      ruleAction,
+		})
 	}
 
 	reachability := NewReachability(allPods, action)
