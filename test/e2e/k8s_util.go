@@ -16,10 +16,8 @@ package e2e
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
 	"strconv"
 	"strings"
 	"sync"
@@ -1112,8 +1110,7 @@ func (hsr *httpServerReadiness) spawnProberPool(resultsCh chan *probeResult) {
 	probes := make(chan probeVector, hsr.numProbes())
 	go hsr.buildProbeVectors(probes)
 
-	var probeWithRetry func(vector probeVector, retries int)
-	probeWithRetry = func(vector probeVector, retries int) {
+	probe := func(vector probeVector) {
 		podFrom := vector.fromPod
 		podTo := vector.toPod
 		port := vector.port
@@ -1121,23 +1118,12 @@ func (hsr *httpServerReadiness) spawnProberPool(resultsCh chan *probeResult) {
 		log.Tracef("Probing: %s -> %s", podFrom, podTo)
 		expectedResult := hsr.reachability.Expected.Get(podFrom.String(), podTo.String())
 		connectivity, err := hsr.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, hsr.remoteCluster, &expectedResult)
-		if err != nil && retries > 1 {
-			randomTimeout, err := rand.Int(rand.Reader, big.NewInt(5))
-			if err != nil {
-				panic(err)
-			}
-			time.Sleep(time.Duration(randomTimeout.Int64()) * time.Second)
-			retries--
-			probeWithRetry(vector, retries)
-
-		} else {
-			resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
-		}
+		resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
 	}
 
 	startProber := func() {
 		for vector := range probes {
-			probeWithRetry(vector, 3)
+			probe(vector)
 		}
 	}
 
