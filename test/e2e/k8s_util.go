@@ -1044,11 +1044,9 @@ type httpServerReadiness struct {
 
 func (hsr *httpServerReadiness) isReady() bool {
 	hsr.reachability = NewReachability(hsr.pods, Connected)
-	for protocol := range hsr.protocolPortPairs {
-		hsr.validateProtocol(protocol)
-		if _, wrong, _ := hsr.reachability.Summary(); wrong != 0 {
-			return false
-		}
+	hsr.validate()
+	if _, wrong, _ := hsr.reachability.Summary(); wrong != 0 {
+		return false
 	}
 
 	return true
@@ -1077,43 +1075,49 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 
 // Encapsulate the data needed to perform a probe between pods
 type probeVector struct {
-	fromPod Pod
-	toPod   Pod
-	port    int32
+	fromPod  Pod
+	toPod    Pod
+	port     int32
+	protocol utils.AntreaPolicyProtocol
 }
 
-// For the specified protocol, populate the channel with all combinations of probes based on the
-// required ports
-func (hsr *httpServerReadiness) buildProbeVectors(protocol utils.AntreaPolicyProtocol, probes chan<- probeVector) {
-	ports := hsr.protocolPortPairs[protocol]
-	for _, fromPod := range hsr.pods {
-		for _, podTo := range hsr.pods {
-			for _, port := range ports {
-				probes <- probeVector{fromPod, podTo, port}
+// Populate the channel with all combinations of probes based on the required ports and protocols
+func (hsr *httpServerReadiness) buildProbeVectors(probes chan<- probeVector) {
+	for protocol, ports := range hsr.protocolPortPairs {
+		for _, fromPod := range hsr.pods {
+			for _, podTo := range hsr.pods {
+				for _, port := range ports {
+					probes <- probeVector{fromPod, podTo, port, protocol}
+				}
 			}
 		}
 	}
 	close(probes)
 }
 
-// For a specified protocol, calculate the number of probes created given the set of
-// pods and required ports
-func (hsr *httpServerReadiness) numProbes(protocol utils.AntreaPolicyProtocol) int {
-	ports := hsr.protocolPortPairs[protocol]
+// Calculate the number of probes created across all port protocol permutations
+func (hsr *httpServerReadiness) numProbes() int {
+	probeCount := 0
 	podCount := len(hsr.pods)
-	return podCount * podCount * len(ports)
+	podCountSquared := podCount * podCount
+	for protocol := range hsr.protocolPortPairs {
+		ports := hsr.protocolPortPairs[protocol]
+		probeCount += podCountSquared * len(ports)
+	}
+	return probeCount
 }
 
-// Spawn a fixed set of workers to complete probing of the servers for a given protocol
-func (hsr *httpServerReadiness) spawnProberPool(protocol utils.AntreaPolicyProtocol, resultsCh chan *probeResult) {
-	probes := make(chan probeVector, hsr.numProbes(protocol))
-	go hsr.buildProbeVectors(protocol, probes)
+// Spawn a fixed set of workers to complete probing of the servers
+func (hsr *httpServerReadiness) spawnProberPool(resultsCh chan *probeResult) {
+	probes := make(chan probeVector, hsr.numProbes())
+	go hsr.buildProbeVectors(probes)
 
 	var probeWithRetry func(vector probeVector, retries int)
 	probeWithRetry = func(vector probeVector, retries int) {
 		podFrom := vector.fromPod
 		podTo := vector.toPod
 		port := vector.port
+		protocol := vector.protocol
 		log.Tracef("Probing: %s -> %s", podFrom, podTo)
 		expectedResult := hsr.reachability.Expected.Get(podFrom.String(), podTo.String())
 		connectivity, err := hsr.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, hsr.remoteCluster, &expectedResult)
@@ -1144,12 +1148,12 @@ func (hsr *httpServerReadiness) spawnProberPool(protocol utils.AntreaPolicyProto
 	}
 }
 
-// Validates two way connectivity between all pods on the specified protocol against the given ports
-func (hsr *httpServerReadiness) validateProtocol(protocol utils.AntreaPolicyProtocol) {
-	numProbes := hsr.numProbes(protocol)
+// Validates two way connectivity between all pods across all protocol and port permutations
+func (hsr *httpServerReadiness) validate() {
+	numProbes := hsr.numProbes()
 	// TODO: find better metrics, this is only for POC.
 	resultsCh := make(chan *probeResult, numProbes)
-	hsr.spawnProberPool(protocol, resultsCh)
+	hsr.spawnProberPool(resultsCh)
 
 	for range numProbes {
 		r := <-resultsCh
@@ -1186,7 +1190,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 		},
 		reachability: reachability,
 	}
-	httpServerReadiness.validateProtocol(protocol)
+	httpServerReadiness.validate()
 }
 
 func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
@@ -1199,7 +1203,7 @@ func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, 
 		reachability:  reachability,
 		remoteCluster: remoteCluster,
 	}
-	httpServerReadiness.validateProtocol(protocol)
+	httpServerReadiness.validate()
 }
 
 func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, podsPerNamespace []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
