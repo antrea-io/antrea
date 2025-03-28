@@ -46,51 +46,51 @@ func AntreaPolicyProtocolToK8sProtocol(antreaProtocol AntreaPolicyProtocol) (v1.
 	}
 }
 
-func GenPortsOrProtocols(protoc AntreaPolicyProtocol, port *int32, portName *string, endPort, srcPort, srcEndPort, icmpType, icmpCode, igmpType *int32, groupAddress *string) ([]crdv1beta1.NetworkPolicyPort, []crdv1beta1.NetworkPolicyProtocol) {
-	if protoc == ProtocolICMP {
+func GenPortsOrProtocols(ingressBuilder IngressBuilder) ([]crdv1beta1.NetworkPolicyPort, []crdv1beta1.NetworkPolicyProtocol) {
+	if ingressBuilder.Protoc == ProtocolICMP {
 		return nil, []crdv1beta1.NetworkPolicyProtocol{
 			{
 				ICMP: &crdv1beta1.ICMPProtocol{
-					ICMPType: icmpType,
-					ICMPCode: icmpCode,
+					ICMPType: ingressBuilder.IcmpType,
+					ICMPCode: ingressBuilder.IcmpCode,
 				},
 			},
 		}
 	}
-	if protoc == ProtocolIGMP {
+	if ingressBuilder.Protoc == ProtocolIGMP {
 		return nil, []crdv1beta1.NetworkPolicyProtocol{
 			{
 				IGMP: &crdv1beta1.IGMPProtocol{
-					IGMPType:     igmpType,
-					GroupAddress: *groupAddress,
+					IGMPType:     ingressBuilder.IgmpType,
+					GroupAddress: *ingressBuilder.GroupAddress,
 				},
 			},
 		}
 	}
 	var ports []crdv1beta1.NetworkPolicyPort
-	k8sProtocol, _ := AntreaPolicyProtocolToK8sProtocol(protoc)
-	if port != nil && portName != nil {
+	k8sProtocol, _ := AntreaPolicyProtocolToK8sProtocol(ingressBuilder.Protoc)
+	if ingressBuilder.Port != nil && ingressBuilder.PortName != nil {
 		panic("specify portname or port, not both")
 	}
-	if portName != nil {
+	if ingressBuilder.PortName != nil {
 		ports = []crdv1beta1.NetworkPolicyPort{
 			{
-				Port:     &intstr.IntOrString{Type: intstr.String, StrVal: *portName},
+				Port:     &intstr.IntOrString{Type: intstr.String, StrVal: *ingressBuilder.PortName},
 				Protocol: &k8sProtocol,
 			},
 		}
 	}
-	if port != nil || endPort != nil || srcPort != nil || srcEndPort != nil {
+	if ingressBuilder.Port != nil || ingressBuilder.EndPort != nil || ingressBuilder.SrcPort != nil || ingressBuilder.SrcEndPort != nil {
 		var pVal *intstr.IntOrString
-		if port != nil {
-			pVal = &intstr.IntOrString{IntVal: *port}
+		if ingressBuilder.Port != nil {
+			pVal = &intstr.IntOrString{IntVal: *ingressBuilder.Port}
 		}
 		ports = []crdv1beta1.NetworkPolicyPort{
 			{
 				Port:          pVal,
-				EndPort:       endPort,
-				SourcePort:    srcPort,
-				SourceEndPort: srcEndPort,
+				EndPort:       ingressBuilder.EndPort,
+				SourcePort:    ingressBuilder.SrcPort,
+				SourceEndPort: ingressBuilder.SrcEndPort,
 				Protocol:      &k8sProtocol,
 			},
 		}

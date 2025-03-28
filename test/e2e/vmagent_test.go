@@ -646,7 +646,7 @@ func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace stri
 	for fqdn, action := range fqdnSettings {
 		ruleName := fmt.Sprintf("name-%d", i)
 		policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
-		ports, _ := GenPortsOrProtocols(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		ports, _ := GenPortsOrProtocols(IngressBuilder{Protoc: ProtocolTCP})
 		newRule := crdv1beta1.Rule{
 			To:     policyPeer,
 			Ports:  ports,

@@ -138,7 +138,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(ib IngressBuilder) *AntreaNe
 			Group:                  ib.RuleGroup,
 		}}
 	}
-	ports, protocols := GenPortsOrProtocols(ib.Protoc, ib.Port, ib.PortName, ib.EndPort, nil, nil, ib.IcmpType, ib.IcmpCode, ib.IgmpType, ib.GroupAddress)
+	ports, protocols := GenPortsOrProtocols(ib)
 	newRule := crdv1beta1.Rule{
 		From:        policyPeer,
 		Ports:       ports,
@@ -232,7 +232,12 @@ func (b *AntreaNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	}
 
 	policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
-	ports, _ := GenPortsOrProtocols(protoc, port, portName, endPort, nil, nil, nil, nil, nil, nil)
+	ports, _ := GenPortsOrProtocols(IngressBuilder{
+		Protoc:   protoc,
+		Port:     port,
+		PortName: portName,
+		EndPort:  endPort,
+	})
 	newRule := crdv1beta1.Rule{
 		To:        policyPeer,
 		Ports:     ports,

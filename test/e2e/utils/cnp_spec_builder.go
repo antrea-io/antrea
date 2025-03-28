@@ -142,6 +142,8 @@ type IngressBuilder struct {
 	NodeSelectorMatchExp []metav1.LabelSelectorRequirement
 	Action               crdv1beta1.RuleAction
 	Name                 string
+	SrcPort              *int32
+	SrcEndPort           *int32
 
 	// CNP only
 	IpBlock            *crdv1beta1.IPBlock
@@ -222,7 +224,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(ib IngressBuilder) *Cluster
 			ServiceAccount:    ib.ServiceAccount,
 		}}
 	}
-	ports, protocols := GenPortsOrProtocols(ib.Protoc, ib.Port, ib.PortName, ib.EndPort, nil, nil, ib.IcmpType, ib.IcmpCode, ib.IgmpType, ib.GroupAddress)
+	ports, protocols := GenPortsOrProtocols(ib)
 	newRule := crdv1beta1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
@@ -301,7 +303,17 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngressForSrcPort(protoc AntreaPoli
 			ServiceAccount:    serviceAccount,
 		}}
 	}
-	ports, protocols := GenPortsOrProtocols(protoc, port, nil, endPort, srcPort, endSrcPort, icmpType, icmpCode, igmpType, groupAddress)
+	ports, protocols := GenPortsOrProtocols(
+		IngressBuilder{
+			Protoc:       protoc,
+			Port:         port,
+			EndPort:      endPort,
+			SrcPort:      srcPort,
+			SrcEndPort:   endSrcPort,
+			IcmpType:     icmpType,
+			IcmpCode:     icmpCode,
+			IgmpType:     igmpType,
+			GroupAddress: groupAddress})
 	newRule := crdv1beta1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
@@ -379,7 +391,12 @@ func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 			at.Service))
 	}
 	policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
-	ports, _ := GenPortsOrProtocols(protoc, port, portName, endPort, nil, nil, nil, nil, nil, nil)
+	ports, _ := GenPortsOrProtocols(
+		IngressBuilder{
+			Protoc:   protoc,
+			Port:     port,
+			PortName: portName,
+			EndPort:  endPort})
 	newRule := crdv1beta1.Rule{
 		To:        policyPeer,
 		Ports:     ports,
