@@ -87,44 +87,69 @@ func TestRun(t *testing.T) {
 		{
 			name: "pod-2-pod",
 			option: options{
-				source: srcPod,
-				dest:   dstPod,
-				flow:   "tcp,tcp_src=50060,tcp_dst=80",
+				source:  srcPod,
+				dest:    dstPod,
+				flow:    "tcp,tcp_src=50060,tcp_dst=80",
+				timeout: testTimeout,
+				number:  testNum,
 			},
 		},
 		{
 			name: "pod-2-ip",
 			option: options{
-				source: srcPod,
-				dest:   ipv4,
-				nowait: true,
-				flow:   "udp,udp_src=1234,udp_dst=1234",
+				source:  srcPod,
+				dest:    ipv4,
+				nowait:  true,
+				timeout: testTimeout,
+				number:  testNum,
+				flow:    "udp,udp_src=1234,udp_dst=1234",
 			},
 		},
 		{
 			name: "timeout",
 			option: options{
-				source: srcPod,
-				dest:   dstPod,
-				flow:   "icmp",
+				source:  srcPod,
+				dest:    dstPod,
+				flow:    "icmp",
+				timeout: testTimeout,
+				number:  testNum,
 			},
 			expectErr: "timeout while waiting for PacketCapture to complete",
 		},
 		{
 			name: "invalid-packetcapture",
 			option: options{
-				source: ipv4,
-				dest:   ipv4,
-				flow:   "icmp",
+				source:  ipv4,
+				dest:    ipv4,
+				flow:    "icmp",
+				timeout: testTimeout,
+				number:  testNum,
 			},
 			expectErr: "error when constructing a PacketCapture CR: one of source and destination must be a Pod",
+		},
+		{
+			name: "invalid timeout settings",
+			option: options{
+				source:  srcPod,
+				dest:    dstPod,
+				timeout: 500 * time.Second,
+				number:  testNum,
+			},
+			expectErr: "timeout cannot be longer than 5m0s",
+		},
+		{
+			name: "invalid packet number",
+			option: options{
+				source:  srcPod,
+				dest:    dstPod,
+				timeout: testTimeout,
+			},
+			expectErr: "packet number should be larger than 0",
 		},
 	}
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.option.number = 10
-			tt.option.timeout = testTimeout
 			client := antreafakeclient.NewSimpleClientset()
 			client.PrependReactor("create", "packetcaptures", func(action k8stesting.Action) (bool, runtime.Object, error) {
 				createAction := action.(k8stesting.CreateAction)
