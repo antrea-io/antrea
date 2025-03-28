@@ -42,7 +42,6 @@ diff="$(git status --porcelain ${YAMLS[@]})"
 
 MULTICLUSTER_YAMLS=($(ls multicluster/build/yamls/*.yml))
 
-rm "${MULTICLUSTER_YAMLS[@]}"
 cd multicluster; make manifests; cd ..
 mcdiff="$(git status --porcelain ${MULTICLUSTER_YAMLS[@]})"
 
