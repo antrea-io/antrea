@@ -142,6 +142,7 @@ type IngressBuilder struct {
 	NodeSelectorMatchExp []metav1.LabelSelectorRequirement
 	Action               crdv1beta1.RuleAction
 	Name                 string
+	SelfNS               bool
 	SrcPort              *int32
 	SrcEndPort           *int32
 
@@ -211,6 +212,13 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(ib IngressBuilder) *Cluster
 			at.Group,
 			at.Service))
 	}
+
+	matchSelf := crdv1beta1.NamespaceMatchSelf
+	if ib.SelfNS == true {
+		ib.Namespaces = &crdv1beta1.PeerNamespaces{
+			Match: matchSelf,
+		}
+	}
 	// An empty From/To in ACNP rules evaluates to match all addresses.
 	policyPeer := make([]crdv1beta1.NetworkPolicyPeer, 0)
 	if podSel != nil || nodeSel != nil || nsSel != nil || ib.Namespaces != nil || ib.IpBlock != nil || ib.RuleClusterGroup != "" || ib.ServiceAccount != nil {
@@ -231,95 +239,6 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(ib IngressBuilder) *Cluster
 		Protocols: protocols,
 		Action:    &ib.Action,
 		Name:      ib.Name,
-		AppliedTo: appliedTos,
-	}
-	b.Spec.Ingress = append(b.Spec.Ingress, newRule)
-	return b
-}
-
-// TODO: added new function to avoid merge conflicts. Unify this function with 'addIngress' when
-//
-//	all conflicting PRs are merged.
-func (b *ClusterNetworkPolicySpecBuilder) AddIngressForSrcPort(protoc AntreaPolicyProtocol,
-	port, endPort, srcPort, endSrcPort, icmpType, icmpCode, igmpType *int32,
-	groupAddress *string, ipBlock *crdv1beta1.IPBlock, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement, nodeSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
-	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1beta1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
-
-	var podSel *metav1.LabelSelector
-	var nodeSel *metav1.LabelSelector
-	var nsSel *metav1.LabelSelector
-	var ns *crdv1beta1.PeerNamespaces
-	var appliedTos []crdv1beta1.AppliedTo
-	matchSelf := crdv1beta1.NamespaceMatchSelf
-
-	if b.Spec.Ingress == nil {
-		b.Spec.Ingress = []crdv1beta1.Rule{}
-	}
-
-	if podSelector != nil || podSelectorMatchExp != nil {
-		podSel = &metav1.LabelSelector{
-			MatchLabels:      podSelector,
-			MatchExpressions: podSelectorMatchExp,
-		}
-	}
-	if nodeSelector != nil || nodeSelectorMatchExp != nil {
-		nodeSel = &metav1.LabelSelector{
-			MatchLabels:      nodeSelector,
-			MatchExpressions: nodeSelectorMatchExp,
-		}
-	}
-	if nsSelector != nil || nsSelectorMatchExp != nil {
-		nsSel = &metav1.LabelSelector{
-			MatchLabels:      nsSelector,
-			MatchExpressions: nsSelectorMatchExp,
-		}
-	}
-	if selfNS == true {
-		ns = &crdv1beta1.PeerNamespaces{
-			Match: matchSelf,
-		}
-	}
-	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector,
-			at.NodeSelector,
-			at.NSSelector,
-			at.PodSelectorMatchExp,
-			at.NodeSelectorMatchExp,
-			at.NSSelectorMatchExp,
-			at.Group,
-			at.Service))
-	}
-	// An empty From/To in ACNP rules evaluates to match all addresses.
-	policyPeer := make([]crdv1beta1.NetworkPolicyPeer, 0)
-	if podSel != nil || nodeSel != nil || nsSel != nil || ns != nil || ipBlock != nil || ruleClusterGroup != "" || serviceAccount != nil {
-		policyPeer = []crdv1beta1.NetworkPolicyPeer{{
-			PodSelector:       podSel,
-			NodeSelector:      nodeSel,
-			NamespaceSelector: nsSel,
-			Namespaces:        ns,
-			IPBlock:           ipBlock,
-			Group:             ruleClusterGroup,
-			ServiceAccount:    serviceAccount,
-		}}
-	}
-	ports, protocols := GenPortsOrProtocols(
-		IngressBuilder{
-			Protoc:       protoc,
-			Port:         port,
-			EndPort:      endPort,
-			SrcPort:      srcPort,
-			SrcEndPort:   endSrcPort,
-			IcmpType:     icmpType,
-			IcmpCode:     icmpCode,
-			IgmpType:     igmpType,
-			GroupAddress: groupAddress})
-	newRule := crdv1beta1.Rule{
-		From:      policyPeer,
-		Ports:     ports,
-		Protocols: protocols,
-		Action:    &action,
-		Name:      name,
 		AppliedTo: appliedTos,
 	}
 	b.Spec.Ingress = append(b.Spec.Ingress, newRule)

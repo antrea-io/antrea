@@ -313,22 +313,43 @@ func testNodeACNPSourcePort(t *testing.T) {
 	builder = builder.SetName("acnp-source-port").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder.AddIngressForSrcPort(ProtocolTCP, nil, nil, &portStart, &portEnd, nil, nil, nil, nil, nil, nil, map[string]string{labelNodeHostname: nodes["y"]}, nil,
-		nil, nil, nil, false, nil, crdv1beta1.RuleActionDrop, "", "", nil)
+	builder.AddIngress(IngressBuilder{
+		Protoc:       ProtocolTCP,
+		SrcPort:      &portStart,
+		SrcEndPort:   &portEnd,
+		NodeSelector: map[string]string{labelNodeHostname: nodes["y"]},
+		SelfNS:       false,
+		Action:       crdv1beta1.RuleActionDrop,
+	})
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
 	builder2 = builder2.SetName("acnp-source-port").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder2.AddIngressForSrcPort(ProtocolTCP, &p80, nil, &portStart, &portEnd, nil, nil, nil, nil, nil, nil, map[string]string{labelNodeHostname: nodes["y"]}, nil,
-		nil, nil, nil, false, nil, crdv1beta1.RuleActionDrop, "", "", nil)
+	builder2.AddIngress(IngressBuilder{
+		Protoc:       ProtocolTCP,
+		Port:         &p80,
+		SrcPort:      &portStart,
+		SrcEndPort:   &portEnd,
+		NodeSelector: map[string]string{labelNodeHostname: nodes["y"]},
+		SelfNS:       false,
+		Action:       crdv1beta1.RuleActionDrop,
+	})
 
 	builder3 := &ClusterNetworkPolicySpecBuilder{}
 	builder3 = builder3.SetName("acnp-source-port").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NodeSelector: map[string]string{labelNodeHostname: nodes["x"]}}})
-	builder3.AddIngressForSrcPort(ProtocolTCP, &p80, &p81, &portStart, &portEnd, nil, nil, nil, nil, nil, nil, map[string]string{labelNodeHostname: nodes["y"]}, nil,
-		nil, nil, nil, false, nil, crdv1beta1.RuleActionDrop, "", "", nil)
+	builder3.AddIngress(IngressBuilder{
+		Protoc:       ProtocolTCP,
+		Port:         &p80,
+		EndPort:      &p81,
+		SrcPort:      &portStart,
+		SrcEndPort:   &portEnd,
+		NodeSelector: map[string]string{labelNodeHostname: nodes["y"]},
+		SelfNS:       false,
+		Action:       crdv1beta1.RuleActionDrop,
+	})
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("y", "a"), getPod("x", "a"), Dropped)
