@@ -123,7 +123,6 @@ type: Opaque`)
 	}
 	cmd := NewJoinCommand()
 	buf := new(bytes.Buffer)
-	cmd.SetOutput(buf)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.Flag("clusterset").Value.Set("test-clusterset")
