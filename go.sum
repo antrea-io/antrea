@@ -776,8 +776,8 @@ github.com/vishvananda/netlink v1.3.0/go.mod h1:i6NetklAujEcC6fK0JPjT8qSwWyO0HLn
 github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae/go.mod h1:DD4vA1DwXk04H54A1oHXtwZmA0grkVMdPxx/VGLCah0=
 github.com/vishvananda/netns v0.0.4 h1:Oeaw1EM2JMxD51g9uhtC0D7erkIjgmj8+JZc26m1YX8=
 github.com/vishvananda/netns v0.0.4/go.mod h1:SpkAiCQRtJ6TvvxPnOSyH3BMl6unz3xZlaprSwhNNJM=
-github.com/vmware/go-ipfix v0.13.0 h1:v3paBzd7oq7LEU1SzDwD5RGoYcGROLQycYyN3EzLvDk=
-github.com/vmware/go-ipfix v0.13.0/go.mod h1:UTIR38AuEePzrWYjQOvnORCYRG33xZJ56E0K75mSosM=
+github.com/vmware/go-ipfix v0.14.0 h1:Flz77R8mjD7QfAE56rGqKuI6Xc8O8BZ8kToyu8mA0rM=
+github.com/vmware/go-ipfix v0.14.0/go.mod h1:HagsZnswXBEglXBYL5NCAkRk35OETTpYwnMoBsT7Qp8=
 github.com/wlynxg/anet v0.0.3/go.mod h1:eay5PRQr7fIVAMbTbchTnO9gG65Hg/uYGdc7mguHxoA=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
