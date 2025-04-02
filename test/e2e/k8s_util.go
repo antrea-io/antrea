@@ -1129,7 +1129,7 @@ func (hsr *httpServerReadiness) spawnProberPool(resultsCh chan *probeResult) {
 
 	// Tested value as the upper limit for running locally with minimal impacts to CI speeds
 	proberRateLimit := 150
-	for range proberRateLimit {
+	for range min(proberRateLimit, hsr.numProbes()) {
 		go startProber()
 	}
 }
