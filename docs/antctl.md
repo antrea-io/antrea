@@ -575,7 +575,7 @@ $ antctl traceflow -D pod1 -f tcp,tcp_dst=80 --live-traffic --dropped-only -t 10
 ### PacketCapture
 
 `antctl packetcapture` (or  `antctl pc`) command is used to start a `PacketCapture`
-and retrieve the captured result. After the result packet file(in pcapng format)
+and retrieve the captured result. After the result packet file (in pcapng format)
 is copied out, the PacketCapture will be deleted. The command will display the
 local path to the pcapng file as it exits. Users can also create a PacketCapture
 with `kubectl`, but `antctl` makes it easier. For more information about PacketCapture,
