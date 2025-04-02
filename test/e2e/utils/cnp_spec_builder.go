@@ -253,12 +253,11 @@ func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 			at.Service))
 	}
 	policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
-	ports, _ := GenPortsOrProtocols(
-		RuleBuilder{
-			Protoc:   protoc,
-			Port:     port,
-			PortName: portName,
-			EndPort:  endPort})
+	ports, _ := GenPortsOrProtocols(RuleBuilder{
+		Protoc:   protoc,
+		Port:     port,
+		PortName: portName,
+		EndPort:  endPort})
 	newRule := crdv1beta1.Rule{
 		To:        policyPeer,
 		Ports:     ports,

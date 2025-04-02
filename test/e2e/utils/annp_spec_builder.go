@@ -156,29 +156,28 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(rb RuleBuilder) *AntreaNetwor
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &AntreaNetworkPolicySpecBuilder{}
-	c.AddIngress(
-		RuleBuilder{
-			Protoc:                rb.Protoc,
-			Port:                  rb.Port,
-			PortName:              rb.PortName,
-			EndPort:               rb.EndPort,
-			IcmpType:              rb.IcmpType,
-			IcmpCode:              rb.IcmpCode,
-			IgmpType:              rb.IgmpType,
-			L7Protocols:           rb.L7Protocols,
-			GroupAddress:          rb.GroupAddress,
-			Cidr:                  rb.Cidr,
-			PodSelector:           rb.PodSelector,
-			NsSelector:            rb.NsSelector,
-			EeSelector:            rb.EeSelector,
-			PodSelectorMatchExp:   rb.PodSelectorMatchExp,
-			NsSelectorMatchExp:    rb.NsSelectorMatchExp,
-			EeSelectorMatchExp:    rb.EeSelectorMatchExp,
-			ANPRuleAppliedToSpecs: rb.ANPRuleAppliedToSpecs,
-			Action:                rb.Action,
-			RuleGroup:             rb.RuleGroup,
-			Name:                  rb.Name,
-		})
+	c.AddIngress(RuleBuilder{
+		Protoc:                rb.Protoc,
+		Port:                  rb.Port,
+		PortName:              rb.PortName,
+		EndPort:               rb.EndPort,
+		IcmpType:              rb.IcmpType,
+		IcmpCode:              rb.IcmpCode,
+		IgmpType:              rb.IgmpType,
+		L7Protocols:           rb.L7Protocols,
+		GroupAddress:          rb.GroupAddress,
+		Cidr:                  rb.Cidr,
+		PodSelector:           rb.PodSelector,
+		NsSelector:            rb.NsSelector,
+		EeSelector:            rb.EeSelector,
+		PodSelectorMatchExp:   rb.PodSelectorMatchExp,
+		NsSelectorMatchExp:    rb.NsSelectorMatchExp,
+		EeSelectorMatchExp:    rb.EeSelectorMatchExp,
+		ANPRuleAppliedToSpecs: rb.ANPRuleAppliedToSpecs,
+		Action:                rb.Action,
+		RuleGroup:             rb.RuleGroup,
+		Name:                  rb.Name,
+	})
 	theRule := c.Get().Spec.Ingress[0]
 
 	b.Spec.Egress = append(b.Spec.Egress, crdv1beta1.Rule{
