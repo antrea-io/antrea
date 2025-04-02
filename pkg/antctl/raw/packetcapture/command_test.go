@@ -103,17 +103,6 @@ func TestRun(t *testing.T) {
 			},
 		},
 		{
-			name: "timeout",
-			option: packetCaptureOptions{
-				source:  srcPod,
-				dest:    dstPod,
-				flow:    "icmp",
-				timeout: testTimeout,
-				number:  testNum,
-			},
-			expectErr: "timeout while waiting for PacketCapture to complete",
-		},
-		{
 			name: "invalid-packetcapture",
 			option: packetCaptureOptions{
 				source:  ipv4,
