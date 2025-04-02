@@ -587,7 +587,7 @@ To start a PacketCapture, users must provide the following arguments:
 * `--destination` (or `-D`)
 * `--number` (or `-n`)
 
-Note: one of `--source` and `--destination` must be a pod.
+Note: one of `--source` and `--destination` must be a Pod.
 
 The `--flow` (or `-f`) argument can be used to specify the PacketCapture packet
 headers with the [ovs-ofctl](http://www.openvswitch.org//support/dist-docs/ovs-ofctl.8.txt)
@@ -605,7 +605,7 @@ More examples of `antctl packetcapture`:
 
 ```bash
 # Start capturing packets from pod1 to pod2, both Pods are in Namespace default
-$ antctl packetcaputre -S pod1 -D pod2
+$ antctl packetcapture -S pod1 -D pod2
 # Start capturing packets from pod1 in Namespace ns1 to a destination IP
 $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
 # Start capturing UDP packets from pod1 to pod2, with destination port 1234

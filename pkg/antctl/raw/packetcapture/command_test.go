@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/spf13/afero"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -37,7 +36,6 @@ import (
 
 	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 )
 
@@ -71,8 +69,7 @@ var (
 	k8sClient = k8sfake.NewSimpleClientset(&pod1, &pod2, &antreaAgentPod)
 )
 
-type testPodFile struct {
-}
+type testPodFile struct{}
 
 func (p *testPodFile) CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name, containerName, srcPath, dstDir string) error {
 	return nil
@@ -81,12 +78,12 @@ func (p *testPodFile) CopyFromPod(ctx context.Context, fs afero.Fs, namespace, n
 func TestRun(t *testing.T) {
 	tcs := []struct {
 		name      string
-		option    options
+		option    packetCaptureOptions
 		expectErr string
 	}{
 		{
 			name: "pod-2-pod",
-			option: options{
+			option: packetCaptureOptions{
 				source:  srcPod,
 				dest:    dstPod,
 				flow:    "tcp,tcp_src=50060,tcp_dst=80",
@@ -96,7 +93,7 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "pod-2-ip",
-			option: options{
+			option: packetCaptureOptions{
 				source:  srcPod,
 				dest:    ipv4,
 				nowait:  true,
@@ -107,7 +104,7 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "timeout",
-			option: options{
+			option: packetCaptureOptions{
 				source:  srcPod,
 				dest:    dstPod,
 				flow:    "icmp",
@@ -118,7 +115,7 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "invalid-packetcapture",
-			option: options{
+			option: packetCaptureOptions{
 				source:  ipv4,
 				dest:    ipv4,
 				flow:    "icmp",
@@ -129,7 +126,7 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "invalid timeout settings",
-			option: options{
+			option: packetCaptureOptions{
 				source:  srcPod,
 				dest:    dstPod,
 				timeout: 500 * time.Second,
@@ -139,7 +136,7 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "invalid packet number",
-			option: options{
+			option: packetCaptureOptions{
 				source:  srcPod,
 				dest:    dstPod,
 				timeout: testTimeout,
@@ -165,22 +162,14 @@ func TestRun(t *testing.T) {
 				}
 				return false, obj, nil
 			})
-			getClients = func(cmd *cobra.Command) (*rest.Config, kubernetes.Interface, antrea.Interface, error) {
-				return nil, k8sClient, client, nil
-			}
-			getCopier = func(cmd *cobra.Command) (raw.PodFileCopier, error) {
-				return &testPodFile{}, nil
+			getCopier = func(config *rest.Config, client kubernetes.Interface) raw.PodFileCopier {
+				return &testPodFile{}
 			}
 			defer func() {
-				getClients = getConfigAndClients
 				getCopier = getPodFileCopier
 			}()
 			buf := new(bytes.Buffer)
-			Command.SetOut(buf)
-			Command.SetErr(buf)
-			Command.SetContext(context.Background())
-
-			err := packetCaptureRun(Command, &tt.option)
+			err := packetCaptureRun(context.TODO(), buf, nil, k8sClient, client, &tt.option)
 			if tt.expectErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -193,13 +182,13 @@ func TestRun(t *testing.T) {
 func TestNewPacketCapture(t *testing.T) {
 	tcs := []struct {
 		name      string
-		option    options
+		option    packetCaptureOptions
 		expectErr string
 		expectPC  *v1alpha1.PacketCapture
 	}{
 		{
 			name: "pod-2-pod-tcp",
-			option: options{
+			option: packetCaptureOptions{
 				source:  srcPod,
 				dest:    dstPod,
 				flow:    "tcp,tcp_dst=80",
@@ -240,7 +229,7 @@ func TestNewPacketCapture(t *testing.T) {
 		},
 		{
 			name: "no-pod",
-			option: options{
+			option: packetCaptureOptions{
 				source: "127.0.0.1",
 				dest:   "127.0.0.1",
 			},
@@ -248,7 +237,7 @@ func TestNewPacketCapture(t *testing.T) {
 		},
 		{
 			name: "bad-flow",
-			option: options{
+			option: packetCaptureOptions{
 				source: srcPod,
 				dest:   dstPod,
 				flow:   "tcp,tcp_dst=invalid",
@@ -257,7 +246,7 @@ func TestNewPacketCapture(t *testing.T) {
 		},
 		{
 			name: "bad-flow-2",
-			option: options{
+			option: packetCaptureOptions{
 				source: srcPod,
 				dest:   dstPod,
 				flow:   "tcp,tcp_dst=80=80",
