@@ -249,7 +249,7 @@ func testUpdateValidationInvalidACNP(t *testing.T) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
 		SetPriority(1.0)
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			PodSelector: map[string]string{"pod": "b"},
 			Action:      crdv1beta1.RuleActionAllow,
@@ -260,7 +260,7 @@ func testUpdateValidationInvalidACNP(t *testing.T) {
 		failOnError(fmt.Errorf("create ACNP acnp-applied-to-update failed: %v", err), t)
 	}
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:             ProtocolTCP,
 			PodSelector:        map[string]string{"pod": "c"},
 			Action:             crdv1beta1.RuleActionAllow,
@@ -296,7 +296,7 @@ func testUpdateValidationInvalidANNP(t *testing.T) {
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
 		SetPriority(1.0)
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			PodSelector: map[string]string{"pod": "c"},
 			Action:      crdv1beta1.RuleActionAllow,
@@ -307,7 +307,7 @@ func testUpdateValidationInvalidANNP(t *testing.T) {
 		failOnError(fmt.Errorf("create ANNP annp-applied-to-update failed: %v", err), t)
 	}
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:                ProtocolTCP,
 			PodSelector:           map[string]string{"pod": "b"},
 			ANPRuleAppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}},
@@ -433,7 +433,7 @@ func testACNPAllowXBtoA(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
@@ -474,7 +474,7 @@ func testACNPSourcePort(t *testing.T) {
 	builder = builder.SetName("acnp-source-port").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddIngress(IngressBuilder{
+	builder.AddIngress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		SrcPort:     &portStart,
 		SrcEndPort:  &portEnd,
@@ -488,7 +488,7 @@ func testACNPSourcePort(t *testing.T) {
 	builder2 = builder2.SetName("acnp-source-port").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder2.AddIngress(IngressBuilder{
+	builder2.AddIngress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		Port:        &p80,
 		SrcPort:     &portStart,
@@ -503,7 +503,7 @@ func testACNPSourcePort(t *testing.T) {
 	builder3 = builder3.SetName("acnp-source-port").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder3.AddIngress(IngressBuilder{
+	builder3.AddIngress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		Port:        &p80,
 		EndPort:     &p81,
@@ -560,7 +560,7 @@ func testACNPAllowXBtoYA(t *testing.T) {
 		SetPriority(2.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("y")}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			PortName:    &port81Name,
 			PodSelector: map[string]string{"pod": "b"},
@@ -596,7 +596,7 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T, data *TestData) {
 		SetPriority(2).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
 	builder1.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -608,7 +608,7 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T, data *TestData) {
 		SetPriority(1).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("x")}}})
 	builder2.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -661,13 +661,13 @@ func testACNPAllowNoDefaultIsolation(t *testing.T, protocol AntreaPolicyProtocol
 		SetPriority(1.1).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     protocol,
 			Port:       &p81,
 			NsSelector: map[string]string{"ns": getNS("y")},
 			Action:     crdv1beta1.RuleActionAllow,
 		})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:     protocol,
 		Port:       &p81,
 		NsSelector: map[string]string{"ns": getNS("z")},
@@ -704,7 +704,7 @@ func testACNPDropEgress(t *testing.T, protocol AntreaPolicyProtocol) {
 	builder = builder.SetName("acnp-deny-a-to-z-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:     protocol,
 		Port:       &p80,
 		NsSelector: map[string]string{"ns": getNS("z")},
@@ -740,7 +740,7 @@ func testACNPDropIngressInSelectedNamespace(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc: ProtocolTCP,
 			Port:   &p80,
 			Action: crdv1beta1.RuleActionDrop,
@@ -776,7 +776,7 @@ func testACNPDropIPBlockWithExcept(t *testing.T) {
 	podXBIP, _ := podIPs[getPodName("x", "b")]
 	ipBlocks := genIPBlockForAllIPsExcept(append(podXAIP, podXBIP...))
 	for i := range ipBlocks {
-		builder.AddEgress(IngressBuilder{
+		builder.AddEgress(RuleBuilder{
 			Protoc:  ProtocolTCP,
 			Port:    &p80,
 			IpBlock: ipBlocks[i],
@@ -802,7 +802,7 @@ func testACNPDropIPBlockWithExcept(t *testing.T) {
 	builder2 = builder2.SetName("acnp-drop-egress-from-ya-to-xa").
 		SetPriority(2.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("y")}}}).
-		AddEgress(IngressBuilder{
+		AddEgress(RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "a"},
@@ -838,7 +838,7 @@ func testACNPNoEffectOnOtherProtocols(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -892,7 +892,7 @@ func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 		SetPriority(2.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{Group: cgName}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			PortName:    &port81Name,
 			PodSelector: map[string]string{"pod": "b"},
@@ -933,7 +933,7 @@ func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 		SetPriority(2.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("y")}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:           ProtocolTCP,
 			PortName:         &port81Name,
 			Action:           crdv1beta1.RuleActionDrop,
@@ -967,7 +967,7 @@ func testACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-cg-with-a-to-z").
 		SetPriority(1.0)
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:             ProtocolTCP,
 		Port:               &p80,
 		NsSelector:         map[string]string{"ns": getNS("z")},
@@ -1005,7 +1005,7 @@ func testACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 	builder = builder.SetName("acnp-deny-a-to-cg-with-z-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:           ProtocolTCP,
 		Port:             &p80,
 		Action:           crdv1beta1.RuleActionDrop,
@@ -1044,7 +1044,7 @@ func testACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 	builder = builder.SetName("acnp-deny-cg-with-a-to-z-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{Group: cgName}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:     ProtocolTCP,
 		Port:       &p80,
 		NsSelector: map[string]string{"ns": getNS("z")},
@@ -1095,7 +1095,7 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 	builder = builder.SetName("acnp-deny-a-to-cg-with-z-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:           ProtocolTCP,
 		Port:             &p80,
 		Action:           crdv1beta1.RuleActionDrop,
@@ -1145,7 +1145,7 @@ func testACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 	builder = builder.SetName("acnp-deny-cg-with-zj-to-xj-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{Group: cgName}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		Port:        &p80,
 		PodSelector: map[string]string{"pod": "j"},
@@ -1196,7 +1196,7 @@ func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 				NSSelector:  map[string]string{"ns": getNS("x")},
 			},
 		})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:           ProtocolTCP,
 		Port:             &p80,
 		Action:           crdv1beta1.RuleActionDrop,
@@ -1302,14 +1302,14 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 			},
 		})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:           ProtocolTCP,
 			Port:             &p80,
 			Action:           crdv1beta1.RuleActionDrop,
 			RuleClusterGroup: cgName,
 		})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:           ProtocolTCP,
 			Port:             &p80,
 			Action:           crdv1beta1.RuleActionDrop,
@@ -1345,7 +1345,7 @@ func testANNPEgressRulePodsAToGrpWithPodsC(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-deny-xa-to-grp-xc-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:    ProtocolTCP,
 		Port:      &p80,
 		Action:    crdv1beta1.RuleActionDrop,
@@ -1381,7 +1381,7 @@ func testANNPIngressRuleDenyGrpWithXCtoXA(t *testing.T) {
 		SetPriority(2.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:    ProtocolTCP,
 			PortName:  &port81Name,
 			Action:    crdv1beta1.RuleActionDrop,
@@ -1417,7 +1417,7 @@ func testANNPGroupUpdate(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-deny-xa-to-grp-with-xc-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:    ProtocolTCP,
 		Port:      &p80,
 		Action:    crdv1beta1.RuleActionDrop,
@@ -1462,7 +1462,7 @@ func testANNPAppliedToDenyXBtoGrpWithXA(t *testing.T) {
 		SetPriority(2.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grpName}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			PortName:    &port81Name,
 			PodSelector: map[string]string{"pod": "b"},
@@ -1497,7 +1497,7 @@ func testANNPAppliedToRuleGrpWithPodsAToPodsC(t *testing.T) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-deny-grp-with-a-to-c").
 		SetPriority(1.0)
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:                ProtocolTCP,
 		Port:                  &p80,
 		PodSelector:           map[string]string{"pod": "c"},
@@ -1534,7 +1534,7 @@ func testANNPGroupUpdateAppliedTo(t *testing.T) {
 	builder = builder.SetName(getNS("x"), "annp-deny-grp-xc-to-xa-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grpName}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		Port:        &p80,
 		PodSelector: map[string]string{"pod": "c"},
@@ -1576,7 +1576,7 @@ func testANNPGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 	builder = builder.SetName(getNS("x"), "annp-deny-grp-with-xj-to-xd-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grpName}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		Port:        &p80,
 		PodSelector: map[string]string{"pod": "d"},
@@ -1624,7 +1624,7 @@ func testANNPGroupServiceRefPodAdd(t *testing.T, data *TestData) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-grp-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grp1Name}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:    ProtocolTCP,
 			Port:      &p80,
 			Action:    crdv1beta1.RuleActionDrop,
@@ -1689,7 +1689,7 @@ func testANNPGroupServiceRefDelete(t *testing.T) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-grp-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grp1Name}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:    ProtocolTCP,
 			Port:      &p80,
 			Action:    crdv1beta1.RuleActionDrop,
@@ -1735,7 +1735,7 @@ func testANNPGroupServiceRefCreateAndUpdate(t *testing.T) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-grp-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grp1Name}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:    ProtocolTCP,
 			Port:      &p80,
 			Action:    crdv1beta1.RuleActionDrop,
@@ -1795,7 +1795,7 @@ func testANNPGroupRefRuleIPBlocks(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:    ProtocolTCP,
 			Port:      &p80,
 			Action:    crdv1beta1.RuleActionDrop,
@@ -1838,7 +1838,7 @@ func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	builder = builder.SetName(getNS("x"), "annp-nested-grp").SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{}}).
 		AddIngress(
-			IngressBuilder{
+			RuleBuilder{
 				Protoc:    ProtocolTCP,
 				Port:      &p80,
 				Action:    crdv1beta1.RuleActionDrop,
@@ -1928,7 +1928,7 @@ func testBaselineNamespaceIsolation(t *testing.T, data *TestData) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:             ProtocolTCP,
 			Port:               &p80,
 			NsSelectorMatchExp: []metav1.LabelSelectorRequirement{nsExpOtherThanX},
@@ -2008,7 +2008,7 @@ func testACNPPriorityOverride(t *testing.T, data *TestData) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("x")}}})
 	// Highest priority. Drops traffic from z/b to x/a.
 	builder1.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
@@ -2022,7 +2022,7 @@ func testACNPPriorityOverride(t *testing.T, data *TestData) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("x")}}})
 	// Medium priority. Allows traffic from z to x/a.
 	builder2.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -2035,7 +2035,7 @@ func testACNPPriorityOverride(t *testing.T, data *TestData) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
 	// Lowest priority. Drops traffic from z to x.
 	builder3.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -2108,7 +2108,7 @@ func testACNPTierOverride(t *testing.T, data *TestData) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("x")}}})
 	// Highest priority tier. Drops traffic from z/b to x/a.
 	builder1.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
@@ -2123,7 +2123,7 @@ func testACNPTierOverride(t *testing.T, data *TestData) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("x")}}})
 	// Medium priority tier. Allows traffic from z to x/a.
 	builder2.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -2137,7 +2137,7 @@ func testACNPTierOverride(t *testing.T, data *TestData) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
 	// Lowest priority tier. Drops traffic from z to x.
 	builder3.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -2217,7 +2217,7 @@ func testACNPCustomTiers(t *testing.T, data *TestData) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("x")}}})
 	// Medium priority tier. Allows traffic from z to x/a.
 	builder1.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -2231,7 +2231,7 @@ func testACNPCustomTiers(t *testing.T, data *TestData) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
 	// Lowest priority tier. Drops traffic from z to x.
 	builder2.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -2279,7 +2279,7 @@ func testACNPPriorityConflictingRule(t *testing.T, data *TestData) {
 		SetPriority(1).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
 	builder1.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -2293,7 +2293,7 @@ func testACNPPriorityConflictingRule(t *testing.T, data *TestData) {
 	// The following ingress rule will take no effect as it is exactly the same as ingress rule of cnp-drop,
 	// but cnp-allow has lower priority.
 	builder2.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -2333,14 +2333,14 @@ func testACNPRulePriority(t *testing.T, data *TestData) {
 	builder1 = builder1.SetName("acnp-deny").
 		SetPriority(5).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
-	builder1.AddEgress(IngressBuilder{
+	builder1.AddEgress(RuleBuilder{
 		Protoc:     ProtocolTCP,
 		Port:       &p80,
 		NsSelector: map[string]string{"ns": getNS("y")},
 		Action:     crdv1beta1.RuleActionDrop,
 	})
 	// This rule should take no effect as it will be overridden by the first rule of cnp-allow
-	builder1.AddEgress(IngressBuilder{
+	builder1.AddEgress(RuleBuilder{
 		Protoc:     ProtocolTCP,
 		Port:       &p80,
 		NsSelector: map[string]string{"ns": getNS("z")},
@@ -2352,14 +2352,14 @@ func testACNPRulePriority(t *testing.T, data *TestData) {
 	builder2 = builder2.SetName("acnp-allow").
 		SetPriority(5).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
-	builder2.AddEgress(IngressBuilder{
+	builder2.AddEgress(RuleBuilder{
 		Protoc:     ProtocolTCP,
 		Port:       &p80,
 		NsSelector: map[string]string{"ns": getNS("z")},
 		Action:     crdv1beta1.RuleActionAllow,
 	})
 	// This rule should take no effect as it will be overridden by the first rule of cnp-drop
-	builder2.AddEgress(IngressBuilder{
+	builder2.AddEgress(RuleBuilder{
 		Protoc:     ProtocolTCP,
 		Port:       &p80,
 		NsSelector: map[string]string{"ns": getNS("y")},
@@ -2399,7 +2399,7 @@ func testACNPPortRange(t *testing.T) {
 	builder = builder.SetName("acnp-deny-a-to-z-egress-port-range").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:     ProtocolTCP,
 		Port:       &p8080,
 		EndPort:    &p8082,
@@ -2435,7 +2435,7 @@ func testACNPRejectEgress(t *testing.T, data *TestData) {
 	builder = builder.SetName("acnp-reject-a-to-z-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:     ProtocolTCP,
 		Port:       &p80,
 		NsSelector: map[string]string{"ns": getNS("z")},
@@ -2475,7 +2475,7 @@ func testACNPRejectIngress(t *testing.T, protocol AntreaPolicyProtocol) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     protocol,
 			Port:       &p80,
 			NsSelector: map[string]string{"ns": getNS("z")},
@@ -2535,13 +2535,13 @@ func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, ser
 	builder1 = builder1.SetName("acnp-reject-egress-svc-traffic").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": "agnhost-client"}}})
-	builder1.AddEgress(IngressBuilder{
+	builder1.AddEgress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		Port:        &p80,
 		PodSelector: map[string]string{"antrea-e2e": "s1"},
 		Action:      crdv1beta1.RuleActionReject,
 	})
-	builder1.AddEgress(IngressBuilder{
+	builder1.AddEgress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		Port:        &p80,
 		PodSelector: map[string]string{"antrea-e2e": "s2"},
@@ -2571,7 +2571,7 @@ func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, ser
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: svc1.Spec.Selector}, {PodSelector: svc2.Spec.Selector}})
 	builder2.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"antrea-e2e": "agnhost-client"},
@@ -2667,14 +2667,14 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, ser
 	builder1 = builder1.SetName("acnp-reject-ingress-double-dir").
 		SetPriority(1.0)
 	builder1.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:             ProtocolTCP,
 			PodSelector:        map[string]string{"app": "nginx"},
 			RuleAppliedToSpecs: []ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}},
 			Action:             crdv1beta1.RuleActionReject,
 		})
 	builder1.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:             ProtocolTCP,
 			PodSelector:        map[string]string{"antrea-e2e": clientName},
 			RuleAppliedToSpecs: []ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}},
@@ -2687,13 +2687,13 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, ser
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
 	builder2 = builder2.SetName("acnp-reject-egress-double-dir").
 		SetPriority(1.0)
-	builder2.AddEgress(IngressBuilder{
+	builder2.AddEgress(RuleBuilder{
 		Protoc:             ProtocolTCP,
 		PodSelector:        map[string]string{"app": "nginx"},
 		RuleAppliedToSpecs: []ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}},
 		Action:             crdv1beta1.RuleActionReject,
 	})
-	builder2.AddEgress(IngressBuilder{
+	builder2.AddEgress(RuleBuilder{
 		Protoc:             ProtocolTCP,
 		PodSelector:        map[string]string{"antrea-e2e": clientName},
 		RuleAppliedToSpecs: []ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}},
@@ -2708,12 +2708,12 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, ser
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}})
 	builder3.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			PodSelector: map[string]string{"antrea-e2e": clientName},
 			Action:      crdv1beta1.RuleActionReject,
 		})
-	builder3.AddEgress(IngressBuilder{
+	builder3.AddEgress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		PodSelector: map[string]string{"antrea-e2e": clientName},
 		Action:      crdv1beta1.RuleActionReject,
@@ -2727,12 +2727,12 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, ser
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}})
 	builder4.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			PodSelector: map[string]string{"app": "nginx"},
 			Action:      crdv1beta1.RuleActionReject,
 		})
-	builder4.AddEgress(IngressBuilder{
+	builder4.AddEgress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		PodSelector: map[string]string{"app": "nginx"},
 		Action:      crdv1beta1.RuleActionReject,
@@ -2747,7 +2747,7 @@ func testANNPPortRange(t *testing.T) {
 	builder = builder.SetName(getNS("y"), "annp-deny-yb-to-xc-egress-port-range").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:      ProtocolTCP,
 		Port:        &p8080,
 		EndPort:     &p8082,
@@ -2783,7 +2783,7 @@ func testANNPBasic(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
@@ -2832,7 +2832,7 @@ func testANNPUpdate(t *testing.T, data *TestData) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
@@ -2863,7 +2863,7 @@ func testANNPUpdate(t *testing.T, data *TestData) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	updatedBuilder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
@@ -2902,7 +2902,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	if singleRule {
 		builder.SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}, {PodSelector: map[string]string{tempLabel: ""}}})
 		builder.AddIngress(
-			IngressBuilder{
+			RuleBuilder{
 				Protoc:      ProtocolTCP,
 				Port:        &p80,
 				PodSelector: map[string]string{"pod": "b"},
@@ -2911,7 +2911,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 			})
 	} else {
 		builder.AddIngress(
-			IngressBuilder{
+			RuleBuilder{
 				Protoc:                ProtocolTCP,
 				Port:                  &p80,
 				PodSelector:           map[string]string{"pod": "b"},
@@ -2920,7 +2920,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 				Action:                crdv1beta1.RuleActionDrop,
 			})
 		builder.AddIngress(
-			IngressBuilder{
+			RuleBuilder{
 				Protoc:                ProtocolTCP,
 				Port:                  &p80,
 				PodSelector:           map[string]string{"pod": "b"},
@@ -3086,7 +3086,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	builder = builder.SetName(npName).
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("x")}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:     ProtocolTCP,
 		Port:       &p80,
 		NsSelector: map[string]string{"ns": getNS("z")},
@@ -3286,7 +3286,7 @@ func testAppliedToPerRule(t *testing.T) {
 	annpATGrp1 := ANNPAppliedToSpec{PodSelector: map[string]string{"pod": "a"}, PodSelectorMatchExp: nil}
 	annpATGrp2 := ANNPAppliedToSpec{PodSelector: map[string]string{"pod": "b"}, PodSelectorMatchExp: nil}
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:                ProtocolTCP,
 			Port:                  &p80,
 			PodSelector:           map[string]string{"pod": "b"},
@@ -3295,7 +3295,7 @@ func testAppliedToPerRule(t *testing.T) {
 			Action:                crdv1beta1.RuleActionDrop,
 		})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:                ProtocolTCP,
 			Port:                  &p80,
 			PodSelector:           map[string]string{"pod": "b"},
@@ -3324,7 +3324,7 @@ func testAppliedToPerRule(t *testing.T) {
 		PodSelector: map[string]string{"pod": "b"}, NSSelector: map[string]string{"ns": getNS("y")},
 		PodSelectorMatchExp: nil, NSSelectorMatchExp: nil}
 	builder2.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:             ProtocolTCP,
 			Port:               &p80,
 			PodSelector:        map[string]string{"pod": "b"},
@@ -3333,7 +3333,7 @@ func testAppliedToPerRule(t *testing.T) {
 			Action:             crdv1beta1.RuleActionDrop,
 		})
 	builder2.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:             ProtocolTCP,
 			Port:               &p80,
 			PodSelector:        map[string]string{"pod": "b"},
@@ -3376,7 +3376,7 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("cnp-cg-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ACNPAppliedToSpec{{Group: cg1Name}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:           ProtocolTCP,
 			Port:             &p80,
 			Action:           crdv1beta1.RuleActionDrop,
@@ -3431,7 +3431,7 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	builderUpdated = builderUpdated.SetName("cnp-cg-svc-ref").SetPriority(1.0)
 	builderUpdated.SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("x")}}})
 	builderUpdated.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
@@ -3477,7 +3477,7 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	builder = builder.SetName("cnp-nested-cg").SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("z")}}}).
 		AddIngress(
-			IngressBuilder{
+			RuleBuilder{
 				Protoc:           ProtocolTCP,
 				Port:             &p80,
 				Action:           crdv1beta1.RuleActionDrop,
@@ -3577,7 +3577,7 @@ func testACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 			},
 		})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:           ProtocolTCP,
 			Port:             &p80,
 			Action:           crdv1beta1.RuleActionDrop,
@@ -3627,13 +3627,13 @@ func testACNPNamespaceIsolation(t *testing.T) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
 	// deny ingress traffic except from own namespace, which is always allowed.
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Namespaces: selfNamespace,
 			Action:     crdv1beta1.RuleActionAllow,
 		})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			NsSelector: map[string]string{},
 			Action:     crdv1beta1.RuleActionDrop,
@@ -3653,13 +3653,13 @@ func testACNPNamespaceIsolation(t *testing.T) {
 	builder2 = builder2.SetName("test-acnp-ns-isolation-applied-to-per-rule").
 		SetTier("baseline").
 		SetPriority(1.0)
-	builder2.AddEgress(IngressBuilder{
+	builder2.AddEgress(RuleBuilder{
 		Protoc:             ProtocolTCP,
 		Namespaces:         selfNamespace,
 		RuleAppliedToSpecs: []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}},
 		Action:             crdv1beta1.RuleActionAllow,
 	})
-	builder2.AddEgress(IngressBuilder{
+	builder2.AddEgress(RuleBuilder{
 		Protoc:             ProtocolTCP,
 		NsSelector:         map[string]string{},
 		RuleAppliedToSpecs: []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}},
@@ -3695,13 +3695,13 @@ func testACNPStrictNamespacesIsolation(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Namespaces: selfNamespace,
 			Action:     crdv1beta1.RuleActionPass,
 		})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			NsSelector: map[string]string{},
 			Action:     crdv1beta1.RuleActionDrop,
@@ -3750,13 +3750,13 @@ func testACNPStrictNamespacesIsolationByLabels(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Namespaces: samePurposeTierLabels,
 			Action:     crdv1beta1.RuleActionPass,
 		})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc: ProtocolTCP,
 			Action: crdv1beta1.RuleActionDrop,
 		})
@@ -3801,13 +3801,13 @@ func testACNPStrictNamespacesIsolationBySingleLabel(t *testing.T, data *TestData
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:     ProtocolTCP,
 			Namespaces: samePurposeTierLabels,
 			Action:     crdv1beta1.RuleActionPass,
 		})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc: ProtocolTCP,
 			Action: crdv1beta1.RuleActionDrop,
 		})
@@ -4190,7 +4190,7 @@ func testServiceAccountSelector(t *testing.T, data *TestData) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": serverName}}})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:         ProtocolTCP,
 			Port:           &p80,
 			Action:         crdv1beta1.RuleActionDrop,
@@ -4408,14 +4408,14 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-icmp").
 		SetPriority(1.0).SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:      ProtocolICMP,
 		IcmpType:    &icmpType,
 		IcmpCode:    &icmpCode,
 		PodSelector: map[string]string{"antrea-e2e": server0Name},
 		Action:      crdv1beta1.RuleActionReject,
 	})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:      ProtocolICMP,
 		PodSelector: map[string]string{"antrea-e2e": server1Name},
 		Action:      crdv1beta1.RuleActionDrop,
@@ -4520,7 +4520,7 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 			},
 		})
 	builder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:  ProtocolTCP,
 			IpBlock: ipb,
 			Action:  crdv1beta1.RuleActionReject,
@@ -4615,7 +4615,7 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 
 	// create acnp with ingress rule for IGMP query
 	igmpType := crdv1beta1.IGMPQuery
-	builder.AddIngress(IngressBuilder{
+	builder.AddIngress(RuleBuilder{
 		Protoc:       ProtocolIGMP,
 		IgmpType:     &igmpType,
 		GroupAddress: &queryGroupAddress,
@@ -4701,7 +4701,7 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": label}}})
 	cidr := mc.group.String() + "/32"
 	ipb := &crdv1beta1.IPBlock{CIDR: cidr}
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:  ProtocolUDP,
 		IpBlock: ipb,
 		Action:  action,
@@ -5259,7 +5259,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}})
 	annpBuilder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
@@ -5277,7 +5277,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}})
 	acnpBuilder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
@@ -5320,7 +5320,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	annpBuilder = annpBuilder.SetName(data.testNamespace, "annp-applied-to-per-rule").
 		SetPriority(1.0)
 	annpBuilder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:                ProtocolTCP,
 			Port:                  &p80,
 			PodSelector:           map[string]string{"pod": "b"},
@@ -5329,7 +5329,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 			Action:                crdv1beta1.RuleActionAllow,
 		})
 	annpBuilder.AddIngress(
-		IngressBuilder{
+		RuleBuilder{
 			Protoc:                ProtocolTCP,
 			Port:                  &p80,
 			PodSelector:           map[string]string{"pod": "b"},
@@ -5976,14 +5976,14 @@ func createPolicyForFQDNCacheMinTTL(t *testing.T, data *TestData, testFQDN strin
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: podSelectorLabel}})
 	builder.AddFQDNRule(testFQDN, ProtocolTCP, ptr.To[int32](80), nil, nil, "AllowForFQDN", nil,
 		crdv1beta1.RuleActionAllow)
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc:      ProtocolUDP,
 		Port:        ptr.To[int32](53),
 		PodSelector: map[string]string{"app": customDNSLabelValue},
 		Action:      crdv1beta1.RuleActionAllow,
 		Name:        "AllowDnsQueries",
 	})
-	builder.AddEgress(IngressBuilder{
+	builder.AddEgress(RuleBuilder{
 		Protoc: ProtocolTCP,
 		Action: crdv1beta1.RuleActionReject,
 		Name:   "DropAllRemainingTraffic",

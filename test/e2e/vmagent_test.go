@@ -609,7 +609,7 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 			cidr = &peerIPCIDR
 		}
 		port := int32(iperfPort)
-		ruleFunc(IngressBuilder{
+		ruleFunc(RuleBuilder{
 			Protoc:     proto,
 			Port:       &port,
 			Cidr:       cidr,
@@ -618,7 +618,7 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 		})
 	case ProtocolICMP:
 		peerIPCIDR := fmt.Sprintf("%s/32", nodeIP(0))
-		ruleFunc(IngressBuilder{
+		ruleFunc(RuleBuilder{
 			Protoc:   ProtocolICMP,
 			IcmpType: &icmpType,
 			IcmpCode: &icmpCode,
@@ -646,7 +646,7 @@ func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace stri
 	for fqdn, action := range fqdnSettings {
 		ruleName := fmt.Sprintf("name-%d", i)
 		policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
-		ports, _ := GenPortsOrProtocols(IngressBuilder{Protoc: ProtocolTCP})
+		ports, _ := GenPortsOrProtocols(RuleBuilder{Protoc: ProtocolTCP})
 		newRule := crdv1beta1.Rule{
 			To:     policyPeer,
 			Ports:  ports,

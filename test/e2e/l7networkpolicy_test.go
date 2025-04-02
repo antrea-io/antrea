@@ -90,7 +90,7 @@ func createL7NetworkPolicy(t *testing.T,
 	annpBuilder = annpBuilder.SetName(data.testNamespace, name).SetPriority(priority)
 	if isIngress {
 		annpBuilder.AddIngress(
-			IngressBuilder{
+			RuleBuilder{
 				Protoc:                l4Protocol,
 				Port:                  &port,
 				L7Protocols:           l7Protocols,
@@ -99,7 +99,7 @@ func createL7NetworkPolicy(t *testing.T,
 				Action:                crdv1beta1.RuleActionAllow,
 			})
 	} else {
-		annpBuilder.AddEgress(IngressBuilder{
+		annpBuilder.AddEgress(RuleBuilder{
 			Protoc:                l4Protocol,
 			Port:                  &port,
 			L7Protocols:           l7Protocols,
