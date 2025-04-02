@@ -1108,7 +1108,7 @@ func (hsr *httpServerReadiness) numProbes() int {
 // Spawn a fixed set of workers to complete probing of the servers
 func (hsr *httpServerReadiness) spawnProberPool(resultsCh chan *probeResult) {
 	probes := make(chan probeVector, hsr.numProbes())
-	go hsr.buildProbeVectors(probes)
+	hsr.buildProbeVectors(probes)
 
 	probe := func(vector probeVector) {
 		podFrom := vector.fromPod
