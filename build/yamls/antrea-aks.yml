@@ -5486,6 +5486,10 @@ spec:
             # binaries that need to be skipped for installation, e.g. "portmap, bandwidth".
             - name: SKIP_CNI_BINARIES
               value: ""
+            # CONFIG_FILE_MODE set the file permission for 10-antrea.conflist.
+            # The default value will be '644' if it's empty.
+            - name: CONFIG_FILE_MODE
+              value: "644"
           volumeMounts:
           - name: antrea-config
             mountPath: /etc/antrea/antrea-cni.conflist
