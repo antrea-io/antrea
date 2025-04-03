@@ -40,11 +40,10 @@ import (
 )
 
 const (
-	srcPod            = "default/pod-1"
-	dstPod            = "pod-2"
-	ipv4              = "192.168.10.10"
-	testNum     int32 = 10
-	testTimeout       = 3 * time.Second
+	srcPod        = "default/pod-1"
+	dstPod        = "pod-2"
+	ipv4          = "192.168.10.10"
+	testNum int32 = 10
 )
 
 var (
@@ -75,7 +74,7 @@ func (p *testPodFile) CopyFromPod(ctx context.Context, fs afero.Fs, namespace, n
 	return nil
 }
 
-func TestRun(t *testing.T) {
+func TestPacketCaptureRun(t *testing.T) {
 	tcs := []struct {
 		name      string
 		option    packetCaptureOptions
@@ -84,32 +83,29 @@ func TestRun(t *testing.T) {
 		{
 			name: "pod-2-pod",
 			option: packetCaptureOptions{
-				source:  srcPod,
-				dest:    dstPod,
-				flow:    "tcp,tcp_src=50060,tcp_dst=80",
-				timeout: testTimeout,
-				number:  testNum,
+				source: srcPod,
+				dest:   dstPod,
+				flow:   "tcp,tcp_src=50060,tcp_dst=80",
+				number: testNum,
 			},
 		},
 		{
 			name: "pod-2-ip",
 			option: packetCaptureOptions{
-				source:  srcPod,
-				dest:    ipv4,
-				nowait:  true,
-				timeout: testTimeout,
-				number:  testNum,
-				flow:    "udp,udp_src=1234,udp_dst=1234",
+				source: srcPod,
+				dest:   ipv4,
+				nowait: true,
+				number: testNum,
+				flow:   "udp,udp_src=1234,udp_dst=1234",
 			},
 		},
 		{
 			name: "invalid-packetcapture",
 			option: packetCaptureOptions{
-				source:  ipv4,
-				dest:    ipv4,
-				flow:    "icmp",
-				timeout: testTimeout,
-				number:  testNum,
+				source: ipv4,
+				dest:   ipv4,
+				flow:   "icmp",
+				number: testNum,
 			},
 			expectErr: "error when constructing a PacketCapture CR: one of source and destination must be a Pod",
 		},
@@ -126,9 +122,8 @@ func TestRun(t *testing.T) {
 		{
 			name: "invalid packet number",
 			option: packetCaptureOptions{
-				source:  srcPod,
-				dest:    dstPod,
-				timeout: testTimeout,
+				source: srcPod,
+				dest:   dstPod,
 			},
 			expectErr: "packet number should be larger than 0",
 		},
@@ -161,8 +156,14 @@ func TestRun(t *testing.T) {
 			err := packetCaptureRun(context.TODO(), buf, nil, k8sClient, client, &tt.option)
 			if tt.expectErr == "" {
 				require.NoError(t, err)
+				if tt.option.nowait {
+					assert.Contains(t, buf.String(), fmt.Sprintf("PacketCapture Name: %s", getPCName(&tt.option)))
+				} else {
+					assert.Contains(t, buf.String(), fmt.Sprintf("%s.pcapng", antreaAgentPod.Name))
+				}
+
 			} else {
-				require.ErrorContains(t, err, tt.expectErr)
+				assert.ErrorContains(t, err, tt.expectErr)
 			}
 		})
 	}
@@ -178,11 +179,10 @@ func TestNewPacketCapture(t *testing.T) {
 		{
 			name: "pod-2-pod-tcp",
 			option: packetCaptureOptions{
-				source:  srcPod,
-				dest:    dstPod,
-				flow:    "tcp,tcp_dst=80",
-				number:  testNum,
-				timeout: testTimeout,
+				source: srcPod,
+				dest:   dstPod,
+				flow:   "tcp,tcp_dst=80",
+				number: testNum,
 			},
 			expectPC: &v1alpha1.PacketCapture{
 				Spec: v1alpha1.PacketCaptureSpec{
@@ -198,7 +198,7 @@ func TestNewPacketCapture(t *testing.T) {
 							Name:      "pod-2",
 						},
 					},
-					Timeout: ptr.To(int32(3)),
+					Timeout: ptr.To(int32(0)),
 					CaptureConfig: v1alpha1.CaptureConfig{
 						FirstN: &v1alpha1.PacketCaptureFirstNConfig{
 							Number: testNum,
@@ -250,7 +250,7 @@ func TestNewPacketCapture(t *testing.T) {
 			if tt.expectErr != "" {
 				require.ErrorContains(t, err, tt.expectErr)
 			} else {
-				require.Nil(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectPC.Spec, pc.Spec)
 			}
 		})

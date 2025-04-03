@@ -112,12 +112,12 @@ func getConfigAndClients(cmd *cobra.Command) (*rest.Config, kubernetes.Interface
 	return kubeConfig, k8sClientset, client, nil
 }
 
-func getPCName(src, dest string) string {
+func getPCName(option *packetCaptureOptions) string {
 	replace := func(s string) string {
 		return strings.ReplaceAll(s, "/", "-")
 	}
-	prefix := fmt.Sprintf("%s-%s", replace(src), replace(dest))
-	if options.nowait {
+	prefix := fmt.Sprintf("%s-%s", replace(option.source), replace(option.dest))
+	if option.nowait {
 		return prefix
 	}
 	return fmt.Sprintf("%s-%s", prefix, rand.String(8))
@@ -310,7 +310,7 @@ func newPacketCapture(option *packetCaptureOptions) (*v1alpha1.PacketCapture, er
 		return nil, fmt.Errorf("failed to parse flow: %w", err)
 	}
 
-	name := getPCName(option.source, option.dest)
+	name := getPCName(option)
 	timeout := int32(option.timeout.Seconds())
 	pc := &v1alpha1.PacketCapture{
 		ObjectMeta: metav1.ObjectMeta{
