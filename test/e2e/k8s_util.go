@@ -1138,7 +1138,6 @@ func (hsr *httpServerReadiness) spawnProberPool(resultsCh chan *probeResult) {
 // Validates two way connectivity between all pods across all protocol and port permutations
 func (hsr *httpServerReadiness) validate() {
 	numProbes := hsr.numProbes()
-	// TODO: find better metrics, this is only for POC.
 	resultsCh := make(chan *probeResult, numProbes)
 	hsr.spawnProberPool(resultsCh)
 
