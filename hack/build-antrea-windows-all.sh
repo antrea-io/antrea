@@ -86,6 +86,15 @@ cd build/images/ovs
 ./build.sh --distro windows $ARGS
 cd -
 
+GO_VERSION=$(head -n 1 build/images/deps/go-version)
+
+if [[ "${DOCKER_REGISTRY}" == "" ]]; then
+    docker pull --platform linux/amd64 golang:$GO_VERSION
+else
+    docker pull --platform linux/amd64 ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION
+    docker tag ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION $GO_VERSION
+fi
+
 if $PUSH_AGENT; then
     make build-and-push-windows
 else
