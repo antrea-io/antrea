@@ -49,7 +49,7 @@ fi
 # Install Antrea configuration file.
 # Note that it needs to be executed after installing the above binaries because container runtimes such as cri-o may
 # watch the conf directory and try to validate the config and binaries immediately once there is a change.
-install -m 644 /etc/antrea/antrea-cni.conflist /host/etc/cni/net.d/10-antrea.conflist
+install -m "${CONFIG_FILE_MODE:-644}" /etc/antrea/antrea-cni.conflist /host/etc/cni/net.d/10-antrea.conflist
 
 # If more than one CNI config file exists, the file with the lowest name is
 # chosen i.e. existing 10-antrea.conf will be chosen over 10-antrea.conflist.
