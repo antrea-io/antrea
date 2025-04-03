@@ -1107,7 +1107,8 @@ func (hsr *httpServerReadiness) numProbes() int {
 
 // Spawn a fixed set of workers to complete probing of the servers
 func (hsr *httpServerReadiness) spawnProberPool(resultsCh chan *probeResult) {
-	probes := make(chan probeVector, hsr.numProbes())
+	numProbes := hsr.numProbes()
+	probes := make(chan probeVector, numProbes)
 	hsr.buildProbeVectors(probes)
 
 	probe := func(vector probeVector) {
@@ -1129,7 +1130,7 @@ func (hsr *httpServerReadiness) spawnProberPool(resultsCh chan *probeResult) {
 
 	// Tested value as the upper limit for running locally with minimal impacts to CI speeds
 	proberRateLimit := 150
-	for range min(proberRateLimit, hsr.numProbes()) {
+	for range min(proberRateLimit, numProbes) {
 		go startProber()
 	}
 }
