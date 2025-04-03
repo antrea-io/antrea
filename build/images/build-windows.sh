@@ -73,6 +73,9 @@ registry="antrea"
 image_name="antrea-windows"
 image="${registry}/${image_name}"
 BUILD_ARGS="--build-arg GO_VERSION=${GO_VERSION} --build-arg OVS_VERSION=${OVS_VERSION} --build-arg CNI_BINARIES_VERSION=${CNI_BINARIES_VERSION}"
+if [[ ${DOCKER_REGISTRY} != "" ]]; then
+    BUILD_ARGS+=" --build-arg DOCKER_REGISTRY=${DOCKER_REGISTRY}"
+fi
 
 ANTREA_DIR=${THIS_DIR}/../../
 pushd $ANTREA_DIR > /dev/null
