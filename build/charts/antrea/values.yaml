@@ -429,6 +429,9 @@ cni:
   # -- CNI binaries shipped with Antrea for which installation should be
   # skipped.
   skipBinaries: []
+  # -- The file permission for 10-antrea.conflist when it is installed in
+  # the CNI configuration directory on the host.
+  configFileMode: "644"
 
 webhooks:
   labelsMutator:
