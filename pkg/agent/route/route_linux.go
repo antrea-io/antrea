@@ -27,6 +27,8 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -123,12 +125,13 @@ type Client struct {
 	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
 	markToSNATIP sync.Map
 	// iptablesInitialized is used to notify when iptables initialization is done.
-	iptablesInitialized      chan struct{}
-	proxyAll                 bool
-	connectUplinkToBridge    bool
-	multicastEnabled         bool
-	isCloudEKS               bool
-	nodeNetworkPolicyEnabled bool
+	iptablesInitialized       chan struct{}
+	proxyAll                  bool
+	connectUplinkToBridge     bool
+	multicastEnabled          bool
+	isCloudEKS                bool
+	nodeNetworkPolicyEnabled  bool
+	nodeLatencyMonitorEnabled bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
 	// serviceExternalIPReferences tracks the references of Service IP. The key is the Service IP and the value is
@@ -163,6 +166,10 @@ type Client struct {
 	wireguardIPTablesIPv4 sync.Map
 	// wireguardIPTablesIPv6 caches all existing IPv6 iptables chains and rules for WireGuard.
 	wireguardIPTablesIPv6 sync.Map
+	// nodeLatencyMonitorIPTablesIPv4 caches all existing IPv4 iptables chains and rules for NodeLatencyMonitor.
+	nodeLatencyMonitorIPTablesIPv4 sync.Map
+	// nodeLatencyMonitorIPTablesIPv6 caches all existing IPv6 iptables chains and rules for NodeLatencyMonitor.
+	nodeLatencyMonitorIPTablesIPv6 sync.Map
 	// deterministic represents whether to write iptables chains and rules for NodeNetworkPolicy deterministically when
 	// syncIPTables is called. Enabling it may carry a performance impact. It's disabled by default and should only be
 	// used in testing.
@@ -178,6 +185,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 	proxyAll bool,
 	connectUplinkToBridge bool,
 	nodeNetworkPolicyEnabled bool,
+	nodeLatencyMonitorEnabled bool,
 	multicastEnabled bool,
 	nodeSNATRandomFully bool,
 	egressSNATRandomFully bool,
@@ -192,6 +200,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 		multicastEnabled:            multicastEnabled,
 		connectUplinkToBridge:       connectUplinkToBridge,
 		nodeNetworkPolicyEnabled:    nodeNetworkPolicyEnabled,
+		nodeLatencyMonitorEnabled:   nodeLatencyMonitorEnabled,
 		ipset:                       ipset.NewClient(),
 		netlink:                     &netlink.Handle{},
 		isCloudEKS:                  env.IsCloudEKS(),
@@ -278,6 +287,10 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		c.initWireguard()
 	}
+	if c.nodeLatencyMonitorEnabled {
+		c.initNodeLatencyRules()
+	}
+
 	return nil
 }
 
@@ -733,12 +746,14 @@ func (c *Client) syncIPTables() error {
 	}
 
 	iptablesFilterRulesByChainV4 := make(map[string][]string)
-	// Install the static rules (WireGuard for now) before the dynamic rules (e.g., NodeNetworkPolicy)
+	// Install the static rules (WireGuard + NodeLatencyMonitor) before the dynamic rules (e.g., NodeNetworkPolicy)
 	// for performance reasons.
+	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeLatencyMonitorIPTablesIPv4)
 	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.wireguardIPTablesIPv4)
 	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeNetworkPolicyIPTablesIPv4)
 
 	iptablesFilterRulesByChainV6 := make(map[string][]string)
+	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeLatencyMonitorIPTablesIPv6)
 	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.wireguardIPTablesIPv6)
 	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeNetworkPolicyIPTablesIPv6)
 
@@ -1242,6 +1257,55 @@ func (c *Client) initWireguard() {
 	if c.networkConfig.IPv4Enabled {
 		c.wireguardIPTablesIPv4.Store(antreaInputChain, antreaInputChainRules)
 		c.wireguardIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRules)
+	}
+}
+
+func (c *Client) initNodeLatencyRules() {
+	// the interface on which ICMP probes are sent / received is the Antrea gateway interface, except
+	// in networkPolicyOnly mode, for which it is the Node's transport interface.
+	iface := c.nodeConfig.GatewayConfig.Name
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		iface = c.networkConfig.TransportIface
+	}
+
+	buildInputRule := func(ipProtocol iptables.Protocol, icmpType int32) string {
+		return iptables.NewRuleBuilder(antreaInputChain).
+			MatchInputInterface(iface).
+			MatchICMP(&icmpType, nil, ipProtocol).
+			SetComment("Antrea: allow ICMP probes from NodeLatencyMonitor").
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule()
+	}
+	buildOutputRule := func(ipProtocol iptables.Protocol, icmpType int32) string {
+		return iptables.NewRuleBuilder(antreaOutputChain).
+			MatchOutputInterface(iface).
+			MatchICMP(&icmpType, nil, ipProtocol).
+			SetComment("Antrea: allow ICMP probes from NodeLatencyMonitor").
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule()
+	}
+
+	if c.networkConfig.IPv6Enabled {
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaInputChain, []string{
+			buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest)),
+			buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply)),
+		})
+		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaOutputChain, []string{
+			buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest)),
+			buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply)),
+		})
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaInputChain, []string{
+			buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho)),
+			buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply)),
+		})
+		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaOutputChain, []string{
+			buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho)),
+			buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply)),
+		})
 	}
 }
 

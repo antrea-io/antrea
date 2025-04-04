@@ -86,6 +86,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 	proxyAll bool,
 	connectUplinkToBridge bool,
 	nodeNetworkPolicyEnabled bool,
+	nodeLatencyMonitorEnabled bool,
 	multicastEnabled bool,
 	nodeSNATRandomFully bool, // ignored
 	egressSNATRandomFully bool, // ignored
