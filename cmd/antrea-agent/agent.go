@@ -154,7 +154,7 @@ func run(o *Options) error {
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	nodeNetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.NodeNetworkPolicy)
-	nodeLatencyMonitorEnabled := features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor) //o.config.FeatureGates[string(features.NodeLatencyMonitor)]
+	nodeLatencyMonitorEnabled := features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor)
 	l7FlowExporterEnabled := features.DefaultFeatureGate.Enabled(features.L7FlowExporter)
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	_, multiclusterEncryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.Multicluster.TrafficEncryptionMode)

@@ -288,7 +288,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		c.initWireguard()
 	}
 	if c.nodeLatencyMonitorEnabled {
-		c.initNodeLatency()
+		c.initNodeLatencyRules()
 	}
 
 	return nil
@@ -1260,7 +1260,7 @@ func (c *Client) initWireguard() {
 	}
 }
 
-func (c *Client) initNodeLatency() {
+func (c *Client) initNodeLatencyRules() {
 	// the interface on which ICMP probes are sent / received is the Antrea gateway interface, except
 	// in networkPolicyOnly mode, for which it is the Node's transport interface.
 	iface := c.nodeConfig.GatewayConfig.Name

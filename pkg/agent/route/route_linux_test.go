@@ -776,7 +776,7 @@ COMMIT
 				c.initWireguard()
 			}
 			if tt.nodeLatencyMonitorEnabled {
-				c.initNodeLatency()
+				c.initNodeLatencyRules()
 			}
 			tt.expectedCalls(mockIPTables.EXPECT())
 			assert.NoError(t, c.syncIPTables())
