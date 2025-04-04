@@ -102,80 +102,82 @@ func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string
 	return peer
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
-	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32, l7Protocols []crdv1beta1.L7Protocol,
-	groupAddress, cidr *string, podSelector map[string]string, nsSelector map[string]string, eeSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, eeSelectorMatchExp []metav1.LabelSelectorRequirement,
-	ruleAppliedToSpecs []ANNPAppliedToSpec, action crdv1beta1.RuleAction, ruleGroup, name string) *AntreaNetworkPolicySpecBuilder {
-	var ps, ns, ees *metav1.LabelSelector
+func (b *AntreaNetworkPolicySpecBuilder) AddIngress(rb RuleBuilder) *AntreaNetworkPolicySpecBuilder {
+	var ees *metav1.LabelSelector
 	var appliedTos []crdv1beta1.AppliedTo
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []crdv1beta1.Rule{}
 	}
 
-	if len(podSelector) > 0 || len(podSelectorMatchExp) > 0 {
-		ps = &metav1.LabelSelector{
-			MatchLabels:      podSelector,
-			MatchExpressions: podSelectorMatchExp,
-		}
-	}
-	if len(nsSelector) > 0 || len(nsSelectorMatchExp) > 0 {
-		ns = &metav1.LabelSelector{
-			MatchLabels:      nsSelector,
-			MatchExpressions: nsSelectorMatchExp,
-		}
-	}
-	if len(eeSelector) > 0 || len(eeSelectorMatchExp) > 0 {
+	ps := rb.generatePodSelector()
+	ns := rb.generateNsSelector()
+
+	if len(rb.EeSelector) > 0 || len(rb.EeSelectorMatchExp) > 0 {
 		ees = &metav1.LabelSelector{
-			MatchLabels:      eeSelector,
-			MatchExpressions: eeSelectorMatchExp,
+			MatchLabels:      rb.EeSelector,
+			MatchExpressions: rb.EeSelectorMatchExp,
 		}
 	}
 	var ipBlock *crdv1beta1.IPBlock
-	if cidr != nil {
+	if rb.Cidr != nil {
 		ipBlock = &crdv1beta1.IPBlock{
-			CIDR: *cidr,
+			CIDR: *rb.Cidr,
 		}
 	}
-	for _, at := range ruleAppliedToSpecs {
+	for _, at := range rb.ANPRuleAppliedToSpecs {
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp, at.ExternalEntitySelector, at.ExternalEntitySelectorMatchExp, at.Group))
 	}
 	// An empty From/To in ANNP rules evaluates to match all addresses.
 	policyPeer := make([]crdv1beta1.NetworkPolicyPeer, 0)
-	if ps != nil || ns != nil || ipBlock != nil || ruleGroup != "" || ees != nil {
+	if ps != nil || ns != nil || ipBlock != nil || rb.RuleGroup != "" || ees != nil {
 		policyPeer = []crdv1beta1.NetworkPolicyPeer{{
 			PodSelector:            ps,
 			NamespaceSelector:      ns,
 			ExternalEntitySelector: ees,
 			IPBlock:                ipBlock,
-			Group:                  ruleGroup,
+			Group:                  rb.RuleGroup,
 		}}
 	}
-	ports, protocols := GenPortsOrProtocols(protoc, port, portName, endPort, nil, nil, icmpType, icmpCode, igmpType, groupAddress)
+	ports, protocols := GenPortsOrProtocols(rb)
 	newRule := crdv1beta1.Rule{
 		From:        policyPeer,
 		Ports:       ports,
 		Protocols:   protocols,
-		L7Protocols: l7Protocols,
-		Action:      &action,
-		Name:        name,
+		L7Protocols: rb.L7Protocols,
+		Action:      &rb.Action,
+		Name:        rb.Name,
 		AppliedTo:   appliedTos,
 	}
 	b.Spec.Ingress = append(b.Spec.Ingress, newRule)
 	return b
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
-	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32, l7Protocols []crdv1beta1.L7Protocol,
-	groupAddress, cidr *string, podSelector map[string]string, nsSelector map[string]string, eeSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, eeSelectorMatchExp []metav1.LabelSelectorRequirement,
-	ruleAppliedToSpecs []ANNPAppliedToSpec, action crdv1beta1.RuleAction, ruleGroup, name string) *AntreaNetworkPolicySpecBuilder {
-
+func (b *AntreaNetworkPolicySpecBuilder) AddEgress(rb RuleBuilder) *AntreaNetworkPolicySpecBuilder {
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &AntreaNetworkPolicySpecBuilder{}
-	c.AddIngress(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, l7Protocols, groupAddress, cidr, podSelector, nsSelector, eeSelector,
-		podSelectorMatchExp, nsSelectorMatchExp, eeSelectorMatchExp, ruleAppliedToSpecs, action, ruleGroup, name)
+	c.AddIngress(RuleBuilder{
+		Protoc:                rb.Protoc,
+		Port:                  rb.Port,
+		PortName:              rb.PortName,
+		EndPort:               rb.EndPort,
+		IcmpType:              rb.IcmpType,
+		IcmpCode:              rb.IcmpCode,
+		IgmpType:              rb.IgmpType,
+		L7Protocols:           rb.L7Protocols,
+		GroupAddress:          rb.GroupAddress,
+		Cidr:                  rb.Cidr,
+		PodSelector:           rb.PodSelector,
+		NsSelector:            rb.NsSelector,
+		EeSelector:            rb.EeSelector,
+		PodSelectorMatchExp:   rb.PodSelectorMatchExp,
+		NsSelectorMatchExp:    rb.NsSelectorMatchExp,
+		EeSelectorMatchExp:    rb.EeSelectorMatchExp,
+		ANPRuleAppliedToSpecs: rb.ANPRuleAppliedToSpecs,
+		Action:                rb.Action,
+		RuleGroup:             rb.RuleGroup,
+		Name:                  rb.Name,
+	})
 	theRule := c.Get().Spec.Ingress[0]
 
 	b.Spec.Egress = append(b.Spec.Egress, crdv1beta1.Rule{
@@ -229,7 +231,12 @@ func (b *AntreaNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	}
 
 	policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
-	ports, _ := GenPortsOrProtocols(protoc, port, portName, endPort, nil, nil, nil, nil, nil, nil)
+	ports, _ := GenPortsOrProtocols(RuleBuilder{
+		Protoc:   protoc,
+		Port:     port,
+		PortName: portName,
+		EndPort:  endPort,
+	})
 	newRule := crdv1beta1.Rule{
 		To:        policyPeer,
 		Ports:     ports,
