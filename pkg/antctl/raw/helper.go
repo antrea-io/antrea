@@ -15,11 +15,15 @@
 package raw
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
+	"path"
 	"strconv"
+	"strings"
 
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
 	corev1 "k8s.io/api/core/v1"
@@ -27,12 +31,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
 
 	"antrea.io/antrea/pkg/antctl/runtime"
 	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/pkg/util/compress"
 	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -219,4 +225,59 @@ func CreateControllerClientCfg(
 
 	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP, fmt.Sprint(controllerInfo.APIPort)))
 	return cfg, nil
+}
+
+func ExecInPod(ctx context.Context, client kubernetes.Interface, config *rest.Config, namespace, pod, container string, command []string) (string, string, error) {
+	req := client.CoreV1().RESTClient().Post().Resource("pods").Name(pod).Namespace(namespace).SubResource("exec")
+	req.VersionedParams(&corev1.PodExecOptions{
+		Command:   command,
+		Container: container,
+		Stdin:     false,
+		Stdout:    true,
+		Stderr:    true,
+		TTY:       false,
+	}, scheme.ParameterCodec)
+	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+	if err != nil {
+		return "", "", fmt.Errorf("error while creating executor: %w", err)
+	}
+	var stdout, stderr bytes.Buffer
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Tty:    false,
+	})
+	return stdout.String(), stderr.String(), err
+}
+
+type PodFileCopier interface {
+	CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name, containerName, srcPath, dstDir string) error
+}
+
+type podFile struct {
+	RestConfig *rest.Config
+	Client     kubernetes.Interface
+}
+
+func NewPodFileCopier(restConfig *rest.Config, client kubernetes.Interface) *podFile {
+	return &podFile{
+		RestConfig: restConfig,
+		Client:     client,
+	}
+}
+
+func (p *podFile) CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name, containerName, srcPath, dstDir string) error {
+	dir, fileName := path.Split(srcPath)
+	cmd := []string{"tar"}
+	if dir != "" {
+		cmd = append(cmd, "-C", dir)
+	}
+	cmd = append(cmd, "-cf", "-", fileName)
+
+	output, _, err := ExecInPod(ctx, p.Client, p.RestConfig, namespace, name, containerName, cmd)
+	if err != nil {
+		return err
+	}
+	return compress.UnpackReader(fs, strings.NewReader(output), false, dstDir)
 }
