@@ -199,27 +199,16 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		builder2.AddIngress(ruleBuilder)
 		builder3.AddIngress(ruleBuilder)
 	} else {
-		builder.AddEgress(e2eutils.CNPRuleBuilder{
+		ruleBuilder := e2eutils.CNPRuleBuilder{
 			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
 				Protoc:      protocol,
 				Port:        &p80,
 				PodSelector: map[string]string{},
 				Action:      ruleAction,
-			}})
-		builder2.AddEgress(e2eutils.CNPRuleBuilder{
-			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
-				Protoc:      protocol,
-				Port:        &p80,
-				PodSelector: map[string]string{},
-				Action:      ruleAction,
-			}})
-		builder3.AddEgress(e2eutils.CNPRuleBuilder{
-			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
-				Protoc:      protocol,
-				Port:        &p80,
-				PodSelector: map[string]string{},
-				Action:      ruleAction,
-			}})
+			}}
+		builder.AddEgress(ruleBuilder)
+		builder2.AddEgress(ruleBuilder)
+		builder3.AddEgress(ruleBuilder)
 	}
 
 	reachability := NewReachability(allPods, action)
