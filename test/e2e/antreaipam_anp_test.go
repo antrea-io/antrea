@@ -188,33 +188,38 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2eutils.ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "c"}}})
 	if isIngress {
-		ruleBuilder := e2eutils.RuleBuilder{
-			Protoc: protocol,
-			Port:   &p80,
-			Action: ruleAction,
+		ruleBuilder := e2eutils.CNPRuleBuilder{
+			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
+				Protoc: protocol,
+				Port:   &p80,
+				Action: ruleAction,
+			},
 		}
 		builder.AddIngress(ruleBuilder)
 		builder2.AddIngress(ruleBuilder)
 		builder3.AddIngress(ruleBuilder)
 	} else {
-		builder.AddEgress(e2eutils.RuleBuilder{
-			Protoc:      protocol,
-			Port:        &p80,
-			PodSelector: map[string]string{},
-			Action:      ruleAction,
-		})
-		builder2.AddEgress(e2eutils.RuleBuilder{
-			Protoc:      protocol,
-			Port:        &p80,
-			PodSelector: map[string]string{},
-			Action:      ruleAction,
-		})
-		builder3.AddEgress(e2eutils.RuleBuilder{
-			Protoc:      protocol,
-			Port:        &p80,
-			PodSelector: map[string]string{},
-			Action:      ruleAction,
-		})
+		builder.AddEgress(e2eutils.CNPRuleBuilder{
+			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
+				Protoc:      protocol,
+				Port:        &p80,
+				PodSelector: map[string]string{},
+				Action:      ruleAction,
+			}})
+		builder2.AddEgress(e2eutils.CNPRuleBuilder{
+			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
+				Protoc:      protocol,
+				Port:        &p80,
+				PodSelector: map[string]string{},
+				Action:      ruleAction,
+			}})
+		builder3.AddEgress(e2eutils.CNPRuleBuilder{
+			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
+				Protoc:      protocol,
+				Port:        &p80,
+				PodSelector: map[string]string{},
+				Action:      ruleAction,
+			}})
 	}
 
 	reachability := NewReachability(allPods, action)

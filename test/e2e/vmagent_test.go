@@ -609,22 +609,24 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 			cidr = &peerIPCIDR
 		}
 		port := int32(iperfPort)
-		ruleFunc(RuleBuilder{
-			Protoc:     proto,
-			Port:       &port,
+		ruleFunc(ANPRuleBuilder{
 			Cidr:       cidr,
 			EeSelector: peerLabel,
-			Action:     ruleAction,
-		})
+			BaseRuleBuilder: BaseRuleBuilder{
+				Protoc: proto,
+				Port:   &port,
+				Action: ruleAction,
+			}})
 	case ProtocolICMP:
 		peerIPCIDR := fmt.Sprintf("%s/32", nodeIP(0))
-		ruleFunc(RuleBuilder{
-			Protoc:   ProtocolICMP,
-			IcmpType: &icmpType,
-			IcmpCode: &icmpCode,
-			Cidr:     &peerIPCIDR,
-			Action:   ruleAction,
-		})
+		ruleFunc(ANPRuleBuilder{
+			Cidr: &peerIPCIDR,
+			BaseRuleBuilder: BaseRuleBuilder{
+				Protoc:   ProtocolICMP,
+				IcmpType: &icmpType,
+				IcmpCode: &icmpCode,
+				Action:   ruleAction,
+			}})
 	}
 	anpRule := builder.Get()
 
@@ -646,7 +648,7 @@ func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace stri
 	for fqdn, action := range fqdnSettings {
 		ruleName := fmt.Sprintf("name-%d", i)
 		policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
-		ports, _ := GenPortsOrProtocols(RuleBuilder{Protoc: ProtocolTCP})
+		ports, _ := GenPortsOrProtocols(BaseRuleBuilder{Protoc: ProtocolTCP})
 		newRule := crdv1beta1.Rule{
 			To:     policyPeer,
 			Ports:  ports,
