@@ -46,7 +46,7 @@ func AntreaPolicyProtocolToK8sProtocol(antreaProtocol AntreaPolicyProtocol) (v1.
 	}
 }
 
-func GenPortsOrProtocols(ruleBuilder RuleBuilder) ([]crdv1beta1.NetworkPolicyPort, []crdv1beta1.NetworkPolicyProtocol) {
+func GenPortsOrProtocols(ruleBuilder BaseRuleBuilder) ([]crdv1beta1.NetworkPolicyPort, []crdv1beta1.NetworkPolicyProtocol) {
 	if ruleBuilder.Protoc == ProtocolICMP {
 		return nil, []crdv1beta1.NetworkPolicyProtocol{
 			{
