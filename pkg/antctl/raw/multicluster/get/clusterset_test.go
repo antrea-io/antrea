@@ -129,7 +129,6 @@ func TestGetClusterSet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := NewClusterSetCommand()
 			buf := new(bytes.Buffer)
-			cmd.SetOutput(buf)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 			cmd.SetArgs(tt.args)

@@ -100,7 +100,6 @@ func TestDeleteClusterSet(t *testing.T) {
 				fakeClient = fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(tt.existingClusterSet).Build()
 			}
 			buf := new(bytes.Buffer)
-			cmd.SetOutput(buf)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 
@@ -131,7 +130,6 @@ func TestDeleteSecrets(t *testing.T) {
 	cmd := &cobra.Command{}
 	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(secret1, secret2).Build()
 	buf := new(bytes.Buffer)
-	cmd.SetOutput(buf)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 
@@ -162,7 +160,6 @@ func TestDeleteRoleBindings(t *testing.T) {
 	cmd := &cobra.Command{}
 	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(rb1, rb2).Build()
 	buf := new(bytes.Buffer)
-	cmd.SetOutput(buf)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 
@@ -193,7 +190,6 @@ func TestDeleteServiceAccounts(t *testing.T) {
 	cmd := &cobra.Command{}
 	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(sa1, sa2).Build()
 	buf := new(bytes.Buffer)
-	cmd.SetOutput(buf)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 
@@ -448,7 +444,6 @@ type: Opaque`)
 			cmd := &cobra.Command{}
 			fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(tt.secret, tt.rolebinding, tt.serviceAccount).Build()
 			buf := new(bytes.Buffer)
-			cmd.SetOutput(buf)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 
