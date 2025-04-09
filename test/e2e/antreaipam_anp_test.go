@@ -190,9 +190,10 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 	if isIngress {
 		ruleBuilder := e2eutils.CNPRuleBuilder{
 			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
-				Protoc: protocol,
-				Port:   &p80,
-				Action: ruleAction,
+				Protoc:      protocol,
+				Port:        &p80,
+				Action:      ruleAction,
+				PodSelector: map[string]string{},
 			},
 		}
 		builder.AddIngress(ruleBuilder)
