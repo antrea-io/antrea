@@ -8,6 +8,10 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 ![GitHub release](https://img.shields.io/github/v/release/antrea-io/antrea?display_name=tag&sort=semver)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea?ref=badge_shield)
+[![Coverage Status](https://coveralls.io/repos/github/antrea-io/antrea/badge.svg?branch=main)](https://coveralls.io/github/antrea-io/antrea?branch=main)
+[![Pull Requests](https://img.shields.io/github/issues-pr/antrea-io/antrea)](https://github.com/antrea-io/antrea/pulls)
+[![Release](https://img.shields.io/github/v/release/antrea-io/antrea)](https://github.com/antrea-io/antrea/releases)
+
 
 ## Overview
 
