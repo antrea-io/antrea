@@ -28,6 +28,8 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
+	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	"google.golang.org/grpc"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -527,6 +529,20 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	}
 	cniVersion := cniConfig.CNIVersion
 	cniResult, _ := result.Result.GetAsVersion(cniVersion)
+	status, err := netdefutils.CreateNetworkStatus(cniResult, cniConfig.Name, true, nil)
+	if err != nil {
+		klog.ErrorS(err, "Create NetworkStatus failed", "Pod", klog.KRef(podNamespace, podName))
+	} else {
+		pod, err := s.kubeClient.CoreV1().Pods(podNamespace).Get(ctx, podName, metav1.GetOptions{})
+		if err == nil {
+			netStatus := []netdefv1.NetworkStatus{*status}
+			if err := netdefutils.SetNetworkStatus(s.kubeClient, pod, netStatus); err != nil {
+				klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
+			} else {
+				klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
+			}
+		}
+	}
 
 	klog.InfoS("CmdAdd for container succeeded", "container", cniConfig.ContainerId)
 	// mark success as true to avoid rollback
