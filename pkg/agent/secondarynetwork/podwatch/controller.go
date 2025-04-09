@@ -383,7 +383,7 @@ func (pc *PodController) configureSecondaryInterface(
 		ifConfigErr = pc.interfaceConfigurator.ConfigureVLANSecondaryInterface(
 			pod.Name, pod.Namespace,
 			podCNIInfo.containerID, podCNIInfo.netNS, network.InterfaceRequest,
-			int(networkConfig.MTU), ipamResult)
+			networkConfig.MTU, ipamResult)
 	}
 	return &ipamResult.Result, ifConfigErr
 }
@@ -494,7 +494,18 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 
 	// Update the Pod's network status annotation
 	if netStatus != nil {
-		if err := netdefutils.SetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
+		podActual, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+		if err != nil {
+			klog.ErrorS(err, "Get Pod failed", "Pod", klog.KObj(pod))
+			return err
+		}
+		oldNetworkStatus, err := netdefutils.GetNetworkStatus(podActual)
+		if err == nil {
+			netStatus = append(netStatus, oldNetworkStatus...)
+		} else {
+			klog.ErrorS(err, "Get Pod network status annotation failed", "Pod", klog.KObj(pod))
+		}
+		if err := netdefutils.SetNetworkStatus(pc.kubeClient, podActual, netStatus); err != nil {
 			klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
 		} else {
 			klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
@@ -592,7 +603,6 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 			klog.InfoS("Unknown Antrea interface type for the secondary bridge", "type", interfaceType)
 			continue
 		}
-
 		ifaceList = append(ifaceList, intf)
 	}
 
@@ -619,7 +629,7 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 	for _, containerConfig := range secondaryInterfaces {
 		_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
 		if !exists || containerConfig.OFPort == -1 {
-			// Deletes ports not in the CNI cache.
+			// Delete ports not in the CNI cache.
 			staleInterfaces = append(staleInterfaces, containerConfig)
 		}
 	}
