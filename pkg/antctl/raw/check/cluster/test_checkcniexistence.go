@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	"antrea.io/antrea/pkg/antctl/raw/check"
+	"antrea.io/antrea/pkg/antctl/raw"
 )
 
 type checkCNIExistence struct{}
@@ -31,7 +31,7 @@ func init() {
 
 func (t *checkCNIExistence) Run(ctx context.Context, testContext *testContext) error {
 	command := []string{"ls", "-1", "/etc/cni/net.d"}
-	output, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", command)
+	output, _, err := raw.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", command)
 	if err != nil {
 		return fmt.Errorf("failed to execute command in Pod %s, error: %w", testContext.testPod.Name, err)
 	}

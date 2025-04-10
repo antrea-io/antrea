@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	"antrea.io/antrea/pkg/antctl/raw/check"
+	"antrea.io/antrea/pkg/antctl/raw"
 )
 
 type checkOVSLoadable struct{}
@@ -34,7 +34,7 @@ func (c *checkOVSLoadable) Run(ctx context.Context, testContext *testContext) er
 		"-c",
 		"grep -q 'openvswitch.ko' /lib/modules/$(uname -r)/modules.builtin; echo $?",
 	}
-	stdout, stderr, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", command)
+	stdout, stderr, err := raw.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", command)
 	if err != nil {
 		return fmt.Errorf("error executing command in Pod %s: %w", testContext.testPod.Name, err)
 	}
@@ -43,7 +43,7 @@ func (c *checkOVSLoadable) Run(ctx context.Context, testContext *testContext) er
 	} else if strings.TrimSpace(stdout) == "1" {
 		testContext.Log("The kernel module openvswitch is not built-in. Running modprobe command to load the module.")
 		cmd := []string{"modprobe", "openvswitch"}
-		_, stderr, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", cmd)
+		_, stderr, err := raw.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", cmd)
 		if err != nil {
 			return fmt.Errorf("error executing modprobe command in Pod %s: %w", testContext.testPod.Name, err)
 		} else if stderr != "" {

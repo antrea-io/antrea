@@ -15,7 +15,6 @@
 package check
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"fmt"
@@ -28,10 +27,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/remotecommand"
 )
 
 func NewClient() (client kubernetes.Interface, config *rest.Config, clusterName string, err error) {
@@ -80,30 +77,6 @@ func DeploymentIsReady(ctx context.Context, client kubernetes.Interface, namespa
 		return true, nil
 	}
 	return false, nil
-}
-
-func ExecInPod(ctx context.Context, client kubernetes.Interface, config *rest.Config, namespace, pod, container string, command []string) (string, string, error) {
-	req := client.CoreV1().RESTClient().Post().Resource("pods").Name(pod).Namespace(namespace).SubResource("exec")
-	req.VersionedParams(&corev1.PodExecOptions{
-		Command:   command,
-		Container: container,
-		Stdin:     false,
-		Stdout:    true,
-		Stderr:    true,
-		TTY:       false,
-	}, scheme.ParameterCodec)
-	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
-	if err != nil {
-		return "", "", fmt.Errorf("error while creating executor: %w", err)
-	}
-	var stdout, stderr bytes.Buffer
-	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdin:  nil,
-		Stdout: &stdout,
-		Stderr: &stderr,
-		Tty:    false,
-	})
-	return stdout.String(), stderr.String(), err
 }
 
 func NewDeployment(p DeploymentParameters) *appsv1.Deployment {

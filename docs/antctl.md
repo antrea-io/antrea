@@ -33,6 +33,7 @@ running in three different modes:
   - [Dumping OVS flows](#dumping-ovs-flows)
   - [OVS packet tracing](#ovs-packet-tracing)
   - [Traceflow](#traceflow)
+  - [PacketCapture](#packetcapture)
   - [Antctl Proxy](#antctl-proxy)
   - [Flow Aggregator commands](#flow-aggregator-commands)
     - [Dumping flow records](#dumping-flow-records)
@@ -569,6 +570,48 @@ $ antctl traceflow -S pod1 -D pod2 -f udp,udp_dst=1234
 $ antctl traceflow -S pod1 -D svc1 -f tcp --live-traffic -t 1m
 # Start a Traceflow to capture the first dropped TCP packet to pod1 on port 80, within 10 minutes
 $ antctl traceflow -D pod1 -f tcp,tcp_dst=80 --live-traffic --dropped-only -t 10m
+```
+
+### PacketCapture
+
+`antctl packetcapture` (or  `antctl pc`) command is used to start a `PacketCapture`
+and retrieve the captured result. After the result packet file (in pcapng format)
+is copied out, the PacketCapture will be deleted. The command will display the
+local path to the pcapng file as it exits. Users can also create a PacketCapture
+with `kubectl`, but `antctl` makes it easier. For more information about PacketCapture,
+refer to [PacketCapture guide](packetcapture-guide.md).
+
+To start a PacketCapture, users must provide the following arguments:
+
+* `--source` (or `-S`)
+* `--destination` (or `-D`)
+* `--number` (or `-n`)
+
+Note: one of `--source` and `--destination` must be a Pod.
+
+The `--flow` (or `-f`) argument can be used to specify the PacketCapture packet
+headers with the [ovs-ofctl](http://www.openvswitch.org//support/dist-docs/ovs-ofctl.8.txt)
+flow syntax. This argument works the same way as the one for `antctl traceflow`. The supported flow fields
+include: IP protocol (`icmp`, `tcp`, `udp`), source and destination ports
+(`tcp_src`, `tcp_dst`, `udp_src`, `udp_dst`).
+
+By default, the command will wait for the PacketCapture to succeed or fail, or to
+timeout. The default timeout is 60 seconds, but can be changed with the
+`--timeout` (or `-t`) argument. Add the `--no-wait` flag to start a PacketCapture
+without waiting for its results. In this case, the command will not delete the
+PacketCapture resource.
+
+More examples of `antctl packetcapture`:
+
+```bash
+# Start capturing packets from pod1 to pod2, both Pods are in Namespace default
+$ antctl packetcapture -S pod1 -D pod2
+# Start capturing packets from pod1 in Namespace ns1 to a destination IP
+$ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
+# Start capturing UDP packets from pod1 to pod2, with destination port 1234
+$ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
+# Save the packets file to a specified directory
+$ antctl packetcapture -S 192.168.123.123 -D pod2 -f tcp,tcp_dst=80 -o /tmp
 ```
 
 ### Antctl Proxy
