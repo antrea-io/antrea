@@ -76,7 +76,7 @@ func UnpackReader(fs afero.Fs, file io.Reader, useGzip bool, targetDir string) e
 		if err != nil {
 			return err
 		}
-		targetPath, err := sanitizeExtractPath(targetDir, header.Name)
+		targetPath, err := sanitizeExtractPath(header.Name, targetDir)
 		if err != nil {
 			return err
 		}
