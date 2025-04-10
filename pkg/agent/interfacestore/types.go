@@ -68,6 +68,7 @@ type ContainerInterfaceConfig struct {
 	PodNamespace string
 	// Interface name inside container.
 	IFDev string
+	NetNS string
 }
 
 // +k8s:deepcopy-gen=true
@@ -142,6 +143,7 @@ func NewContainerInterface(
 	podName string,
 	podNamespace string,
 	ifDev string,
+	netNS string,
 	mac net.HardwareAddr,
 	ips []net.IP,
 	vlanID uint16) *InterfaceConfig {
@@ -149,7 +151,8 @@ func NewContainerInterface(
 		ContainerID:  containerID,
 		PodName:      podName,
 		PodNamespace: podNamespace,
-		IFDev:        ifDev}
+		IFDev:        ifDev,
+		NetNS:        netNS}
 	return &InterfaceConfig{
 		InterfaceName:            interfaceName,
 		Type:                     ContainerInterface,

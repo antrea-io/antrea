@@ -610,6 +610,7 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 		podKey := podKeyGet(config.PodName, config.PodNamespace)
 		pc.cniCache.Store(podKey, &podCNIInfo{
 			containerID: config.ContainerID,
+			netNS:       config.NetNS,
 		})
 	}
 
