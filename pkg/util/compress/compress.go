@@ -29,12 +29,20 @@ import (
 )
 
 // Sanitize archive file pathing from "G305: Zip Slip vulnerability"
-func sanitizeArchivePath(d, t string) (string, error) {
-	v := filepath.Join(d, t)
-	if strings.HasPrefix(v, filepath.Clean(d)) {
-		return v, nil
+func sanitizeExtractPath(filePath string, destination string) (string, error) {
+	destPath := filepath.Join(destination, filePath) // result will be "clean"
+	destDir := filepath.Clean(destination)
+	// As a special case, if destDir is the current working directory (as "."), we just check that
+	// the extract path matches the path in the archive. This is because when calling Join with "."
+	// as the directory, the leading "./" is removed, which is not handled correctly by the general
+	// case (prefix check) below.
+	if destDir == "." && filePath == destPath {
+		return destPath, nil
 	}
-	return "", fmt.Errorf("%s: %s", "content filepath is tainted", t)
+	if strings.HasPrefix(destPath, destDir+string(filepath.Separator)) {
+		return destPath, nil
+	}
+	return "", fmt.Errorf("illegal file path: %s", filePath)
 }
 
 func UnpackDir(fs afero.Fs, fileName string, targetDir string) error {
@@ -43,12 +51,21 @@ func UnpackDir(fs afero.Fs, fileName string, targetDir string) error {
 		return err
 	}
 	defer file.Close()
+	return UnpackReader(fs, file, true, targetDir)
+}
 
-	reader, err := gzip.NewReader(file)
-	if err != nil {
-		return err
+func UnpackReader(fs afero.Fs, file io.Reader, useGzip bool, targetDir string) error {
+	reader := file
+	var err error
+	var gzipReader *gzip.Reader
+	if useGzip {
+		gzipReader, err = gzip.NewReader(file)
+		if err != nil {
+			return err
+		}
+		defer gzipReader.Close()
+		reader = gzipReader
 	}
-	defer reader.Close()
 	tarReader := tar.NewReader(reader)
 
 	for true {
@@ -59,7 +76,7 @@ func UnpackDir(fs afero.Fs, fileName string, targetDir string) error {
 		if err != nil {
 			return err
 		}
-		targetPath, err := sanitizeArchivePath(targetDir, header.Name)
+		targetPath, err := sanitizeExtractPath(targetDir, header.Name)
 		if err != nil {
 			return err
 		}
@@ -70,10 +87,10 @@ func UnpackDir(fs afero.Fs, fileName string, targetDir string) error {
 			}
 		case tar.TypeReg:
 			outFile, err := fs.Create(targetPath)
-			defer outFile.Close()
 			if err != nil {
 				return err
 			}
+			defer outFile.Close()
 			for {
 				// to resolve G110: Potential DoS vulnerability via decompression bomb
 				if _, err := io.CopyN(outFile, tarReader, 1024); err != nil {

@@ -56,7 +56,6 @@ func TestCommandListApplyToCommand(t *testing.T) {
 }
 
 func TestGetDebugCommands(t *testing.T) {
-
 	tc := []struct {
 		name     string
 		mode     string
@@ -84,5 +83,4 @@ func TestGetDebugCommands(t *testing.T) {
 			assert.Equal(t, tt.expected, generated)
 		})
 	}
-
 }
