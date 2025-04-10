@@ -174,7 +174,7 @@ func convertGoBGPPeerToPeerStatus(peer *gobgpapi.Peer) *bgp.PeerStatus {
 	}
 	if conf := peer.GetConf(); conf != nil {
 		peerStatus.Address = conf.GetNeighborAddress()
-		peerStatus.ASN = int32(conf.GetPeerAsn())
+		peerStatus.ASN = conf.GetPeerAsn()
 	}
 	if ebgpMultiHop := peer.GetEbgpMultihop(); ebgpMultiHop != nil {
 		peerStatus.MultihopTTL = int32(ebgpMultiHop.GetMultihopTtl())

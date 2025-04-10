@@ -28,24 +28,24 @@ import (
 
 	"antrea.io/antrea/pkg/agent/bgp"
 	"antrea.io/antrea/pkg/agent/bgp/gobgp"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 func TestGoBGPLifecycle(t *testing.T) {
-	asn1 := int32(61179)
-	asn2 := int32(62179)
+	asn1 := uint32(61179)
+	asn2 := uint32(62179)
 	routerID1 := "127.0.0.1"
 	routerID2 := "127.0.0.2"
 	listenPort1 := int32(1179)
 	listenPort2 := int32(2179)
 	server1GlobalConfig := &bgp.GlobalConfig{
-		ASN:             uint32(asn1),
+		ASN:             asn1,
 		RouterID:        routerID1,
 		ListenPort:      listenPort1,
 		ListenAddresses: []string{"127.0.0.1"},
 	}
 	server2GlobalConfig := &bgp.GlobalConfig{
-		ASN:             uint32(asn2),
+		ASN:             asn2,
 		RouterID:        routerID2,
 		ListenPort:      listenPort2,
 		ListenAddresses: []string{"127.0.0.2"},
@@ -66,10 +66,10 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Started all BGP servers")
 
 	server1PeerConfigForServer2 := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
+		BGPPeer: &v1alpha2.BGPPeer{
 			Address:                    "127.0.0.1",
 			Port:                       &listenPort1,
-			ASN:                        asn1,
+			ASN:                        int64(asn1),
 			MultihopTTL:                ptr.To[int32](2),
 			GracefulRestartTimeSeconds: ptr.To[int32](120),
 		},
@@ -77,10 +77,10 @@ func TestGoBGPLifecycle(t *testing.T) {
 		ConnectionMode: bgp.ConnectionModeActive,
 	}
 	server2PeerConfigForServer1 := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
+		BGPPeer: &v1alpha2.BGPPeer{
 			Address:                    "127.0.0.2",
 			Port:                       &listenPort2,
-			ASN:                        asn2,
+			ASN:                        int64(asn2),
 			MultihopTTL:                ptr.To[int32](3),
 			GracefulRestartTimeSeconds: ptr.To[int32](130),
 		},
@@ -209,10 +209,10 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Got received routes of BGP server2 and verified them")
 
 	updatedServer2PeerConfigForServer1 := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
+		BGPPeer: &v1alpha2.BGPPeer{
 			Address:                    "127.0.0.2",
 			Port:                       &listenPort2,
-			ASN:                        asn2,
+			ASN:                        int64(asn2),
 			MultihopTTL:                ptr.To[int32](1),
 			GracefulRestartTimeSeconds: ptr.To[int32](180),
 		},

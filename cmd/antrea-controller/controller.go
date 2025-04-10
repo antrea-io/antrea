@@ -119,6 +119,7 @@ var allowedPaths = []string{
 	"/validate/traceflow",
 	"/convert/clustergroup",
 	"/convert/ippool",
+	"/convert/bgppolicy",
 }
 
 // run starts Antrea Controller with the given options and waits for termination signal.

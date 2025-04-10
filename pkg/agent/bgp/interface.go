@@ -17,7 +17,7 @@ package bgp
 import (
 	"context"
 
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 // Interface defines the methods for managing a BGP (Border Gateway Protocol) process.
@@ -99,7 +99,7 @@ const (
 
 // PeerConfig contains the configuration for a BGP peer. More attributes might be added later.
 type PeerConfig struct {
-	*v1alpha1.BGPPeer
+	*v1alpha2.BGPPeer
 	// These 2 fields are not currently exposed in the BGPPeer API but are used in integration tests.
 	// LocalAddress is the address used by the BGP server to connect to the peer. If omitted, it
 	// will be determined automatically based on the routing decision.
@@ -117,7 +117,7 @@ type PeerConfig struct {
 type PeerStatus struct {
 	Address                    string
 	Port                       int32
-	ASN                        int32
+	ASN                        uint32
 	MultihopTTL                int32
 	GracefulRestartTimeSeconds int32
 	SessionState               SessionState
