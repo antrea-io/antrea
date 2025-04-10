@@ -24,7 +24,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/bgp"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
@@ -165,7 +165,7 @@ func TestConvertRouteToGoBGPPath(t *testing.T) {
 
 func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 	peerConfig := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
+		BGPPeer: &v1alpha2.BGPPeer{
 			Address:                    "192.168.0.1",
 			ASN:                        65000,
 			Port:                       ptr.To(int32(179)),

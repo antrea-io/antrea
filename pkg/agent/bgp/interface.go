@@ -17,7 +17,7 @@ package bgp
 import (
 	"context"
 
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 // Interface defines the methods for managing a BGP (Border Gateway Protocol) process.
@@ -83,7 +83,7 @@ const (
 
 // PeerConfig contains the configuration for a BGP peer. More attributes might be added later.
 type PeerConfig struct {
-	*v1alpha1.BGPPeer
+	*v1alpha2.BGPPeer
 	// Password is used to authenticate the BGP session with a BGP peer. This field holds the authentication password
 	// required to establish a secure BGP connection. If the peer requires password-based authentication, this value
 	// must be set to the appropriate password. Leaving this field empty will disable password authentication.
@@ -94,7 +94,7 @@ type PeerConfig struct {
 type PeerStatus struct {
 	Address                    string
 	Port                       int32
-	ASN                        int32
+	ASN                        int64
 	MultihopTTL                int32
 	GracefulRestartTimeSeconds int32
 	SessionState               SessionState
