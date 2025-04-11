@@ -202,14 +202,6 @@ func (pc *PodController) processCNIUpdate(e interface{}) {
 
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
 func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo, storedInterfaces []*interfacestore.InterfaceConfig) error {
-	// if len(storedInterfaces) > 0 {
-	// 	// We do not support secondary network update at the moment. Return as long as one
-	// 	// secondary interface has been created for the Pod.
-	// 	klog.V(1).InfoS("Secondary network already configured on this Pod and update not supported, skipping update",
-	// 		"Pod", klog.KObj(pod))
-	// 	return nil
-	// }
-
 	if len(pod.Status.PodIPs) == 0 {
 		// Primary network configuration is not complete yet. Return nil here to enqueue the
 		// Pod event. Secondary network configuration will be handled with the following Pod
@@ -222,10 +214,10 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 	if !ok {
 		// NOTE: We do not handle Pod annotation deletion/update scenario at present.
 		klog.V(2).InfoS("Pod does not have a NetworkAttachmentDefinition", "Pod", klog.KObj(pod))
-		// return nil
 	} else {
 		// Parse Pod annotation and proceed with the secondary network configuration.
-		networklist, err := netdefutils.ParseNetworkAnnotation(secondaryNetwork, pod.Namespace)
+		var err error
+		networklist, err = netdefutils.ParseNetworkAnnotation(secondaryNetwork, pod.Namespace)
 		if err != nil {
 			klog.ErrorS(err, "Error when parsing network annotation", "annotation", secondaryNetwork)
 			// Do not return an error as a retry is not appropriate.
@@ -234,7 +226,30 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 		}
 	}
 
+	if err := pc.removeInterfaces(pc.filterStaleInterfaces(networklist, storedInterfaces)); err != nil {
+		return err
+	}
+
 	return pc.configurePodSecondaryNetwork(pod, networklist, podCNIInfo)
+}
+
+func (pc *PodController) filterStaleInterfaces(networkList []*netdefv1.NetworkSelectionElement, storedInterfaces []*interfacestore.InterfaceConfig) (staleInfs []*interfacestore.InterfaceConfig) {
+	if len(networkList) == 0 {
+		return storedInterfaces
+	}
+	for _, inf := range storedInterfaces {
+		exists := false
+		for _, network := range networkList {
+			if inf.IFDev == network.InterfaceRequest {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			staleInfs = append(staleInfs, inf)
+		}
+	}
+	return staleInfs
 }
 
 func (pc *PodController) removeInterfaces(interfaces []*interfacestore.InterfaceConfig) error {
