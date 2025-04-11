@@ -464,6 +464,49 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				},
 			},
 		},
+		{
+			name:      "ipv4-tcp-syn",
+			ipVersion: 4,
+			pc: getPacketCaptureCR(
+				"ipv4-tcp-syn",
+				tcpServerPodName,
+				&crdv1alpha1.Packet{
+					Protocol: &tcpProto,
+					IPFamily: v1.IPv4Protocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						TCP: &crdv1alpha1.TCPHeader{
+							DstPort: ptr.To(serverPodPort),
+							Flags: []crdv1alpha1.TCPFlagsMatcher{
+								{Value: 2}, // +syn
+							},
+						},
+					},
+				},
+				crdv1alpha1.CaptureDirectionSourceToDestination,
+				packetCaptureHostPublicKey(pubKey1),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 1,
+				FilePath:       getPcapURL("ipv4-tcp-syn"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+		},
 	}
 	t.Run("testPacketCaptureBasic", func(t *testing.T) {
 		for _, tc := range testcases {
@@ -732,6 +775,16 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 					}
 					if ports.SrcPort != nil {
 						assert.Equal(t, *ports.SrcPort, int32(tcp.SrcPort))
+					}
+				}
+				flags := packetSpec.TransportHeader.TCP.Flags
+				if flags != nil {
+					tcpHeaderBytes := tcp.Contents
+					flagsByte := tcpHeaderBytes[13]
+					for _, flagMatcher := range flags {
+						value := flagMatcher.Value
+						mask := flagMatcher.Mask
+						assert.Equal(t, uint8(value), flagsByte&uint8(*mask))
 					}
 				}
 			}
