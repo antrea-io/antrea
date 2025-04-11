@@ -67,11 +67,15 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 
 // DeleteSriovSecondaryInterface deletes a SRIOV secondary interface.
 func (pc *podConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
+	if err := pc.ifConfigurator.removeContainerLink(interfaceConfig.ContainerID, interfaceConfig.InterfaceName); err != nil {
+		klog.ErrorS(err, "Failed to delete container interface link",
+			"Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
+			"interface", interfaceConfig.IFDev)
+	}
 	pc.ifaceStore.DeleteInterface(interfaceConfig)
 	klog.InfoS("Deleted SR-IOV interface", "Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
 		"interface", interfaceConfig.IFDev)
 	return nil
-
 }
 
 // ConfigureVLANSecondaryInterface configures a VLAN secondary interface on the secondary network
