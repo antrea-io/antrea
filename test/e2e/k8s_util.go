@@ -1063,12 +1063,16 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 		},
 	}
 
-	if httpServerReadiness.isReady() {
-		log.Infof("All HTTP servers are ready")
-		return nil
-	} else {
-		return fmt.Errorf("HTTP servers are not ready")
+	retries := 10
+	for range retries {
+		if httpServerReadiness.isReady() {
+			log.Infof("All HTTP servers are ready")
+			return nil
+		}
+		time.Sleep(defaultInterval)
 	}
+
+	return fmt.Errorf("HTTP servers are not ready")
 }
 
 // Encapsulate the data needed to perform a probe between pods
