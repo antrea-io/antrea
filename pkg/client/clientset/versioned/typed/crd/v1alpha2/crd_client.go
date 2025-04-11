@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 
 type CrdV1alpha2Interface interface {
 	RESTClient() rest.Interface
+	BGPPoliciesGetter
 	ExternalEntitiesGetter
 	IPPoolsGetter
 	TrafficControlsGetter
@@ -34,6 +35,10 @@ type CrdV1alpha2Interface interface {
 // CrdV1alpha2Client is used to interact with features provided by the crd.antrea.io group.
 type CrdV1alpha2Client struct {
 	restClient rest.Interface
+}
+
+func (c *CrdV1alpha2Client) BGPPolicies() BGPPolicyInterface {
+	return newBGPPolicies(c)
 }
 
 func (c *CrdV1alpha2Client) ExternalEntities(namespace string) ExternalEntityInterface {
