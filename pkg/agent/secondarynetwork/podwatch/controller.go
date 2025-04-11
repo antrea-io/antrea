@@ -201,36 +201,37 @@ func (pc *PodController) processCNIUpdate(e interface{}) {
 }
 
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
-func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo,
-	storedInterfaces []*interfacestore.InterfaceConfig) error {
-	if len(storedInterfaces) > 0 {
-		// We do not support secondary network update at the moment. Return as long as one
-		// secondary interface has been created for the Pod.
-		klog.V(1).InfoS("Secondary network already configured on this Pod and update not supported, skipping update",
-			"Pod", klog.KObj(pod))
-		return nil
-	}
+func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo, storedInterfaces []*interfacestore.InterfaceConfig) error {
+	// if len(storedInterfaces) > 0 {
+	// 	// We do not support secondary network update at the moment. Return as long as one
+	// 	// secondary interface has been created for the Pod.
+	// 	klog.V(1).InfoS("Secondary network already configured on this Pod and update not supported, skipping update",
+	// 		"Pod", klog.KObj(pod))
+	// 	return nil
+	// }
 
 	if len(pod.Status.PodIPs) == 0 {
-		// Primary network configuration is not complete yet. Return nil here to unqueue the
+		// Primary network configuration is not complete yet. Return nil here to enqueue the
 		// Pod event. Secondary network configuration will be handled with the following Pod
 		// update events.
 		return nil
 	}
 
+	var networklist []*netdefv1.NetworkSelectionElement
 	secondaryNetwork, ok := checkForPodSecondaryNetworkAttachment(pod)
 	if !ok {
 		// NOTE: We do not handle Pod annotation deletion/update scenario at present.
 		klog.V(2).InfoS("Pod does not have a NetworkAttachmentDefinition", "Pod", klog.KObj(pod))
-		return nil
-	}
-	// Parse Pod annotation and proceed with the secondary network configuration.
-	networklist, err := netdefutils.ParseNetworkAnnotation(secondaryNetwork, pod.Namespace)
-	if err != nil {
-		klog.ErrorS(err, "Error when parsing network annotation", "annotation", secondaryNetwork)
-		// Do not return an error as a retry is not appropriate.
-		// When the annotation is fixed, the Pod will be enqueued again.
-		return nil
+		// return nil
+	} else {
+		// Parse Pod annotation and proceed with the secondary network configuration.
+		networklist, err := netdefutils.ParseNetworkAnnotation(secondaryNetwork, pod.Namespace)
+		if err != nil {
+			klog.ErrorS(err, "Error when parsing network annotation", "annotation", secondaryNetwork)
+			// Do not return an error as a retry is not appropriate.
+			// When the annotation is fixed, the Pod will be enqueued again.
+			return nil
+		}
 	}
 
 	return pc.configurePodSecondaryNetwork(pod, networklist, podCNIInfo)
@@ -397,7 +398,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 	}
 
 	var savedErr error
-	interfacesConfigured := 0
 	var netStatus []netdefv1.NetworkStatus
 	for _, network := range networkList {
 		klog.V(2).InfoS("Secondary Network attached to Pod", "network", network, "Pod", klog.KObj(pod))
@@ -483,33 +483,33 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		}
 
 		netStatus = append(netStatus, *status)
-		interfacesConfigured++
 	}
 
-	if savedErr != nil && interfacesConfigured == 0 {
-		// As we do not support secondary network update, do not return error to
-		// retry, if at least one secondary network is configured.
+	if savedErr != nil {
 		return savedErr
 	}
 
 	// Update the Pod's network status annotation
-	if netStatus != nil {
-		podActual, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
-		if err != nil {
-			klog.ErrorS(err, "Get Pod failed", "Pod", klog.KObj(pod))
-			return err
+	podActual, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+	if err != nil {
+		klog.ErrorS(err, "Get Pod failed", "Pod", klog.KObj(pod))
+		return err
+	}
+	oldNetworkStatus, err := netdefutils.GetNetworkStatus(podActual)
+	if err != nil {
+		klog.ErrorS(err, "Get Pod network status annotation failed", "Pod", klog.KObj(pod))
+		return nil
+	}
+	for _, status := range oldNetworkStatus {
+		if status.Default {
+			netStatus = append(netStatus, status)
+			break
 		}
-		oldNetworkStatus, err := netdefutils.GetNetworkStatus(podActual)
-		if err == nil {
-			netStatus = append(netStatus, oldNetworkStatus...)
-		} else {
-			klog.ErrorS(err, "Get Pod network status annotation failed", "Pod", klog.KObj(pod))
-		}
-		if err := netdefutils.SetNetworkStatus(pc.kubeClient, podActual, netStatus); err != nil {
-			klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
-		} else {
-			klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
-		}
+	}
+	if err := netdefutils.SetNetworkStatus(pc.kubeClient, podActual, netStatus); err != nil {
+		klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
+	} else {
+		klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
 	}
 	return nil
 }
