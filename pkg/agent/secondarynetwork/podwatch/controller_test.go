@@ -309,7 +309,7 @@ func TestPodControllerRun(t *testing.T) {
 		podName,
 		testNamespace,
 		containerID,
-		containerNetNs(containerID),
+		"",
 		interfaceName,
 		defaultMTU,
 		sriovDeviceID11,
