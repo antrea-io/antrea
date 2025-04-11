@@ -289,13 +289,27 @@ func TestPodControllerRun(t *testing.T) {
 		containerNetNs(containerID),
 		interfaceName,
 		defaultMTU,
+		sriovDeviceID12,
+		&ipamResult.Result,
+	).Do(func(string, string, string, string, string, int, string, *current.Result) {
+		atomic.AddInt32(&interfaceConfigured, 1)
+		interfaceStore.AddInterface(containerConfig)
+	})
+	interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
+		podName,
+		testNamespace,
+		containerID,
+		containerNetNs(containerID),
+		interfaceName,
+		defaultMTU,
 		sriovDeviceID11,
 		&ipamResult.Result,
 	).Do(func(string, string, string, string, string, int, string, *current.Result) {
 		atomic.AddInt32(&interfaceConfigured, 1)
 		interfaceStore.AddInterface(containerConfig)
 	})
-	mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(ipamResult, nil)
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner).Return(nil).AnyTimes()
+	mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(ipamResult, nil).AnyTimes()
 
 	// The NetworkAttachmentDefinition must be created before the Pod: if handleAddUpdatePod
 	// runs before the NetworkAttachmentDefinition has been created, it will return an
@@ -310,12 +324,14 @@ func TestPodControllerRun(t *testing.T) {
 
 	// Wait for ConfigureSriovSecondaryInterface to be called.
 	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&interfaceConfigured) == 1
+		return atomic.LoadInt32(&interfaceConfigured) == 2
 	}, 1*time.Second, 10*time.Millisecond)
+
 	_, exists := podController.vfDeviceIDUsageMap.Load(podKey)
 	assert.True(t, exists)
 
 	podController.processCNIUpdate(event)
+
 	interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
 		podName,
 		testNamespace,
@@ -329,8 +345,10 @@ func TestPodControllerRun(t *testing.T) {
 	).Do(func(string, string, string, string, string, int, string, *current.Result) {
 		atomic.AddInt32(&interfaceConfigured, 1)
 		interfaceStore.AddInterface(containerConfig)
-	})
-	mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(ipamResult, nil)
+	}).AnyTimes()
+
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner).Return(nil).AnyTimes()
+	mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(ipamResult, nil).AnyTimes()
 
 	interfaceStore.DeleteInterface(containerConfig)
 	// Since interface is not saved to the interface store, interface creation should be
@@ -343,13 +361,13 @@ func TestPodControllerRun(t *testing.T) {
 	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig).
 		Do(func(*interfacestore.InterfaceConfig) {
 			atomic.AddInt32(&interfaceConfigured, -1)
-		})
-	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
+		}).AnyTimes()
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner).AnyTimes()
 	require.NoError(t, client.CoreV1().Pods(testNamespace).Delete(context.Background(),
 		podName, metav1.DeleteOptions{}), "error when deleting test Pod")
 
 	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&interfaceConfigured) == 1
+		return atomic.LoadInt32(&interfaceConfigured) == 2
 	}, 1*time.Second, 10*time.Millisecond)
 	_, exists = podController.vfDeviceIDUsageMap.Load(podKey)
 	assert.False(t, exists)
@@ -357,8 +375,8 @@ func TestPodControllerRun(t *testing.T) {
 	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig).
 		Do(func(*interfacestore.InterfaceConfig) {
 			atomic.AddInt32(&interfaceConfigured, -1)
-		})
-	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
+		}).AnyTimes()
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner).AnyTimes()
 	// CNI Del event.
 	event.IsAdd = false
 	// Interface is not deleted from the interface store, so CNI Del should trigger interface
@@ -366,8 +384,9 @@ func TestPodControllerRun(t *testing.T) {
 	podController.processCNIUpdate(event)
 	_, exists = cniCache.Load(podKey)
 	assert.False(t, exists)
+
 	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&interfaceConfigured) == 0
+		return atomic.LoadInt32(&interfaceConfigured) == 2
 	}, 1*time.Second, 10*time.Millisecond)
 
 	interfaceStore.DeleteInterface(containerConfig)
@@ -812,7 +831,8 @@ func TestPodControllerAddPod(t *testing.T) {
 
 		podController.cniCache.Store(podKey, cniConfig)
 		createPodFn(podController, pod)
-		assert.NoError(t, podController.syncPod(podKey))
+		require.Error(t, podController.syncPod(podKey), "Failed to get NetworkAttachmentDefinition")
+
 		podController.interfaceStore.DeleteInterface(staleConfig1)
 		podController.interfaceStore.DeleteInterface(staleConfig2)
 
@@ -844,17 +864,19 @@ func TestPodControllerAddPod(t *testing.T) {
 		_, err = podController.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(),
 			network2, metav1.CreateOptions{})
 		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
-		assert.NoError(t, podController.syncPod(podKey))
 
-		podController.interfaceStore.AddInterface(containerConfig1)
-		podController.interfaceStore.AddInterface(containerConfig2)
 		mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner1)
 		mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner2)
 		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig1)
 		interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfig2)
 
+		require.NoError(t, podController.syncPod(podKey))
+
+		podController.interfaceStore.AddInterface(containerConfig1)
+		podController.interfaceStore.AddInterface(containerConfig2)
+
 		deletePodFn(podController, pod.Name)
-		assert.NoError(t, podController.syncPod(podKey))
+		require.NoError(t, podController.syncPod(podKey))
 	})
 
 	t.Run("no network interfaces", func(t *testing.T) {
@@ -1236,9 +1258,8 @@ func TestUpdatePodNetworkStatusAnnotation(t *testing.T) {
 		expectStatus           []netdefv1.NetworkStatus
 	}{
 		{
-			name:         "empty status skips update",
-			netStatus:    nil,
-			expectErrStr: "context deadline exceeded",
+			name:      "empty status should delete the networkStatus annotation",
+			netStatus: nil,
 		},
 		{
 			name:         "get pod failure",
@@ -1312,7 +1333,8 @@ func TestUpdatePodNetworkStatusAnnotation(t *testing.T) {
 			}
 
 			err := updatePodNetworkStatusAnnotation(client, ctx, tc.netStatus, "test-pod", "default")
-			if err != nil {
+			if tc.expectErrStr != "" {
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectErrStr)
 			}
 			assert.Equal(t, tc.setNetworkStatusCalled, setNetworkStatusCalled)
@@ -1336,5 +1358,90 @@ func mockNetdefutilsSetNetworkStatus(err error, called *bool) func() {
 	}
 	return func() {
 		netdefutilsSetNetworkStatus = origSetStatus
+	}
+}
+
+func TestMergeNetworkStatusLists(t *testing.T) {
+	tests := []struct {
+		name     string
+		oldList  []netdefv1.NetworkStatus
+		newList  []netdefv1.NetworkStatus
+		expected []netdefv1.NetworkStatus
+	}{
+		{
+			name: "new list contains old items - update existing",
+			oldList: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.1"}, Default: true},
+				{Name: "eth1", Interface: "eth1", Mac: "00:11:33", IPs: []string{"2.2.2.2"}, Default: false},
+			},
+			newList: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.100"}, Default: true},
+				{Name: "eth2", Interface: "eth2", Mac: "00:11:44", IPs: []string{"3.3.3.3"}, Default: false},
+			},
+			expected: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.100"}, Default: true},
+				{Name: "eth1", Interface: "eth1", Mac: "00:11:33", IPs: []string{"2.2.2.2"}, Default: false},
+				{Name: "eth2", Interface: "eth2", Mac: "00:11:44", IPs: []string{"3.3.3.3"}, Default: false},
+			},
+		},
+		{
+			name: "new list empty - retain only default",
+			oldList: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.1"}, Default: true},
+				{Name: "eth1", Interface: "eth1", Mac: "00:11:33", IPs: []string{"2.2.2.2"}, Default: false},
+			},
+			newList: []netdefv1.NetworkStatus{},
+			expected: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.1"}, Default: true},
+			},
+		},
+		{
+			name:     "both lists empty",
+			oldList:  []netdefv1.NetworkStatus{},
+			newList:  []netdefv1.NetworkStatus{},
+			expected: nil,
+		},
+		{
+			name:    "old list empty - add all new",
+			oldList: []netdefv1.NetworkStatus{},
+			newList: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.1"}, Default: true},
+			},
+			expected: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.1"}, Default: true},
+			},
+		},
+		{
+			name: "no overlapping items - concatenate",
+			oldList: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.1"}, Default: true},
+			},
+			newList: []netdefv1.NetworkStatus{
+				{Name: "eth1", Interface: "eth1", Mac: "00:11:33", IPs: []string{"2.2.2.2"}, Default: false},
+			},
+			expected: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.1"}, Default: true},
+				{Name: "eth1", Interface: "eth1", Mac: "00:11:33", IPs: []string{"2.2.2.2"}, Default: false},
+			},
+		},
+		{
+			name: "multiple default in old - retain all default when new empty",
+			oldList: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.1"}, Default: true},
+				{Name: "eth1", Interface: "eth1", Mac: "00:11:33", IPs: []string{"2.2.2.2"}, Default: true},
+			},
+			newList: []netdefv1.NetworkStatus{},
+			expected: []netdefv1.NetworkStatus{
+				{Name: "eth0", Interface: "eth0", Mac: "00:11:22", IPs: []string{"1.1.1.1"}, Default: true},
+				{Name: "eth1", Interface: "eth1", Mac: "00:11:33", IPs: []string{"2.2.2.2"}, Default: true},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mergeNetworkStatusLists(tt.oldList, tt.newList)
+			assert.Equal(t, tt.expected, result)
+		})
 	}
 }
