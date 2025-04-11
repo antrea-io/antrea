@@ -28,12 +28,12 @@ import (
 
 	"antrea.io/antrea/pkg/agent/bgp"
 	"antrea.io/antrea/pkg/agent/bgp/gobgp"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 func TestGoBGPLifecycle(t *testing.T) {
-	asn1 := int32(61179)
-	asn2 := int32(62179)
+	asn1 := int64(61179)
+	asn2 := int64(62179)
 	routerID1 := "192.168.1.1"
 	routerID2 := "192.168.1.2"
 	listenPort1 := int32(1179)
@@ -64,7 +64,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Started all BGP servers")
 
 	server1Config := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
+		BGPPeer: &v1alpha2.BGPPeer{
 			Address:                    "127.0.0.1",
 			Port:                       &listenPort1,
 			ASN:                        asn1,
@@ -73,7 +73,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 		},
 	}
 	server2Config := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
+		BGPPeer: &v1alpha2.BGPPeer{
 			Address:                    "127.0.0.1",
 			Port:                       &listenPort2,
 			ASN:                        asn2,
@@ -203,7 +203,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Got received routes of BGP server2 and verified them")
 
 	updatedServer2Config := bgp.PeerConfig{
-		BGPPeer: &v1alpha1.BGPPeer{
+		BGPPeer: &v1alpha2.BGPPeer{
 			Address:                    "127.0.0.1",
 			Port:                       &listenPort2,
 			ASN:                        asn2,

@@ -41,7 +41,7 @@ import (
 	bgptest "antrea.io/antrea/pkg/agent/bgp/testing"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -67,7 +67,7 @@ var (
 		Name:         localNodeName,
 	}
 
-	peer1ASN          = int32(65531)
+	peer1ASN          = int64(65531)
 	peer1AuthPassword = "bgp-peer1" // #nosec G101
 	ipv4Peer1Addr     = "192.168.77.251"
 	ipv6Peer1Addr     = "fec0::196:168:77:251"
@@ -86,7 +86,7 @@ var (
 		SessionState: bgp.SessionActive,
 	}
 
-	peer2ASN          = int32(65532)
+	peer2ASN          = int64(65532)
 	peer2AuthPassword = "bgp-peer2" // #nosec G101
 	ipv4Peer2Addr     = "192.168.77.252"
 	ipv6Peer2Addr     = "fec0::196:168:77:252"
@@ -110,7 +110,7 @@ var (
 	updatedIPv4Peer2Config = generateBGPPeerConfig(&updatedIPv4Peer2, peer2AuthPassword)
 	updatedIPv6Peer2Config = generateBGPPeerConfig(&updatedIPv6Peer2, peer2AuthPassword)
 
-	peer3ASN          = int32(65533)
+	peer3ASN          = int64(65533)
 	peer3AuthPassword = "bgp-peer3" // #nosec G101
 	ipv4Peer3Addr     = "192.168.77.253"
 	ipv6Peer3Addr     = "fec0::196:168:77:253"
@@ -251,7 +251,7 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 	serviceInformer := informerFactory.Core().V1().Services()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
-	bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
+	bgpPolicyInformer := crdInformerFactory.Crd().V1alpha2().BGPPolicies()
 
 	bgpController, _ := NewBGPPolicyController(nodeInformer,
 		serviceInformer,
@@ -307,7 +307,7 @@ func TestBGPPolicyAdd(t *testing.T) {
 				true,
 				true,
 				false,
-				[]v1alpha1.BGPPeer{ipv4Peer1}),
+				[]v1alpha2.BGPPeer{ipv4Peer1}),
 			},
 			objects: []runtime.Object{
 				ipv4ClusterIP1,
@@ -340,7 +340,7 @@ func TestBGPPolicyAdd(t *testing.T) {
 				true,
 				true,
 				false,
-				[]v1alpha1.BGPPeer{ipv6Peer1})},
+				[]v1alpha2.BGPPeer{ipv6Peer1})},
 			objects: []runtime.Object{
 				ipv6ClusterIP1,
 				ipv6ClusterIP1Eps,
@@ -373,7 +373,7 @@ func TestBGPPolicyAdd(t *testing.T) {
 				true,
 				false,
 				false,
-				[]v1alpha1.BGPPeer{ipv4Peer1, ipv6Peer1})},
+				[]v1alpha2.BGPPeer{ipv4Peer1, ipv6Peer1})},
 			objects: []runtime.Object{
 				ipv4LoadBalancer,
 				ipv4LoadBalancerEps,
@@ -409,7 +409,7 @@ func TestBGPPolicyAdd(t *testing.T) {
 				true,
 				true,
 				false,
-				[]v1alpha1.BGPPeer{ipv4Peer1})},
+				[]v1alpha2.BGPPeer{ipv4Peer1})},
 			objects: []runtime.Object{node},
 			crdObjects: []runtime.Object{
 				ipv4Egress1,
@@ -441,7 +441,7 @@ func TestBGPPolicyAdd(t *testing.T) {
 				true,
 				true,
 				true,
-				[]v1alpha1.BGPPeer{ipv6Peer1})},
+				[]v1alpha2.BGPPeer{ipv6Peer1})},
 			objects: []runtime.Object{node},
 			expectedState: generateBGPPolicyState(bgpPolicyName1,
 				179,
@@ -470,7 +470,7 @@ func TestBGPPolicyAdd(t *testing.T) {
 				true,
 				false,
 				false,
-				[]v1alpha1.BGPPeer{ipv4Peer1, ipv6Peer1})},
+				[]v1alpha2.BGPPeer{ipv4Peer1, ipv6Peer1})},
 			objects: []runtime.Object{
 				ipv4ClusterIP2,
 				ipv4ClusterIP2Eps,
@@ -504,7 +504,7 @@ func TestBGPPolicyAdd(t *testing.T) {
 				false,
 				false,
 				false,
-				[]v1alpha1.BGPPeer{ipv4Peer1}),
+				[]v1alpha2.BGPPeer{ipv4Peer1}),
 				generateBGPPolicy(bgpPolicyName1,
 					creationTimestampAdd1s,
 					nodeLabels1,
@@ -515,7 +515,7 @@ func TestBGPPolicyAdd(t *testing.T) {
 					false,
 					false,
 					false,
-					[]v1alpha1.BGPPeer{ipv4Peer1})},
+					[]v1alpha2.BGPPeer{ipv4Peer1})},
 			objects: []runtime.Object{ipv4ClusterIP1, ipv4ClusterIP1Eps, node},
 			existingState: generateBGPPolicyState(bgpPolicyName2,
 				179,
@@ -577,7 +577,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 		true,
 		false,
 		true,
-		[]v1alpha1.BGPPeer{ipv4Peer1,
+		[]v1alpha2.BGPPeer{ipv4Peer1,
 			ipv4Peer2,
 			ipv6Peer1,
 			ipv6Peer2,
@@ -603,7 +603,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 		true,
 		false,
 		true,
-		[]v1alpha1.BGPPeer{ipv4Peer1,
+		[]v1alpha2.BGPPeer{ipv4Peer1,
 			ipv4Peer2,
 			ipv6Peer1,
 			ipv6Peer2,
@@ -618,7 +618,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 		true,
 		false,
 		true,
-		[]v1alpha1.BGPPeer{ipv4Peer1,
+		[]v1alpha2.BGPPeer{ipv4Peer1,
 			ipv4Peer2,
 			ipv6Peer1,
 			ipv6Peer2,
@@ -644,7 +644,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 	}
 	testCases := []struct {
 		name           string
-		policyToUpdate *v1alpha1.BGPPolicy
+		policyToUpdate *v1alpha2.BGPPolicy
 		existingState  *bgpPolicyState
 		expectedState  *bgpPolicyState
 		expectedCalls  func(mockBGPServer *bgptest.MockInterfaceMockRecorder)
@@ -662,7 +662,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				true,
 				false,
 				true,
-				[]v1alpha1.BGPPeer{ipv4Peer1,
+				[]v1alpha2.BGPPeer{ipv4Peer1,
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
@@ -712,7 +712,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				true,
 				false,
 				true,
-				[]v1alpha1.BGPPeer{ipv4Peer1,
+				[]v1alpha2.BGPPeer{ipv4Peer1,
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
@@ -735,7 +735,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				false,
 				true,
 				false,
-				[]v1alpha1.BGPPeer{ipv4Peer1,
+				[]v1alpha2.BGPPeer{ipv4Peer1,
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
@@ -782,7 +782,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				false,
 				true,
 				false,
-				[]v1alpha1.BGPPeer{ipv4Peer1,
+				[]v1alpha2.BGPPeer{ipv4Peer1,
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
@@ -828,7 +828,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				true,
 				false,
 				true,
-				[]v1alpha1.BGPPeer{ipv4Peer1,
+				[]v1alpha2.BGPPeer{ipv4Peer1,
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
@@ -878,7 +878,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				true,
 				false,
 				true,
-				[]v1alpha1.BGPPeer{updatedIPv4Peer2,
+				[]v1alpha2.BGPPeer{updatedIPv4Peer2,
 					updatedIPv6Peer2,
 					ipv4Peer3,
 					ipv6Peer3}),
@@ -921,7 +921,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				true,
 				false,
 				true,
-				[]v1alpha1.BGPPeer{ipv4Peer1,
+				[]v1alpha2.BGPPeer{ipv4Peer1,
 					ipv4Peer2,
 					ipv6Peer1,
 					ipv6Peer2,
@@ -941,7 +941,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				true,
 				false,
 				false,
-				[]v1alpha1.BGPPeer{ipv4Peer1,
+				[]v1alpha2.BGPPeer{ipv4Peer1,
 					updatedIPv4Peer2,
 					ipv6Peer1,
 					updatedIPv6Peer2,
@@ -971,7 +971,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			c.bgpPeerPasswords = bgpPeerPasswords
 
 			tt.policyToUpdate.Generation += 1
-			_, err := c.crdClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), tt.policyToUpdate, metav1.UpdateOptions{})
+			_, err := c.crdClient.CrdV1alpha2().BGPPolicies().Update(context.TODO(), tt.policyToUpdate, metav1.UpdateOptions{})
 			require.NoError(t, err)
 
 			// Wait for the dummy event triggered by BGPPolicy update events.
@@ -1003,7 +1003,7 @@ func TestBGPPolicyDelete(t *testing.T) {
 		true,
 		false,
 		false,
-		[]v1alpha1.BGPPeer{
+		[]v1alpha2.BGPPeer{
 			ipv4Peer1,
 			ipv6Peer1,
 		})
@@ -1027,7 +1027,7 @@ func TestBGPPolicyDelete(t *testing.T) {
 		false,
 		false,
 		false,
-		[]v1alpha1.BGPPeer{
+		[]v1alpha2.BGPPeer{
 			ipv4Peer2,
 			ipv6Peer2,
 		})
@@ -1050,7 +1050,7 @@ func TestBGPPolicyDelete(t *testing.T) {
 		false,
 		false,
 		false,
-		[]v1alpha1.BGPPeer{
+		[]v1alpha2.BGPPeer{
 			ipv4Peer2,
 			ipv6Peer2,
 		})
@@ -1146,7 +1146,7 @@ func TestBGPPolicyDelete(t *testing.T) {
 			c.bgpPolicyState.bgpServer = c.mockBGPServer
 			c.bgpPeerPasswords = bgpPeerPasswords
 
-			err := c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), tt.policyToDelete, metav1.DeleteOptions{})
+			err := c.crdClient.CrdV1alpha2().BGPPolicies().Delete(context.TODO(), tt.policyToDelete, metav1.DeleteOptions{})
 			require.NoError(t, err)
 
 			// Wait for the dummy event triggered by BGPPolicy delete events.
@@ -1174,7 +1174,7 @@ func TestNodeUpdate(t *testing.T) {
 		false,
 		false,
 		true,
-		[]v1alpha1.BGPPeer{ipv4Peer1, ipv6Peer1})
+		[]v1alpha2.BGPPeer{ipv4Peer1, ipv6Peer1})
 	policy1State := generateBGPPolicyState(bgpPolicyName1,
 		179,
 		65000,
@@ -1191,7 +1191,7 @@ func TestNodeUpdate(t *testing.T) {
 		false,
 		false,
 		true,
-		[]v1alpha1.BGPPeer{ipv4Peer1, ipv6Peer1})
+		[]v1alpha2.BGPPeer{ipv4Peer1, ipv6Peer1})
 	policy2State := generateBGPPolicyState(bgpPolicyName2,
 		1179,
 		65000,
@@ -1208,7 +1208,7 @@ func TestNodeUpdate(t *testing.T) {
 		false,
 		false,
 		true,
-		[]v1alpha1.BGPPeer{ipv4Peer1, ipv6Peer1})
+		[]v1alpha2.BGPPeer{ipv4Peer1, ipv6Peer1})
 	crdObjects := []runtime.Object{
 		policy1,
 		policy2,
@@ -1424,7 +1424,7 @@ func TestServiceLifecycle(t *testing.T) {
 		true,
 		false,
 		false,
-		[]v1alpha1.BGPPeer{ipv4Peer1})
+		[]v1alpha2.BGPPeer{ipv4Peer1})
 	c := newFakeController(t, []runtime.Object{node}, []runtime.Object{policy}, true, false)
 	mockBGPServer := c.mockBGPServer
 
@@ -1554,7 +1554,7 @@ func TestEgressLifecycle(t *testing.T) {
 		false,
 		true,
 		false,
-		[]v1alpha1.BGPPeer{ipv4Peer1})
+		[]v1alpha2.BGPPeer{ipv4Peer1})
 	c := newFakeController(t, []runtime.Object{node}, []runtime.Object{policy}, true, false)
 	mockBGPServer := c.mockBGPServer
 
@@ -1636,7 +1636,7 @@ func TestBGPPasswordUpdate(t *testing.T) {
 		false,
 		false,
 		true,
-		[]v1alpha1.BGPPeer{ipv4Peer1, ipv4Peer2, ipv4Peer3})
+		[]v1alpha2.BGPPeer{ipv4Peer1, ipv4Peer2, ipv4Peer3})
 	c := newFakeController(t, []runtime.Object{node}, []runtime.Object{policy}, true, false)
 
 	c.secretInformer = coreinformers.NewFilteredSecretInformer(c.client,
@@ -1738,7 +1738,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		true,
 		false,
 		false,
-		[]v1alpha1.BGPPeer{ipv4Peer2})
+		[]v1alpha2.BGPPeer{ipv4Peer2})
 	policy2 := generateBGPPolicy(bgpPolicyName2,
 		creationTimestampAdd1s,
 		nodeLabels1,
@@ -1749,7 +1749,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		false,
 		false,
 		true,
-		[]v1alpha1.BGPPeer{ipv4Peer1})
+		[]v1alpha2.BGPPeer{ipv4Peer1})
 	policy3 := generateBGPPolicy(bgpPolicyName3,
 		creationTimestampAdd2s,
 		nodeLabels1,
@@ -1760,7 +1760,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		false,
 		false,
 		false,
-		[]v1alpha1.BGPPeer{ipv4Peer2})
+		[]v1alpha2.BGPPeer{ipv4Peer2})
 	policy4 := generateBGPPolicy(bgpPolicyName4,
 		creationTimestampAdd3s,
 		nodeLabels1,
@@ -1771,7 +1771,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		true,
 		false,
 		false,
-		[]v1alpha1.BGPPeer{updatedIPv4Peer2})
+		[]v1alpha2.BGPPeer{updatedIPv4Peer2})
 	objects := []runtime.Object{
 		ipv4LoadBalancer,
 		ipv4LoadBalancerEps,
@@ -1816,7 +1816,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		c.bgpPolicyState)
 
 	// Delete the effective BGPPolicy policy1, and BGPPolicy policy2 will be the effective one.
-	require.NoError(t, c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), policy1.Name, metav1.DeleteOptions{}))
+	require.NoError(t, c.crdClient.CrdV1alpha2().BGPPolicies().Delete(context.TODO(), policy1.Name, metav1.DeleteOptions{}))
 
 	waitAndGetDummyEvent(t, c)
 
@@ -1866,7 +1866,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 
 	// Delete the effective BGPPolicy policy2, and BGPPolicy policy3 will be the effective one. The BGP server doesn't need to
 	// be updated. The peers and routes will be reconciled according to the existing BGPPolicy state.
-	require.NoError(t, c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), policy2.Name, metav1.DeleteOptions{}))
+	require.NoError(t, c.crdClient.CrdV1alpha2().BGPPolicies().Delete(context.TODO(), policy2.Name, metav1.DeleteOptions{}))
 
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer2Config)
@@ -1885,7 +1885,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 
 	// Delete the effective BGPPolicy policy3, and BGPPolicy policy4 will be the effective one. The BGP server doesn't need to
 	// be updated. The peers and routes will be reconciled according to the existing BGPPolicy state.
-	require.NoError(t, c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), policy3.Name, metav1.DeleteOptions{}))
+	require.NoError(t, c.crdClient.CrdV1alpha2().BGPPolicies().Delete(context.TODO(), policy3.Name, metav1.DeleteOptions{}))
 
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), updatedIPv4Peer2Config)
@@ -1905,7 +1905,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 
 func generateBGPPolicyState(bgpPolicyName string,
 	listenPort int32,
-	localASN int32,
+	localASN int64,
 	routerID string,
 	bgpRoutes []bgp.Route,
 	peerConfigs []bgp.PeerConfig) *bgpPolicyState {
@@ -1965,38 +1965,38 @@ func generateBGPPolicy(name string,
 	creationTimestamp metav1.Time,
 	nodeSelector map[string]string,
 	listenPort int32,
-	localASN int32,
+	localASN int64,
 	advertiseClusterIP bool,
 	advertiseExternalIP bool,
 	advertiseLoadBalancerIP bool,
 	advertiseEgressIP bool,
 	advertisePodCIDR bool,
-	externalPeers []v1alpha1.BGPPeer) *v1alpha1.BGPPolicy {
-	var advertisement v1alpha1.Advertisements
-	advertisement.Service = &v1alpha1.ServiceAdvertisement{}
+	externalPeers []v1alpha2.BGPPeer) *v1alpha2.BGPPolicy {
+	var advertisement v1alpha2.Advertisements
+	advertisement.Service = &v1alpha2.ServiceAdvertisement{}
 	if advertiseClusterIP {
-		advertisement.Service.IPTypes = append(advertisement.Service.IPTypes, v1alpha1.ServiceIPTypeClusterIP)
+		advertisement.Service.IPTypes = append(advertisement.Service.IPTypes, v1alpha2.ServiceIPTypeClusterIP)
 	}
 	if advertiseExternalIP {
-		advertisement.Service.IPTypes = append(advertisement.Service.IPTypes, v1alpha1.ServiceIPTypeExternalIP)
+		advertisement.Service.IPTypes = append(advertisement.Service.IPTypes, v1alpha2.ServiceIPTypeExternalIP)
 	}
 	if advertiseLoadBalancerIP {
-		advertisement.Service.IPTypes = append(advertisement.Service.IPTypes, v1alpha1.ServiceIPTypeLoadBalancerIP)
+		advertisement.Service.IPTypes = append(advertisement.Service.IPTypes, v1alpha2.ServiceIPTypeLoadBalancerIP)
 	}
 	if advertiseEgressIP {
-		advertisement.Egress = &v1alpha1.EgressAdvertisement{}
+		advertisement.Egress = &v1alpha2.EgressAdvertisement{}
 	}
 
 	if advertisePodCIDR {
-		advertisement.Pod = &v1alpha1.PodAdvertisement{}
+		advertisement.Pod = &v1alpha2.PodAdvertisement{}
 	}
-	return &v1alpha1.BGPPolicy{
+	return &v1alpha2.BGPPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			UID:               "test-uid",
 			CreationTimestamp: creationTimestamp,
 		},
-		Spec: v1alpha1.BGPPolicySpec{
+		Spec: v1alpha2.BGPPolicySpec{
 			NodeSelector:   metav1.LabelSelector{MatchLabels: nodeSelector},
 			LocalASN:       localASN,
 			ListenPort:     &listenPort,
@@ -2125,8 +2125,8 @@ func generateEndpointSlice(svcName string,
 	return endpointSlice
 }
 
-func generateBGPPeer(ip string, asn, port, gracefulRestartTimeSeconds int32) v1alpha1.BGPPeer {
-	return v1alpha1.BGPPeer{
+func generateBGPPeer(ip string, asn int64, port, gracefulRestartTimeSeconds int32) v1alpha2.BGPPeer {
+	return v1alpha2.BGPPeer{
 		Address:                    ip,
 		Port:                       &port,
 		ASN:                        asn,
@@ -2135,7 +2135,7 @@ func generateBGPPeer(ip string, asn, port, gracefulRestartTimeSeconds int32) v1a
 	}
 }
 
-func generateBGPPeerConfig(peerConfig *v1alpha1.BGPPeer, password string) bgp.PeerConfig {
+func generateBGPPeerConfig(peerConfig *v1alpha2.BGPPeer, password string) bgp.PeerConfig {
 	return bgp.PeerConfig{
 		BGPPeer:  peerConfig,
 		Password: password,
@@ -2185,7 +2185,7 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 		name                  string
 		existingState         *bgpPolicyState
 		expectedBgpPolicyName string
-		expectedASN           int32
+		expectedASN           int64
 		expectedRouterID      string
 		expectedListenPort    int32
 	}{
@@ -2199,7 +2199,7 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 				nil,
 			),
 			expectedBgpPolicyName: bgpPolicyName1,
-			expectedASN:           int32(65000),
+			expectedASN:           int64(65000),
 			expectedRouterID:      nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 			expectedListenPort:    int32(179),
 		},
