@@ -367,14 +367,14 @@ spec:
                   properties:
                     identifier:
                       type: integer
-                      format: int64
+                      format: int32
                       minimum: 1
                       maximum: 65535
                     memberASNs:
                       type: array
                       items:
                         type: integer
-                        format: int64
+                        format: int32
                         minimum: 1
                         maximum: 65535
                 advertisements:
@@ -488,7 +488,7 @@ spec:
                   properties:
                     identifier:
                       type: integer
-                      format: int32
+                      format: int64
                       minimum: 1
                       maximum: 65535
                     memberASNs:
