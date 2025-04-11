@@ -285,13 +285,27 @@ func TestPodControllerRun(t *testing.T) {
 		containerNetNs(containerID),
 		interfaceName,
 		defaultMTU,
+		sriovDeviceID12,
+		&ipamResult.Result,
+	).Do(func(string, string, string, string, string, int, string, *current.Result) {
+		atomic.AddInt32(&interfaceConfigured, 1)
+		interfaceStore.AddInterface(containerConfig)
+	})
+	interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
+		podName,
+		testNamespace,
+		containerID,
+		containerNetNs(containerID),
+		interfaceName,
+		defaultMTU,
 		sriovDeviceID11,
 		&ipamResult.Result,
 	).Do(func(string, string, string, string, string, int, string, *current.Result) {
 		atomic.AddInt32(&interfaceConfigured, 1)
 		interfaceStore.AddInterface(containerConfig)
 	})
-	mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(ipamResult, nil)
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner).Return(nil).AnyTimes()
+	mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(ipamResult, nil).AnyTimes()
 
 	// The NetworkAttachmentDefinition must be created before the Pod: if handleAddUpdatePod
 	// runs before the NetworkAttachmentDefinition has been created, it will return an
@@ -306,12 +320,14 @@ func TestPodControllerRun(t *testing.T) {
 
 	// Wait for ConfigureSriovSecondaryInterface to be called.
 	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&interfaceConfigured) == 1
+		return atomic.LoadInt32(&interfaceConfigured) == 2
 	}, 1*time.Second, 10*time.Millisecond)
+
 	_, exists := podController.vfDeviceIDUsageMap.Load(podKey)
 	assert.True(t, exists)
 
 	podController.processCNIUpdate(event)
+
 	interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
 		podName,
 		testNamespace,
@@ -325,8 +341,10 @@ func TestPodControllerRun(t *testing.T) {
 	).Do(func(string, string, string, string, string, int, string, *current.Result) {
 		atomic.AddInt32(&interfaceConfigured, 1)
 		interfaceStore.AddInterface(containerConfig)
-	})
-	mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(ipamResult, nil)
+	}).AnyTimes()
+
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner).Return(nil).AnyTimes()
+	mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(ipamResult, nil).AnyTimes()
 
 	interfaceStore.DeleteInterface(containerConfig)
 	// Since interface is not saved to the interface store, interface creation should be
@@ -339,13 +357,13 @@ func TestPodControllerRun(t *testing.T) {
 	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig).
 		Do(func(*interfacestore.InterfaceConfig) {
 			atomic.AddInt32(&interfaceConfigured, -1)
-		})
-	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
+		}).AnyTimes()
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner).AnyTimes()
 	require.NoError(t, client.CoreV1().Pods(testNamespace).Delete(context.Background(),
 		podName, metav1.DeleteOptions{}), "error when deleting test Pod")
 
 	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&interfaceConfigured) == 1
+		return atomic.LoadInt32(&interfaceConfigured) == 2
 	}, 1*time.Second, 10*time.Millisecond)
 	_, exists = podController.vfDeviceIDUsageMap.Load(podKey)
 	assert.False(t, exists)
@@ -353,8 +371,8 @@ func TestPodControllerRun(t *testing.T) {
 	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig).
 		Do(func(*interfacestore.InterfaceConfig) {
 			atomic.AddInt32(&interfaceConfigured, -1)
-		})
-	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
+		}).AnyTimes()
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner).AnyTimes()
 	// CNI Del event.
 	event.IsAdd = false
 	// Interface is not deleted from the interface store, so CNI Del should trigger interface
@@ -362,8 +380,9 @@ func TestPodControllerRun(t *testing.T) {
 	podController.processCNIUpdate(event)
 	_, exists = cniCache.Load(podKey)
 	assert.False(t, exists)
+
 	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&interfaceConfigured) == 0
+		return atomic.LoadInt32(&interfaceConfigured) == 2
 	}, 1*time.Second, 10*time.Millisecond)
 
 	interfaceStore.DeleteInterface(containerConfig)
@@ -648,7 +667,6 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
@@ -806,14 +824,14 @@ func TestPodControllerAddPod(t *testing.T) {
 		podController.interfaceStore.AddInterface(staleConfig1)
 		podController.interfaceStore.AddInterface(staleConfig2)
 		// Stale interfaces in the interface store should be deleted first.
-		mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner1)
-		mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner2)
-		interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(staleConfig1)
-		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(staleConfig2)
+		mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner1).Times(2)
+		mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner2).Times(2)
+		interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(staleConfig1).Times(2)
+		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(staleConfig2).Times(2)
 
 		podController.cniCache.Store(podKey, cniConfig)
 		createPodFn(podController, pod)
-		assert.NoError(t, podController.syncPod(podKey))
+		assert.Error(t, podController.syncPod(podKey), "Failed to get NetworkAttachmentDefinition")
 		podController.interfaceStore.DeleteInterface(staleConfig1)
 		podController.interfaceStore.DeleteInterface(staleConfig2)
 
