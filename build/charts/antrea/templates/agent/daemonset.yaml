@@ -411,6 +411,12 @@ spec:
             path: {{ .Values.agent.kubeletRootDir }}/pod-resources
             type: Directory
         {{- end }}
+        {{- if .Values.secondaryNetwork }}
+        - name: sys-bus-pci
+          hostPath:
+            path:  /sys/bus/pci
+            type: Directory
+        {{- end }}
         {{- with .Values.agent.extraVolumes }}
         {{- toYaml . | trim | nindent 8 }}
         {{- end }}

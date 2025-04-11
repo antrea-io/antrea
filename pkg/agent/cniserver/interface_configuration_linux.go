@@ -406,13 +406,13 @@ func (ic *ifConfigurator) changeContainerMTU(containerNetNS string, containerIFD
 }
 
 func (ic *ifConfigurator) removeContainerLink(containerID, hostInterfaceName string) error {
-	klog.V(2).Infof("Deleting veth devices for container %s", containerID)
+	klog.InfoS("Deleting veth devices for container", "containerID", containerID, "hostInterfaceName", hostInterfaceName)
 	// Don't return an error if the device is already removed as CniDel can be called multiple times.
 	if err := ip.DelLinkByName(hostInterfaceName); err != nil {
 		if err != ip.ErrLinkNotFound {
 			return fmt.Errorf("failed to delete veth devices for container %s: %v", containerID, err)
 		}
-		klog.V(2).Infof("Did not find interface %s for container %s", hostInterfaceName, containerID)
+		klog.ErrorS(err, "Did not find interface %s for container", "hostInterfaceName", hostInterfaceName, "containerID", containerID)
 	}
 	return nil
 }

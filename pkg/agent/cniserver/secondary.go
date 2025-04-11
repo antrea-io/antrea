@@ -16,6 +16,8 @@ package cniserver
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/klog/v2"
@@ -65,13 +67,49 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	return nil
 }
 
+const (
+	vfDriver = "ixgbevf"
+)
+
+func rebindVFToHost(pciAddr string) error {
+	// echo 0000:00:04.0 > /sys/bus/pci/devices/0000:00:04.0/driver/unbind
+	unbindPath := filepath.Join("/sys/bus/pci/devices", pciAddr, "driver/unbind")
+	if err := os.WriteFile(unbindPath, []byte(pciAddr), 0200); err != nil {
+		return fmt.Errorf("unbind driver failed: %v", err)
+	}
+
+	bindPath := filepath.Join("/sys/bus/pci/drivers", vfDriver, "bind")
+	// echo 0000:00:04.0 > /sys/bus/pci/drivers/ixgbevf/bind
+	if err := os.WriteFile(bindPath, []byte(pciAddr), 0200); err != nil {
+		if recoverErr := recoverVFDriver(pciAddr); recoverErr != nil {
+			klog.Errorf("Critical: Failed to recover VF driver: %v", recoverErr)
+		}
+		return fmt.Errorf("bind to driver %s failed: %v", vfDriver, err)
+	}
+
+	klog.Infof("Successfully rebound %s to %s", pciAddr, vfDriver)
+	return nil
+}
+
+func recoverVFDriver(pciAddr string) error {
+	bindPath := filepath.Join("/sys/bus/pci/drivers/vfio-pci/bind")
+	return os.WriteFile(bindPath, []byte(pciAddr), 0200)
+}
+
 // DeleteSriovSecondaryInterface deletes a SRIOV secondary interface.
 func (pc *podConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
+	klog.InfoS("Delete container interface link",
+		"Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
+		"interfaceConfig", interfaceConfig)
+	if err := rebindVFToHost(interfaceConfig.InterfaceName); err != nil {
+		klog.ErrorS(err, "Failed to UnbindVFFromPod",
+			"Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
+			"interface", interfaceConfig.InterfaceName)
+	}
 	pc.ifaceStore.DeleteInterface(interfaceConfig)
 	klog.InfoS("Deleted SR-IOV interface", "Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
 		"interface", interfaceConfig.IFDev)
 	return nil
-
 }
 
 // ConfigureVLANSecondaryInterface configures a VLAN secondary interface on the secondary network

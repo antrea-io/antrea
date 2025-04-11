@@ -5675,6 +5675,10 @@ spec:
           hostPath:
             path: /var/lib/kubelet/pod-resources
             type: Directory
+        - name: sys-bus-pci
+          hostPath:
+            path:  /sys/bus/pci
+            type: Directory
 ---
 # Source: antrea/templates/controller/deployment.yaml
 apiVersion: apps/v1

@@ -99,13 +99,78 @@ func (data *testData) createPods(t *testing.T, ns string) error {
 	return err
 }
 
+func (data *testData) deletePodNetworkAttachmentAnnot(t *testing.T, pods []*testPodInfo, ns string) error {
+	for _, pod := range pods {
+		err := data.e2eTestData.UpdatePod(ns, pod.podName, func(pod *corev1.Pod) {
+			pod.Annotations[v1.NetworkAttachmentAnnot] = ""
+		})
+		if err != nil {
+			return err
+		}
+		t.Logf("Delete Pod %s annotation: %+v\n", v1.NetworkAttachmentAnnot, pod)
+	}
+	return nil
+}
+
+func (data *testData) updatePodNetworkAttachmentAnnot(t *testing.T, pods []*testPodInfo, ns string) error {
+	for _, pod := range pods {
+		anno := fmt.Sprintf("%s", data.formAnnotationStringOfPod(pod))
+		err := data.e2eTestData.UpdatePod(ns, pod.podName, func(pod *corev1.Pod) {
+			pod.Annotations[v1.NetworkAttachmentAnnot] = anno
+		})
+		if err != nil {
+			return err
+		}
+		t.Logf("Update Pod annotation: %s, Pod: %+v\n", anno, pod)
+	}
+	return nil
+}
+
+func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes.Clientset, pods []*testPodInfo, ns string) error {
+	for _, pod := range pods {
+		if err := wait.PollUntilContextTimeout(context.Background(), time.Second, 20*time.Second, false, func(ctx context.Context) (done bool, err error) {
+			podItem, err := clientset.CoreV1().Pods(ns).Get(ctx, pod.podName, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+			t.Logf("Get Pod Annotations: %+v", podItem.Annotations)
+
+			secondarynetworkList, _ := utils.ParsePodNetworkAnnotation(podItem)
+			t.Logf("Get Pod networks in Annotations: %+v", secondarynetworkList)
+
+			ips, err := data.listPodIPs(pod)
+			if err != nil {
+				return false, err
+			}
+			t.Logf("Get Pod IPs: %+v", ips)
+
+			networkStatus, err := utils.GetNetworkStatus(podItem)
+			if err != nil || len(networkStatus) != len(ips)-1 || len(networkStatus) != len(secondarynetworkList)+1 {
+				return false, nil
+			}
+			for _, network := range networkStatus {
+				if ip, ok := ips[network.Interface]; ok {
+					assert.Contains(t, network.IPs, ip.String(), "IPs in the Pod network status annotation should contain Pod IPs")
+				} else {
+					return false, fmt.Errorf("interface in Network status(%v) does not exist in the Pod IPs(%v), Pod: %s/%s", network, ips, ns, pod.podName)
+				}
+			}
+			t.Logf("Assert Pod NetworkStatus successfully\n")
+			return true, nil
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // The Wrapper function createPodForSecondaryNetwork creates the Pod adding the annotation, arguments, commands, Node, container name,
 // resource requests and limits as arguments with the NewPodBuilder API
 func (data *testData) createPodForSecondaryNetwork(ns string, pod *testPodInfo) error {
 	podBuilder := antreae2e.NewPodBuilder(pod.podName, ns, antreae2e.ToolboxImage).
 		OnNode(pod.nodeName).WithContainerName(containerName).
 		WithAnnotations(map[string]string{
-			"k8s.v1.cni.cncf.io/networks": fmt.Sprintf("%s", data.formAnnotationStringOfPod(pod)),
+			v1.NetworkAttachmentAnnot: fmt.Sprintf("%s", data.formAnnotationStringOfPod(pod)),
 		}).
 		WithLabels(map[string]string{
 			"App": fmt.Sprintf("%s", podApp),
@@ -127,6 +192,7 @@ func (data *testData) listPodIPs(targetPod *testPodInfo) (map[string]net.IP, err
 	if err != nil {
 		return nil, fmt.Errorf("error when listing interfaces for %s: %w", targetPod.podName, err)
 	}
+	logs.Infof("listPodIPs: %s, %+v", stdout, *targetPod)
 	result := make(map[string]net.IP)
 	var currentInterface string
 	lines := strings.Split(stdout, "\n")
@@ -228,7 +294,6 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -269,7 +334,6 @@ func (data *testData) getIPPoolNames(ifaces []string, vlanPod *testPodInfo, name
 
 func (data *testData) checkIPReleased(ipPools map[string][]string, ifacesIPs map[string]net.IP, ifaces []string) error {
 	crdClient := data.e2eTestData.CRDClient
-
 	return wait.PollUntilContextTimeout(context.Background(), time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
 		for _, iface := range ifaces {
 			ipPoolName, exists := ipPools[iface]
@@ -542,5 +606,24 @@ func TestSRIOVNetwork(t *testing.T) {
 	}
 	if err := testData.pingBetweenInterfaces(t); err != nil {
 		t.Fatalf("Error when pinging between interfaces: %v", err)
+	}
+	// Delete the Pod secondary network annotation
+	if err := testData.deletePodNetworkAttachmentAnnot(t, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when updating the annotation of Pod: %v", err)
+	}
+	// Check Pod ip
+	// Check the Pod network status annotation
+	if err := testData.assertPodNetworkStatus(t, clientset, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when check the Pod IP and networkstatus annotation: %v", err)
+	}
+
+	// Update the Pod secondary network annotation
+	if err := testData.updatePodNetworkAttachmentAnnot(t, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when updating the annotation of Pod: %v", err)
+	}
+	// Check the Pod ip
+	// Check the Pod network status annotation
+	if err := testData.assertPodNetworkStatus(t, clientset, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when check the Pod IP and networkstatus annotation: %v", err)
 	}
 }
