@@ -19,7 +19,7 @@ jobs:
       run: |
         ./hack/build-antrea-linux-all.sh --pull
     - name: Install Trivy
-      uses: aquasecurity/setup-trivy@v0.2.2
+      uses: aquasecurity/setup-trivy@v0.2.3
     - name: Download Trivy DB
       # Always download the latest DB for releases, don't use a cached version.
       # Try downloading the vulnerability DB up to 5 times, to account for TOOMANYREQUESTS errors.
