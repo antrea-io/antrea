@@ -212,9 +212,9 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ip
 	cniServer.enableSecondaryNetworkIPAM = enableSecondaryNetworkIPAM
 	cniServer.secondaryNetworkEnabled = enableSecondaryNetwork
 	cniServer.isChaining = isChaining
-	if secondaryNetworkEnabled {
+	if enableSecondaryNetwork {
 		mockVFDeviceUsageChecker = typestest.NewMockVFDeviceUsageChecker(controller)
-		cniServer.secondaryNetworkEnabled = secondaryNetworkEnabled
+		cniServer.secondaryNetworkEnabled = enableSecondaryNetwork
 		cniServer.vfDeviceChecker = mockVFDeviceUsageChecker
 	}
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
@@ -246,6 +246,7 @@ func TestCmdAdd(t *testing.T) {
 		ipamError                  error
 		cniType                    string
 		enableSecondaryNetworkIPAM bool
+		enableSecondaryNetwork     bool
 		networkAttachmentAnnotNum  int
 		isChaining                 bool
 		connectOVS                 bool
@@ -290,6 +291,7 @@ func TestCmdAdd(t *testing.T) {
 			ipamType:                   "test-cni-ipam",
 			ipamAdd:                    true,
 			networkAttachmentAnnotNum:  1,
+			enableSecondaryNetwork:     true,
 			enableSecondaryNetworkIPAM: false,
 			isChaining:                 false,
 			connectOVS:                 true,
@@ -312,7 +314,7 @@ func TestCmdAdd(t *testing.T) {
 			ipam.ResetIPAMResults()
 			controller := gomock.NewController(t)
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
-			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, false)
+			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, tc.enableSecondaryNetwork)
 			testIfaceConfigurator := newTestInterfaceConfigurator()
 			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			testIfaceConfigurator.hostIfaceName = hostInterfaceName

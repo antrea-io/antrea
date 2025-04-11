@@ -125,7 +125,6 @@ type CNIServer struct {
 	enableBridgingMode bool
 	// Enable AntreaIPAM for secondary networks implemented by other CNIs.
 	enableSecondaryNetworkIPAM bool
-	secondaryNetworkEnabled    bool
 	disableTXChecksumOffload   bool
 	secondaryNetworkEnabled    bool
 	networkConfig              *config.NetworkConfig
@@ -678,7 +677,6 @@ func New(
 		enableBridgingMode:         enableBridgingMode,
 		disableTXChecksumOffload:   disableTXChecksumOffload,
 		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
-		secondaryNetworkEnabled:    secondaryNetworkEnabled,
 		networkConfig:              networkConfig,
 		podNetworkWait:             podNetworkWait,
 		flowRestoreCompleteWait:    flowRestoreCompleteWait.Increment(),

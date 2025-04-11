@@ -157,6 +157,33 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 	return nil
 }
 
+func (data *testData) deletePodNetworkAttachmentAnnot(t *testing.T, pods []*testPodInfo, ns string) error {
+	for _, pod := range pods {
+		err := data.e2eTestData.UpdatePod(ns, pod.podName, func(pod *corev1.Pod) {
+			pod.Annotations[nadv1.NetworkAttachmentAnnot] = ""
+		})
+		if err != nil {
+			return err
+		}
+		t.Logf("Delete Pod %s annotation: %+v\n", nadv1.NetworkAttachmentAnnot, pod)
+	}
+	return nil
+}
+
+func (data *testData) updatePodNetworkAttachmentAnnot(t *testing.T, pods []*testPodInfo, ns string) error {
+	for _, pod := range pods {
+		anno := data.formAnnotationStringOfPod(pod)
+		err := data.e2eTestData.UpdatePod(ns, pod.podName, func(pod *corev1.Pod) {
+			pod.Annotations[nadv1.NetworkAttachmentAnnot] = anno
+		})
+		if err != nil {
+			return err
+		}
+		t.Logf("Update Pod annotation: %s, Pod: %+v\n", anno, pod)
+	}
+	return nil
+}
+
 // The Wrapper function createPodForSecondaryNetwork creates the Pod adding the annotation, arguments, commands, Node, container name,
 // resource requests and limits as arguments with the NewPodBuilder API
 func (data *testData) createPodForSecondaryNetwork(ns string, pod *testPodInfo) error {
@@ -574,8 +601,24 @@ func TestSRIOVNetwork(t *testing.T) {
 	if err := testData.pingBetweenInterfaces(t); err != nil {
 		t.Fatalf("Error when pinging between interfaces: %v", err)
 	}
-	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns); err != nil {
-		t.Fatalf("Error when checking the Pod annotation: %v", err)
+	// Delete the Pod secondary network annotation
+	if err := testData.deletePodNetworkAttachmentAnnot(t, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when updating the annotation of Pod: %v", err)
+	}
+	// Check Pod ip
+	// Check the Pod network status annotation
+	if err := testData.assertPodNetworkStatus(t, clientset, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when check the Pod IP and networkstatus annotation: %v", err)
+	}
+
+	// Update the Pod secondary network annotation
+	if err := testData.updatePodNetworkAttachmentAnnot(t, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when updating the annotation of Pod: %v", err)
+	}
+	// Check the Pod ip
+	// Check the Pod network status annotation
+	if err := testData.assertPodNetworkStatus(t, clientset, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when check the Pod IP and networkstatus annotation: %v", err)
 	}
 	if err := testData.assertVFName(t, e2eTestData, vfName, pod1, node1, ns); err != nil {
 		t.Fatalf("Error when checking the VF device name: %v", err)
