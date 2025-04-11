@@ -40,7 +40,7 @@ jobs:
         docker pull antrea/antrea-controller-ubuntu:latest
         docker pull antrea/antrea-controller-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}
     - name: Install Trivy
-      uses: aquasecurity/setup-trivy@v0.2.2
+      uses: aquasecurity/setup-trivy@v0.2.3
     - name: Get current UTC date
       id: date
       run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
