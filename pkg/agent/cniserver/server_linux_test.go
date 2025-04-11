@@ -207,7 +207,6 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ip
 	cniServer.nodeConfig = &config.NodeConfig{Name: "node1", PodIPv4CIDR: nodePodCIDRv4, GatewayConfig: gateway}
 	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	cniServer.enableSecondaryNetworkIPAM = enableSecondaryNetworkIPAM
-	cniServer.secondaryNetworkEnabled = enableSecondaryNetwork
 	cniServer.isChaining = isChaining
 	if enableSecondaryNetwork {
 		mockVFDeviceUsageChecker = typestest.NewMockVFDeviceUsageChecker(controller)
@@ -244,6 +243,8 @@ func TestCmdAdd(t *testing.T) {
 		ipamError                  error
 		cniType                    string
 		enableSecondaryNetworkIPAM bool
+		enableSecondaryNetwork     bool
+		networkAttachmentAnnotNum  int
 		isChaining                 bool
 		connectOVS                 bool
 		migrateRoute               bool
@@ -286,6 +287,8 @@ func TestCmdAdd(t *testing.T) {
 			name:                       "add-general-cni",
 			ipamType:                   "test-cni-ipam",
 			ipamAdd:                    true,
+			networkAttachmentAnnotNum:  1,
+			enableSecondaryNetwork:     true,
 			enableSecondaryNetworkIPAM: false,
 			isChaining:                 false,
 			connectOVS:                 true,
@@ -308,7 +311,7 @@ func TestCmdAdd(t *testing.T) {
 			ipam.ResetIPAMResults()
 			controller := gomock.NewController(t)
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
-			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, true)
+			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, tc.enableSecondaryNetwork)
 			testIfaceConfigurator := newTestInterfaceConfigurator()
 			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			testIfaceConfigurator.hostIfaceName = hostInterfaceName

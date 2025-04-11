@@ -123,7 +123,6 @@ type CNIServer struct {
 	enableBridgingMode bool
 	// Enable AntreaIPAM for secondary networks implemented by other CNIs.
 	enableSecondaryNetworkIPAM bool
-	secondaryNetworkEnabled    bool
 	disableTXChecksumOffload   bool
 	enableSecondaryNetwork     bool
 	networkConfig              *config.NetworkConfig
@@ -533,7 +532,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	cniVersion := cniConfig.CNIVersion
 	cniResult, _ := result.Result.GetAsVersion(cniVersion)
 
-	if s.secondaryNetworkEnabled {
+	if s.enableSecondaryNetwork {
 		status, err := netdefutils.CreateNetworkStatus(cniResult, cniConfig.Name, true, nil)
 		if err != nil {
 			klog.ErrorS(err, "Create NetworkStatus failed", "Pod", klog.KRef(podNamespace, podName))
@@ -681,7 +680,6 @@ func New(
 		enableBridgingMode:         enableBridgingMode,
 		disableTXChecksumOffload:   disableTXChecksumOffload,
 		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
-		secondaryNetworkEnabled:    secondaryNetworkEnabled,
 		networkConfig:              networkConfig,
 		podNetworkWait:             podNetworkWait,
 		flowRestoreCompleteWait:    flowRestoreCompleteWait.Increment(),
