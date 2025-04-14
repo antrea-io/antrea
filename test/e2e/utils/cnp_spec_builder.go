@@ -69,7 +69,7 @@ func (b *ClusterNetworkPolicySpecBuilder) SetTier(tier string) *ClusterNetworkPo
 
 func (b *ClusterNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ACNPAppliedToSpec) *ClusterNetworkPolicySpecBuilder {
 	for _, spec := range specs {
-		appliedToPeer := CNPGetAppliedToPeer(spec.PodSelector,
+		appliedToPeer := ACNPGetAppliedToPeer(spec.PodSelector,
 			spec.NodeSelector,
 			spec.NSSelector,
 			spec.PodSelectorMatchExp,
@@ -82,7 +82,7 @@ func (b *ClusterNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ACNPAppliedT
 	return b
 }
 
-func CNPGetAppliedToPeer(podSelector map[string]string,
+func ACNPGetAppliedToPeer(podSelector map[string]string,
 	nodeSelector map[string]string,
 	nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement,
@@ -141,7 +141,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddNodeSelectorRule(nodeSelector *meta
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, isEgress bool) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1beta1.AppliedTo
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, CNPGetAppliedToPeer(at.PodSelector,
+		appliedTos = append(appliedTos, ACNPGetAppliedToPeer(at.PodSelector,
 			at.NodeSelector,
 			at.NSSelector,
 			at.PodSelectorMatchExp,
@@ -175,7 +175,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1beta1.AppliedTo
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, CNPGetAppliedToPeer(at.PodSelector,
+		appliedTos = append(appliedTos, ACNPGetAppliedToPeer(at.PodSelector,
 			at.NodeSelector,
 			at.NSSelector,
 			at.PodSelectorMatchExp,
@@ -205,7 +205,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1beta1
 	name string, ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1beta1.AppliedTo
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, CNPGetAppliedToPeer(at.PodSelector,
+		appliedTos = append(appliedTos, ACNPGetAppliedToPeer(at.PodSelector,
 			at.NodeSelector,
 			at.NSSelector,
 			at.PodSelectorMatchExp,
@@ -230,7 +230,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddStretchedIngressRule(pSel, nsSel ma
 
 	var appliedTos []crdv1beta1.AppliedTo
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, CNPGetAppliedToPeer(at.PodSelector,
+		appliedTos = append(appliedTos, ACNPGetAppliedToPeer(at.PodSelector,
 			at.NodeSelector,
 			at.NSSelector,
 			at.PodSelectorMatchExp,

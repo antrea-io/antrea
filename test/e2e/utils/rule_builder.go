@@ -46,7 +46,7 @@ type BaseRuleBuilder struct {
 	SrcEndPort           *int32
 }
 
-type CNPRuleBuilder struct {
+type ACNPRuleBuilder struct {
 	BaseRuleBuilder
 	IpBlock            *crdv1beta1.IPBlock
 	NodeSelector       map[string]string
@@ -123,7 +123,7 @@ func (rb ANNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 	}
 }
 
-func (rb CNPRuleBuilder) GetIngress() crdv1beta1.Rule {
+func (rb ACNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 	var nodeSel *metav1.LabelSelector
 	var appliedTos []crdv1beta1.AppliedTo
 	podSel := rb.generatePodSelector()
@@ -137,7 +137,7 @@ func (rb CNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 
 	nsSel := rb.generateNsSelector()
 	for _, at := range rb.RuleAppliedToSpecs {
-		appliedTos = append(appliedTos, CNPGetAppliedToPeer(at.PodSelector,
+		appliedTos = append(appliedTos, ACNPGetAppliedToPeer(at.PodSelector,
 			at.NodeSelector,
 			at.NSSelector,
 			at.PodSelectorMatchExp,
@@ -177,7 +177,7 @@ func (rb CNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 	}
 }
 
-func (rb CNPRuleBuilder) GetEgress() crdv1beta1.Rule {
+func (rb ACNPRuleBuilder) GetEgress() crdv1beta1.Rule {
 	return toEgress(rb.GetIngress())
 }
 

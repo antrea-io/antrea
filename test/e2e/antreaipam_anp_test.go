@@ -188,7 +188,7 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2eutils.ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "c"}}})
 	if isIngress {
-		ruleBuilder := e2eutils.CNPRuleBuilder{
+		ruleBuilder := e2eutils.ACNPRuleBuilder{
 			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
 				Protoc:      protocol,
 				Port:        &p80,
@@ -200,7 +200,7 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		builder2.AddIngress(ruleBuilder)
 		builder3.AddIngress(ruleBuilder)
 	} else {
-		ruleBuilder := e2eutils.CNPRuleBuilder{
+		ruleBuilder := e2eutils.ACNPRuleBuilder{
 			BaseRuleBuilder: e2eutils.BaseRuleBuilder{
 				Protoc:      protocol,
 				Port:        &p80,
