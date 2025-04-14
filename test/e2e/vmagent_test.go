@@ -609,7 +609,7 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 			cidr = &peerIPCIDR
 		}
 		port := int32(iperfPort)
-		ruleFunc(ANPRuleBuilder{
+		ruleFunc(ANNPRuleBuilder{
 			Cidr:       cidr,
 			EeSelector: peerLabel,
 			BaseRuleBuilder: BaseRuleBuilder{
@@ -619,7 +619,7 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 			}})
 	case ProtocolICMP:
 		peerIPCIDR := fmt.Sprintf("%s/32", nodeIP(0))
-		ruleFunc(ANPRuleBuilder{
+		ruleFunc(ANNPRuleBuilder{
 			Cidr: &peerIPCIDR,
 			BaseRuleBuilder: BaseRuleBuilder{
 				Protoc:   ProtocolICMP,
