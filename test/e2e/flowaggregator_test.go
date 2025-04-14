@@ -1694,7 +1694,7 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 	builder1 = builder1.SetName(data.testNamespace, ingressAntreaNetworkPolicyName).
 		SetPriority(2.0).
 		SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": dstPod}}})
-	builder1 = builder1.AddIngress(utils.ANPRuleBuilder{
+	builder1 = builder1.AddIngress(utils.ANNPRuleBuilder{
 		BaseRuleBuilder: utils.BaseRuleBuilder{
 			Protoc:      utils.ProtocolTCP,
 			PodSelector: map[string]string{"antrea-e2e": srcPod},
@@ -1713,7 +1713,7 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 	builder2 = builder2.SetName(data.testNamespace, egressAntreaNetworkPolicyName).
 		SetPriority(2.0).
 		SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
-	builder2 = builder2.AddEgress(utils.ANPRuleBuilder{
+	builder2 = builder2.AddEgress(utils.ANNPRuleBuilder{
 		BaseRuleBuilder: utils.BaseRuleBuilder{
 			Protoc:      utils.ProtocolTCP,
 			PodSelector: map[string]string{"antrea-e2e": dstPod},
@@ -1750,7 +1750,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 		builder1 = builder1.SetName(data.testNamespace, ingressRejectANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": podReject}}})
-		builder1 = builder1.AddIngress(utils.ANPRuleBuilder{
+		builder1 = builder1.AddIngress(utils.ANNPRuleBuilder{
 			BaseRuleBuilder: utils.BaseRuleBuilder{
 				Protoc:      utils.ProtocolTCP,
 				PodSelector: map[string]string{"antrea-e2e": srcPod},
@@ -1761,7 +1761,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 		builder2 = builder2.SetName(data.testNamespace, ingressDropANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": podDrop}}})
-		builder2 = builder2.AddIngress(utils.ANPRuleBuilder{
+		builder2 = builder2.AddIngress(utils.ANNPRuleBuilder{
 			BaseRuleBuilder: utils.BaseRuleBuilder{
 				Protoc:      utils.ProtocolTCP,
 				PodSelector: map[string]string{"antrea-e2e": srcPod},
@@ -1777,7 +1777,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 		builder1 = builder1.SetName(data.testNamespace, egressRejectANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
-		builder1 = builder1.AddEgress(utils.ANPRuleBuilder{
+		builder1 = builder1.AddEgress(utils.ANNPRuleBuilder{
 			BaseRuleBuilder: utils.BaseRuleBuilder{
 				Protoc:      utils.ProtocolTCP,
 				PodSelector: map[string]string{"antrea-e2e": podReject},
@@ -1788,7 +1788,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 		builder2 = builder2.SetName(data.testNamespace, egressDropANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
-		builder2 = builder2.AddEgress(utils.ANPRuleBuilder{
+		builder2 = builder2.AddEgress(utils.ANNPRuleBuilder{
 			BaseRuleBuilder: utils.BaseRuleBuilder{
 				Protoc:      utils.ProtocolTCP,
 				PodSelector: map[string]string{"antrea-e2e": podDrop},

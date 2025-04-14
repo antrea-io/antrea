@@ -68,13 +68,13 @@ func (b *AntreaNetworkPolicySpecBuilder) SetTier(tier string) *AntreaNetworkPoli
 
 func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ANNPAppliedToSpec) *AntreaNetworkPolicySpecBuilder {
 	for _, spec := range specs {
-		appliedToPeer := ANPGetAppliedToPeer(spec.PodSelector, spec.PodSelectorMatchExp, spec.ExternalEntitySelector, spec.ExternalEntitySelectorMatchExp, spec.Group)
+		appliedToPeer := ANNPGetAppliedToPeer(spec.PodSelector, spec.PodSelectorMatchExp, spec.ExternalEntitySelector, spec.ExternalEntitySelectorMatchExp, spec.Group)
 		b.Spec.AppliedTo = append(b.Spec.AppliedTo, appliedToPeer)
 	}
 	return b
 }
 
-func ANPGetAppliedToPeer(podSelector map[string]string,
+func ANNPGetAppliedToPeer(podSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement,
 	entitySelector map[string]string,
 	entitySelectorMatchExp []metav1.LabelSelectorRequirement,
@@ -102,12 +102,12 @@ func ANPGetAppliedToPeer(podSelector map[string]string,
 	return peer
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) AddIngress(rb ANPRuleBuilder) *AntreaNetworkPolicySpecBuilder {
+func (b *AntreaNetworkPolicySpecBuilder) AddIngress(rb ANNPRuleBuilder) *AntreaNetworkPolicySpecBuilder {
 	b.Spec.Ingress = append(b.Spec.Ingress, rb.GetIngress())
 	return b
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) AddEgress(rb ANPRuleBuilder) *AntreaNetworkPolicySpecBuilder {
+func (b *AntreaNetworkPolicySpecBuilder) AddEgress(rb ANNPRuleBuilder) *AntreaNetworkPolicySpecBuilder {
 	b.Spec.Egress = append(b.Spec.Egress, rb.GetEgress())
 	return b
 }
@@ -116,7 +116,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1beta1.
 	name string, ruleAppliedToSpecs []ANNPAppliedToSpec, action crdv1beta1.RuleAction) *AntreaNetworkPolicySpecBuilder {
 	var appliedTos []crdv1beta1.AppliedTo
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, ANPGetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp, at.ExternalEntitySelector, at.ExternalEntitySelectorMatchExp, at.Group))
+		appliedTos = append(appliedTos, ANNPGetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp, at.ExternalEntitySelector, at.ExternalEntitySelectorMatchExp, at.Group))
 	}
 	newRule := crdv1beta1.Rule{
 		To:         make([]crdv1beta1.NetworkPolicyPeer, 0),
@@ -144,7 +144,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	var appliedTos []crdv1beta1.AppliedTo
 
 	for _, at := range specs {
-		appliedTos = append(appliedTos, ANPGetAppliedToPeer(at.PodSelector,
+		appliedTos = append(appliedTos, ANNPGetAppliedToPeer(at.PodSelector,
 			at.PodSelectorMatchExp,
 			at.ExternalEntitySelector,
 			at.ExternalEntitySelectorMatchExp,
