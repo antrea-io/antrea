@@ -1119,7 +1119,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 			Enable:         true,
 			CommitInterval: aggregatorClickHouseCommitInterval.String(),
 			DatabaseURL:    o.databaseURL,
-			TLS: flowaggregatorconfig.TLSConfig{
+			TLS: flowaggregatorconfig.ClickHouseTLSConfig{
 				CACert: o.secureConnection,
 			},
 		}
