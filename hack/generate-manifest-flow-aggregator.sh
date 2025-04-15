@@ -28,6 +28,9 @@ Generate a YAML manifest for the Flow Aggregator, using Helm and Kustomize, and 
         --clickhouse, -ch               Enable exporting flow records to default ClickHouse service address.
         --coverage                      Generate a manifest which supports measuring code coverage of the Flow Aggregator binaries.
         --host-network                  Run Flow Aggregator in hostNetwork mode.
+        --extra-helm-values-file        Optional extra helm values file to override the default config values.
+        --extra-helm-values             Optional extra helm values to override the default config values.
+                                        This option can be specified multiple times.
         --verbose-log                   Generate a manifest with increased log-level (level 4) for the Flow Aggregator.
                                         This option will work only with 'dev' mode.
         --help, -h                      Print this message and exit.
@@ -57,6 +60,8 @@ CLICKHOUSE=false
 COVERAGE=false
 HOST_NETWORK=false
 VERBOSE_LOG=false
+HELM_VALUES_FILES=()
+HELM_VALUES=()
 
 while [[ $# -gt 0 ]]
 do
@@ -82,6 +87,18 @@ case $key in
     --host-network)
     HOST_NETWORK=true
     shift
+    ;;
+    --extra-helm-values-file)
+    if [[ ! -f "$2" ]]; then
+        echoerr "Helm values file $2 does not exist."
+        exit 1
+    fi
+    HELM_VALUES_FILES=("$2")
+    shift 2
+    ;;
+    --extra-helm-values)
+    HELM_VALUES+=("$2")
+    shift 2
     ;;
     --verbose-log)
     VERBOSE_LOG=true
@@ -149,8 +166,6 @@ elif ! $KUSTOMIZE version > /dev/null 2>&1; then
     exit 1
 fi
 
-HELM_VALUES=()
-
 if [[ $FLOW_COLLECTOR != "" ]]; then
     HELM_VALUES+=("flowCollector.enable=true,flowCollector.address=$FLOW_COLLECTOR")
 fi
@@ -195,6 +210,11 @@ if [ "$HELM_VALUES_OPTION" != "" ]; then
     HELM_VALUES_OPTION="--set $HELM_VALUES_OPTION"
 fi
 
+HELM_VALUES_FILES_OPTION=""
+for v in "${HELM_VALUES_FILES[@]}"; do
+    HELM_VALUES_FILES_OPTION="$HELM_VALUES_FILES_OPTION -f $v"
+done
+
 ANTREA_CHART=$THIS_DIR/../build/charts/flow-aggregator
 KUSTOMIZATION_DIR=$THIS_DIR/../build/yamls/flow-aggregator
 # intermediate manifest
@@ -204,6 +224,7 @@ MANIFEST=$KUSTOMIZATION_DIR/base/manifest.yaml
 $HELM template \
       --namespace flow-aggregator \
       $HELM_VALUES_OPTION \
+      $HELM_VALUES_FILES_OPTION \
       "$ANTREA_CHART"\
       2> >(grep -v 'This is insecure' >&2)\
       > $MANIFEST

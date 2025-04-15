@@ -117,6 +117,10 @@ const (
 	flowVisibilityNamespace = "flow-visibility"
 	defaultBridgeName       = "br-int"
 	monitoringNamespace     = "monitoring"
+	// #nosec G101: not credentials
+	flowAggregatorIPFIXClientTLSSecretName = "ipfix-client-cert"
+	// #nosec G101: not credentials
+	flowAggregatorIPFIXCASecretName = "ipfix-server-ca"
 
 	cpNodeCoverageDir = "/tmp/antrea-e2e-coverage"
 
@@ -129,7 +133,7 @@ const (
 	mcjoinImage         = "antrea/mcjoin:v2.9"
 	nginxImage          = "antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
-	ipfixCollectorImage = "antrea/ipfix-collector:v0.13.0"
+	ipfixCollectorImage = "antrea/ipfix-collector:v0.15.0"
 
 	nginxLBService = "nginx-loadbalancer"
 
@@ -235,11 +239,17 @@ type TestOptions struct {
 	externalFRRCID string
 }
 
+type flowVisibilityIPFIXTestOptions struct {
+	tls        bool
+	clientAuth bool
+}
+
 type flowVisibilityTestOptions struct {
-	mode             flowaggregatorconfig.AggregatorMode
-	databaseURL      string
-	secureConnection bool
-	clusterID        string
+	mode                     flowaggregatorconfig.AggregatorMode
+	databaseURL              string
+	databaseSecureConnection bool
+	clusterID                string
+	ipfixCollector           flowVisibilityIPFIXTestOptions
 }
 
 var testOptions TestOptions
@@ -950,7 +960,7 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 	}
 
 	visibilityYML := flowVisibilityYML
-	if o.secureConnection {
+	if o.databaseSecureConnection {
 		visibilityYML = flowVisibilityTLSYML
 	}
 
@@ -1042,19 +1052,122 @@ func (data *TestData) deleteClickHouseOperator() error {
 	return nil
 }
 
-// deployFlowAggregator deploys the Flow Aggregator with ipfix collector and clickHouse address.
-func (data *TestData) deployFlowAggregator(ipfixCollector string, o flowVisibilityTestOptions) error {
+func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, clientCA []byte) (string, error) {
+	args := []string{"--ipfix.port", ipfixCollectorPort}
+	if serverCert != nil {
+		args = append(args, "--server-cert", "/certs/server/tls.crt", "--server-key", "/certs/server/tls.key")
+		if clientCA != nil {
+			args = append(args, "--client-ca", "/certs/clients/ca.crt")
+		}
+	}
+
+	pb := NewPodBuilder("ipfix-collector", data.testNamespace, ipfixCollectorImage).WithArgs(args).InHostNetwork()
+
+	if serverCert != nil {
+		serverCertSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "ipfix-collector-server-cert",
+			},
+			Immutable: ptr.To(true),
+			Data: map[string][]byte{
+				"tls.crt": serverCert,
+				"tls.key": serverKey,
+			},
+		}
+		if _, err := data.clientset.CoreV1().Secrets(data.testNamespace).Create(context.TODO(), serverCertSecret, metav1.CreateOptions{}); err != nil {
+			return "", fmt.Errorf("failed to create Secret for ipfix-collector server certificate: %w", err)
+		}
+		pb = pb.MountSecret(serverCertSecret.Name, "/certs/server", serverCertSecret.Name)
+
+		if clientCA != nil {
+			clientCASecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ipfix-collector-client-ca",
+				},
+				Immutable: ptr.To(true),
+				Data: map[string][]byte{
+					"ca.crt": clientCA,
+				},
+			}
+			if _, err := data.clientset.CoreV1().Secrets(data.testNamespace).Create(context.TODO(), clientCASecret, metav1.CreateOptions{}); err != nil {
+				return "", fmt.Errorf("failed to create Secret for ipfix-collector client CA certificate: %w", err)
+			}
+			pb = pb.MountSecret(clientCASecret.Name, "/certs/clients", clientCASecret.Name)
+		}
+	}
+
+	if err := pb.Create(data); err != nil {
+		return "", fmt.Errorf("error when creating the ipfix collector Pod: %w", err)
+	}
+	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", data.testNamespace)
+	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
+		return "", fmt.Errorf("error when waiting to get ipfix collector Pod IP: %w", err)
+	}
+	var ipStr string
+	if isIPv6Enabled() && ipfixCollectorIP.IPv6 != nil {
+		ipStr = ipfixCollectorIP.IPv6.String()
+	} else {
+		ipStr = ipfixCollectorIP.IPv4.String()
+	}
+	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
+	return ipfixCollectorAddr, nil
+}
+
+// deployFlowAggregator deploys the Flow Aggregator.
+func (data *TestData) deployFlowAggregator(
+	ipfixCollector string,
+	ipfixClientCert, ipfixClientKey, ipfixServerCA []byte,
+	o flowVisibilityTestOptions,
+) error {
 	flowAggYaml := flowAggregatorYML
 	if testOptions.enableCoverage {
 		flowAggYaml = flowAggregatorCovYML
 	}
+
+	// Create flow-aggregator Namespace first, so that we can create the necessary Secrets prior
+	// to applying the Flow Aggregator manifest.
+	if err := data.CreateNamespace(flowAggregatorNamespace, nil); err != nil {
+		return fmt.Errorf("failed to create %q Namespace: %w", flowAggregatorNamespace, err)
+	}
+
+	if ipfixClientCert != nil {
+		clientCertSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: flowAggregatorIPFIXClientTLSSecretName,
+			},
+			Immutable: ptr.To(true),
+			Data: map[string][]byte{
+				"tls.crt": ipfixClientCert,
+				"tls.key": ipfixClientKey,
+			},
+		}
+		if _, err := data.clientset.CoreV1().Secrets(flowAggregatorNamespace).Create(context.TODO(), clientCertSecret, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("failed to create Secret for IPFIX client certificate: %w", err)
+		}
+	}
+
+	if ipfixServerCA != nil {
+		serverCASecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: flowAggregatorIPFIXCASecretName,
+			},
+			Immutable: ptr.To(true),
+			Data: map[string][]byte{
+				"ca.crt": ipfixServerCA,
+			},
+		}
+		if _, err := data.clientset.CoreV1().Secrets(flowAggregatorNamespace).Create(context.TODO(), serverCASecret, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("failed to create Secret for IPFIX server CA certificate: %w", err)
+		}
+	}
+
 	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowAggYaml))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying the Flow Aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
 	// clickhouse-ca Secret is created in the flow-visibility Namespace. In order to make it accessible to the Flow Aggregator,
-	// we copy it from Namespace flow-visibility to Namespace flow-aggregator when secureConnection is true.
-	if o.secureConnection {
+	// we copy it from Namespace flow-visibility to Namespace flow-aggregator when databaseSecureConnection is true.
+	if o.databaseSecureConnection {
 		secret, err := data.clientset.CoreV1().Secrets(flowVisibilityNamespace).Get(context.TODO(), flowAggregatorCHSecret, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("unable to get Secret with name %s in Namespace %s: %v", flowAggregatorCHSecret, flowVisibilityNamespace, err)
@@ -1114,13 +1227,28 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 		Enable:  true,
 		Address: ipfixCollectorAddr,
 	}
+	if o.ipfixCollector.tls {
+		tls := &flowAggregatorConf.FlowCollector.TLS
+		tls.Enable = true
+		tls.ServerName = "ipfix-collector"
+		// By default, the YAML manifest used for testing already has CASecretName and
+		// ClientSecretName set (which is a no-op unless TLS is enabled). However, when
+		// client auth is disabled by the test, we have to make sure that ClientSecretName
+		// is set to the empty string.
+		tls.CASecretName = flowAggregatorIPFIXCASecretName
+		if o.ipfixCollector.clientAuth {
+			tls.ClientSecretName = flowAggregatorIPFIXClientTLSSecretName
+		} else {
+			tls.ClientSecretName = ""
+		}
+	}
 	if o.databaseURL != "" {
 		flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
 			Enable:         true,
 			CommitInterval: aggregatorClickHouseCommitInterval.String(),
 			DatabaseURL:    o.databaseURL,
-			TLS: flowaggregatorconfig.TLSConfig{
-				CACert: o.secureConnection,
+			TLS: flowaggregatorconfig.ClickHouseTLSConfig{
+				CACert: o.databaseSecureConnection,
 			},
 		}
 
@@ -1488,13 +1616,13 @@ func (b *PodBuilder) WithResources(ResourceRequests, ResourceLimits corev1.Resou
 	return b
 }
 
-func (b *PodBuilder) AddVolume(volume []corev1.Volume) *PodBuilder {
-	b.Volumes = volume
+func (b *PodBuilder) AddVolume(volume corev1.Volume) *PodBuilder {
+	b.Volumes = append(b.Volumes, volume)
 	return b
 }
 
-func (b *PodBuilder) AddVolumeMount(volumeMount []corev1.VolumeMount) *PodBuilder {
-	b.VolumeMounts = volumeMount
+func (b *PodBuilder) AddVolumeMount(volumeMount corev1.VolumeMount) *PodBuilder {
+	b.VolumeMounts = append(b.VolumeMounts, volumeMount)
 	return b
 }
 
@@ -1510,7 +1638,20 @@ func (b *PodBuilder) MountConfigMap(configMapName string, mountPath string, volu
 			},
 		},
 	}
-	return b.AddVolume([]corev1.Volume{volume}).AddVolumeMount([]corev1.VolumeMount{volumeMount})
+	return b.AddVolume(volume).AddVolumeMount(volumeMount)
+}
+
+func (b *PodBuilder) MountSecret(secretName string, mountPath string, volumeName string) *PodBuilder {
+	volumeMount := corev1.VolumeMount{Name: volumeName, MountPath: mountPath}
+	volume := corev1.Volume{
+		Name: volumeName,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+	return b.AddVolume(volume).AddVolumeMount(volumeMount)
 }
 
 func (b *PodBuilder) MountHostPath(hostPath string, hostPathType corev1.HostPathType, mountPath string, volumeName string) *PodBuilder {
@@ -1524,7 +1665,7 @@ func (b *PodBuilder) MountHostPath(hostPath string, hostPathType corev1.HostPath
 			},
 		},
 	}
-	return b.AddVolume([]corev1.Volume{volume}).AddVolumeMount([]corev1.VolumeMount{volumeMount})
+	return b.AddVolume(volume).AddVolumeMount(volumeMount)
 }
 
 func (b *PodBuilder) WithReadinessProbe(probe *corev1.Probe) *PodBuilder {

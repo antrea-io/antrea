@@ -18,10 +18,12 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"path/filepath"
 	"reflect"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/spf13/afero"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
@@ -34,12 +36,16 @@ import (
 	"antrea.io/antrea/pkg/util/env"
 )
 
-// this is used for unit testing
 var (
+	// this is used for unit testing
 	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
 		return exporter.initExportingProcess()
 	}
+
+	defaultFS = afero.NewOsFs()
 )
+
+const flowCollectorCertDir = "/etc/flow-aggregator/certs/flow-collector"
 
 type IPFIXExporter struct {
 	config                     flowaggregatorconfig.FlowCollectorConfig
@@ -56,6 +62,35 @@ type IPFIXExporter struct {
 	registry                   ipfix.IPFIXRegistry
 	clusterUUID                uuid.UUID
 	maxIPFIXMsgSize            int
+	tls                        ipfixExporterTLSConfig
+}
+
+type ipfixExporterTLSConfig struct {
+	enable                          bool
+	minVersion                      uint16
+	externalFlowCollectorCAPath     string
+	externalFlowCollectorServerName string
+	exporterCertPath                string
+	exporterKeyPath                 string
+}
+
+func newIPFIXExporterTLSConfig(config flowaggregatorconfig.FlowCollectorTLSConfig) ipfixExporterTLSConfig {
+	var tlsConfig ipfixExporterTLSConfig
+	if !config.Enable {
+		return tlsConfig
+	}
+	tlsConfig.enable = true
+	// config.MinVersion has already been validated during FA config validation.
+	tlsConfig.minVersion = options.TLSVersionOrDie(config.MinVersion)
+	if config.CASecretName != "" {
+		tlsConfig.externalFlowCollectorCAPath = filepath.Join(flowCollectorCertDir, "ca.crt")
+	}
+	tlsConfig.externalFlowCollectorServerName = config.ServerName
+	if config.ClientSecretName != "" {
+		tlsConfig.exporterCertPath = filepath.Join(flowCollectorCertDir, "tls.crt")
+		tlsConfig.exporterKeyPath = filepath.Join(flowCollectorCertDir, "tls.key")
+	}
+	return tlsConfig
 }
 
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
@@ -98,6 +133,7 @@ func NewIPFIXExporter(
 		registry:                   registry,
 		clusterUUID:                clusterUUID,
 		maxIPFIXMsgSize:            int(opt.Config.FlowCollector.MaxIPFIXMsgSize),
+		tls:                        newIPFIXExporterTLSConfig(opt.Config.FlowCollector.TLS),
 	}
 
 	return exporter
@@ -139,19 +175,20 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	e.config = config
 	e.externalFlowCollectorAddr = opt.ExternalFlowCollectorAddr
 	e.externalFlowCollectorProto = opt.ExternalFlowCollectorProto
-	if opt.Config.FlowCollector.RecordFormat == "JSON" {
+	if config.RecordFormat == "JSON" {
 		e.sendJSONRecord = true
 	} else {
 		e.sendJSONRecord = false
 	}
-	if opt.Config.FlowCollector.ObservationDomainID != nil {
-		e.observationDomainID = *opt.Config.FlowCollector.ObservationDomainID
+	if config.ObservationDomainID != nil {
+		e.observationDomainID = *config.ObservationDomainID
 	} else {
 		e.observationDomainID = genObservationDomainID(e.clusterUUID)
 	}
 	e.templateRefreshTimeout = opt.TemplateRefreshTimeout
-	e.maxIPFIXMsgSize = int(opt.Config.FlowCollector.MaxIPFIXMsgSize)
-	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "templateRefreshTimeout", e.templateRefreshTimeout, "maxIPFIXMsgSize", e.maxIPFIXMsgSize)
+	e.maxIPFIXMsgSize = int(config.MaxIPFIXMsgSize)
+	e.tls = newIPFIXExporterTLSConfig(config.TLS)
+	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "templateRefreshTimeout", e.templateRefreshTimeout, "maxIPFIXMsgSize", e.maxIPFIXMsgSize, "tls", e.tls.enable)
 
 	if e.exportingProcess != nil {
 		if err := e.bufferedExporter.Flush(); err != nil {
@@ -201,7 +238,44 @@ func getMTU(ifaceName string) (int, error) {
 	return iface.MTU, nil
 }
 
+func (e *IPFIXExporter) prepareExportingProcessTLSClientConfig() (*exporter.ExporterTLSClientConfig, error) {
+	if !e.tls.enable {
+		return nil, nil
+	}
+	exporterConfig := &exporter.ExporterTLSClientConfig{
+		ServerName: e.tls.externalFlowCollectorServerName,
+		MinVersion: e.tls.minVersion,
+	}
+	if e.tls.externalFlowCollectorCAPath != "" {
+		caBytes, err := afero.ReadFile(defaultFS, e.tls.externalFlowCollectorCAPath)
+		if err != nil {
+			return nil, fmt.Errorf("error when reading CA cert %q: %w", e.tls.externalFlowCollectorCAPath, err)
+		}
+		exporterConfig.CAData = caBytes
+	}
+	if e.tls.exporterCertPath != "" {
+		certBytes, err := afero.ReadFile(defaultFS, e.tls.exporterCertPath)
+		if err != nil {
+			return nil, fmt.Errorf("error when reading client cert %q: %w", e.tls.exporterCertPath, err)
+		}
+		exporterConfig.CertData = certBytes
+	}
+	if e.tls.exporterKeyPath != "" {
+		keyBytes, err := afero.ReadFile(defaultFS, e.tls.exporterKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("error when reading client key %q: %w", e.tls.exporterKeyPath, err)
+		}
+		exporterConfig.KeyData = keyBytes
+	}
+	return exporterConfig, nil
+}
+
 func (e *IPFIXExporter) initExportingProcess() error {
+	// We reload the certificate data every time, in case the files have been updated.
+	tlsClientConfig, err := e.prepareExportingProcessTLSClientConfig()
+	if err != nil {
+		return fmt.Errorf("error when preparing TLS config for exporter: %w", err)
+	}
 	var expInput exporter.ExporterInput
 	if e.externalFlowCollectorProto == "tcp" {
 		expInput = exporter.ExporterInput{
@@ -210,7 +284,7 @@ func (e *IPFIXExporter) initExportingProcess() error {
 			ObservationDomainID: e.observationDomainID,
 			// TCP transport does not need any tempRefTimeout, so sending 0.
 			TempRefTimeout:  0,
-			TLSClientConfig: nil,
+			TLSClientConfig: tlsClientConfig,
 			SendJSONRecord:  e.sendJSONRecord,
 		}
 	} else {
@@ -219,7 +293,7 @@ func (e *IPFIXExporter) initExportingProcess() error {
 			CollectorProtocol:   e.externalFlowCollectorProto,
 			ObservationDomainID: e.observationDomainID,
 			TempRefTimeout:      uint32(e.templateRefreshTimeout.Seconds()),
-			TLSClientConfig:     nil,
+			TLSClientConfig:     tlsClientConfig,
 			SendJSONRecord:      e.sendJSONRecord,
 		}
 		if inPod() {

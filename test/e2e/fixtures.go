@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +29,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/features"
+	tlsutil "antrea.io/antrea/pkg/util/tls"
 )
 
 func skipIfNotBenchmarkTest(tb testing.TB) {
@@ -292,22 +292,24 @@ func setupTest(tb testing.TB) (*TestData, error) {
 }
 
 func setupFlowAggregator(tb testing.TB, testData *TestData, o flowVisibilityTestOptions) error {
-	// Create pod using ipfix collector image
-	if err := NewPodBuilder("ipfix-collector", testData.testNamespace, ipfixCollectorImage).WithArgs([]string{"--ipfix.port", ipfixCollectorPort}).InHostNetwork().Create(testData); err != nil {
-		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
+	tb.Logf("Deploying IPFIX Collector")
+	var ipfixServerCert, ipfixServerKey, ipfixClientCert, ipfixClientKey []byte
+	if o.ipfixCollector.tls {
+		var err error
+		if ipfixServerCert, ipfixServerKey, err = tlsutil.GenerateCert([]string{"ipfix-collector"}, time.Unix(0, 0), 100*365*24*time.Hour, true, false, 0, "P256", false); err != nil {
+			return fmt.Errorf("failed to generate server certificate for ipfix-collector: %w", err)
+		}
+		if o.ipfixCollector.clientAuth {
+			var err error
+			if ipfixClientCert, ipfixClientKey, err = tlsutil.GenerateCert([]string{"ipfix-collector"}, time.Unix(0, 0), 100*365*24*time.Hour, true, true, 0, "P256", false); err != nil {
+				return fmt.Errorf("failed to generate client certificate for ipfix-collector: %w", err)
+			}
+		}
 	}
-	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
-	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
-		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
+	ipfixCollectorAddr, err := testData.deployIPFIXCollector(ipfixServerCert, ipfixServerKey, ipfixClientCert)
+	if err != nil {
 		return err
 	}
-	var ipStr string
-	if isIPv6Enabled() && ipfixCollectorIP.IPv6 != nil {
-		ipStr = ipfixCollectorIP.IPv6.String()
-	} else {
-		ipStr = ipfixCollectorIP.IPv4.String()
-	}
-	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 
 	tb.Logf("Deploying ClickHouse")
 	chSvcIP, err := testData.deployFlowVisibilityClickHouse(o)
@@ -317,7 +319,7 @@ func setupFlowAggregator(tb testing.TB, testData *TestData, o flowVisibilityTest
 	tb.Logf("ClickHouse Service created with ClusterIP: %v", chSvcIP)
 	tb.Logf("Deploying FlowAggregator with ipfix collector: %s and options: %+v", ipfixCollectorAddr, o)
 
-	if err := testData.deployFlowAggregator(ipfixCollectorAddr, o); err != nil {
+	if err := testData.deployFlowAggregator(ipfixCollectorAddr, ipfixClientCert, ipfixClientKey, ipfixServerCert, o); err != nil {
 		return err
 	}
 

@@ -112,6 +112,29 @@ type FlowCollectorConfig struct {
 	// default value will be used based on the protocol (tcp or udp) used to connect to the collector.
 	// Min valid value is 512 and max valid value is 65535.
 	MaxIPFIXMsgSize int32 `yaml:"maxIPFIXMsgSize,omitempty"`
+	// TLS / mTLS configuration when exporting to the flowCollector.
+	TLS FlowCollectorTLSConfig `yaml:"tls,omitempty"`
+}
+
+type FlowCollectorTLSConfig struct {
+	// Enable TLS.
+	Enable bool `yaml:"enable,omitempty"`
+	// Name of the Secret containing the CA certificate used to authenticate the
+	// flowCollector. Default root CAs will be used if this field is empty. The Secret must be
+	// created in the Namespace in which the Flow Aggregator is deployed, and it must contain
+	// the ca.crt key.
+	CASecretName string `yaml:"caSecretName,omitempty"`
+	// If this field is provided, this name will be used to check the server (flowCollector)
+	// certificate. By default the provided address will be used. This name will also be
+	// included as SNI information.
+	ServerName string `yaml:"serverName,omitempty"`
+	// Name of the Secret containing the client's certificate and private key for mTLS. If
+	// omitted, client authentication will be disabled. The Secret must be created in Namespace
+	// in which the Flow Aggregator is deployed, and it must of type kubernetes.io/tls and
+	// contain the tls.crt and tls.key keys.
+	ClientSecretName string `yaml:"clientSecretName,omitempty"`
+	// TLS min version.
+	MinVersion string `yaml:"minVersion,omitempty"`
 }
 
 type ClickHouseConfig struct {
@@ -133,10 +156,10 @@ type ClickHouseConfig struct {
 	// Min value allowed is "1s".
 	CommitInterval string `yaml:"commitInterval,omitempty"`
 	// TLS configuration options, when using TLS to connect to the ClickHouse service.
-	TLS TLSConfig `yaml:"tls,omitempty"`
+	TLS ClickHouseTLSConfig `yaml:"tls,omitempty"`
 }
 
-type TLSConfig struct {
+type ClickHouseTLSConfig struct {
 	// InsecureSkipVerify determines whether to skip the verification of the server's certificate chain and host name.
 	// Default is false.
 	InsecureSkipVerify bool `yaml:"insecureSkipVerify,omitempty"`

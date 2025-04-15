@@ -243,7 +243,8 @@ data:
       # prefer TLS1.3 Cipher Suites whenever possible.
       tlsCipherSuites: ""
 
-      # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+      # TLS min version from: VersionTLS12, VersionTLS13.
+      # The current default is VersionTLS12.
       tlsMinVersion: ""
 
     # flowCollector contains external IPFIX or JSON collector related configuration options.
@@ -275,6 +276,28 @@ data:
       # value will be used based on the protocol (tcp or udp) used to connect to the collector.
       # Min valid value is 512 and max valid value is 65535.
       maxIPFIXMsgSize: 0
+
+      # TLS / mTLS configuration when exporting to the flowCollector.
+      tls:
+        # Enable TLS.
+        enable: false
+        # Name of the Secret containing the CA certificate used to authenticate the
+        # flowCollector. Default root CAs will be used if this field is empty. The Secret must be
+        # created in the Namespace in which the Flow Aggregator is deployed, and it must contain the
+        # ca.crt key.
+        caSecretName: ""
+        # If this field is provided, this name will be used to check the server (flowCollector)
+        # certificate. By default the provided address will be used. This name will also be included as
+        # SNI information.
+        serverName: ""
+        # Name of the Secret containing the client's certificate and private key for mTLS. If omitted,
+        # client authentication will be disabled. The Secret must be created in Namespace in which the
+        # Flow Aggregator is deployed, and it must of type kubernetes.io/tls and contain the tls.crt and
+        # tls.key keys.
+        clientSecretName: ""
+        # Minimum TLS version from: VersionTLS12, VersionTLS13.
+        # The current default is TLS 1.2.
+        minVersion: ""
 
     # clickHouse contains ClickHouse related configuration options.
     clickHouse:
@@ -455,7 +478,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 226913332e1c10fc849cb803ad124d7a6c94362bdc287775db7641539812f609
+        checksum/config: 88e1f60faa7f40abc04d383330da3ac8648bc1cdfb6ed06f6e7dd216fa284bf7
       labels:
         app: flow-aggregator
     spec:
@@ -520,7 +543,8 @@ spec:
         - mountPath: /var/log/antrea/flow-aggregator
           name: host-var-log-antrea-flow-aggregator
         - mountPath: /etc/flow-aggregator/certs
-          name: clickhouse-ca
+          name: certs
+          readOnly: true
       hostNetwork: false
       nodeSelector:
         kubernetes.io/arch: amd64
@@ -528,6 +552,16 @@ spec:
       priorityClassName: system-cluster-critical
       serviceAccountName: flow-aggregator
       volumes:
+      - name: certs
+        projected:
+          defaultMode: 256
+          sources:
+          - secret:
+              items:
+              - key: ca.crt
+                path: clickhouse/ca.crt
+              name: clickhouse-ca
+              optional: true
       - configMap:
           name: flow-aggregator-configmap
         name: flow-aggregator-config
@@ -535,8 +569,3 @@ spec:
           path: /var/log/antrea/flow-aggregator
           type: DirectoryOrCreate
         name: host-var-log-antrea-flow-aggregator
-      - name: clickhouse-ca
-        secret:
-          defaultMode: 256
-          optional: true
-          secretName: clickhouse-ca
