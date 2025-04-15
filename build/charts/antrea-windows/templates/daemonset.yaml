@@ -116,7 +116,7 @@ spec:
       {{- end }}
       nodeSelector:
         kubernetes.io/os: windows
-      priorityClassName: system-node-critical
+      priorityClassName: {{ .Values.priorityClassName }}
       securityContext:
         windowsOptions:
           hostProcess: true
