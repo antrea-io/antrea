@@ -1226,6 +1226,10 @@ kind: MutatingWebhookConfiguration
 metadata:
   # Do not edit this name.
   name: "labelsmutator.antrea.io"
+  # Do not remove these labels.
+  labels:
+    app: antrea
+    served-by: antrea-controller
 webhooks:
   - name: "namelabelmutator.antrea.io"
     clientConfig:
