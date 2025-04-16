@@ -18,6 +18,54 @@ kind: Role
 metadata:
   labels:
     app: flow-aggregator
+  name: flow-aggregator-role
+  namespace: flow-aggregator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-ca
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-client-tls
+  resources:
+  - secrets
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-configmap
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: flow-aggregator
   name: flow-exporter-role
   namespace: flow-aggregator
 rules:
@@ -47,63 +95,28 @@ metadata:
 rules:
 - apiGroups:
   - ""
-  resourceNames:
-  - flow-aggregator-ca
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - update
-- apiGroups:
-  - ""
   resources:
   - pods
   verbs:
   - get
   - list
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - create
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resourceNames:
-  - extension-apiserver-authentication
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resourceNames:
-  - flow-aggregator-client-tls
-  resources:
-  - secrets
-  verbs:
-  - get
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-- apiGroups:
-  - ""
-  resourceNames:
-  - flow-aggregator-configmap
-  resources:
-  - configmaps
-  verbs:
-  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role-binding
+  namespace: flow-aggregator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: flow-aggregator-role
+subjects:
+- kind: ServiceAccount
+  name: flow-aggregator
+  namespace: flow-aggregator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -120,6 +133,37 @@ subjects:
 - kind: ServiceAccount
   name: antrea-agent
   namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-extension-apiserver-authentication-reader-role-binding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-auth-delegator-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: flow-aggregator
+  namespace: flow-aggregator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
