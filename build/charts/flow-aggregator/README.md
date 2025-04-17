@@ -20,6 +20,7 @@ Kubernetes: `>= 1.19.0-0`
 |-----|------|---------|-------------|
 | activeFlowRecordTimeout | string | `"60s"` | Provide the active flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | aggregatorTransportProtocol | string | `"tls"` | Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp. |
+| antreaNamespace | string | `"kube-system"` | Namespace in which Antrea was installed. |
 | apiServer.apiPort | int | `10348` | The port for the Flow Aggregator APIServer to serve on. |
 | apiServer.tlsCipherSuites | string | `""` | Comma-separated list of cipher suites that will be used by the Flow Aggregator APIservers. If empty, the default Go Cipher Suites will be used. |
 | apiServer.tlsMinVersion | string | `""` | TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13. |

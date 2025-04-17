@@ -8,7 +8,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: antrea-agent
-  namespace: kube-system
+  namespace: {{ .Values.antreaNamespace }}
 roleRef:
   kind: Role
   name: flow-exporter-role
