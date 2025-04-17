@@ -472,6 +472,7 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
         kubernetes.io/os: linux
+      priorityClassName: system-cluster-critical
       serviceAccountName: flow-aggregator
       volumes:
       - configMap:

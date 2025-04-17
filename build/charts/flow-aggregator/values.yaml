@@ -4,6 +4,9 @@ image:
   pullPolicy: "IfNotPresent"
   tag: ""
 
+# -- Prority class to use for the flow aggregator Pod.
+priorityClassName: "system-cluster-critical"
+
 # -- Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy". In Aggregate
 # mode, flow records received from source and destination are aggregated and sent as one flow
 # record. In Proxy mode, flow records are enhanced with some additional information, then sent
