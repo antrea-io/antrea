@@ -5179,6 +5179,19 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
+      - packetcaptures
+      - packetcaptures/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
       - externalentities
       - clustergroups
       - groups
