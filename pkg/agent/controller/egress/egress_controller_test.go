@@ -1101,6 +1101,15 @@ func TestSyncEgress(t *testing.T) {
 			},
 		},
 	}
+
+	egressNodeAvailability = func(egress *crdv1b1.Egress) bool {
+		return true
+	}
+
+	defer func() {
+		egressNodeAvailability = hasEgressNode
+	}()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			initObjects := []runtime.Object{tt.existingEgress}
@@ -1195,6 +1204,15 @@ func TestPodUpdateShouldSyncEgress(t *testing.T) {
 			{Pod: &cpv1b2.PodReference{Name: "pendingPod", Namespace: "ns1"}},
 		},
 	}
+
+	egressNodeAvailability = func(egress *crdv1b1.Egress) bool {
+		return true
+	}
+
+	defer func() {
+		egressNodeAvailability = hasEgressNode
+	}()
+
 	c := newFakeController(t, []runtime.Object{egress})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -1327,6 +1345,15 @@ func TestSyncOverlappingEgress(t *testing.T) {
 			{Pod: &cpv1b2.PodReference{Name: "pod4", Namespace: "ns4"}},
 		},
 	}
+
+	egressNodeAvailability = func(egress *crdv1b1.Egress) bool {
+		return true
+	}
+
+	defer func() {
+		egressNodeAvailability = hasEgressNode
+	}()
+
 	c := newFakeController(t, []runtime.Object{egress1, egress2, egress3})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
