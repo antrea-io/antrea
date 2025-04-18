@@ -303,6 +303,8 @@ func TestCmdAdd(t *testing.T) {
 			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			testIfaceConfigurator.hostIfaceName = hostInterfaceName
 			cniserver.podConfigurator.ifConfigurator = testIfaceConfigurator
+			kubeClient := fakeclientset.NewClientset(pod1, pod2, pod3)
+			cniserver.kubeClient = kubeClient
 			if tc.ipamAdd {
 				if tc.enableSecondaryNetworkIPAM {
 					mockIPAMResult := ipamResult
