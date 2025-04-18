@@ -49,11 +49,11 @@ import (
 	"antrea.io/antrea/pkg/agent/bgp/gobgp"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	crdinformersv1a1 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdinformersv1a2 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdinformersv1b1 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlistersv1a1 "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	crdlistersv1a2 "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	crdlistersv1b1 "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/util/env"
 )
@@ -101,7 +101,7 @@ type bgpPolicyState struct {
 	// The port on which the local BGP server listens.
 	listenPort int32
 	// The AS number used by the local BGP server.
-	localASN int32
+	localASN int64
 	// The router ID used by the local BGP server.
 	routerID string
 	// routes stores all BGP routes advertised to BGP peers.
@@ -125,7 +125,7 @@ type Controller struct {
 	egressListerSynced cache.InformerSynced
 
 	bgpPolicyInformer     cache.SharedIndexInformer
-	bgpPolicyLister       crdlistersv1a1.BGPPolicyLister
+	bgpPolicyLister       crdlistersv1a2.BGPPolicyLister
 	bgpPolicyListerSynced cache.InformerSynced
 
 	endpointSliceInformer     cache.SharedIndexInformer
@@ -158,7 +158,7 @@ type Controller struct {
 func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 	serviceInformer coreinformers.ServiceInformer,
 	egressInformer crdinformersv1b1.EgressInformer,
-	bgpPolicyInformer crdinformersv1a1.BGPPolicyInformer,
+	bgpPolicyInformer crdinformersv1a2.BGPPolicyInformer,
 	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
 	egressEnabled bool,
 	k8sClient kubernetes.Interface,
@@ -309,9 +309,9 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	return true
 }
 
-func (c *Controller) getEffectiveBGPPolicy() *v1alpha1.BGPPolicy {
+func (c *Controller) getEffectiveBGPPolicy() *v1alpha2.BGPPolicy {
 	allPolicies, _ := c.bgpPolicyLister.List(labels.Everything())
-	var oldestPolicy *v1alpha1.BGPPolicy
+	var oldestPolicy *v1alpha2.BGPPolicy
 	for _, policy := range allPolicies {
 		if c.matchesCurrentNode(policy) {
 			if oldestPolicy == nil || policy.CreationTimestamp.Before(&oldestPolicy.CreationTimestamp) {
@@ -423,7 +423,7 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 	return nil
 }
 
-func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.BGPPeer) error {
+func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha2.BGPPeer) error {
 	curPeerConfigs := c.getPeerConfigs(bgpPeers)
 	prePeerConfigs := c.bgpPolicyState.peerConfigs
 	prePeerKeys := sets.KeySet(prePeerConfigs)
@@ -466,7 +466,7 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 	return nil
 }
 
-func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertisements v1alpha1.Advertisements) error {
+func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertisements v1alpha2.Advertisements) error {
 	curRoutes := c.getRoutes(bgpAdvertisements)
 	preRoutes := c.bgpPolicyState.routes
 	currRoutesKeys := sets.KeySet(curRoutes)
@@ -558,7 +558,7 @@ func (c *Controller) getRouterID() (string, error) {
 	return routerID, nil
 }
 
-func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) map[bgp.Route]RouteMetadata {
+func (c *Controller) getRoutes(advertisements v1alpha2.Advertisements) map[bgp.Route]RouteMetadata {
 	allRoutes := make(map[bgp.Route]RouteMetadata)
 
 	if advertisements.Service != nil {
@@ -574,7 +574,7 @@ func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) map[bgp.R
 	return allRoutes
 }
 
-func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertisement, allRoutes map[bgp.Route]RouteMetadata) {
+func (c *Controller) addServiceRoutes(advertisement *v1alpha2.ServiceAdvertisement, allRoutes map[bgp.Route]RouteMetadata) {
 	ipTypes := sets.New(advertisement.IPTypes...)
 	services, _ := c.serviceLister.List(labels.Everything())
 
@@ -586,7 +586,7 @@ func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertiseme
 		if internalLocal || externalLocal {
 			hasLocalEndpoints = c.hasLocalEndpoints(svc)
 		}
-		if ipTypes.Has(v1alpha1.ServiceIPTypeClusterIP) {
+		if ipTypes.Has(v1alpha2.ServiceIPTypeClusterIP) {
 			if internalLocal && hasLocalEndpoints || !internalLocal {
 				for _, clusterIP := range svc.Spec.ClusterIPs {
 					if c.enabledIPv4 && utilnet.IsIPv4String(clusterIP) {
@@ -597,7 +597,7 @@ func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertiseme
 				}
 			}
 		}
-		if ipTypes.Has(v1alpha1.ServiceIPTypeExternalIP) {
+		if ipTypes.Has(v1alpha2.ServiceIPTypeExternalIP) {
 			if externalLocal && hasLocalEndpoints || !externalLocal {
 				for _, externalIP := range svc.Spec.ExternalIPs {
 					if c.enabledIPv4 && utilnet.IsIPv4String(externalIP) {
@@ -608,7 +608,7 @@ func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertiseme
 				}
 			}
 		}
-		if ipTypes.Has(v1alpha1.ServiceIPTypeLoadBalancerIP) && svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
+		if ipTypes.Has(v1alpha2.ServiceIPTypeLoadBalancerIP) && svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
 			if externalLocal && hasLocalEndpoints || !externalLocal {
 				loadBalancerIPs := getIngressIPs(svc)
 				for _, loadBalancerIP := range loadBalancerIPs {
@@ -667,7 +667,7 @@ func (c *Controller) hasLocalEndpoints(svc *corev1.Service) bool {
 	return false
 }
 
-func (c *Controller) getPeerConfigs(peers []v1alpha1.BGPPeer) map[string]bgp.PeerConfig {
+func (c *Controller) getPeerConfigs(peers []v1alpha2.BGPPeer) map[string]bgp.PeerConfig {
 	c.bgpPeerPasswordsMutex.RLock()
 	defer c.bgpPeerPasswordsMutex.RUnlock()
 
@@ -691,12 +691,12 @@ func (c *Controller) getPeerConfigs(peers []v1alpha1.BGPPeer) map[string]bgp.Pee
 	return peerConfigs
 }
 
-func generateBGPPeerKey(address string, asn int32) string {
+func generateBGPPeerKey(address string, asn int64) string {
 	return fmt.Sprintf("%s-%d", address, asn)
 }
 
 func (c *Controller) addBGPPolicy(obj interface{}) {
-	bgpPolicy := obj.(*v1alpha1.BGPPolicy)
+	bgpPolicy := obj.(*v1alpha2.BGPPolicy)
 	if !c.matchesCurrentNode(bgpPolicy) {
 		return
 	}
@@ -705,8 +705,8 @@ func (c *Controller) addBGPPolicy(obj interface{}) {
 }
 
 func (c *Controller) updateBGPPolicy(oldObj, obj interface{}) {
-	oldBGPPolicy := oldObj.(*v1alpha1.BGPPolicy)
-	policy := obj.(*v1alpha1.BGPPolicy)
+	oldBGPPolicy := oldObj.(*v1alpha2.BGPPolicy)
+	policy := obj.(*v1alpha2.BGPPolicy)
 	if !c.matchesCurrentNode(policy) && !c.matchesCurrentNode(oldBGPPolicy) {
 		return
 	}
@@ -717,7 +717,7 @@ func (c *Controller) updateBGPPolicy(oldObj, obj interface{}) {
 }
 
 func (c *Controller) deleteBGPPolicy(obj interface{}) {
-	bgpPolicy := obj.(*v1alpha1.BGPPolicy)
+	bgpPolicy := obj.(*v1alpha2.BGPPolicy)
 	if !c.matchesCurrentNode(bgpPolicy) {
 		return
 	}
@@ -735,7 +735,7 @@ func getIngressIPs(svc *corev1.Service) []string {
 	return ips
 }
 
-func (c *Controller) matchesCurrentNode(bgpPolicy *v1alpha1.BGPPolicy) bool {
+func (c *Controller) matchesCurrentNode(bgpPolicy *v1alpha2.BGPPolicy) bool {
 	node, _ := c.nodeLister.Get(c.nodeName)
 	if node == nil {
 		return false
@@ -743,16 +743,16 @@ func (c *Controller) matchesCurrentNode(bgpPolicy *v1alpha1.BGPPolicy) bool {
 	return matchesNode(node, bgpPolicy)
 }
 
-func matchesNode(node *corev1.Node, bgpPolicy *v1alpha1.BGPPolicy) bool {
+func matchesNode(node *corev1.Node, bgpPolicy *v1alpha2.BGPPolicy) bool {
 	nodeSelector, _ := metav1.LabelSelectorAsSelector(&bgpPolicy.Spec.NodeSelector)
 	return nodeSelector.Matches(labels.Set(node.Labels))
 }
 
-func matchesService(svc *corev1.Service, bgpPolicy *v1alpha1.BGPPolicy) bool {
+func matchesService(svc *corev1.Service, bgpPolicy *v1alpha2.BGPPolicy) bool {
 	ipTypeMap := sets.New(bgpPolicy.Spec.Advertisements.Service.IPTypes...)
-	if ipTypeMap.Has(v1alpha1.ServiceIPTypeClusterIP) && len(svc.Spec.ClusterIPs) != 0 ||
-		ipTypeMap.Has(v1alpha1.ServiceIPTypeExternalIP) && len(svc.Spec.ExternalIPs) != 0 ||
-		ipTypeMap.Has(v1alpha1.ServiceIPTypeLoadBalancerIP) && len(getIngressIPs(svc)) != 0 {
+	if ipTypeMap.Has(v1alpha2.ServiceIPTypeClusterIP) && len(svc.Spec.ClusterIPs) != 0 ||
+		ipTypeMap.Has(v1alpha2.ServiceIPTypeExternalIP) && len(svc.Spec.ExternalIPs) != 0 ||
+		ipTypeMap.Has(v1alpha2.ServiceIPTypeLoadBalancerIP) && len(getIngressIPs(svc)) != 0 {
 		return true
 	}
 	return false
@@ -984,9 +984,10 @@ func (c *Controller) updateBGPPeerPasswords(secret *corev1.Secret) {
 }
 
 // GetBGPPolicyInfo returns Name, RouterID, LocalASN and ListenPort of effective BGP Policy applied on the Node.
-func (c *Controller) GetBGPPolicyInfo() (string, string, int32, int32) {
+func (c *Controller) GetBGPPolicyInfo() (string, string, int64, int32) {
 	var name, routerID string
-	var localASN, listenPort int32
+	var localASN int64
+	var listenPort int32
 
 	c.bgpPolicyStateMutex.RLock()
 	defer c.bgpPolicyStateMutex.RUnlock()

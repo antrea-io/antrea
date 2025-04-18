@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,6 +65,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().SupportBundleCollections().Informer()}, nil
 
 		// Group=crd.antrea.io, Version=v1alpha2
+	case v1alpha2.SchemeGroupVersion.WithResource("bgppolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().BGPPolicies().Informer()}, nil
 	case v1alpha2.SchemeGroupVersion.WithResource("externalentities"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().ExternalEntities().Informer()}, nil
 	case v1alpha2.SchemeGroupVersion.WithResource("ippools"):

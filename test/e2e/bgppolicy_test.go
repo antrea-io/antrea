@@ -32,16 +32,16 @@ import (
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/types"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/test/e2e/providers/exec"
 )
 
 const (
-	externalASN = int32(65000)
+	externalASN = int64(65000)
 
-	nodeASN        = int32(64512)
-	updatedNodeASN = int32(64513)
+	nodeASN        = int64(64512)
+	updatedNodeASN = int64(64513)
 
 	bgpPeerPassword = "password"
 
@@ -131,29 +131,29 @@ func TestBGPPolicy(t *testing.T) {
 	clusterIP := svcClusterIP.Spec.ClusterIP
 
 	t.Log("Create a test BGPPolicy selecting all Nodes as well as advertising ClusterIPs and Pod CIDRs")
-	bgpPolicy := &crdv1alpha1.BGPPolicy{
+	bgpPolicy := &crdv1alpha2.BGPPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bgpPolicyName,
 		},
-		Spec: crdv1alpha1.BGPPolicySpec{
+		Spec: crdv1alpha2.BGPPolicySpec{
 			NodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{},
 			},
 			LocalASN:   nodeASN,
 			ListenPort: ptr.To[int32](179),
-			Advertisements: crdv1alpha1.Advertisements{
-				Service: &crdv1alpha1.ServiceAdvertisement{
-					IPTypes: []crdv1alpha1.ServiceIPType{crdv1alpha1.ServiceIPTypeClusterIP},
+			Advertisements: crdv1alpha2.Advertisements{
+				Service: &crdv1alpha2.ServiceAdvertisement{
+					IPTypes: []crdv1alpha2.ServiceIPType{crdv1alpha2.ServiceIPTypeClusterIP},
 				},
-				Pod: &crdv1alpha1.PodAdvertisement{},
+				Pod: &crdv1alpha2.PodAdvertisement{},
 			},
-			BGPPeers: []crdv1alpha1.BGPPeer{
+			BGPPeers: []crdv1alpha2.BGPPeer{
 				{Address: externalInfo.externalFRRIPv4, ASN: externalASN},
 			},
 		},
 	}
-	bgpPolicy, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Create(context.TODO(), bgpPolicy, metav1.CreateOptions{})
-	defer data.CRDClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
+	bgpPolicy, err = data.CRDClient.CrdV1alpha2().BGPPolicies().Create(context.TODO(), bgpPolicy, metav1.CreateOptions{})
+	defer data.CRDClient.CrdV1alpha2().BGPPolicies().Delete(context.TODO(), bgpPolicyName, metav1.DeleteOptions{})
 	require.NoError(t, err)
 
 	t.Log("Get the routes installed on remote FRR router and verify them")
@@ -184,7 +184,7 @@ func TestBGPPolicy(t *testing.T) {
 	updatedBGPPolicy := bgpPolicy.DeepCopy()
 	updatedBGPPolicy.Spec.LocalASN = updatedNodeASN
 	updatedBGPPolicy.Spec.Advertisements.Pod = nil
-	_, err = data.CRDClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), updatedBGPPolicy, metav1.UpdateOptions{})
+	_, err = data.CRDClient.CrdV1alpha2().BGPPolicies().Update(context.TODO(), updatedBGPPolicy, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	t.Log("Get routes installed on remote FRR router and verify them")
@@ -231,7 +231,7 @@ func runVtyshCommands(commands []string) (int, string, string, error) {
 	return exec.RunDockerExecCommand(externalInfo.externalFRRCID, "/usr/bin/vtysh", "/", nil, strings.Join(commands, "\n"))
 }
 
-func configureExternalBGPRouter(t *testing.T, externalASN, nodeASN int32, deferCleanup bool) {
+func configureExternalBGPRouter(t *testing.T, externalASN, nodeASN int64, deferCleanup bool) {
 	commands := []string{
 		"configure terminal",
 		fmt.Sprintf("router bgp %d", externalASN),
