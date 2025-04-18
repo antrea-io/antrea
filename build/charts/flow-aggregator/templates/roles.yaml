@@ -1,0 +1,46 @@
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-exporter-role
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-client-tls"]
+    verbs: ["get"]
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role
+  namespace: {{ .Release.Namespace }}
+rules:
+  # RBAC to create / update / get flow-aggregator-ca ConfigMap
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get", "update"]
+  # RBAC to create / update / get flow-aggregator-client-tls Secret
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-client-tls"]
+    verbs: ["get", "update"]
+  # RBAC to get / update flow-aggregator-configmap ConfigMap (required by antctl)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-configmap"]
+    verbs: ["get", "update"]
