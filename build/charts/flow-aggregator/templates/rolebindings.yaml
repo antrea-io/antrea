@@ -1,0 +1,48 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-exporter-role-binding
+  namespace: {{ .Release.Namespace }}
+subjects:
+- kind: ServiceAccount
+  name: antrea-agent
+  namespace: {{ .Values.antreaNamespace }}
+roleRef:
+  kind: Role
+  name: flow-exporter-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role-binding
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: flow-aggregator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# For auth delegation to apiserver
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-extension-apiserver-authentication-reader-role-binding
+  namespace: kube-system
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: extension-apiserver-authentication-reader
+  apiGroup: rbac.authorization.k8s.io

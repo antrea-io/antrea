@@ -142,3 +142,5 @@ testing:
   coverage: false
 # -- Log verbosity switch for Flow Aggregator.
 logVerbosity: 0
+# -- Namespace in which Antrea was installed.
+antreaNamespace: "kube-system"
