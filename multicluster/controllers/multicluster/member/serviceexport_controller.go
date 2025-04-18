@@ -125,7 +125,6 @@ func epInfoKeyFunc(obj interface{}) (string, error) {
 
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/finalizers,verbs=update
 //+kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceexports,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceexports/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update
@@ -692,12 +691,6 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 	createResExport := reflect.DeepEqual(*existingResExport, mcv1alpha1.ResourceExport{})
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	if createResExport {
-		// We are using Finalizers to implement asynchronous pre-delete hooks.
-		// When a ServiceExport is deleted, the corresponding ResourceExport will have non-zero
-		// DeletionTimestamp, so Leader controller can still get the deleted ResourceExport object,
-		// then it can clean up any external resources like ResourceImport.
-		// For more details about using Finalizers, please refer to https://book.kubebuilder.io/reference/using-finalizers.html.
-		newResExport.Finalizers = []string{constants.ResourceExportFinalizer}
 		klog.InfoS("Creating ResourceExport", "resourceexport", resNamespaced.String())
 		err := rc.Create(ctx, newResExport, &client.CreateOptions{})
 		if err != nil {
@@ -706,7 +699,6 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 		}
 	} else {
 		newResExport.ObjectMeta.ResourceVersion = existingResExport.ObjectMeta.ResourceVersion
-		newResExport.Finalizers = existingResExport.Finalizers
 		err := rc.Update(ctx, newResExport, &client.UpdateOptions{})
 		if err != nil {
 			klog.ErrorS(err, "Failed to update ResourceExport", "resourceexport", resNamespaced.String())
