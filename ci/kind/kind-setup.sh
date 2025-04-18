@@ -663,7 +663,7 @@ while [[ $# -gt 0 ]]
       shift 2
       ;;
     --flexible-ipam)
-      add_option "--flexible-ipam" "create"
+      add_option "--flexible-ipam" "$ACTION"
       FLEXIBLE_IPAM=true
       shift
       ;; 
