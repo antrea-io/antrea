@@ -313,3 +313,12 @@ spec:
   annotation is added to the Pod for the first time (e.g., when creating the
   Pod), we will configure the secondary network interfaces accordingly, and no
   change is possible after that, until the Pod is deleted.
+* We don't support K8s Nodes with multi-path routes.
+
+  > A multi-path route is a route with multiple possible next hops. When listing the
+  > rules (e.g., with `ip route list`), a multi-path route may appear as multiple individual
+  > routes (one for each next hop), all with the same cost.
+
+  When the K8s Node interfaces are managed by a network manager, please make sure the default
+  routes for secondary interfaces are disabled, or configure the routes with different metrics.
+  Otherwise, you may encounter K8s Nodes connection issue. Please check issue [#7058](https://github.com/antrea-io/antrea/issues/7058) for details.
