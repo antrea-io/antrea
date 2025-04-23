@@ -22,6 +22,13 @@ spec:
                 - ipRanges
                 - nodeSelector
               properties:
+                filterReservedIPs:
+                  type: boolean
+                  default: false
+                  description: |-
+                    filterReservedIPs prevents the allocation of IP addresses ending in .0 or .255
+                    when the pool is defined using a start-end IP range. This flag is not applicable for CIDR-based ranges,
+                    as these addresses are automatically excluded by the network subnetting rules.
                 ipRanges:
                   type: array
                   items:

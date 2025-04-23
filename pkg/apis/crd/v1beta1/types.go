@@ -229,6 +229,12 @@ type ExternalIPPoolSpec struct {
 	SubnetInfo *SubnetInfo `json:"subnetInfo,omitempty"`
 	// The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.
 	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
+
+	// FilterReservedIPs prevents allocation of IPs ending in .0 or .255.
+	// Only applicable to IP ranges defined with start and end. Ignored for CIDRs.
+	// +optional
+	// +kubebuilder:default=false
+	FilterReservedIPs bool `json:"filterReservedIPs,omitempty"`
 }
 
 // IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
