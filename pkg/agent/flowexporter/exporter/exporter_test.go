@@ -39,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/pkg/agent/metrics"
 	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
@@ -663,7 +664,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 				StaleConnectionTimeout: 1,
 				PollInterval:           1}
 			flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, !isIPv6, isIPv6, nil, nil, nil, nil, o)
-			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, o)
+			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, o, filter.NewProtocolFilter(nil))
 			flowExp.conntrackPriorityQueue = flowExp.conntrackConnStore.GetPriorityQueue()
 			flowExp.denyPriorityQueue = flowExp.denyConnStore.GetPriorityQueue()
 			flowExp.numDataSetsSent = 0

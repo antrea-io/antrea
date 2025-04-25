@@ -306,6 +306,12 @@ type FlowExporterConfig struct {
 	// Defaults to "15s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
 	// "m", "h".
 	IdleFlowExportTimeout string `yaml:"idleFlowExportTimeout,omitempty"`
+	// Provide the set of protocols to filter specific flows that will be
+	// exported. Invalid protocols do not error and instead warnings are
+	// logged on the antrea agent. By default the full set of supported
+	// protocols are exported which are:
+	// "tcp", "udp", "sctp"
+	ProtocolFilter []string `yaml:"protocols,omitempty"`
 }
 
 type MulticastConfig struct {
