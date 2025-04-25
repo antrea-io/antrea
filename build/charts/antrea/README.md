@@ -100,6 +100,7 @@ Kubernetes: `>= 1.19.0-0`
 | flowExporter.flowCollectorAddr | string | `"flow-aggregator/flow-aggregator:4739:tls"` | IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>]. If the collector is running in-cluster as a Service, set <HOST> to <Service namespace>/<Service name>. |
 | flowExporter.flowPollInterval | string | `"5s"` | Determines how often the flow exporter polls for new connections. |
 | flowExporter.idleFlowExportTimeout | string | `"15s"` | timeout after which a flow record is sent to the collector for idle flows. |
+| flowExporter.protocolFilter | list | `[]` | filter which flows are exported based on protocol |
 | fqdnCacheMinTTL | int | `0` | fqdnCacheMinTTL helps address the issue of applications caching DNS response IPs beyond the TTL value for the DNS record. It is used to enforce FQDN policy rules, ensuring that resolved IPs are included in datapath rules for as long as the application caches them. Ideally, this value should be set to the maximum caching duration across all applications. |
 | hostGateway | string | `"antrea-gw0"` | Name of the interface antrea-agent will create and use for host <-> Pod communication. |
 | image | object | `{}` | Container image to use for Antrea components. DEPRECATED: use agentImage and controllerImage instead. |

@@ -418,6 +418,8 @@ flowExporter:
   # -- timeout after which a flow record is sent to the collector for idle
   # flows.
   idleFlowExportTimeout: "15s"
+  # -- filter which flows are exported based on protocol
+  protocolFilter: []
 
 cni:
   # -- Chained plugins to use alongside antrea-cni.

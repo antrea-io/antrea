@@ -122,6 +122,12 @@ your `antrea-agent` ConfigMap should look like this:
       # packet matching this flow has been observed since the last export event.
       # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
       idleFlowExportTimeout: "15s"
+
+      # Optional: Provide the set of protocols to filter specific flows that will be
+      # exported. By default, all protocols supported by OVS are exported. Invalid protocols
+      # will be not error and instead a warning is logged on the antrea agent. Supported
+      # protocols include: "TCP", "UDP", "SCTP"
+      protocolFilter: "[]"
 ```
 
 Please note that the default value for `flowExporter.flowCollectorAddr` is

@@ -132,3 +132,38 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	assert.Equal(t, false, exists, "connection should be deleted in connection store")
 	checkAntreaConnectionMetrics(t, len(conntrackConnStore.connections))
 }
+
+func TestValidateProtocolFilter(t *testing.T) {
+	testCases := []struct {
+		name           string
+		protocolFilter []string
+		want           []string
+	}{
+		{
+			"No protocols",
+			[]string{},
+			[]string{},
+		},
+		{
+			"Valid protocols",
+			[]string{"TCP", "UDP"},
+			[]string{"TCP", "UDP"},
+		},
+		{
+			"Valid protocols and some invalid typo'd protocols",
+			[]string{"TCP", "udp"},
+			[]string{"TCP"},
+		},
+		{
+			"Invalid typo'd protocols",
+			[]string{"tpc", "udp", "scctp"},
+			[]string{},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := validateProtocolFilter(tc.protocolFilter)
+			assert.Equal(t, got, tc.want)
+		})
+	}
+}
