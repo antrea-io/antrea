@@ -93,12 +93,12 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 func (pc *podConfigurator) configureInterfaces(
 	podName, podNamespace, containerID, containerNetNS string,
 	containerIFDev string, mtu int, sriovVFDeviceID string,
-	result *ipam.IPAMResult, createOVSPort bool, containerAccess *containerAccessArbitrator) error {
+	result *ipam.IPAMResult, createOVSPort bool, containerAccess *containerAccessArbitrator, mac string) error {
 	if !createOVSPort {
 		return pc.ifConfigurator.configureContainerLink(
 			podName, podNamespace, containerID, containerNetNS,
 			containerIFDev, mtu, sriovVFDeviceID, "",
-			&result.Result, containerAccess)
+			&result.Result, containerAccess, mac)
 	}
 	// Check if the OVS configurations for the container exists or not. If yes, return
 	// immediately. This check is used on Windows, as kubelet on Windows will call CNI ADD
@@ -125,7 +125,7 @@ func (pc *podConfigurator) configureInterfaces(
 	}
 
 	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
-		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess)
+		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess, mac)
 }
 
 // isInterfaceInvalid returns false because we now don't support detecting the disconnected host interface on Windows

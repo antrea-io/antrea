@@ -94,9 +94,9 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName, netNS string
 func (pc *podConfigurator) configureInterfaces(
 	podName, podNamespace, containerID, containerNetNS string,
 	containerIFDev string, mtu int, sriovVFDeviceID string,
-	result *ipam.IPAMResult, createOVSPort bool, containerAccess *containerAccessArbitrator) error {
+	result *ipam.IPAMResult, createOVSPort bool, containerAccess *containerAccessArbitrator, mac string) error {
 	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
-		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess)
+		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess, mac)
 }
 
 // reconcileMissingPods is never called on Linux, see reconcile logic.

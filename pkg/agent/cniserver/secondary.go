@@ -44,7 +44,7 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 		return fmt.Errorf("error getting the Pod SR-IOV VF device ID")
 	}
 
-	err := pc.ifConfigurator.configureContainerLink(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, "", podSriovVFDeviceID, result, nil)
+	err := pc.ifConfigurator.configureContainerLink(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, "", podSriovVFDeviceID, result, nil, "")
 	if err != nil {
 		return err
 	}
@@ -79,9 +79,9 @@ func (pc *podConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interf
 func (pc *podConfigurator) ConfigureVLANSecondaryInterface(
 	podName, podNamespace string,
 	containerID, containerNetNS, containerInterfaceName string,
-	mtu int, ipamResult *ipam.IPAMResult) error {
+	mtu int, ipamResult *ipam.IPAMResult, mac string) error {
 	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
-		containerInterfaceName, mtu, "", ipamResult, nil)
+		containerInterfaceName, mtu, "", ipamResult, nil, mac)
 }
 
 // DeleteVLANSecondaryInterface deletes a VLAN secondary interface.
