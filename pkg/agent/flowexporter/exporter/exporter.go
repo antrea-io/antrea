@@ -135,6 +135,7 @@ type FlowExporter struct {
 	egressQuerier          querier.EgressQuerier
 	podStore               podstore.Interface
 	l7Listener             *connections.L7Listener
+	protocols              []string
 }
 
 func genObservationID(nodeName string) uint32 {

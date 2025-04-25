@@ -306,6 +306,8 @@ type FlowExporterConfig struct {
 	// Defaults to "15s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
 	// "m", "h".
 	IdleFlowExportTimeout string `yaml:"idleFlowExportTimeout,omitempty"`
+	// TODO
+	Protocols []string `yaml:"protocols,omitempty"`
 }
 
 type MulticastConfig struct {

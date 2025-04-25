@@ -4258,6 +4258,12 @@ data:
       # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
       idleFlowExportTimeout: "15s"
 
+      # Optional: Provide the set of protocols to filter specific flows that will be
+      # exported. By default, all protocols supported by OVS are exported. Invalid protocols
+      # will be not error and instead a warning is logged on the antrea agent.
+      # protocols:
+      # - "tls"
+
     nodePortLocal:
     # Enable NodePortLocal, a feature used to make Pods reachable using port forwarding on the host. To
     # enable this feature, you need to set "enable" to true.
