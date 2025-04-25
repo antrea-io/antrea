@@ -25,6 +25,7 @@
 package testing
 
 import (
+	"net"
 	reflect "reflect"
 
 	ipam "antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -74,7 +75,7 @@ func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureSriovSecondaryInterfac
 }
 
 // ConfigureVLANSecondaryInterface mocks base method.
-func (m *MockInterfaceConfigurator) ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult) error {
+func (m *MockInterfaceConfigurator) ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult, mac net.HardwareAddr) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ConfigureVLANSecondaryInterface", podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult)
 	ret0, _ := ret[0].(error)
