@@ -16,6 +16,7 @@ package cniserver
 
 import (
 	"fmt"
+	"net"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/klog/v2"
@@ -44,7 +45,7 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 		return fmt.Errorf("error getting the Pod SR-IOV VF device ID")
 	}
 
-	err := pc.ifConfigurator.configureContainerLink(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, "", podSriovVFDeviceID, result, nil)
+	err := pc.ifConfigurator.configureContainerLink(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, "", podSriovVFDeviceID, result, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -79,9 +80,18 @@ func (pc *podConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interf
 func (pc *podConfigurator) ConfigureVLANSecondaryInterface(
 	podName, podNamespace string,
 	containerID, containerNetNS, containerInterfaceName string,
-	mtu int, ipamResult *ipam.IPAMResult) error {
+	mtu int, ipamResult *ipam.IPAMResult, ifaceMAC string) error {
+
+	var podMAC net.HardwareAddr
+	if ifaceMAC != "" {
+		var err error
+		podMAC, err = net.ParseMAC(ifaceMAC)
+		if err != nil {
+			return fmt.Errorf("failed to parse MAC address %s: %w", ifaceMAC, err)
+		}
+	}
 	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
-		containerInterfaceName, mtu, "", ipamResult, nil)
+		containerInterfaceName, mtu, "", ipamResult, nil, podMAC)
 }
 
 // DeleteVLANSecondaryInterface deletes a VLAN secondary interface.

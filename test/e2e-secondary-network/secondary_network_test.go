@@ -42,6 +42,8 @@ type testPodInfo struct {
 	nodeName string
 	// map from interface name to secondary network name.
 	interfaceNetworks map[string]string
+	// map from interface name to secondary MAC address.
+	macAddresses map[string]string
 }
 
 type testData struct {
@@ -71,17 +73,25 @@ const (
 
 // formAnnotationStringOfPod forms the annotation string, used in the generation of each Pod YAML file.
 func (data *testData) formAnnotationStringOfPod(pod *testPodInfo) string {
-	var annotationString = ""
+	var annotationString string
 	for i, n := range pod.interfaceNetworks {
-		podNetworkSpec := fmt.Sprintf("{\"name\": \"%s\", \"namespace\": \"%s\", \"interface\": \"%s\"}",
+		podNetworkSpec := fmt.Sprintf("{\"name\": \"%s\", \"namespace\": \"%s\", \"interface\": \"%s\"",
 			n, attachDefNamespace, i)
+
+		if pod.macAddresses != nil {
+			if mac, ok := pod.macAddresses[i]; ok {
+				podNetworkSpec += fmt.Sprintf(", \"mac\": \"%s\"", mac)
+			}
+		}
+		podNetworkSpec += "}"
+
 		if annotationString == "" {
 			annotationString = "[" + podNetworkSpec
 		} else {
 			annotationString = annotationString + ", " + podNetworkSpec
 		}
 	}
-	annotationString = annotationString + "]"
+	annotationString += "]"
 	return annotationString
 }
 
@@ -427,16 +437,19 @@ func TestVLANNetwork(t *testing.T) {
 			podName:           "vlan-pod1",
 			nodeName:          node1,
 			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth2": "vlan-net2"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:01", "eth2": "aa:bb:cc:dd:ee:02"},
 		},
 		{
 			podName:           "vlan-pod2",
 			nodeName:          node1,
 			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth2": "vlan-net3"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:04", "eth2": "aa:bb:cc:dd:ee:04"},
 		},
 		{
 			podName:           "vlan-pod3",
 			nodeName:          node2,
 			interfaceNetworks: map[string]string{"eth1": "vlan-net2"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:05"},
 		},
 	}
 	testSecondaryNetwork(t, networkTypeVLAN, pods)
