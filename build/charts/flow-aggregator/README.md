@@ -32,6 +32,9 @@ Kubernetes: `>= 1.19.0-0`
 | clickHouse.enable | bool | `false` | Determine whether to enable exporting flow records to ClickHouse. |
 | clickHouse.tls.caCert | bool | `false` | Indicates whether to use custom CA certificate. Default root CAs will be used if this field is false. If true, a Secret named "clickhouse-ca" must be provided with the following keys: ca.crt: <CA certificate> |
 | clickHouse.tls.insecureSkipVerify | bool | `false` | Determine whether to skip the verification of the server's certificate chain and host name. Default is false. |
+| dnsPolicy | string | `""` | DNS Policy for the flow-aggregator Pod. If empty, the Kubernetes default will be used. |
+| flowAggregator.resources | object | `{"requests":{"cpu":"500m","memory":"256Mi"}}` | Resource requests and limits for the flow-aggregator container. |
+| flowAggregator.securityContext | object | `{}` | Configure the security context for the flow-aggregator container. |
 | flowAggregatorAddress | string | `""` | Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate. |
 | flowCollector.address | string | `""` | Provide the flow collector address as string with format <IP>:<port>[:<proto>],  where proto is tcp or udp. If no L4 transport proto is given, we consider tcp as default. |
 | flowCollector.enable | bool | `false` | Determine whether to enable exporting flow records to external flow collector. |
@@ -49,11 +52,12 @@ Kubernetes: `>= 1.19.0-0`
 | flowLogger.prettyPrint | bool | `true` | PrettyPrint enables conversion of some numeric fields to a more meaningful string representation. |
 | flowLogger.recordFormat | string | `"CSV"` | RecordFormat defines the format of the flow records logged to file. Only "CSV" is supported at the moment. |
 | hostAliases | list | `[]` | HostAliases to be injected into the Pod's hosts file. For example: `[{"ip": "8.8.8.8", "hostnames": ["clickhouse.example.com"]}]` |
+| hostNetwork | bool | `false` | Run the flow-aggregator Pod in the host network. |
 | image | object | `{"pullPolicy":"IfNotPresent","repository":"antrea/flow-aggregator","tag":""}` | Container image used by Flow Aggregator. |
 | inactiveFlowRecordTimeout | string | `"90s"` | Provide the inactive flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | logVerbosity | int | `0` | Log verbosity switch for Flow Aggregator. |
 | mode | string | `"Aggregate"` | Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy". In Aggregate mode, flow records received from source and destination are aggregated and sent as one flow record. In Proxy mode, flow records are enhanced with some additional information, then sent directly without buffering or aggregation. |
-| priorityClassName | string | `"system-cluster-critical"` | Prority class to use for the flow aggregator Pod. |
+| priorityClassName | string | `"system-cluster-critical"` | Prority class to use for the flow-aggregator Pod. |
 | recordContents.podLabels | bool | `false` | Determine whether source and destination Pod labels will be included in the flow records. |
 | s3Uploader.awsCredentials | object | `{"aws_access_key_id":"changeme","aws_secret_access_key":"changeme","aws_session_token":""}` | Credentials to authenticate to AWS. They will be stored in a Secret and injected into the Pod as environment variables. |
 | s3Uploader.bucketName | string | `""` | BucketName is the name of the S3 bucket to which flow records will be uploaded. It is required. |

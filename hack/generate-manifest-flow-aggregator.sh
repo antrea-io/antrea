@@ -27,6 +27,7 @@ Generate a YAML manifest for the Flow Aggregator, using Helm and Kustomize, and 
                                         It should be given in format IP:port:proto. Example: 192.168.1.100:4739:udp.
         --clickhouse, -ch               Enable exporting flow records to default ClickHouse service address.
         --coverage                      Generate a manifest which supports measuring code coverage of the Flow Aggregator binaries.
+        --host-network                  Run Flow Aggregator in hostNetwork mode.
         --verbose-log                   Generate a manifest with increased log-level (level 4) for the Flow Aggregator.
                                         This option will work only with 'dev' mode.
         --help, -h                      Print this message and exit.
@@ -54,6 +55,7 @@ MODE="dev"
 FLOW_COLLECTOR=""
 CLICKHOUSE=false
 COVERAGE=false
+HOST_NETWORK=false
 VERBOSE_LOG=false
 
 while [[ $# -gt 0 ]]
@@ -75,6 +77,10 @@ case $key in
     ;;
     --coverage)
     COVERAGE=true
+    shift
+    ;;
+    --host-network)
+    HOST_NETWORK=true
     shift
     ;;
     --verbose-log)
@@ -155,7 +161,11 @@ fi
 
 if $COVERAGE; then
     HELM_VALUES+=("testing.coverage=true")
-fi 
+fi
+
+if $HOST_NETWORK; then
+    HELM_VALUES+=("hostNetwork=true,dnsPolicy=ClusterFirstWithHostNet")
+fi
 
 if [ "$MODE" == "dev" ]; then
     if [[ -z "$IMG_NAME" ]]; then
