@@ -119,6 +119,8 @@ func (ic *ifConfigurator) moveVFtoContainerNS(vfNetDevice string, containerID st
 		if err != nil {
 			return fmt.Errorf("failed to set MTU for VF netdevice %s: %v", containerIfaceName, err)
 		}
+		ic.netlink.LinkSetAlias(link, vfNetDevice)
+		klog.InfoS("link's alias has been updated", "alias", vfNetDevice)
 		err = ic.netlink.LinkSetUp(link)
 		if err != nil {
 			return fmt.Errorf("failed to set link up to VF netdevice %s: %v", containerIfaceName, err)
@@ -229,6 +231,30 @@ func (ic *ifConfigurator) configureContainerSriovLink(
 	klog.V(2).Infof("hostIface.Name: %s, hostIface.Mac: %s, vfIFName: %s", hostIface.Name, hostIface.Mac, vfIFName)
 
 	return ic.moveVFtoContainerNS(vfIFName, containerID, containerNetNS, containerIfaceName, mtu, result)
+}
+
+// renameContainerVFInterfaceName rename the container interface back to the original VF interface name.
+func (ic *ifConfigurator) renameContainerVFInterfaceName(containerNetNS string, containerIfaceName string) error {
+	klog.InfoS("renameContainerVFInterfaceName", "containerNetNS", containerNetNS, "containerIfaceName", containerIfaceName)
+	if err := nsWithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
+		link, err := ic.netlink.LinkByName(containerIfaceName)
+		if err != nil {
+			return fmt.Errorf("failed to find container interface %s: %v", containerIfaceName, err)
+		}
+		originalName := link.Attrs().Alias
+		klog.InfoS("renameContainerVFInterfaceName", "originalName", originalName)
+		if originalName != "" {
+			err = renameInterface(containerIfaceName, originalName)
+			if err != nil {
+				return fmt.Errorf("failed to rename containerIfaceName as the original VF name %s: %v", originalName, err)
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // configureContainerLinkVeth creates a veth pair: one in the container netns and one in the host netns, and configures IP
