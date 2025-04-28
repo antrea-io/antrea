@@ -15,7 +15,6 @@
 package connections
 
 import (
-	"fmt"
 	"net"
 	"net/netip"
 	"strconv"
@@ -118,7 +117,6 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 }
 
 func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
-	ctrl := gomock.NewController(t)
 
 	// Create flows for test
 	tuple := flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: dstAddr, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
@@ -147,21 +145,34 @@ func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
 		GatewayConfig: gwConfig,
 		PodIPv4CIDR:   podCIDR,
 	}
-	// Test the DumpFlows implementation of connTrackSystem
-	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
-	protocols := []string{"tcp", "udp", "sctp"} // 6, 17, 32
-	connDumperDPSystem := NewConnTrackSystem(nodeConfig, svcCIDR, netip.Prefix{}, false, protocols)
 
-	connDumperDPSystem.connTrack = mockNetlinkCT
-	// Set expects for mocks
-	mockNetlinkCT.EXPECT().Dial().Return(nil)
-	mockNetlinkCT.EXPECT().DumpFlowsInCtZone(uint16(openflow.CtZone)).Return(testFlows, nil)
+	testCases := []struct {
+		name                string
+		protocols           []string
+		testFlows           []*flowexporter.Connection
+		expectedConnections int
+	}{
+		{
+			"all support protocols",
+			[]string{"tcp", "udp", "sctp"}, // 6, 17, 32
+			[]*flowexporter.Connection{antreaTCPFlow, antreaUPDFlow, antreaSCTPFlow},
+			3,
+		},
+	}
+	for _, tc := range testCases {
+		ctrl := gomock.NewController(t)
+		mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
+		connDumperDPSystem := NewConnTrackSystem(nodeConfig, svcCIDR, netip.Prefix{}, false, tc.protocols)
+		connDumperDPSystem.connTrack = mockNetlinkCT
 
-	conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
-	fmt.Println(conns)
-	assert.NoErrorf(t, err, "Dump flows function returned error: %v", err)
-	assert.Equal(t, 3, len(conns), "number of filtered connections should be equal")
-	assert.Equal(t, len(testFlows), totalConns, "Number of connections in conntrack table should be equal to testFlows")
+		mockNetlinkCT.EXPECT().Dial().Return(nil)
+		mockNetlinkCT.EXPECT().DumpFlowsInCtZone(uint16(openflow.CtZone)).Return(tc.testFlows, nil)
+
+		conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
+		assert.NoErrorf(t, err, "Test Case: \"%s\", Dump flows function returned error: %v", tc.name, err)
+		assert.Equal(t, tc.expectedConnections, len(conns), "Test Case: \"%s\", number of filtered connections should be equal", tc.name)
+		assert.Equal(t, len(testFlows), totalConns, "Test Case: \"%s\", Number of connections in conntrack table should be equal to testFlows", tc.name)
+	}
 }
 
 func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
