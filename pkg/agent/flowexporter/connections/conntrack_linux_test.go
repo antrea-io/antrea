@@ -153,10 +153,16 @@ func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
 		expectedConnections int
 	}{
 		{
-			"all support protocols",
-			[]string{"tcp", "udp", "sctp"}, // 6, 17, 32
+			"all supported protocols specified",
+			[]string{"TCP", "UDP", "SCTP"}, // 6, 17, 32
 			[]*flowexporter.Connection{antreaTCPFlow, antreaUPDFlow, antreaSCTPFlow},
 			3,
+		},
+		{
+			"only tcp",
+			[]string{"TCP"},
+			[]*flowexporter.Connection{antreaTCPFlow, antreaUPDFlow, antreaSCTPFlow},
+			1,
 		},
 	}
 	for _, tc := range testCases {
