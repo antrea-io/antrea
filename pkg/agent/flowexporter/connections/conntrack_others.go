@@ -57,6 +57,6 @@ func (ct *connTrackOvsCtlWindows) GetMaxConnections() (int, error) {
 	return 0, fmt.Errorf("couldn't find limit field in dpctl/ct-get-limits command output '%s'", cmdOutput)
 }
 
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool) *connTrackOvsCtlWindows {
-	return &connTrackOvsCtlWindows{*NewConnTrackOvsAppCtl(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled)}
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool, protocols []string) *connTrackOvsCtlWindows {
+	return &connTrackOvsCtlWindows{*NewConnTrackOvsAppCtl(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled, protocols)}
 }

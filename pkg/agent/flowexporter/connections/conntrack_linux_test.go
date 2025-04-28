@@ -103,7 +103,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	}
 	// Test the DumpFlows implementation of connTrackSystem
 	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
-	connDumperDPSystem := NewConnTrackSystem(nodeConfig, svcCIDR, netip.Prefix{}, false)
+	connDumperDPSystem := NewConnTrackSystem(nodeConfig, svcCIDR, netip.Prefix{}, false, []string{})
 
 	connDumperDPSystem.connTrack = mockNetlinkCT
 	// Set expects for mocks
@@ -137,6 +137,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		netip.Prefix{},
 		mockOVSCtlClient,
 		false,
+		[]string{},
 	}
 	// Set expect call for mock ovsCtlClient
 	ovsctlCmdOutput := []byte("tcp,orig=(src=127.0.0.1,dst=127.0.0.1,sport=45218,dport=2379,packets=320108,bytes=24615344),reply=(src=127.0.0.1,dst=127.0.0.1,sport=2379,dport=45218,packets=239595,bytes=24347883),start=2020-07-24T05:07:03.998,id=3750535678,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86399,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
@@ -187,7 +188,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 }
 
 func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
-	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, netip.Prefix{}, netip.Prefix{}, false)
+	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, netip.Prefix{}, netip.Prefix{}, false, []string{})
 	maxConns, err := connDumperDPSystem.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
 	expMaxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
@@ -207,6 +208,7 @@ func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 		netip.Prefix{},
 		mockOVSCtlClient,
 		false,
+		[]string{},
 	}
 	maxConns, err := connDumper.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)

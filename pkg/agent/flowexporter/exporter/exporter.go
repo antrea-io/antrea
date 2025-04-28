@@ -135,7 +135,6 @@ type FlowExporter struct {
 	egressQuerier          querier.EgressQuerier
 	podStore               podstore.Interface
 	l7Listener             *connections.L7Listener
-	protocols              []string
 }
 
 func genObservationID(nodeName string) uint32 {
@@ -163,7 +162,7 @@ func prepareExporterInputArgs(collectorProto, nodeName string) exporter.Exporter
 func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
 	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
 	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *flowexporter.FlowExporterOptions,
-	egressQuerier querier.EgressQuerier, podL7FlowExporterAttrGetter connections.PodL7FlowExporterAttrGetter, l7FlowExporterEnabled bool) (*FlowExporter, error) {
+	egressQuerier querier.EgressQuerier, podL7FlowExporterAttrGetter connections.PodL7FlowExporterAttrGetter, l7FlowExporterEnabled bool, protocols []string) (*FlowExporter, error) {
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
@@ -175,7 +174,7 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 	}
 	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
 
-	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
+	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocols)
 	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o)
 	var l7Listener *connections.L7Listener
 	var eventMapGetter connections.L7EventMapGetter
