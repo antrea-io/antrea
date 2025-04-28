@@ -220,6 +220,9 @@ if $extra_network && [[ "$mode" == "hybrid" ]]; then
 fi
 
 if [[ $cleanup_only == "true" ]];then
+  if [[ $flexible_ipam == "true" ]]; then
+    $TESTBED_CMD destroy kind --flexible-ipam 
+  fi
   $TESTBED_CMD destroy kind
   exit 0
 fi
