@@ -17,6 +17,7 @@ package connections
 import (
 	"net"
 	"net/netip"
+	"slices"
 
 	"k8s.io/klog/v2"
 
@@ -46,6 +47,7 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 	filteredConns := conns[:0]
 	gwIPv4, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
 	gwIPv6, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv6)
+
 	for _, conn := range conns {
 		if conn.Zone != zoneFilter {
 			continue
@@ -75,6 +77,14 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 				continue
 			}
 		}
+
+		if len(protocols) > 0 {
+			protocol := string(serviceProtocolMap[conn.FlowKey.Protocol])
+			if slices.Index(protocols, protocol) == -1 {
+				continue
+			}
+		}
+
 		filteredConns = append(filteredConns, conn)
 	}
 	return filteredConns

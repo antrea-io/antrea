@@ -159,6 +159,12 @@ func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
 			3,
 		},
 		{
+			"default protocols / no protocols specified",
+			[]string{},
+			[]*flowexporter.Connection{antreaTCPFlow, antreaUPDFlow, antreaSCTPFlow},
+			3,
+		},
+		{
 			"only tcp",
 			[]string{"TCP"},
 			[]*flowexporter.Connection{antreaTCPFlow, antreaUPDFlow, antreaSCTPFlow},
