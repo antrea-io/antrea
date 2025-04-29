@@ -169,6 +169,12 @@ func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
 			testFlows,
 			3,
 		},
+		{
+			"only udp",
+			[]string{"UDP"},
+			testFlows,
+			2,
+		},
 	}
 	for _, tc := range testCases {
 		ctrl := gomock.NewController(t)
