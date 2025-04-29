@@ -117,7 +117,6 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 }
 
 func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
-
 	// Create flows for test
 	tuple := flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: dstAddr, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	antreaTCPFlow := &flowexporter.Connection{

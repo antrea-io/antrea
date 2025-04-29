@@ -80,7 +80,7 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 
 		if len(protocols) > 0 {
 			protocol := string(serviceProtocolMap[conn.FlowKey.Protocol])
-			if slices.Index(protocols, protocol) == -1 {
+			if !slices.Contains(protocols, protocol) {
 				continue
 			}
 		}
