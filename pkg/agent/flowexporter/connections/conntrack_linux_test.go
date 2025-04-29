@@ -133,7 +133,7 @@ func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
 	}
-	testFlows := []*flowexporter.Connection{antreaTCPFlow, antreaUPDFlow, antreaSCTPFlow}
+	testFlows := []*flowexporter.Connection{antreaTCPFlow, antreaTCPFlow, antreaTCPFlow, antreaUPDFlow, antreaUPDFlow, antreaSCTPFlow}
 
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
@@ -153,21 +153,21 @@ func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
 	}{
 		{
 			"all supported protocols specified",
-			[]string{"TCP", "UDP", "SCTP"}, // 6, 17, 32
-			[]*flowexporter.Connection{antreaTCPFlow, antreaUPDFlow, antreaSCTPFlow},
-			3,
+			[]string{"TCP", "UDP", "SCTP"},
+			testFlows,
+			6,
 		},
 		{
 			"default protocols / no protocols specified",
 			[]string{},
-			[]*flowexporter.Connection{antreaTCPFlow, antreaUPDFlow, antreaSCTPFlow},
-			3,
+			testFlows,
+			6,
 		},
 		{
 			"only tcp",
 			[]string{"TCP"},
-			[]*flowexporter.Connection{antreaTCPFlow, antreaUPDFlow, antreaSCTPFlow},
-			1,
+			testFlows,
+			3,
 		},
 	}
 	for _, tc := range testCases {
@@ -182,7 +182,7 @@ func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
 		conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
 		assert.NoErrorf(t, err, "Test Case: \"%s\", Dump flows function returned error: %v", tc.name, err)
 		assert.Equal(t, tc.expectedConnections, len(conns), "Test Case: \"%s\", number of filtered connections should be equal", tc.name)
-		assert.Equal(t, len(testFlows), totalConns, "Test Case: \"%s\", Number of connections in conntrack table should be equal to testFlows", tc.name)
+		assert.Equal(t, len(tc.testFlows), totalConns, "Test Case: \"%s\", Number of connections in conntrack table should be equal to testFlows", tc.name)
 	}
 }
 
