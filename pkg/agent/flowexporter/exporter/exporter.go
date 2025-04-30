@@ -175,7 +175,7 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
 
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocols)
-	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o)
+	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o, protocols)
 	var l7Listener *connections.L7Listener
 	var eventMapGetter connections.L7EventMapGetter
 	if l7FlowExporterEnabled {
