@@ -523,10 +523,7 @@ func TestUpdateEgress(t *testing.T) {
 			return false
 		}
 		ip := getEgressIP()
-		if ip != "" {
-			return false
-		}
-		return true
+		return ip == ""
 	}, time.Second, 50*time.Millisecond, "EgressIP was not deleted after the ExternalIPPool was deleted")
 
 	// Recreate the ExternalIPPool. An EgressIP should be allocated.

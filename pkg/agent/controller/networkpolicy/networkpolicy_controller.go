@@ -1015,19 +1015,17 @@ func (w *watcher) watch() {
 	var initObjects []runtime.Object
 loop:
 	for {
-		select {
-		case event, ok := <-watcher.ResultChan():
-			if !ok {
-				klog.Warningf("Result channel for %s was closed", w.objectType)
-				return
-			}
-			switch event.Type {
-			case watch.Added:
-				klog.V(2).Infof("Added %s (%#v)", w.objectType, event.Object)
-				initObjects = append(initObjects, event.Object)
-			case watch.Bookmark:
-				break loop
-			}
+		event, ok := <-watcher.ResultChan()
+		if !ok {
+			klog.Warningf("Result channel for %s was closed", w.objectType)
+			return
+		}
+		switch event.Type {
+		case watch.Added:
+			klog.V(2).Infof("Added %s (%#v)", w.objectType, event.Object)
+			initObjects = append(initObjects, event.Object)
+		case watch.Bookmark:
+			break loop
 		}
 	}
 	klog.Infof("Received %d init events for %s", len(initObjects), w.objectType)
@@ -1040,33 +1038,31 @@ loop:
 	w.onFullSync()
 
 	for {
-		select {
-		case event, ok := <-watcher.ResultChan():
-			if !ok {
-				return
-			}
-			klog.V(2).InfoS("Received event", "eventType", event.Type, "objectType", w.objectType, "object", event.Object)
-			switch event.Type {
-			case watch.Added:
-				if err := w.AddFunc(event.Object); err != nil {
-					klog.Errorf("Failed to handle added event: %v", err)
-					return
-				}
-			case watch.Modified:
-				if err := w.UpdateFunc(event.Object); err != nil {
-					klog.Errorf("Failed to handle modified event: %v", err)
-					return
-				}
-			case watch.Deleted:
-				if err := w.DeleteFunc(event.Object); err != nil {
-					klog.Errorf("Failed to handle deleted event: %v", err)
-					return
-				}
-			default:
-				klog.Errorf("Unknown event: %v", event)
-				return
-			}
-			eventCount++
+		event, ok := <-watcher.ResultChan()
+		if !ok {
+			return
 		}
+		klog.V(2).InfoS("Received event", "eventType", event.Type, "objectType", w.objectType, "object", event.Object)
+		switch event.Type {
+		case watch.Added:
+			if err := w.AddFunc(event.Object); err != nil {
+				klog.Errorf("Failed to handle added event: %v", err)
+				return
+			}
+		case watch.Modified:
+			if err := w.UpdateFunc(event.Object); err != nil {
+				klog.Errorf("Failed to handle modified event: %v", err)
+				return
+			}
+		case watch.Deleted:
+			if err := w.DeleteFunc(event.Object); err != nil {
+				klog.Errorf("Failed to handle deleted event: %v", err)
+				return
+			}
+		default:
+			klog.Errorf("Unknown event: %v", event)
+			return
+		}
+		eventCount++
 	}
 }

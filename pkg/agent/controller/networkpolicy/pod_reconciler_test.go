@@ -99,7 +99,7 @@ var (
 		UID:  "uid2",
 	}
 
-	transientError = errors.New("Transient OVS error")
+	errTransient = errors.New("Transient OVS error")
 )
 
 func newCIDR(cidrStr string) *net.IPNet {
@@ -919,7 +919,7 @@ func TestReconcileWithTransientError(t *testing.T) {
 	r.idAllocator.deleteInterval = 0
 
 	// Make the first call fail.
-	mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any()).Return(transientError).Times(1)
+	mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any()).Return(errTransient).Times(1)
 	err := r.Reconcile(egressRule)
 	assert.Error(t, err)
 	// Ensure the openflow ID is not persistent in podPolicyLastRealized and is released to idAllocator upon error.

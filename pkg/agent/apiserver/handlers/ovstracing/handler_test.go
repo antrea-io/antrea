@@ -232,11 +232,12 @@ func TestPodFlows(t *testing.T) {
 
 		if tc.expectedStatus == http.StatusNotFound {
 			q.EXPECT().GetInterfaceStore().Return(i).Times(1)
-			if tc.port == "pod" {
+			switch tc.port {
+			case "pod":
 				i.EXPECT().GetContainerInterfacesByPod("inPod", "inNS").Return(nil).Times(1)
-			} else if tc.port == "srcPod" {
+			case "srcPod":
 				i.EXPECT().GetContainerInterfacesByPod("srcPod", "srcNS").Return([]*interfacestore.InterfaceConfig{srcPodInterface}).Times(1)
-			} else {
+			default:
 				i.EXPECT().GetInterfaceByName(tc.port).Return(nil, false).Times(1)
 			}
 		}

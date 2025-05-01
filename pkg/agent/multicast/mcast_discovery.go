@@ -160,11 +160,12 @@ func (s *IGMPSnooper) addToIGMPReportNPStatsMap(item types.IGMPNPRuleInfo, packe
 		t.Bytes += packetLen
 	}
 	ruleType := *item.NPType
-	if ruleType == v1beta2.AntreaNetworkPolicy {
+	switch ruleType {
+	case v1beta2.AntreaNetworkPolicy:
 		s.igmpReportANNPStatsMutex.Lock()
 		updateRuleStats(s.igmpReportANNPStats, item.UUID, item.Name)
 		s.igmpReportANNPStatsMutex.Unlock()
-	} else if ruleType == v1beta2.AntreaClusterNetworkPolicy {
+	case v1beta2.AntreaClusterNetworkPolicy:
 		s.igmpReportACNPStatsMutex.Lock()
 		updateRuleStats(s.igmpReportACNPStats, item.UUID, item.Name)
 		s.igmpReportACNPStatsMutex.Unlock()
@@ -229,9 +230,10 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	klog.V(2).InfoS("Received PacketIn for IGMP packet", "in_port", iface.OFPort)
 	podName := "unknown"
 	var srcNode net.IP
-	if iface.Type == interfacestore.ContainerInterface {
+	switch iface.Type {
+	case interfacestore.ContainerInterface:
 		podName = iface.PodName
-	} else if iface.Type == interfacestore.TunnelInterface {
+	case interfacestore.TunnelInterface:
 		var err error
 		srcNode, err = s.parseSrcNode(pktIn)
 		if err != nil {

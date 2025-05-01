@@ -58,16 +58,18 @@ func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo 
 	info.LoadBalancerMode = getLoadBalancerMode(service)
 	if utilnet.IsIPv6(baseInfo.ClusterIP()) {
 		info.OFProtocol = openflow.ProtocolTCPv6
-		if port.Protocol == corev1.ProtocolUDP {
+		switch port.Protocol {
+		case corev1.ProtocolUDP:
 			info.OFProtocol = openflow.ProtocolUDPv6
-		} else if port.Protocol == corev1.ProtocolSCTP {
+		case corev1.ProtocolSCTP:
 			info.OFProtocol = openflow.ProtocolSCTPv6
 		}
 	} else {
 		info.OFProtocol = openflow.ProtocolTCP
-		if port.Protocol == corev1.ProtocolUDP {
+		switch port.Protocol {
+		case corev1.ProtocolUDP:
 			info.OFProtocol = openflow.ProtocolUDP
-		} else if port.Protocol == corev1.ProtocolSCTP {
+		case corev1.ProtocolSCTP:
 			info.OFProtocol = openflow.ProtocolSCTP
 		}
 	}

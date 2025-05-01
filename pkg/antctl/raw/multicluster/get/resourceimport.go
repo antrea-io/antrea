@@ -99,10 +99,7 @@ func runE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	argsNum := len(args)
-	singleResource := false
-	if argsNum > 0 {
-		singleResource = true
-	}
+	singleResource := argsNum > 0
 
 	if options.allNamespaces && singleResource {
 		return fmt.Errorf("a resource cannot be retrieved by name across all Namespaces")

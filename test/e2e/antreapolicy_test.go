@@ -690,8 +690,8 @@ func testACNPDropIPBlockWithExcept(t *testing.T) {
 	builder = builder.SetName("acnp-drop-all-egress-from-ya-except-xa-xb-ip").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": getNS("y")}}})
-	podXAIP, _ := podIPs[getPodName("x", "a")]
-	podXBIP, _ := podIPs[getPodName("x", "b")]
+	podXAIP := podIPs[getPodName("x", "a")]
+	podXBIP := podIPs[getPodName("x", "b")]
 	ipBlocks := genIPBlockForAllIPsExcept(append(podXAIP, podXBIP...))
 	for i := range ipBlocks {
 		builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, ipBlocks[i], nil, nil, nil, nil, nil, nil, nil, nil,
@@ -1137,10 +1137,10 @@ func genIPBlockForAllIPsExcept(except []string) []*crdv1beta1.IPBlock {
 }
 
 func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
-	podXAIP, _ := podIPs[getPodName("x", "a")]
-	podXBIP, _ := podIPs[getPodName("x", "b")]
-	podXCIP, _ := podIPs[getPodName("x", "c")]
-	podZAIP, _ := podIPs[getPodName("z", "a")]
+	podXAIP := podIPs[getPodName("x", "a")]
+	podXBIP := podIPs[getPodName("x", "b")]
+	podXCIP := podIPs[getPodName("x", "c")]
+	podZAIP := podIPs[getPodName("z", "a")]
 	var ipBlock1, ipBlock2 []crdv1beta1.IPBlock
 	for i := 0; i < len(podXAIP); i++ {
 		for _, ips := range [][]string{podXAIP, podXBIP, podXCIP} {
@@ -1587,8 +1587,8 @@ func testANNPGroupServiceRefCreateAndUpdate(t *testing.T) {
 }
 
 func testANNPGroupRefRuleIPBlocks(t *testing.T) {
-	podXBIP, _ := podIPs[getPodName("x", "b")]
-	podXCIP, _ := podIPs[getPodName("x", "c")]
+	podXBIP := podIPs[getPodName("x", "b")]
+	podXCIP := podIPs[getPodName("x", "c")]
 	var ipBlock []crdv1beta1.IPBlock
 	for i := 0; i < len(podXBIP); i++ {
 		for _, podIP := range []string{podXBIP[i], podXCIP[i]} {
@@ -2137,7 +2137,7 @@ func testACNPPortRange(t *testing.T) {
 	reachability.Expect(getPod("z", "a"), getPod("z", "c"), Dropped)
 	testSteps := []*TestStep{
 		{
-			Name:          fmt.Sprintf("ACNP Drop Ports 8080:8082"),
+			Name:          "ACNP Drop Ports 8080:8082",
 			Reachability:  reachability,
 			TestResources: []metav1.Object{builder.Get()},
 			Ports:         []int32{8080, 8081, 8082},
@@ -2423,7 +2423,7 @@ func testANNPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		Name:          fmt.Sprintf("ANNP Drop Ports 8080:8082"),
+		Name:          "ANNP Drop Ports 8080:8082",
 		Reachability:  reachability,
 		TestResources: []metav1.Object{builder.Get()},
 		Ports:         []int32{8080, 8081, 8082},
@@ -2672,8 +2672,8 @@ func (m *auditLogMatcher) add(appliedToRef, srcIP, destIP string, destPort int32
 }
 
 func (m *auditLogMatcher) AddProbe(appliedToRef, ns1, pod1, ns2, pod2 string, destPort int32) {
-	srcIPs, _ := podIPs[fmt.Sprintf("%s/%s", ns1, pod1)]
-	destIPs, _ := podIPs[fmt.Sprintf("%s/%s", ns2, pod2)]
+	srcIPs := podIPs[fmt.Sprintf("%s/%s", ns1, pod1)]
+	destIPs := podIPs[fmt.Sprintf("%s/%s", ns2, pod2)]
 	for _, srcIP := range srcIPs {
 		for _, destIP := range destIPs {
 			// only look for an entry in the audit log file if srcIP and dstIP are of the same family
@@ -2686,7 +2686,7 @@ func (m *auditLogMatcher) AddProbe(appliedToRef, ns1, pod1, ns2, pod2 string, de
 }
 
 func (m *auditLogMatcher) AddProbeAddr(appliedToRef, ns, pod, destIP string, destPort int32) {
-	srcIPs, _ := podIPs[fmt.Sprintf("%s/%s", ns, pod)]
+	srcIPs := podIPs[fmt.Sprintf("%s/%s", ns, pod)]
 	for _, srcIP := range srcIPs {
 		// only look for an entry in the audit log file if srcIP and dstIP are of the same family
 		if IPFamily(srcIP) != IPFamily(destIP) {
@@ -3125,8 +3125,8 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 }
 
 func testACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
-	podXAIP, _ := podIPs[getPodName("x", "a")]
-	podXBIP, _ := podIPs[getPodName("x", "b")]
+	podXAIP := podIPs[getPodName("x", "a")]
+	podXBIP := podIPs[getPodName("x", "b")]
 	cg1Name, cg2Name, cg3Name := "cg-x-a-ipb", "cg-x-b-ipb", "cg-select-x-c"
 	cgParentName := "cg-parent"
 	var ipBlockXA, ipBlockXB []crdv1beta1.IPBlock
@@ -4221,11 +4221,12 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	defer data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp.Name, metav1.DeleteOptions{})
 
 	captured, err := checkPacketCaptureResult(t, data, tcpdumpName, cmd)
-	if action == crdv1beta1.RuleActionAllow {
+	switch action {
+	case crdv1beta1.RuleActionAllow:
 		if !captured || err != nil {
 			t.Fatalf("failed to apply acnp policy: %+v, err: %v", *acnp, err)
 		}
-	} else if action == crdv1beta1.RuleActionDrop {
+	case crdv1beta1.RuleActionDrop:
 		if captured || err != nil {
 			t.Fatalf("failed to apply acnp policy: %+v, err: %v", *acnp, err)
 		}
@@ -4320,7 +4321,7 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 			if reachability != nil {
 				start := time.Now()
 				k8sUtils.Validate(allPods, reachability, step.Ports, step.Protocol)
-				step.Duration = time.Now().Sub(start)
+				step.Duration = time.Since(start)
 
 				_, wrong, _ := step.Reachability.Summary()
 				if wrong != 0 {

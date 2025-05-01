@@ -81,7 +81,8 @@ func newFeatureService(
 	nodePortAddresses := make(map[binding.Protocol][]net.IP)
 	serviceCIDRs := make(map[binding.Protocol]net.IPNet)
 	for _, ipProtocol := range ipProtocols {
-		if ipProtocol == binding.ProtocolIP {
+		switch ipProtocol {
+		case binding.ProtocolIP:
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv4
 			virtualIPs[ipProtocol] = config.VirtualServiceIPv4
 			virtualNodePortDNATIPs[ipProtocol] = config.VirtualNodePortDNATIPv4
@@ -91,7 +92,7 @@ func newFeatureService(
 			if serviceConfig.ServiceCIDR != nil {
 				serviceCIDRs[ipProtocol] = *serviceConfig.ServiceCIDR
 			}
-		} else if ipProtocol == binding.ProtocolIPv6 {
+		case binding.ProtocolIPv6:
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv6
 			virtualIPs[ipProtocol] = config.VirtualServiceIPv6
 			virtualNodePortDNATIPs[ipProtocol] = config.VirtualNodePortDNATIPv6

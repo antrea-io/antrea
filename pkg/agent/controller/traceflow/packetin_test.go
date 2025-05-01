@@ -730,5 +730,5 @@ func TestParsePacketInLiveDuplicates(t *testing.T) {
 	tfc.runningTraceflows[tfState.tag] = tfState
 
 	_, _, _, err := tfc.parsePacketIn(pktIn)
-	assert.ErrorIs(t, err, skipTraceflowUpdateErr)
+	assert.ErrorIs(t, err, errSkipTraceflowUpdate)
 }

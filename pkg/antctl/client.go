@@ -74,11 +74,12 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 		kubeconfig.CAFile = ""
 		kubeconfig.CAData = nil
 		kubeconfig.BearerTokenFile = apis.APIServerLoopbackTokenPath
-		if runtime.Mode == runtime.ModeAgent {
+		switch runtime.Mode {
+		case runtime.ModeAgent:
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
-		} else if runtime.Mode == runtime.ModeController {
+		case runtime.ModeController:
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaControllerAPIPort))
-		} else if runtime.Mode == runtime.ModeFlowAggregator {
+		case runtime.ModeFlowAggregator:
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.FlowAggregatorAPIPort))
 		}
 	} else {
@@ -93,11 +94,12 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 
 func (c *client) request(opt *requestOption) (io.Reader, error) {
 	var e *endpoint
-	if runtime.Mode == runtime.ModeAgent {
+	switch runtime.Mode {
+	case runtime.ModeAgent:
 		e = opt.commandDefinition.agentEndpoint
-	} else if runtime.Mode == runtime.ModeFlowAggregator {
+	case runtime.ModeFlowAggregator:
 		e = opt.commandDefinition.flowAggregatorEndpoint
-	} else {
+	default:
 		e = opt.commandDefinition.controllerEndpoint
 	}
 	if e.resourceEndpoint != nil {
@@ -156,9 +158,10 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 	restClient.Client.Timeout = opt.timeout
 
 	var restRequest *rest.Request
-	if e.restMethod == restGet {
+	switch e.restMethod {
+	case restGet:
 		restRequest = restClient.Get()
-	} else if e.restMethod == restPost {
+	case restPost:
 		restRequest = restClient.Post()
 	}
 

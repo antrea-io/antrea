@@ -317,7 +317,6 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 			assert.Equal(t, expectedRules[idx].Index, responseRules[idx].Index)
 			assert.Equal(t, expectedRules[idx].Policy.SourceRef, responseRules[idx].Policy.SourceRef)
 		}
-		return
 	}
 
 	for _, tc := range testCases {
@@ -407,9 +406,10 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			Name:            fmt.Sprintf("pod%d", podID),
 			AppliedPolicies: appliedPolicies,
 		}
-		if podID == 1 {
+		switch podID {
+		case 1:
 			endpointRule.EndpointAsIngressSrcRules = matchedRules
-		} else if podID == 2 {
+		case 2:
 			endpointRule.EndpointAsEgressDstRules = matchedRules
 		}
 		return endpointRule

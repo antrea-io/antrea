@@ -313,11 +313,7 @@ func (i *LabelIdentityIndex) RemoveStalePolicySelectors(selectorKeys sets.Set[st
 	}
 	if selectorKeys.Len() > 0 {
 		for selKey := range selectorKeys {
-			if _, exists := originalSelectors[selKey]; exists {
-				// Remove matched ClusterSet-scoped selectors of the policy before and after the update.
-				// The selectors remaining in originalSelectors will need to be unbounded from the policy.
-				delete(originalSelectors, selKey)
-			}
+			delete(originalSelectors, selKey)
 		}
 	}
 	// The policy no longer has these selectors.

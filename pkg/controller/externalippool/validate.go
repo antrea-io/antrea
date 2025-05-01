@@ -177,7 +177,7 @@ func validateIPRangesAndSubnetInfo(externalIPPool crdv1beta1.ExternalIPPool, exi
 		}
 
 		// validate if range is subset of given subnet info
-		if subnet != nil && !(subnet.Contains(start) && subnet.Contains(end)) {
+		if subnet != nil && (!subnet.Contains(start) || !subnet.Contains(end)) {
 			return fmt.Sprintf("%s must be a strict subset of the subnet %s/%d",
 				key, subnetInfo.Gateway, subnetInfo.PrefixLength), false
 		}
@@ -185,7 +185,7 @@ func validateIPRangesAndSubnetInfo(externalIPPool crdv1beta1.ExternalIPPool, exi
 		// validate if the range overlaps with ranges of any existing pool or already processed
 		// range of current pool.
 		for combinedKey, combinedRange := range combinedRanges {
-			if !(start.Compare(combinedRange[1]) == 1 || end.Compare(combinedRange[0]) == -1) {
+			if start.Compare(combinedRange[1]) != 1 && end.Compare(combinedRange[0]) != -1 {
 				return fmt.Sprintf("%s overlaps with %s", key, combinedKey), false
 			}
 		}

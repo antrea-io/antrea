@@ -2004,7 +2004,7 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 		assert.Contains(record, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
 		assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
 		assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", nodeName), "Record does not have correct sourceNodeName: %s", nodeName)
-		assert.Contains(record, fmt.Sprintf("\"flowexportertest\":\"l7\""), "Record does not have correct label for source Pod")
+		assert.Contains(record, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
 
 		checkL7FlowExporterData(t, record, "http")
 	}
@@ -2015,7 +2015,7 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 		assert.Equal(record.SourcePodName, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
 		assert.Equal(record.SourcePodNamespace, data.testNamespace, "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
 		assert.Equal(record.SourceNodeName, nodeName, "Record does not have correct sourceNodeName: %s", nodeName)
-		assert.Contains(record.SourcePodLabels, fmt.Sprintf("\"flowexportertest\":\"l7\""), "Record does not have correct label for source Pod")
+		assert.Contains(record.SourcePodLabels, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
 
 		checkL7FlowExporterDataClickHouse(t, record, "http")
 	}

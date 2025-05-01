@@ -483,8 +483,7 @@ func run(o *Options) error {
 	// AntreaPolicy feature is enabled.
 	statusManagerEnabled := antreaPolicyEnabled
 
-	var auditLoggerOptions *networkpolicy.AuditLoggerOptions
-	auditLoggerOptions = &networkpolicy.AuditLoggerOptions{
+	var auditLoggerOptions = &networkpolicy.AuditLoggerOptions{
 		MaxSize:    int(o.config.AuditLogging.MaxSize),
 		MaxBackups: int(*o.config.AuditLogging.MaxBackups),
 		MaxAge:     int(*o.config.AuditLogging.MaxAge),
