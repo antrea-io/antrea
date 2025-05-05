@@ -181,7 +181,7 @@ func (ct *ConnectivityTable) PrettyPrint(indent string) string {
 	for _, from := range ct.Items {
 		line := []string{from}
 		for _, to := range ct.Items {
-			val := fmt.Sprintf("%s", ct.Values[from][to])
+			val := string(ct.Values[from][to])
 			line = append(line, val)
 		}
 		lines = append(lines, indent+strings.Join(line, "\t"))
