@@ -109,10 +109,8 @@ func Test_StartPacketInHandler(t *testing.T) {
 				UserData: tt.userData,
 			}
 			bridge.PacketRcvd(nil, packetIn)
-			select {
-			case value := <-callChannel:
-				assert.Equal(t, value, tt.expectValue)
-			}
+			value := <-callChannel
+			assert.Equal(t, value, tt.expectValue)
 		})
 	}
 }

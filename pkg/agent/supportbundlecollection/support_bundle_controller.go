@@ -135,26 +135,24 @@ func (c *SupportBundleController) watchSupportBundleCollections() {
 	}()
 
 	for {
-		select {
-		case event, ok := <-watcher.ResultChan():
-			if !ok {
-				return
-			}
-			switch event.Type {
-			case watch.Bookmark:
-				klog.V(2).Info("Received Bookmark event")
-			case watch.Added:
-				c.addSupportBundleCollection(event.Object.(*cpv1b2.SupportBundleCollection))
-				klog.InfoS("Added SupportBundleCollection", "name", event.Object.(*cpv1b2.SupportBundleCollection).Name)
-			case watch.Deleted:
-				c.deleteSupportBundleCollection(event.Object.(*cpv1b2.SupportBundleCollection))
-				klog.InfoS("Deleted SupportBundleCollection", "name", event.Object.(*cpv1b2.SupportBundleCollection).Name)
-			default:
-				klog.ErrorS(nil, "Received unknown event", "event", event.Type)
-				return
-			}
-			eventCount++
+		event, ok := <-watcher.ResultChan()
+		if !ok {
+			return
 		}
+		switch event.Type {
+		case watch.Bookmark:
+			klog.V(2).Info("Received Bookmark event")
+		case watch.Added:
+			c.addSupportBundleCollection(event.Object.(*cpv1b2.SupportBundleCollection))
+			klog.InfoS("Added SupportBundleCollection", "name", event.Object.(*cpv1b2.SupportBundleCollection).Name)
+		case watch.Deleted:
+			c.deleteSupportBundleCollection(event.Object.(*cpv1b2.SupportBundleCollection))
+			klog.InfoS("Deleted SupportBundleCollection", "name", event.Object.(*cpv1b2.SupportBundleCollection).Name)
+		default:
+			klog.ErrorS(nil, "Received unknown event", "event", event.Type)
+			return
+		}
+		eventCount++
 	}
 }
 

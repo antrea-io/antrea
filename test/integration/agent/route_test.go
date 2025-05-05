@@ -294,9 +294,7 @@ func TestIpTablesSync(t *testing.T) {
 		close(inited)
 	})
 	assert.NoError(t, err)
-	select {
-	case <-inited: // Node network initialized
-	}
+	<-inited // Node network initialized
 
 	snatIP := net.ParseIP("1.1.1.1")
 	mark := uint32(1)
@@ -345,9 +343,7 @@ func TestAddAndDeleteSNATRule(t *testing.T) {
 		close(inited)
 	})
 	assert.NoError(t, err)
-	select {
-	case <-inited: // Node network initialized
-	}
+	<-inited // Node network initialized
 
 	snatIP := net.ParseIP("1.1.1.1")
 	mark := uint32(1)

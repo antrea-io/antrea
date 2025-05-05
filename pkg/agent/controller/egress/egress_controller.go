@@ -1245,19 +1245,17 @@ func (c *EgressController) watchEgressGroup() {
 	var initObjects []*cpv1b2.EgressGroup
 loop:
 	for {
-		select {
-		case event, ok := <-watcher.ResultChan():
-			if !ok {
-				klog.Warningf("Result channel for EgressGroup was closed")
-				return
-			}
-			switch event.Type {
-			case watch.Added:
-				klog.V(2).Infof("Added EgressGroup (%#v)", event.Object)
-				initObjects = append(initObjects, event.Object.(*cpv1b2.EgressGroup))
-			case watch.Bookmark:
-				break loop
-			}
+		event, ok := <-watcher.ResultChan()
+		if !ok {
+			klog.Warningf("Result channel for EgressGroup was closed")
+			return
+		}
+		switch event.Type {
+		case watch.Added:
+			klog.V(2).Infof("Added EgressGroup (%#v)", event.Object)
+			initObjects = append(initObjects, event.Object.(*cpv1b2.EgressGroup))
+		case watch.Bookmark:
+			break loop
 		}
 	}
 	klog.Infof("Received %d init events for EgressGroup", len(initObjects))
@@ -1266,27 +1264,25 @@ loop:
 	c.replaceEgressGroups(initObjects)
 
 	for {
-		select {
-		case event, ok := <-watcher.ResultChan():
-			if !ok {
-				return
-			}
-			switch event.Type {
-			case watch.Added:
-				c.addEgressGroup(event.Object.(*cpv1b2.EgressGroup))
-				klog.V(2).Infof("Added EgressGroup (%#v)", event.Object)
-			case watch.Modified:
-				c.patchEgressGroup(event.Object.(*cpv1b2.EgressGroupPatch))
-				klog.V(2).Infof("Updated EgressGroup (%#v)", event.Object)
-			case watch.Deleted:
-				c.deleteEgressGroup(event.Object.(*cpv1b2.EgressGroup))
-				klog.V(2).Infof("Removed EgressGroup (%#v)", event.Object)
-			default:
-				klog.Errorf("Unknown event: %v", event)
-				return
-			}
-			eventCount++
+		event, ok := <-watcher.ResultChan()
+		if !ok {
+			return
 		}
+		switch event.Type {
+		case watch.Added:
+			c.addEgressGroup(event.Object.(*cpv1b2.EgressGroup))
+			klog.V(2).Infof("Added EgressGroup (%#v)", event.Object)
+		case watch.Modified:
+			c.patchEgressGroup(event.Object.(*cpv1b2.EgressGroupPatch))
+			klog.V(2).Infof("Updated EgressGroup (%#v)", event.Object)
+		case watch.Deleted:
+			c.deleteEgressGroup(event.Object.(*cpv1b2.EgressGroup))
+			klog.V(2).Infof("Removed EgressGroup (%#v)", event.Object)
+		default:
+			klog.Errorf("Unknown event: %v", event)
+			return
+		}
+		eventCount++
 	}
 }
 

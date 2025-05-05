@@ -159,19 +159,17 @@ func (w *watchWrapper) watch() {
 	// Watch the init events from chan, and log the events
 loop:
 	for {
-		select {
-		case event, ok := <-watcher.ResultChan():
-			if !ok {
-				klog.Warningf("Result channel for %s was closed", w.name)
-				return
-			}
-			switch event.Type {
-			case watch.Added:
-				klog.V(2).Infof("Added %s (%#v)", w.name, event.Object)
-				initCount++
-			case watch.Bookmark:
-				break loop
-			}
+		event, ok := <-watcher.ResultChan()
+		if !ok {
+			klog.Warningf("Result channel for %s was closed", w.name)
+			return
+		}
+		switch event.Type {
+		case watch.Added:
+			klog.V(2).Infof("Added %s (%#v)", w.name, event.Object)
+			initCount++
+		case watch.Bookmark:
+			break loop
 		}
 	}
 	klog.Infof("Received %d init events for %s", initCount, w.name)
@@ -179,23 +177,21 @@ loop:
 
 	// Watch the events from chan, and log the events
 	for {
-		select {
-		case event, ok := <-watcher.ResultChan():
-			if !ok {
-				return
-			}
-			switch event.Type {
-			case watch.Added:
-				klog.V(2).Infof("Added %s (%#v)", w.name, event.Object)
-			case watch.Modified:
-				klog.V(2).Infof("Updated %s (%#v)", w.name, event.Object)
-			case watch.Deleted:
-				klog.V(2).Infof("Removed %s (%#v)", w.name, event.Object)
-			default:
-				klog.Errorf("Unknown event: %v", event)
-				return
-			}
-			eventCount++
+		event, ok := <-watcher.ResultChan()
+		if !ok {
+			return
 		}
+		switch event.Type {
+		case watch.Added:
+			klog.V(2).Infof("Added %s (%#v)", w.name, event.Object)
+		case watch.Modified:
+			klog.V(2).Infof("Updated %s (%#v)", w.name, event.Object)
+		case watch.Deleted:
+			klog.V(2).Infof("Removed %s (%#v)", w.name, event.Object)
+		default:
+			klog.Errorf("Unknown event: %v", event)
+			return
+		}
+		eventCount++
 	}
 }

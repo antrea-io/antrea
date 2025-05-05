@@ -780,33 +780,31 @@ func (b *OFBridge) processTableFeatures(ch chan *openflow15.MultipartReply) {
 	// features in the reply. Here we complete the loop after we receive all the reply messages, while the reply message
 	// is configured with Flags=0.
 	for {
-		select {
-		case rpl := <-ch:
-			request := &openflow15.MultipartRequest{
-				Header: header,
-				Type:   openflow15.MultipartType_TableFeatures,
-				Flags:  rpl.Flags,
+		rpl := <-ch
+		request := &openflow15.MultipartRequest{
+			Header: header,
+			Type:   openflow15.MultipartType_TableFeatures,
+			Flags:  rpl.Flags,
+		}
+		// A MultipartReply message may have one or many OFPTableFeatures messages, and MultipartReply.Body is a
+		// slice of these messages.
+		for _, body := range rpl.Body {
+			tableFeature := body.(*openflow15.TableFeatures)
+			// Modify table name if the table is in the pipeline, otherwise use the default table features.
+			// OVS doesn't allow to skip any table except the hidden table (always the last table) in a table_features
+			// request. So use the existing table features for the tables that Antrea doesn't define in the pipeline.
+			if t, ok := b.tableCache[tableFeature.TableID]; ok {
+				// Set table name with the configured value.
+				copy(tableFeature.Name[0:], t.name)
 			}
-			// A MultipartReply message may have one or many OFPTableFeatures messages, and MultipartReply.Body is a
-			// slice of these messages.
-			for _, body := range rpl.Body {
-				tableFeature := body.(*openflow15.TableFeatures)
-				// Modify table name if the table is in the pipeline, otherwise use the default table features.
-				// OVS doesn't allow to skip any table except the hidden table (always the last table) in a table_features
-				// request. So use the existing table features for the tables that Antrea doesn't define in the pipeline.
-				if t, ok := b.tableCache[tableFeature.TableID]; ok {
-					// Set table name with the configured value.
-					copy(tableFeature.Name[0:], t.name)
-				}
-				request.Body = append(request.Body, tableFeature)
-			}
-			request.Length = request.Len()
-			b.ofSwitch.Send(request)
-			// OVS uses "Flags=0" in the last MultipartReply message to indicate all tables' features have been sent.
-			// Here use this mark to identify all related messages are received and complete the loop.
-			if rpl.Flags == 0 {
-				break
-			}
+			request.Body = append(request.Body, tableFeature)
+		}
+		request.Length = request.Len()
+		b.ofSwitch.Send(request)
+		// OVS uses "Flags=0" in the last MultipartReply message to indicate all tables' features have been sent.
+		// Here use this mark to identify all related messages are received and complete the loop.
+		if rpl.Flags == 0 {
+			break
 		}
 	}
 }

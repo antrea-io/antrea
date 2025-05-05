@@ -429,8 +429,8 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 	defer bridge.Disconnect()
 
 	// Ensure OVS is connected before sending bundle messages.
-	select {
-	case <-time.Tick(1 * time.Second):
+	for {
+		<-time.Tick(1 * time.Second)
 		if bridge.IsConnected() {
 			break
 		}
@@ -438,11 +438,9 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 
 	// Restart OVS in another goroutine.
 	go func() {
-		select {
-		case <-time.After(100 * time.Millisecond):
-			DeleteOVSBridge(br)
-			PrepareOVSBridge(br)
-		}
+		<-time.After(100 * time.Millisecond)
+		DeleteOVSBridge(br)
+		PrepareOVSBridge(br)
 	}()
 
 	expectedErrorMsgs := map[string]bool{

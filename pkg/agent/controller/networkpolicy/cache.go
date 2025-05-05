@@ -492,10 +492,8 @@ func (c *ruleCache) processExternalEntityUpdate(e interface{}) {
 // ToServices field and use dirtyRuleHandler to re-queue these rules.
 func (c *ruleCache) processGroupIDUpdates() {
 	for {
-		select {
-		case svcStr := <-c.groupIDUpdates:
-			c.processServiceGroupIDUpdate(svcStr)
-		}
+		svcStr := <-c.groupIDUpdates
+		c.processServiceGroupIDUpdate(svcStr)
 	}
 }
 
