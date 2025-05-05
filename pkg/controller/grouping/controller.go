@@ -46,7 +46,7 @@ func PodIPsIndexFunc(obj interface{}) ([]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("obj is not pod: %+v", obj)
 	}
-	if pod.Status.PodIPs != nil && len(pod.Status.PodIPs) > 0 && pod.Status.Phase != v1.PodSucceeded && pod.Status.Phase != v1.PodFailed {
+	if len(pod.Status.PodIPs) > 0 && pod.Status.Phase != v1.PodSucceeded && pod.Status.Phase != v1.PodFailed {
 		indexes := make([]string, len(pod.Status.PodIPs))
 		for i := range pod.Status.PodIPs {
 			indexes[i] = pod.Status.PodIPs[i].IP
