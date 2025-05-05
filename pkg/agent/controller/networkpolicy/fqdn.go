@@ -661,9 +661,7 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 	if len(responseIPs) > 0 {
 		klog.V(4).InfoS("Received DNS Packet with valid Answer", "IPs", responseIPs)
 	}
-	if strings.HasSuffix(fqdn, ".") {
-		fqdn = fqdn[:len(fqdn)-1]
-	}
+	fqdn = strings.TrimSuffix(fqdn, ".")
 	return fqdn, responseIPs, nil
 }
 
