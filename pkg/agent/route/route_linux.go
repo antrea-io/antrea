@@ -933,7 +933,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		nodeNetworkPolicyIPTablesChains = append(nodeNetworkPolicyIPTablesChains, chain)
 	}
 	if c.deterministic {
-		sort.Sort(sort.StringSlice(nodeNetworkPolicyIPTablesChains))
+		sort.Strings(nodeNetworkPolicyIPTablesChains)
 	}
 	for _, chain := range nodeNetworkPolicyIPTablesChains {
 		writeLine(iptablesData, iptables.MakeChainLine(chain))
