@@ -328,7 +328,7 @@ func TestOFctrlGroup(t *testing.T) {
 				for _, loading := range bucket.reg2reg {
 					rngStr := ""
 					data := loading[1]
-					if !(loading[2] == 0 && loading[3] == 31) {
+					if loading[2] != 0 || loading[3] != 31 {
 						length := loading[3] - loading[2] + 1
 						mask := ^uint32(0) >> (32 - length) << loading[2]
 						rngStr = fmt.Sprintf("/0x%x", mask)

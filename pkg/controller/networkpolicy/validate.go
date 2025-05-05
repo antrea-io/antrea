@@ -731,7 +731,7 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1beta1.Rule)
 	}
 	for _, rule := range egress {
 		if rule.ToServices != nil {
-			if (rule.To != nil && len(rule.To) > 0) || rule.Ports != nil || rule.Protocols != nil {
+			if (len(rule.To) > 0) || rule.Ports != nil || rule.Protocols != nil {
 				return "`toServices` cannot be used with `to`, `ports` or `protocols`", false
 			}
 		}
@@ -1053,7 +1053,7 @@ func validateAntreaClusterGroupSpec(s crdv1beta1.GroupSpec) (string, bool) {
 		return errMsg, false
 	} else if setFieldNum == 2 {
 		// If two fields are set, only nsSel+pSel and nsSel+eeSel are valid.
-		if !(s.NamespaceSelector != nil && (s.PodSelector != nil || s.ExternalEntitySelector != nil)) {
+		if s.NamespaceSelector == nil || (s.PodSelector == nil && s.ExternalEntitySelector == nil) {
 			return errMsg, false
 		}
 	}
@@ -1072,7 +1072,7 @@ func validateAntreaGroupSpec(s crdv1beta1.GroupSpec) (string, bool) {
 		return errMsg, false
 	} else if setFieldNum == 2 {
 		// If two fields are set, only nsSel+pSel and nsSel+eeSel are valid.
-		if !(s.NamespaceSelector != nil && (s.PodSelector != nil || s.ExternalEntitySelector != nil)) {
+		if s.NamespaceSelector == nil || (s.PodSelector == nil && s.ExternalEntitySelector == nil) {
 			return errMsg, false
 		}
 	}
