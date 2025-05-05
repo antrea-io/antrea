@@ -92,7 +92,6 @@ func (d *fakeLocalIPDetector) Run(stopCh <-chan struct{}) {
 }
 
 func (d *fakeLocalIPDetector) AddEventHandler(handler ipassigner.LocalIPEventHandler) {
-	return
 }
 
 func (d *fakeLocalIPDetector) HasSynced() bool {

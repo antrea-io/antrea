@@ -317,7 +317,6 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 			assert.Equal(t, expectedRules[idx].Index, responseRules[idx].Index)
 			assert.Equal(t, expectedRules[idx].Policy.SourceRef, responseRules[idx].Policy.SourceRef)
 		}
-		return
 	}
 
 	for _, tc := range testCases {

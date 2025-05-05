@@ -525,7 +525,6 @@ func (c *ruleCache) ReplaceAddressGroups(groups []*v1beta.AddressGroup) {
 	for key := range oldGroupKeys {
 		delete(c.addressSetByGroup, key)
 	}
-	return
 }
 
 // AddAddressGroup adds a new *v1beta.AddressGroup to the cache. The rules
@@ -628,7 +627,6 @@ func (c *ruleCache) ReplaceAppliedToGroups(groups []*v1beta.AppliedToGroup) {
 	for key := range oldGroupKeys {
 		delete(c.appliedToSetByGroup, key)
 	}
-	return
 }
 
 // AddAppliedToGroup adds a new *v1beta.AppliedToGroup to the cache. The rules
@@ -773,7 +771,6 @@ func (c *ruleCache) ReplaceNetworkPolicies(policies []*v1beta.NetworkPolicy) {
 	for key := range oldKeys {
 		c.deleteNetworkPolicyLocked(key)
 	}
-	return
 }
 
 // AddNetworkPolicy adds a new *v1beta.NetworkPolicy to the cache.

@@ -355,7 +355,6 @@ func (n *netIO) DeleteIPForwardEntry(ipForwardEntry *MibIPForwardRow) (errcode e
 
 func (n *netIO) freeMibTable(table unsafe.Pointer) {
 	n.syscallN(procFreeMibTable.Addr(), uintptr(table))
-	return
 }
 
 func getIPForwardTable(family uint16, ipForwardTable **MibIPForwardTable) (errcode error) {
