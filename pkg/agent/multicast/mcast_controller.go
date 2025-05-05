@@ -581,7 +581,7 @@ func (c *Controller) syncGroup(groupKey string) error {
 // groupIsStale returns true if no local members in the group, or there is no IGMP report received after c.mcastGroupTimeout.
 func (c *Controller) groupIsStale(status *GroupMemberStatus) bool {
 	membersCount := len(status.localMembers)
-	diff := time.Now().Sub(status.lastIGMPReport)
+	diff := time.Since(status.lastIGMPReport)
 	return membersCount == 0 || diff > c.mcastGroupTimeout
 }
 

@@ -4321,7 +4321,7 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 			if reachability != nil {
 				start := time.Now()
 				k8sUtils.Validate(allPods, reachability, step.Ports, step.Protocol)
-				step.Duration = time.Now().Sub(start)
+				step.Duration = time.Since(start)
 
 				_, wrong, _ := step.Reachability.Summary()
 				if wrong != 0 {
