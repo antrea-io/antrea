@@ -50,7 +50,7 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 		Name:         "ens160",
 		HardwareAddr: macAddr,
 	}
-	datapathID := "0000" + strings.Replace(macAddr.String(), ":", "", -1)
+	datapathID := "0000" + strings.ReplaceAll(macAddr.String(), ":", "")
 	nodeConfig := &config.NodeConfig{
 		UplinkNetConfig: &config.AdapterNetConfig{},
 		NodeIPv4Addr:    nodeIPNet,

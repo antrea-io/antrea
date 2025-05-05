@@ -195,7 +195,7 @@ func TestPrepareHNSNetwork(t *testing.T) {
 		Index:        0,
 		HardwareAddr: testMACAddr,
 	}
-	testUplinkMACStr := strings.Replace(testUplinkAdapter.HardwareAddr.String(), ":", "", -1)
+	testUplinkMACStr := strings.ReplaceAll(testUplinkAdapter.HardwareAddr.String(), ":", "")
 	testDNSServer := "192.168.1.21"
 	testNetInterfaces := generateNetInterfaces()
 	for i, itf := range testNetInterfaces {

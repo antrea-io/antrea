@@ -59,9 +59,9 @@ func newFilterFromURLQuery(query url.Values) (*querier.FQDNCacheFilter, error) {
 	}
 	pattern := strings.TrimSpace(domain)
 	// Replace "." as a regex literal, since it's recogized as a separator in FQDN.
-	pattern = strings.Replace(pattern, ".", "[.]", -1)
+	pattern = strings.ReplaceAll(pattern, ".", "[.]")
 	// Replace "*" with ".*".
-	pattern = strings.Replace(pattern, "*", ".*", -1)
+	pattern = strings.ReplaceAll(pattern, "*", ".*")
 	// Anchor the regex match expression.
 	pattern = "^" + pattern + "$"
 

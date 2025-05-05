@@ -223,9 +223,9 @@ func toRegex(pattern string) string {
 	pattern = strings.TrimSpace(pattern)
 
 	// Replace "." as a regex literal, since it's recogized as a separator in FQDN.
-	pattern = strings.Replace(pattern, ".", "[.]", -1)
+	pattern = strings.ReplaceAll(pattern, ".", "[.]")
 	// Replace "*" with ".*".
-	pattern = strings.Replace(pattern, "*", ".*", -1)
+	pattern = strings.ReplaceAll(pattern, "*", ".*")
 
 	// Anchor the regex match expression.
 	return "^" + pattern + "$"

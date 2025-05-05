@@ -191,7 +191,7 @@ func (i *Initializer) prepareVMNetworkAndOVSExtension() error {
 		}
 	}()
 
-	uplinkMACStr := strings.Replace(uplinkIface.HardwareAddr.String(), ":", "", -1)
+	uplinkMACStr := strings.ReplaceAll(uplinkIface.HardwareAddr.String(), ":", "")
 	if err = winnetUtil.RenameVMNetworkAdapter(util.LocalVMSwitch, uplinkMACStr, hostIFName, true); err != nil {
 		return fmt.Errorf("failed to rename VMNetworkAdapter as %s: %v", hostIFName, err)
 	}
