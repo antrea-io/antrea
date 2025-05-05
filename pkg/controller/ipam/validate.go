@@ -191,15 +191,16 @@ func ipInRange(rangeStart, rangeEnd, ip net.IP) bool {
 func validateIPRange(r crdv1beta1.IPRange, subnetInfo crdv1beta1.SubnetInfo) (bool, string) {
 	// Verify that prefix length matches IP version
 	gatewayIPVersion := utilnet.IPFamilyOfString(subnetInfo.Gateway)
-	if gatewayIPVersion == utilnet.IPv4 {
+	switch gatewayIPVersion {
+	case utilnet.IPv4:
 		if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 32 {
 			return false, fmt.Sprintf("Invalid prefix length %d", subnetInfo.PrefixLength)
 		}
-	} else if gatewayIPVersion == utilnet.IPv6 {
+	case utilnet.IPv6:
 		if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 128 {
 			return false, fmt.Sprintf("Invalid prefix length %d", subnetInfo.PrefixLength)
 		}
-	} else {
+	default:
 		return false, fmt.Sprintf("Invalid IP version for gateway %s", subnetInfo.Gateway)
 	}
 

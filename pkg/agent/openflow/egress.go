@@ -60,9 +60,10 @@ func newFeatureEgress(cookieAllocator cookie.Allocator,
 
 	nodeIPs := make(map[binding.Protocol]net.IP)
 	for _, ipProtocol := range ipProtocols {
-		if ipProtocol == binding.ProtocolIP {
+		switch ipProtocol {
+		case binding.ProtocolIP:
 			nodeIPs[ipProtocol] = nodeConfig.NodeIPv4Addr.IP
-		} else if ipProtocol == binding.ProtocolIPv6 {
+		case binding.ProtocolIPv6:
 			nodeIPs[ipProtocol] = nodeConfig.NodeIPv6Addr.IP
 		}
 	}

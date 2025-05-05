@@ -824,9 +824,10 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		// of iptables rules in nat table. The first encapsulation packets of connections would have to go through all
 		// of the rules which wastes CPU and increases packet latency.
 		udpPort := 0
-		if c.networkConfig.TunnelType == ovsconfig.GeneveTunnel {
+		switch c.networkConfig.TunnelType {
+		case ovsconfig.GeneveTunnel:
 			udpPort = genevePort
-		} else if c.networkConfig.TunnelType == ovsconfig.VXLANTunnel {
+		case ovsconfig.VXLANTunnel:
 			udpPort = vxlanPort
 		}
 		if udpPort > 0 {
@@ -2255,11 +2256,12 @@ func (c *Client) ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, end
 }
 
 func getTransProtocolStr(protocol binding.Protocol) string {
-	if protocol == binding.ProtocolTCP || protocol == binding.ProtocolTCPv6 {
+	switch protocol {
+	case binding.ProtocolTCP, binding.ProtocolTCPv6:
 		return "tcp"
-	} else if protocol == binding.ProtocolUDP || protocol == binding.ProtocolUDPv6 {
+	case binding.ProtocolUDP, binding.ProtocolUDPv6:
 		return "udp"
-	} else if protocol == binding.ProtocolSCTP || protocol == binding.ProtocolSCTPv6 {
+	case binding.ProtocolSCTP, binding.ProtocolSCTPv6:
 		return "sctp"
 	}
 	return ""

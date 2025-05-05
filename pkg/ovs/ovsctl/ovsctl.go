@@ -209,11 +209,12 @@ func (c *ovsCtlClient) GetDPFeatures() (map[DPFeature]bool, error) {
 		}
 		value := strings.TrimSpace(fields[1])
 		var supported bool
-		if value == "Yes" {
+		switch value {
+		case "Yes":
 			supported = true
-		} else if value == "No" {
+		case "No":
 			supported = false
-		} else {
+		default:
 			klog.InfoS("Unexpected non boolean value", "feature", feature, "value", value)
 			continue
 		}

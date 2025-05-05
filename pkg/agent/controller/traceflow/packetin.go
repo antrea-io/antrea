@@ -85,7 +85,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 	if err := etherData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
 	}
-	if etherData.Ethertype == protocol.IPv4_MSG {
+	switch etherData.Ethertype {
+	case protocol.IPv4_MSG:
 		ipPacket, ok := etherData.Data.(*protocol.IPv4)
 		if !ok {
 			return nil, nil, nil, errors.New("invalid traceflow IPv4 packet")
@@ -101,7 +102,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		}
 		ipDst = ipPacket.NWDst.String()
 		ipSrc = ipPacket.NWSrc.String()
-	} else if etherData.Ethertype == protocol.IPv6_MSG {
+	case protocol.IPv6_MSG:
 		ipv6Packet, ok := etherData.Data.(*protocol.IPv6)
 		if !ok {
 			return nil, nil, nil, errors.New("invalid traceflow IPv6 packet")
@@ -117,7 +118,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		}
 		ipDst = ipv6Packet.NWDst.String()
 		ipSrc = ipv6Packet.NWSrc.String()
-	} else {
+	default:
 		return nil, nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", etherData.Ethertype)
 	}
 
@@ -484,11 +485,12 @@ func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1beta1.Packet {
 	} else {
 		capturedPacket.IPHeader = &crdv1beta1.IPHeader{Protocol: int32(pkt.IPProto), TTL: int32(pkt.TTL), Flags: int32(pkt.IPFlags)}
 	}
-	if pkt.IPProto == protocol.Type_TCP {
+	switch pkt.IPProto {
+	case protocol.Type_TCP:
 		capturedPacket.TransportHeader.TCP = &crdv1beta1.TCPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort), Flags: ptr.To(int32(pkt.TCPFlags))}
-	} else if pkt.IPProto == protocol.Type_UDP {
+	case protocol.Type_UDP:
 		capturedPacket.TransportHeader.UDP = &crdv1beta1.UDPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort)}
-	} else if pkt.IPProto == protocol.Type_ICMP || pkt.IPProto == protocol.Type_IPv6ICMP {
+	case protocol.Type_ICMP, protocol.Type_IPv6ICMP:
 		capturedPacket.TransportHeader.ICMP = &crdv1beta1.ICMPEchoRequestHeader{ID: int32(pkt.ICMPEchoID), Sequence: int32(pkt.ICMPEchoSeq)}
 	}
 	return &capturedPacket

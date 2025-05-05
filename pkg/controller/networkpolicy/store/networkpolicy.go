@@ -157,9 +157,10 @@ func NewNetworkPolicyStore() storage.Interface {
 				return []string{}, nil
 			}
 			for _, rule := range fp.Rules {
-				if rule.Direction == controlplane.DirectionIn {
+				switch rule.Direction {
+				case controlplane.DirectionIn:
 					groupNames = append(groupNames, rule.From.AddressGroups...)
-				} else if rule.Direction == controlplane.DirectionOut {
+				case controlplane.DirectionOut:
 					groupNames = append(groupNames, rule.To.AddressGroups...)
 				}
 			}

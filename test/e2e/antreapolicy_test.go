@@ -4221,11 +4221,12 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	defer data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp.Name, metav1.DeleteOptions{})
 
 	captured, err := checkPacketCaptureResult(t, data, tcpdumpName, cmd)
-	if action == crdv1beta1.RuleActionAllow {
+	switch action {
+	case crdv1beta1.RuleActionAllow:
 		if !captured || err != nil {
 			t.Fatalf("failed to apply acnp policy: %+v, err: %v", *acnp, err)
 		}
-	} else if action == crdv1beta1.RuleActionDrop {
+	case crdv1beta1.RuleActionDrop:
 		if captured || err != nil {
 			t.Fatalf("failed to apply acnp policy: %+v, err: %v", *acnp, err)
 		}

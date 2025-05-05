@@ -2576,10 +2576,11 @@ func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withS
 		if !endpoint.GetIsLocal() && endpoint.GetNodeName() != "" && !f.nodeIPChecker.IsNodeIP(endpoint.IP()) {
 			bucketBuilder = bucketBuilder.LoadRegMark(RemoteEndpointRegMark)
 		}
-		if ipProtocol == binding.ProtocolIP {
+		switch ipProtocol {
+		case binding.ProtocolIP:
 			ipVal := binary.BigEndian.Uint32(endpointIP.To4())
 			bucketBuilder = bucketBuilder.LoadToRegField(EndpointIPField, ipVal)
-		} else if ipProtocol == binding.ProtocolIPv6 {
+		case binding.ProtocolIPv6:
 			ipVal := []byte(endpointIP)
 			bucketBuilder = bucketBuilder.LoadXXReg(EndpointIP6Field.GetRegID(), ipVal)
 		}

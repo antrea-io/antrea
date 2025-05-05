@@ -176,9 +176,10 @@ func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmLis
 		}
 		require.NoError(t, err)
 		var expectedInfoEntries []string
-		if vm.osType == linuxOS {
+		switch vm.osType {
+		case linuxOS:
 			expectedInfoEntries = []string{"address", "addressgroups", "agentinfo", "appliedtogroups", "flows", "goroutinestacks", "groups", "iptables", "link", "logs", "memprofile", "networkpolicies", "ovsports", "route"}
-		} else if vm.osType == windowsOS {
+		case windowsOS:
 			expectedInfoEntries = []string{"addressgroups", "agentinfo", "appliedtogroups", "flows", "goroutinestacks", "groups", "ipconfig", "logs\\ovs\\ovs-vswitchd.log", "logs\\ovs\\ovsdb-server.log", "memprofile", "network-adapters", "networkpolicies", "ovsports", "routes"}
 		}
 		actualInfoEntries := strings.Split(strings.Trim(stdout, "\n"), "\n")

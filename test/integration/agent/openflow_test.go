@@ -796,10 +796,11 @@ func uninstallServiceFlowsFunc(t *testing.T, svc *types.ServiceConfig, endpointL
 func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []k8sproxy.Endpoint, antreaPolicyEnabled bool) (tableFlows []expectTableFlows, groupBuckets []string) {
 	nw_proto := 6
 	learnProtoField := "NXM_OF_TCP_DST[]"
-	if svc.Protocol == ofconfig.ProtocolUDP {
+	switch svc.Protocol {
+	case ofconfig.ProtocolUDP:
 		nw_proto = 17
 		learnProtoField = "NXM_OF_UDP_DST[]"
-	} else if svc.Protocol == ofconfig.ProtocolSCTP {
+	case ofconfig.ProtocolSCTP:
 		nw_proto = 132
 		learnProtoField = "OXM_OF_SCTP_DST[]"
 	}

@@ -758,9 +758,10 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	// Traffic in a direction must be isolated if Spec.PolicyTypes specify it explicitly.
 	var ingressIsolated, egressIsolated bool
 	for _, policyType := range np.Spec.PolicyTypes {
-		if policyType == networkingv1.PolicyTypeIngress {
+		switch policyType {
+		case networkingv1.PolicyTypeIngress:
 			ingressIsolated = true
-		} else if policyType == networkingv1.PolicyTypeEgress {
+		case networkingv1.PolicyTypeEgress:
 			egressIsolated = true
 		}
 	}

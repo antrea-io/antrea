@@ -625,12 +625,13 @@ func (ic *ifConfigurator) validateInterface(intf *current.Interface, inNetns boo
 	if err != nil {
 		return nil, fmt.Errorf("failed to find link for interface %s", intf.Name)
 	}
-	if ifType == netDeviceTypeVeth {
+	switch ifType {
+	case netDeviceTypeVeth:
 		if !isVeth(link) {
 			return nil, fmt.Errorf("interface %s is not of type veth", intf.Name)
 		}
 		return link, nil
-	} else if ifType == netDeviceTypeVF {
+	case netDeviceTypeVF:
 		return link, nil
 	}
 	return nil, fmt.Errorf("unknown device type %s", ifType)

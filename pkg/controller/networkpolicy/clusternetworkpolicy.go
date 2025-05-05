@@ -418,9 +418,10 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1beta1.Cl
 					L7Protocols:     toAntreaL7ProtocolsForCRD(cnpRule.L7Protocols),
 					LogLabel:        cnpRule.LogLabel,
 				}
-				if dir == controlplane.DirectionIn {
+				switch dir {
+				case controlplane.DirectionIn:
 					rule.From = *peer
-				} else if dir == controlplane.DirectionOut {
+				case controlplane.DirectionOut:
 					rule.To = *peer
 				}
 				rules = append(rules, rule)

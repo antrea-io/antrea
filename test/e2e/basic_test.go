@@ -366,10 +366,11 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	}
 
 	expectedRtNumMin, expectedRtNumMax := clusterInfo.numNodes-1, clusterInfo.numNodes-1
-	if encapMode == config.TrafficEncapModeNoEncap {
+	switch encapMode {
+	case config.TrafficEncapModeNoEncap:
 		expectedRtNumMin, expectedRtNumMax = 0, 0
 
-	} else if encapMode == config.TrafficEncapModeHybrid {
+	case config.TrafficEncapModeHybrid:
 		expectedRtNumMin = 1
 	}
 

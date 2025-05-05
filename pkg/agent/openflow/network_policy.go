@@ -747,7 +747,8 @@ func (c *client) NewDNSPacketInConjunction(id uint32) error {
 				},
 			},
 		}
-		if proto == binding.ProtocolIP {
+		switch proto {
+		case binding.ProtocolIP:
 			tcpMatch.matchPairs = append(tcpMatch.matchPairs, matchPair{
 				matchKey:   MatchTCPSrcPort,
 				matchValue: dnsPortMatchValue,
@@ -756,7 +757,7 @@ func (c *client) NewDNSPacketInConjunction(id uint32) error {
 				matchKey:   MatchUDPSrcPort,
 				matchValue: dnsPortMatchValue,
 			})
-		} else if proto == binding.ProtocolIPv6 {
+		case binding.ProtocolIPv6:
 			tcpMatch.matchPairs = append(tcpMatch.matchPairs, matchPair{
 				matchKey:   MatchTCPv6SrcPort,
 				matchValue: dnsPortMatchValue,

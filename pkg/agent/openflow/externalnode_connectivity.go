@@ -45,9 +45,10 @@ func newFeatureExternalNodeConnectivity(
 	ipProtocols []binding.Protocol) *featureExternalNodeConnectivity {
 	ctZones := make(map[binding.Protocol]int)
 	for _, ipProtocol := range ipProtocols {
-		if ipProtocol == binding.ProtocolIP {
+		switch ipProtocol {
+		case binding.ProtocolIP:
 			ctZones[ipProtocol] = CtZone
-		} else if ipProtocol == binding.ProtocolIPv6 {
+		case binding.ProtocolIPv6:
 			ctZones[ipProtocol] = CtZoneV6
 		}
 	}

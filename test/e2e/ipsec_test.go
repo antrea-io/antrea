@@ -115,11 +115,12 @@ func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, c
 		return 0, 0, false, fmt.Errorf("failed to determine authentication method from 'ipsec statusall' output: %s", stdout)
 	}
 
-	if match[1] == "pre-shared" {
+	switch match[1] {
+	case "pre-shared":
 		isCertAuth = false
-	} else if match[1] == "public" {
+	case "public":
 		isCertAuth = true
-	} else {
+	default:
 		return 0, 0, false, fmt.Errorf("unknown key authentication mode %q", match[1])
 	}
 

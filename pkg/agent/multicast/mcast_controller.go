@@ -867,9 +867,10 @@ func (c *Controller) processNextNodeItem() bool {
 
 func memberExists(status *GroupMemberStatus, e *mcastGroupEvent) bool {
 	var exist bool
-	if e.iface.Type == interfacestore.ContainerInterface {
+	switch e.iface.Type {
+	case interfacestore.ContainerInterface:
 		_, exist = status.localMembers[e.iface.InterfaceName]
-	} else if e.iface.Type == interfacestore.TunnelInterface {
+	case interfacestore.TunnelInterface:
 		exist = status.remoteMembers.Has(e.srcNode.String())
 	}
 	return exist

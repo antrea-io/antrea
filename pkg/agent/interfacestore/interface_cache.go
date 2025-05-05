@@ -84,12 +84,13 @@ func (c *interfaceCache) Initialize(interfaces []*InterfaceConfig) {
 func getInterfaceKey(obj interface{}) (string, error) {
 	interfaceConfig := obj.(*InterfaceConfig)
 	var key string
-	if interfaceConfig.Type == ContainerInterface {
+	switch interfaceConfig.Type {
+	case ContainerInterface:
 		key = util.GenerateContainerInterfaceKey(interfaceConfig.ContainerID, interfaceConfig.IFDev)
-	} else if interfaceConfig.Type == IPSecTunnelInterface {
+	case IPSecTunnelInterface:
 		// IPsec tunnel interface for a Node.
 		key = util.GenerateNodeTunnelInterfaceKey(interfaceConfig.NodeName)
-	} else {
+	default:
 		// Use the interface name as the key by default.
 		key = interfaceConfig.InterfaceName
 	}

@@ -407,9 +407,10 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			Name:            fmt.Sprintf("pod%d", podID),
 			AppliedPolicies: appliedPolicies,
 		}
-		if podID == 1 {
+		switch podID {
+		case 1:
 			endpointRule.EndpointAsIngressSrcRules = matchedRules
-		} else if podID == 2 {
+		case 2:
 			endpointRule.EndpointAsEgressDstRules = matchedRules
 		}
 		return endpointRule
