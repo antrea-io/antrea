@@ -868,8 +868,8 @@ func nxActionLearnToString(action openflow15.Action) string {
 	if len(a.LearnSpecs) != 0 {
 		for _, spec := range a.LearnSpecs {
 			nBits := spec.Header.NBits
-			isLoad := spec.Header.Dst == true
-			isMatch := spec.Header.Dst == false
+			isLoad := spec.Header.Dst
+			isMatch := !spec.Header.Dst
 			//TODO: add isOutput
 
 			if spec.SrcValue != nil {

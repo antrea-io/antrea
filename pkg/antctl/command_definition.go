@@ -520,7 +520,7 @@ func (cd *commandDefinition) newCommandRunE(c AntctlClient, out io.Writer) func(
 		klog.Infof("Args: %v", argMap)
 		var argGet bool
 		for _, flag := range cd.getEndpoint().flags() {
-			if _, ok := argMap[flag.name]; ok && flag.arg == true {
+			if _, ok := argMap[flag.name]; ok && flag.arg {
 				argGet = true
 				break
 			}

@@ -167,7 +167,7 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 
 ownerReferenceLoop:
 	for _, ownerReference := range pod.OwnerReferences {
-		if ownerReference.Controller != nil && *ownerReference.Controller == true {
+		if ownerReference.Controller != nil && *ownerReference.Controller {
 			switch ownerReference.Kind {
 			case "StatefulSet":
 				// Parse StatefulSet name/index from Pod name
