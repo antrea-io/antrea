@@ -233,7 +233,7 @@ func TestConnectInterceptedInterface(t *testing.T) {
 				containerConfig, exists := ifaceStore.GetContainerInterface(containerID)
 				assert.True(t, exists)
 				assert.Equal(t, containerID, containerConfig.ContainerID)
-				assert.Equal(t, ovsPortID, containerConfig.OVSPortConfig.PortUUID)
+				assert.Equal(t, ovsPortID, containerConfig.PortUUID)
 			}
 		})
 	}

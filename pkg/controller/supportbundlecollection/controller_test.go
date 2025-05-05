@@ -763,7 +763,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 		bundleConfig := tc.bundleConfig
 		if bundleConfig.secretName == "" {
 			secretName := secretWithAPIKey
-			if tc.bundleConfig.authType == v1alpha1.BearerToken {
+			if tc.authType == v1alpha1.BearerToken {
 				secretName = secretWithToken
 			}
 			bundleConfig.secretName = secretName
@@ -773,7 +773,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 		_, err := testClient.crdClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), bundle, metav1.CreateOptions{})
 		require.NoError(t, err)
 		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
-			_, getErr := controller.supportBundleCollectionLister.Get(tc.bundleConfig.name)
+			_, getErr := controller.supportBundleCollectionLister.Get(tc.name)
 			if getErr == nil {
 				return true, nil
 			}
@@ -947,7 +947,7 @@ func TestSyncSupportBundleCollection(t *testing.T) {
 
 	for _, tc := range testCases {
 		secretName := secretWithAPIKey
-		if tc.bundleConfig.authType == v1alpha1.BearerToken {
+		if tc.authType == v1alpha1.BearerToken {
 			secretName = secretWithToken
 		}
 		bundleConfig := tc.bundleConfig
@@ -968,7 +968,7 @@ func TestSyncSupportBundleCollection(t *testing.T) {
 
 	for _, tc := range testCases {
 		err := wait.PollUntilContextTimeout(context.Background(), time.Millisecond*100, time.Second, true, func(ctx context.Context) (done bool, err error) {
-			_, exists, err := controller.supportBundleCollectionStore.Get(tc.bundleConfig.name)
+			_, exists, err := controller.supportBundleCollectionStore.Get(tc.name)
 			if err != nil {
 				return false, err
 			}
@@ -1879,7 +1879,7 @@ func generateSupportBundleResource(b bundleConfig) *v1alpha1.SupportBundleCollec
 		},
 	}
 	if b.createTime != nil {
-		bundle.ObjectMeta.CreationTimestamp = metav1.NewTime(*b.createTime)
+		bundle.CreationTimestamp = metav1.NewTime(*b.createTime)
 	}
 	if b.nodes != nil {
 		bundle.Spec.Nodes = &v1alpha1.BundleNodes{}

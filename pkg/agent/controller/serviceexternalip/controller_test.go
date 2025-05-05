@@ -762,7 +762,7 @@ func TestServiceExternalIPController_GetServiceExternalIPStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t)
 			c.externalIPStates = tt.externalIPStates
-			got := c.ServiceExternalIPController.GetServiceExternalIPStatus()
+			got := c.GetServiceExternalIPStatus()
 			assert.ElementsMatch(t, tt.expectedServiceExternalIPInfo, got)
 		})
 	}

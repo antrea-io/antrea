@@ -188,8 +188,8 @@ func newCRDClientset() *fakeversioned.Clientset {
 		tf := action.(k8stesting.CreateAction).GetObject().(*crdv1beta1.Traceflow)
 
 		// Fake client does not set CreationTimestamp.
-		if tf.ObjectMeta.CreationTimestamp == (metav1.Time{}) {
-			tf.ObjectMeta.CreationTimestamp.Time = time.Now()
+		if tf.CreationTimestamp == (metav1.Time{}) {
+			tf.CreationTimestamp.Time = time.Now()
 		}
 
 		return false, tf, nil

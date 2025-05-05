@@ -272,11 +272,11 @@ func (s *CNIServer) validateRequestMessage(request *cnipb.CniCmdRequest) (*CNICo
 // passed to the IPAM driver.
 func (s *CNIServer) updateLocalIPAMSubnet(cniConfig *CNIConfig) {
 	if (s.nodeConfig.GatewayConfig.IPv4 != nil) && (s.nodeConfig.PodIPv4CIDR != nil) {
-		cniConfig.NetworkConfig.IPAM.Ranges = append(cniConfig.NetworkConfig.IPAM.Ranges,
+		cniConfig.IPAM.Ranges = append(cniConfig.IPAM.Ranges,
 			types.RangeSet{types.Range{Subnet: s.nodeConfig.PodIPv4CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv4.String()}})
 	}
 	if (s.nodeConfig.GatewayConfig.IPv6 != nil) && (s.nodeConfig.PodIPv6CIDR != nil) {
-		cniConfig.NetworkConfig.IPAM.Ranges = append(cniConfig.NetworkConfig.IPAM.Ranges,
+		cniConfig.IPAM.Ranges = append(cniConfig.IPAM.Ranges,
 			types.RangeSet{types.Range{Subnet: s.nodeConfig.PodIPv6CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv6.String()}})
 	}
 	cniConfig.NetworkConfiguration, _ = json.Marshal(cniConfig.NetworkConfig)
@@ -526,7 +526,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		return s.configInterfaceFailureResponse(err), nil
 	}
 	cniVersion := cniConfig.CNIVersion
-	cniResult, _ := result.Result.GetAsVersion(cniVersion)
+	cniResult, _ := result.GetAsVersion(cniVersion)
 
 	klog.InfoS("CmdAdd for container succeeded", "container", cniConfig.ContainerId)
 	// mark success as true to avoid rollback

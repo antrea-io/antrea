@@ -147,7 +147,7 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	stillGatewayNode := false
 
 	node := &corev1.Node{}
-	if err := r.Client.Get(ctx, req.NamespacedName, node); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, node); err != nil {
 		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to get Node", "node", req.Name)
 			return ctrl.Result{}, err
@@ -201,19 +201,19 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 func (r *NodeReconciler) initialize() error {
 	ctx := context.Background()
 	nodeList := &corev1.NodeList{}
-	if err := r.Client.List(ctx, nodeList, &client.ListOptions{}); err != nil {
+	if err := r.List(ctx, nodeList, &client.ListOptions{}); err != nil {
 		return err
 	}
 
 	gwList := &mcv1alpha1.GatewayList{}
-	if err := r.Client.List(ctx, gwList, &client.ListOptions{}); err != nil {
+	if err := r.List(ctx, gwList, &client.ListOptions{}); err != nil {
 		return err
 	}
 	// Gateway webhook guarantees that there is at most one Gateway in the member cluster.
 	if len(gwList.Items) > 0 {
 		existingGWName := gwList.Items[0].Name
 		node := &corev1.Node{}
-		if err := r.Client.Get(ctx, types.NamespacedName{Name: existingGWName}, node); err != nil {
+		if err := r.Get(ctx, types.NamespacedName{Name: existingGWName}, node); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return err
 			}
@@ -222,7 +222,7 @@ func (r *NodeReconciler) initialize() error {
 					Namespace: r.namespace,
 					Name:      existingGWName},
 			}
-			err := r.Client.Delete(ctx, staleGateway, &client.DeleteOptions{})
+			err := r.Delete(ctx, staleGateway, &client.DeleteOptions{})
 			if err != nil && !apierrors.IsNotFound(err) {
 				return err
 			}
@@ -242,7 +242,7 @@ func (r *NodeReconciler) updateActiveGateway(ctx context.Context, newGateway *mc
 	existingGW := &mcv1alpha1.Gateway{}
 	// TODO: cache might be stale. Need to revisit here and other reconcilers to
 	// check if we can improve this with 'Owns' or other methods.
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: newGateway.Name, Namespace: r.namespace}, existingGW); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: newGateway.Name, Namespace: r.namespace}, existingGW); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.activeGateway = ""
 			return nil
@@ -258,7 +258,7 @@ func (r *NodeReconciler) updateActiveGateway(ctx context.Context, newGateway *mc
 	existingGW.ServiceCIDR = newGateway.ServiceCIDR
 	// If the Gateway version in the client cache is stale, the update operation will fail,
 	// then the reconciler will retry with latest state again.
-	if err := r.Client.Update(ctx, existingGW, &client.UpdateOptions{}); err != nil {
+	if err := r.Update(ctx, existingGW, &client.UpdateOptions{}); err != nil {
 		return err
 	}
 	return nil
@@ -267,7 +267,7 @@ func (r *NodeReconciler) updateActiveGateway(ctx context.Context, newGateway *mc
 // recreateActiveGateway will delete the existing Gateway CR and create a new Gateway
 // from the pool of Gateway candidates.
 func (r *NodeReconciler) recreateActiveGateway(ctx context.Context, gateway *mcv1alpha1.Gateway) error {
-	err := r.Client.Delete(ctx, gateway, &client.DeleteOptions{})
+	err := r.Delete(ctx, gateway, &client.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
@@ -292,7 +292,7 @@ func (r *NodeReconciler) getValidGatewayFromCandidates() (*mcv1alpha1.Gateway, e
 
 	gatewayNode := &corev1.Node{}
 	for name := range r.gatewayCandidates {
-		if err = r.Client.Get(context.Background(), types.NamespacedName{Name: name}, gatewayNode); err == nil {
+		if err = r.Get(context.Background(), types.NamespacedName{Name: name}, gatewayNode); err == nil {
 			if !isReadyNode(gatewayNode) {
 				continue
 			}
@@ -321,7 +321,7 @@ func (r *NodeReconciler) getValidGatewayFromCandidates() (*mcv1alpha1.Gateway, e
 }
 
 func (r *NodeReconciler) createGateway(gateway *mcv1alpha1.Gateway) error {
-	if err := r.Client.Create(context.Background(), gateway, &client.CreateOptions{}); err != nil {
+	if err := r.Create(context.Background(), gateway, &client.CreateOptions{}); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			r.activeGateway = gateway.Name
 			return nil
@@ -388,11 +388,11 @@ func (r *NodeReconciler) clusterSetMapFunc(ctx context.Context, a client.Object)
 	if a.GetNamespace() != r.namespace {
 		return requests
 	}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
+	err := r.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
 	if err == nil {
 		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {
 			nodeList := &corev1.NodeList{}
-			r.Client.List(ctx, nodeList)
+			r.List(ctx, nodeList)
 			for idx := range nodeList.Items {
 				n := &nodeList.Items[idx]
 				if _, ok := n.Annotations[common.GatewayAnnotation]; ok {

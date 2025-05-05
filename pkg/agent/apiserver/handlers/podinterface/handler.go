@@ -26,14 +26,14 @@ import (
 
 func generateResponse(i *interfacestore.InterfaceConfig) apis.PodInterfaceResponse {
 	return apis.PodInterfaceResponse{
-		PodName:       i.ContainerInterfaceConfig.PodName,
-		PodNamespace:  i.ContainerInterfaceConfig.PodNamespace,
+		PodName:       i.PodName,
+		PodNamespace:  i.PodNamespace,
 		InterfaceName: i.InterfaceName,
 		IPs:           getPodIPs(i.IPs),
 		MAC:           i.MAC.String(),
-		PortUUID:      i.OVSPortConfig.PortUUID,
-		OFPort:        i.OVSPortConfig.OFPort,
-		ContainerID:   i.ContainerInterfaceConfig.ContainerID,
+		PortUUID:      i.PortUUID,
+		OFPort:        i.OFPort,
+		ContainerID:   i.ContainerID,
 	}
 }
 

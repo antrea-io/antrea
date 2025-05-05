@@ -817,15 +817,15 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 	if portExists {
 		if createTunnelInterface &&
 			tunnelIface.TunnelInterfaceConfig.Type == i.networkConfig.TunnelType &&
-			tunnelIface.TunnelInterfaceConfig.DestinationPort == i.networkConfig.TunnelPort &&
-			tunnelIface.TunnelInterfaceConfig.LocalIP.Equal(localIP) {
+			tunnelIface.DestinationPort == i.networkConfig.TunnelPort &&
+			tunnelIface.LocalIP.Equal(localIP) {
 			klog.V(2).InfoS("Tunnel port already exists on OVS bridge", "name", tunnelPortName, "ofPort", tunnelIface.OFPort)
-			if shouldEnableCsum != tunnelIface.TunnelInterfaceConfig.Csum {
+			if shouldEnableCsum != tunnelIface.Csum {
 				klog.InfoS("Updating csum for tunnel port", "port", tunnelPortName, "csum", shouldEnableCsum)
 				if err := i.setTunnelCsum(tunnelPortName, shouldEnableCsum); err != nil {
 					return fmt.Errorf("failed to update csum for tunnel port %s to %v: %v", tunnelPortName, shouldEnableCsum, err)
 				}
-				tunnelIface.TunnelInterfaceConfig.Csum = shouldEnableCsum
+				tunnelIface.Csum = shouldEnableCsum
 			}
 			i.nodeConfig.TunnelOFPort = uint32(tunnelIface.OFPort)
 			return nil

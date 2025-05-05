@@ -131,7 +131,7 @@ func (t *ofTable) BuildFlow(priority uint16) FlowBuilder {
 
 // DumpFlows dumps all existing Openflow entries from OFSwitch using cookie ID and table ID as filters.
 func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error) {
-	ofStats, err := t.Table.Switch.DumpFlowStats(cookieID, &cookieMask, nil, &t.TableId)
+	ofStats, err := t.Switch.DumpFlowStats(cookieID, &cookieMask, nil, &t.TableId)
 	if err != nil {
 		return nil, err
 	}
@@ -759,7 +759,7 @@ func (b *OFBridge) queryTableFeatures() {
 		Flags:  0,
 	}
 	mpartRequest.Header.Type = openflow15.Type_MultiPartRequest
-	mpartRequest.Header.Length = mpartRequest.Len()
+	mpartRequest.Length = mpartRequest.Len()
 	// Use a buffer for the channel to avoid blocking the OpenFlow connection inbound channel, since it takes time when
 	// sending the Multipart Request messages to modify the tables' names. The buffer size "20" is the observed number
 	// of the Multipart Reply messages sent from OVS.

@@ -241,7 +241,7 @@ func getRejectOFPorts(rejectType rejectType, sIface, dIface *interfacestore.Inte
 		inPort = uint32(sIface.OFPort)
 	case rejectPodRemoteToLocal:
 		if dIface.Type == interfacestore.ExternalEntityInterface {
-			inPort = uint32(dIface.EntityInterfaceConfig.UplinkPort.OFPort)
+			inPort = uint32(dIface.UplinkPort.OFPort)
 		} else {
 			inPort = gwOFPort
 		}
@@ -251,7 +251,7 @@ func getRejectOFPorts(rejectType rejectType, sIface, dIface *interfacestore.Inte
 	case rejectPodLocalToRemote:
 		inPort = uint32(sIface.OFPort)
 		if sIface.Type == interfacestore.ExternalEntityInterface {
-			outPort = uint32(sIface.EntityInterfaceConfig.UplinkPort.OFPort)
+			outPort = uint32(sIface.UplinkPort.OFPort)
 		}
 	case rejectNoAPServiceLocal:
 		inPort = uint32(sIface.OFPort)

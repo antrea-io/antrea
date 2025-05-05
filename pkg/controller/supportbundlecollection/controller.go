@@ -334,7 +334,7 @@ func (c *Controller) createInternalSupportBundleCollection(bundle *v1alpha1.Supp
 		klog.ErrorS(err, "Failed to parse expiration minute", "expirationMinute", bundle.Spec.ExpirationMinutes)
 		return nil, err
 	}
-	expiredAt := bundle.ObjectMeta.CreationTimestamp.Add(expiredDuration)
+	expiredAt := bundle.CreationTimestamp.Add(expiredDuration)
 	now := time.Now()
 	transitionTime := metav1.Now()
 
@@ -652,7 +652,7 @@ func (c *Controller) isCollectionAvailable(bundleCollection *v1alpha1.SupportBun
 
 func (c *Controller) updateStatus(internalBundleCollection *types.SupportBundleCollection) error {
 	now := metav1.Now()
-	desiredNodes := len(internalBundleCollection.SpanMeta.NodeNames)
+	desiredNodes := len(internalBundleCollection.NodeNames)
 	collectedNodes := 0
 	failedNodeReasons := make(map[string][]string)
 	failedNodes := 0

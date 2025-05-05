@@ -719,7 +719,7 @@ func (pc *podConfigurator) processPortStatusMessage(status *openflow15.PortStatu
 		}
 		// Update interface config with the ofPort.
 		newIfConfig := ifConfig.DeepCopy()
-		newIfConfig.OVSPortConfig.OFPort = int32(ofPort)
+		newIfConfig.OFPort = int32(ofPort)
 		pc.ifaceStore.UpdateInterface(newIfConfig)
 	}()
 

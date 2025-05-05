@@ -153,7 +153,7 @@ func (ic *ipsecCSRApprover) verifyIdentity(nodeName string, csr *certificatesv1.
 	} else if err != nil {
 		return &transientError{err}
 	}
-	if pod.ObjectMeta.UID != types.UID(podUID) {
+	if pod.UID != types.UID(podUID) {
 		return errPodUIDMismatch
 	}
 	if pod.Spec.NodeName != nodeName {

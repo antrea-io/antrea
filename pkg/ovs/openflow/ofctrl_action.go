@@ -403,7 +403,7 @@ func (a *ofFlowAction) Conjunction(conjID uint32, clauseID uint8, nClause uint8)
 // Group is an action to forward packets to groups to do load-balance.
 func (a *ofFlowAction) Group(id GroupIDType) FlowBuilder {
 	group := &ofctrl.Group{
-		Switch: a.builder.Flow.Table.Switch,
+		Switch: a.builder.Table.Switch,
 		ID:     uint32(id),
 	}
 	a.builder.ApplyAction(group)
@@ -428,10 +428,10 @@ func (a *ofFlowAction) Note(notes string) FlowBuilder {
 // byte is packetIn operation, which indicates the operation(s) that should be
 // executed by the handler.
 func (a *ofFlowAction) SendToController(userdata []byte, pause bool) FlowBuilder {
-	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
+	if a.builder.Table != nil && a.builder.Table.Switch != nil {
 		controllerAct := &ofctrl.NXController{
 			Version2:     true,
-			ControllerID: a.builder.ofFlow.Table.Switch.GetControllerID(),
+			ControllerID: a.builder.Table.Switch.GetControllerID(),
 			UserData:     userdata,
 			Pause:        pause,
 		}
@@ -634,19 +634,19 @@ func getFieldRange(name string) (*openflow15.MatchField, Range, error) {
 
 // GotoTable is an action to jump to the specified table.
 func (a *ofFlowAction) GotoTable(tableID uint8) FlowBuilder {
-	a.builder.ofFlow.Goto(tableID)
+	a.builder.Goto(tableID)
 	return a.builder
 }
 
 func (a *ofFlowAction) NextTable() FlowBuilder {
-	tableID := a.builder.ofFlow.table.next
-	a.builder.ofFlow.Goto(tableID)
+	tableID := a.builder.table.next
+	a.builder.Goto(tableID)
 	return a.builder
 }
 
 func (a *ofFlowAction) GotoStage(stage StageID) FlowBuilder {
-	pipeline := pipelineCache[a.builder.ofFlow.table.pipelineID]
+	pipeline := pipelineCache[a.builder.table.pipelineID]
 	table := pipeline.GetFirstTableInStage(stage)
-	a.builder.ofFlow.Goto(table.GetID())
+	a.builder.Goto(table.GetID())
 	return a.builder
 }

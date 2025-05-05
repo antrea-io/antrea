@@ -70,7 +70,7 @@ func testContainerInterface(t *testing.T) {
 	assert.True(t, exists)
 	_, exists = store.GetInterfaceByIP(podIPv6.String())
 	assert.True(t, exists)
-	_, exists = store.GetInterfaceByOFPort(uint32(containerInterface.OVSPortConfig.OFPort))
+	_, exists = store.GetInterfaceByOFPort(uint32(containerInterface.OFPort))
 	assert.True(t, exists)
 	ifaces := store.GetContainerInterfacesByPod(containerInterface.PodName, containerInterface.PodNamespace)
 	assert.Equal(t, 1, len(ifaces))
@@ -168,7 +168,7 @@ func testTunnelInterface(t *testing.T) {
 		storedIface, exists = store.GetInterfaceByIP(tunIface.IPs[0].String())
 		assert.True(t, exists)
 		assert.True(t, reflect.DeepEqual(storedIface, tunIface))
-		storedIface, exists = store.GetInterfaceByOFPort(uint32(tunIface.OVSPortConfig.OFPort))
+		storedIface, exists = store.GetInterfaceByOFPort(uint32(tunIface.OFPort))
 		assert.True(t, exists)
 		assert.True(t, reflect.DeepEqual(storedIface, tunIface))
 	}
@@ -236,7 +236,7 @@ func testEntityInterface(t *testing.T) {
 		_, exists = store.GetInterfaceByIP(entityIP.String())
 		assert.True(t, exists)
 	}
-	_, exists = store.GetInterfaceByOFPort(uint32(entityInterface.OVSPortConfig.OFPort))
+	_, exists = store.GetInterfaceByOFPort(uint32(entityInterface.OFPort))
 	assert.True(t, exists)
 	_, exists = store.GetInterfaceByOFPort(uint32(entityInterface.UplinkPort.OFPort))
 	assert.False(t, exists)
@@ -262,7 +262,7 @@ func testGeneralInterface(t *testing.T, ifaceConfig *InterfaceConfig, ifaceType 
 	assert.True(t, exists)
 	_, exists = store.GetInterfaceByIP(ifaceConfig.IPs[0].String())
 	assert.True(t, exists)
-	_, exists = store.GetInterfaceByOFPort(uint32(ifaceConfig.OVSPortConfig.OFPort))
+	_, exists = store.GetInterfaceByOFPort(uint32(ifaceConfig.OFPort))
 	assert.True(t, exists)
 	fooPort := uint32(1)
 	_, exists = store.GetInterfaceByOFPort(fooPort)
@@ -336,7 +336,7 @@ func TestUpdateStore(t *testing.T) {
 	oldCfg, ok := store.GetInterfaceByName("interface1")
 	require.True(t, ok)
 	newCfg := oldCfg.DeepCopy()
-	newCfg.OVSPortConfig.OFPort = 1024
+	newCfg.OFPort = 1024
 	store.UpdateInterface(newCfg)
 	ifConfig2, ok := store.GetInterfaceByName("interface1")
 	require.True(t, ok)

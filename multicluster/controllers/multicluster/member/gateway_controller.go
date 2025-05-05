@@ -123,7 +123,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	gw := &mcv1alpha1.Gateway{}
-	if err := r.Client.Get(ctx, req.NamespacedName, gw); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, gw); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
@@ -202,11 +202,11 @@ func (r *GatewayReconciler) clusterSetMapFunc(ctx context.Context, a client.Obje
 	if a.GetNamespace() != r.namespace {
 		return requests
 	}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
+	err := r.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
 	if err == nil {
 		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == v1.ConditionTrue {
 			gwList := &mcv1alpha1.GatewayList{}
-			r.Client.List(ctx, gwList, &client.ListOptions{Namespace: r.namespace})
+			r.List(ctx, gwList, &client.ListOptions{Namespace: r.namespace})
 			requests = make([]reconcile.Request, len(gwList.Items))
 			for i, gw := range gwList.Items {
 				requests[i] = reconcile.Request{

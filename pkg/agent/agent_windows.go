@@ -500,8 +500,8 @@ func (i *Initializer) installVMInitialFlows() error {
 		return fmt.Errorf("not found interfaceConfig by name %s", i.nodeConfig.UplinkNetConfig.Name)
 	}
 	hostIFName := hostIfConfig.InterfaceName
-	hostOFPort := hostIfConfig.OVSPortConfig.OFPort
-	uplinkOFPort := hostIfConfig.EntityInterfaceConfig.UplinkPort.OFPort
+	hostOFPort := hostIfConfig.OFPort
+	uplinkOFPort := hostIfConfig.UplinkPort.OFPort
 	klog.InfoS("Installing host flows", "hostIFName", hostIFName, "hostOFPort", hostOFPort, "uplinkOFPort", uplinkOFPort)
 	if err := i.ofClient.InstallVMUplinkFlows(hostIFName, hostOFPort, uplinkOFPort); err != nil {
 		return fmt.Errorf("failed to install host fows for interface %s", hostIFName)

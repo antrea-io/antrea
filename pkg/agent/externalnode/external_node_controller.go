@@ -194,7 +194,7 @@ func (c *ExternalNodeController) reconcile() error {
 func (c *ExternalNodeController) reconcileHostUplinkFlows() error {
 	hostIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.ExternalEntityInterface)
 	for _, hostIface := range hostIfaces {
-		if err := c.ofClient.InstallVMUplinkFlows(hostIface.InterfaceName, hostIface.OVSPortConfig.OFPort, hostIface.UplinkPort.OFPort); err != nil {
+		if err := c.ofClient.InstallVMUplinkFlows(hostIface.InterfaceName, hostIface.OFPort, hostIface.UplinkPort.OFPort); err != nil {
 			return err
 		}
 		klog.InfoS("Reconciled host uplink flow for ExternalEntityInterface", "ifName", hostIface.InterfaceName)

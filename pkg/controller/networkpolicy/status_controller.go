@@ -299,11 +299,11 @@ func (c *StatusController) syncHandler(key string) error {
 
 	// It means the NetworkPolicy hasn't been processed once. Set it to Pending to differentiate from NetworkPolicies
 	// that spans 0 Node.
-	if internalNP.SpanMeta.NodeNames == nil {
+	if internalNP.NodeNames == nil {
 		return updateStatus(crdv1beta1.NetworkPolicyPending, 0, 0, conditions)
 	}
 
-	desiredNodes := len(internalNP.SpanMeta.NodeNames)
+	desiredNodes := len(internalNP.NodeNames)
 	currentNodes := 0
 	statuses := c.getNodeStatuses(key)
 	failedNodes := make([]string, 0)

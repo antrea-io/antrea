@@ -223,7 +223,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 	if localIP != "" {
 		iface, ok := c.ifaceStore.GetInterfaceByIP(localIP)
 		if ok && iface.Type == interfacestore.ContainerInterface {
-			ob.appliedToRef = fmt.Sprintf("%s/%s", iface.ContainerInterfaceConfig.PodNamespace, iface.ContainerInterfaceConfig.PodName)
+			ob.appliedToRef = fmt.Sprintf("%s/%s", iface.PodNamespace, iface.PodName)
 		}
 	}
 	if ob.appliedToRef == "" {

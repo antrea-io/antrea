@@ -95,20 +95,20 @@ func (r *LabelIdentityReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	var pod v1.Pod
 	var ns v1.Namespace
-	if err := r.Client.Get(ctx, req.NamespacedName, &pod); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("Pod is deleted", "pod", req.NamespacedName)
-			r.onPodDelete(req.NamespacedName.String())
+			r.onPodDelete(req.String())
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: req.Namespace}, &ns); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: req.Namespace}, &ns); err != nil {
 		klog.ErrorS(err, "Cannot get corresponding Namespace of the Pod", "pod", req.NamespacedName)
 		return ctrl.Result{}, err
 	}
 	normalizedLabel := GetNormalizedLabel(ns.Labels, pod.Labels, ns.Name)
-	r.onPodCreateOrUpdate(req.NamespacedName.String(), normalizedLabel)
+	r.onPodCreateOrUpdate(req.String(), normalizedLabel)
 	return ctrl.Result{}, nil
 }
 
@@ -151,11 +151,11 @@ func (r *LabelIdentityReconciler) clusterSetMapFunc(ctx context.Context, a clien
 	if a.GetNamespace() != r.namespace {
 		return requests
 	}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
+	err := r.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
 	if err == nil {
 		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == v1.ConditionTrue {
 			podList := &v1.PodList{}
-			r.Client.List(ctx, podList)
+			r.List(ctx, podList)
 			requests = make([]reconcile.Request, len(podList.Items))
 			for idx := range podList.Items {
 				pod := &podList.Items[idx]
@@ -181,7 +181,7 @@ func (r *LabelIdentityReconciler) clusterSetMapFunc(ctx context.Context, a clien
 // all Pods in the Namespace into the reconciler processing queue.
 func (r *LabelIdentityReconciler) namespaceMapFunc(ctx context.Context, ns client.Object) []reconcile.Request {
 	podList := &v1.PodList{}
-	r.Client.List(context.TODO(), podList, client.InNamespace(ns.GetName()))
+	r.List(context.TODO(), podList, client.InNamespace(ns.GetName()))
 	requests := make([]reconcile.Request, len(podList.Items))
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]

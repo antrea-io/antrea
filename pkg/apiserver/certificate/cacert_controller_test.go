@@ -375,7 +375,7 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 			prepareReactor: func(clientset *fakeclientset.Clientset) {
 				clientset.PrependReactor("update", "mutatingwebhookconfigurations", func(action cgtesting.Action) (handled bool, ret runtime.Object, err error) {
 					webhook := action.(cgtesting.UpdateAction).GetObject().(*admissionregistrationv1.MutatingWebhookConfiguration)
-					if webhook.ObjectMeta.Name == "labelsmutator.antrea.io" {
+					if webhook.Name == "labelsmutator.antrea.io" {
 						err = errors.New("error updating mutatingwebhookconfigurations labelsmutator.antrea.io")
 					}
 					return true, &admissionregistrationv1.MutatingWebhookConfiguration{}, err

@@ -86,7 +86,7 @@ func (c *StaleResCleanupController) cleanUpExpiredMemberClusterAnnounces(ctx con
 				"MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
 		}
 
-		if err := c.Client.Delete(ctx, &memberClusterAnnounce, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		if err := c.Delete(ctx, &memberClusterAnnounce, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to delete stale MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
 			return
 		}
@@ -182,7 +182,7 @@ func getClusterIDFromName(name string) string {
 
 func getResourceExportsByClusterID(c *StaleResCleanupController, ctx context.Context, clusterID string) ([]mcv1alpha1.ResourceExport, error) {
 	resourceExports := &mcv1alpha1.ResourceExportList{}
-	err := c.Client.List(ctx, resourceExports, &client.ListOptions{}, client.MatchingFields{indexKey: clusterID})
+	err := c.List(ctx, resourceExports, &client.ListOptions{}, client.MatchingFields{indexKey: clusterID})
 	if err != nil {
 		klog.ErrorS(err, "Failed to get ResourceExports by ClusterID", "clusterID", clusterID)
 		return nil, err

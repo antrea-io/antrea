@@ -287,9 +287,9 @@ func newClientset(objects ...runtime.Object) *fake.Clientset {
 	client.PrependReactor("create", "networkpolicies", k8stesting.ReactionFunc(func(action k8stesting.Action) (bool, runtime.Object, error) {
 		np := action.(k8stesting.CreateAction).GetObject().(*networkingv1.NetworkPolicy)
 
-		if np.ObjectMeta.GenerateName != "" {
-			np.ObjectMeta.Name = fmt.Sprintf("%s-%s", np.ObjectMeta.GenerateName, rand.String(8))
-			np.ObjectMeta.GenerateName = ""
+		if np.GenerateName != "" {
+			np.Name = fmt.Sprintf("%s-%s", np.GenerateName, rand.String(8))
+			np.GenerateName = ""
 		}
 
 		return false, np, nil

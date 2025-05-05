@@ -144,7 +144,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	klog.V(2).InfoS("Reconciling ServiceExport", "serviceexport", req.NamespacedName)
 	svcExportList := &k8smcsv1alpha1.ServiceExportList{}
-	err := r.Client.List(ctx, svcExportList, &client.ListOptions{})
+	err := r.List(ctx, svcExportList, &client.ListOptions{})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -184,7 +184,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return nil
 	}
 
-	if err := r.Client.Get(ctx, req.NamespacedName, &svcExport); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, &svcExport); err != nil {
 		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Unable to fetch ServiceExport", "serviceexport", req.String())
 			return ctrl.Result{}, err
@@ -202,7 +202,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// If the corresponding Service doesn't exist, update ServiceExport's status reason to
 	// 'service_not_found', and clean up remote ResourceExport.
 	svc := &corev1.Service{}
-	err = r.Client.Get(ctx, req.NamespacedName, svc)
+	err = r.Get(ctx, req.NamespacedName, svc)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			if err := cleanup(); err != nil {
@@ -430,7 +430,7 @@ func (r *ServiceExportReconciler) handleEndpointDeleteEvent(ctx context.Context,
 
 func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req ctrl.Request, cause reason) error {
 	svcExport := &k8smcsv1alpha1.ServiceExport{}
-	err := r.Client.Get(ctx, req.NamespacedName, svcExport)
+	err := r.Get(ctx, req.NamespacedName, svcExport)
 	if err != nil {
 		return client.IgnoreNotFound(err)
 	}
@@ -537,11 +537,11 @@ func (r *ServiceExportReconciler) clusterSetMapFunc(ctx context.Context, a clien
 		return requests
 	}
 
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
+	err := r.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
 	if err == nil {
 		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {
 			svcExports := &k8smcsv1alpha1.ServiceExportList{}
-			r.Client.List(ctx, svcExports)
+			r.List(ctx, svcExports)
 			for idx := range svcExports.Items {
 				svcExport := &svcExports.Items[idx]
 				namespacedName := types.NamespacedName{
@@ -666,7 +666,7 @@ func (r *ServiceExportReconciler) resetResourceExport(resName, kind string,
 	re.Spec.Kind = kind
 	switch kind {
 	case constants.ServiceKind:
-		re.ObjectMeta.Name = resName
+		re.Name = resName
 		re.Spec.Service = &mcv1alpha1.ServiceExport{
 			ServiceSpec: corev1.ServiceSpec{
 				Ports: svc.Spec.Ports,
@@ -674,7 +674,7 @@ func (r *ServiceExportReconciler) resetResourceExport(resName, kind string,
 		}
 		re.Labels[constants.SourceKind] = constants.ServiceKind
 	case constants.EndpointsKind:
-		re.ObjectMeta.Name = resName
+		re.Name = resName
 		re.Spec.Endpoints = &mcv1alpha1.EndpointsExport{
 			Subsets: ep.Subsets,
 		}
@@ -705,7 +705,7 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 			return err
 		}
 	} else {
-		newResExport.ObjectMeta.ResourceVersion = existingResExport.ObjectMeta.ResourceVersion
+		newResExport.ResourceVersion = existingResExport.ResourceVersion
 		newResExport.Finalizers = existingResExport.Finalizers
 		err := rc.Update(ctx, newResExport, &client.UpdateOptions{})
 		if err != nil {
@@ -723,7 +723,7 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 func (r *ServiceExportReconciler) getSubsetsFromEndpointSlice(ctx context.Context, req ctrl.Request) ([]corev1.EndpointSubset, bool, error) {
 	epSliceList := &discovery.EndpointSliceList{}
 	hasReadyEndpoints := false
-	err := r.Client.List(ctx, epSliceList, &client.ListOptions{
+	err := r.List(ctx, epSliceList, &client.ListOptions{
 		LabelSelector: getEndpointSliceLabelSelector(req.Name),
 		Namespace:     req.Namespace})
 	if err != nil {
@@ -762,7 +762,7 @@ func (r *ServiceExportReconciler) getSubsetsFromEndpointSlice(ctx context.Contex
 
 func (r *ServiceExportReconciler) checkSubsetsFromEndpoint(ctx context.Context, req ctrl.Request, eps *corev1.Endpoints) ([]corev1.EndpointSubset, bool, error) {
 	var newSubsets []corev1.EndpointSubset
-	err := r.Client.Get(ctx, req.NamespacedName, eps)
+	err := r.Get(ctx, req.NamespacedName, eps)
 	if err == nil {
 		for _, s := range eps.Subsets {
 			subset := corev1.EndpointSubset{}
