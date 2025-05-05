@@ -145,9 +145,7 @@ func (f *featureExternalNodeConnectivity) replayFlows() []*openflow15.FlowMod {
 	var flows []*openflow15.FlowMod
 	rangeFunc := func(key, value interface{}) bool {
 		cachedFlows := value.([]*openflow15.FlowMod)
-		for _, flow := range cachedFlows {
-			flows = append(flows, flow)
-		}
+		flows = append(flows, cachedFlows...)
 		return true
 	}
 	f.uplinkFlowCache.Range(rangeFunc)
