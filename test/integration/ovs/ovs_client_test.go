@@ -432,7 +432,7 @@ func TestTunnelOptionTunnelPort(t *testing.T) {
 			}
 			if testCase.updatedTunnelPort != 0 {
 				updatedOptions["dst_port"] = strconv.Itoa(int(testCase.updatedTunnelPort))
-			} else if _, ok := updatedOptions["dst_port"]; ok {
+			} else {
 				delete(updatedOptions, "dst_port")
 			}
 			err = data.br.SetInterfaceOptions(name, updatedOptions)
