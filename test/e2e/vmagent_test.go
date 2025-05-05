@@ -360,7 +360,7 @@ func getVMInfo(t *testing.T, data *TestData, nodeName string) (vmInfo, error) {
 func getWindowsVMInfo(t *testing.T, data *TestData, nodeName string) (vmInfo, error) {
 	var err error
 	vm := vmInfo{nodeName: nodeName, osType: windowsOS}
-	cmd := fmt.Sprintf("powershell 'Get-WmiObject -Class Win32_IP4RouteTable | Where { $_.destination -eq \"0.0.0.0\" -and $_.mask -eq \"0.0.0.0\"} | Sort-Object metric1 | select interfaceindex | ft -HideTableHeaders'")
+	cmd := "powershell 'Get-WmiObject -Class Win32_IP4RouteTable | Where { $_.destination -eq \"0.0.0.0\" -and $_.mask -eq \"0.0.0.0\"} | Sort-Object metric1 | select interfaceindex | ft -HideTableHeaders'"
 	rc, ifIndex, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 	if err != nil {
 		t.Logf("Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)

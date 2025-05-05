@@ -264,7 +264,7 @@ func testNodeACNPPortRange(t *testing.T) {
 	reachability.Expect(getPod("x", "a"), getPod("y", "a"), Dropped)
 	testSteps := []*TestStep{
 		{
-			Name:          fmt.Sprintf("ACNP Drop Ports 8080:8082"),
+			Name:          "ACNP Drop Ports 8080:8082",
 			Reachability:  reachability,
 			TestResources: []metav1.Object{builder.Get()},
 			Ports:         []int32{8080, 8081, 8082},
