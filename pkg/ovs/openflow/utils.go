@@ -482,51 +482,51 @@ func trimLeadingZero(s string) string {
 func getFieldDataString(field *openflow15.MatchField) string {
 	value, mask := field.Value, field.Mask
 	var fieldStr string
-	switch value.(type) {
+	switch value := value.(type) {
 	case *util.Buffer:
-		fieldStr = fmt.Sprintf("0x%s", trimLeadingZero(fmt.Sprintf("%x", value.(*util.Buffer).Bytes())))
+		fieldStr = fmt.Sprintf("0x%s", trimLeadingZero(fmt.Sprintf("%x", value.Bytes())))
 		if mask != nil {
 			fieldStr = fmt.Sprintf("%s/0x%s", fieldStr, trimLeadingZero(fmt.Sprintf("%x", mask.(*util.Buffer).Bytes())))
 		}
 	case *openflow15.ByteArrayField:
-		fieldStr = fmt.Sprintf("0x%s", trimLeadingZero(fmt.Sprintf("%x", value.(*openflow15.ByteArrayField).Data)))
+		fieldStr = fmt.Sprintf("0x%s", trimLeadingZero(fmt.Sprintf("%x", value.Data)))
 		if mask != nil {
 			fieldStr = fmt.Sprintf("%s/0x%s", fieldStr, trimLeadingZero(fmt.Sprintf("%x", mask.(*openflow15.ByteArrayField).Data)))
 		}
 	case *openflow15.Uint32Message:
-		fieldStr = fmt.Sprintf("0x%x", value.(*openflow15.Uint32Message).Data)
+		fieldStr = fmt.Sprintf("0x%x", value.Data)
 		if mask != nil && mask.(*openflow15.Uint32Message).Data != 0xffffffff {
 			fieldStr = fmt.Sprintf("%s/0x%x", fieldStr, mask.(*openflow15.Uint32Message).Data)
 		}
 	case *openflow15.CTLabel:
-		fieldStr = fmt.Sprintf("0x%s", trimLeadingZero(fmt.Sprintf("%x", value.(*openflow15.CTLabel).Data)))
+		fieldStr = fmt.Sprintf("0x%s", trimLeadingZero(fmt.Sprintf("%x", value.Data)))
 		if mask != nil && mask.(*openflow15.CTLabel).Data != [16]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff} {
 			fieldStr = fmt.Sprintf("%s/0x%s", fieldStr, trimLeadingZero(fmt.Sprintf("%x", mask.(*openflow15.CTLabel).Data)))
 		}
 	case *openflow15.PortField:
-		fieldStr = fmt.Sprintf("%d", value.(*openflow15.PortField).Port)
+		fieldStr = fmt.Sprintf("%d", value.Port)
 		if mask != nil && mask.(*openflow15.PortField).Port != 0xffff {
-			fieldStr = fmt.Sprintf("0x%x/0x%x", value.(*openflow15.PortField).Port, mask.(*openflow15.PortField).Port)
+			fieldStr = fmt.Sprintf("0x%x/0x%x", value.Port, mask.(*openflow15.PortField).Port)
 		}
 	case *ofctrl.PortField:
-		fieldStr = fmt.Sprintf("%d", value.(*ofctrl.PortField).Port)
+		fieldStr = fmt.Sprintf("%d", value.Port)
 		if mask != nil && mask.(*ofctrl.PortField).Port != 0xffff {
-			fieldStr = fmt.Sprintf("0x%x/0x%x", value.(*ofctrl.PortField).Port, mask.(*ofctrl.PortField).Port)
+			fieldStr = fmt.Sprintf("0x%x/0x%x", value.Port, mask.(*ofctrl.PortField).Port)
 		}
 	case *ofctrl.ProtocolField:
-		fieldStr = fmt.Sprintf("%d", value.(*ofctrl.ProtocolField).Protocol)
+		fieldStr = fmt.Sprintf("%d", value.Protocol)
 	case *openflow15.IpDscpField:
-		fieldStr = fmt.Sprintf("%d", value.(*openflow15.IpDscpField).Dscp)
+		fieldStr = fmt.Sprintf("%d", value.Dscp)
 	case *openflow15.EthSrcField:
-		fieldStr = value.(*openflow15.EthSrcField).EthSrc.String()
+		fieldStr = value.EthSrc.String()
 	case *openflow15.EthDstField:
-		fieldStr = value.(*openflow15.EthDstField).EthDst.String()
+		fieldStr = value.EthDst.String()
 	case *openflow15.ArpXHaField:
-		fieldStr = value.(*openflow15.ArpXHaField).ArpHa.String()
+		fieldStr = value.ArpHa.String()
 	case *openflow15.ArpXPaField:
-		fieldStr = value.(*openflow15.ArpXPaField).ArpPa.String()
+		fieldStr = value.ArpPa.String()
 	case *openflow15.Ipv4SrcField:
-		fieldStr = value.(*openflow15.Ipv4SrcField).Ipv4Src.String()
+		fieldStr = value.Ipv4Src.String()
 		if mask != nil {
 			prefix, _ := net.IPMask(mask.(*openflow15.Ipv4SrcField).Ipv4Src).Size()
 			if prefix < 32 {
@@ -534,7 +534,7 @@ func getFieldDataString(field *openflow15.MatchField) string {
 			}
 		}
 	case *openflow15.Ipv4DstField:
-		fieldStr = value.(*openflow15.Ipv4DstField).Ipv4Dst.String()
+		fieldStr = value.Ipv4Dst.String()
 		if mask != nil {
 			prefix, _ := net.IPMask(mask.(*openflow15.Ipv4DstField).Ipv4Dst).Size()
 			if prefix < 32 {
@@ -542,7 +542,7 @@ func getFieldDataString(field *openflow15.MatchField) string {
 			}
 		}
 	case *openflow15.Ipv6SrcField:
-		fieldStr = value.(*openflow15.Ipv6SrcField).Ipv6Src.String()
+		fieldStr = value.Ipv6Src.String()
 		if mask != nil {
 			prefix, _ := net.IPMask(mask.(*openflow15.Ipv6SrcField).Ipv6Src).Size()
 			if prefix < 128 {
@@ -550,7 +550,7 @@ func getFieldDataString(field *openflow15.MatchField) string {
 			}
 		}
 	case *openflow15.Ipv6DstField:
-		fieldStr = value.(*openflow15.Ipv6DstField).Ipv6Dst.String()
+		fieldStr = value.Ipv6Dst.String()
 		if mask != nil {
 			prefix, _ := net.IPMask(mask.(*openflow15.Ipv6DstField).Ipv6Dst).Size()
 			if prefix < 128 {
@@ -558,24 +558,24 @@ func getFieldDataString(field *openflow15.MatchField) string {
 			}
 		}
 	case *openflow15.TunnelIpv4DstField:
-		fieldStr = value.(*openflow15.TunnelIpv4DstField).TunnelIpv4Dst.String()
+		fieldStr = value.TunnelIpv4Dst.String()
 	case *openflow15.TunnelIdField:
-		fieldStr = fmt.Sprintf("%d", value.(*openflow15.TunnelIdField).TunnelId)
+		fieldStr = fmt.Sprintf("%d", value.TunnelId)
 	case *openflow15.VlanIdField:
-		fieldStr = fmt.Sprintf("%d", value.(*openflow15.VlanIdField).VlanId)
+		fieldStr = fmt.Sprintf("%d", value.VlanId)
 	case *openflow15.ArpOperField:
-		fieldStr = fmt.Sprintf("%d", value.(*openflow15.ArpOperField).ArpOper)
+		fieldStr = fmt.Sprintf("%d", value.ArpOper)
 	case *openflow15.MatchField:
-		fieldStr = fmt.Sprintf("0x%x", value.(*openflow15.MatchField).Value)
+		fieldStr = fmt.Sprintf("0x%x", value.Value)
 		if mask != nil {
 			fieldStr = fmt.Sprintf("%s/0x%x", fieldStr, mask.(*openflow15.MatchField).Value)
 		}
 	case *openflow15.InPortField:
-		fieldStr = fmt.Sprintf("%d", value.(*openflow15.InPortField).InPort)
+		fieldStr = fmt.Sprintf("%d", value.InPort)
 	case *openflow15.IcmpTypeField:
-		fieldStr = fmt.Sprintf("%d", value.(*openflow15.IcmpTypeField).Type)
+		fieldStr = fmt.Sprintf("%d", value.Type)
 	case *openflow15.IcmpCodeField:
-		fieldStr = fmt.Sprintf("%d", value.(*openflow15.IcmpCodeField).Code)
+		fieldStr = fmt.Sprintf("%d", value.Code)
 	}
 	return fieldStr
 }

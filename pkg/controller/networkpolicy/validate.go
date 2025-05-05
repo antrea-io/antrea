@@ -527,19 +527,17 @@ func (v *antreaPolicyValidator) validatePolicy(curObj interface{}) ([]string, st
 	var ingress, egress []crdv1beta1.Rule
 	var specAppliedTo []crdv1beta1.AppliedTo
 	var warnings []string
-	switch curObj.(type) {
+	switch curObj := curObj.(type) {
 	case *crdv1beta1.ClusterNetworkPolicy:
-		curACNP := curObj.(*crdv1beta1.ClusterNetworkPolicy)
-		tier = curACNP.Spec.Tier
-		ingress = curACNP.Spec.Ingress
-		egress = curACNP.Spec.Egress
-		specAppliedTo = curACNP.Spec.AppliedTo
+		tier = curObj.Spec.Tier
+		ingress = curObj.Spec.Ingress
+		egress = curObj.Spec.Egress
+		specAppliedTo = curObj.Spec.AppliedTo
 	case *crdv1beta1.NetworkPolicy:
-		curANNP := curObj.(*crdv1beta1.NetworkPolicy)
-		tier = curANNP.Spec.Tier
-		ingress = curANNP.Spec.Ingress
-		egress = curANNP.Spec.Egress
-		specAppliedTo = curANNP.Spec.AppliedTo
+		tier = curObj.Spec.Tier
+		ingress = curObj.Spec.Ingress
+		egress = curObj.Spec.Egress
+		specAppliedTo = curObj.Spec.AppliedTo
 	}
 	reason, allowed := v.validateTierForPolicy(tier)
 	if !allowed {
@@ -1184,17 +1182,13 @@ func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo aut
 
 // validateGroup validates the CREATE and UPDATE events of Group, ClusterGroup resources.
 func (g *groupValidator) validateGroup(curObj interface{}) ([]string, string, bool) {
-	var curCG *crdv1beta1.ClusterGroup
-	var curG *crdv1beta1.Group
 	var reason string
 	var allowed bool
-	switch curObj.(type) {
+	switch curObj := curObj.(type) {
 	case *crdv1beta1.ClusterGroup:
-		curCG = curObj.(*crdv1beta1.ClusterGroup)
-		reason, allowed = g.validateCG(curCG)
+		reason, allowed = g.validateCG(curObj)
 	case *crdv1beta1.Group:
-		curG = curObj.(*crdv1beta1.Group)
-		reason, allowed = g.validateG(curG)
+		reason, allowed = g.validateG(curObj)
 	}
 	return nil, reason, allowed
 }
@@ -1221,13 +1215,11 @@ func (a *adminPolicyValidator) validateBANP(banp *v1alpha1.BaselineAdminNetworkP
 func (a *adminPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	var reason string
 	var allowed bool
-	switch curObj.(type) {
+	switch curObj := curObj.(type) {
 	case *v1alpha1.AdminNetworkPolicy:
-		curANP := curObj.(*v1alpha1.AdminNetworkPolicy)
-		reason, allowed = a.validateAdminNP(curANP)
+		reason, allowed = a.validateAdminNP(curObj)
 	case *v1alpha1.BaselineAdminNetworkPolicy:
-		curBANP := curObj.(*v1alpha1.BaselineAdminNetworkPolicy)
-		reason, allowed = a.validateBANP(curBANP)
+		reason, allowed = a.validateBANP(curObj)
 	}
 	return nil, reason, allowed
 }
