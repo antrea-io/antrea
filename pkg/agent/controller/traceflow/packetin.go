@@ -35,14 +35,14 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-var skipTraceflowUpdateErr = errors.New("skip Traceflow update")
+var errSkipTraceflowUpdate = errors.New("skip Traceflow update")
 
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if !c.traceflowListerSynced() {
 		return errors.New("Traceflow controller is not started")
 	}
 	oldTf, nodeResult, packet, err := c.parsePacketIn(pktIn)
-	if err == skipTraceflowUpdateErr {
+	if err == errSkipTraceflowUpdate {
 		return nil
 	}
 	if err != nil {
@@ -146,7 +146,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		// request does not specify source / destination ports.
 		if !firstPacket {
 			klog.InfoS("An additional Traceflow packet was received unexpectedly for Live Traceflow, ignoring it")
-			return nil, nil, nil, skipTraceflowUpdateErr
+			return nil, nil, nil, errSkipTraceflowUpdate
 		}
 		// Uninstall the OVS flows after receiving the first packet, to
 		// avoid capturing too many matched packets.

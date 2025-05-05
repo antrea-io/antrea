@@ -72,7 +72,7 @@ func TestSetLinkUp(t *testing.T) {
 		{
 			name:           "Get Interface Err",
 			gwInterface:    &net.Interface{Index: 0},
-			gwInterfaceErr: testInvalidErr,
+			gwInterfaceErr: errTestInvalid,
 			expectedCalls: func(mockUtil *winnettesting.MockInterfaceMockRecorder) {
 				mockUtil.EnableNetAdapter(testName).Return(nil).MinTimes(1)
 				mockUtil.IsNetAdapterStatusUp(testName).Return(true, nil).Times(1)
@@ -118,13 +118,13 @@ func TestConfigureLinkAddresses(t *testing.T) {
 		{
 			name:                "Net Interface Err",
 			ipNets:              []*net.IPNet{},
-			testNetInterfaceErr: testInvalidErr,
-			wantErr:             testInvalidErr,
+			testNetInterfaceErr: errTestInvalid,
+			wantErr:             errTestInvalid,
 		},
 		{
 			name:            "Link Addr Err",
 			ipNets:          []*net.IPNet{},
-			testNetAddrsErr: testInvalidErr,
+			testNetAddrsErr: errTestInvalid,
 			wantErr:         fmt.Errorf("failed to query IPv4 address list for interface 0: invalid"),
 		},
 		{
@@ -230,7 +230,7 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			nodeIPNet:           &ipv4PublicIPNet,
 			dnsServers:          testDNSServer,
 			ipFound:             true,
-			hnsNetworkCreateErr: testInvalidErr,
+			hnsNetworkCreateErr: errTestInvalid,
 			wantErr:             fmt.Errorf("error creating HNSNetwork: invalid"),
 		},
 		{
@@ -238,8 +238,8 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			nodeIPNet:           &ipv4PublicIPNet,
 			dnsServers:          testDNSServer,
 			ipFound:             true,
-			testNetInterfaceErr: testInvalidErr,
-			wantErr:             testInvalidErr,
+			testNetInterfaceErr: errTestInvalid,
+			wantErr:             errTestInvalid,
 		},
 		{
 			name:       "Rename Err",
@@ -248,17 +248,17 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			newName:    testNewName,
 			ipFound:    true,
 			expectedCalls: func(mockUtil *winnettesting.MockInterfaceMockRecorder) {
-				mockUtil.RenameVMNetworkAdapter(LocalHNSNetwork, testUplinkMACStr, testNewName, true).Return(testInvalidErr).Times(1)
+				mockUtil.RenameVMNetworkAdapter(LocalHNSNetwork, testUplinkMACStr, testNewName, true).Return(errTestInvalid).Times(1)
 			},
-			wantErr: testInvalidErr,
+			wantErr: errTestInvalid,
 		},
 		{
 			name:                   "Enable HNS Err",
 			nodeIPNet:              &ipv4PublicIPNet,
 			dnsServers:             testDNSServer,
 			ipFound:                true,
-			hnsNetworkRequestError: testInvalidErr,
-			wantErr:                testInvalidErr,
+			hnsNetworkRequestError: errTestInvalid,
+			wantErr:                errTestInvalid,
 		},
 		{
 			name:       "Enable RSC Err",
@@ -266,9 +266,9 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			dnsServers: testDNSServer,
 			ipFound:    true,
 			expectedCalls: func(mockUtil *winnettesting.MockInterfaceMockRecorder) {
-				mockUtil.EnableRSCOnVSwitch(LocalHNSNetwork).Return(testInvalidErr).Times(1)
+				mockUtil.EnableRSCOnVSwitch(LocalHNSNetwork).Return(errTestInvalid).Times(1)
 			},
-			wantErr: testInvalidErr,
+			wantErr: errTestInvalid,
 		},
 		{
 			name:       "IP Not Found",
@@ -424,8 +424,8 @@ func TestGetInterfaceConfig(t *testing.T) {
 		},
 		{
 			name:                "Interface Err",
-			testNetInterfaceErr: testInvalidErr,
-			wantErr:             fmt.Errorf("failed to get interface %s: %v", "0", testInvalidErr),
+			testNetInterfaceErr: errTestInvalid,
+			wantErr:             fmt.Errorf("failed to get interface %s: %v", "0", errTestInvalid),
 		},
 		{
 			name:    "Route Err",

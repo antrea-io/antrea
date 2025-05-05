@@ -850,7 +850,7 @@ func TestInitInvalidPod(t *testing.T) {
 }
 
 var (
-	portTakenError = fmt.Errorf("Port taken")
+	errPortTaken = fmt.Errorf("Port taken")
 )
 
 // TestNodePortAlreadyBoundTo validates that when a port with TCP protocol is already bound to,
@@ -861,7 +861,7 @@ func TestNodePortAlreadyBoundTo(t *testing.T) {
 	testConfig := newTestConfig().withCustomPortOpenerExpectations(func(mockPortOpener *portcachetesting.MockLocalPortOpener) {
 		gomock.InOrder(
 			// 1. port1 is checked for TCP availability -> error
-			mockPortOpener.EXPECT().OpenLocalPort(nodePort1, protocolTCP).Return(nil, portTakenError),
+			mockPortOpener.EXPECT().OpenLocalPort(nodePort1, protocolTCP).Return(nil, errPortTaken),
 			// 2. port2 is checked for TCP availability -> success
 			mockPortOpener.EXPECT().OpenLocalPort(nodePort2, protocolTCP).Return(&fakeSocket{}, nil),
 		)
