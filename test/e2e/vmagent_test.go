@@ -733,7 +733,7 @@ func runIperfClient(t *testing.T, data *TestData, targetVM vmInfo, svrIP net.IP,
 		}
 	}
 
-	errCh := make(chan error, 0)
+	errCh := make(chan error)
 	go func() {
 		err := runCommandAndCheckResult(data, targetVM.nodeName, cmdStr, expectedOutput, "")
 		errCh <- err

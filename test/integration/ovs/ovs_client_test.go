@@ -49,7 +49,7 @@ func (data *testData) setup(t *testing.T) {
 	var err error
 	// ensure that we timeout after a reasonable time duration if we cannot connect to the Unix
 	// socket.
-	connectErrorCh := make(chan error, 0)
+	connectErrorCh := make(chan error)
 	connect := func() {
 		data.ovsdb, err = ovsconfig.NewOVSDBConnectionUDS(UDSAddress)
 		connectErrorCh <- err
