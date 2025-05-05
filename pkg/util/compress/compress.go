@@ -68,7 +68,7 @@ func UnpackReader(fs afero.Fs, file io.Reader, useGzip bool, targetDir string) e
 	}
 	tarReader := tar.NewReader(reader)
 
-	for true {
+	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
 			break
