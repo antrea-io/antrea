@@ -720,7 +720,7 @@ func TestOnDNSResponse(t *testing.T) {
 
 			f.onDNSResponse(testFQDN, tc.dnsResponseIPs, nil)
 
-			cachedDnsMetaData, _ := f.dnsEntryCache[testFQDN]
+			cachedDnsMetaData := f.dnsEntryCache[testFQDN]
 
 			assert.Equal(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "FQDN cache doesn't match expected entries")
 

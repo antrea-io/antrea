@@ -1054,7 +1054,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
-			actualPods, _ := c.appliedToSetByGroup[tt.args.Name]
+			actualPods := c.appliedToSetByGroup[tt.args.Name]
 			assert.ElementsMatch(t, tt.expectedPods, actualPods.Items(), "stored Pods not equal")
 			if !tt.expectedErr {
 				assert.Equal(t, len(ret.GroupMembers), len(actualPods))
@@ -1134,7 +1134,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
-			actualAddresses, _ := c.addressSetByGroup[tt.args.Name]
+			actualAddresses := c.addressSetByGroup[tt.args.Name]
 			assert.ElementsMatch(t, tt.expectedAddresses, actualAddresses.Items(), "stored addresses not equal")
 			if !tt.expectedErr {
 				assert.Equal(t, len(ret.GroupMembers), len(actualAddresses))

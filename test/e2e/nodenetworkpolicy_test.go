@@ -735,8 +735,8 @@ func testNodeACNPClusterGroupUpdate(t *testing.T) {
 }
 
 func testNodeACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
-	podYAIP, _ := podIPs[getNS("y")+"/a"]
-	podZAIP, _ := podIPs[getNS("z")+"/a"]
+	podYAIP := podIPs[getNS("y")+"/a"]
+	podZAIP := podIPs[getNS("z")+"/a"]
 	// There are three situations of a Pod's IP(s):
 	// 1. Only one IPv4 address.
 	// 2. Only one IPv6 address.
@@ -837,8 +837,8 @@ func testNodeACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData)
 }
 
 func testNodeACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
-	podYAIP, _ := podIPs[getPodName("y", "a")]
-	podZAIP, _ := podIPs[getPodName("z", "a")]
+	podYAIP := podIPs[getPodName("y", "a")]
+	podZAIP := podIPs[getPodName("z", "a")]
 	genCIDR := func(ip string) string {
 		switch IPFamily(ip) {
 		case "v4":

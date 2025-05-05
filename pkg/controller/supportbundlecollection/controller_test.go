@@ -1680,7 +1680,7 @@ func TestUpdateStatus(t *testing.T) {
 		prepareController(collectionName, desiredNodes)
 		reportedNodes := 1
 		agentReportStatus(reportedNodes, 0, collectionName)
-		statusPerNode, _ := controller.statuses[collectionName]
+		statusPerNode := controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes, len(statusPerNode))
 		syncSupportBundleCollection()
 		assert.Equal(t, reportedNodes, len(statusPerNode))
@@ -1690,10 +1690,10 @@ func TestUpdateStatus(t *testing.T) {
 			NodeType:  controlplane.SupportBundleCollectionNodeTypeNode,
 			Completed: true,
 		})
-		statusPerNode, _ = controller.statuses[collectionName]
+		statusPerNode = controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes+1, len(statusPerNode))
 		syncSupportBundleCollection()
-		statusPerNode, _ = controller.statuses[collectionName]
+		statusPerNode = controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes, len(statusPerNode))
 	})
 

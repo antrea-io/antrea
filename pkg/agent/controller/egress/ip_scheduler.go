@@ -345,7 +345,7 @@ func (s *egressIPScheduler) schedule() {
 
 		maxEgressIPsFilter := func(node string) bool {
 			// Count the Egress IPs that are already assigned to this Node.
-			ipsOnNode, _ := nodeToIPs[node]
+			ipsOnNode := nodeToIPs[node]
 			numIPs := ipsOnNode.Len()
 			// Check if this Node can accommodate the new Egress IP.
 			if !ipsOnNode.Has(egress.Spec.EgressIP) {

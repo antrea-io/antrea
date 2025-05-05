@@ -149,7 +149,7 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 	}
 
 	// Collect specified IPs if exist
-	ipStrings, _ := pod.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
+	ipStrings := pod.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
 	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
 	var ipErr error
 	if ipStrings != "" {

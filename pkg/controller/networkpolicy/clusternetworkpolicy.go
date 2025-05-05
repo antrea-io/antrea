@@ -690,7 +690,7 @@ func (n *NetworkPolicyController) toAntreaPeerForSameLabelNamespaces(peer crdv1b
 	var atgs []*antreatypes.AppliedToGroup
 	sort.Strings(namespacesByLabelValues)
 	for _, ns := range namespacesByLabelValues {
-		atgForNamespace, _ := atgPerAffectedNS[ns]
+		atgForNamespace := atgPerAffectedNS[ns]
 		atgs = append(atgs, atgForNamespace)
 	}
 	return antreaPeer, atgs, addressGroups, clusterSetScopeSelectorKeys
