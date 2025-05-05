@@ -1035,11 +1035,9 @@ func (r *podReconciler) Forget(ruleID string) error {
 }
 
 func (r *podReconciler) isIGMPRule(rule *CompletedRule) bool {
-	isIGMP := false
-	if len(rule.Services) > 0 && (rule.Services[0].Protocol != nil) &&
-		(*rule.Services[0].Protocol == v1beta2.ProtocolIGMP) {
-		isIGMP = true
-	}
+	isIGMP := len(rule.Services) > 0 && (rule.Services[0].Protocol != nil) &&
+		(*rule.Services[0].Protocol == v1beta2.ProtocolIGMP)
+
 	return isIGMP
 }
 

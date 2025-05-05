@@ -580,10 +580,8 @@ func (f *featurePodConnectivity) podClassifierFlow(podOFPort uint32, isAntreaFle
 func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAddr, vlanID uint16) []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
-	nonVLAN := true
-	if vlanID > 0 {
-		nonVLAN = false
-	}
+	nonVLAN := vlanID <= 0
+
 	for _, ipProtocol := range f.ipProtocols {
 		flows = append(flows,
 			// This generates the flow to mark the packets from uplink port.
