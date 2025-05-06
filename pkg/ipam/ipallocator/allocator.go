@@ -249,7 +249,7 @@ func (a *SingleIPAllocator) Free() int {
 
 // Total returns the number total of IPs within the pool.
 func (a *SingleIPAllocator) Total() int {
-	return a.max - len(a.reservedIPs)
+	return max(a.max-len(a.reservedIPs), 0)
 }
 
 // Has returns whether the provided IP is in the range or not.
