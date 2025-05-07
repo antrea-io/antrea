@@ -118,7 +118,7 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 			t.Logf("Get Pod IPs: %+v\n", ips)
 
 			networkStatus, err := utils.GetNetworkStatus(podItem)
-			if err != nil || len(networkStatus) != len(ips)-2 || len(networkStatus) != len(secondarynetworkList) {
+			if err != nil || len(networkStatus) != len(ips)-1 || len(networkStatus) != len(secondarynetworkList)+1 {
 				return false, nil
 			}
 			for _, network := range networkStatus {
