@@ -66,6 +66,10 @@ var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Po
   $ antctl packetcapture -S pod1 -D pod2
   Start capturing packets from pod1 in Namespace ns1 to a destination IP
   $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
+  Start capturing TCP FIN packets from pod1 to pod2, with destination port 80
+  $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
+  Start capturing TCP SYNs that are not ACKs from pod1 to pod2, with destination port 80
+  $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+syn-ack
   Start capturing UDP packets from pod1 to pod2, with destination port 1234
   $ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
   Save the packets file to a specified directory
@@ -85,7 +89,7 @@ func init() {
 	Command.Flags().StringVarP(&options.source, "source", "S", "", "source of the the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().StringVarP(&options.dest, "destination", "D", "", "destination of the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().Int32VarP(&options.number, "number", "n", 1, "target number of packets to capture, the capture will stop when it is reached")
-	Command.Flags().StringVarP(&options.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture, including tcp_src, tcp_dst, udp_src, udp_dst")
+	Command.Flags().StringVarP(&options.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst")
 	Command.Flags().BoolVarP(&options.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 	Command.Flags().StringVarP(&options.outputDir, "output-dir", "o", ".", "save the packets file to the target directory")
 }
@@ -94,6 +98,17 @@ var protocols = map[string]int32{
 	"icmp": 1,
 	"tcp":  6,
 	"udp":  17,
+}
+
+var tcpFlags = map[string]int32{
+	"fin": 1,
+	"syn": 1 << 1,
+	"rst": 1 << 2,
+	"psh": 1 << 3,
+	"ack": 1 << 4,
+	"urg": 1 << 5,
+	"ece": 1 << 6,
+	"cwr": 1 << 7,
 }
 
 func getPodFileCopier(config *rest.Config, client kubernetes.Interface) raw.PodFileCopier {
@@ -227,19 +242,15 @@ func parseEndpoint(endpoint string) (*v1alpha1.PodReference, *string) {
 	return pod, ip
 }
 
-func getFlowFields(flow string) (map[string]int, error) {
-	fields := map[string]int{}
+func getFlowFields(flow string) (map[string]string, error) {
+	fields := map[string]string{}
 	for _, v := range strings.Split(flow, ",") {
 		kv := strings.Split(v, "=")
 		if len(kv) == 2 && len(kv[0]) != 0 && len(kv[1]) != 0 {
-			r, err := strconv.Atoi(kv[1])
-			if err != nil {
-				return nil, err
-			}
-			fields[kv[0]] = r
+			fields[kv[0]] = kv[1]
 		} else if len(kv) == 1 {
 			if len(kv[0]) != 0 {
-				fields[v] = 0
+				fields[v] = ""
 			}
 		} else {
 			return nil, fmt.Errorf("%s is not valid in flow", v)
@@ -248,11 +259,42 @@ func getFlowFields(flow string) (map[string]int, error) {
 	return fields, nil
 }
 
+// tokenizeTCPFlags parses tcp_flags value and returns two slices: set (flags that must be set) and unset (flags that must be unset).
+func tokenizeTCPFlags(r string) ([]string, []string, error) {
+	var currentSign rune
+	var set, unset []string
+	for i := 0; i < len(r); {
+		if r[i] == '+' || r[i] == '-' {
+			currentSign = rune(r[i])
+			start := i + 1
+			i++
+			for i < len(r) && r[i] >= 'a' && r[i] <= 'z' {
+				i++
+			}
+			token := r[start:i]
+			if token == "" {
+				return nil, nil, fmt.Errorf("missing TCP flag after '%c' at %d", currentSign, i)
+			}
+			if _, ok := tcpFlags[token]; !ok {
+				return nil, nil, fmt.Errorf("invalid TCP flag %s", token)
+			}
+			if currentSign == '+' {
+				set = append(set, token)
+			} else {
+				unset = append(unset, token)
+			}
+		} else {
+			return nil, nil, fmt.Errorf("invalid character '%c' at %d, expected '+' or '-'", r[i], i+1)
+		}
+	}
+	return set, unset, nil
+}
+
 func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 	trimFlow := strings.ReplaceAll(options.flow, " ", "")
 	fields, err := getFlowFields(trimFlow)
 	if err != nil {
-		return nil, fmt.Errorf("error when parsing the flow: %w", err)
+		return nil, err
 	}
 	var pkt v1alpha1.Packet
 	pkt.IPFamily = v1.IPv4Protocol
@@ -263,24 +305,68 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 		}
 	}
 	if r, ok := fields["tcp_src"]; ok {
+		srcPort, err := strconv.ParseUint(r, 0, 16)
+		if err != nil {
+			return nil, err
+		}
 		pkt.TransportHeader.TCP = new(v1alpha1.TCPHeader)
-		pkt.TransportHeader.TCP.SrcPort = ptr.To(int32(r))
+		pkt.TransportHeader.TCP.SrcPort = ptr.To(int32(srcPort))
 	}
 	if r, ok := fields["tcp_dst"]; ok {
+		dstPort, err := strconv.ParseUint(r, 0, 16)
+		if err != nil {
+			return nil, err
+		}
 		if pkt.TransportHeader.TCP == nil {
 			pkt.TransportHeader.TCP = new(v1alpha1.TCPHeader)
 		}
-		pkt.TransportHeader.TCP.DstPort = ptr.To(int32(r))
+		pkt.TransportHeader.TCP.DstPort = ptr.To(int32(dstPort))
+	}
+	if r, ok := fields["tcp_flags"]; ok {
+		var value, mask int32
+
+		set, unset, err := tokenizeTCPFlags(r)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, flag := range set {
+			val := tcpFlags[flag]
+			value += val
+			mask += val
+		}
+		for _, flag := range unset {
+			val := tcpFlags[flag]
+			mask += val
+		}
+
+		if pkt.TransportHeader.TCP == nil {
+			pkt.TransportHeader.TCP = new(v1alpha1.TCPHeader)
+		}
+		pkt.TransportHeader.TCP.Flags = []v1alpha1.TCPFlagsMatcher{
+			{
+				Value: value,
+				Mask:  ptr.To(mask),
+			},
+		}
 	}
 	if r, ok := fields["udp_src"]; ok {
+		srcPort, err := strconv.ParseUint(r, 0, 16)
+		if err != nil {
+			return nil, err
+		}
 		pkt.TransportHeader.UDP = new(v1alpha1.UDPHeader)
-		pkt.TransportHeader.UDP.SrcPort = ptr.To(int32(r))
+		pkt.TransportHeader.UDP.SrcPort = ptr.To(int32(srcPort))
 	}
 	if r, ok := fields["udp_dst"]; ok {
+		dstPort, err := strconv.ParseUint(r, 0, 16)
+		if err != nil {
+			return nil, err
+		}
 		if pkt.TransportHeader.UDP == nil {
 			pkt.TransportHeader.UDP = new(v1alpha1.UDPHeader)
 		}
-		pkt.TransportHeader.UDP.DstPort = ptr.To(int32(r))
+		pkt.TransportHeader.UDP.DstPort = ptr.To(int32(dstPort))
 	}
 	return &pkt, nil
 }
