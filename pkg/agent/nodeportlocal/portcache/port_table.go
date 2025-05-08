@@ -177,7 +177,7 @@ func (pt *PortTable) GetDataForPod(podKey string) []*NodePortData {
 
 func (pt *PortTable) getDataForPod(podKey string) []*NodePortData {
 	allData, exist := pt.getPortTableCacheFromPodKeyIndex(podKey)
-	if exist == false {
+	if !exist {
 		return nil
 	}
 	return allData

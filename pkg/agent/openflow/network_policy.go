@@ -747,7 +747,8 @@ func (c *client) NewDNSPacketInConjunction(id uint32) error {
 				},
 			},
 		}
-		if proto == binding.ProtocolIP {
+		switch proto {
+		case binding.ProtocolIP:
 			tcpMatch.matchPairs = append(tcpMatch.matchPairs, matchPair{
 				matchKey:   MatchTCPSrcPort,
 				matchValue: dnsPortMatchValue,
@@ -756,7 +757,7 @@ func (c *client) NewDNSPacketInConjunction(id uint32) error {
 				matchKey:   MatchUDPSrcPort,
 				matchValue: dnsPortMatchValue,
 			})
-		} else if proto == binding.ProtocolIPv6 {
+		case binding.ProtocolIPv6:
 			tcpMatch.matchPairs = append(tcpMatch.matchPairs, matchPair{
 				matchKey:   MatchTCPv6SrcPort,
 				matchValue: dnsPortMatchValue,
@@ -1168,9 +1169,7 @@ func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
 	ctxChanges := c.featureNetworkPolicy.calculateMatchFlowChangesForRule(conj, rule)
 
 	var flowMessages []*openflow15.FlowMod
-	for _, fm := range append(conj.metricFlows, conj.actionFlows...) {
-		flowMessages = append(flowMessages, fm)
-	}
+	flowMessages = append(flowMessages, append(conj.metricFlows, conj.actionFlows...)...)
 	if err := c.ofEntryOperations.AddAll(flowMessages); err != nil {
 		return err
 	}
@@ -1317,9 +1316,7 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 	for _, rule := range ofPolicyRules {
 		conj := c.featureNetworkPolicy.calculateActionFlowChangesForRule(rule)
 		c.featureNetworkPolicy.addRuleToConjunctiveMatch(conj, rule)
-		for _, msg := range append(conj.actionFlows, conj.metricFlows...) {
-			allFlowMessages = append(allFlowMessages, msg)
-		}
+		allFlowMessages = append(allFlowMessages, append(conj.actionFlows, conj.metricFlows...)...)
 		conjunctions = append(conjunctions, conj)
 	}
 
@@ -1626,14 +1623,10 @@ func (f *featureNetworkPolicy) getStalePriorities(conj *policyRuleConjunction) (
 func (f *featureNetworkPolicy) replayFlows() []*openflow15.FlowMod {
 	var flows []*openflow15.FlowMod
 	addActionFlows := func(conj *policyRuleConjunction) {
-		for _, flow := range conj.actionFlows {
-			flows = append(flows, flow)
-		}
+		flows = append(flows, conj.actionFlows...)
 	}
 	addMetricFlows := func(conj *policyRuleConjunction) {
-		for _, flow := range conj.metricFlows {
-			flows = append(flows, flow)
-		}
+		flows = append(flows, conj.metricFlows...)
 	}
 
 	for _, conj := range f.policyCache.List() {

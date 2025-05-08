@@ -309,9 +309,9 @@ func (br *OVSBridge) GetDatapathID() (string, Error) {
 		return "", NewTransactionError(err, temporary)
 	}
 	datapathID := res[0].Rows[0].(map[string]interface{})["datapath_id"]
-	switch datapathID.(type) {
+	switch datapathID := datapathID.(type) {
 	case string:
-		return datapathID.(string), nil
+		return datapathID, nil
 	default:
 		return "", nil
 	}
@@ -348,9 +348,9 @@ func (br *OVSBridge) WaitForDatapathID(timeout time.Duration) (string, Error) {
 	}
 
 	datapathID := res[1].Rows[0].(map[string]interface{})["datapath_id"]
-	switch datapathID.(type) {
+	switch datapathID := datapathID.(type) {
 	case string:
-		return datapathID.(string), nil
+		return datapathID, nil
 	default:
 		return "", nil
 	}

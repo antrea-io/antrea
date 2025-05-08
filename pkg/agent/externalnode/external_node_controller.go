@@ -194,7 +194,7 @@ func (c *ExternalNodeController) reconcile() error {
 func (c *ExternalNodeController) reconcileHostUplinkFlows() error {
 	hostIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.ExternalEntityInterface)
 	for _, hostIface := range hostIfaces {
-		if err := c.ofClient.InstallVMUplinkFlows(hostIface.InterfaceName, hostIface.OVSPortConfig.OFPort, hostIface.UplinkPort.OFPort); err != nil {
+		if err := c.ofClient.InstallVMUplinkFlows(hostIface.InterfaceName, hostIface.OFPort, hostIface.UplinkPort.OFPort); err != nil {
 			return err
 		}
 		klog.InfoS("Reconciled host uplink flow for ExternalEntityInterface", "ifName", hostIface.InterfaceName)
@@ -663,14 +663,14 @@ func ParseHostInterfaceConfig(ovsBridgeClient ovsconfig.OVSBridgeClient, portDat
 		entityIPs = append(entityIPs, net.ParseIP(ipStr))
 	}
 	interfaceConfig.IPs = entityIPs
-	uplinkName, _ := portData.ExternalIDs[ovsExternalIDUplinkName]
-	uplinkPortUUID, _ := portData.ExternalIDs[ovsExternalIDUplinkPort]
+	uplinkName := portData.ExternalIDs[ovsExternalIDUplinkName]
+	uplinkPortUUID := portData.ExternalIDs[ovsExternalIDUplinkPort]
 	uplinkPortData, ovsErr := ovsBridgeClient.GetPortData(uplinkPortUUID, uplinkName)
 	if ovsErr != nil {
 		return nil, ovsErr
 	}
-	entityName, _ := portData.ExternalIDs[ovsExternalIDEntityName]
-	entityNamespace, _ := portData.ExternalIDs[ovsExternalIDEntityNamespace]
+	entityName := portData.ExternalIDs[ovsExternalIDEntityName]
+	entityNamespace := portData.ExternalIDs[ovsExternalIDEntityNamespace]
 	hostUplinkConfig = &interfacestore.EntityInterfaceConfig{
 		EntityName:      entityName,
 		EntityNamespace: entityNamespace,

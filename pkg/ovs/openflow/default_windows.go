@@ -24,6 +24,6 @@ const namedPipePrefix = `\\.\pipe\`
 func GetMgmtAddress(ovsRunDir, brName string) string {
 	sockFile := brName + ".mgmt"
 	addr := filepath.Join(filepath.FromSlash(ovsRunDir), sockFile)
-	addr = strings.Replace(addr, string(filepath.Separator), "", -1)
+	addr = strings.ReplaceAll(addr, string(filepath.Separator), "")
 	return namedPipePrefix + addr
 }

@@ -97,9 +97,7 @@ func TestReconcileSupportBundles(t *testing.T) {
 	nodeConfigs, externalNodeConfigs := parseDependentResources(testConfigs)
 	coreObjects := prepareNodes(nodeConfigs)
 	crdObjects := prepareExternalNodes(externalNodeConfigs)
-	for _, c := range prepareBundleCollections(testConfigs) {
-		crdObjects = append(crdObjects, c)
-	}
+	crdObjects = append(crdObjects, prepareBundleCollections(testConfigs)...)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -763,7 +761,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 		bundleConfig := tc.bundleConfig
 		if bundleConfig.secretName == "" {
 			secretName := secretWithAPIKey
-			if tc.bundleConfig.authType == v1alpha1.BearerToken {
+			if tc.authType == v1alpha1.BearerToken {
 				secretName = secretWithToken
 			}
 			bundleConfig.secretName = secretName
@@ -773,7 +771,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 		_, err := testClient.crdClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), bundle, metav1.CreateOptions{})
 		require.NoError(t, err)
 		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
-			_, getErr := controller.supportBundleCollectionLister.Get(tc.bundleConfig.name)
+			_, getErr := controller.supportBundleCollectionLister.Get(tc.name)
 			if getErr == nil {
 				return true, nil
 			}
@@ -947,7 +945,7 @@ func TestSyncSupportBundleCollection(t *testing.T) {
 
 	for _, tc := range testCases {
 		secretName := secretWithAPIKey
-		if tc.bundleConfig.authType == v1alpha1.BearerToken {
+		if tc.authType == v1alpha1.BearerToken {
 			secretName = secretWithToken
 		}
 		bundleConfig := tc.bundleConfig
@@ -968,7 +966,7 @@ func TestSyncSupportBundleCollection(t *testing.T) {
 
 	for _, tc := range testCases {
 		err := wait.PollUntilContextTimeout(context.Background(), time.Millisecond*100, time.Second, true, func(ctx context.Context) (done bool, err error) {
-			_, exists, err := controller.supportBundleCollectionStore.Get(tc.bundleConfig.name)
+			_, exists, err := controller.supportBundleCollectionStore.Get(tc.name)
 			if err != nil {
 				return false, err
 			}
@@ -1680,7 +1678,7 @@ func TestUpdateStatus(t *testing.T) {
 		prepareController(collectionName, desiredNodes)
 		reportedNodes := 1
 		agentReportStatus(reportedNodes, 0, collectionName)
-		statusPerNode, _ := controller.statuses[collectionName]
+		statusPerNode := controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes, len(statusPerNode))
 		syncSupportBundleCollection()
 		assert.Equal(t, reportedNodes, len(statusPerNode))
@@ -1690,10 +1688,10 @@ func TestUpdateStatus(t *testing.T) {
 			NodeType:  controlplane.SupportBundleCollectionNodeTypeNode,
 			Completed: true,
 		})
-		statusPerNode, _ = controller.statuses[collectionName]
+		statusPerNode = controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes+1, len(statusPerNode))
 		syncSupportBundleCollection()
-		statusPerNode, _ = controller.statuses[collectionName]
+		statusPerNode = controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes, len(statusPerNode))
 	})
 
@@ -1879,7 +1877,7 @@ func generateSupportBundleResource(b bundleConfig) *v1alpha1.SupportBundleCollec
 		},
 	}
 	if b.createTime != nil {
-		bundle.ObjectMeta.CreationTimestamp = metav1.NewTime(*b.createTime)
+		bundle.CreationTimestamp = metav1.NewTime(*b.createTime)
 	}
 	if b.nodes != nil {
 		bundle.Spec.Nodes = &v1alpha1.BundleNodes{}
@@ -1966,24 +1964,20 @@ func prepareSecrets(ns string, secretConfigs []secretConfig) []*corev1.Secret {
 
 func prepareTopology() ([]runtime.Object, []runtime.Object) {
 	var coreObjects, crdObjects []runtime.Object
-	for _, n := range prepareNodes([]nodeConfig{
+	coreObjects = append(coreObjects, prepareNodes([]nodeConfig{
 		{name: "n1"},
 		{name: "n2"},
 		{name: "n3", labels: map[string]string{"test": "selected"}},
 		{name: "n4", labels: map[string]string{"test": "selected"}},
 		{name: "n5", labels: map[string]string{"test": "not-selected"}},
-	}) {
-		coreObjects = append(coreObjects, n)
-	}
-	for _, en := range prepareExternalNodes([]externalNodeConfig{
+	})...)
+	crdObjects = append(crdObjects, prepareExternalNodes([]externalNodeConfig{
 		{namespace: "ns1", name: "en1"},
 		{namespace: "ns1", name: "en2"},
 		{namespace: "ns1", name: "en3", labels: map[string]string{"test": "selected"}},
 		{namespace: "ns1", name: "en4", labels: map[string]string{"test": "not-selected"}},
 		{namespace: "ns2", name: "en5", labels: map[string]string{"test": "selected"}},
-	}) {
-		crdObjects = append(crdObjects, en)
-	}
+	})...)
 
 	apiKey := []byte(testKeyString)
 	token := []byte(testTokenString)

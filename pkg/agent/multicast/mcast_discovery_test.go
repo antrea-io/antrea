@@ -57,14 +57,12 @@ func (v *snooperValidator) processPackets(expectedPackets int) {
 		return groupNodes
 	}
 	for i := 0; i < expectedPackets; i++ {
-		select {
-		case e := <-v.eventCh:
-			groupKey := e.group.String()
-			if e.eType == groupJoin {
-				v.groupJoinedNodes = appendSrcNode(groupKey, v.groupJoinedNodes, e.srcNode)
-			} else {
-				v.groupLeftNodes = appendSrcNode(groupKey, v.groupLeftNodes, e.srcNode)
-			}
+		e := <-v.eventCh
+		groupKey := e.group.String()
+		if e.eType == groupJoin {
+			v.groupJoinedNodes = appendSrcNode(groupKey, v.groupJoinedNodes, e.srcNode)
+		} else {
+			v.groupLeftNodes = appendSrcNode(groupKey, v.groupLeftNodes, e.srcNode)
 		}
 	}
 }

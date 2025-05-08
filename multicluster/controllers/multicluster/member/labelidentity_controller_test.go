@@ -196,11 +196,11 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			switch tt.eventType {
 			case addEvent:
 				tt.podEvent.ResourceVersion = ""
-				r.Client.Create(common.TestCtx, tt.podEvent, &client.CreateOptions{})
+				r.Create(common.TestCtx, tt.podEvent, &client.CreateOptions{})
 			case updateEvent:
-				r.Client.Update(common.TestCtx, tt.podEvent, &client.UpdateOptions{})
+				r.Update(common.TestCtx, tt.podEvent, &client.UpdateOptions{})
 			case deleteEvent:
-				r.Client.Delete(common.TestCtx, tt.podEvent, &client.DeleteOptions{})
+				r.Delete(common.TestCtx, tt.podEvent, &client.DeleteOptions{})
 			}
 			var err error
 			req := ctrl.Request{NamespacedName: *tt.podNamespaceName}

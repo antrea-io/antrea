@@ -42,7 +42,7 @@ func TestCopyToBuilder(t *testing.T) {
 		LoadToCtMark(mark).
 		MoveToLabel(NxmFieldSrcMAC, &Range{0, 47}, &Range{0, 47}).CTDone().
 		Done()
-	oriFlow.(*ofFlow).Flow.Table = &ofctrl.Table{TableId: t0}
+	oriFlow.(*ofFlow).Table = &ofctrl.Table{TableId: t0}
 	newFlow := oriFlow.CopyToBuilder(0, false)
 	assert.Equal(t, oriFlow.MatchString(), newFlow.Done().MatchString())
 	assert.Equal(t, oriFlow.(*ofFlow).Match, newFlow.Done().(*ofFlow).Match)
@@ -62,7 +62,7 @@ func TestCopyToBuilder_Drop(t *testing.T) {
 		MatchCTStateNew(true).MatchCTStateTrk(true).
 		Action().Drop().
 		Done()
-	oriFlow.(*ofFlow).Flow.Table = &ofctrl.Table{TableId: t0}
+	oriFlow.(*ofFlow).Table = &ofctrl.Table{TableId: t0}
 	newFlow := oriFlow.CopyToBuilder(0, false)
 	assert.Equal(t, oriFlow.MatchString(), newFlow.Done().MatchString())
 	assert.Equal(t, oriFlow.(*ofFlow).Match, newFlow.Done().(*ofFlow).Match)

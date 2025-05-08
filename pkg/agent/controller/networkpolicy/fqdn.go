@@ -223,9 +223,9 @@ func toRegex(pattern string) string {
 	pattern = strings.TrimSpace(pattern)
 
 	// Replace "." as a regex literal, since it's recogized as a separator in FQDN.
-	pattern = strings.Replace(pattern, ".", "[.]", -1)
+	pattern = strings.ReplaceAll(pattern, ".", "[.]")
 	// Replace "*" with ".*".
-	pattern = strings.Replace(pattern, "*", ".*", -1)
+	pattern = strings.ReplaceAll(pattern, "*", ".*")
 
 	// Anchor the regex match expression.
 	return "^" + pattern + "$"
@@ -661,9 +661,7 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 	if len(responseIPs) > 0 {
 		klog.V(4).InfoS("Received DNS Packet with valid Answer", "IPs", responseIPs)
 	}
-	if strings.HasSuffix(fqdn, ".") {
-		fqdn = fqdn[:len(fqdn)-1]
-	}
+	fqdn = strings.TrimSuffix(fqdn, ".")
 	return fqdn, responseIPs, nil
 }
 

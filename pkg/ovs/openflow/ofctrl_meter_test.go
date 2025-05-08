@@ -56,7 +56,7 @@ func TestMeterBandBuilder(t *testing.T) {
 		meter := m.MeterBand().MeterType(ofctrl.MeterDSCPRemark).Rate(rate).Done()
 		meterMod := getMeterMod(t, meter)
 		assert.Equal(t, 1, len(meterMod.MeterBands))
-		assert.Equal(t, rate, meterMod.MeterBands[0].(*openflow15.MeterBandDSCP).MeterBandHeader.Rate)
+		assert.Equal(t, rate, meterMod.MeterBands[0].(*openflow15.MeterBandDSCP).Rate)
 	})
 	t.Run("Burst", func(t *testing.T) {
 		m.ResetMeterBands()
@@ -64,7 +64,7 @@ func TestMeterBandBuilder(t *testing.T) {
 		meter := m.MeterBand().MeterType(ofctrl.MeterDSCPRemark).Burst(burst).Done()
 		meterMod := getMeterMod(t, meter)
 		assert.Equal(t, 1, len(meterMod.MeterBands))
-		assert.Equal(t, burst, meterMod.MeterBands[0].(*openflow15.MeterBandDSCP).MeterBandHeader.BurstSize)
+		assert.Equal(t, burst, meterMod.MeterBands[0].(*openflow15.MeterBandDSCP).BurstSize)
 	})
 	t.Run("PrecLevel", func(t *testing.T) {
 		m.ResetMeterBands()

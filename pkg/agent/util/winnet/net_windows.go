@@ -252,10 +252,7 @@ func (h *Handle) SetNetAdapterDNSServers(adapterName, dnsServers string) error {
 
 func (h *Handle) NetAdapterExists(adapterName string) bool {
 	_, err := getAdapterInAllCompartmentsByName(adapterName)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // IsNetAdapterIPv4DHCPEnabled returns the IPv4 DHCP status on the specified network adapter.
@@ -711,10 +708,7 @@ func parseOVSExtensionOutput(s string) bool {
 		temp := strings.Fields(scanner.Text())
 		line := strings.Join(temp, "")
 		if strings.Contains(line, "Enabled") {
-			if strings.Contains(line, "True") {
-				return true
-			}
-			return false
+			return strings.Contains(line, "True")
 		}
 	}
 	return false

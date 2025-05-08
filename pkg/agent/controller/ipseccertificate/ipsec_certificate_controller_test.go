@@ -70,9 +70,9 @@ func newFakeController(t *testing.T, clock clock.WithTicker) *fakeController {
 	fakeClient.PrependReactor("create", "certificatesigningrequests", k8stesting.ReactionFunc(
 		func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			csr := action.(k8stesting.CreateAction).GetObject().(*certificatesv1.CertificateSigningRequest)
-			if csr.ObjectMeta.GenerateName != "" {
-				csr.ObjectMeta.Name = fmt.Sprintf("%s%s", csr.ObjectMeta.GenerateName, utilrand.String(8))
-				csr.ObjectMeta.GenerateName = ""
+			if csr.GenerateName != "" {
+				csr.Name = fmt.Sprintf("%s%s", csr.GenerateName, utilrand.String(8))
+				csr.GenerateName = ""
 				csr.UID = uuid.NewUUID()
 			}
 			return false, csr, nil
@@ -82,7 +82,7 @@ func newFakeController(t *testing.T, clock clock.WithTicker) *fakeController {
 	fakeClient.PrependReactor("list", "certificatesigningrequests", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		var csrList *certificatesv1.CertificateSigningRequestList
 		// list CSRs using the original reactors.
-		for _, reactor := range fakeClient.Fake.ReactionChain[1:] {
+		for _, reactor := range fakeClient.ReactionChain[1:] {
 			if !reactor.Handles(listCSRAction) {
 				continue
 			}

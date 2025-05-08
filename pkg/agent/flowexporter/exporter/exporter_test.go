@@ -90,8 +90,7 @@ func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 }
 
 func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ipfixtest.MockIPFIXExportingProcess, mockIPFIXRegistry *ipfixtest.MockIPFIXRegistry, flowExp *FlowExporter, isIPv6 bool) {
-	var mockTempSet *ipfixentitiestesting.MockSet
-	mockTempSet = ipfixentitiestesting.NewMockSet(ctrl)
+	var mockTempSet = ipfixentitiestesting.NewMockSet(ctrl)
 	flowExp.ipfixSet = mockTempSet
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Only the element name is needed, other arguments have dummy values.

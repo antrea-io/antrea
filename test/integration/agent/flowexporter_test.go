@@ -154,11 +154,11 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Check if connections in connectionStore are same as testConns or not
 	for i, expConn := range testConns {
 		if i == 0 {
-			expConn.SourcePodName = testPods[i].ObjectMeta.Name
-			expConn.SourcePodNamespace = testPods[i].ObjectMeta.Namespace
+			expConn.SourcePodName = testPods[i].Name
+			expConn.SourcePodNamespace = testPods[i].Namespace
 		} else {
-			expConn.DestinationPodName = testPods[i].ObjectMeta.Name
-			expConn.DestinationPodNamespace = testPods[i].ObjectMeta.Name
+			expConn.DestinationPodName = testPods[i].Name
+			expConn.DestinationPodNamespace = testPods[i].Name
 		}
 		actualConn, found := conntrackConnStore.GetConnByKey(*testConnKeys[i])
 		assert.Equal(t, found, true, "testConn should be present in connection store")

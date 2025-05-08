@@ -189,11 +189,12 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 
 	inst = append(inst, loadIPv4SourceAddress)
 
-	if direction == crdv1alpha1.CaptureDirectionSourceToDestination {
+	switch direction {
+	case crdv1alpha1.CaptureDirectionSourceToDestination:
 		inst = append(inst, compileIPPortFilter(srcAddrVal, dstAddrVal, size, uint8(len(inst)), srcPort, dstPort, false)...)
-	} else if direction == crdv1alpha1.CaptureDirectionDestinationToSource {
+	case crdv1alpha1.CaptureDirectionDestinationToSource:
 		inst = append(inst, compileIPPortFilter(dstAddrVal, srcAddrVal, size, uint8(len(inst)), dstPort, srcPort, false)...)
-	} else {
+	default:
 		inst = append(inst, compileIPPortFilter(srcAddrVal, dstAddrVal, size, uint8(len(inst)), srcPort, dstPort, true)...)
 		inst = append(inst, compileIPPortFilter(dstAddrVal, srcAddrVal, size, uint8(len(inst)), dstPort, srcPort, false)...)
 	}

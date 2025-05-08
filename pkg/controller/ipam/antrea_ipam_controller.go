@@ -267,7 +267,7 @@ func (c *AntreaIPAMController) cleanIPPoolForStatefulSet(namespacedName string) 
 func (c *AntreaIPAMController) getIPPoolsForStatefulSet(ss *appsv1.StatefulSet) ([]string, []net.IP) {
 
 	// Inspect IP annotation for the Pods
-	ipStrings, _ := ss.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
+	ipStrings := ss.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
 	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
 	var ips []net.IP
 	if ipStrings != "" {

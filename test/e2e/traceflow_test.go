@@ -2365,7 +2365,7 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 			if tc.allowed {
 				assert.Nil(t, err)
 			} else {
-				tc.deniedReason = strings.Replace(tc.deniedReason, "{{name}}", tf.Name, -1)
+				tc.deniedReason = strings.ReplaceAll(tc.deniedReason, "{{name}}", tf.Name)
 				expected := "admission webhook \"traceflowvalidator.antrea.io\" denied the request: " + tc.deniedReason
 				assert.EqualError(t, err, expected)
 			}

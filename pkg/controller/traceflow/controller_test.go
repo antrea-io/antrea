@@ -141,7 +141,7 @@ func TestTraceflow(t *testing.T) {
 		assert.NotNil(t, res)
 		res, _ = tfc.waitForTraceflow("tf1", crdv1beta1.Failed, defaultTimeoutDuration*2)
 		assert.NotNil(t, res)
-		assert.True(t, time.Now().Sub(startTime) >= time.Second*time.Duration(tf1.Spec.Timeout))
+		assert.True(t, time.Since(startTime) >= time.Second*time.Duration(tf1.Spec.Timeout))
 		assert.Equal(t, res.Status.Reason, traceflowTimeout)
 		assert.True(t, res.Status.DataplaneTag == 0)
 		assert.Equal(t, numRunningTraceflows(), 0)
@@ -188,8 +188,8 @@ func newCRDClientset() *fakeversioned.Clientset {
 		tf := action.(k8stesting.CreateAction).GetObject().(*crdv1beta1.Traceflow)
 
 		// Fake client does not set CreationTimestamp.
-		if tf.ObjectMeta.CreationTimestamp == (metav1.Time{}) {
-			tf.ObjectMeta.CreationTimestamp.Time = time.Now()
+		if tf.CreationTimestamp == (metav1.Time{}) {
+			tf.CreationTimestamp.Time = time.Now()
 		}
 
 		return false, tf, nil

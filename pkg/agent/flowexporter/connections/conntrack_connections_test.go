@@ -237,8 +237,8 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			actualConn, exist := conntrackConnStore.GetConnByKey(flowexporter.NewConnectionKey(&c.newConn))
 			require.Equal(t, exist, true, "The connection should exist in the connection store")
 			assert.Equal(t, c.expectedConn, *actualConn, "Connections should be equal")
-			assert.Equalf(t, 1, conntrackConnStore.connectionStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
-			conntrackConnStore.connectionStore.expirePriorityQueue.Pop() // empty the PQ
+			assert.Equalf(t, 1, conntrackConnStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
+			conntrackConnStore.expirePriorityQueue.Pop() // empty the PQ
 		})
 	}
 }

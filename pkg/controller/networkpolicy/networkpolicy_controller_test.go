@@ -287,9 +287,9 @@ func newClientset(objects ...runtime.Object) *fake.Clientset {
 	client.PrependReactor("create", "networkpolicies", k8stesting.ReactionFunc(func(action k8stesting.Action) (bool, runtime.Object, error) {
 		np := action.(k8stesting.CreateAction).GetObject().(*networkingv1.NetworkPolicy)
 
-		if np.ObjectMeta.GenerateName != "" {
-			np.ObjectMeta.Name = fmt.Sprintf("%s-%s", np.ObjectMeta.GenerateName, rand.String(8))
-			np.ObjectMeta.GenerateName = ""
+		if np.GenerateName != "" {
+			np.Name = fmt.Sprintf("%s-%s", np.GenerateName, rand.String(8))
+			np.GenerateName = ""
 		}
 
 		return false, np, nil
@@ -1708,7 +1708,7 @@ func TestToAntreaIPBlock(t *testing.T) {
 			continue
 		}
 		ipNet := antreaIPBlock.CIDR
-		if bytes.Compare(ipNet.IP, table.expValue.CIDR.IP) != 0 {
+		if !bytes.Equal(ipNet.IP, table.expValue.CIDR.IP) {
 			t.Errorf("Unexpected IP in Antrea IPBlock conversion. Expected %v, got %v", table.expValue.CIDR.IP, ipNet.IP)
 		}
 		if table.expValue.CIDR.PrefixLength != ipNet.PrefixLength {
@@ -2499,7 +2499,7 @@ func comparePodIPs(actIPs, expIPs []controlplane.IPAddress) bool {
 
 func containsPodIP(expIPs []controlplane.IPAddress, actIP controlplane.IPAddress) bool {
 	for _, expIP := range expIPs {
-		if bytes.Compare(actIP, expIP) == 0 {
+		if bytes.Equal(actIP, expIP) {
 			return true
 		}
 	}
@@ -2590,7 +2590,7 @@ func TestIPStrToIPAddress(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actIP := ipStrToIPAddress(tt.ipStr)
-			if bytes.Compare(actIP, tt.expIP) != 0 {
+			if !bytes.Equal(actIP, tt.expIP) {
 				t.Errorf("ipStrToIPAddress() got unexpected IPAddress %v, want %v", actIP, tt.expIP)
 			}
 		})
@@ -3101,7 +3101,7 @@ func compareIPBlocks(ipb1, ipb2 *controlplane.IPBlock) bool {
 
 // compareIPNet is a util function to compare the contents of two IPNets.
 func compareIPNet(ipn1, ipn2 controlplane.IPNet) bool {
-	if bytes.Compare(ipn1.IP, ipn2.IP) != 0 {
+	if !bytes.Equal(ipn1.IP, ipn2.IP) {
 		return false
 	}
 	if ipn1.PrefixLength != ipn2.PrefixLength {

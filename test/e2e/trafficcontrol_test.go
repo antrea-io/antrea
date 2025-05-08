@@ -137,28 +137,28 @@ func (data *TestData) createTrafficControl(t *testing.T,
 			ReturnPort: &v1alpha2.TrafficControlPort{},
 		},
 	}
-	switch targetPort.(type) {
+	switch targetPort := targetPort.(type) {
 	case *v1alpha2.OVSInternalPort:
-		tc.Spec.TargetPort.OVSInternal = targetPort.(*v1alpha2.OVSInternalPort)
+		tc.Spec.TargetPort.OVSInternal = targetPort
 	case *v1alpha2.NetworkDevice:
-		tc.Spec.TargetPort.Device = targetPort.(*v1alpha2.NetworkDevice)
+		tc.Spec.TargetPort.Device = targetPort
 	case *v1alpha2.UDPTunnel:
 		if isTargetPortVXLAN {
-			tc.Spec.TargetPort.VXLAN = targetPort.(*v1alpha2.UDPTunnel)
+			tc.Spec.TargetPort.VXLAN = targetPort
 		} else {
-			tc.Spec.TargetPort.GENEVE = targetPort.(*v1alpha2.UDPTunnel)
+			tc.Spec.TargetPort.GENEVE = targetPort
 		}
 	case *v1alpha2.GRETunnel:
-		tc.Spec.TargetPort.GRE = targetPort.(*v1alpha2.GRETunnel)
+		tc.Spec.TargetPort.GRE = targetPort
 	case *v1alpha2.ERSPANTunnel:
-		tc.Spec.TargetPort.ERSPAN = targetPort.(*v1alpha2.ERSPANTunnel)
+		tc.Spec.TargetPort.ERSPAN = targetPort
 	}
 
-	switch returnPort.(type) {
+	switch returnPort := returnPort.(type) {
 	case *v1alpha2.OVSInternalPort:
-		tc.Spec.ReturnPort.OVSInternal = returnPort.(*v1alpha2.OVSInternalPort)
+		tc.Spec.ReturnPort.OVSInternal = returnPort
 	case *v1alpha2.NetworkDevice:
-		tc.Spec.ReturnPort.Device = returnPort.(*v1alpha2.NetworkDevice)
+		tc.Spec.ReturnPort.Device = returnPort
 	default:
 		tc.Spec.ReturnPort = nil
 	}

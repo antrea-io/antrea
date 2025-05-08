@@ -649,11 +649,12 @@ func (c *Controller) createERSPANPort(portName string, tunnelConfig *v1alpha2.ER
 	if tunnelConfig.SessionID != nil {
 		extraOptions["key"] = strconv.Itoa(int(*tunnelConfig.SessionID))
 	}
-	if tunnelConfig.Version == 1 {
+	switch tunnelConfig.Version {
+	case 1:
 		if tunnelConfig.Index != nil {
 			extraOptions["erspan_idx"] = strconv.FormatInt(int64(*tunnelConfig.Index), 16)
 		}
-	} else if tunnelConfig.Version == 2 {
+	case 2:
 		if tunnelConfig.Dir != nil {
 			extraOptions["erspan_dir"] = strconv.Itoa(int(*tunnelConfig.Dir))
 		}

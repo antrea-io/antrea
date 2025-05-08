@@ -257,7 +257,7 @@ func TestLookupIPInPodSubnets(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, ip := range tc.ips {
-				isInPodSubnets, isGwIP := c.Controller.LookupIPInPodSubnets(netip.MustParseAddr(ip))
+				isInPodSubnets, isGwIP := c.LookupIPInPodSubnets(netip.MustParseAddr(ip))
 				assert.Equal(t, tc.isInPodSubnets, isInPodSubnets)
 				assert.Equal(t, tc.isGwIP, isGwIP)
 			}
@@ -290,10 +290,10 @@ func BenchmarkLookupIPInPodSubnets(b *testing.B) {
 
 	b.ResetTimer()
 	for range b.N {
-		c.Controller.findPodSubnetForIP(localPodIP)
-		c.Controller.findPodSubnetForIP(remotePodIP)
-		c.Controller.findPodSubnetForIP(remoteGatewayIP)
-		c.Controller.findPodSubnetForIP(unknownIP)
+		c.findPodSubnetForIP(localPodIP)
+		c.findPodSubnetForIP(remotePodIP)
+		c.findPodSubnetForIP(remoteGatewayIP)
+		c.findPodSubnetForIP(unknownIP)
 	}
 }
 

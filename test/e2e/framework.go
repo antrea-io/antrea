@@ -72,7 +72,7 @@ import (
 var AntreaConfigMap *corev1.ConfigMap
 
 var (
-	connectionLostError = fmt.Errorf("http2: client connection lost")
+	errConnectionLost = fmt.Errorf("http2: client connection lost")
 )
 
 const (
@@ -3176,7 +3176,7 @@ func (data *TestData) waitForStatefulSetPods(timeout time.Duration, stsName stri
 }
 
 func isConnectionLostError(err error) bool {
-	return strings.Contains(err.Error(), connectionLostError.Error())
+	return strings.Contains(err.Error(), errConnectionLost.Error())
 }
 
 // retryOnConnectionLostError allows the caller to retry fn in case the error is ConnectionLost.

@@ -581,7 +581,7 @@ func (c *Controller) syncGroup(groupKey string) error {
 // groupIsStale returns true if no local members in the group, or there is no IGMP report received after c.mcastGroupTimeout.
 func (c *Controller) groupIsStale(status *GroupMemberStatus) bool {
 	membersCount := len(status.localMembers)
-	diff := time.Now().Sub(status.lastIGMPReport)
+	diff := time.Since(status.lastIGMPReport)
 	return membersCount == 0 || diff > c.mcastGroupTimeout
 }
 
@@ -867,9 +867,10 @@ func (c *Controller) processNextNodeItem() bool {
 
 func memberExists(status *GroupMemberStatus, e *mcastGroupEvent) bool {
 	var exist bool
-	if e.iface.Type == interfacestore.ContainerInterface {
+	switch e.iface.Type {
+	case interfacestore.ContainerInterface:
 		_, exist = status.localMembers[e.iface.InterfaceName]
-	} else if e.iface.Type == interfacestore.TunnelInterface {
+	case interfacestore.TunnelInterface:
 		exist = status.remoteMembers.Has(e.srcNode.String())
 	}
 	return exist

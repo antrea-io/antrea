@@ -106,7 +106,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 			actualConn, ok := denyConnStore.GetConnByKey(flowexporter.NewConnectionKey(&c.testFlow))
 			assert.Equal(t, ok, true, "deny connection should be there in deny connection store")
 			assert.Equal(t, expConn, *actualConn, "deny connections should be equal")
-			assert.Equal(t, 1, denyConnStore.connectionStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
+			assert.Equal(t, 1, denyConnStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
 			assert.Equal(t, refTime.Add(-(time.Second * 20)), actualConn.LastExportTime, "LastExportTime should be set to StartTime during Add")
 			checkDenyConnectionMetrics(t, len(denyConnStore.connections))
 
@@ -118,7 +118,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 			assert.Equal(t, ok, true, "deny connection should be there in deny connection store")
 			assert.Equal(t, expConn, *actualConn, "deny connections should be equal")
 			assert.True(t, actualConn.IsActive)
-			assert.Equal(t, 1, denyConnStore.connectionStore.expirePriorityQueue.Len())
+			assert.Equal(t, 1, denyConnStore.expirePriorityQueue.Len())
 			assert.Equal(t, refTime.Add(-(time.Second * 20)), actualConn.LastExportTime, "LastExportTime should not be changed during Update")
 			checkDenyConnectionMetrics(t, len(denyConnStore.connections))
 		})

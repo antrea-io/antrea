@@ -758,9 +758,10 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	// Traffic in a direction must be isolated if Spec.PolicyTypes specify it explicitly.
 	var ingressIsolated, egressIsolated bool
 	for _, policyType := range np.Spec.PolicyTypes {
-		if policyType == networkingv1.PolicyTypeIngress {
+		switch policyType {
+		case networkingv1.PolicyTypeIngress:
 			ingressIsolated = true
-		} else if policyType == networkingv1.PolicyTypeEgress {
+		case networkingv1.PolicyTypeEgress:
 			egressIsolated = true
 		}
 	}
@@ -1118,7 +1119,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	addrGroupNodeNames := sets.Set[string]{}
 	for _, internalNPObj := range nps {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
-		utilsets.MergeString(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
+		utilsets.MergeString(addrGroupNodeNames, internalNP.NodeNames)
 	}
 	memberSet := n.getAddressGroupMemberSet(addressGroup)
 	updatedAddressGroup := &antreatypes.AddressGroup{
@@ -1572,7 +1573,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 			if appGroup.SyncError != nil {
 				return nil, appGroup.SyncError
 			}
-			utilsets.MergeString(nodeNames, appGroup.SpanMeta.NodeNames)
+			utilsets.MergeString(nodeNames, appGroup.NodeNames)
 		}
 		return nodeNames, nil
 	}()

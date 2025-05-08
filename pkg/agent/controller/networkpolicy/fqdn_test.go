@@ -579,13 +579,8 @@ func TestSyncDirtyRules(t *testing.T) {
 			for _, waitCh := range tc.waitChs {
 				if waitCh != nil {
 					assert.Eventually(t, func() bool {
-						select {
-						case err := <-waitCh:
-							if err != nil && !tc.expectErr {
-								return false
-							}
-						}
-						return true
+						err := <-waitCh
+						return err == nil || tc.expectErr
 					}, ruleRealizationTimeout, time.Millisecond*10, "Failed to successfully wait for rule syncs")
 				}
 			}
@@ -725,7 +720,7 @@ func TestOnDNSResponse(t *testing.T) {
 
 			f.onDNSResponse(testFQDN, tc.dnsResponseIPs, nil)
 
-			cachedDnsMetaData, _ := f.dnsEntryCache[testFQDN]
+			cachedDnsMetaData := f.dnsEntryCache[testFQDN]
 
 			assert.Equal(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "FQDN cache doesn't match expected entries")
 

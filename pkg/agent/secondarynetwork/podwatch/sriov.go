@@ -131,7 +131,6 @@ func (pc *PodController) deleteVFDeviceIDListPerPod(podName, podNamespace string
 		pc.vfDeviceIDUsageMap.Delete(podKey)
 		klog.V(2).InfoS("Pod specific SRIOV VF cache cleared", "Key", podKey)
 	}
-	return
 }
 
 func (pc *PodController) releaseSriovVFDeviceID(podName, podNamespace, interfaceName string) {

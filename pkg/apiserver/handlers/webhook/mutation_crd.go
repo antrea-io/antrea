@@ -47,8 +47,8 @@ func HandleMutationNetworkPolicy(m *networkpolicy.NetworkPolicyMutator) http.Han
 		}
 		var admissionResponse *admv1.AdmissionResponse
 		ar := admv1.AdmissionReview{}
-		ar.TypeMeta.Kind = "AdmissionReview"
-		ar.TypeMeta.APIVersion = "admission.k8s.io/v1"
+		ar.Kind = "AdmissionReview"
+		ar.APIVersion = "admission.k8s.io/v1"
 		if err := json.Unmarshal(reqBody, &ar); err != nil {
 			klog.Errorf("CRD mutation received incorrect body")
 			admissionResponse = networkpolicy.GetAdmissionResponseForErr(err)
@@ -56,8 +56,8 @@ func HandleMutationNetworkPolicy(m *networkpolicy.NetworkPolicyMutator) http.Han
 			admissionResponse = m.Mutate(&ar)
 		}
 		aReview := admv1.AdmissionReview{}
-		aReview.TypeMeta.Kind = "AdmissionReview"
-		aReview.TypeMeta.APIVersion = "admission.k8s.io/v1"
+		aReview.Kind = "AdmissionReview"
+		aReview.APIVersion = "admission.k8s.io/v1"
 		if admissionResponse != nil {
 			aReview.Response = admissionResponse
 			if ar.Request != nil {

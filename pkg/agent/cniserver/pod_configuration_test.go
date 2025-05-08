@@ -248,7 +248,7 @@ func TestUpdateUnreadyPod(t *testing.T) {
 			}
 
 			if tc.ofPortAssigned {
-				ifConfig.OVSPortConfig.OFPort = int32(1)
+				ifConfig.OFPort = int32(1)
 			}
 
 			if tc.podIfaceIsCached {

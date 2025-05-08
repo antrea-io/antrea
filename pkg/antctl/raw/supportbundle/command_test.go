@@ -465,7 +465,7 @@ func TestProcessResults(t *testing.T) {
 
 					unpackError := compress.UnpackDir(defaultFS, filepath.Join(option.dir, tgzFileName), option.dir)
 					require.NoError(t, unpackError)
-					files, _ := tt.expectFileList[node]
+					files := tt.expectFileList[node]
 					for _, expectFileName := range files {
 						ok, checkErr = afero.Exists(defaultFS, filepath.Join(option.dir, expectFileName))
 						require.NoError(t, checkErr)

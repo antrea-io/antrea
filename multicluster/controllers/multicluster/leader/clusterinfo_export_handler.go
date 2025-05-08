@@ -42,7 +42,7 @@ func (r *ResourceExportReconciler) handleClusterInfo(ctx context.Context, req ct
 
 	if !resExport.DeletionTimestamp.IsZero() {
 		if slices.Contains(resExport.Finalizers, constants.LegacyResourceExportFinalizer) || slices.Contains(resExport.Finalizers, constants.ResourceExportFinalizer) {
-			err := r.Client.Delete(ctx, resImport, &client.DeleteOptions{})
+			err := r.Delete(ctx, resImport, &client.DeleteOptions{})
 			if err == nil || apierrors.IsNotFound(err) {
 				return r.deleteResourceExport(&resExport)
 			}
@@ -62,13 +62,13 @@ func (r *ResourceExportReconciler) handleClusterInfo(ctx context.Context, req ct
 	}
 
 	var err error
-	if err = r.Client.Get(ctx, resImportName, resImport); err != nil {
+	if err = r.Get(ctx, resImportName, resImport); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
 		// Create a new ClusterInfo of ResourceImport
 		resImport.Spec.ClusterInfo = resExport.Spec.ClusterInfo
-		if err = r.Client.Create(ctx, resImport, &client.CreateOptions{}); err != nil {
+		if err = r.Create(ctx, resImport, &client.CreateOptions{}); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -80,7 +80,7 @@ func (r *ResourceExportReconciler) handleClusterInfo(ctx context.Context, req ct
 	// Update an existing ClusterInfo of ResourceImport
 	resImport.Spec.ClusterInfo = resExport.Spec.ClusterInfo
 	klog.InfoS("Updating ResourceImport", "resourceimport", klog.KObj(&resExport))
-	if err = r.Client.Update(ctx, resImport, &client.UpdateOptions{}); err != nil {
+	if err = r.Update(ctx, resImport, &client.UpdateOptions{}); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil

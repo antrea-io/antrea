@@ -576,7 +576,7 @@ func (o *Options) validateK8sNodeOptions() error {
 			return fmt.Errorf("TrafficEncryptionMode %s may only be enabled in %s mode", encryptionMode, config.TrafficEncapModeEncap)
 		}
 	}
-	if o.config.NoSNAT && !(encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeNetworkPolicyOnly) {
+	if o.config.NoSNAT && (encapMode != config.TrafficEncapModeNoEncap && encapMode != config.TrafficEncapModeNetworkPolicyOnly) {
 		return fmt.Errorf("noSNAT is only applicable to the %s mode", config.TrafficEncapModeNoEncap)
 	}
 	if encapMode == config.TrafficEncapModeNetworkPolicyOnly {

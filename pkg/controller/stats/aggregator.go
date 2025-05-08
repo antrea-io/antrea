@@ -396,13 +396,13 @@ func (a *Aggregator) doCollect(summary *controlplane.NodeStatsSummary) {
 			for _, pod := range mcastGroupInfo.Pods {
 				statsv1alpha1Pods = append(statsv1alpha1Pods, statsv1alpha1.PodReference{Name: pod.Name, Namespace: pod.Namespace})
 			}
-			a.groupNodePodsMap[group][summary.ObjectMeta.Name] = statsv1alpha1Pods
+			a.groupNodePodsMap[group][summary.Name] = statsv1alpha1Pods
 		}
 		for group := range a.groupNodePodsMap {
 			// The antrea-agent reports full mcastGroupInfo to the controller, if the group is unreported,
 			// then this group has no Pod joined in this Node.
 			if !reportedGroups.Has(group) {
-				delete(a.groupNodePodsMap[group], summary.ObjectMeta.Name)
+				delete(a.groupNodePodsMap[group], summary.Name)
 				if len(a.groupNodePodsMap[group]) == 0 {
 					delete(a.groupNodePodsMap, group)
 				}

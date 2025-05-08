@@ -39,7 +39,7 @@ var (
 	ipv4Public      = net.ParseIP("8.8.8.8")
 	ipv4PublicIPNet = ip.MustParseCIDR("8.8.8.8/32")
 
-	testInvalidErr = fmt.Errorf("invalid")
+	errTestInvalid = fmt.Errorf("invalid")
 
 	h = &Handle{}
 )
@@ -101,7 +101,7 @@ func TestIsVirtualNetAdapter(t *testing.T) {
 		},
 		{
 			name:          "Virtual adapter Err",
-			commandErr:    testInvalidErr,
+			commandErr:    errTestInvalid,
 			wantIsVirtual: false,
 		},
 	}
@@ -134,7 +134,7 @@ func TestGetDNServersByNetAdapterIndex(t *testing.T) {
 		{
 			name:       "Index Error",
 			commandOut: "fail",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 		},
 	}
 
@@ -468,9 +468,9 @@ func TestAddNetNat(t *testing.T) {
 		},
 		{
 			name:       "Net Nat Not Found",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantCmds:   []string{getCmd},
-			wantErr:    fmt.Errorf("failed to check the existing netnat '%s': %w", testNetNat, testInvalidErr),
+			wantErr:    fmt.Errorf("failed to check the existing netnat '%s': %w", testNetNat, errTestInvalid),
 		},
 		{
 			name:       "Net Nat Exist",
@@ -532,9 +532,9 @@ func TestReplaceNetNatStaticMapping(t *testing.T) {
 		},
 		{
 			name:       "Get Net Nat Err",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantCmds:   []string{getCmd},
-			wantErr:    testInvalidErr,
+			wantErr:    errTestInvalid,
 		},
 		{
 			name:       "Remove Net Nat Err",
@@ -595,9 +595,9 @@ func TestRemoveNetNatStaticMapping(t *testing.T) {
 		},
 		{
 			name:       "Remove Err",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantCmds:   []string{getCmd, removeCmd},
-			wantErr:    testInvalidErr,
+			wantErr:    errTestInvalid,
 		},
 	}
 
@@ -641,9 +641,9 @@ func TestReplaceNetNeighbor(t *testing.T) {
 		},
 		{
 			name:       "Get Net Neighbor Err",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantCmds:   []string{getCmd},
-			wantErr:    testInvalidErr,
+			wantErr:    errTestInvalid,
 		},
 		{
 			name:       "Remove Net Neighbor Err",
@@ -692,7 +692,7 @@ func TestRenameNetAdapter(t *testing.T) {
 		},
 		{
 			name:       "Rename Err",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantErr:    fmt.Errorf("invalid"),
 		},
 	}
@@ -720,7 +720,7 @@ func TestAddVMSwitch(t *testing.T) {
 		},
 		{
 			name:       "Error",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantErr:    fmt.Errorf("invalid"),
 		},
 	}
@@ -745,7 +745,7 @@ func TestEnableVMSwitchOVSExtension(t *testing.T) {
 		},
 		{
 			name:       "Error",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantErr:    fmt.Errorf("invalid"),
 		},
 	}
@@ -779,7 +779,7 @@ func TestIsVMSwitchOVSExtensionEnabled(t *testing.T) {
 		},
 		{
 			name:       "Error",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantErr:    fmt.Errorf("invalid"),
 		},
 	}
@@ -813,9 +813,9 @@ func TestGetVMSwitchInterfaceName(t *testing.T) {
 		},
 		{
 			name:       "Get Err",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantCmds:   []string{getVMCmd},
-			wantErr:    testInvalidErr,
+			wantErr:    errTestInvalid,
 		},
 	}
 
@@ -846,9 +846,9 @@ func TestRemoveVMSwitch(t *testing.T) {
 		},
 		{
 			name:       "Get Err",
-			commandErr: testInvalidErr,
+			commandErr: errTestInvalid,
 			wantCmds:   []string{getCmd},
-			wantErr:    testInvalidErr,
+			wantErr:    errTestInvalid,
 		},
 	}
 

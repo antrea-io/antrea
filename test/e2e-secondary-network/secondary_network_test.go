@@ -103,10 +103,10 @@ func (data *testData) createPodForSecondaryNetwork(ns string, pod *testPodInfo) 
 	podBuilder := antreae2e.NewPodBuilder(pod.podName, ns, antreae2e.ToolboxImage).
 		OnNode(pod.nodeName).WithContainerName(containerName).
 		WithAnnotations(map[string]string{
-			"k8s.v1.cni.cncf.io/networks": fmt.Sprintf("%s", data.formAnnotationStringOfPod(pod)),
+			"k8s.v1.cni.cncf.io/networks": data.formAnnotationStringOfPod(pod),
 		}).
 		WithLabels(map[string]string{
-			"App": fmt.Sprintf("%s", podApp),
+			"App": podApp,
 		})
 
 	if data.networkType == networkTypeSriov {

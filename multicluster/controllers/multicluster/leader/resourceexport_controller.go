@@ -78,7 +78,7 @@ func NewResourceExportReconciler(
 func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconciling ResourceExport", "resourceexport", req.NamespacedName)
 	var resExport mcsv1alpha1.ResourceExport
-	if err := r.Client.Get(ctx, req.NamespacedName, &resExport); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, &resExport); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -135,7 +135,7 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	resImportName := GetResourceImportName(&resExport)
 
 	if createResImport {
-		if err = r.Client.Create(ctx, resImport, &client.CreateOptions{}); err != nil {
+		if err = r.Create(ctx, resImport, &client.CreateOptions{}); err != nil {
 			klog.ErrorS(err, "Failed to create ResourceImport", "resourceimport", resImportName.String())
 			return ctrl.Result{}, err
 		}
@@ -164,12 +164,12 @@ func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 	resImpName := GetResourceImportName(resExport)
 
 	var err error
-	if err = r.Client.Update(ctx, resImport, &client.UpdateOptions{}); err != nil {
+	if err = r.Update(ctx, resImport, &client.UpdateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to update ResourceImport", "resourceimport", resImpName.String())
 		return err
 	}
 	latestResImport := &mcsv1alpha1.ResourceImport{}
-	err = r.Client.Get(ctx, resImpName, latestResImport)
+	err = r.Get(ctx, resImpName, latestResImport)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get latest ResourceImport", "resourceimport", resImpName.String())
 		return err
@@ -207,7 +207,7 @@ func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 // the deleted ResourceExport.
 func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExport *mcsv1alpha1.ResourceExport) error {
 	reList := &mcsv1alpha1.ResourceExportList{}
-	err := r.Client.List(ctx, reList, &client.ListOptions{LabelSelector: getLabelSelector(resExport)})
+	err := r.List(ctx, reList, &client.ListOptions{LabelSelector: getLabelSelector(resExport)})
 	if err != nil {
 		return err
 	}
@@ -236,14 +236,14 @@ func (r *ResourceExportReconciler) cleanUpResourceImport(ctx context.Context,
 		Name:      resImp.Name,
 		Namespace: resImp.Namespace,
 	}}
-	err := r.Client.Delete(ctx, resImport, &client.DeleteOptions{})
+	err := r.Delete(ctx, resImport, &client.DeleteOptions{})
 	return client.IgnoreNotFound(err)
 }
 
 func (r *ResourceExportReconciler) updateEndpointResourceImport(ctx context.Context,
 	existRe *mcsv1alpha1.ResourceExport, resImpName types.NamespacedName) error {
 	resImport := &mcsv1alpha1.ResourceImport{}
-	err := r.Client.Get(ctx, resImpName, resImport)
+	err := r.Get(ctx, resImpName, resImport)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get ResourceImport", "resourceimport", resImpName)
 		return client.IgnoreNotFound(err)
@@ -268,7 +268,7 @@ func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
 	existResImport := &mcsv1alpha1.ResourceImport{}
 	resImportName := GetResourceImportName(&resExport)
 
-	err := r.Client.Get(ctx, resImportName, existResImport)
+	err := r.Get(ctx, resImportName, existResImport)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to get ResourceImport", "resourceimport", resImportName.String())
@@ -351,7 +351,7 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 				resExport.Labels[constants.SourceName] + "-" + "service",
 		}
 		svcResExport := &mcsv1alpha1.ResourceExport{}
-		err := r.Client.Get(context.Background(), svcResExportName, svcResExport)
+		err := r.Get(context.Background(), svcResExportName, svcResExport)
 		if err != nil && apierrors.IsNotFound(err) {
 			return newResImport, false, fmt.Errorf("failed to get ResourceExport %s: %w", svcResExportName.String(), err)
 		}
@@ -417,7 +417,7 @@ func (r *ResourceExportReconciler) refreshACNPResourceImport(
 
 func (r *ResourceExportReconciler) getNotDeletedResourceExports(resExport *mcsv1alpha1.ResourceExport) ([]mcsv1alpha1.ResourceExport, error) {
 	reList := &mcsv1alpha1.ResourceExportList{}
-	err := r.Client.List(context.TODO(), reList, &client.ListOptions{
+	err := r.List(context.TODO(), reList, &client.ListOptions{
 		LabelSelector: getLabelSelector(resExport),
 	})
 	if err != nil {
@@ -466,7 +466,7 @@ func (r *ResourceExportReconciler) deleteResourceExport(resExport *mcsv1alpha1.R
 		return s == constants.LegacyResourceExportFinalizer || s == constants.ResourceExportFinalizer
 	})
 	resExport.SetFinalizers(finalizers)
-	if err := r.Client.Update(context.Background(), resExport, &client.UpdateOptions{}); err != nil {
+	if err := r.Update(context.Background(), resExport, &client.UpdateOptions{}); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil

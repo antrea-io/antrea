@@ -60,7 +60,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterInfo(ctx context.
 	}
 	if reflect.DeepEqual(clusterInfoImport.Spec, clusterInfo) {
 		klog.InfoS("No change on ClusterInfoImport spec, skip reconciling", "clusterinfoimport", clusterInfoImportName.String(),
-			"resourceimport", req.NamespacedName.String())
+			"resourceimport", req.String())
 		r.installedResImports.Update(*resImp)
 		return ctrl.Result{}, nil
 	}

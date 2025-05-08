@@ -79,7 +79,7 @@ func NewStaleResCleanupController(
 func (c *StaleResCleanupController) CleanUp(ctx context.Context) error {
 	var err error
 	clusterSets := &mcv1alpha2.ClusterSetList{}
-	if err = c.Client.List(ctx, clusterSets, &client.ListOptions{}); err != nil {
+	if err = c.List(ctx, clusterSets, &client.ListOptions{}); err != nil {
 		return err
 	}
 
@@ -188,14 +188,14 @@ func (c *StaleResCleanupController) cleanUpStaleServiceResources(ctx context.Con
 	for _, staleSvc := range mcsSvcItems {
 		svc := staleSvc
 		klog.InfoS("Cleaning up stale imported Service", "service", klog.KObj(&svc))
-		if err := c.Client.Delete(ctx, &svc, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		if err := c.Delete(ctx, &svc, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
 	for _, staleSvcImp := range svcImpItems {
 		svcImp := staleSvcImp
 		klog.InfoS("Cleaning up stale ServiceImport", "serviceimport", klog.KObj(&svcImp))
-		if err := c.Client.Delete(ctx, &svcImp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		if err := c.Delete(ctx, &svcImp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -219,7 +219,7 @@ func (c *StaleResCleanupController) cleanUpACNPResources(ctx context.Context, ac
 	for _, stalePolicy := range staleMCACNPItems {
 		acnp := stalePolicy
 		klog.InfoS("Cleaning up stale imported ACNP", "acnp", klog.KObj(&acnp))
-		if err := c.Client.Delete(ctx, &acnp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		if err := c.Delete(ctx, &acnp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -240,7 +240,7 @@ func (c *StaleResCleanupController) cleanUpClusterInfoImports(ctx context.Contex
 	for _, staleCIImp := range staleCIImps {
 		ciImp := staleCIImp
 		klog.InfoS("Cleaning up stale ClusterInfoImport", "clusterinfoimport", klog.KObj(&ciImp))
-		if err := c.Client.Delete(ctx, &ciImp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		if err := c.Delete(ctx, &ciImp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -259,7 +259,7 @@ func (c *StaleResCleanupController) cleanUpLabelIdentities(ctx context.Context, 
 	for _, l := range staleLabelIdentities {
 		labelIdentity := l
 		klog.V(2).InfoS("Cleaning up stale imported LabelIdentity", "labelidentity", klog.KObj(&labelIdentity))
-		if err := c.Client.Delete(ctx, &labelIdentity, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		if err := c.Delete(ctx, &labelIdentity, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -347,7 +347,7 @@ func (c *StaleResCleanupController) cleanUpLabelIdentityResourceExports(ctx cont
 // Gateway in the local cluster.
 func (c *StaleResCleanupController) cleanUpClusterInfoResourceExports(ctx context.Context, commonArea commonarea.RemoteCommonArea) error {
 	var gws mcv1alpha1.GatewayList
-	if err := c.Client.List(ctx, &gws, &client.ListOptions{}); err != nil {
+	if err := c.List(ctx, &gws, &client.ListOptions{}); err != nil {
 		return err
 	}
 

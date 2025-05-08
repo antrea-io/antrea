@@ -59,18 +59,18 @@ func (b *ofFlowBuilder) MatchVLAN(nonVLAN bool, vlanID uint16, vlanMask *uint16)
 }
 
 func (b *ofFlowBuilder) SetHardTimeout(timout uint16) FlowBuilder {
-	b.ofFlow.HardTimeout = timout
+	b.HardTimeout = timout
 	return b
 }
 
 func (b *ofFlowBuilder) SetIdleTimeout(timeout uint16) FlowBuilder {
-	b.ofFlow.IdleTimeout = timeout
+	b.IdleTimeout = timeout
 	return b
 }
 
 func (b *ofFlowBuilder) Done() Flow {
 	if b.ctStates != nil {
-		b.Flow.Match.CtStates = b.ctStates
+		b.Match.CtStates = b.ctStates
 		b.ctStates = nil
 	}
 	return &b.ofFlow
@@ -233,28 +233,28 @@ func (b *ofFlowBuilder) MatchCTMark(marks ...*CtMark) FlowBuilder {
 		value |= mark.GetValue()
 		mask |= mark.field.rng.ToNXRange().ToUint32Mask()
 	}
-	b.ofFlow.Match.CtMark = value
-	b.ofFlow.Match.CtMarkMask = &mask
+	b.Match.CtMark = value
+	b.Match.CtMarkMask = &mask
 	return b
 }
 
 // MatchPktMark adds match condition for matching pkt_mark. If mask is nil, the mask should be not set in the OpenFlow
 // message which is sent to OVS, and OVS should match the value exactly.
 func (b *ofFlowBuilder) MatchPktMark(value uint32, mask *uint32) FlowBuilder {
-	b.ofFlow.Match.PktMark = value
-	b.ofFlow.Match.PktMarkMask = mask
+	b.Match.PktMark = value
+	b.Match.PktMarkMask = mask
 	return b
 }
 
 // MatchTunnelDst adds match condition for matching tun_dst or tun_ipv6_dst.
 func (b *ofFlowBuilder) MatchTunnelDst(dstIP net.IP) FlowBuilder {
-	b.ofFlow.Match.TunnelDst = &dstIP
+	b.Match.TunnelDst = &dstIP
 	return b
 }
 
 // MatchTunnelID adds match condition for matching tun_id.
 func (b *ofFlowBuilder) MatchTunnelID(tunnelID uint64) FlowBuilder {
-	b.ofFlow.Match.TunnelId = tunnelID
+	b.Match.TunnelId = tunnelID
 	return b
 }
 
@@ -282,7 +282,7 @@ func ctLabelRange(high, low uint64, rng *Range, match *ofctrl.FlowMatch) {
 }
 
 func (b *ofFlowBuilder) MatchCTLabelField(high, low uint64, field *CtLabel) FlowBuilder {
-	ctLabelRange(high, low, field.GetRange(), &b.ofFlow.Match)
+	ctLabelRange(high, low, field.GetRange(), &b.Match)
 	return b
 }
 
@@ -563,7 +563,7 @@ func (b *ofFlowBuilder) MatchCTProtocol(proto Protocol) FlowBuilder {
 
 // Cookie sets cookie ID for the flow entry.
 func (b *ofFlowBuilder) Cookie(cookieID uint64) FlowBuilder {
-	b.Flow.CookieID = cookieID
+	b.CookieID = cookieID
 	return b
 }
 

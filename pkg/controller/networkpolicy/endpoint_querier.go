@@ -221,12 +221,8 @@ func predictEndpointsRules(srcEndpointRules, dstEndpointRules *antreatypes.Endpo
 				commonRules = append(commonRules, rule)
 			}
 		}
-		for _, defaultDropRule := range srcIsolated {
-			commonRules = append(commonRules, defaultDropRule)
-		}
-		for _, defaultDropRule := range dstIsolated {
-			commonRules = append(commonRules, defaultDropRule)
-		}
+		commonRules = append(commonRules, srcIsolated...)
+		commonRules = append(commonRules, dstIsolated...)
 	}
 
 	// sort the common rules based on multiple closures, the top rule has the highest precedence

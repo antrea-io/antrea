@@ -101,15 +101,15 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		isDeleted = apierrors.IsNotFound(err)
 		if !isDeleted {
-			klog.InfoS("Unable to fetch ResourceImport", "resourceimport", req.NamespacedName.String(), "err", err)
+			klog.InfoS("Unable to fetch ResourceImport", "resourceimport", req.String(), "err", err)
 			return ctrl.Result{}, err
 		} else {
-			resImpObj, exist, err := r.installedResImports.GetByKey(req.NamespacedName.String())
+			resImpObj, exist, err := r.installedResImports.GetByKey(req.String())
 			if exist {
 				resImp = resImpObj.(multiclusterv1alpha1.ResourceImport)
 			} else {
 				// stale_controller will reconcile and clean up MC Service/ServiceImport, so it's ok to return nil here
-				klog.ErrorS(err, "No cached data for ResourceImport", "resourceimport", req.NamespacedName.String())
+				klog.ErrorS(err, "No cached data for ResourceImport", "resourceimport", req.String())
 				return ctrl.Result{}, nil
 			}
 		}

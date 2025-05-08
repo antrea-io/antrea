@@ -22,11 +22,9 @@ func (d *localIPDetector) IsLocalIP(ip string) bool {
 }
 
 func (d *localIPDetector) Run(stopCh <-chan struct{}) {
-	return
 }
 
 func (d *localIPDetector) AddEventHandler(handler LocalIPEventHandler) {
-	return
 }
 
 func (d *localIPDetector) HasSynced() bool {

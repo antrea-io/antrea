@@ -144,9 +144,10 @@ func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ re
 	go func(since string) {
 		var err error
 		var b *systemv1beta1.SupportBundle
-		if r.mode == modeAgent {
+		switch r.mode {
+		case modeAgent:
 			b, err = r.collectAgent(ctx, since)
-		} else if r.mode == modeController {
+		case modeController:
 			b, err = r.collectController(ctx, since)
 		}
 		func() {

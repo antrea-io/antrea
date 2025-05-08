@@ -62,11 +62,11 @@ func (f *ofFlow) getFlowMod() (*openflow15.FlowMod, error) {
 // objects. Reset() can be called to reset ofFlow.Flow.Table to the right value,
 // before replaying the Flow to OVS.
 func (f *ofFlow) Reset() {
-	f.Flow.Table = f.table.Table
+	f.Table = f.table.Table
 }
 
 func (f *ofFlow) Add() error {
-	err := f.Flow.Send(openflow15.FC_ADD)
+	err := f.Send(openflow15.FC_ADD)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (f *ofFlow) Add() error {
 }
 
 func (f *ofFlow) Modify() error {
-	err := f.Flow.Send(openflow15.FC_MODIFY_STRICT)
+	err := f.Send(openflow15.FC_MODIFY_STRICT)
 	if err != nil {
 		return err
 	}
@@ -84,8 +84,8 @@ func (f *ofFlow) Modify() error {
 }
 
 func (f *ofFlow) Delete() error {
-	f.Flow.UpdateInstallStatus(true)
-	err := f.Flow.Send(openflow15.FC_DELETE_STRICT)
+	f.UpdateInstallStatus(true)
+	err := f.Send(openflow15.FC_DELETE_STRICT)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (f *ofFlow) GetBundleMessages(entryOper OFOperation) ([]ofctrl.OpenFlowModM
 	case DeleteMessage:
 		operation = openflow15.FC_DELETE_STRICT
 	}
-	message, err := f.Flow.GetBundleMessage(operation)
+	message, err := f.GetBundleMessage(operation)
 	if err != nil {
 		return nil, err
 	}
@@ -134,13 +134,13 @@ func (f *ofFlow) GetBundleMessages(entryOper OFOperation) ([]ofctrl.OpenFlowModM
 // resets the priority in the new FlowBuilder if it is provided.
 func (f *ofFlow) CopyToBuilder(priority uint16, copyActions bool) FlowBuilder {
 	flow := &ofctrl.Flow{
-		Table:      f.Flow.Table,
-		CookieID:   f.Flow.CookieID,
-		CookieMask: f.Flow.CookieMask,
-		Match:      f.Flow.Match,
+		Table:      f.Table,
+		CookieID:   f.CookieID,
+		CookieMask: f.CookieMask,
+		Match:      f.Match,
 	}
 	if copyActions {
-		f.Flow.CopyActionsToNewFlow(flow)
+		f.CopyActionsToNewFlow(flow)
 	}
 	if priority > 0 {
 		flow.Match.Priority = priority

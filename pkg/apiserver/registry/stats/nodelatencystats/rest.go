@@ -68,8 +68,8 @@ func (r *REST) Destroy() {
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	// Update will add the object if the key does not exist.
 	summary := obj.(*statsv1alpha1.NodeLatencyStats)
-	if summary.ObjectMeta.CreationTimestamp.IsZero() {
-		summary.ObjectMeta.CreationTimestamp = metav1.Time{Time: r.clock.Now()}
+	if summary.CreationTimestamp.IsZero() {
+		summary.CreationTimestamp = metav1.Time{Time: r.clock.Now()}
 	}
 	if err := r.indexer.Update(summary); err != nil {
 		return nil, errors.NewInternalError(err)

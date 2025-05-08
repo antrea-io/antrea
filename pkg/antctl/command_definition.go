@@ -234,11 +234,12 @@ type commandDefinition struct {
 }
 
 func (cd *commandDefinition) namespaced() bool {
-	if runtime.Mode == runtime.ModeAgent {
+	switch runtime.Mode {
+	case runtime.ModeAgent:
 		return cd.agentEndpoint != nil && cd.agentEndpoint.resourceEndpoint != nil && cd.agentEndpoint.resourceEndpoint.namespaced
-	} else if runtime.Mode == runtime.ModeController {
+	case runtime.ModeController:
 		return cd.controllerEndpoint != nil && cd.controllerEndpoint.resourceEndpoint != nil && cd.controllerEndpoint.resourceEndpoint.namespaced
-	} else if runtime.Mode == runtime.ModeFlowAggregator {
+	case runtime.ModeFlowAggregator:
 		return cd.flowAggregatorEndpoint != nil && cd.flowAggregatorEndpoint.resourceEndpoint != nil && cd.flowAggregatorEndpoint.resourceEndpoint.namespaced
 	}
 	return false
@@ -256,21 +257,22 @@ func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single b
 }
 
 func (cd *commandDefinition) getEndpoint() endpointResponder {
-	if runtime.Mode == runtime.ModeAgent {
+	switch runtime.Mode {
+	case runtime.ModeAgent:
 		if cd.agentEndpoint != nil {
 			if cd.agentEndpoint.resourceEndpoint != nil {
 				return cd.agentEndpoint.resourceEndpoint
 			}
 			return cd.agentEndpoint.nonResourceEndpoint
 		}
-	} else if runtime.Mode == runtime.ModeController {
+	case runtime.ModeController:
 		if cd.controllerEndpoint != nil {
 			if cd.controllerEndpoint.resourceEndpoint != nil {
 				return cd.controllerEndpoint.resourceEndpoint
 			}
 			return cd.controllerEndpoint.nonResourceEndpoint
 		}
-	} else if runtime.Mode == runtime.ModeFlowAggregator {
+	case runtime.ModeFlowAggregator:
 		if cd.flowAggregatorEndpoint != nil {
 			if cd.flowAggregatorEndpoint.resourceEndpoint != nil {
 				return cd.flowAggregatorEndpoint.resourceEndpoint
@@ -282,15 +284,16 @@ func (cd *commandDefinition) getEndpoint() endpointResponder {
 }
 
 func (cd *commandDefinition) getRequestErrorFallback() func() (io.Reader, error) {
-	if runtime.Mode == runtime.ModeAgent {
+	switch runtime.Mode {
+	case runtime.ModeAgent:
 		if cd.agentEndpoint != nil {
 			return cd.agentEndpoint.requestErrorFallback
 		}
-	} else if runtime.Mode == runtime.ModeController {
+	case runtime.ModeController:
 		if cd.controllerEndpoint != nil {
 			return cd.controllerEndpoint.requestErrorFallback
 		}
-	} else if runtime.Mode == runtime.ModeFlowAggregator {
+	case runtime.ModeFlowAggregator:
 		if cd.flowAggregatorEndpoint != nil {
 			return cd.flowAggregatorEndpoint.requestErrorFallback
 		}
@@ -445,14 +448,15 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 	case yamlFormatter:
 		return output.YamlOutput(obj, writer)
 	case tableFormatter:
-		if cd.commandGroup == get {
+		switch cd.commandGroup {
+		case get:
 			return output.TableOutputForGetCommands(obj, writer)
-		} else if cd.commandGroup == query {
+		case query:
 			if cd.controllerEndpoint.nonResourceEndpoint != nil && cd.controllerEndpoint.nonResourceEndpoint.path == "/endpoint" {
 				return output.TableOutputForQueryEndpoint(obj, writer)
 			}
 			return output.TableOutputForGetCommands(obj, writer)
-		} else {
+		default:
 			return output.TableOutput(obj, writer)
 		}
 	case rawFormatter:
@@ -520,7 +524,7 @@ func (cd *commandDefinition) newCommandRunE(c AntctlClient, out io.Writer) func(
 		klog.Infof("Args: %v", argMap)
 		var argGet bool
 		for _, flag := range cd.getEndpoint().flags() {
-			if _, ok := argMap[flag.name]; ok && flag.arg == true {
+			if _, ok := argMap[flag.name]; ok && flag.arg {
 				argGet = true
 				break
 			}
@@ -579,11 +583,12 @@ func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
 	if !hasArg {
 		cmd.Args = cobra.NoArgs
 	}
-	if cd.commandGroup == get {
+	switch cd.commandGroup {
+	case get:
 		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml|raw")
-	} else if cd.commandGroup == query {
+	case query:
 		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml|raw")
-	} else {
+	default:
 		cmd.Flags().StringP("output", "o", "yaml", "output format: json|table|yaml|raw")
 	}
 }

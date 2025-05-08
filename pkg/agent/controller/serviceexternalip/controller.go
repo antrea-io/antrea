@@ -350,7 +350,7 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 		}
 	}
 
-	ipPool := service.ObjectMeta.Annotations[types.ServiceExternalIPPoolAnnotationKey]
+	ipPool := service.Annotations[types.ServiceExternalIPPoolAnnotationKey]
 	state := &externalIPState{
 		ip:     currentExternalIP,
 		ipPool: ipPool,
