@@ -124,6 +124,7 @@ func (ic *ifConfigurator) configureContainerLink(
 	podSriovVFDeviceID string,
 	result *current.Result,
 	containerAccess *containerAccessArbitrator,
+	mac string,
 ) error {
 	if brSriovVFDeviceID != "" {
 		return fmt.Errorf("OVS hardware offload is not supported on windows")

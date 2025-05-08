@@ -334,6 +334,7 @@ type PodOwner struct {
 	// Network interface name. Used when the IP is allocated for a secondary network interface
 	// of the Pod.
 	IFName string `json:"ifName,omitempty"`
+	MAC    string `json:"mac,omitempty"`
 }
 
 // StatefulSet owner

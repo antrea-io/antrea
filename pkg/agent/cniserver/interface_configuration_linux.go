@@ -241,6 +241,7 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 	containerIfaceName string,
 	mtu int,
 	result *current.Result,
+	mac string,
 ) error {
 	// Include the container veth interface name in the name generation, as one Pod can have more
 	// than one interfaces inc. secondary interfaces, while the host interface name must be unique.
@@ -250,7 +251,18 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 	containerIface := &current.Interface{Name: containerIfaceName, Sandbox: containerNetNS}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 
-	podMAC := util.GenerateRandomMAC()
+	var podMAC net.HardwareAddr
+	var err error
+
+	if mac != "" {
+		podMAC, err = net.ParseMAC(mac)
+		if err != nil {
+			return fmt.Errorf("failed to parse provided MAC address %s: %v", mac, err)
+		}
+	} else {
+		podMAC = util.GenerateRandomMAC()
+	}
+
 	if err := nsWithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
 		klog.V(2).Infof("Creating veth devices (%s, %s) for container %s", containerIfaceName, hostIfaceName, containerID)
 		hostVeth, containerVeth, err := ipSetupVethWithName(containerIfaceName, hostIfaceName, mtu, podMAC.String(), hostNS)
@@ -259,6 +271,7 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 		}
 		containerIface.Mac = podMAC.String()
 		hostIface.Mac = hostVeth.HardwareAddr.String()
+
 		// Disable TX checksum offloading when it's configured explicitly.
 		if ic.disableTXChecksumOffload {
 			if err := ethtoolTXHWCsumOff(containerVeth.Name); err != nil {
@@ -349,6 +362,7 @@ func (ic *ifConfigurator) configureContainerLink(
 	podSriovVFDeviceID string,
 	result *current.Result,
 	containerAccess *containerAccessArbitrator,
+	mac string,
 ) error {
 	if brSriovVFDeviceID != "" {
 		if !ic.isOvsHardwareOffloadEnabled {
@@ -364,7 +378,7 @@ func (ic *ifConfigurator) configureContainerLink(
 	} else {
 		klog.V(2).Infof("Create veth pair for container %s", containerID)
 		// Create veth pair and link up
-		return ic.configureContainerLinkVeth(podName, podNamespace, containerID, containerNetNS, containerIfaceName, mtu, result)
+		return ic.configureContainerLinkVeth(podName, podNamespace, containerID, containerNetNS, containerIfaceName, mtu, result, mac)
 	}
 }
 
