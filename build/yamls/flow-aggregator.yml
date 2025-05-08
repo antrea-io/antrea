@@ -504,6 +504,10 @@ spec:
         name: flow-aggregator
         ports:
         - containerPort: 4739
+        resources:
+          requests:
+            cpu: 500m
+            memory: 256Mi
         volumeMounts:
         - mountPath: /etc/flow-aggregator
           name: flow-aggregator-config
@@ -512,7 +516,7 @@ spec:
           name: host-var-log-antrea-flow-aggregator
         - mountPath: /etc/flow-aggregator/certs
           name: clickhouse-ca
-      hostAliases: null
+      hostNetwork: false
       nodeSelector:
         kubernetes.io/arch: amd64
         kubernetes.io/os: linux
