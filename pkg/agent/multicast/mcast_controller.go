@@ -181,13 +181,15 @@ func (c *Controller) clearStaleGroups() {
 	for _, obj := range c.groupCache.List() {
 		status := obj.(*GroupMemberStatus)
 		diff := now.Sub(status.lastIGMPReport)
-		if diff > c.mcastGroupTimeout {
-			// Notify worker to remove the group from groupCache if all its members are not updated before mcastGroupTimeout.
-			c.queue.Add(status.group.String())
+		if diff > c.mcastGroupTimeout && len(status.localMembers) == 0 {
+			c.checkLastMember(status.group)
+			klog.V(2).InfoS("Group is timeout without any members", "group", status.group.String(), "timeDiff", diff.String())
 		} else {
 			// Create a "leave" event for a local member if it is not updated before mcastGroupTimeout.
 			for member, lastUpdate := range status.localMembers {
-				if now.Sub(lastUpdate) > c.mcastGroupTimeout {
+				containerDiff := now.Sub(lastUpdate)
+				if containerDiff > c.mcastGroupTimeout {
+					klog.V(2).InfoS("Local member in group is timeout", "group", status.group.String(), "member", member, "timeDiff", containerDiff.String())
 					ifConfig := &interfacestore.InterfaceConfig{
 						InterfaceName: member,
 						Type:          interfacestore.ContainerInterface,
@@ -458,7 +460,7 @@ func (c *Controller) syncGroup(groupKey string) error {
 		return nil
 	}
 	status := obj.(*GroupMemberStatus)
-	memberPorts := make([]uint32, 0, len(status.localMembers)+1)
+	memberPorts := make([]uint32, 0)
 	if c.flexibleIPAMEnabled {
 		memberPorts = append(memberPorts, c.nodeConfig.UplinkNetConfig.OFPort, c.nodeConfig.HostInterfaceOFPort)
 	} else {
@@ -513,8 +515,10 @@ func (c *Controller) syncGroup(groupKey string) error {
 			if err := c.igmpSnooper.sendIGMPLeaveReport([]net.IP{group}); err != nil {
 				klog.ErrorS(err, "Failed to send IGMP leave message to other Nodes", "group", groupKey)
 			}
+			klog.V(2).InfoS("Sent the IGMP leave message to other Nodes", "group", groupKey)
 		}
 		c.delInstalledLocalGroup(groupKey)
+		klog.V(2).InfoS("Removed local multicast group", "group", groupKey)
 		return nil
 	}
 	if c.groupHasInstalled(groupKey) {
