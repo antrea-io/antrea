@@ -143,7 +143,6 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 				expectNetworkStatuses = append(expectNetworkStatuses, expectNetworkStatus)
 			}
 			assert.ElementsMatch(t, expectNetworkStatuses, networkStatus, "The Pod network-status annotation is not as expected")
-
 			return true, nil
 		}); err != nil {
 			return err
