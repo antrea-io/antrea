@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -199,6 +199,20 @@ func (m *MockInterface) LinkList() ([]netlink.Link, error) {
 func (mr *MockInterfaceMockRecorder) LinkList() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkList", reflect.TypeOf((*MockInterface)(nil).LinkList))
+}
+
+// LinkSetAlias mocks base method.
+func (m *MockInterface) LinkSetAlias(link netlink.Link, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetAlias", link, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetAlias indicates an expected call of LinkSetAlias.
+func (mr *MockInterfaceMockRecorder) LinkSetAlias(link, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetAlias", reflect.TypeOf((*MockInterface)(nil).LinkSetAlias), link, name)
 }
 
 // LinkSetDown mocks base method.
