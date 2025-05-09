@@ -590,12 +590,10 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 		SetName(namespace, name).
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{ExternalEntitySelector: eeSelector}})
-
 	ruleFunc := builder.AddIngress
 	if !ingress {
 		ruleFunc = builder.AddEgress
 	}
-
 	switch proto {
 	case ProtocolTCP:
 		fallthrough
@@ -611,12 +609,24 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 			cidr = &peerIPCIDR
 		}
 		port := int32(iperfPort)
-		ruleFunc(proto, &port, nil, nil, nil, nil, nil, nil, nil, cidr, nil, nil, peerLabel,
-			nil, nil, nil, nil, ruleAction, "", "")
+		ruleFunc(ANNPRuleBuilder{
+			Cidr:       cidr,
+			EeSelector: peerLabel,
+			BaseRuleBuilder: BaseRuleBuilder{
+				Protoc: proto,
+				Port:   &port,
+				Action: ruleAction,
+			}})
 	case ProtocolICMP:
 		peerIPCIDR := fmt.Sprintf("%s/32", nodeIP(0))
-		ruleFunc(ProtocolICMP, nil, nil, nil, &icmpType, &icmpCode, nil, nil, nil, &peerIPCIDR, nil, nil, nil,
-			nil, nil, nil, nil, ruleAction, "", "")
+		ruleFunc(ANNPRuleBuilder{
+			Cidr: &peerIPCIDR,
+			BaseRuleBuilder: BaseRuleBuilder{
+				Protoc:   ProtocolICMP,
+				IcmpType: &icmpType,
+				IcmpCode: &icmpCode,
+				Action:   ruleAction,
+			}})
 	}
 	anpRule := builder.Get()
 
@@ -638,7 +648,7 @@ func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace stri
 	for fqdn, action := range fqdnSettings {
 		ruleName := fmt.Sprintf("name-%d", i)
 		policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
-		ports, _ := GenPortsOrProtocols(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		ports, _ := GenPortsOrProtocols(BaseRuleBuilder{Protoc: ProtocolTCP})
 		newRule := crdv1beta1.Rule{
 			To:     policyPeer,
 			Ports:  ports,
