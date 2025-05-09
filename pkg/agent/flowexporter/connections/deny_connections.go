@@ -16,6 +16,7 @@ package connections
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -31,11 +32,14 @@ import (
 
 type DenyConnectionStore struct {
 	connectionStore
+
+	protocolFilter []string
 }
 
 func NewDenyConnectionStore(podStore podstore.Interface, proxier proxy.Proxier, o *flowexporter.FlowExporterOptions) *DenyConnectionStore {
 	return &DenyConnectionStore{
 		connectionStore: NewConnectionStore(podStore, proxier, o),
+		protocolFilter:  o.ProtocolFilter,
 	}
 }
 
@@ -91,6 +95,13 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 		}
 		klog.V(4).InfoS("Deny connection has been updated", "connection", conn)
 	} else {
+		if len(ds.protocolFilter) > 0 {
+			protocol := string(serviceProtocolMap[conn.FlowKey.Protocol])
+			if !slices.Contains(ds.protocolFilter, protocol) {
+				return
+			}
+		}
+
 		conn.StartTime = timeSeen
 		conn.StopTime = timeSeen
 		conn.LastExportTime = timeSeen
