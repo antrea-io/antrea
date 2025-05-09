@@ -741,13 +741,19 @@ func TestConfigureLinkRoutes(t *testing.T) {
 		{
 			name: "Configure Link Route Success",
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
-				mockNetlink.RouteReplace(&routes[0]).Return(nil)
+				mockNetlink.RouteAdd(&routes[0]).Return(nil)
 			},
 		},
 		{
-			name: "Route Replace Err",
+			name: "Configure Link Route with file exists error",
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
-				mockNetlink.RouteReplace(&routes[0]).Return(testInvalidErr)
+				mockNetlink.RouteAdd(&routes[0]).Return(fmt.Errorf("RTNETLINK answers: File exists"))
+			},
+		},
+		{
+			name: "Route Add Err",
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteAdd(&routes[0]).Return(testInvalidErr)
 			},
 			wantErr: testInvalidErr,
 		},

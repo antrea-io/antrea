@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -326,6 +326,20 @@ func (m *MockInterface) NeighSet(neigh *netlink.Neigh) error {
 func (mr *MockInterfaceMockRecorder) NeighSet(neigh any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NeighSet", reflect.TypeOf((*MockInterface)(nil).NeighSet), neigh)
+}
+
+// RouteAdd mocks base method.
+func (m *MockInterface) RouteAdd(route *netlink.Route) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RouteAdd", route)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RouteAdd indicates an expected call of RouteAdd.
+func (mr *MockInterfaceMockRecorder) RouteAdd(route any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RouteAdd", reflect.TypeOf((*MockInterface)(nil).RouteAdd), route)
 }
 
 // RouteDel mocks base method.
