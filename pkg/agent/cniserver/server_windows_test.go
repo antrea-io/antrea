@@ -286,6 +286,7 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, clients *mock
 	mockOFClient.EXPECT().SubscribeOFPortStatusMessage(gomock.Any()).AnyTimes()
 	cniServer.podConfigurator, _ = newPodConfigurator(kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, podUpdateNotifier, clients.localPodInformer, cniServer.containerAccess)
 	cniServer.podConfigurator.ifConfigurator.(*ifConfigurator).winnet = mockWinnet
+	cniServer.kubeClient = kubeClient
 	return cniServer
 }
 
