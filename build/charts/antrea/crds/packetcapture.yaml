@@ -152,6 +152,20 @@ spec:
                               type: integer
                               minimum: 1
                               maximum: 65535
+                        icmp:
+                          type: object
+                          properties:
+                            messages:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  type:
+                                    x-kubernetes-int-or-string: true
+                                  code:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 255
                 direction:
                   type: string
                   enum: ["SourceToDestination", "DestinationToSource", "Both"]
