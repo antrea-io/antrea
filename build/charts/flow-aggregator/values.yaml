@@ -6,7 +6,8 @@ image:
 
 # -- Prority class to use for the flow-aggregator Pod.
 priorityClassName: "system-cluster-critical"
-# -- Run the flow-aggregator Pod in the host network.
+# -- Run the flow-aggregator Pod in the host network. With hostNetwork enabled, it is usually
+# necessary to set dnsPolicy to ClusterFirstWithHostNet.
 hostNetwork: false
 # -- DNS Policy for the flow-aggregator Pod. If empty, the Kubernetes default will be used.
 dnsPolicy: ""
