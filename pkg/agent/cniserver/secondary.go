@@ -53,7 +53,7 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 
 	// Use podSriovVFDeviceID as the interface name in the interface store.
 	hostInterfaceName := podSriovVFDeviceID
-	containerConfig := buildContainerConfig(hostInterfaceName, containerID, podName, podNamespace, containerIface, result.IPs, 0)
+	containerConfig := buildContainerConfig(hostInterfaceName, containerID, podName, podNamespace, containerIface, result.IPs, 0, containerNetNS)
 	pc.ifaceStore.AddInterface(containerConfig)
 
 	if result.IPs != nil {

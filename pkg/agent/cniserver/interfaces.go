@@ -24,6 +24,7 @@ type postInterfaceCreateHook func() error
 // podInterfaceConfigurator is for testing.
 type podInterfaceConfigurator interface {
 	configureContainerLink(podName string, podNamespace string, containerID string, containerNetNS string, containerIfaceName string, mtu int, brSriovVFDeviceID string, podSriovVFDeviceID string, result *current.Result, containerAccess *containerAccessArbitrator) error
+	recoverVFInterfaceName(containerNetNS string, containerIfaceName string) error
 	removeContainerLink(containerID, hostInterfaceName string) error
 	advertiseContainerAddr(containerNetNS string, containerIfaceName string, result *current.Result) error
 	validateVFRepInterface(sriovVFDeviceID string) (string, error)

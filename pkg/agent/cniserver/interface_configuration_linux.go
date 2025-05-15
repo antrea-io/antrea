@@ -20,6 +20,7 @@ package cniserver
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -43,6 +44,7 @@ import (
 const (
 	netDeviceTypeVeth = "veth"
 	netDeviceTypeVF   = "vf"
+	vfDeviceSuffix    = "~~"
 )
 
 // Declared variables for test
@@ -111,6 +113,15 @@ func (ic *ifConfigurator) moveVFtoContainerNS(vfNetDevice string, containerID st
 		if err != nil {
 			return fmt.Errorf("failed to rename VF netdevice as containerIfaceName %s: %v", containerIfaceName, err)
 		}
+		// Rename the device back to vfNetDevice on error
+		defer func() {
+			if err != nil {
+				if err := renameInterface(containerIfaceName, vfNetDevice); err != nil {
+					klog.ErrorS(err, "failed to rename VF netdevice back")
+				}
+			}
+		}()
+
 		link, err := ic.netlink.LinkByName(containerIfaceName)
 		if err != nil {
 			return fmt.Errorf("failed to find VF netdevice %s: %v", containerIfaceName, err)
@@ -228,7 +239,75 @@ func (ic *ifConfigurator) configureContainerSriovLink(
 	hostIface.Name = vfIFName
 	klog.V(2).Infof("hostIface.Name: %s, hostIface.Mac: %s, vfIFName: %s", hostIface.Name, hostIface.Mac, vfIFName)
 
-	return ic.moveVFtoContainerNS(vfIFName, containerID, containerNetNS, containerIfaceName, mtu, result)
+	newVFIFName := getVFInterfaceNameWithSuffix(vfIFName)
+	err = ic.netlink.LinkSetAlias(link, newVFIFName)
+	if err != nil {
+		return fmt.Errorf("failed to set alias %s for VF netdevice %s: %v", newVFIFName, vfIFName, err)
+	}
+	klog.InfoS("link's alias has been updated", "alias", newVFIFName)
+
+	// Change the VF device name temporarily to avoid a potential conflict if its name is the same as
+	// an existing container interface name.
+	err = renameInterface(vfIFName, newVFIFName)
+	if err != nil {
+		return fmt.Errorf("failed to rename VF netdevice %s with suffix %s: %v", vfIFName, newVFIFName, err)
+	}
+
+	defer func() {
+		// Rename it back if moving VF device to container NS is failed.
+		if err != nil {
+			err = renameInterface(newVFIFName, vfIFName)
+			klog.ErrorS(err, "Rename back to original VF name failed", "originalName", vfIFName, "newName", newVFIFName)
+		}
+	}()
+
+	err = ic.moveVFtoContainerNS(newVFIFName, containerID, containerNetNS, containerIfaceName, mtu, result)
+	return err
+}
+
+func getVFInterfaceNameWithSuffix(originalVFIFName string) string {
+	return originalVFIFName + vfDeviceSuffix
+}
+
+// recoverVFInterfaceName rename the interface back to the original VF interface name.
+func (ic *ifConfigurator) recoverVFInterfaceName(containerNetNS string, containerIfaceName string) error {
+	var vfName string
+	if err := nsWithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
+		link, err := ic.netlink.LinkByName(containerIfaceName)
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				klog.V(2).InfoS("Container interface not found", "containerIfaceName", containerIfaceName)
+				return nil
+			}
+			return fmt.Errorf("failed to find container interface %s: %v", containerIfaceName, err)
+		}
+		vfName = link.Attrs().Alias
+		if vfName != "" {
+			err = renameInterface(containerIfaceName, vfName)
+			if err != nil {
+				return fmt.Errorf("failed to rename containerIfaceName back to the VF name %s: %v", vfName, err)
+			}
+			err = ic.netlink.LinkSetAlias(link, "")
+			if err != nil {
+				klog.InfoS("failed to clean up alias for VF netdevice %s: %v", vfName, err)
+			} else {
+				klog.InfoS("link's alias has been removed", "link", vfName)
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if strings.HasSuffix(vfName, vfDeviceSuffix) {
+		originalName := vfName[:len(vfName)-2]
+		err := renameInterface(vfName, originalName)
+		if err != nil {
+			return fmt.Errorf("failed to rename VF netdevice %s back to the original VF name %s: %v", vfName, originalName, err)
+		}
+		klog.InfoS("rename VF netdevice back to the original VF name successfully", "vfName", vfName, "originalName", originalName)
+	}
+	return nil
 }
 
 // configureContainerLinkVeth creates a veth pair: one in the container netns and one in the host netns, and configures IP
