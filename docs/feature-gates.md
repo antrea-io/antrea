@@ -47,7 +47,7 @@ edit the Agent configuration in the
 | `NodeIPAM`                    | Controller         | `true`  | Beta  | v1.4          | v1.12        | N/A        | Yes                |                                               |
 | `AntreaIPAM`                  | Agent + Controller | `true`  | Beta  | v1.4          | v2.4         | N/A        | Yes                |                                               |
 | `Multicast`                   | Agent + Controller | `true`  | Beta  | v1.5          | v1.12        | N/A        | Yes                |                                               |
-| `SecondaryNetwork`            | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |                                               |
+| `SecondaryNetwork`            | Agent              | `true`  | Beta  | v1.5          | v2.4         | N/A        | Yes                |                                               |
 | `ServiceExternalIP`           | Agent + Controller | `false` | Beta  | v1.5          | v2.3         | N/A        | Yes                |                                               |
 | `TrafficControl`              | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |                                               |
 | `Multicluster`                | Agent + Controller | `false` | Alpha | v1.7          | N/A          | N/A        | Yes                | Controller side feature gate added in v1.10.0 |
