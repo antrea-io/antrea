@@ -19,13 +19,19 @@ spec:
       labels:
         app: flow-aggregator
     spec:
+      hostNetwork: {{ .Values.hostNetwork }}
+      {{- if .Values.dnsPolicy }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- end }}
+      {{- if .Values.hostAliases }}
       hostAliases:
-      {{- range .Values.hostAliases }}
+        {{- range .Values.hostAliases }}
         - ip: {{ .ip }}
           hostnames:
           {{- range $hostname := .hostnames }}
             - {{ $hostname }}
           {{- end }}
+        {{- end }}
       {{- end }}
       containers:
       - name: flow-aggregator
@@ -100,6 +106,14 @@ spec:
           name: host-var-log-antrea-flow-aggregator
         - name: clickhouse-ca
           mountPath: /etc/flow-aggregator/certs
+        {{- if .Values.flowAggregator.securityContext }}
+        securityContext:
+          {{- toYaml .Values.flowAggregator.securityContext | nindent 10 }}
+        {{- end }}
+        {{- if .Values.flowAggregator.resources }}
+        resources:
+          {{- toYaml .Values.flowAggregator.resources | nindent 10 }}
+        {{- end }}
       nodeSelector:
         kubernetes.io/os: linux
         kubernetes.io/arch: amd64
