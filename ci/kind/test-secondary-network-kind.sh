@@ -107,7 +107,6 @@ function run_test {
   # Create a secondary OVS bridge with the Node's physical interface on the extra
   # network.
   helm install antrea $ANTREA_CHART --namespace kube-system \
-     --set featureGates.SecondaryNetwork=true \
      --set-json secondaryNetwork.ovsBridges='[{"bridgeName": "br-secondary", "physicalInterfaces": ["eth1"]}]'
 
   # Wait for antrea-controller start to make sure the IPPool validation webhook is ready.

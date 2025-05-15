@@ -35,18 +35,17 @@ feature across different releases.
 |---------------|-----------------------------|---------|---------------------------|
 | v1.5 - v1.14  | `Alpha`                     |         |                           |
 | v1.15 - v2.2  | `Alpha`                     | `Alpha` |                           |
-| v2.3 - latest | `Alpha`                     | `Alpha` | `Alpha`                   |
+| v2.3          | `Alpha`                     | `Alpha` | `Alpha`                   |
+| v2.4 - latest | `Beta`                      | `Beta`  | `Beta`                    |
 
 This document describes steps to enable and use Antrea's native support for
 secondary networks.
 
 ## Prerequisites
 
-Native secondary network support is still an alpha feature and is disabled by
-default. To enable it, you must activate the `SecondaryNetwork` feature gate in the
-`antrea-agent` configuration. **Antrea IPAM**, the **sole IPAM option** for
-Antrea-managed secondary networks, has been **graduated to beta** as of v2.4 and is
-now **enabled by default**. No additional feature gate configuration is required for Antrea IPAM.
+Native secondary network was graduated to beta in v2.4, at which time it
+was enabled by default. Prior to v2.4, you must activate the `SecondaryNetwork`
+feature gate in the `antrea-agent` configuration.
 > **Note for Pre-v2.4 Users:** If you require IPAM for secondary interfaces **prior to v2.4**,
 > you must also enable the `AntreaIPAM` feature gate in **both** the `antrea-agent` and `antrea-controller` configurations.
 
@@ -65,7 +64,7 @@ data:
   antrea-agent.conf: |
     featureGates:
       AntreaIPAM: true    # Required for all versions < v2.4
-      SecondaryNetwork: true
+      SecondaryNetwork: true    # Required for all versions < v2.4
 ```
 
 Antrea leverages the `NetworkAttachmentDefinition` CRD from [Kubernetes Network

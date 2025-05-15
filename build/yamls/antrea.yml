@@ -4087,7 +4087,7 @@ data:
     # Pod annotations). At the moment, Antrea can create secondary network
     # interfaces either using SR-IOV VFs on bare-metal Nodes or veth interfaces
     # bridged to the underlay network, with or without VLAN tagging.
-    #  SecondaryNetwork: false
+    #  SecondaryNetwork: true
 
     # Enable managing external IPs of Services of LoadBalancer type.
     #  ServiceExternalIP: true
@@ -5502,7 +5502,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0e0223df5ad6a0500373b68983f8427272e7ccc2bd83af0667846e2d8210188a
+        checksum/config: 52b6342c0e6b500ad2e5f0380bf0c27e653bb4e32fcfffd6d42c6dab0230968e
       labels:
         app: antrea
         component: antrea-agent
@@ -5748,7 +5748,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0e0223df5ad6a0500373b68983f8427272e7ccc2bd83af0667846e2d8210188a
+        checksum/config: 52b6342c0e6b500ad2e5f0380bf0c27e653bb4e32fcfffd6d42c6dab0230968e
       labels:
         app: antrea
         component: antrea-controller

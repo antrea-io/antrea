@@ -349,7 +349,6 @@ if [[ $SECONDARY_BRIDGE != "" ]]; then
 secondaryNetwork:
   ovsBridges: $ovs_bridges
 EOF
-    HELM_VALUES+=("featureGates.SecondaryNetwork=true")
     HELM_VALUES_FILES+=("$TMP_DIR/secondary-network.yml")
 fi
 
