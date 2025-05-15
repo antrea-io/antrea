@@ -89,7 +89,7 @@ func Test_getGatesResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getFeatureGatesResponse(tt.cfg, AgentMode)
-			assert.Equal(t, got, tt.want, "The feature gates for Antrea agent are not correct")
+			assert.Equal(t, tt.want, got, "The feature gates for Antrea agent are not correct")
 		})
 	}
 }
