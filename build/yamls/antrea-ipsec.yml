@@ -4633,6 +4633,7 @@ rules:
       - pods/status
     verbs:
       - patch
+      - update
   - apiGroups:
       - ""
     resources:
