@@ -15,7 +15,7 @@
 package openflow
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"reflect"
 	"testing"
@@ -1275,7 +1275,7 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Specify a hardcoded seed for testing to make output predictable.
 			// #nosec G404: random number generator not used for security purposes
-			pktRand = rand.New(rand.NewSource(1))
+			pktRand = rand.New(rand.NewPCG(1, 0))
 			b := &ofPacketOutBuilder{
 				pktOut:  tt.fields.pktOut,
 				icmpID:  tt.fields.icmpID,

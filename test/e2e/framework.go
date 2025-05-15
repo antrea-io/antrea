@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"path"
@@ -2264,7 +2264,7 @@ func randSeq(n int) string {
 	b := make([]rune, n)
 	for i := range b {
 		// #nosec G404: random number generator not used for security purposes
-		randIdx := rand.Intn(len(lettersAndDigits))
+		randIdx := rand.IntN(len(lettersAndDigits))
 		b[i] = lettersAndDigits[randIdx]
 	}
 	return string(b)
