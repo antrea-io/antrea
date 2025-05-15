@@ -15,7 +15,7 @@
 package openflow
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"reflect"
 	"testing"
@@ -25,6 +25,17 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 )
+
+// Initialize pktRand with a fixed seed for predictable test outcomes.
+// #nosec G404: random number generator not used for security purposes
+var pktRandInstance = rand.New(rand.NewPCG(1, 0)) // Fixed seeds: 1 and 0
+
+// Override pktRand in the main package with pktRandInstance during tests.
+// This assumes pktRand is a package-level variable that can be overridden.
+// If pktRand is not accessible, consider refactoring your code to allow dependency injection.
+func init() {
+	pktRand = pktRandInstance
+}
 
 func Test_ofPacketOutBuilder(t *testing.T) {
 	newPktOutBuilder := func() *ofPacketOutBuilder {
@@ -1275,7 +1286,7 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Specify a hardcoded seed for testing to make output predictable.
 			// #nosec G404: random number generator not used for security purposes
-			pktRand = rand.New(rand.NewSource(1))
+			pktRand = pktRandInstance
 			b := &ofPacketOutBuilder{
 				pktOut:  tt.fields.pktOut,
 				icmpID:  tt.fields.icmpID,
