@@ -28,7 +28,7 @@
       - shell: |-
          #!/bin/bash
          set -ex
-         sudo ./ci/test-conformance-gke.sh --gcloud-sdk-path "${GCLOUD_SDK_PATH}" --cluster-name "${CLUSTERNAME}" --cleanup-only
+         sudo ./ci/test-conformance-gke.sh --gcloud-sdk-path "${GCLOUD_SDK_PATH}" --cluster-name "${CLUSTERNAME}" --cleanup-only --gke-project ${GKE_PROJECT}
 
 - builder:
     name: builder-aks-cluster-cleanup
