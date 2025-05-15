@@ -76,8 +76,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "AntreaIPAM",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -166,8 +166,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "SecondaryNetwork",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -283,8 +283,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "AntreaIPAM",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -373,8 +373,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "SecondaryNetwork",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -412,8 +412,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "AntreaIPAM",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -502,8 +502,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "SecondaryNetwork",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -695,7 +695,7 @@ func TestGetFeatureGates(t *testing.T) {
 			runE: controllerRemoteRunE,
 			expectedOutput: `Antrea Agent Feature Gates
 FEATUREGATE                     STATUS       VERSION
-AntreaIPAM                      Disabled     ALPHA
+AntreaIPAM                      Enabled      BETA
 AntreaPolicy                    Enabled      BETA
 AntreaProxy                     Enabled      BETA
 CleanupStaleUDPSvcConntrack     Disabled     ALPHA
@@ -710,7 +710,7 @@ Multicast                       Enabled      BETA
 Multicluster                    Disabled     ALPHA
 NetworkPolicyStats              Enabled      BETA
 NodePortLocal                   Enabled      BETA
-SecondaryNetwork                Disabled     ALPHA
+SecondaryNetwork                Enabled      BETA
 ServiceExternalIP               Disabled     ALPHA
 SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
@@ -740,7 +740,7 @@ Traceflow                   Enabled      BETA
 			runE: agentRunE,
 			expectedOutput: `Antrea Agent Feature Gates
 FEATUREGATE                     STATUS       VERSION
-AntreaIPAM                      Disabled     ALPHA
+AntreaIPAM                      Enabled      BETA
 AntreaPolicy                    Enabled      BETA
 AntreaProxy                     Enabled      BETA
 CleanupStaleUDPSvcConntrack     Disabled     ALPHA
@@ -755,7 +755,7 @@ Multicast                       Enabled      BETA
 Multicluster                    Disabled     ALPHA
 NetworkPolicyStats              Enabled      BETA
 NodePortLocal                   Enabled      BETA
-SecondaryNetwork                Disabled     ALPHA
+SecondaryNetwork                Enabled      BETA
 ServiceExternalIP               Disabled     ALPHA
 SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
@@ -769,7 +769,7 @@ TrafficControl                  Disabled     ALPHA
 			runE: controllerLocalRunE,
 			expectedOutput: `Antrea Agent Feature Gates
 FEATUREGATE                     STATUS       VERSION
-AntreaIPAM                      Disabled     ALPHA
+AntreaIPAM                      Enabled      BETA
 AntreaPolicy                    Enabled      BETA
 AntreaProxy                     Enabled      BETA
 CleanupStaleUDPSvcConntrack     Disabled     ALPHA
@@ -784,7 +784,7 @@ Multicast                       Enabled      BETA
 Multicluster                    Disabled     ALPHA
 NetworkPolicyStats              Enabled      BETA
 NodePortLocal                   Enabled      BETA
-SecondaryNetwork                Disabled     ALPHA
+SecondaryNetwork                Enabled      BETA
 ServiceExternalIP               Disabled     ALPHA
 SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
@@ -814,7 +814,7 @@ Traceflow                   Enabled      BETA
 			runE: controllerLocalRunE,
 			expectedOutput: `Antrea Agent Feature Gates
 FEATUREGATE                     STATUS       VERSION
-AntreaIPAM                      Disabled     ALPHA
+AntreaIPAM                      Enabled      BETA
 AntreaPolicy                    Enabled      BETA
 AntreaProxy                     Enabled      BETA
 CleanupStaleUDPSvcConntrack     Disabled     ALPHA
@@ -829,7 +829,7 @@ Multicast                       Enabled      BETA
 Multicluster                    Disabled     ALPHA
 NetworkPolicyStats              Enabled      BETA
 NodePortLocal                   Enabled      BETA
-SecondaryNetwork                Disabled     ALPHA
+SecondaryNetwork                Enabled      BETA
 ServiceExternalIP               Disabled     ALPHA
 SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
@@ -853,7 +853,7 @@ TrafficControl              Disabled     ALPHA
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
 AdminNetworkPolicy          Disabled     ALPHA
-AntreaIPAM                  Disabled     ALPHA
+AntreaIPAM                  Enabled      BETA
 AntreaPolicy                Enabled      BETA
 Egress                      Enabled      BETA
 IPsecCertAuth               Disabled     ALPHA

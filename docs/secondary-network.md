@@ -35,37 +35,16 @@ feature across different releases.
 |---------------|-----------------------------|---------|---------------------------|
 | v1.5 - v1.14  | `Alpha`                     |         |                           |
 | v1.15 - v2.2  | `Alpha`                     | `Alpha` |                           |
-| v2.3 - latest | `Alpha`                     | `Alpha` | `Alpha`                   |
+| v2.3          | `Alpha`                     | `Alpha` | `Alpha`                   |
+| v2.4 - latest | `Beta`                      | `Beta`  | `Beta`                    |
 
 This document describes steps to enable and use Antrea's native support for
 secondary networks.
 
 ## Prerequisites
 
-Native secondary network support is still an alpha feature and is disabled by
-default. To use the feature, the `SecondaryNetwork` feature gate must be enabled
-in the `antrea-agent` configuration. If you need IPAM for the secondary
-interfaces, you should also enable the `AntreaIPAM` feature gate in both
-`antrea-agent` and `antrea-controller` configuration. At the moment, Antrea IPAM
-is the only available IPAM option for secondary networks managed by Antrea. The
-`antrea-config` ConfigMap with the two feature gates enables is like the
-following:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: antrea-config
-  namespace: kube-system
-data:
-  antrea-controller.conf: |
-    featureGates:
-      AntreaIPAM: true
-  antrea-agent.conf: |
-    featureGates:
-      AntreaIPAM: true
-      SecondaryNetwork: true
-```
+Native secondary network support has been promoted to Beta and is now enabled by default. 
+AntreaIPAM, the integrated IP address management solution for secondary networks, is also in Beta stage and enabled by default. 
 
 Antrea leverages the `NetworkAttachmentDefinition` CRD from [Kubernetes Network
 Plumbing Working Group](https://github.com/k8snetworkplumbingwg/multi-net-spec)
