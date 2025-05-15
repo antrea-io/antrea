@@ -43,8 +43,8 @@ secondary networks.
 
 ## Prerequisites
 
-Native secondary network support has been promoted to Beta and is now enabled by default. 
-AntreaIPAM, the integrated IP address management solution for secondary networks, is also in Beta stage and enabled by default. 
+Native secondary network support has been promoted to Beta and is now enabled by default.  
+AntreaIPAM, the integrated IP address management solution for secondary networks, is also in Beta stage and enabled by default.  
 
 Antrea leverages the `NetworkAttachmentDefinition` CRD from [Kubernetes Network
 Plumbing Working Group](https://github.com/k8snetworkplumbingwg/multi-net-spec)
