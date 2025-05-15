@@ -610,13 +610,14 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		}
 	}
 
+	const defaultTimeoutSeconds = 15
 	timeoutSeconds := tc.timeoutSeconds
 	// If timeout is not explicitly provided by test case...
 	if timeoutSeconds == 0 {
 		if tc.pc.Spec.Timeout != nil {
 			timeoutSeconds = int(*tc.pc.Spec.Timeout)
 		} else {
-			timeoutSeconds = 15
+			timeoutSeconds = defaultTimeoutSeconds
 		}
 		if strings.Contains(tc.name, "timeout") {
 			// wait more for status update.
