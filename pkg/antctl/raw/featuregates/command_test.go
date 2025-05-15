@@ -166,8 +166,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "SecondaryNetwork",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -373,8 +373,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "SecondaryNetwork",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -502,8 +502,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "SecondaryNetwork",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -710,7 +710,7 @@ Multicast                       Enabled      BETA
 Multicluster                    Disabled     ALPHA
 NetworkPolicyStats              Enabled      BETA
 NodePortLocal                   Enabled      BETA
-SecondaryNetwork                Disabled     ALPHA
+SecondaryNetwork                Enabled      BETA
 ServiceExternalIP               Disabled     ALPHA
 SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
@@ -755,7 +755,7 @@ Multicast                       Enabled      BETA
 Multicluster                    Disabled     ALPHA
 NetworkPolicyStats              Enabled      BETA
 NodePortLocal                   Enabled      BETA
-SecondaryNetwork                Disabled     ALPHA
+SecondaryNetwork                Enabled      BETA
 ServiceExternalIP               Disabled     ALPHA
 SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
@@ -784,7 +784,7 @@ Multicast                       Enabled      BETA
 Multicluster                    Disabled     ALPHA
 NetworkPolicyStats              Enabled      BETA
 NodePortLocal                   Enabled      BETA
-SecondaryNetwork                Disabled     ALPHA
+SecondaryNetwork                Enabled      BETA
 ServiceExternalIP               Disabled     ALPHA
 SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
@@ -829,7 +829,7 @@ Multicast                       Enabled      BETA
 Multicluster                    Disabled     ALPHA
 NetworkPolicyStats              Enabled      BETA
 NodePortLocal                   Enabled      BETA
-SecondaryNetwork                Disabled     ALPHA
+SecondaryNetwork                Enabled      BETA
 ServiceExternalIP               Disabled     ALPHA
 SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
