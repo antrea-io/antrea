@@ -4,8 +4,23 @@ image:
   pullPolicy: "IfNotPresent"
   tag: ""
 
-# -- Prority class to use for the flow aggregator Pod.
+# -- Prority class to use for the flow-aggregator Pod.
 priorityClassName: "system-cluster-critical"
+# -- Run the flow-aggregator Pod in the host network. With hostNetwork enabled, it is usually
+# necessary to set dnsPolicy to ClusterFirstWithHostNet.
+hostNetwork: false
+# -- DNS Policy for the flow-aggregator Pod. If empty, the Kubernetes default will be used.
+dnsPolicy: ""
+
+# Configuration specific to the flow-aggregator container.
+flowAggregator:
+  # -- Configure the security context for the flow-aggregator container.
+  securityContext: {}
+  # -- Resource requests and limits for the flow-aggregator container.
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "256Mi"
 
 # -- Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy". In Aggregate
 # mode, flow records received from source and destination are aggregated and sent as one flow
