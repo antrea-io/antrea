@@ -66,6 +66,15 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		if msg, allowed = validateIPRangesAndSubnetInfo(newObj, externalIPPools); !allowed {
 			break
 		}
+
+		// If the current ExternalIPPool is not in use by any resource then IPRanges shrink or expansion can be allowed.
+		if oldObj.Status.Usage.Used == 0 {
+			// Delete Existing ExternalIPPool
+			c.deleteExternalIPPool(oldObj)
+			// Add New ExternalIPPool with the updated IPRanges
+			c.addExternalIPPool(newObj)
+		}
+
 		oldIPRangeSet := getIPRangeSet(oldObj.Spec.IPRanges)
 		newIPRangeSet := getIPRangeSet(newObj.Spec.IPRanges)
 		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
