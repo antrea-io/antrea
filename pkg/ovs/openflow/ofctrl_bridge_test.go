@@ -139,7 +139,7 @@ func TestOFBridgePacketRcvd(t *testing.T) {
 	packetInQueueTracker := map[uint8]*PacketInQueue{}
 	// Test different userdata.
 	for i := 0; i < 5; i++ {
-		packetInQueue := NewPacketInQueue(1, rate.Limit(10))
+		packetInQueue := NewPacketInQueue(0, 1, rate.Limit(10))
 		b.SubscribePacketIn(uint8(i), packetInQueue)
 		packetInQueueTracker[uint8(i)] = packetInQueue
 		b.PacketRcvd(nil, &ofctrl.PacketIn{
@@ -202,10 +202,10 @@ func TestOFMeterStats(t *testing.T) {
 
 func TestPacketInQueue(t *testing.T) {
 	burst := 200
-	q := NewPacketInQueue(burst, rate.Limit(100))
+	q := NewPacketInQueue(0, burst, rate.Limit(100))
 	for i := 0; i < burst; i++ {
 		assert.True(t, q.AddOrDrop(nil), "Packet should not be dropped before reaching the burst")
 	}
 	assert.False(t, q.AddOrDrop(nil), "Packet should be dropped after reaching the burst")
-	assert.Equal(t, float64(burst), q.rateLimiter.Tokens())
+	assert.Equal(t, float64(burst), q.pktRateLimiter.Tokens())
 }
