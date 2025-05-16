@@ -3040,6 +3040,21 @@ spec:
                               type: integer
                               minimum: 1
                               maximum: 65535
+                            flags:
+                              type: array
+                              items:
+                                type: object
+                                required:
+                                  - value
+                                properties:
+                                  value:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 255
+                                  mask:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 255
                 direction:
                   type: string
                   enum: ["SourceToDestination", "DestinationToSource", "Both"]
