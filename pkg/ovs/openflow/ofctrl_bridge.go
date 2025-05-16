@@ -652,12 +652,22 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 }
 
 type PacketInQueue struct {
-	rateLimiter *rate.Limiter
-	packetsCh   chan *ofctrl.PacketIn
+	// category is used only for logging, to help distinguish the purpose of packets.
+	category       uint8
+	pktRateLimiter *rate.Limiter
+	pktDrops       int64
+	logRateLimiter *rate.Limiter
+	packetsCh      chan *ofctrl.PacketIn
 }
 
-func NewPacketInQueue(size int, r rate.Limit) *PacketInQueue {
-	return &PacketInQueue{rateLimiter: rate.NewLimiter(r, size), packetsCh: make(chan *ofctrl.PacketIn, size)}
+func NewPacketInQueue(category uint8, size int, r rate.Limit) *PacketInQueue {
+	return &PacketInQueue{
+		category:       category,
+		pktRateLimiter: rate.NewLimiter(r, size),
+		// Throttle packet drop logs to once per minute.
+		logRateLimiter: rate.NewLimiter(rate.Every(time.Minute), 1),
+		packetsCh:      make(chan *ofctrl.PacketIn, size),
+	}
 }
 
 func (q *PacketInQueue) AddOrDrop(packet *ofctrl.PacketIn) bool {
@@ -666,12 +676,16 @@ func (q *PacketInQueue) AddOrDrop(packet *ofctrl.PacketIn) bool {
 		return true
 	default:
 		// Channel is full.
+		q.pktDrops++
+		if q.logRateLimiter.Allow() {
+			klog.ErrorS(nil, "Failed to dispatch PacketIn event due to full channel", "category", q.category, "pktDrops", q.pktDrops)
+		}
 		return false
 	}
 }
 
 func (q *PacketInQueue) GetRateLimited(stopCh <-chan struct{}) *ofctrl.PacketIn {
-	when := q.rateLimiter.Reserve().Delay()
+	when := q.pktRateLimiter.Reserve().Delay()
 	t := time.NewTimer(when)
 	defer t.Stop()
 
