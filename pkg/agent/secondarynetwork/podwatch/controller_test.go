@@ -262,7 +262,7 @@ func TestPodControllerRun(t *testing.T) {
 		ContainerID: containerID,
 		IFName:      interfaceName}
 	containerConfig := interfacestore.NewContainerInterface(interfaceName, containerID,
-		pod.Name, pod.Namespace, interfaceName, nil, nil, 0)
+		pod.Name, pod.Namespace, interfaceName, nil, nil, 0, "containerNS")
 
 	// CNI Add event.
 	event := types.PodUpdate{
@@ -773,9 +773,9 @@ func TestPodControllerAddPod(t *testing.T) {
 		podOwner2 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: containerID, IFName: "eth11"}
 		containerConfig1 := interfacestore.NewContainerInterface("interface1", containerID,
-			pod.Name, pod.Namespace, "eth10", nil, nil, 0)
+			pod.Name, pod.Namespace, "eth10", nil, nil, 0, "containerNS")
 		containerConfig2 := interfacestore.NewContainerInterface("interface2", containerID,
-			pod.Name, pod.Namespace, "eth11", nil, nil, 0)
+			pod.Name, pod.Namespace, "eth11", nil, nil, 0, "containerNS")
 		// VLAN interface should have OVSPortConfig.
 		containerConfig2.OVSPortConfig = &interfacestore.OVSPortConfig{}
 
@@ -785,9 +785,9 @@ func TestPodControllerAddPod(t *testing.T) {
 		stalePodOwner2 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: staleContainerID, IFName: "eth2"}
 		staleConfig1 := interfacestore.NewContainerInterface("interface1", staleContainerID,
-			pod.Name, pod.Namespace, "eth1", nil, nil, 0)
+			pod.Name, pod.Namespace, "eth1", nil, nil, 0, "containerNS")
 		staleConfig2 := interfacestore.NewContainerInterface("interface2", staleContainerID,
-			pod.Name, pod.Namespace, "eth2", nil, nil, 0)
+			pod.Name, pod.Namespace, "eth2", nil, nil, 0, "containerNS")
 		staleConfig1.OVSPortConfig = &interfacestore.OVSPortConfig{}
 
 		networkConfig1 := cnitypes.NetworkConfig{
@@ -1105,15 +1105,15 @@ func createTestInterfaces() (map[string]string, []ovsconfig.OVSPortData, []*inte
 	p2NetIP := net.ParseIP(p2IP)
 
 	// Create InterfaceConfig objects directly
-	containerConfig1 := interfacestore.NewContainerInterface("p1", uuid1, "Pod1", "nsA", "eth0", p1NetMAC, []net.IP{p1NetIP}, 100)
+	containerConfig1 := interfacestore.NewContainerInterface("p1", uuid1, "Pod1", "nsA", "eth0", p1NetMAC, []net.IP{p1NetIP}, 100, "containerNS")
 	containerConfig1.OVSPortConfig = &interfacestore.OVSPortConfig{
 		OFPort: 11,
 	}
-	containerConfig2 := interfacestore.NewContainerInterface("p2", uuid2, "Pod2", "nsA", "eth0", p2NetMAC, []net.IP{p2NetIP}, 100)
+	containerConfig2 := interfacestore.NewContainerInterface("p2", uuid2, "Pod2", "nsA", "eth0", p2NetMAC, []net.IP{p2NetIP}, 100, "containerNS")
 	containerConfig2.OVSPortConfig = &interfacestore.OVSPortConfig{
 		OFPort: 12,
 	}
-	containerConfig3 := interfacestore.NewContainerInterface("p3", uuid3, "Pod3", "nsA", "eth0", p2NetMAC, []net.IP{p2NetIP}, 100)
+	containerConfig3 := interfacestore.NewContainerInterface("p3", uuid3, "Pod3", "nsA", "eth0", p2NetMAC, []net.IP{p2NetIP}, 100, "containerNS")
 	containerConfig3.OVSPortConfig = &interfacestore.OVSPortConfig{
 		OFPort: -1,
 	}

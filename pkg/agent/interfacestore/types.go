@@ -64,6 +64,7 @@ type OVSPortConfig struct {
 // +k8s:deepcopy-gen=true
 type ContainerInterfaceConfig struct {
 	ContainerID  string
+	ContainerNS  string
 	PodName      string
 	PodNamespace string
 	// Interface name inside container.
@@ -144,12 +145,14 @@ func NewContainerInterface(
 	ifDev string,
 	mac net.HardwareAddr,
 	ips []net.IP,
-	vlanID uint16) *InterfaceConfig {
+	vlanID uint16,
+	containerNS string) *InterfaceConfig {
 	containerConfig := &ContainerInterfaceConfig{
 		ContainerID:  containerID,
 		PodName:      podName,
 		PodNamespace: podNamespace,
-		IFDev:        ifDev}
+		IFDev:        ifDev,
+		ContainerNS:  containerNS}
 	return &InterfaceConfig{
 		InterfaceName:            interfaceName,
 		Type:                     ContainerInterface,

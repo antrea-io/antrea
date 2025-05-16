@@ -147,7 +147,9 @@ func TestConfigureContainerLink(t *testing.T) {
 	fakeNetlink := netlinktest.NewMockInterface(controller)
 
 	sriovVfNetdeviceName := "vfDevice"
+	sriovVfNetdeviceNameWithSuffix := getVFInterfaceNameWithSuffix(sriovVfNetdeviceName)
 	vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVfNetdeviceName, Flags: net.FlagUp}}
+	renamedVFDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVfNetdeviceNameWithSuffix, Flags: net.FlagUp}}
 
 	defer mockGetNS()()
 	defer mockWithNetNSPath()()
@@ -158,7 +160,7 @@ func TestConfigureContainerLink(t *testing.T) {
 		sriovVFDeviceID           string
 		vfNetdevices              []string
 		podSriovVFDeviceID        string
-		renameIntefaceErr         error
+		renameIntefaceErrs        []error
 		setupVethErr              error
 		ipamConfigureIfaceErr     error
 		ethtoolEthTXHWCsumOffErr  error
@@ -203,17 +205,30 @@ func TestConfigureContainerLink(t *testing.T) {
 			ovsHardwareOffloadEnabled: true,
 			sriovVFDeviceID:           "br-vf",
 			vfNetdevices:              []string{sriovVfNetdeviceName},
-			renameIntefaceErr:         fmt.Errorf("unable to rename netlink"),
+			renameIntefaceErrs:        []error{fmt.Errorf("unable to rename netlink")},
 			expectErr:                 fmt.Errorf("failed to rename %s to %s: unable to rename netlink", sriovVfRepresentor, hostIfaceName),
 		}, {
+			name:                      "pod-sriov-rename-on-host-failure",
+			ovsHardwareOffloadEnabled: true,
+			podSriovVFDeviceID:        "sriovPodVF",
+			renameIntefaceErrs:        []error{fmt.Errorf("unable to rename netlink")},
+			expectErr:                 fmt.Errorf("failed to rename VF netdevice %s with suffix %s: unable to rename netlink", sriovVfNetdeviceName, sriovVfNetdeviceNameWithSuffix),
+		}, {
+			name:                      "pod-sriov-rename-on-pod-failure",
+			ovsHardwareOffloadEnabled: true,
+			podSriovVFDeviceID:        "sriovPodVF",
+			renameIntefaceErrs:        []error{nil, fmt.Errorf("unable to rename netlink"), nil},
+			expectErr:                 fmt.Errorf("failed to rename VF netdevice as containerIfaceName %s: unable to rename netlink", containerIfaceName),
+		},
+		{
 			name:                      "pod-sriov-success",
 			ovsHardwareOffloadEnabled: true,
 			podSriovVFDeviceID:        "sriovPodVF",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			defer mockRenameInterface(tc.renameIntefaceErrs)()
 			defer mockSetupVethWithName(tc.setupVethErr, 1, 2)()
-			defer mockRenameInterface(tc.renameIntefaceErr)()
 			defer mockIPAMConfigureIface(tc.ipamConfigureIfaceErr)()
 			defer mockEthtoolTXHWCsumOff(tc.ethtoolEthTXHWCsumOffErr)()
 			testIfConfigurator := newTestIfConfigurator(tc.ovsHardwareOffloadEnabled, fakeNetlink, fakeSriovNet)
@@ -226,7 +241,7 @@ func TestConfigureContainerLink(t *testing.T) {
 					fakeSriovNet.EXPECT().GetUplinkRepresentor(tc.sriovVFDeviceID).Return(sriovUplinkName, nil).Times(1)
 					fakeSriovNet.EXPECT().GetVfIndexByPciAddress(tc.sriovVFDeviceID).Return(sriovVfIndex, nil).Times(1)
 					fakeSriovNet.EXPECT().GetVfRepresentor(sriovUplinkName, sriovVfIndex).Return(sriovVfRepresentor, nil).Times(1)
-					if tc.renameIntefaceErr == nil {
+					if tc.renameIntefaceErrs == nil || (tc.renameIntefaceErrs != nil && tc.renameIntefaceErrs[0] == nil) {
 						hostInterfaceLink := &netlink.Dummy{
 							LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: hostVethMac, Name: hostIfaceName, Flags: net.FlagUp},
 						}
@@ -238,17 +253,100 @@ func TestConfigureContainerLink(t *testing.T) {
 			if tc.podSriovVFDeviceID != "" {
 				fakeSriovNet.EXPECT().GetVFLinkNames(tc.podSriovVFDeviceID).Return(sriovVfNetdeviceName, nil).Times(1)
 				fakeNetlink.EXPECT().LinkByName(sriovVfNetdeviceName).Return(vfDeviceLink, nil).Times(1)
-				moveVFtoNS = true
+				fakeNetlink.EXPECT().LinkSetAlias(vfDeviceLink, sriovVfNetdeviceNameWithSuffix).Return(nil).Times(1)
+				if tc.renameIntefaceErrs == nil || (tc.renameIntefaceErrs != nil && tc.renameIntefaceErrs[0] == nil) {
+					moveVFtoNS = true
+				}
 			}
 			if moveVFtoNS {
-				fakeNetlink.EXPECT().LinkByName(sriovVfNetdeviceName).Return(vfDeviceLink, nil).Times(1)
-				fakeNetlink.EXPECT().LinkSetNsFd(vfDeviceLink, gomock.Any()).Return(nil).Times(1)
-				containerInterfaceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp}}
-				fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerInterfaceLink, nil).Times(1)
-				fakeNetlink.EXPECT().LinkSetMTU(containerInterfaceLink, gomock.Any()).Return(nil).Times(1)
-				fakeNetlink.EXPECT().LinkSetUp(containerInterfaceLink).Return(nil).Times(1)
+				if tc.podSriovVFDeviceID != "" {
+					fakeNetlink.EXPECT().LinkByName(sriovVfNetdeviceNameWithSuffix).Return(renamedVFDeviceLink, nil).Times(1)
+					fakeNetlink.EXPECT().LinkSetNsFd(renamedVFDeviceLink, gomock.Any()).Return(nil).Times(1)
+				}
+				if tc.sriovVFDeviceID != "" {
+					fakeNetlink.EXPECT().LinkByName(sriovVfNetdeviceName).Return(vfDeviceLink, nil).Times(1)
+					fakeNetlink.EXPECT().LinkSetNsFd(vfDeviceLink, gomock.Any()).Return(nil).Times(1)
+				}
+				if tc.renameIntefaceErrs == nil {
+					containerInterfaceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp}}
+					fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerInterfaceLink, nil).Times(1)
+					fakeNetlink.EXPECT().LinkSetMTU(containerInterfaceLink, gomock.Any()).Return(nil).Times(1)
+					fakeNetlink.EXPECT().LinkSetUp(containerInterfaceLink).Return(nil).Times(1)
+				}
 			}
 			err := testIfConfigurator.configureContainerLink(podName, testPodNamespace, podContainerID, containerNS.Path(), containerIfaceName, mtu, tc.sriovVFDeviceID, tc.podSriovVFDeviceID, ipamResult, nil)
+			if tc.expectErr != nil {
+				assert.Error(t, err)
+				assert.Equal(t, tc.expectErr, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestRecoverVFInterfaceName(t *testing.T) {
+	controller := gomock.NewController(t)
+	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
+	fakeNetlink := netlinktest.NewMockInterface(controller)
+	sriovVfNetdeviceName := "vfDevice"
+	alias := getVFInterfaceNameWithSuffix(sriovVfNetdeviceName)
+	containerDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp, Alias: alias}}
+
+	defer mockGetNS()()
+	defer mockWithNetNSPath()()
+
+	for _, tc := range []struct {
+		name               string
+		renameIntefaceErrs []error
+		setAliasErr        error
+		linkByNameErr      error
+		expectErr          error
+	}{
+		{
+			name: "rename successfully",
+		},
+		{
+			name:          "link not found error, ignoring",
+			linkByNameErr: netlink.LinkNotFoundError{},
+		},
+		{
+			name:          "get link error",
+			linkByNameErr: fmt.Errorf("unknown"),
+			expectErr:     fmt.Errorf("failed to find container interface %s: unknown", containerIfaceName),
+		},
+		{
+			name:        "set alias failed, ignoring",
+			setAliasErr: fmt.Errorf("set alias error"),
+		},
+		{
+			name:               "rename interface first try failed",
+			renameIntefaceErrs: []error{fmt.Errorf("file exists")},
+			expectErr:          fmt.Errorf("failed to rename containerIfaceName back to the VF name %s: file exists", alias),
+		},
+		{
+			name:               "rename interface second try failed",
+			renameIntefaceErrs: []error{nil, fmt.Errorf("file exists")},
+			expectErr:          fmt.Errorf("failed to rename VF netdevice %s back to the original VF name %s: file exists", alias, sriovVfNetdeviceName),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer mockRenameInterface(tc.renameIntefaceErrs)()
+			containerNS := createNS(t, false)
+			defer containerNS.clear()
+
+			if tc.linkByNameErr != nil {
+				fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(nil, tc.linkByNameErr).Times(1)
+			} else {
+				fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerDeviceLink, nil).Times(1)
+				if tc.renameIntefaceErrs == nil || (tc.renameIntefaceErrs != nil && tc.renameIntefaceErrs[0] == nil) {
+					fakeNetlink.EXPECT().LinkSetAlias(containerDeviceLink, "").Return(tc.setAliasErr).Times(1)
+				}
+			}
+
+			testIfConfigurator := newTestIfConfigurator(false, fakeNetlink, fakeSriovNet)
+			err := testIfConfigurator.recoverVFInterfaceName(containerNS.Path(), containerIfaceName)
+
 			if tc.expectErr != nil {
 				assert.Error(t, err)
 				assert.Equal(t, tc.expectErr, err)
@@ -809,10 +907,19 @@ func mockSetupVethWithName(setupVethErr error, containerIndex, hostIndex int) fu
 	}
 }
 
-func mockRenameInterface(renameIntefaceErr error) func() {
+func mockRenameInterface(renameIntefaceErrs []error) func() {
 	originalRenameInterface := renameInterface
+	callCount := 0
 	renameInterface = func(from, to string) error {
-		return renameIntefaceErr
+		tempErrs := []error{nil, nil}
+		if renameIntefaceErrs != nil {
+			tempErrs = renameIntefaceErrs
+		}
+		defer func() { callCount++ }()
+		if callCount < len(tempErrs) {
+			return tempErrs[callCount]
+		}
+		return nil
 	}
 	return func() {
 		renameInterface = originalRenameInterface

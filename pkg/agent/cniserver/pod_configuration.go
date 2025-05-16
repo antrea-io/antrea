@@ -148,7 +148,7 @@ func buildContainerConfig(
 	interfaceName, containerID, podName, podNamespace string,
 	containerIface *current.Interface,
 	ips []*current.IPConfig,
-	vlanID uint16) *interfacestore.InterfaceConfig {
+	vlanID uint16, containerNS string) *interfacestore.InterfaceConfig {
 	// A secondary interface can be created without IPs. Ignore the IP parsing error here.
 	containerIPs, _ := parseContainerIPs(ips)
 	// containerIface.Mac should be a valid MAC string, otherwise it should throw error before
@@ -161,7 +161,8 @@ func buildContainerConfig(
 		containerIface.Name,
 		containerMAC,
 		containerIPs,
-		vlanID)
+		vlanID,
+		containerNS)
 }
 
 // BuildOVSPortExternalIDs parses OVS port external_ids from InterfaceConfig.
@@ -230,7 +231,7 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 		ifDev,
 		containerMAC,
 		containerIPs,
-		portData.VLANID)
+		portData.VLANID, "")
 	interfaceConfig.OVSPortConfig = portConfig
 	return interfaceConfig
 }
@@ -323,6 +324,17 @@ func (pc *podConfigurator) removeInterfaces(containerID string) error {
 	// Note that deleting the interface attached to an OVS port can release the ofport.
 	if err := pc.disconnectInterfaceFromOVS(containerConfig); err != nil {
 		return err
+	}
+
+	// Since only VLAN and SR-IOV interfaces are supported by now, we judge the
+	// interface type by checking containerConfig.OVSPortConfig is set or not.
+	if containerConfig.OVSPortConfig == nil {
+		if err := pc.ifConfigurator.recoverVFInterfaceName(containerConfig.ContainerNS, containerConfig.IFDev); err != nil {
+			klog.ErrorS(err, "Failed to rename the container interface link to the original VF name",
+				"Pod", klog.KRef(containerConfig.PodNamespace, containerConfig.PodName),
+				"interface", containerConfig.IFDev)
+			return err
+		}
 	}
 
 	if err := pc.ifConfigurator.removeContainerLink(containerID, containerConfig.InterfaceName); err != nil {

@@ -201,6 +201,20 @@ func (mr *MockInterfaceMockRecorder) LinkList() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkList", reflect.TypeOf((*MockInterface)(nil).LinkList))
 }
 
+// LinkSetAlias mocks base method.
+func (m *MockInterface) LinkSetAlias(link netlink.Link, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetAlias", link, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetAlias indicates an expected call of LinkSetAlias.
+func (mr *MockInterfaceMockRecorder) LinkSetAlias(link, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetAlias", reflect.TypeOf((*MockInterface)(nil).LinkSetAlias), link, name)
+}
+
 // LinkSetDown mocks base method.
 func (m *MockInterface) LinkSetDown(link netlink.Link) error {
 	m.ctrl.T.Helper()
