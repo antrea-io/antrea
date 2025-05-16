@@ -67,7 +67,7 @@ const (
 type InterfaceConfigurator interface {
 	ConfigureSriovSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, podSriovVFDeviceID string, result *current.Result) error
 	DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error
-	ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult) error
+	ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult, ifaceMAC string) error
 	DeleteVLANSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error
 }
 
@@ -351,6 +351,7 @@ func (pc *PodController) configureSecondaryInterface(
 			Namespace:   pod.Namespace,
 			ContainerID: podCNIInfo.containerID,
 			IFName:      network.InterfaceRequest,
+			MAC:         network.MacRequest,
 		}
 		ipamResult, err = pc.ipamAllocator.SecondaryNetworkAllocate(podOwner, &networkConfig.NetworkConfig)
 		if err != nil {
@@ -383,16 +384,27 @@ func (pc *PodController) configureSecondaryInterface(
 		ifConfigErr = pc.interfaceConfigurator.ConfigureVLANSecondaryInterface(
 			pod.Name, pod.Namespace,
 			podCNIInfo.containerID, podCNIInfo.netNS, network.InterfaceRequest,
-			int(networkConfig.MTU), ipamResult)
+			int(networkConfig.MTU), ipamResult, network.MacRequest)
 	}
 	return &ipamResult.Result, ifConfigErr
 }
 
 func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkList []*netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo) error {
 	usedIFNames := sets.New[string]()
+	usedIFMac := sets.New[string]()
 	for _, network := range networkList {
 		if network.InterfaceRequest != "" {
 			usedIFNames.Insert(network.InterfaceRequest)
+		}
+
+		if network.MacRequest != "" {
+			if !usedIFMac.Has(network.MacRequest) {
+				usedIFMac.Insert(network.MacRequest)
+			} else {
+				network.MacRequest = ""
+				klog.InfoS("Duplicate MAC address found in NetworkAttachmentDefinition, ignoring",
+					"Pod", klog.KRef(pod.Namespace, pod.Name), "MAC", network.MacRequest)
+			}
 		}
 	}
 
