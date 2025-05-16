@@ -169,6 +169,62 @@ func TestPacketCaptureRun(t *testing.T) {
 	}
 }
 
+func TestTokenizeTCPFlags(t *testing.T) {
+	tcs := []struct {
+		name        string
+		tcp_flags   string
+		expectSet   []string
+		expectUnset []string
+		expectErr   string
+	}{
+		{
+			name:        "good-input-1",
+			tcp_flags:   "+syn-ack",
+			expectSet:   []string{"syn"},
+			expectUnset: []string{"ack"},
+		},
+		{
+			name:        "good-input-2",
+			tcp_flags:   "+fin+ack",
+			expectSet:   []string{"fin", "ack"},
+			expectUnset: nil,
+		},
+		{
+			name:      "bad-input-1",
+			tcp_flags: "syn",
+			expectErr: "invalid character 's' at 1, expected '+' or '-'",
+		},
+		{
+			name:      "bad-input-2",
+			tcp_flags: "+syn#ack",
+			expectErr: "invalid character '#' at 5, expected '+' or '-'",
+		},
+		{
+			name:      "bad-input-3",
+			tcp_flags: "-acck",
+			expectErr: "invalid TCP flag acck",
+		},
+		{
+			name:      "bad-input-4",
+			tcp_flags: "-",
+			expectErr: "missing TCP flag after '-' at 1",
+		},
+	}
+
+	for _, tt := range tcs {
+		t.Run(tt.name, func(t *testing.T) {
+			set, unset, err := tokenizeTCPFlags(tt.tcp_flags)
+			if tt.expectErr != "" {
+				require.ErrorContains(t, err, tt.expectErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectSet, set)
+				assert.Equal(t, tt.expectUnset, unset)
+			}
+		})
+	}
+}
+
 func TestNewPacketCapture(t *testing.T) {
 	tcs := []struct {
 		name      string
@@ -177,11 +233,11 @@ func TestNewPacketCapture(t *testing.T) {
 		expectPC  *v1alpha1.PacketCapture
 	}{
 		{
-			name: "pod-2-pod-tcp",
+			name: "pod-2-pod-tcp-syn",
 			option: packetCaptureOptions{
 				source: srcPod,
 				dest:   dstPod,
-				flow:   "tcp,tcp_dst=80",
+				flow:   "tcp,tcp_dst=80,tcp_flags=+syn",
 				number: testNum,
 			},
 			expectPC: &v1alpha1.PacketCapture{
@@ -210,6 +266,7 @@ func TestNewPacketCapture(t *testing.T) {
 						TransportHeader: v1alpha1.TransportHeader{
 							TCP: &v1alpha1.TCPHeader{
 								DstPort: ptr.To(int32(80)),
+								Flags:   []v1alpha1.TCPFlagsMatcher{{Value: 0x2, Mask: ptr.To(int32(0x2))}},
 							},
 						},
 					},
@@ -231,7 +288,7 @@ func TestNewPacketCapture(t *testing.T) {
 				dest:   dstPod,
 				flow:   "tcp,tcp_dst=invalid",
 			},
-			expectErr: "failed to parse flow: error when parsing the flow: strconv.Atoi: parsing \"invalid\": invalid syntax",
+			expectErr: "failed to parse flow: strconv.ParseUint: parsing \"invalid\": invalid syntax",
 		},
 		{
 			name: "bad-flow-2",
@@ -240,7 +297,7 @@ func TestNewPacketCapture(t *testing.T) {
 				dest:   dstPod,
 				flow:   "tcp,tcp_dst=80=80",
 			},
-			expectErr: "failed to parse flow: error when parsing the flow: tcp_dst=80=80 is not valid in flow",
+			expectErr: "failed to parse flow: tcp_dst=80=80 is not valid in flow",
 		},
 	}
 
