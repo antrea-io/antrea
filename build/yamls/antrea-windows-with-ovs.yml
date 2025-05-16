@@ -209,6 +209,9 @@ data:
     # Enable TLS communication from flow exporter to flow aggregator.
     #enableTLSToFlowAggregator: true
 
+    AntreaIPAM: true
+    SecondaryNetwork: true
+
     # Determines how traffic is encapsulated. It has the following options:
     # encap(default):    Inter-node Pod traffic is always encapsulated and Pod to external network
     #                    traffic is SNAT'd.
@@ -306,7 +309,7 @@ spec:
     metadata:
       annotations:
         checksum/agent-windows: cd61458cbe274d2d6117702c6220c55ae75b38b71806d18e569682998ff83d79
-        checksum/windows-config: 4f07164f32afc61e20b4aef984a8781142e5d99f7c58f7581e4ccfeabb34855f
+        checksum/windows-config: 572b256b75b733f2ed498848fa9b58579dc8bd5ae2b9d16d2b8443c14723a475
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
         app: antrea
