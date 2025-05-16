@@ -332,7 +332,12 @@ func ConfigureLinkRoutes(link netlink.Link, routes []interface{}) error {
 	for _, r := range routes {
 		rt := r.(netlink.Route)
 		rt.LinkIndex = netlinkAttrs(link).Index
-		if err := netlinkUtil.RouteReplace(&rt); err != nil {
+		if err := netlinkUtil.RouteAdd(&rt); err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "file exists") {
+				// Route already exists
+				klog.InfoS("Route already exists, skipping", "route", rt)
+				continue
+			}
 			return err
 		}
 	}
