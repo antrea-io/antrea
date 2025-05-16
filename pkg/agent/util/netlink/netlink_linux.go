@@ -28,6 +28,8 @@ type Interface interface {
 
 	RuleList(family int) ([]netlink.Rule, error)
 
+	RouteAdd(route *netlink.Route) error
+
 	RouteReplace(route *netlink.Route) error
 
 	RouteList(link netlink.Link, family int) ([]netlink.Route, error)
