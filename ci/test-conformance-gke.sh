@@ -32,6 +32,7 @@ RUN_CLEANUP_ONLY=false
 SKIP_IAM_POLICY_BINDING=false
 TEST_SCRIPT_RC=0
 KUBE_CONFORMANCE_IMAGE_VERSION=auto
+SHARED_NETWORK=false
 
 _usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>]  [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>] \
                   [--svc-account <Name>] [--user <Name>] [--gke-project <Project>] [--gke-zone <Zone>] [--log-mode <SonobuoyResultLogLevel>] \
@@ -53,6 +54,7 @@ and create the project to be used for cluster with \`gcloud projects create\`.
         --machine-type        The machine type of worker node. Defaults to e2-standard-4.
         --gcloud-sdk-path     The path of gcloud installation. Only need to be explicitly set for Jenkins environments.
         --log-mode            Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
+        --shared-network      Create the GKE cluster using a shared network.
         --setup-only          Only perform setting up the cluster and run test.
         --cleanup-only        Only perform cleaning up the cluster."
 
@@ -118,6 +120,10 @@ case $key in
     MODE="$2"
     shift 2
     ;;
+    --shared-network)
+    SHARED_NETWORK=true
+    shift
+    ;;
     --setup-only)
     RUN_SETUP_ONLY=true
     RUN_ALL=false
@@ -167,6 +173,7 @@ function setup_gke() {
 
     echo "=== This cluster to be created is named: ${CLUSTER} ==="
     echo "CLUSTERNAME=${CLUSTER}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
+    echo "GKE_PROJECT=${GKE_PROJECT}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
     if [[ -n ${ANTREA_GIT_REVISION+x} ]]; then
         echo "ANTREA_REPO=${ANTREA_REPO}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
         echo "ANTREA_GIT_REVISION=${ANTREA_GIT_REVISION}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
@@ -178,11 +185,24 @@ function setup_gke() {
     which kubectl
 
     echo '=== Creating a cluster in GKE ==='
-    gcloud container clusters create ${CLUSTER} \
-        --image-type ${GKE_HOST} --machine-type ${MACHINE_TYPE} \
-        --cluster-version ${K8S_VERSION} --zone ${GKE_ZONE} \
-        --enable-ip-alias \
-        --no-enable-autoupgrade
+    if [[ "$SHARED_NETWORK" == true ]]; then
+        gcloud container clusters create ${CLUSTER} \
+            --image-type ${GKE_HOST} --machine-type ${MACHINE_TYPE} \
+            --cluster-version ${K8S_VERSION} --zone ${GKE_ZONE} \
+            --enable-ip-alias \
+            --no-enable-autoupgrade \
+            --network ${GKE_NETWORK} \
+            --subnetwork ${GKE_SUBNET} \
+            --cluster-secondary-range-name pods \
+            --cluster-secondary-range-name services
+    else
+        gcloud container clusters create ${CLUSTER} \
+            --image-type ${GKE_HOST} --machine-type ${MACHINE_TYPE} \
+            --cluster-version ${K8S_VERSION} --zone ${GKE_ZONE} \
+            --enable-ip-alias \
+            --no-enable-autoupgrade
+    fi
+
     if [[ $? -ne 0 ]]; then
         echo "=== Failed to deploy GKE cluster! ==="
         exit 1
@@ -237,8 +257,8 @@ function deliver_antrea_to_gke() {
 
     node_names=$(kubectl get nodes -o wide --no-headers=true | awk '{print $1}')
     for node_name in ${node_names}; do
-        gcloud compute scp ${antrea_images_tar} ubuntu@${node_name}:~ --zone ${GKE_ZONE}
-        gcloud compute ssh ubuntu@${node_name} --command="sudo ctr -n=k8s.io images import ~/${antrea_images_tar} ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_AGENT_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_AGENT_IMG_NAME}:latest ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_CONTROLLER_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_CONTROLLER_IMG_NAME}:latest" --zone ${GKE_ZONE}
+        gcloud compute scp --internal-ip ${antrea_images_tar} ubuntu@${node_name}:~ --zone ${GKE_ZONE}
+        gcloud compute ssh --internal-ip ubuntu@${node_name} --command="sudo ctr -n=k8s.io images import ~/${antrea_images_tar} ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_AGENT_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_AGENT_IMG_NAME}:latest ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_CONTROLLER_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_CONTROLLER_IMG_NAME}:latest" --zone ${GKE_ZONE}
     done
     rm ${antrea_images_tar}
 
@@ -277,8 +297,10 @@ function deliver_antrea_to_gke() {
 function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
 
-    # Allow nodeport traffic by external IP
-    gcloud compute firewall-rules create allow-nodeport --allow tcp:30000-32767
+    # Allow nodeport traffic by external IP, but this is not supported in a shared network.
+    if [[ "$SHARED_NETWORK" == false ]]; then
+        gcloud compute firewall-rules create allow-nodeport --allow tcp:30000-32767
+    fi
 
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance \
       --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
@@ -300,7 +322,9 @@ function run_conformance() {
         echo "=== FAILURE !!! ==="
     fi
 
-    gcloud compute firewall-rules delete allow-nodeport
+    if [[ "$SHARED_NETWORK" == false ]]; then
+        gcloud compute firewall-rules delete allow-nodeport
+    fi
 
     echo "=== Cleanup Antrea Installation ==="
     kubectl delete -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke.yml --ignore-not-found=true || true
