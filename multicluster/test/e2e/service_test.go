@@ -17,7 +17,7 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"testing"
@@ -509,7 +509,7 @@ func (data *MCTestData) getNodeNamesFromCluster(clusterName string) (string, str
 		return "", "", fmt.Errorf("error when getting Node list: %v, stderr: %s", err, stderr)
 	}
 	nodes := strings.Split(strings.TrimRight(output, " "), " ")
-	gwIdx := rand.Intn(len(nodes)) // #nosec G404: for test only
+	gwIdx := rand.IntN(len(nodes)) // #nosec G404: for test only
 	var regularNode string
 	for i, node := range nodes {
 		if i != gwIdx {

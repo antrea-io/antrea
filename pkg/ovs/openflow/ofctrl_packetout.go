@@ -16,9 +16,8 @@ package openflow
 
 import (
 	"encoding/binary"
-	"math/rand"
+	"math/rand/v2"
 	"net"
-	"time"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
@@ -28,7 +27,7 @@ import (
 )
 
 // #nosec G404: random number generator not used for security purposes
-var pktRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+var pktRand = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 
 type ofPacketOutBuilder struct {
 	pktOut  *ofctrl.PacketOut
