@@ -49,8 +49,10 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	tc := []struct {
 		name string
 		// flow for testing adding and updating
-		testFlow flowexporter.Connection
-		isSvc    bool
+		testFlow                 flowexporter.Connection
+		isSvc                    bool
+		protocolFilter           []string
+		expectConnectionNotFound bool
 	}{
 		{
 			name: "Flow not through service",
@@ -80,6 +82,37 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				Mark:                       openflow.ServiceCTMark.GetValue(),
 			},
 			isSvc: true,
+		}, {
+			name: "With SCTP protocol filter",
+			testFlow: flowexporter.Connection{
+				StopTime:                   refTime.Add(-(time.Second * 20)),
+				StartTime:                  refTime.Add(-(time.Second * 20)),
+				FlowKey:                    tuple,
+				OriginalDestinationAddress: tuple.DestinationAddress,
+				OriginalDestinationPort:    tuple.DestinationPort,
+				OriginalBytes:              uint64(60),
+				OriginalPackets:            uint64(1),
+				IsActive:                   true,
+				Mark:                       openflow.ServiceCTMark.GetValue(),
+			},
+			isSvc:                    true,
+			protocolFilter:           []string{"SCTP"},
+			expectConnectionNotFound: true,
+		}, {
+			name: "With TCP protocol filter",
+			testFlow: flowexporter.Connection{
+				StopTime:                   refTime.Add(-(time.Second * 20)),
+				StartTime:                  refTime.Add(-(time.Second * 20)),
+				FlowKey:                    tuple,
+				OriginalDestinationAddress: tuple.DestinationAddress,
+				OriginalDestinationPort:    tuple.DestinationPort,
+				OriginalBytes:              uint64(60),
+				OriginalPackets:            uint64(1),
+				IsActive:                   true,
+				Mark:                       openflow.ServiceCTMark.GetValue(),
+			},
+			isSvc:          true,
+			protocolFilter: []string{"TCP"},
 		},
 	}
 	for _, c := range tc {
@@ -90,11 +123,17 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 			mockProxier := proxytest.NewMockProxier(ctrl)
 			protocol, _ := lookupServiceProtocol(tuple.Protocol)
 			serviceStr := fmt.Sprintf("%s:%d/%s", tuple.DestinationAddress.String(), tuple.DestinationPort, protocol)
-			if c.isSvc {
-				mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
+			if !c.expectConnectionNotFound {
+				if c.isSvc {
+					mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
+				}
+				mockPodStore.EXPECT().GetPodByIPAndTime(tuple.SourceAddress.String(), gomock.Any()).Return(pod1, true)
+				mockPodStore.EXPECT().GetPodByIPAndTime(tuple.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 			}
-			mockPodStore.EXPECT().GetPodByIPAndTime(tuple.SourceAddress.String(), gomock.Any()).Return(pod1, true)
-			mockPodStore.EXPECT().GetPodByIPAndTime(tuple.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
+
+			if len(c.protocolFilter) > 0 {
+				testFlowExporterOptions.ProtocolFilter = c.protocolFilter
+			}
 
 			denyConnStore := NewDenyConnectionStore(mockPodStore, mockProxier, testFlowExporterOptions)
 
@@ -104,6 +143,11 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				expConn.DestinationServicePortName = servicePortName.String()
 			}
 			actualConn, ok := denyConnStore.GetConnByKey(flowexporter.NewConnectionKey(&c.testFlow))
+			if c.expectConnectionNotFound {
+				assert.Equal(t, ok, false, "deny connection should not be there in deny connection store")
+				return // The connection was filtered out, nothing to compare
+			}
+
 			assert.Equal(t, ok, true, "deny connection should be there in deny connection store")
 			assert.Equal(t, expConn, *actualConn, "deny connections should be equal")
 			assert.Equal(t, 1, denyConnStore.connectionStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")

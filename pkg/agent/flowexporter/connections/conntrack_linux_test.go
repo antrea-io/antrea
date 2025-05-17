@@ -17,6 +17,7 @@ package connections
 import (
 	"net"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -103,7 +104,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	}
 	// Test the DumpFlows implementation of connTrackSystem
 	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
-	connDumperDPSystem := NewConnTrackSystem(nodeConfig, svcCIDR, netip.Prefix{}, false)
+	connDumperDPSystem := NewConnTrackSystem(nodeConfig, svcCIDR, netip.Prefix{}, false, []string{})
 
 	connDumperDPSystem.connTrack = mockNetlinkCT
 	// Set expects for mocks
@@ -114,6 +115,108 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	assert.NoErrorf(t, err, "Dump flows function returned error: %v", err)
 	assert.Equal(t, 1, len(conns), "number of filtered connections should be equal")
 	assert.Equal(t, len(testFlows), totalConns, "Number of connections in conntrack table should be equal to testFlows")
+}
+
+func TestConnTrackSystem_DumpFlows_AntreaFilterConns(t *testing.T) {
+	// Create flows for test
+	tuple := flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: dstAddr, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	antreaTCPFlow := &flowexporter.Connection{
+		FlowKey: tuple,
+		Zone:    openflow.CtZone,
+	}
+	tuple = flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: netip.MustParseAddr("5.3.2.1"), Protocol: 17, SourcePort: 60001, DestinationPort: 200}
+	antreaUPDFlow := &flowexporter.Connection{
+		FlowKey: tuple,
+		Zone:    openflow.CtZone,
+	}
+	tuple = flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: netip.MustParseAddr("5.3.2.1"), Protocol: 132, SourcePort: 60001, DestinationPort: 200}
+	antreaSCTPFlow := &flowexporter.Connection{
+		FlowKey: tuple,
+		Zone:    openflow.CtZone,
+	}
+	testFlows := []*flowexporter.Connection{antreaTCPFlow, antreaTCPFlow, antreaTCPFlow, antreaUPDFlow, antreaUPDFlow, antreaSCTPFlow}
+
+	// Create nodeConfig and gateWayConfig
+	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
+	gwConfig := &config.GatewayConfig{
+		IPv4: gwAddr.AsSlice(),
+	}
+	nodeConfig := &config.NodeConfig{
+		GatewayConfig: gwConfig,
+		PodIPv4CIDR:   podCIDR,
+	}
+
+	testCases := []struct {
+		name                string
+		protocols           []string
+		testFlows           []*flowexporter.Connection
+		expectedConnections int
+	}{
+		{
+			"Filter for all supported protocols with explicit declaration",
+			[]string{"TCP", "UDP", "SCTP"},
+			testFlows,
+			6,
+		},
+		{
+			"Filter for all supported protocols with default config",
+			[]string{},
+			testFlows,
+			6,
+		},
+		{
+			"Filter for only TCP flows",
+			[]string{"TCP"},
+			testFlows,
+			3,
+		},
+		{
+			"Filter for only UDP",
+			[]string{"UDP"},
+			testFlows,
+			2,
+		},
+		{
+			"Filter for only SCTP",
+			[]string{"SCTP"},
+			testFlows,
+			1,
+		},
+		{
+			"Filter for only TCP and UDP",
+			[]string{"UDP", "TCP"},
+			testFlows,
+			5,
+		},
+		{
+			"Filter for UDP and SCTP",
+			[]string{"UDP", "SCTP"},
+			testFlows,
+			3,
+		},
+		{
+			"Filter for TCP on empty flows",
+			[]string{"TCP"},
+			[]*flowexporter.Connection{},
+			0,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
+			connDumperDPSystem := NewConnTrackSystem(nodeConfig, svcCIDR, netip.Prefix{}, false, tc.protocols)
+			connDumperDPSystem.connTrack = mockNetlinkCT
+
+			mockNetlinkCT.EXPECT().Dial().Return(nil)
+			mockNetlinkCT.EXPECT().DumpFlowsInCtZone(uint16(openflow.CtZone)).Return(slices.Clone(tc.testFlows), nil)
+
+			conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
+			assert.NoErrorf(t, err, "Dump flows function returned error: %v", err)
+			assert.Equal(t, tc.expectedConnections, len(conns), "number of filtered connections should be equal")
+			assert.Equal(t, len(tc.testFlows), totalConns, "Number of connections in conntrack table should be equal to testFlows")
+		})
+	}
 }
 
 func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
@@ -137,6 +240,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		netip.Prefix{},
 		mockOVSCtlClient,
 		false,
+		[]string{},
 	}
 	// Set expect call for mock ovsCtlClient
 	ovsctlCmdOutput := []byte("tcp,orig=(src=127.0.0.1,dst=127.0.0.1,sport=45218,dport=2379,packets=320108,bytes=24615344),reply=(src=127.0.0.1,dst=127.0.0.1,sport=2379,dport=45218,packets=239595,bytes=24347883),start=2020-07-24T05:07:03.998,id=3750535678,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86399,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
@@ -187,7 +291,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 }
 
 func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
-	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, netip.Prefix{}, netip.Prefix{}, false)
+	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, netip.Prefix{}, netip.Prefix{}, false, []string{})
 	maxConns, err := connDumperDPSystem.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
 	expMaxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
@@ -207,6 +311,7 @@ func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 		netip.Prefix{},
 		mockOVSCtlClient,
 		false,
+		[]string{},
 	}
 	maxConns, err := connDumper.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
