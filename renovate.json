@@ -1,0 +1,119 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base"],
+  "username": "antrea-renovate[bot]",
+  "gitAuthor": "antrea-renovate[bot] <bot-id+antrea-renovate[bot]@users.noreply.github.com>",
+  "baseBranches": ["main", "release-1.15", "release-1.16"],
+  "schedule": ["on sunday"],
+  "timezone": "Asia/Kolkata",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"]
+  },
+  "labels": ["area/dependency", "area/build-release"],
+  "postUpdateOptions": ["gomodTidy"],
+  "separateMajorMinor": false,
+  "separateMinorPatch": false,
+  "pruneStaleBranches": true,
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate Dependency Dashboard",
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "go",
+        "github.com/cilium/cilium",
+        "k8s.io/*",
+        "s ASCIICode",
+        "sigs.k8s.io/*",
+        "golang.org/x/*"
+      ],
+      "matchPackagePrefixes": ["github.com/antrea-io/"],
+      "automerge": true,
+      "automergeType": "pr",
+      "groupName": "auto-merge-trusted-deps",
+      "reviewers": ["antrea-bot"],
+      "labels": ["automerge"]
+    },
+    {
+      "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
+      "groupName": "all-dependencies-main",
+      "matchBaseBranches": ["main"]
+    },
+    {
+      "enabled": false,
+      "matchUpdateTypes": ["major", "minor"],
+      "matchFiles": ["go.mod", "go.sum"],
+      "matchBaseBranches": ["release-1.15", "release-1.16"],
+      "groupName": "stable-go-deps"
+    },
+    {
+      "matchFiles": ["go.mod", "go.sum"],
+      "matchBaseBranches": ["main"],
+      "postUpdateOptions": ["gomodUpdateImportPaths"],
+      "groupName": "main-go-deps"
+    },
+    {
+      "matchPaths": [".github/workflows/**"],
+      "groupName": "github-actions",
+      "matchBaseBranches": ["main"]
+    },
+    {
+      "enabled": false,
+      "matchPaths": [".github/workflows/**"],
+      "matchUpdateTypes": ["major", "minor"],
+      "matchBaseBranches": ["release-1.15", "release-1.16"],
+      "groupName": "stable-github-actions"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["docker.io/library/ubuntu"],
+      "allowedVersions": "24.04",
+      "matchBaseBranches": ["main", "release-1.16"]
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["docker.io/library/ubuntu"],
+      "allowedVersions": "22.04",
+      "matchBaseBranches": ["release-1.15"]
+    }
+  ],
+  "regexManagers": [
+    {
+      "fileMatch": ["Makefile", "ci/.*\\.sh$", "hack/.*\\.sh$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+_VERSION=\"(?<currentValue>.*)\""
+      ],
+      "depNameTemplate": "{{depName}}",
+      "datasourceTemplate": "{{datasource}}"
+    },
+    {
+      "fileMatch": ["test/e2e/charts/flow-visibility/Chart.yaml"],
+      "matchStrings": [
+        "version: (?<currentValue>.*?)\\s"
+      ],
+      "depNameTemplate": "flow-visibility-chart",
+      "datasourceTemplate": "helm"
+    },
+    {
+      "fileMatch": ["ci/kind/version"],
+      "matchStrings": [
+        "(?<currentValue>.*?)\\s"
+      ],
+      "depNameTemplate": "kind",
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "kubernetes-sigs/kind"
+    }
+  ],
+  "ignoreDeps": [
+    "github.com/onsi/ginkgo",
+    "github.com/onsi/gomega"
+  ],
+  "postUpgradeTasks": {
+    "commands": [
+      "make generate",
+      "make manifests"
+    ],
+    "fileFilters": ["**/*.go", "**/*.yml", "**/*.yaml"],
+    "executionMode": "update"
+  }
+}
