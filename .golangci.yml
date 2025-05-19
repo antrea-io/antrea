@@ -1,45 +1,55 @@
-# golangci-lint configuration used for CI
+version: "2"
 run:
   tests: true
-  timeout: 15m
-
-linters-settings:
-  goimports:
-    local-prefixes: antrea.io/antrea
-  gosec:
-    excludes:
-      # At the time of writing this, the G115 rule is not even part of an
-      # official release of gosec. This rule causes a lot of errors to be
-      # reported in the codebase. While some of the reported errors should be
-      # addressed, a lot can also be ignored and there are also some clear false
-      # positives that should not be flagged by gosec in the first place (see
-      # https://github.com/securego/gosec/issues/1187). We will re-enable this
-      # rule in the future when it becomes more accurate.
-      - G115 # Potential integer overflow when converting between integer types
-  misspell:
-    ignore-words:
-      - creater
-  revive:
-    ignore-generated-header: false
-    severity: warning
-    confidence: 0.8
-    rules:
-      - name: unreachable-code
-      - name: errorf
-      - name: range
-      - name: superfluous-else
-      - name: var-declaration
-      - name: duplicated-imports
-
 linters:
-  disable-all: true
+  default: none
   enable:
-    - misspell
-    - gofmt
-    - unused
-    - staticcheck
     - gosec
-    - goimports
     - govet
-    - revive
     - loggercheck
+    - misspell
+    - revive
+    - staticcheck
+    - unused
+  settings:
+    gosec:
+      excludes:
+        - G115
+    misspell:
+      ignore-rules:
+        - creater
+    revive:
+      confidence: 0.8
+      severity: warning
+      rules:
+        - name: unreachable-code
+        - name: errorf
+        - name: range
+        - name: superfluous-else
+        - name: var-declaration
+        - name: duplicated-imports
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - antrea.io/antrea
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

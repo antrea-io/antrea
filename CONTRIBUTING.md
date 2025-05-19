@@ -35,13 +35,13 @@ contributing to project Antrea:
    architecture and design.
 3. Set up necessary [accounts](#accounts-setup).
 
-Now that you're setup, skip ahead to learn how to [contribute](#contribute).
+Now that you're set up, skip ahead to learn how to [contribute](#contribute).
 
 ### Accounts Setup
 
 At minimum, you need the following accounts for effective participation:
 
-1. **Github**: Committing any change requires you to have a [github
+1. **Github**: Committing any change requires you to have a [GitHub
    account](https://github.com/join).
 2. **Slack**: Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
    [#antrea](https://kubernetes.slack.com/messages/CR2J23M0X) channel.
@@ -120,7 +120,7 @@ project's repository.
     ```
 
 7. Create a Pull request on GitHub.
-   Visit your fork at `https://github.com/antrea-io/antrea` and click
+   Visit your fork at `https://github.com/antrea-io/antrea` and click the
    `Compare & Pull Request` button next to your `remoteBranchName` branch.
 
 ### Getting reviewers
