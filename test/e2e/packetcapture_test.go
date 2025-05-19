@@ -59,6 +59,12 @@ type pcTestCase struct {
 
 	// required IP version, skip if not match.
 	ipVersion int
+
+	// optional timeout in seconds. If omitted, we will use a reasonable default for the test
+	// case. Note that this is the timeout used by the test when polling for the desired
+	// PacketCapture Status. It is different from the PacketCapture Timeout, which can be set as
+	// part of the pc field.
+	timeoutSeconds int
 }
 
 func createUDPServerPod(name string, ns string, portNum int32, serverNode string) error {
@@ -416,6 +422,8 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					},
 				},
 			},
+			// Takes into account retries and delay between retries for upload failures.
+			timeoutSeconds: 30,
 		},
 	}
 	t.Run("testPacketCaptureBasic", func(t *testing.T) {
@@ -515,18 +523,22 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		}
 	}
 
-	timeout := tc.pc.Spec.Timeout
-	if timeout == nil {
-		// It may take some time to upload.
-		timeout = ptr.To[int32](15)
+	const defaultTimeoutSeconds = 15
+	timeoutSeconds := tc.timeoutSeconds
+	// If timeout is not explicitly provided by test case...
+	if timeoutSeconds == 0 {
+		if tc.pc.Spec.Timeout != nil {
+			timeoutSeconds = int(*tc.pc.Spec.Timeout)
+		} else {
+			timeoutSeconds = defaultTimeoutSeconds
+		}
+		if strings.Contains(tc.name, "timeout") {
+			// wait more for status update.
+			timeoutSeconds += 5
+		}
 	}
 
-	if strings.Contains(tc.name, "timeout") {
-		// wait more for status update.
-		timeout = ptr.To[int32](*timeout + 5)
-	}
-
-	pc, err := data.waitForPacketCapture(t, tc.pc.Name, int(*timeout), isPacketCaptureComplete)
+	pc, err := data.waitForPacketCapture(t, tc.pc.Name, timeoutSeconds, isPacketCaptureComplete)
 	if err != nil {
 		t.Fatalf("Error: Get PacketCapture failed: %v", err)
 	}

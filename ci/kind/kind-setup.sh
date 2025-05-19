@@ -171,17 +171,21 @@ function configure_networks {
   i=0
   for node in $nodes; do
     network=${networks[i]}
-    docker network connect $network $node >/dev/null 2>&1
+    ifname="eth1"
+    # the com.docker.network.endpoint.ifname label is only supported starting with Docker Engine v28
+    # prior to that, the interface should be named "eth1" by default
+    # note that providing an unsupported label does not generate an error
+    docker network connect --driver-opt=com.docker.network.endpoint.ifname=$ifname $network $node
     echo "connected worker $node to network $network"
     node_ip=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
 
     # reset network
-    docker exec -t $node ip link set eth1 down
-    docker exec -t $node ip link set eth1 name eth0
+    docker exec -t $node ip link set $ifname down
+    docker exec -t $node ip link set $ifname name eth0
     docker exec -t $node ip link set eth0 up
     gateway=$(echo "${node_ip/%?/1}")
     docker exec -t $node ip route add default via $gateway
-    echo "node $node is ready with ip change to $node_ip with gw $gateway"
+    echo "node $node is ready with ip changed to $node_ip with gw $gateway"
 
     # change kubelet config before reset network
     docker exec -t $node sed -i "s/node-ip=.*/node-ip=$node_ip/g" /var/lib/kubelet/kubeadm-flags.env
@@ -236,10 +240,13 @@ function configure_extra_networks {
 
   nodes="$(kind get nodes --name $CLUSTER_NAME)"
   for node in $nodes; do
+    i=1
     for network in $networks; do
-      docker network connect $network $node >/dev/null 2>&1
+      ifname="eth$i"
+      docker network connect --driver-opt=com.docker.network.endpoint.ifname=$ifname $network $node
       echo "connected worker $node to network $network"
     done
+    i=$((i+1))
   done
 }
 
@@ -773,9 +780,33 @@ if [[ $ACTION == "create" ]]; then
         exit 1
     fi
 
-   # Reserve IPs after 192.168.240.63 for e2e tests.
-    if [[ $FLEXIBLE_IPAM == true ]]; then
-        docker network create -d bridge --subnet 192.168.240.0/24 --gateway 192.168.240.1 --ip-range 192.168.240.0/26 kind
+    # Create the docker bridge network used as the primary network for the kind cluster. As long as
+    # we use the expected name, kind will use our network.
+    # We mostly replicate what is in:
+    # https://github.com/kubernetes-sigs/kind/blob/180d624f741e3da5ceba52b643e29c4e64538537/pkg/cluster/internal/providers/docker/network.go#L149-L160
+    # We also add some extra options required for our use case.
+    docker_network_mtu=$(docker network inspect bridge -f '{{ index .Options "com.docker.network.driver.mtu" }}')
+    docker_network_args=("-d" "bridge")
+    docker_network_args+=("-o" "com.docker.network.bridge.enable_ip_masquerade=true")
+    docker_network_args+=("-o" "com.docker.network.driver.mtu=$docker_network_mtu")
+    # Use nat-unprotected to revert to the legacy default behavior (pre Docker Engine v28)
+    # Without this, access to the K8s apiserver from Nodes using a non-default network will be
+    # blocked because of port mapping hardening.
+    # See https://www.docker.com/blog/docker-engine-28-hardening-container-networking-by-default/
+    # While this is only required when we create extra docker networks, it's easier to use it
+    # consistently. It is also better than modifying the iptables rules installed by docker.
+    docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv4=nat-unprotected")
+    if [[ "$IP_FAMILY" != "ipv4" ]]; then
+        docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv6=nat-unprotected")
+        docker_network_args+=("--ipv6")
     fi
+    if [[ $FLEXIBLE_IPAM == true ]]; then
+        docker_network_args+=("--subnet" "192.168.240.0/24")
+        docker_network_args+=("--gateway" "192.168.240.1")
+        # Reserve IPs after 192.168.240.63 for e2e tests.
+        docker_network_args+=("--ip-range" "192.168.240.0/26")
+    fi
+    echo "Creating docker network $CLUSTER_NAME with args: ${docker_network_args[@]}"
+    docker network create "${docker_network_args[@]}" "$CLUSTER_NAME"
     create
 fi
