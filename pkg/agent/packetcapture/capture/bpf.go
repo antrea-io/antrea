@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/net/bpf"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
@@ -49,6 +50,8 @@ var (
 	loadIPv4DestinationAddress = bpf.LoadAbsolute{Off: 30, Size: lengthWord}
 	loadIPv4Protocol           = bpf.LoadAbsolute{Off: 23, Size: lengthByte}
 	loadIPv4TCPFlags           = bpf.LoadIndirect{Off: 27, Size: lengthByte}
+	loadIPv4ICMPType           = bpf.LoadIndirect{Off: 14, Size: lengthByte}
+	loadIPv4ICMPCode           = bpf.LoadIndirect{Off: 15, Size: lengthByte}
 )
 
 var ProtocolMap = map[string]uint32{
@@ -57,9 +60,28 @@ var ProtocolMap = map[string]uint32{
 	"ICMP": 1,
 }
 
-type flags struct {
+var ICMPMsgTypeMap = map[crdv1alpha1.ICMPMsgType]uint32{
+	crdv1alpha1.ICMPMsgTypeEcho:       8,
+	crdv1alpha1.ICMPMsgTypeEchoReply:  0,
+	crdv1alpha1.ICMPMsgTypeDstUnreach: 3,
+	crdv1alpha1.ICMPMsgTypeTimexceed:  11,
+}
+
+type tcpFlagsFilter struct {
 	flag uint32
 	mask uint32
+}
+
+type icmpFilter struct {
+	typeVal uint32
+	codeVal *uint32
+}
+
+type transportFilters struct {
+	srcPort  uint16
+	dstPort  uint16
+	tcpFlags []tcpFlagsFilter
+	icmp     []icmpFilter
 }
 
 func loadIPv4HeaderOffset(skipTrue uint8) []bpf.Instruction {
@@ -78,23 +100,32 @@ func compareProtocol(protocol uint32, skipTrue, skipFalse uint8) bpf.Instruction
 	return bpf.JumpIf{Cond: bpf.JumpEqual, Val: protocol, SkipTrue: skipTrue, SkipFalse: skipFalse}
 }
 
-func calculateSkipFalse(srcPort, dstPort uint16, tcpFlags []flags) uint8 {
+func calculateSkipFalse(transport *transportFilters) uint8 {
 	var count uint8
 	// load dstIP and compare
 	count += 2
 
-	if srcPort > 0 || dstPort > 0 {
+	if transport.srcPort > 0 || transport.dstPort > 0 || len(transport.tcpFlags) > 0 || len(transport.icmp) > 0 {
 		// load fragment offset
 		count += 3
 
-		if srcPort > 0 {
+		if transport.srcPort > 0 {
 			count += 2
 		}
-		if dstPort > 0 {
+		if transport.dstPort > 0 {
 			count += 2
 		}
-		if len(tcpFlags) > 0 {
-			count += uint8(len(tcpFlags) * 3)
+		if len(transport.tcpFlags) > 0 {
+			count += uint8(len(transport.tcpFlags) * 3)
+		}
+		if len(transport.icmp) > 0 {
+			count += 1
+			for _, m := range transport.icmp {
+				count += 1
+				if m.codeVal != nil {
+					count += 2
+				}
+			}
 		}
 	}
 	// ret keep
@@ -104,7 +135,7 @@ func calculateSkipFalse(srcPort, dstPort uint16, tcpFlags []flags) uint8 {
 }
 
 // Generates IP address and port matching instructions
-func compileIPPortFilter(srcAddrVal, dstAddrVal uint32, size, curLen uint8, srcPort, dstPort uint16, tcpFlags []flags, needsOtherTrafficDirectionCheck bool) []bpf.Instruction {
+func compileIPAndTransportFilters(srcAddrVal, dstAddrVal uint32, size, curLen uint8, transport *transportFilters, needsOtherTrafficDirectionCheck bool) []bpf.Instruction {
 	inst := []bpf.Instruction{}
 
 	// from here we need to check the inst length to calculate skipFalse. If no protocol is set, there will be no related bpf instructions.
@@ -118,7 +149,7 @@ func compileIPPortFilter(srcAddrVal, dstAddrVal uint32, size, curLen uint8, srcP
 	// packet spec and packet header don't match and we are capturing packets in both direction. If true, we calculate skipFalse to jump to the
 	// instruction that compares the destination IP from the packet spec with the loaded source IP from the packet header.
 	if needsOtherTrafficDirectionCheck {
-		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: srcAddrVal, SkipTrue: 0, SkipFalse: calculateSkipFalse(srcPort, dstPort, tcpFlags)})
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: srcAddrVal, SkipTrue: 0, SkipFalse: calculateSkipFalse(transport)})
 	} else {
 		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: srcAddrVal, SkipTrue: 0, SkipFalse: skipToEnd()})
 	}
@@ -127,27 +158,53 @@ func compileIPPortFilter(srcAddrVal, dstAddrVal uint32, size, curLen uint8, srcP
 	inst = append(inst, loadIPv4DestinationAddress)
 	inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: dstAddrVal, SkipTrue: 0, SkipFalse: skipToEnd()})
 
-	if srcPort > 0 || dstPort > 0 || len(tcpFlags) > 0 {
+	if transport.srcPort > 0 || transport.dstPort > 0 || len(transport.tcpFlags) > 0 || len(transport.icmp) > 0 {
 		skipTrue := skipToEnd() - 1
 		inst = append(inst, loadIPv4HeaderOffset(skipTrue)...)
-		if srcPort > 0 {
+		if transport.srcPort > 0 {
 			inst = append(inst, loadIPv4SourcePort)
-			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: uint32(srcPort), SkipTrue: 0, SkipFalse: skipToEnd()})
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: uint32(transport.srcPort), SkipTrue: 0, SkipFalse: skipToEnd()})
 		}
-		if dstPort > 0 {
+		if transport.dstPort > 0 {
 			inst = append(inst, loadIPv4DestinationPort)
-			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: uint32(dstPort), SkipTrue: 0, SkipFalse: skipToEnd()})
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: uint32(transport.dstPort), SkipTrue: 0, SkipFalse: skipToEnd()})
 		}
 
 		// tcp flags
-		if len(tcpFlags) > 0 {
-			for i, f := range tcpFlags {
+		if len(transport.tcpFlags) > 0 {
+			for i, f := range transport.tcpFlags {
 				inst = append(inst, loadIPv4TCPFlags)
 				inst = append(inst, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
-				if i == len(tcpFlags)-1 { // last flag match condition
+				if i == len(transport.tcpFlags)-1 { // last flag match condition
 					inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: 0, SkipFalse: skipToEnd()})
 				} else {
 					inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipToEnd() - 1, SkipFalse: 0})
+				}
+			}
+		}
+
+		// icmp messages
+		if len(transport.icmp) > 0 {
+			inst = append(inst, loadIPv4ICMPType)
+			for i, m := range transport.icmp {
+				var skipTrue, skipFalse uint8
+				if m.codeVal != nil {
+					if i != len(transport.icmp)-1 {
+						skipFalse = 2
+					} else {
+						skipFalse = skipToEnd()
+					}
+				} else {
+					if i != len(transport.icmp)-1 {
+						skipTrue, skipFalse = skipToEnd()-1, 0
+					} else {
+						skipTrue, skipFalse = 0, skipToEnd()
+					}
+				}
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: m.typeVal, SkipTrue: skipTrue, SkipFalse: skipFalse})
+				if m.codeVal != nil {
+					inst = append(inst, loadIPv4ICMPCode)
+					inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: *m.codeVal, SkipTrue: skipToEnd() - 1, SkipFalse: skipToEnd()})
 				}
 			}
 		}
@@ -191,15 +248,14 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 	srcAddrVal := binary.BigEndian.Uint32(srcIP[len(srcIP)-4:])
 	dstAddrVal := binary.BigEndian.Uint32(dstIP[len(dstIP)-4:])
 
-	// ports and TCP flags
-	var srcPort, dstPort uint16
-	var tcpFlags []flags
+	// ports, TCP flags and ICMP messages
+	var transport transportFilters
 	if packetSpec.TransportHeader.TCP != nil {
 		if packetSpec.TransportHeader.TCP.SrcPort != nil {
-			srcPort = uint16(*packetSpec.TransportHeader.TCP.SrcPort)
+			transport.srcPort = uint16(*packetSpec.TransportHeader.TCP.SrcPort)
 		}
 		if packetSpec.TransportHeader.TCP.DstPort != nil {
-			dstPort = uint16(*packetSpec.TransportHeader.TCP.DstPort)
+			transport.dstPort = uint16(*packetSpec.TransportHeader.TCP.DstPort)
 		}
 		if packetSpec.TransportHeader.TCP.Flags != nil {
 			for _, f := range packetSpec.TransportHeader.TCP.Flags {
@@ -207,7 +263,7 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 				if f.Mask != nil {
 					m = *f.Mask
 				}
-				tcpFlags = append(tcpFlags, flags{
+				transport.tcpFlags = append(transport.tcpFlags, tcpFlagsFilter{
 					flag: uint32(f.Value),
 					mask: uint32(m),
 				})
@@ -215,10 +271,28 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 		}
 	} else if packetSpec.TransportHeader.UDP != nil {
 		if packetSpec.TransportHeader.UDP.SrcPort != nil {
-			srcPort = uint16(*packetSpec.TransportHeader.UDP.SrcPort)
+			transport.srcPort = uint16(*packetSpec.TransportHeader.UDP.SrcPort)
 		}
 		if packetSpec.TransportHeader.UDP.DstPort != nil {
-			dstPort = uint16(*packetSpec.TransportHeader.UDP.DstPort)
+			transport.dstPort = uint16(*packetSpec.TransportHeader.UDP.DstPort)
+		}
+	} else if packetSpec.TransportHeader.ICMP != nil {
+		for _, m := range packetSpec.TransportHeader.ICMP.Messages {
+			var typeValue uint32
+			var codeValue *uint32
+			if m.Type.Type == intstr.Int {
+				typeValue = uint32(m.Type.IntVal)
+			} else {
+				typeValue = ICMPMsgTypeMap[crdv1alpha1.ICMPMsgType(strings.ToLower(m.Type.StrVal))]
+			}
+			if m.Code != nil {
+				codeValue = ptr.To(uint32(*m.Code))
+			}
+
+			transport.icmp = append(transport.icmp, icmpFilter{
+				typeVal: typeValue,
+				codeVal: codeValue,
+			})
 		}
 	}
 
@@ -226,12 +300,14 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 
 	switch direction {
 	case crdv1alpha1.CaptureDirectionSourceToDestination:
-		inst = append(inst, compileIPPortFilter(srcAddrVal, dstAddrVal, size, uint8(len(inst)), srcPort, dstPort, tcpFlags, false)...)
+		inst = append(inst, compileIPAndTransportFilters(srcAddrVal, dstAddrVal, size, uint8(len(inst)), &transport, false)...)
 	case crdv1alpha1.CaptureDirectionDestinationToSource:
-		inst = append(inst, compileIPPortFilter(dstAddrVal, srcAddrVal, size, uint8(len(inst)), dstPort, srcPort, tcpFlags, false)...)
+		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
+		inst = append(inst, compileIPAndTransportFilters(dstAddrVal, srcAddrVal, size, uint8(len(inst)), &transport, false)...)
 	default:
-		inst = append(inst, compileIPPortFilter(srcAddrVal, dstAddrVal, size, uint8(len(inst)), srcPort, dstPort, tcpFlags, true)...)
-		inst = append(inst, compileIPPortFilter(dstAddrVal, srcAddrVal, size, uint8(len(inst)), dstPort, srcPort, tcpFlags, false)...)
+		inst = append(inst, compileIPAndTransportFilters(srcAddrVal, dstAddrVal, size, uint8(len(inst)), &transport, true)...)
+		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
+		inst = append(inst, compileIPAndTransportFilters(dstAddrVal, srcAddrVal, size, uint8(len(inst)), &transport, false)...)
 	}
 
 	// return (drop)
@@ -348,6 +424,27 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 // (017) ret      #262144                                  # MATCH
 // (018) ret      #0                                       # NOMATCH
 
+// To capture ICMP destination unreachable (host unreachable) packets from 10.0.0.1 to 10.0.0.2, the tcpdump filter would be:
+// 'ip proto 1 and src host 10.0.0.1 and dst host 10.0.0.2 and icmp[0]=3 and icmp[1]=1'
+// And using `tcpdump -i <device> '<filter>' -d` will generate the following BPF instructions:
+// (000) ldh      [12] 									   # Load 2B at 12 (Ethertype)
+// (001) jeq      #0x800           jt 2    jf 16		   # Ethertype: If IPv4, goto #2, else #16
+// (002) ldb      [23]									   # Load 1B at 23 (IPv4 Protocol)
+// (003) jeq      #0x1             jt 4    jf 16		   # IPv4 Protocol: If ICMP, goto #4, #16
+// (004) ld       [26]									   # Load 4B at 26 (source address)
+// (005) jeq      #0xa000001       jt 6    jf 16		   # If bytes match(10.0.0.1), goto #6, else #16
+// (006) ld       [30]									   # Load 4B at 30 (dest address)
+// (007) jeq      #0xa000002       jt 8    jf 16		   # If bytes match(10.0.0.2), goto #8, else #16
+// (008) ldh      [20]									   # Load 2B at 20 (13b Fragment Offset)
+// (009) jset     #0x1fff          jt 16   jf 10		   # Use 0x1fff as a mask for fragment offset; If fragment offset != 0, #10, else #16
+// (010) ldxb     4*([14]&0xf)							   # x = IP header length
+// (011) ldb      [x + 14]								   # Load 1B at x+14 (ICMP Type)
+// (012) jeq      #0x3             jt 13   jf 16		   # ICMP Type: If 3, goto #13, else #16
+// (013) ldb      [x + 15]								   # Load 1B at x+15 (ICMP Code)
+// (014) jeq      #0x1             jt 15   jf 16		   # ICMP Code: If 1, goto #15, else #16
+// (015) ret      #262144								   # MATCH
+// (016) ret      #0									   # NOMATCH
+
 func calculateInstructionsSize(packet *crdv1alpha1.Packet, direction crdv1alpha1.CaptureDirection) int {
 	count := 0
 	// load ethertype
@@ -387,6 +484,15 @@ func calculateInstructionsSize(packet *crdv1alpha1.Packet, direction crdv1alpha1
 				}
 				if transport.UDP.DstPort != nil {
 					count += 2
+				}
+			} else if transport.ICMP != nil {
+				count += 3
+				count += 1 // load icmp type
+				for _, m := range transport.ICMP.Messages {
+					count += 1 // compare icmp type
+					if m.Code != nil {
+						count += 2 // load + compare icmp code
+					}
 				}
 			}
 			return count
