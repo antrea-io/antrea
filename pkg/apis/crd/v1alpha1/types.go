@@ -369,8 +369,9 @@ type Destination struct {
 
 // TransportHeader describes the spec of a TransportHeader.
 type TransportHeader struct {
-	UDP *UDPHeader `json:"udp,omitempty"`
-	TCP *TCPHeader `json:"tcp,omitempty"`
+	UDP  *UDPHeader  `json:"udp,omitempty"`
+	TCP  *TCPHeader  `json:"tcp,omitempty"`
+	ICMP *ICMPHeader `json:"icmp,omitempty"`
 }
 
 // UDPHeader describes the spec of a UDP header.
@@ -400,6 +401,30 @@ type TCPHeader struct {
 	// Flags is a list of TCP flag match conditions that are logically ORed. When direction is set to Both,
 	// the specified TCP flag matching conditions will be applied to traffic in both directions.
 	Flags []TCPFlagsMatcher `json:"flags,omitempty"`
+}
+
+type ICMPMsgType string
+
+const (
+	ICMPMsgTypeEcho       ICMPMsgType = "icmp-echo"      // 8
+	ICMPMsgTypeEchoReply  ICMPMsgType = "icmp-echoreply" // 0
+	ICMPMsgTypeDstUnreach ICMPMsgType = "icmp-unreach"   // 3
+	ICMPMsgTypeTimexceed  ICMPMsgType = "icmp-timxceed"  // 11
+)
+
+// ICMPMsgMatcher describes an ICMP message matching filter with type and code.
+type ICMPMsgMatcher struct {
+	// Type is the type of ICMP message to match.
+	Type intstr.IntOrString `json:"type"`
+	// Code is the optional code field of the ICMP message to match.
+	Code *int32 `json:"code,omitempty"`
+}
+
+// ICMPHeader describes the spec of an ICMP header.
+type ICMPHeader struct {
+	// Messages is a list of ICMP message match conditions that are logically ORed. When direction is set to Both,
+	// the specified ICMP message matching conditions will be applied to traffic in both directions.
+	Messages []ICMPMsgMatcher `json:"messages,omitempty"`
 }
 
 // Packet includes header info.

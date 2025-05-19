@@ -593,7 +593,9 @@ The `--flow` (or `-f`) argument can be used to specify the PacketCapture packet
 headers with the [ovs-ofctl](http://www.openvswitch.org//support/dist-docs/ovs-ofctl.8.txt)
 flow syntax. This argument works the same way as the one for `antctl traceflow`. The supported flow fields
 include: IP protocol (`icmp`, `tcp`, `udp`), source and destination ports
-(`tcp_src`, `tcp_dst`, `udp_src`, `udp_dst`), and TCP flags (`tcp_flags`).
+(`tcp_src`, `tcp_dst`, `udp_src`, `udp_dst`), TCP flags (`tcp_flags`) and ICMP messages (`icmp_type`, `icmp_code`).
+The `icmp_type` value can be provided in either numeric or string type (`icmp-echo`, `icmp-echoreply`, `icmp-unreach`, `icmp-timxceed`),
+and the `icmp_code` value can be provided in only numeric type.
 
 By default, the command will wait for the PacketCapture to succeed or fail, or to
 timeout. The default timeout is 60 seconds, but can be changed with the
@@ -614,6 +616,10 @@ $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
 $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+syn-ack
 # Start capturing UDP packets from pod1 to pod2, with destination port 1234
 $ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
+# Start capturing ICMP destination unreachable (host unreachable) packets from pod1 to pod2
+$ antctl packetcapture -S pod1 -D pod2 -f icmp,icmp_type=icmp-unreach,icmp_code=1
+# Start capturing ICMP echo packets from pod1 to pod2
+$ antctl packetcapture -S pod1 -D pod2 -f icmp,icmp_type=8
 # Save the packets file to a specified directory
 $ antctl packetcapture -S 192.168.123.123 -D pod2 -f tcp,tcp_dst=80 -o /tmp
 ```
