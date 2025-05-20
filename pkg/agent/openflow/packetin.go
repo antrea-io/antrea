@@ -100,7 +100,7 @@ type featureStartPacketIn struct {
 
 func newFeatureStartPacketIn(category uint8, stopCh <-chan struct{}, queueSize, queueRate int) *featureStartPacketIn {
 	featurePacketIn := featureStartPacketIn{category: category, stopCh: stopCh}
-	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(queueSize, rate.Limit(queueRate))
+	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(category, queueSize, rate.Limit(queueRate))
 
 	return &featurePacketIn
 }

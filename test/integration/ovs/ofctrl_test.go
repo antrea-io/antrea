@@ -609,7 +609,7 @@ func TestPacketOutIn(t *testing.T) {
 	defer bridge.Disconnect()
 
 	category := uint8(1)
-	pktInQueue := binding.NewPacketInQueue(200, rate.Limit(100))
+	pktInQueue := binding.NewPacketInQueue(0, 200, rate.Limit(100))
 	err = bridge.SubscribePacketIn(category, pktInQueue)
 	require.NoError(t, err)
 
