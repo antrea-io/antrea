@@ -80,9 +80,8 @@ type GroupMemberStatus struct {
 	localMembers map[string]time.Time
 	// remoteMembers is a set for Nodes which have joined the multicast group in the cluster. The Node's IP is
 	// added in the set.
-	remoteMembers  sets.Set[string]
-	lastIGMPReport time.Time
-	ofGroupID      binding.GroupIDType
+	remoteMembers sets.Set[string]
+	ofGroupID     binding.GroupIDType
 }
 
 // eventHandler process the multicast Group membership report or leave messages.
@@ -123,11 +122,10 @@ func (c *Controller) addGroupMemberStatus(e *mcastGroupEvent) {
 func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent) {
 	status := obj.(*GroupMemberStatus)
 	newStatus := &GroupMemberStatus{
-		group:          status.group,
-		localMembers:   make(map[string]time.Time),
-		remoteMembers:  status.remoteMembers.Union(nil),
-		lastIGMPReport: status.lastIGMPReport,
-		ofGroupID:      status.ofGroupID,
+		group:         status.group,
+		localMembers:  make(map[string]time.Time),
+		remoteMembers: status.remoteMembers.Union(nil),
+		ofGroupID:     status.ofGroupID,
 	}
 	for m, t := range status.localMembers {
 		newStatus.localMembers[m] = t
@@ -180,14 +178,15 @@ func (c *Controller) clearStaleGroups() {
 	now := time.Now()
 	for _, obj := range c.groupCache.List() {
 		status := obj.(*GroupMemberStatus)
-		diff := now.Sub(status.lastIGMPReport)
-		if diff > c.mcastGroupTimeout {
-			// Notify worker to remove the group from groupCache if all its members are not updated before mcastGroupTimeout.
-			c.queue.Add(status.group.String())
+		if len(status.localMembers) == 0 {
+			c.checkLastMember(status.group)
+			klog.V(2).InfoS("Group has timed out without any members", "group", status.group)
 		} else {
 			// Create a "leave" event for a local member if it is not updated before mcastGroupTimeout.
 			for member, lastUpdate := range status.localMembers {
-				if now.Sub(lastUpdate) > c.mcastGroupTimeout {
+				diff := now.Sub(lastUpdate)
+				if diff > c.mcastGroupTimeout {
+					klog.V(2).InfoS("Local member in group has timed out", "group", status.group, "member", member, "timeDiff", diff)
 					ifConfig := &interfacestore.InterfaceConfig{
 						InterfaceName: member,
 						Type:          interfacestore.ContainerInterface,
@@ -458,7 +457,7 @@ func (c *Controller) syncGroup(groupKey string) error {
 		return nil
 	}
 	status := obj.(*GroupMemberStatus)
-	memberPorts := make([]uint32, 0, len(status.localMembers)+1)
+	memberPorts := make([]uint32, 0)
 	if c.flexibleIPAMEnabled {
 		memberPorts = append(memberPorts, c.nodeConfig.UplinkNetConfig.OFPort, c.nodeConfig.HostInterfaceOFPort)
 	} else {
@@ -513,12 +512,14 @@ func (c *Controller) syncGroup(groupKey string) error {
 			if err := c.igmpSnooper.sendIGMPLeaveReport([]net.IP{group}); err != nil {
 				klog.ErrorS(err, "Failed to send IGMP leave message to other Nodes", "group", groupKey)
 			}
+			klog.V(2).InfoS("Sent the IGMP leave message to other Nodes", "group", groupKey)
 		}
 		c.delInstalledLocalGroup(groupKey)
+		klog.V(2).InfoS("Removed local multicast group", "group", groupKey)
 		return nil
 	}
 	if c.groupHasInstalled(groupKey) {
-		if c.groupIsStale(status) {
+		if len(status.localMembers) == 0 {
 			if c.localGroupHasInstalled(groupKey) {
 				if err := deleteLocalMulticastGroup(); err != nil {
 					return err
@@ -576,13 +577,6 @@ func (c *Controller) syncGroup(groupKey string) error {
 	}
 	c.addInstalledGroup(groupKey)
 	return nil
-}
-
-// groupIsStale returns true if no local members in the group, or there is no IGMP report received after c.mcastGroupTimeout.
-func (c *Controller) groupIsStale(status *GroupMemberStatus) bool {
-	membersCount := len(status.localMembers)
-	diff := time.Now().Sub(status.lastIGMPReport)
-	return membersCount == 0 || diff > c.mcastGroupTimeout
 }
 
 func (c *Controller) groupHasInstalled(groupKey string) bool {
@@ -878,7 +872,6 @@ func memberExists(status *GroupMemberStatus, e *mcastGroupEvent) bool {
 func addGroupMember(status *GroupMemberStatus, e *mcastGroupEvent) *GroupMemberStatus {
 	if e.iface.Type == interfacestore.ContainerInterface {
 		status.localMembers[e.iface.InterfaceName] = e.time
-		status.lastIGMPReport = e.time
 		klog.V(2).InfoS("Added local member from multicast group", "group", e.group.String(), "member", e.iface.InterfaceName)
 	} else {
 		status.remoteMembers.Insert(e.srcNode.String())
