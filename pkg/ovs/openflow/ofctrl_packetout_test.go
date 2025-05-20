@@ -1031,8 +1031,8 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 				IPHeader: &protocol.IPv4{
 					Version:  0x4,
 					Length:   28,
-					Checksum: 46753,
-					Id:       1090,
+					Checksum: 6586,
+					Id:       41257,
 				},
 				ICMPHeader: &protocol.ICMP{
 					Type:     3,
@@ -1057,10 +1057,10 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 			want: &ofctrl.PacketOut{
 				IPHeader: &protocol.IPv4{
 					Version:  uint8(4),
-					Id:       uint16(1090),
+					Id:       uint16(41257),
 					Protocol: protocol.Type_IGMP,
 					Length:   uint16(28),
-					Checksum: uint16(46751),
+					Checksum: uint16(6584),
 					Data: &protocol.IGMPv1or2{
 						Checksum:     uint16(64505),
 						GroupAddress: net.ParseIP("1.2.3.4"),
@@ -1085,10 +1085,10 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 			want: &ofctrl.PacketOut{
 				IPHeader: &protocol.IPv4{
 					Version:  uint8(4),
-					Id:       uint16(1090),
+					Id:       uint16(41257),
 					Protocol: protocol.Type_IGMP,
 					Length:   uint16(36),
-					Checksum: uint16(46743),
+					Checksum: uint16(6576),
 					Data: &protocol.IGMPv3Query{
 						Checksum:        uint16(61933),
 						GroupAddress:    net.ParseIP("1.2.3.4"),
@@ -1120,10 +1120,10 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 			want: &ofctrl.PacketOut{
 				IPHeader: &protocol.IPv4{
 					Version:  uint8(4),
-					Id:       uint16(1090),
+					Id:       uint16(41257),
 					Protocol: protocol.Type_IGMP,
 					Length:   uint16(40),
-					Checksum: uint16(46739),
+					Checksum: uint16(6572),
 					Data: &protocol.IGMPv3MembershipReport{
 						Checksum:       uint16(6935),
 						NumberOfGroups: 1,
@@ -1154,16 +1154,16 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 				IPHeader: &protocol.IPv4{
 					Version:  0x4,
 					Length:   40,
-					Checksum: 8009,
-					Id:       39822,
+					Checksum: 8512,
+					Id:       39319,
 				},
 				TCPHeader: &protocol.TCP{
 					PortSrc:  10000,
 					PortDst:  10001,
 					HdrLen:   5,
-					Checksum: 40408,
-					SeqNum:   2596996162,
-					AckNum:   4039455774,
+					Checksum: 2333,
+					SeqNum:   2569511209,
+					AckNum:   382732172,
 				},
 			},
 		},
@@ -1182,8 +1182,8 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 				IPHeader: &protocol.IPv4{
 					Version:  0x4,
 					Length:   28,
-					Checksum: 46753,
-					Id:       1090,
+					Checksum: 6586,
+					Id:       41257,
 				},
 				UDPHeader: &protocol.UDP{
 					PortSrc:  10000,
@@ -1240,9 +1240,9 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 					PortSrc:  10000,
 					PortDst:  10001,
 					HdrLen:   5,
-					Checksum: 40408,
-					SeqNum:   2596996162,
-					AckNum:   4039455774,
+					Checksum: 2333,
+					SeqNum:   2569511209,
+					AckNum:   382732172,
 				},
 			},
 		},
