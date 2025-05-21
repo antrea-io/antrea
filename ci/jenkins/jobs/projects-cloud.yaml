@@ -758,10 +758,10 @@
               # This is to avoid other developers removing this set+x by accident
               set +x
               sudo gcloud auth login --cred-file=${CREDENTIAL_PATH}
-              sudo gcloud config set project antrea
               sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
-                --svc-account ${SERVICE_ACCOUNT} --gcloud-sdk-path ${{GCLOUD_PATH}} \
-                --log-mode detail --setup-only
+                --svc-account ${{SERVICE_ACCOUNT}} --gcloud-sdk-path ${{GCLOUD_PATH}} \
+                --log-mode detail --setup-only --gke-project ${GKE_PROJECT} --shared-network \
+                --gke-network ${{GKE_NETWORK}} --gke-subnet ${{GKE_SUBNET}}
           triggers:
           - timed: H H */2 * *
           publishers:
@@ -783,8 +783,23 @@
           wrappers:
           - credentials-binding:
             - text:
-                credential-id: WORKFORCE_POOL # Jenkins secret that stores the cloud resource pool id
-                variable: WORKFORCE_POOL
+                credential-id: SERVICE_ACCOUNT # Jenkins secret that stores the cloud service account
+                variable: SERVICE_ACCOUNT
+            - text:
+                credential-id: GKE_PROJECT
+                variable: GKE_PROJECT
+            - text:
+                credential-id: GKE_NETWORK
+                variable: GKE_NETWORK
+            - text:
+                credential-id: GKE_SUBNET
+                variable: GKE_SUBNET
+            - text:
+                credential-id: CREDENTIAL_PATH
+                variable: CREDENTIAL_PATH
+            - text:
+                credential-id: GCLOUD_PATH
+                variable: GCLOUD_PATH
       - 'cloud-{name}-{test_name}-cleanup':
           test_name: gke
           description: This is for deleting GKE test clusters.
