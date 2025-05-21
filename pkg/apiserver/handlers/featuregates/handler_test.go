@@ -54,7 +54,7 @@ func Test_getGatesResponse(t *testing.T) {
 				},
 			},
 			want: []apis.FeatureGateResponse{
-				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "AntreaIPAM", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
 				{Component: "agent", Name: "BGPPolicy", Status: "Disabled", Version: "ALPHA"},
@@ -89,7 +89,7 @@ func Test_getGatesResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getFeatureGatesResponse(tt.cfg, AgentMode)
-			assert.Equal(t, got, tt.want, "The feature gates for Antrea agent are not correct")
+			assert.Equal(t, tt.want, got, "The feature gates for Antrea agent are not correct")
 		})
 	}
 }
@@ -126,7 +126,7 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getFeatureGatesResponse(tt.cfg, AgentWindowsMode)
-			assert.Equal(t, got, tt.want, "The feature gates for Antrea agent windows are not correct")
+			assert.Equal(t, tt.want, got, "The feature gates for Antrea agent windows are not correct")
 		})
 	}
 }
@@ -200,7 +200,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 			name: "good path",
 			want: []apis.FeatureGateResponse{
 				{Component: "controller", Name: "AdminNetworkPolicy", Status: "Disabled", Version: "ALPHA"},
-				{Component: "controller", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "AntreaIPAM", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "Egress", Status: egressStatus, Version: "BETA"},
 				{Component: "controller", Name: "IPsecCertAuth", Status: "Disabled", Version: "ALPHA"},
@@ -218,7 +218,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getFeatureGatesResponse(&Config{}, ControllerMode)
-			assert.Equal(t, got, tt.want, "The feature gates for Antrea Controller are not correct")
+			assert.Equal(t, tt.want, got, "The feature gates for Antrea Controller are not correct")
 		})
 	}
 }
