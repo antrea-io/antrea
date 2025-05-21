@@ -375,7 +375,7 @@ EOF
 
 function deploy_antrea() {
     echo "Deploy antrea on cluster..."
-    helm install antrea "$ANTREA_CHART" --namespace kube-system --set featureGates.SecondaryNetwork=true,featureGates.AntreaIPAM=true
+    helm install antrea "$ANTREA_CHART" --namespace kube-system --set featureGates.SecondaryNetwork=true
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=2m daemonset/antrea-agent -n kube-system
     kubectl get node -owide

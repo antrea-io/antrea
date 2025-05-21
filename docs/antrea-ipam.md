@@ -122,12 +122,15 @@ IPPool annotation, or when the `AntreaIPAM` feature is disabled.
 
 #### Enable AntreaIPAM feature gate and bridging mode
 
-To enable flexible IPAM, you need to enable the `AntreaIPAM` feature gate for
-both `antrea-controller` and `antrea-agent`, and set the `enableBridgingMode`
-configuration parameter of `antrea-agent` to `true`.
+**Flexible IPAM** requires enabling the `AntreaIPAM` feature gate for both
+`antrea-controller` and `antrea-agent`, along with setting the `enableBridgingMode`
+parameter to `true` in `antrea-agent`.
 
-When Antrea is installed from YAML, the needed changes in the Antrea
-ConfigMap `antrea-config` YAML are as below:
+> **Version Compatibility Note:**  
+> The `AntreaIPAM` feature gate has been **enabled by default since v2.4**.
+> For versions prior to v2.4, you must explicitly enable this feature gate.
+
+When installing Antrea from YAML, configure the `antrea-config` ConfigMap as follows:
 
 ```yaml
 apiVersion: v1
@@ -138,10 +141,10 @@ metadata:
 data:
   antrea-controller.conf: |
     featureGates:
-      AntreaIPAM: true
+      AntreaIPAM: true    # Required for all versions < v2.4
   antrea-agent.conf: |
     featureGates:
-      AntreaIPAM: true
+      AntreaIPAM: true    # Required for all versions < v2.4
     enableBridgingMode: true
     trafficEncapMode: "noEncap"
     noSNAT: true
