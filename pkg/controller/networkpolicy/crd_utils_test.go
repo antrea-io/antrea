@@ -271,7 +271,7 @@ func TestToAntreaIPBlockForCRD(t *testing.T) {
 			continue
 		}
 		ipNet := antreaIPBlock.CIDR
-		if bytes.Compare(ipNet.IP, table.expValue.CIDR.IP) != 0 {
+		if !bytes.Equal(ipNet.IP, table.expValue.CIDR.IP) {
 			t.Errorf("Unexpected IP in Antrea IPBlock conversion. Expected %v, got %v", table.expValue.CIDR.IP, ipNet.IP)
 		}
 		if table.expValue.CIDR.PrefixLength != ipNet.PrefixLength {

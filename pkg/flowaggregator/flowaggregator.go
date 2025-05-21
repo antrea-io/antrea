@@ -223,7 +223,8 @@ func NewFlowAggregator(
 
 func (fa *flowAggregator) InitCollectingProcess() error {
 	var cpInput collector.CollectorInput
-	if fa.aggregatorTransportProtocol == flowaggregatorconfig.AggregatorTransportProtocolTLS {
+	switch fa.aggregatorTransportProtocol {
+	case flowaggregatorconfig.AggregatorTransportProtocolTLS:
 		parentCert, privateKey, caCert, err := generateCACertKey()
 		if err != nil {
 			return fmt.Errorf("error when generating CA certificate: %v", err)
@@ -251,7 +252,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			ServerKey:     serverKey,
 			ServerCert:    serverCert,
 		}
-	} else if fa.aggregatorTransportProtocol == flowaggregatorconfig.AggregatorTransportProtocolTCP {
+	case flowaggregatorconfig.AggregatorTransportProtocolTCP:
 		cpInput = collector.CollectorInput{
 			Address:       collectorAddress,
 			Protocol:      tcpTransport,
@@ -259,7 +260,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			TemplateTTL:   0, // use default value from go-ipfix library
 			IsEncrypted:   false,
 		}
-	} else {
+	default:
 		cpInput = collector.CollectorInput{
 			Address:       collectorAddress,
 			Protocol:      udpTransport,
@@ -456,9 +457,10 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 			fa.logExporter.Stop()
 		}
 	}()
-	if fa.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
+	switch fa.aggregatorMode {
+	case flowaggregatorconfig.AggregatorModeAggregate:
 		fa.flowExportLoopAggregate(stopCh)
-	} else if fa.aggregatorMode == flowaggregatorconfig.AggregatorModeProxy {
+	case flowaggregatorconfig.AggregatorModeProxy:
 		fa.flowExportLoopProxy(stopCh)
 	}
 }

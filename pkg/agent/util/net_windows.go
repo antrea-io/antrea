@@ -304,7 +304,7 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 	}
 	if newName != "" {
 		// Rename the vnic created by Windows host with the given newName, then it can be used by OVS when creating bridge port.
-		uplinkMACStr := strings.Replace(uplinkAdapter.HardwareAddr.String(), ":", "", -1)
+		uplinkMACStr := strings.ReplaceAll(uplinkAdapter.HardwareAddr.String(), ":", "")
 		// Rename NetAdapter in the meanwhile, then the network adapter can be treated as a host network adapter other than
 		// a vm network adapter.
 		if err = winnetUtil.RenameVMNetworkAdapter(LocalHNSNetwork, uplinkMACStr, newName, true); err != nil {

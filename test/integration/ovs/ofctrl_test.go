@@ -328,7 +328,7 @@ func TestOFctrlGroup(t *testing.T) {
 				for _, loading := range bucket.reg2reg {
 					rngStr := ""
 					data := loading[1]
-					if !(loading[2] == 0 && loading[3] == 31) {
+					if loading[2] != 0 || loading[3] != 31 {
 						length := loading[3] - loading[2] + 1
 						mask := ^uint32(0) >> (32 - length) << loading[2]
 						rngStr = fmt.Sprintf("/0x%x", mask)
@@ -429,8 +429,8 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 	defer bridge.Disconnect()
 
 	// Ensure OVS is connected before sending bundle messages.
-	select {
-	case <-time.Tick(1 * time.Second):
+	for {
+		<-time.Tick(1 * time.Second)
 		if bridge.IsConnected() {
 			break
 		}
@@ -438,11 +438,9 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 
 	// Restart OVS in another goroutine.
 	go func() {
-		select {
-		case <-time.After(100 * time.Millisecond):
-			DeleteOVSBridge(br)
-			PrepareOVSBridge(br)
-		}
+		<-time.After(100 * time.Millisecond)
+		DeleteOVSBridge(br)
+		PrepareOVSBridge(br)
 	}()
 
 	expectedErrorMsgs := map[string]bool{

@@ -42,7 +42,7 @@ var (
 
 	testMACAddr, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 
-	testInvalidErr = fmt.Errorf("invalid")
+	errTestInvalid = fmt.Errorf("invalid")
 )
 
 func TestGenerateContainerInterfaceName(t *testing.T) {
@@ -210,7 +210,7 @@ func TestGetIPNetDeviceFromIP(t *testing.T) {
 		},
 		{
 			name:                "Invalid",
-			testNetInterfaceErr: testInvalidErr,
+			testNetInterfaceErr: errTestInvalid,
 		},
 	}
 
@@ -251,7 +251,7 @@ func TestGetIPNetDeviceByName(t *testing.T) {
 		{
 			name:                 "Invalid",
 			testNetInterfaceName: "0",
-			testNetInterfaceErr:  testInvalidErr,
+			testNetInterfaceErr:  errTestInvalid,
 		},
 	}
 
@@ -303,7 +303,7 @@ func TestGetIPNetDeviceByCIDRs(t *testing.T) {
 		},
 		{
 			name:                "Invalid",
-			testNetInterfaceErr: testInvalidErr,
+			testNetInterfaceErr: errTestInvalid,
 		},
 	}
 
@@ -442,7 +442,7 @@ func TestGetAllNodeAddresses(t *testing.T) {
 		},
 		{
 			name:                "Invalid",
-			testNetInterfaceErr: testInvalidErr,
+			testNetInterfaceErr: errTestInvalid,
 		},
 	}
 
@@ -495,7 +495,7 @@ func TestGetIPNetsByLink(t *testing.T) {
 		},
 		{
 			name:                "Invalid",
-			testNetInterfaceErr: testInvalidErr,
+			testNetInterfaceErr: errTestInvalid,
 		},
 	}
 

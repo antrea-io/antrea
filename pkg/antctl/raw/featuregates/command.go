@@ -193,7 +193,7 @@ func output(resps []apis.FeatureGateResponse, component string, output io.Writer
 	}
 
 	formatter := fmt.Sprintf("%%-%ds%%-%ds%%-s\n", maxNameLen+5, maxStatusLen+5)
-	output.Write([]byte(fmt.Sprintf(formatter, "FEATUREGATE", "STATUS", "VERSION")))
+	fmt.Fprintf(output, formatter, "FEATUREGATE", "STATUS", "VERSION")
 	for _, r := range resps {
 		fmt.Fprintf(output, formatter, r.Name, r.Status, r.Version)
 	}

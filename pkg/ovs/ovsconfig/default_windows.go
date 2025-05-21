@@ -34,6 +34,6 @@ const (
 
 func GetConnAddress(ovsRunDir string) string {
 	addr := filepath.Join(filepath.FromSlash(ovsRunDir), defaultOVSDBFile)
-	addr = strings.Replace(addr, string(filepath.Separator), "", -1)
+	addr = strings.ReplaceAll(addr, string(filepath.Separator), "")
 	return namedPipePrefix + addr
 }

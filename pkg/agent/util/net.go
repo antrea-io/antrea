@@ -438,7 +438,7 @@ func GenerateOVSDatapathID(macString string) string {
 	if macString == "" {
 		macString = GenerateRandomMAC().String()
 	}
-	return "0000" + strings.Replace(macString, ":", "", -1)
+	return "0000" + strings.ReplaceAll(macString, ":", "")
 }
 
 // GetGatewayIPForPodCIDR returns the gateway IP for a given Pod CIDR.

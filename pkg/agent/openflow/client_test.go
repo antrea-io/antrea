@@ -2239,9 +2239,10 @@ func Test_client_SendPacketOut(t *testing.T) {
 					nil))
 			case binding.ProtocolIGMP:
 				mockPacketOutBuilder.EXPECT().SetL4Packet(tc.igmp).Return(mockPacketOutBuilder)
-				if tc.name == "SendIGMPQueryPacketOut" {
+				switch tc.name {
+				case "SendIGMPQueryPacketOut":
 					assert.NoError(t, fc.SendIGMPQueryPacketOut(dstMAC, dstIP, outPort, tc.igmp))
-				} else if tc.name == "SendIGMPRemoteReportPacketOut" {
+				case "SendIGMPRemoteReportPacketOut":
 					assert.NoError(t, fc.SendIGMPRemoteReportPacketOut(dstMAC, dstIP, tc.igmp))
 				}
 			}

@@ -103,10 +103,8 @@ func newInternalNetworkPolicy(name string, generation int64, nodes []string, ref
 }
 
 func newNetworkPolicyStatus(name string, nodeName string, generation int64, errorMessage string) *controlplane.NetworkPolicyStatus {
-	failed := false
-	if errorMessage != "" {
-		failed = true
-	}
+	failed := errorMessage != ""
+
 	return &controlplane.NetworkPolicyStatus{
 		ObjectMeta: v1.ObjectMeta{
 			Name: name,

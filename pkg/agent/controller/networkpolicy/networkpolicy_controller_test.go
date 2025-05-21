@@ -160,7 +160,6 @@ func (r *mockReconciler) Forget(ruleID string) error {
 }
 
 func (r *mockReconciler) RunIDAllocatorWorker(_ <-chan struct{}) {
-	return
 }
 
 func (r *mockReconciler) RegisterFQDNController(fc *fqdnController) {

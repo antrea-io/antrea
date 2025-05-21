@@ -125,7 +125,8 @@ func ParsePacketIn(pktIn *ofctrl.PacketIn) (*Packet, error) {
 	packet.DestinationMAC = ethernetData.HWDst
 	packet.SourceMAC = ethernetData.HWSrc
 
-	if ethernetData.Ethertype == protocol.IPv4_MSG {
+	switch ethernetData.Ethertype {
+	case protocol.IPv4_MSG:
 		ipPkt := ethernetData.Data.(*protocol.IPv4)
 		packet.DestinationIP = ipPkt.NWDst
 		packet.SourceIP = ipPkt.NWSrc
@@ -133,7 +134,7 @@ func ParsePacketIn(pktIn *ofctrl.PacketIn) (*Packet, error) {
 		packet.IPProto = ipPkt.Protocol
 		packet.IPFlags = ipPkt.Flags
 		packet.IPLength = ipPkt.Length
-	} else if ethernetData.Ethertype == protocol.IPv6_MSG {
+	case protocol.IPv6_MSG:
 		ipPkt := ethernetData.Data.(*protocol.IPv6)
 		packet.DestinationIP = ipPkt.NWDst
 		packet.SourceIP = ipPkt.NWSrc
@@ -143,17 +144,18 @@ func ParsePacketIn(pktIn *ofctrl.PacketIn) (*Packet, error) {
 		// the IPv6 header length.
 		packet.IPLength = ipPkt.Length + 40
 		packet.IsIPv6 = true
-	} else {
+	default:
 		// Not an IP packet.
 		return &packet, nil
 	}
 
 	var err error
-	if packet.IPProto == protocol.Type_TCP {
+	switch packet.IPProto {
+	case protocol.Type_TCP:
 		packet.SourcePort, packet.DestinationPort, _, _, _, packet.TCPFlags, _, err = GetTCPHeaderData(ethernetData.Data)
-	} else if packet.IPProto == protocol.Type_UDP {
+	case protocol.Type_UDP:
 		packet.SourcePort, packet.DestinationPort, err = GetUDPHeaderData(ethernetData.Data)
-	} else if packet.IPProto == protocol.Type_ICMP || packet.IPProto == protocol.Type_IPv6ICMP {
+	case protocol.Type_ICMP, protocol.Type_IPv6ICMP:
 		_, _, packet.ICMPEchoID, packet.ICMPEchoSeq, err = getICMPHeaderData(ethernetData.Data)
 	}
 	if err != nil {

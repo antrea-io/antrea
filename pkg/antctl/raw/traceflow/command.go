@@ -420,15 +420,16 @@ func output(tf *v1beta1.Traceflow, writer io.Writer) error {
 		}
 	}
 
-	if option.outputType == "json" {
+	switch option.outputType {
+	case "json":
 		if err := jsonOutput(&r, writer); err != nil {
 			return fmt.Errorf("error when converting output to json: %w", err)
 		}
-	} else if option.outputType == "yaml" {
+	case "yaml":
 		if err := yamlOutput(&r, writer); err != nil {
 			return fmt.Errorf("error when converting output to yaml: %w", err)
 		}
-	} else {
+	default:
 		return fmt.Errorf("output types should be yaml or json")
 	}
 	return nil

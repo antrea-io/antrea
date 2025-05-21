@@ -127,13 +127,14 @@ func (c *ofEntryOperations) changeOFEntries(ofEntries []binding.OFEntry, action 
 		return nil
 	}
 	var adds, mods, dels []binding.OFEntry
-	if action == add {
+	switch action {
+	case add:
 		adds = ofEntries
-	} else if action == mod {
+	case mod:
 		mods = ofEntries
-	} else if action == del {
+	case del:
 		dels = ofEntries
-	} else {
+	default:
 		return fmt.Errorf("OF Entries Action not exists: %s", action)
 	}
 	startTime := time.Now()

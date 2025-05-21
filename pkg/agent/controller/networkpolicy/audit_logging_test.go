@@ -211,7 +211,7 @@ func TestRedirectPacketLog(t *testing.T) {
 func TestGetNetworkPolicyInfo(t *testing.T) {
 	prepareMockOFTablesWithCache()
 	generateMatch := func(regID int, data []byte) openflow15.MatchField {
-		baseData := make([]byte, 8, 8)
+		baseData := make([]byte, 8)
 		if regID%2 == 0 {
 			copy(baseData[0:4], data)
 		} else {
@@ -441,7 +441,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			}
 			if tc.tableIDInReg != nil {
 				tableMatchRegID := openflow.PacketInTableField.GetRegID()
-				tableRegData := make([]byte, 4, 4)
+				tableRegData := make([]byte, 4)
 				binary.BigEndian.PutUint32(tableRegData[0:], uint32(*tc.tableIDInReg))
 				found := false
 				for _, m := range matchers {

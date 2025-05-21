@@ -45,9 +45,10 @@ func newFeatureExternalNodeConnectivity(
 	ipProtocols []binding.Protocol) *featureExternalNodeConnectivity {
 	ctZones := make(map[binding.Protocol]int)
 	for _, ipProtocol := range ipProtocols {
-		if ipProtocol == binding.ProtocolIP {
+		switch ipProtocol {
+		case binding.ProtocolIP:
 			ctZones[ipProtocol] = CtZone
-		} else if ipProtocol == binding.ProtocolIPv6 {
+		case binding.ProtocolIPv6:
 			ctZones[ipProtocol] = CtZoneV6
 		}
 	}
@@ -144,9 +145,7 @@ func (f *featureExternalNodeConnectivity) replayFlows() []*openflow15.FlowMod {
 	var flows []*openflow15.FlowMod
 	rangeFunc := func(key, value interface{}) bool {
 		cachedFlows := value.([]*openflow15.FlowMod)
-		for _, flow := range cachedFlows {
-			flows = append(flows, flow)
-		}
+		flows = append(flows, cachedFlows...)
 		return true
 	}
 	f.uplinkFlowCache.Range(rangeFunc)

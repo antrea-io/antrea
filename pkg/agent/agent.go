@@ -743,7 +743,7 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	// happen in upgrade case.
 	// Note the "mac" field in Windows OVS internal Interface has no impact on the network adapter's actual MAC,
 	// set it to the same value just to keep consistency.
-	if bytes.Compare(gatewayIface.MAC, gwMAC) != 0 {
+	if !bytes.Equal(gatewayIface.MAC, gwMAC) {
 		gatewayIface.MAC = gwMAC
 		if err := i.ovsBridgeClient.SetInterfaceMAC(gatewayIface.InterfaceName, gwMAC); err != nil {
 			klog.ErrorS(err, "Failed to persist interface MAC address", "interface", gatewayIface.InterfaceName, "mac", gwMAC)

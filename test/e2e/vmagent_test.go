@@ -176,9 +176,10 @@ func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmLis
 		}
 		require.NoError(t, err)
 		var expectedInfoEntries []string
-		if vm.osType == linuxOS {
+		switch vm.osType {
+		case linuxOS:
 			expectedInfoEntries = []string{"address", "addressgroups", "agentinfo", "appliedtogroups", "flows", "goroutinestacks", "groups", "iptables", "link", "logs", "memprofile", "networkpolicies", "ovsports", "route"}
-		} else if vm.osType == windowsOS {
+		case windowsOS:
 			expectedInfoEntries = []string{"addressgroups", "agentinfo", "appliedtogroups", "flows", "goroutinestacks", "groups", "ipconfig", "logs\\ovs\\ovs-vswitchd.log", "logs\\ovs\\ovsdb-server.log", "memprofile", "network-adapters", "networkpolicies", "ovsports", "routes"}
 		}
 		actualInfoEntries := strings.Split(strings.Trim(stdout, "\n"), "\n")
@@ -360,7 +361,7 @@ func getVMInfo(t *testing.T, data *TestData, nodeName string) (vmInfo, error) {
 func getWindowsVMInfo(t *testing.T, data *TestData, nodeName string) (vmInfo, error) {
 	var err error
 	vm := vmInfo{nodeName: nodeName, osType: windowsOS}
-	cmd := fmt.Sprintf("powershell 'Get-WmiObject -Class Win32_IP4RouteTable | Where { $_.destination -eq \"0.0.0.0\" -and $_.mask -eq \"0.0.0.0\"} | Sort-Object metric1 | select interfaceindex | ft -HideTableHeaders'")
+	cmd := "powershell 'Get-WmiObject -Class Win32_IP4RouteTable | Where { $_.destination -eq \"0.0.0.0\" -and $_.mask -eq \"0.0.0.0\"} | Sort-Object metric1 | select interfaceindex | ft -HideTableHeaders'"
 	rc, ifIndex, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 	if err != nil {
 		t.Logf("Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
@@ -733,7 +734,7 @@ func runIperfClient(t *testing.T, data *TestData, targetVM vmInfo, svrIP net.IP,
 		}
 	}
 
-	errCh := make(chan error, 0)
+	errCh := make(chan error)
 	go func() {
 		err := runCommandAndCheckResult(data, targetVM.nodeName, cmdStr, expectedOutput, "")
 		errCh <- err

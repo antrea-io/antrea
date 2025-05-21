@@ -49,7 +49,7 @@ func (data *testData) setup(t *testing.T) {
 	var err error
 	// ensure that we timeout after a reasonable time duration if we cannot connect to the Unix
 	// socket.
-	connectErrorCh := make(chan error, 0)
+	connectErrorCh := make(chan error)
 	connect := func() {
 		data.ovsdb, err = ovsconfig.NewOVSDBConnectionUDS(UDSAddress)
 		connectErrorCh <- err
@@ -432,7 +432,7 @@ func TestTunnelOptionTunnelPort(t *testing.T) {
 			}
 			if testCase.updatedTunnelPort != 0 {
 				updatedOptions["dst_port"] = strconv.Itoa(int(testCase.updatedTunnelPort))
-			} else if _, ok := updatedOptions["dst_port"]; ok {
+			} else {
 				delete(updatedOptions, "dst_port")
 			}
 			err = data.br.SetInterfaceOptions(name, updatedOptions)

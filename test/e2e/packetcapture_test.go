@@ -712,18 +712,19 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 			connections = tc.numConnections
 		}
 		// Send an ICMP echo packet from the source Pod to the destination.
-		if protocol == icmpProto {
+		switch protocol {
+		case icmpProto:
 			if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, getOSString(), "", data.testNamespace},
 				data.testNamespace, dstPodIPs, toolboxContainerName, 10, 0, false); err != nil {
 				t.Logf("Ping(%s) '%s' -> '%v' failed: ERROR (%v)", protocol.StrVal, srcPod, *dstPodIPs, err)
 			}
-		} else if protocol == tcpProto {
+		case tcpProto:
 			for i := 1; i <= connections; i++ {
 				if err := data.runNetcatCommandFromTestPodWithProtocol(srcPod, data.testNamespace, toolboxContainerName, server, serverPodPort, "tcp"); err != nil {
 					t.Logf("Netcat(TCP) '%s' -> '%v' failed: ERROR (%v)", srcPod, server, err)
 				}
 			}
-		} else if protocol == udpProto {
+		case udpProto:
 			for i := 1; i <= connections; i++ {
 				if err := data.runNetcatCommandFromTestPodWithProtocol(srcPod, data.testNamespace, toolboxContainerName, server, serverPodPort, "udp"); err != nil {
 					t.Logf("Netcat(UDP) '%s' -> '%v' failed: ERROR (%v)", srcPod, server, err)
