@@ -43,13 +43,14 @@ secondary networks.
 ## Prerequisites
 
 Native secondary network support is still an alpha feature and is disabled by
-default. To use the feature, the `SecondaryNetwork` feature gate must be enabled
-in the `antrea-agent` configuration. If you need IPAM for the secondary
-interfaces, you should also enable the `AntreaIPAM` feature gate in both
-`antrea-agent` and `antrea-controller` configuration. At the moment, Antrea IPAM
-is the only available IPAM option for secondary networks managed by Antrea. The
-`antrea-config` ConfigMap with the two feature gates enables is like the
-following:
+default. To enable it, you must activate the `SecondaryNetwork` feature gate in the
+`antrea-agent` configuration. **Antrea IPAM**, the **sole IPAM option** for
+Antrea-managed secondary networks, has been **graduated to beta** as of Antrea v2.4 and is
+now **enabled by default**. No additional feature gate configuration is required for Antrea IPAM.
+> **Note for Pre-v2.4 Users:** If you require IPAM for secondary interfaces **prior to Antrea v2.4**,
+> you must also enable the `AntreaIPAM` feature gate in **both** the `antrea-agent` and `antrea-controller` configurations.
+
+The `antrea-config` ConfigMap with the necessary feature gate enabled is shown below:
 
 ```yaml
 apiVersion: v1
@@ -60,10 +61,10 @@ metadata:
 data:
   antrea-controller.conf: |
     featureGates:
-      AntreaIPAM: true
+      AntreaIPAM: true    # Required for all versions < v2.4
   antrea-agent.conf: |
     featureGates:
-      AntreaIPAM: true
+      AntreaIPAM: true    # Required for all versions < v2.4
       SecondaryNetwork: true
 ```
 

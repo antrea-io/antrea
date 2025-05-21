@@ -149,8 +149,12 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
-	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
-	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
+	enableBridgingMode := o.config.EnableBridgingMode
+	enableSecondaryNetwork := features.DefaultFeatureGate.Enabled(features.SecondaryNetwork)
+	// Antrea IPAM is needed by bridging mode and secondary network IPAM.
+	// Activate AntreaIPAM only when enableAntreaIPAM is true and at least one of enableBridgingMode or
+	// enableSecondaryNetwork is true, to avoid extra overhead.
+	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM) && (enableBridgingMode || enableSecondaryNetwork)
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	nodeNetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.NodeNetworkPolicy)
 	nodeLatencyMonitorEnabled := features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor)
@@ -636,7 +640,7 @@ func run(o *Options) error {
 			routeClient,
 			isChaining,
 			enableBridgingMode,
-			enableAntreaIPAM,
+			features.DefaultFeatureGate.Enabled(features.AntreaIPAM),
 			o.config.DisableTXChecksumOffload,
 			networkConfig,
 			podNetworkWait,
@@ -772,7 +776,6 @@ func run(o *Options) error {
 		go nplController.Run(stopCh)
 	}
 
-	// Antrea IPAM is needed by bridging mode and secondary network IPAM.
 	if enableAntreaIPAM {
 		ipamController, err := ipam.InitializeAntreaIPAMController(
 			crdClient, namespaceInformer, ipPoolInformer, localPodInformer.Get(), enableBridgingMode)
