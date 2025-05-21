@@ -782,12 +782,12 @@ func testACNPDropIPBlockWithExcept(t *testing.T) {
 	ipBlocks := genIPBlockForAllIPsExcept(append(podXAIP, podXBIP...))
 	for i := range ipBlocks {
 		builder.AddEgress(ACNPRuleBuilder{
-			IPBlock: ipBlocks[i],
 			BaseRuleBuilder: BaseRuleBuilder{
-				Protoc: ProtocolTCP,
-				Port:   &p80,
-				Action: crdv1beta1.RuleActionDrop,
-				Name:   "egress-drop-" + strconv.Itoa(i),
+				Protoc:  ProtocolTCP,
+				IPBlock: ipBlocks[i],
+				Port:    &p80,
+				Action:  crdv1beta1.RuleActionDrop,
+				Name:    "egress-drop-" + strconv.Itoa(i),
 			}})
 	}
 	reachability := NewReachability(allPods, Connected)
@@ -4555,10 +4555,10 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 			},
 		})
 	builder.AddIngress(ACNPRuleBuilder{
-		IPBlock: ipb,
 		BaseRuleBuilder: BaseRuleBuilder{
-			Protoc: ProtocolTCP,
-			Action: crdv1beta1.RuleActionReject,
+			IPBlock: ipb,
+			Protoc:  ProtocolTCP,
+			Action:  crdv1beta1.RuleActionReject,
 		}})
 
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
@@ -4738,10 +4738,10 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	cidr := mc.group.String() + "/32"
 	ipb := &crdv1beta1.IPBlock{CIDR: cidr}
 	builder.AddEgress(ACNPRuleBuilder{
-		IPBlock: ipb,
 		BaseRuleBuilder: BaseRuleBuilder{
-			Protoc: ProtocolUDP,
-			Action: action,
+			IPBlock: ipb,
+			Protoc:  ProtocolUDP,
+			Action:  action,
 		}})
 	acnp := builder.Get()
 	_, err = k8sUtils.CreateOrUpdateACNP(acnp)

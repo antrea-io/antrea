@@ -44,11 +44,11 @@ type BaseRuleBuilder struct {
 	SelfNS               bool
 	SrcPort              *int32
 	SrcEndPort           *int32
+	IPBlock              *crdv1beta1.IPBlock
 }
 
 type ACNPRuleBuilder struct {
 	BaseRuleBuilder
-	IPBlock            *crdv1beta1.IPBlock
 	NodeSelector       map[string]string
 	Namespaces         *crdv1beta1.PeerNamespaces
 	RuleAppliedToSpecs []ACNPAppliedToSpec
@@ -60,7 +60,6 @@ type ANNPRuleBuilder struct {
 	BaseRuleBuilder
 	L7Protocols            []crdv1beta1.L7Protocol
 	RuleGroup              string
-	Cidr                   *string
 	EeSelector             map[string]string
 	EeSelectorMatchExp     []metav1.LabelSelectorRequirement
 	ANNPRuleAppliedToSpecs []ANNPAppliedToSpec
@@ -88,20 +87,14 @@ func (rb ANNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 			MatchExpressions: rb.EeSelectorMatchExp,
 		}
 	}
-	var ipBlock *crdv1beta1.IPBlock
-	if rb.Cidr != nil {
-		ipBlock = &crdv1beta1.IPBlock{
-			CIDR: *rb.Cidr,
-		}
-	}
 	// An empty From/To in ANNP rules evaluates to match all addresses.
 	policyPeer := make([]crdv1beta1.NetworkPolicyPeer, 0)
-	if ps != nil || ns != nil || ipBlock != nil || rb.RuleGroup != "" || ees != nil {
+	if ps != nil || ns != nil || rb.IPBlock != nil || rb.RuleGroup != "" || ees != nil {
 		policyPeer = []crdv1beta1.NetworkPolicyPeer{{
 			PodSelector:            ps,
 			NamespaceSelector:      ns,
 			ExternalEntitySelector: ees,
-			IPBlock:                ipBlock,
+			IPBlock:                rb.IPBlock,
 			Group:                  rb.RuleGroup,
 		}}
 	}
