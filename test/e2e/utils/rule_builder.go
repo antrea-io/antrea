@@ -49,20 +49,20 @@ type BaseRuleBuilder struct {
 
 type ACNPRuleBuilder struct {
 	BaseRuleBuilder
-	NodeSelector       map[string]string
-	Namespaces         *crdv1beta1.PeerNamespaces
-	RuleAppliedToSpecs []ACNPAppliedToSpec
-	ServiceAccount     *crdv1beta1.NamespacedName
-	RuleClusterGroup   string
+	NodeSelector     map[string]string
+	Namespaces       *crdv1beta1.PeerNamespaces
+	AppliedToSpecs   []ACNPAppliedToSpec
+	ServiceAccount   *crdv1beta1.NamespacedName
+	RuleClusterGroup string
 }
 
 type ANNPRuleBuilder struct {
 	BaseRuleBuilder
-	L7Protocols            []crdv1beta1.L7Protocol
-	RuleGroup              string
-	EeSelector             map[string]string
-	EeSelectorMatchExp     []metav1.LabelSelectorRequirement
-	ANNPRuleAppliedToSpecs []ANNPAppliedToSpec
+	L7Protocols        []crdv1beta1.L7Protocol
+	RuleGroup          string
+	EeSelector         map[string]string
+	EeSelectorMatchExp []metav1.LabelSelectorRequirement
+	AppliedToSpecs     []ANNPAppliedToSpec
 }
 
 func toEgress(ingressRule crdv1beta1.Rule) crdv1beta1.Rule {
@@ -101,7 +101,7 @@ func (rb ANNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 	ports, protocols := GenPortsOrProtocols(rb.BaseRuleBuilder)
 
 	var appliedTos []crdv1beta1.AppliedTo
-	for _, at := range rb.ANNPRuleAppliedToSpecs {
+	for _, at := range rb.AppliedToSpecs {
 		appliedTos = append(appliedTos, ANNPGetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp, at.ExternalEntitySelector, at.ExternalEntitySelectorMatchExp, at.Group))
 	}
 
@@ -129,7 +129,7 @@ func (rb ACNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 	}
 
 	nsSel := rb.generateNSSelector()
-	for _, at := range rb.RuleAppliedToSpecs {
+	for _, at := range rb.AppliedToSpecs {
 		appliedTos = append(appliedTos, ACNPGetAppliedToPeer(at.PodSelector,
 			at.NodeSelector,
 			at.NSSelector,

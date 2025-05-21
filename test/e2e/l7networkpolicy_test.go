@@ -90,8 +90,8 @@ func createL7NetworkPolicy(t *testing.T,
 	annpBuilder = annpBuilder.SetName(data.testNamespace, name).SetPriority(priority)
 	if isIngress {
 		annpBuilder.AddIngress(ANNPRuleBuilder{
-			ANNPRuleAppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
-			L7Protocols:            l7Protocols,
+			AppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
+			L7Protocols:    l7Protocols,
 			BaseRuleBuilder: BaseRuleBuilder{
 				Protoc:      l4Protocol,
 				Port:        &port,
@@ -100,8 +100,8 @@ func createL7NetworkPolicy(t *testing.T,
 			}})
 	} else {
 		annpBuilder.AddEgress(ANNPRuleBuilder{
-			L7Protocols:            l7Protocols,
-			ANNPRuleAppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
+			L7Protocols:    l7Protocols,
+			AppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
 			BaseRuleBuilder: BaseRuleBuilder{
 				Protoc:      l4Protocol,
 				Port:        &port,
