@@ -1698,7 +1698,7 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 		BaseRuleBuilder: utils.BaseRuleBuilder{
 			Protoc:      utils.ProtocolTCP,
 			PodSelector: map[string]string{"antrea-e2e": srcPod},
-			NsSelector:  map[string]string{},
+			NSSelector:  map[string]string{},
 			Action:      secv1beta1.RuleActionAllow,
 			Name:        testIngressRuleName,
 		}})
@@ -1717,7 +1717,7 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 		BaseRuleBuilder: utils.BaseRuleBuilder{
 			Protoc:      utils.ProtocolTCP,
 			PodSelector: map[string]string{"antrea-e2e": dstPod},
-			NsSelector:  map[string]string{},
+			NSSelector:  map[string]string{},
 			Action:      secv1beta1.RuleActionAllow,
 			Name:        testEgressRuleName,
 		}})
@@ -1754,7 +1754,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 			BaseRuleBuilder: utils.BaseRuleBuilder{
 				Protoc:      utils.ProtocolTCP,
 				PodSelector: map[string]string{"antrea-e2e": srcPod},
-				NsSelector:  map[string]string{},
+				NSSelector:  map[string]string{},
 				Action:      secv1beta1.RuleActionReject,
 				Name:        testIngressRuleName,
 			}})
@@ -1765,7 +1765,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 			BaseRuleBuilder: utils.BaseRuleBuilder{
 				Protoc:      utils.ProtocolTCP,
 				PodSelector: map[string]string{"antrea-e2e": srcPod},
-				NsSelector:  map[string]string{},
+				NSSelector:  map[string]string{},
 				Action:      secv1beta1.RuleActionDrop,
 				Name:        testIngressRuleName,
 			}})
@@ -1781,7 +1781,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 			BaseRuleBuilder: utils.BaseRuleBuilder{
 				Protoc:      utils.ProtocolTCP,
 				PodSelector: map[string]string{"antrea-e2e": podReject},
-				NsSelector:  map[string]string{},
+				NSSelector:  map[string]string{},
 				Action:      secv1beta1.RuleActionReject,
 				Name:        testEgressRuleName,
 			}})
@@ -1792,7 +1792,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 			BaseRuleBuilder: utils.BaseRuleBuilder{
 				Protoc:      utils.ProtocolTCP,
 				PodSelector: map[string]string{"antrea-e2e": podDrop},
-				NsSelector:  map[string]string{},
+				NSSelector:  map[string]string{},
 				Action:      secv1beta1.RuleActionDrop,
 				Name:        testEgressRuleName,
 			}})

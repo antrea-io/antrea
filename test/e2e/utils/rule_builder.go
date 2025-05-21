@@ -30,15 +30,15 @@ type BaseRuleBuilder struct {
 	Port                 *int32
 	PortName             *string
 	EndPort              *int32
-	IcmpType             *int32
-	IcmpCode             *int32
-	IgmpType             *int32
+	ICMPType             *int32
+	ICMPCode             *int32
+	IGMPType             *int32
 	GroupAddress         *string
 	PodSelector          map[string]string
-	NsSelector           map[string]string
+	NSSelector           map[string]string
 	PodSelectorMatchExp  []metav1.LabelSelectorRequirement
 	NodeSelectorMatchExp []metav1.LabelSelectorRequirement
-	NsSelectorMatchExp   []metav1.LabelSelectorRequirement
+	NSSelectorMatchExp   []metav1.LabelSelectorRequirement
 	Action               crdv1beta1.RuleAction
 	Name                 string
 	SelfNS               bool
@@ -48,7 +48,7 @@ type BaseRuleBuilder struct {
 
 type ACNPRuleBuilder struct {
 	BaseRuleBuilder
-	IpBlock            *crdv1beta1.IPBlock
+	IPBlock            *crdv1beta1.IPBlock
 	NodeSelector       map[string]string
 	Namespaces         *crdv1beta1.PeerNamespaces
 	RuleAppliedToSpecs []ACNPAppliedToSpec
@@ -80,7 +80,7 @@ func (rb ANNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 	var ees *metav1.LabelSelector
 
 	ps := rb.generatePodSelector()
-	ns := rb.generateNsSelector()
+	ns := rb.generateNSSelector()
 
 	if len(rb.EeSelector) > 0 || len(rb.EeSelectorMatchExp) > 0 {
 		ees = &metav1.LabelSelector{
@@ -135,7 +135,7 @@ func (rb ACNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 		}
 	}
 
-	nsSel := rb.generateNsSelector()
+	nsSel := rb.generateNSSelector()
 	for _, at := range rb.RuleAppliedToSpecs {
 		appliedTos = append(appliedTos, ACNPGetAppliedToPeer(at.PodSelector,
 			at.NodeSelector,
@@ -155,13 +155,13 @@ func (rb ACNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 	}
 	// An empty From/To in ACNP rules evaluates to match all addresses.
 	policyPeer := make([]crdv1beta1.NetworkPolicyPeer, 0)
-	if podSel != nil || nodeSel != nil || nsSel != nil || rb.Namespaces != nil || rb.IpBlock != nil || rb.RuleClusterGroup != "" || rb.ServiceAccount != nil {
+	if podSel != nil || nodeSel != nil || nsSel != nil || rb.Namespaces != nil || rb.IPBlock != nil || rb.RuleClusterGroup != "" || rb.ServiceAccount != nil {
 		policyPeer = []crdv1beta1.NetworkPolicyPeer{{
 			PodSelector:       podSel,
 			NodeSelector:      nodeSel,
 			NamespaceSelector: nsSel,
 			Namespaces:        rb.Namespaces,
-			IPBlock:           rb.IpBlock,
+			IPBlock:           rb.IPBlock,
 			Group:             rb.RuleClusterGroup,
 			ServiceAccount:    rb.ServiceAccount,
 		}}
@@ -191,11 +191,11 @@ func (rb BaseRuleBuilder) generatePodSelector() (podSel *metav1.LabelSelector) {
 	return podSel
 }
 
-func (rb BaseRuleBuilder) generateNsSelector() (nsSel *metav1.LabelSelector) {
-	if rb.NsSelector != nil || rb.NsSelectorMatchExp != nil {
+func (rb BaseRuleBuilder) generateNSSelector() (nsSel *metav1.LabelSelector) {
+	if rb.NSSelector != nil || rb.NSSelectorMatchExp != nil {
 		nsSel = &metav1.LabelSelector{
-			MatchLabels:      rb.NsSelector,
-			MatchExpressions: rb.NsSelectorMatchExp,
+			MatchLabels:      rb.NSSelector,
+			MatchExpressions: rb.NSSelectorMatchExp,
 		}
 	}
 	return nsSel

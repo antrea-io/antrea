@@ -47,8 +47,8 @@ const (
 )
 
 var (
-	icmpType = int32(8)
-	icmpCode = int32(0)
+	ICMPType = int32(8)
+	ICMPCode = int32(0)
 )
 
 type vmInfo struct {
@@ -623,8 +623,8 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 			Cidr: &peerIPCIDR,
 			BaseRuleBuilder: BaseRuleBuilder{
 				Protoc:   ProtocolICMP,
-				IcmpType: &icmpType,
-				IcmpCode: &icmpCode,
+				ICMPType: &ICMPType,
+				ICMPCode: &ICMPCode,
 				Action:   ruleAction,
 			}})
 	}

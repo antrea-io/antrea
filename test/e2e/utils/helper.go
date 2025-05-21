@@ -51,8 +51,8 @@ func GenPortsOrProtocols(ruleBuilder BaseRuleBuilder) ([]crdv1beta1.NetworkPolic
 		return nil, []crdv1beta1.NetworkPolicyProtocol{
 			{
 				ICMP: &crdv1beta1.ICMPProtocol{
-					ICMPType: ruleBuilder.IcmpType,
-					ICMPCode: ruleBuilder.IcmpCode,
+					ICMPType: ruleBuilder.ICMPType,
+					ICMPCode: ruleBuilder.ICMPCode,
 				},
 			},
 		}
@@ -61,7 +61,7 @@ func GenPortsOrProtocols(ruleBuilder BaseRuleBuilder) ([]crdv1beta1.NetworkPolic
 		return nil, []crdv1beta1.NetworkPolicyProtocol{
 			{
 				IGMP: &crdv1beta1.IGMPProtocol{
-					IGMPType:     ruleBuilder.IgmpType,
+					IGMPType:     ruleBuilder.IGMPType,
 					GroupAddress: *ruleBuilder.GroupAddress,
 				},
 			},

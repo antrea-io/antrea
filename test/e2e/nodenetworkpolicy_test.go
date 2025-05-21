@@ -793,7 +793,7 @@ func testNodeACNPNamespaceIsolation(t *testing.T) {
 	builder1.AddEgress(ACNPRuleBuilder{
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
-			NsSelector: map[string]string{"ns": getNS("y")},
+			NSSelector: map[string]string{"ns": getNS("y")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 

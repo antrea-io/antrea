@@ -437,7 +437,7 @@ func testACNPAllowXBtoA(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionAllow,
 		}})
 
@@ -480,7 +480,7 @@ func testACNPSourcePort(t *testing.T) {
 			SrcPort:     &portStart,
 			SrcEndPort:  &portEnd,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			SelfNS:      false,
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
@@ -496,7 +496,7 @@ func testACNPSourcePort(t *testing.T) {
 			SrcPort:     &portStart,
 			SrcEndPort:  &portEnd,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			SelfNS:      false,
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
@@ -513,7 +513,7 @@ func testACNPSourcePort(t *testing.T) {
 			SrcPort:     &portStart,
 			SrcEndPort:  &portEnd,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			SelfNS:      false,
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
@@ -567,7 +567,7 @@ func testACNPAllowXBtoYA(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			PortName:    &port81Name,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionAllow,
 		}})
 
@@ -602,7 +602,7 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionAllow,
 		}})
 
@@ -614,7 +614,7 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -667,14 +667,14 @@ func testACNPAllowNoDefaultIsolation(t *testing.T, protocol AntreaPolicyProtocol
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     protocol,
 			Port:       &p81,
-			NsSelector: map[string]string{"ns": getNS("y")},
+			NSSelector: map[string]string{"ns": getNS("y")},
 			Action:     crdv1beta1.RuleActionAllow,
 		}})
 	builder.AddEgress(ACNPRuleBuilder{
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     protocol,
 			Port:       &p81,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionAllow,
 		}})
 
@@ -712,7 +712,7 @@ func testACNPDropEgress(t *testing.T, protocol AntreaPolicyProtocol) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     protocol,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -782,7 +782,7 @@ func testACNPDropIPBlockWithExcept(t *testing.T) {
 	ipBlocks := genIPBlockForAllIPsExcept(append(podXAIP, podXBIP...))
 	for i := range ipBlocks {
 		builder.AddEgress(ACNPRuleBuilder{
-			IpBlock: ipBlocks[i],
+			IPBlock: ipBlocks[i],
 			BaseRuleBuilder: BaseRuleBuilder{
 				Protoc: ProtocolTCP,
 				Port:   &p80,
@@ -813,7 +813,7 @@ func testACNPDropIPBlockWithExcept(t *testing.T) {
 				Protoc:      ProtocolTCP,
 				Port:        &p80,
 				PodSelector: map[string]string{"pod": "a"},
-				NsSelector:  map[string]string{"ns": getNS("x")},
+				NSSelector:  map[string]string{"ns": getNS("x")},
 				Action:      crdv1beta1.RuleActionDrop,
 				Name:        "egress-drop-xa",
 			}})
@@ -848,7 +848,7 @@ func testACNPNoEffectOnOtherProtocols(t *testing.T) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -903,7 +903,7 @@ func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			PortName:    &port81Name,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 
@@ -979,7 +979,7 @@ func testACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -1057,7 +1057,7 @@ func testACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -1161,7 +1161,7 @@ func testACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "j"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 	cp := []*CustomProbe{
@@ -1949,7 +1949,7 @@ func testBaselineNamespaceIsolation(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:             ProtocolTCP,
 			Port:               &p80,
-			NsSelectorMatchExp: []metav1.LabelSelectorRequirement{nsExpOtherThanX},
+			NSSelectorMatchExp: []metav1.LabelSelectorRequirement{nsExpOtherThanX},
 			Action:             crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2030,7 +2030,7 @@ func testACNPPriorityOverride(t *testing.T, data *TestData) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("z")},
+			NSSelector:  map[string]string{"ns": getNS("z")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2043,7 +2043,7 @@ func testACNPPriorityOverride(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionAllow,
 		}})
 
@@ -2056,7 +2056,7 @@ func testACNPPriorityOverride(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2130,7 +2130,7 @@ func testACNPTierOverride(t *testing.T, data *TestData) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("z")},
+			NSSelector:  map[string]string{"ns": getNS("z")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2144,7 +2144,7 @@ func testACNPTierOverride(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionAllow,
 		}})
 
@@ -2158,7 +2158,7 @@ func testACNPTierOverride(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2238,7 +2238,7 @@ func testACNPCustomTiers(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionAllow,
 		}})
 
@@ -2252,7 +2252,7 @@ func testACNPCustomTiers(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2300,7 +2300,7 @@ func testACNPPriorityConflictingRule(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2314,7 +2314,7 @@ func testACNPPriorityConflictingRule(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionAllow,
 		}})
 
@@ -2355,7 +2355,7 @@ func testACNPRulePriority(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("y")},
+			NSSelector: map[string]string{"ns": getNS("y")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 	// This rule should take no effect as it will be overridden by the first rule of cnp-allow
@@ -2363,7 +2363,7 @@ func testACNPRulePriority(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2376,7 +2376,7 @@ func testACNPRulePriority(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionAllow,
 		}})
 	// This rule should take no effect as it will be overridden by the first rule of cnp-drop
@@ -2384,7 +2384,7 @@ func testACNPRulePriority(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("y")},
+			NSSelector: map[string]string{"ns": getNS("y")},
 			Action:     crdv1beta1.RuleActionAllow,
 		}})
 
@@ -2426,7 +2426,7 @@ func testACNPPortRange(t *testing.T) {
 			Protoc:     ProtocolTCP,
 			Port:       &p8080,
 			EndPort:    &p8082,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 			Name:       "acnp-port-range",
 		}})
@@ -2462,7 +2462,7 @@ func testACNPRejectEgress(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionReject,
 		}})
 
@@ -2502,7 +2502,7 @@ func testACNPRejectIngress(t *testing.T, protocol AntreaPolicyProtocol) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     protocol,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionReject,
 		}})
 
@@ -2782,7 +2782,7 @@ func testANNPPortRange(t *testing.T) {
 			Port:        &p8080,
 			EndPort:     &p8082,
 			PodSelector: map[string]string{"pod": "c"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionDrop,
 			Name:        "annp-port-range",
 		}})
@@ -2817,7 +2817,7 @@ func testANNPBasic(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2866,7 +2866,7 @@ func testANNPUpdate(t *testing.T, data *TestData) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 
@@ -2897,7 +2897,7 @@ func testANNPUpdate(t *testing.T, data *TestData) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionAllow,
 		}})
 	updatedReachability := NewReachability(allPods, Connected)
@@ -2936,7 +2936,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 				Protoc:      ProtocolTCP,
 				Port:        &p80,
 				PodSelector: map[string]string{"pod": "b"},
-				NsSelector:  map[string]string{"ns": getNS("x")},
+				NSSelector:  map[string]string{"ns": getNS("x")},
 				Action:      crdv1beta1.RuleActionDrop,
 			}})
 	} else {
@@ -2946,7 +2946,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 				Protoc:      ProtocolTCP,
 				Port:        &p80,
 				PodSelector: map[string]string{"pod": "b"},
-				NsSelector:  map[string]string{"ns": getNS("x")},
+				NSSelector:  map[string]string{"ns": getNS("x")},
 				Action:      crdv1beta1.RuleActionDrop,
 			}})
 		builder.AddIngress(ANNPRuleBuilder{
@@ -2955,7 +2955,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 				Protoc:      ProtocolTCP,
 				Port:        &p80,
 				PodSelector: map[string]string{"pod": "b"},
-				NsSelector:  map[string]string{"ns": getNS("x")},
+				NSSelector:  map[string]string{"ns": getNS("x")},
 				Action:      crdv1beta1.RuleActionDrop,
 			}})
 	}
@@ -3120,7 +3120,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
 			Port:       &p80,
-			NsSelector: map[string]string{"ns": getNS("z")},
+			NSSelector: map[string]string{"ns": getNS("z")},
 			Action:     crdv1beta1.RuleActionDrop,
 			Name:       ruleName,
 		}})
@@ -3322,7 +3322,7 @@ func testAppliedToPerRule(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 	builder.AddIngress(ANNPRuleBuilder{
@@ -3331,7 +3331,7 @@ func testAppliedToPerRule(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("z")},
+			NSSelector:  map[string]string{"ns": getNS("z")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 
@@ -3360,7 +3360,7 @@ func testAppliedToPerRule(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 	builder2.AddIngress(ACNPRuleBuilder{
@@ -3369,7 +3369,7 @@ func testAppliedToPerRule(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("z")},
+			NSSelector:  map[string]string{"ns": getNS("z")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 
@@ -3466,7 +3466,7 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("y")},
+			NSSelector:  map[string]string{"ns": getNS("y")},
 			Action:      crdv1beta1.RuleActionDrop,
 		}})
 
@@ -3666,7 +3666,7 @@ func testACNPNamespaceIsolation(t *testing.T) {
 	builder.AddIngress(ACNPRuleBuilder{
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
-			NsSelector: map[string]string{},
+			NSSelector: map[string]string{},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -3695,7 +3695,7 @@ func testACNPNamespaceIsolation(t *testing.T) {
 		RuleAppliedToSpecs: []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}},
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
-			NsSelector: map[string]string{},
+			NSSelector: map[string]string{},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 
@@ -3736,7 +3736,7 @@ func testACNPStrictNamespacesIsolation(t *testing.T) {
 	builder.AddIngress(ACNPRuleBuilder{
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:     ProtocolTCP,
-			NsSelector: map[string]string{},
+			NSSelector: map[string]string{},
 			Action:     crdv1beta1.RuleActionDrop,
 		}})
 	// deny ingress traffic except from own namespace, which is delegated to Namespace owners (who can create K8s
@@ -4436,16 +4436,16 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 	server1Name, server1IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server1", nodeName(1), data.testNamespace, false)
 	defer cleanupFunc()
 
-	icmpType := int32(8)
-	icmpCode := int32(0)
+	ICMPType := int32(8)
+	ICMPCode := int32(0)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-icmp").
 		SetPriority(1.0).SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}})
 	builder.AddEgress(ACNPRuleBuilder{
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:      ProtocolICMP,
-			IcmpType:    &icmpType,
-			IcmpCode:    &icmpCode,
+			ICMPType:    &ICMPType,
+			ICMPCode:    &ICMPCode,
 			PodSelector: map[string]string{"antrea-e2e": server0Name},
 			Action:      crdv1beta1.RuleActionReject,
 		}})
@@ -4555,7 +4555,7 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 			},
 		})
 	builder.AddIngress(ACNPRuleBuilder{
-		IpBlock: ipb,
+		IPBlock: ipb,
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc: ProtocolTCP,
 			Action: crdv1beta1.RuleActionReject,
@@ -4649,11 +4649,11 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": label}}})
 
 	// create acnp with ingress rule for IGMP query
-	igmpType := crdv1beta1.IGMPQuery
+	IGMPType := crdv1beta1.IGMPQuery
 	builder.AddIngress(ACNPRuleBuilder{
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:       ProtocolIGMP,
-			IgmpType:     &igmpType,
+			IGMPType:     &IGMPType,
 			GroupAddress: &queryGroupAddress,
 			Action:       action,
 		}})
@@ -4738,7 +4738,7 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	cidr := mc.group.String() + "/32"
 	ipb := &crdv1beta1.IPBlock{CIDR: cidr}
 	builder.AddEgress(ACNPRuleBuilder{
-		IpBlock: ipb,
+		IPBlock: ipb,
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc: ProtocolUDP,
 			Action: action,
@@ -5300,7 +5300,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionAllow,
 		}})
 	annp := annpBuilder.Get()
@@ -5318,7 +5318,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionAllow,
 		}})
 	acnp := acnpBuilder.Get()
@@ -5362,7 +5362,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionAllow,
 		}})
 	annpBuilder.AddIngress(ANNPRuleBuilder{
@@ -5371,7 +5371,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 			Protoc:      ProtocolTCP,
 			Port:        &p80,
 			PodSelector: map[string]string{"pod": "b"},
-			NsSelector:  map[string]string{"ns": getNS("x")},
+			NSSelector:  map[string]string{"ns": getNS("x")},
 			Action:      crdv1beta1.RuleActionAllow,
 		}})
 	annp := annpBuilder.Get()
