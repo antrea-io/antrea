@@ -38,6 +38,7 @@ var (
 	cleanupStaleUDPSvcConntrackStatus string
 	serviceExternalIPStatus           string
 	egressSeparateSubnetStatus        string
+	antreaIPAMStatus                  string
 )
 
 func Test_getGatesResponse(t *testing.T) {
@@ -54,7 +55,7 @@ func Test_getGatesResponse(t *testing.T) {
 				},
 			},
 			want: []apis.FeatureGateResponse{
-				{Component: "agent", Name: "AntreaIPAM", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "AntreaIPAM", Status: antreaIPAMStatus, Version: "BETA"},
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
 				{Component: "agent", Name: "BGPPolicy", Status: "Disabled", Version: "ALPHA"},
@@ -200,7 +201,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 			name: "good path",
 			want: []apis.FeatureGateResponse{
 				{Component: "controller", Name: "AdminNetworkPolicy", Status: "Disabled", Version: "ALPHA"},
-				{Component: "controller", Name: "AntreaIPAM", Status: "Enabled", Version: "BETA"},
+				{Component: "controller", Name: "AntreaIPAM", Status: antreaIPAMStatus, Version: "BETA"},
 				{Component: "controller", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "Egress", Status: egressStatus, Version: "BETA"},
 				{Component: "controller", Name: "IPsecCertAuth", Status: "Disabled", Version: "ALPHA"},
@@ -229,11 +230,13 @@ func init() {
 	multicastStatus = "Enabled"
 	cleanupStaleUDPSvcConntrackStatus = "Enabled"
 	serviceExternalIPStatus = "Enabled"
+	antreaIPAMStatus = "Enabled"
 	if runtime.IsWindowsPlatform() {
 		egressStatus = "Disabled"
 		egressSeparateSubnetStatus = "Disabled"
 		multicastStatus = "Disabled"
 		cleanupStaleUDPSvcConntrackStatus = "Disabled"
 		serviceExternalIPStatus = "Disabled"
+		antreaIPAMStatus = "Disabled"
 	}
 }
