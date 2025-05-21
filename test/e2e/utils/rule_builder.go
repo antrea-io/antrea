@@ -60,8 +60,8 @@ type ANNPRuleBuilder struct {
 	BaseRuleBuilder
 	L7Protocols        []crdv1beta1.L7Protocol
 	RuleGroup          string
-	EeSelector         map[string]string
-	EeSelectorMatchExp []metav1.LabelSelectorRequirement
+	EESelector         map[string]string
+	EESelectorMatchExp []metav1.LabelSelectorRequirement
 	AppliedToSpecs     []ANNPAppliedToSpec
 }
 
@@ -81,10 +81,10 @@ func (rb ANNPRuleBuilder) GetIngress() crdv1beta1.Rule {
 	ps := rb.generatePodSelector()
 	ns := rb.generateNSSelector()
 
-	if len(rb.EeSelector) > 0 || len(rb.EeSelectorMatchExp) > 0 {
+	if len(rb.EESelector) > 0 || len(rb.EESelectorMatchExp) > 0 {
 		ees = &metav1.LabelSelector{
-			MatchLabels:      rb.EeSelector,
-			MatchExpressions: rb.EeSelectorMatchExp,
+			MatchLabels:      rb.EESelector,
+			MatchExpressions: rb.EESelectorMatchExp,
 		}
 	}
 	// An empty From/To in ANNP rules evaluates to match all addresses.

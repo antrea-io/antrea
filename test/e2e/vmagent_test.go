@@ -613,7 +613,7 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 		}
 		port := int32(iperfPort)
 		ruleFunc(ANNPRuleBuilder{
-			EeSelector: peerLabel,
+			EESelector: peerLabel,
 			BaseRuleBuilder: BaseRuleBuilder{
 				Protoc:  proto,
 				Port:    &port,
