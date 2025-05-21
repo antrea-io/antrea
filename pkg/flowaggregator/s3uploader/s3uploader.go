@@ -370,6 +370,7 @@ func randSeq(n int) string {
 	var alphabet = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 	b := make([]rune, n)
 	for i := range b {
+		// #nosec G404: random number generator not used for security purposes.
 		b[i] = alphabet[rand.IntN(len(alphabet))]
 	}
 	return string(b)
