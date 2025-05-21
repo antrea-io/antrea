@@ -102,10 +102,7 @@ func runEResourceExport(cmd *cobra.Command, args []string) error {
 	}
 
 	var resExports interface{}
-	singleResource := false
-	if len(args) > 0 {
-		singleResource = true
-	}
+	singleResource := len(args) > 0
 
 	if optionsResourceExport.allNamespaces && singleResource {
 		return fmt.Errorf("a resource cannot be retrieved by name across all Namespaces")

@@ -301,7 +301,7 @@ func (r *podReconciler) Reconcile(rule *CompletedRule) error {
 
 	value, exists := r.lastRealizeds.Load(rule.ID)
 	ruleTable := r.getOFRuleTable(rule)
-	priorityAssigner, _ := r.priorityAssigners[ruleTable]
+	priorityAssigner := r.priorityAssigners[ruleTable]
 	// IGMP Egress policy is enforced in userspace via packet-in message, there won't be OpenFlow
 	// rules created for such rules. Therefore, assigning priority is not required.
 	if rule.isAntreaNetworkPolicyRule() && !rule.isIGMPEgressPolicyRule() {
@@ -994,7 +994,7 @@ func (r *podReconciler) uninstallOFRule(ofID uint32, table uint8) error {
 				return err
 			}
 			// If there are stalePriorities, priorityAssigners[table] must not be nil.
-			priorityAssigner, _ := r.priorityAssigners[table]
+			priorityAssigner := r.priorityAssigners[table]
 			priorityAssigner.assigner.release(uint16(priorityNum))
 		}
 	}
@@ -1035,11 +1035,9 @@ func (r *podReconciler) Forget(ruleID string) error {
 }
 
 func (r *podReconciler) isIGMPRule(rule *CompletedRule) bool {
-	isIGMP := false
-	if len(rule.Services) > 0 && (rule.Services[0].Protocol != nil) &&
-		(*rule.Services[0].Protocol == v1beta2.ProtocolIGMP) {
-		isIGMP = true
-	}
+	isIGMP := len(rule.Services) > 0 && (rule.Services[0].Protocol != nil) &&
+		(*rule.Services[0].Protocol == v1beta2.ProtocolIGMP)
+
 	return isIGMP
 }
 

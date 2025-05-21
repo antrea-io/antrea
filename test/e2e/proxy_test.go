@@ -1164,7 +1164,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 				assert.NoError(t, err, "Failed to delete route to client IP on Node %s, stdout: %s, stderr: %s", backendNode2, stdout, stderr)
 			}()
 
-			serviceName := fmt.Sprintf("svc-dsr")
+			serviceName := "svc-dsr"
 			annotations := map[string]string{
 				types.ServiceLoadBalancerModeAnnotationKey: "dsr",
 			}

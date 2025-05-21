@@ -255,12 +255,12 @@ func (n *NetworkPolicyController) processClusterSubject(subject v1alpha1.AdminNe
 }
 
 func anpActionToCRDAction(action v1alpha1.AdminNetworkPolicyRuleAction) *antreacrd.RuleAction {
-	antreaAction, _ := anpActionToAntreaActionMap[action]
+	antreaAction := anpActionToAntreaActionMap[action]
 	return &antreaAction
 }
 
 func banpActionToCRDAction(action v1alpha1.BaselineAdminNetworkPolicyRuleAction) *antreacrd.RuleAction {
-	antreaAction, _ := banpActionToAntreaActionMap[action]
+	antreaAction := banpActionToAntreaActionMap[action]
 	return &antreaAction
 }
 

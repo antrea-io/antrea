@@ -117,7 +117,7 @@ func OverrideKubeAPIServer(kubeAPIServerOverride string) {
 	if len(kubeAPIServerOverride) == 0 {
 		return
 	}
-	hostPort := strings.Replace(kubeAPIServerOverride, "https://", "", -1)
+	hostPort := strings.ReplaceAll(kubeAPIServerOverride, "https://", "")
 	var host, port string
 	var err error
 	if host, port, err = net.SplitHostPort(hostPort); err != nil {

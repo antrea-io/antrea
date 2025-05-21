@@ -78,7 +78,8 @@ func newFeaturePodConnectivity(
 	nodeIPs := make(map[binding.Protocol]net.IP)
 	ipCtZoneTypeRegMarks := make(map[binding.Protocol]*binding.RegMark)
 	for _, ipProtocol := range ipProtocols {
-		if ipProtocol == binding.ProtocolIP {
+		switch ipProtocol {
+		case binding.ProtocolIP:
 			ctZones[ipProtocol] = CtZone
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv4
 			nodeIPs[ipProtocol] = nodeConfig.NodeIPv4Addr.IP
@@ -86,7 +87,7 @@ func newFeaturePodConnectivity(
 				localCIDRs[ipProtocol] = *nodeConfig.PodIPv4CIDR
 			}
 			ipCtZoneTypeRegMarks[ipProtocol] = IPCtZoneTypeRegMark
-		} else if ipProtocol == binding.ProtocolIPv6 {
+		case binding.ProtocolIPv6:
 			ctZones[ipProtocol] = CtZoneV6
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv6
 			nodeIPs[ipProtocol] = nodeConfig.NodeIPv6Addr.IP
@@ -139,9 +140,10 @@ func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 	gatewayMAC := f.nodeConfig.GatewayConfig.MAC
 
 	for _, ipProtocol := range f.ipProtocols {
-		if ipProtocol == binding.ProtocolIPv6 {
+		switch ipProtocol {
+		case binding.ProtocolIPv6:
 			flows = append(flows, f.ipv6Flows()...)
-		} else if ipProtocol == binding.ProtocolIP {
+		case binding.ProtocolIP:
 			flows = append(flows, f.arpNormalFlow())
 			flows = append(flows, f.arpSpoofGuardFlow(f.gatewayIPs[ipProtocol], gatewayMAC, f.gatewayPort))
 			if f.connectUplinkToBridge {
@@ -210,9 +212,10 @@ func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32,
 	priority uint16) []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var actionRegMark *binding.RegMark
-	if action == v1alpha2.ActionRedirect {
+	switch action {
+	case v1alpha2.ActionRedirect:
 		actionRegMark = TrafficControlRedirectRegMark
-	} else if action == v1alpha2.ActionMirror {
+	case v1alpha2.ActionMirror:
 		actionRegMark = TrafficControlMirrorRegMark
 	}
 	var flows []binding.Flow

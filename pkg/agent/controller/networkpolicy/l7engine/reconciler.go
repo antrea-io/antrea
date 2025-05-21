@@ -494,7 +494,7 @@ func (r *Reconciler) startSuricata() error {
 	}
 	defer f.Close()
 	// Include the config file /etc/suricata/antrea.yaml for Antrea in the default Suricata config file /etc/suricata/suricata.yaml.
-	if _, err = f.WriteString(fmt.Sprintf("include: %s\n", antreaSuricataConfigPath)); err != nil {
+	if _, err = fmt.Fprintf(f, "include: %s\n", antreaSuricataConfigPath); err != nil {
 		return fmt.Errorf("failed to update default Suricata config file %s: %w", defaultSuricataConfigPath, err)
 	}
 

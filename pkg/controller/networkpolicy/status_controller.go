@@ -218,21 +218,19 @@ func (c *StatusController) watchInternalNetworkPolicy() {
 	defer watcher.Stop()
 	resultCh := watcher.ResultChan()
 	for {
-		select {
-		case event, ok := <-resultCh:
-			if !ok {
-				return
-			}
-			// Skip handling Bookmark events.
-			if event.Type == watch.Bookmark {
-				continue
-			}
-			np := event.Object.(*controlplane.NetworkPolicy)
-			if !controlplane.IsSourceAntreaNativePolicy(np.SourceRef) {
-				continue
-			}
-			c.queue.Add(np.Name)
+		event, ok := <-resultCh
+		if !ok {
+			return
 		}
+		// Skip handling Bookmark events.
+		if event.Type == watch.Bookmark {
+			continue
+		}
+		np := event.Object.(*controlplane.NetworkPolicy)
+		if !controlplane.IsSourceAntreaNativePolicy(np.SourceRef) {
+			continue
+		}
+		c.queue.Add(np.Name)
 	}
 }
 

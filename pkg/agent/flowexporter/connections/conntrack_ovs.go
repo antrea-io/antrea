@@ -248,7 +248,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 			conn.Timeout = uint32(val)
 		case strings.Contains(fs, "labels"):
 			fields := strings.Split(fs, "=")
-			labelStr := strings.Replace(fields[len(fields)-1], "0x", "", -1)
+			labelStr := strings.ReplaceAll(fields[len(fields)-1], "0x", "")
 			// Add leading zeros since DecodeString() expects the input string has even length
 			if len(labelStr) < 16 {
 				labelStr = strings.Repeat("0", 16-len(labelStr)) + labelStr

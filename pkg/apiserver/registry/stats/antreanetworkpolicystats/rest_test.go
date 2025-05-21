@@ -45,7 +45,7 @@ func (p *fakeStatsProvider) ListAntreaNetworkPolicyStats(namespace string) []sta
 			}
 		}
 	} else {
-		m1, _ := p.stats[namespace]
+		m1 := p.stats[namespace]
 		for _, m2 := range m1 {
 			list = append(list, m2)
 		}

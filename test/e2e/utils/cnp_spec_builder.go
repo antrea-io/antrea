@@ -234,7 +234,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngressForSrcPort(protoc AntreaPoli
 			MatchExpressions: nsSelectorMatchExp,
 		}
 	}
-	if selfNS == true {
+	if selfNS {
 		ns = &crdv1beta1.PeerNamespaces{
 			Match: matchSelf,
 		}

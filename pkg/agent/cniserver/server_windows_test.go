@@ -263,10 +263,9 @@ func (t *hnsTestUtil) addHostInterface() {
 		return
 	}
 	go func() {
-		select {
-		case <-time.After(time.Millisecond * 650):
+		time.AfterFunc(time.Millisecond*650, func() {
 			hostIfaces.Store(t.hostIfaceName, false)
-		}
+		})
 	}()
 }
 

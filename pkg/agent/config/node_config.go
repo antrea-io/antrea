@@ -293,13 +293,14 @@ func (nc *NetworkConfig) NeedsDirectRoutingToPeer(peerIP net.IP, localIP *net.IP
 
 func (nc *NetworkConfig) getEncapMTUDeduction(isIPv6 bool) int {
 	var deduction int
-	if nc.TunnelType == ovsconfig.VXLANTunnel {
+	switch nc.TunnelType {
+	case ovsconfig.VXLANTunnel:
 		deduction = vxlanOverhead
-	} else if nc.TunnelType == ovsconfig.GeneveTunnel {
+	case ovsconfig.GeneveTunnel:
 		deduction = geneveOverhead
-	} else if nc.TunnelType == ovsconfig.GRETunnel {
+	case ovsconfig.GRETunnel:
 		deduction = greOverhead
-	} else {
+	default:
 		return 0
 	}
 	if isIPv6 {
@@ -326,10 +327,11 @@ func (nc *NetworkConfig) CalculateMTUDeduction(isIPv6 bool) int {
 	if nc.TrafficEncapMode.SupportsEncap() {
 		nc.MTUDeduction = nc.getEncapMTUDeduction(isIPv6)
 	}
-	if nc.TrafficEncryptionMode == TrafficEncryptionModeWireGuard {
+	switch nc.TrafficEncryptionMode {
+	case TrafficEncryptionModeWireGuard:
 		// When WireGuard is enabled, cross-node traffic will only be encrypted, just reduce MTU for encryption.
 		nc.MTUDeduction = nc.WireGuardMTUDeduction
-	} else if nc.TrafficEncryptionMode == TrafficEncryptionModeIPSec {
+	case TrafficEncryptionModeIPSec:
 		// When IPsec is enabled, cross-node traffic will be encapsulated and encrypted, we need to reduce MTU for both
 		// encapsulation and encryption.
 		nc.MTUDeduction += IPSecESPOverhead

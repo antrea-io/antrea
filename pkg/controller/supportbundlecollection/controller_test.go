@@ -97,9 +97,7 @@ func TestReconcileSupportBundles(t *testing.T) {
 	nodeConfigs, externalNodeConfigs := parseDependentResources(testConfigs)
 	coreObjects := prepareNodes(nodeConfigs)
 	crdObjects := prepareExternalNodes(externalNodeConfigs)
-	for _, c := range prepareBundleCollections(testConfigs) {
-		crdObjects = append(crdObjects, c)
-	}
+	crdObjects = append(crdObjects, prepareBundleCollections(testConfigs)...)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1680,7 +1678,7 @@ func TestUpdateStatus(t *testing.T) {
 		prepareController(collectionName, desiredNodes)
 		reportedNodes := 1
 		agentReportStatus(reportedNodes, 0, collectionName)
-		statusPerNode, _ := controller.statuses[collectionName]
+		statusPerNode := controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes, len(statusPerNode))
 		syncSupportBundleCollection()
 		assert.Equal(t, reportedNodes, len(statusPerNode))
@@ -1690,10 +1688,10 @@ func TestUpdateStatus(t *testing.T) {
 			NodeType:  controlplane.SupportBundleCollectionNodeTypeNode,
 			Completed: true,
 		})
-		statusPerNode, _ = controller.statuses[collectionName]
+		statusPerNode = controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes+1, len(statusPerNode))
 		syncSupportBundleCollection()
-		statusPerNode, _ = controller.statuses[collectionName]
+		statusPerNode = controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes, len(statusPerNode))
 	})
 
@@ -1966,24 +1964,20 @@ func prepareSecrets(ns string, secretConfigs []secretConfig) []*corev1.Secret {
 
 func prepareTopology() ([]runtime.Object, []runtime.Object) {
 	var coreObjects, crdObjects []runtime.Object
-	for _, n := range prepareNodes([]nodeConfig{
+	coreObjects = append(coreObjects, prepareNodes([]nodeConfig{
 		{name: "n1"},
 		{name: "n2"},
 		{name: "n3", labels: map[string]string{"test": "selected"}},
 		{name: "n4", labels: map[string]string{"test": "selected"}},
 		{name: "n5", labels: map[string]string{"test": "not-selected"}},
-	}) {
-		coreObjects = append(coreObjects, n)
-	}
-	for _, en := range prepareExternalNodes([]externalNodeConfig{
+	})...)
+	crdObjects = append(crdObjects, prepareExternalNodes([]externalNodeConfig{
 		{namespace: "ns1", name: "en1"},
 		{namespace: "ns1", name: "en2"},
 		{namespace: "ns1", name: "en3", labels: map[string]string{"test": "selected"}},
 		{namespace: "ns1", name: "en4", labels: map[string]string{"test": "not-selected"}},
 		{namespace: "ns2", name: "en5", labels: map[string]string{"test": "selected"}},
-	}) {
-		crdObjects = append(crdObjects, en)
-	}
+	})...)
 
 	apiKey := []byte(testKeyString)
 	token := []byte(testTokenString)

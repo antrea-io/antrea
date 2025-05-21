@@ -41,8 +41,8 @@ var (
 )
 
 const (
-	podNotReadyTimeInSeconds = 30 * time.Second
-	ovsInterfaceTypeForPod   = "internal"
+	podNotReadyTime        = 30 * time.Second
+	ovsInterfaceTypeForPod = "internal"
 )
 
 // connectInterfaceToOVSAsync waits for an interface to be created and connects it to OVS br-int asynchronously
@@ -55,7 +55,7 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 	// need to think about the race condition between the current goroutine with the listener.
 	// It may generate a duplicated PodIsReady event if the Pod's OpenFlow entries are installed
 	// before the time, then the library shall merge the event.
-	pc.unreadyPortQueue.AddAfter(ovsPortName, podNotReadyTimeInSeconds)
+	pc.unreadyPortQueue.AddAfter(ovsPortName, podNotReadyTime)
 	return pc.ifConfigurator.addPostInterfaceCreateHook(ifConfig.ContainerID, ovsPortName, containerAccess, func() error {
 		if err := pc.ovsBridgeClient.SetInterfaceType(ovsPortName, ovsInterfaceTypeForPod); err != nil {
 			return err

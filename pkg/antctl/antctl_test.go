@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	serverError = fmt.Errorf("cannot reach server")
+	errServer = fmt.Errorf("cannot reach server")
 )
 
 // TestCommandListValidation ensures the command list is valid.
@@ -51,7 +51,7 @@ func TestCommandVersionRequestError(t *testing.T) {
 	var bufOut bytes.Buffer
 	CommandList.applyToRootCommand(rootCmd, client, &bufOut)
 
-	client.EXPECT().request(gomock.Any()).Return(nil, serverError)
+	client.EXPECT().request(gomock.Any()).Return(nil, errServer)
 
 	rootCmd.SetOut(&bufOut)
 	rootCmd.SetErr(&bufOut)
@@ -59,7 +59,7 @@ func TestCommandVersionRequestError(t *testing.T) {
 	rootCmd.Execute()
 	expected := fmt.Sprintf("antctlVersion: %s", antreaversion.GetFullVersion())
 	assert.Contains(t, bufOut.String(), expected)
-	assert.Contains(t, bufOut.String(), serverError.Error())
+	assert.Contains(t, bufOut.String(), errServer.Error())
 }
 
 // TestExtraArgs ensures that there will be an error if extra positional
