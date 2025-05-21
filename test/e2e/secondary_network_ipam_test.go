@@ -245,6 +245,7 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	skipIfAntreaIPAMTest(t)
 	skipIfFeatureDisabled(t, features.AntreaIPAM, true, true)
+	skipIfFeatureDisabled(t, features.SecondaryNetwork, true, true)
 
 	data, err := setupTest(t)
 	if err != nil {

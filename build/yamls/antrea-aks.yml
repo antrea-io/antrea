@@ -4075,7 +4075,7 @@ data:
     # Enable AntreaIPAM, which can allocate IP addresses from IPPools. AntreaIPAM is required by the
     # bridging mode and allocates IPs to Pods in bridging mode. It is also required to use Antrea for
     # IPAM when configuring secondary network interfaces with Multus.
-    #  AntreaIPAM: false
+    #  AntreaIPAM: true
 
     # Enable multicast traffic.
     #  Multicast: true
@@ -5502,7 +5502,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7dcad556b009a75a16ec216923b3fe36202ee1addc65c5ec04059205be651699
+        checksum/config: 0123414580b5fce292d1c501e271b074221f5c14de68ce740346f3b366d062f0
       labels:
         app: antrea
         component: antrea-agent
@@ -5750,7 +5750,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7dcad556b009a75a16ec216923b3fe36202ee1addc65c5ec04059205be651699
+        checksum/config: 0123414580b5fce292d1c501e271b074221f5c14de68ce740346f3b366d062f0
       labels:
         app: antrea
         component: antrea-controller
