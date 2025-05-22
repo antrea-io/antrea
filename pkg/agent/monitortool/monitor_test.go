@@ -317,6 +317,7 @@ func TestDisableMonitor(t *testing.T) {
 	}, 2*time.Second, 10*time.Millisecond)
 }
 
+// Update TestUpdateMonitorPingInterval to account for both ticker updates
 func TestUpdateMonitorPingInterval(t *testing.T) {
 	ctx := context.Background()
 
@@ -341,14 +342,12 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 
 	go m.Run(stopCh)
 
-	// We wait for the first ticker to be created, which indicates that we can advance the clock
-	// safely. This is not ideal, because it relies on knowledge of how the implementation
-	// creates tickers.
+	// Wait for both tickers to be created
 	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 1
+		return fakeClock.TickersAdded() == 2
 	}, 2*time.Second, 10*time.Millisecond)
 
-	// After advancing the clock by 60s (ping interval), we should see the ICMP requests being sent.
+	// After advancing the clock by 60s (ping interval), check ICMP requests
 	fakeClock.Step(60 * time.Second)
 	packets := []*nettest.Packet{}
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
@@ -356,26 +355,25 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
 	}, 2*time.Second, 10*time.Millisecond)
 
-	// We increase the ping interval from 60s to 90s.
+	// Update ping interval to 90s
 	newNLM := nlm.DeepCopy()
 	newNLM.Spec.PingIntervalSeconds = 90
 	newNLM.Generation = 1
 	_, err := m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Update(ctx, newNLM, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
-	// Again, we have to wait for the second ticker to be created before we can advance the clock.
+	// Wait for updated tickers
 	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 2
+		return fakeClock.TickersAdded() == 4
 	}, 2*time.Second, 10*time.Millisecond)
 
-	// When advancing the clock by 60s (old ping iterval), we should not observe any ICMP requests.
-	// We only wait for 200ms.
+	// Advancing by old interval (60s) should not trigger pings
 	fakeClock.Step(60 * time.Second)
 	assert.Never(t, func() bool {
 		return len(collect(nil)) > 0
 	}, 200*time.Millisecond, 50*time.Millisecond)
 
-	// After advancing the clock by an extra 30s, we should see the ICMP requests being sent.
+	// Advancing by remaining time should trigger pings
 	fakeClock.Step(30 * time.Second)
 	packets = []*nettest.Packet{}
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
@@ -730,7 +728,7 @@ func TestMonitorLoop(t *testing.T) {
 	// safely. This is not ideal, because it relies on knowledge of how the implementation
 	// creates tickers.
 	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 1
+		return fakeClock.TickersAdded() == 2 // Changed from 1 to 2
 	}, 2*time.Second, 10*time.Millisecond)
 
 	require.Empty(t, m.latencyStore.getNodeIPLatencyKeys())
