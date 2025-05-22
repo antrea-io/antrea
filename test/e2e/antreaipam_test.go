@@ -332,6 +332,13 @@ func testIPPoolConversion(t *testing.T, data *TestData) {
 	assert.Equal(t, v1b1Pool.Spec.SubnetInfo.PrefixLength, v1alpha2Pool.Spec.IPRanges[0].PrefixLength)
 	assert.Equal(t, v1b1Pool.Spec.SubnetInfo.VLAN, int32(v1alpha2Pool.Spec.IPRanges[0].VLAN))
 
+	v1alpha2Pool.Spec.IPRanges[0].PrefixLength = 25
+	_, err = data.CRDClient.CrdV1beta1().IPPools().Update(context.TODO(), &v1b1Pool, metav1.UpdateOptions{})
+	assert.Error(t, err, "The prefixLength of IPPool should be immutable")
+
+	v1alpha2Pool.Spec.IPRanges[0].Gateway = "10.10.2.1"
+	_, err = data.CRDClient.CrdV1beta1().IPPools().Update(context.TODO(), &v1b1Pool, metav1.UpdateOptions{})
+	assert.Error(t, err, "The gateway of IPPool should be immutable")
 }
 
 func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
