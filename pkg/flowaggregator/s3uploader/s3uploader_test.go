@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -41,8 +40,6 @@ var (
 	recordStrIPv4   = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,5,4,TIME_WAIT,11,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,172.18.0.1,http,mockHttpString,test-egress-node"
 	recordStrIPv6   = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,5,4,TIME_WAIT,11,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,172.18.0.1,http,mockHttpString,test-egress-node"
 )
-
-const seed = 1
 
 func init() {
 	registry.LoadRegistry()
@@ -103,8 +100,6 @@ func TestBatchUploadAll(t *testing.T) {
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
 	ctx := context.Background()
 	mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, nil)
-	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 10,
@@ -112,7 +107,6 @@ func TestBatchUploadAll(t *testing.T) {
 		bufferQueue:      make([]*bytes.Buffer, 0),
 		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
 		s3UploaderAPI:    mockS3Uploader,
-		nameRand:         nameRand,
 		clusterUUID:      fakeClusterUUID,
 	}
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
@@ -136,8 +130,6 @@ func TestBatchUploadAllPartialSuccess(t *testing.T) {
 		mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, nil),
 		mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, fmt.Errorf("random error")),
 	)
-	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 1,
@@ -145,7 +137,6 @@ func TestBatchUploadAllPartialSuccess(t *testing.T) {
 		bufferQueue:      make([]*bytes.Buffer, 0),
 		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
 		s3UploaderAPI:    mockS3Uploader,
-		nameRand:         nameRand,
 		clusterUUID:      fakeClusterUUID,
 	}
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
@@ -165,8 +156,6 @@ func TestBatchUploadAllError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctx := context.Background()
 	s3uploader := &S3Uploader{}
-	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
 	s3UploadProc := S3UploadProcess{
 		bucketName:       "test-bucket-name",
 		compress:         false,
@@ -175,7 +164,6 @@ func TestBatchUploadAllError(t *testing.T) {
 		bufferQueue:      make([]*bytes.Buffer, 0),
 		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
 		s3UploaderAPI:    s3uploader,
-		nameRand:         nameRand,
 	}
 	cfg, _ := config.LoadDefaultConfig(ctx, config.WithRegion("us-west-2"))
 	s3UploadProc.awsS3Client = s3.NewFromConfig(cfg)
@@ -202,14 +190,11 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
 	waitCh := make(chan struct{})
 	mockS3Uploader.EXPECT().Upload(context.Background(), gomock.Any(), nil).DoAndReturn(
-		// arguments have to exactly match func (mr *MockS3UploaderAPIMockRecorder) Upload(arg0, arg1, arg2 interface{}, arg3 ...interface{}) *gomock.Call
 		func(arg0, arg1, arg2 interface{}, arg3 ...interface{}) (*s3manager.UploadOutput, error) {
 			close(waitCh)
 			return nil, nil
 		},
 	)
-	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 10,
@@ -218,7 +203,6 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 		bufferQueue:      make([]*bytes.Buffer, 0),
 		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
 		s3UploaderAPI:    mockS3Uploader,
-		nameRand:         nameRand,
 		clusterUUID:      fakeClusterUUID,
 	}
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
@@ -248,8 +232,6 @@ func TestFlushCacheOnStop(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
 	mockS3Uploader.EXPECT().Upload(gomock.Any(), gomock.Any(), nil).Return(nil, nil)
-	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(seed))
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 10,
@@ -258,7 +240,6 @@ func TestFlushCacheOnStop(t *testing.T) {
 		bufferQueue:      make([]*bytes.Buffer, 0),
 		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
 		s3UploaderAPI:    mockS3Uploader,
-		nameRand:         nameRand,
 		clusterUUID:      fakeClusterUUID,
 	}
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
