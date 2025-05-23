@@ -44,6 +44,8 @@ type testPodInfo struct {
 	nodeName string
 	// map from interface name to secondary network name.
 	interfaceNetworks map[string]string
+	// map from interface name to secondary MAC address.
+	macAddresses map[string]string
 }
 
 type testData struct {
@@ -73,17 +75,25 @@ const (
 
 // formAnnotationStringOfPod forms the annotation string, used in the generation of each Pod YAML file.
 func (data *testData) formAnnotationStringOfPod(pod *testPodInfo) string {
-	var annotationString = ""
+	var annotationString string
 	for i, n := range pod.interfaceNetworks {
-		podNetworkSpec := fmt.Sprintf("{\"name\": \"%s\", \"namespace\": \"%s\", \"interface\": \"%s\"}",
+		podNetworkSpec := fmt.Sprintf("{\"name\": \"%s\", \"namespace\": \"%s\", \"interface\": \"%s\"",
 			n, attachDefNamespace, i)
+
+		if pod.macAddresses != nil {
+			if mac, ok := pod.macAddresses[i]; ok {
+				podNetworkSpec += fmt.Sprintf(", \"mac\": \"%s\"", mac)
+			}
+		}
+		podNetworkSpec += "}"
+
 		if annotationString == "" {
 			annotationString = "[" + podNetworkSpec
 		} else {
 			annotationString = annotationString + ", " + podNetworkSpec
 		}
 	}
-	annotationString = annotationString + "]"
+	annotationString += "]"
 	return annotationString
 }
 
@@ -426,6 +436,24 @@ func (data *testData) reconcilationAfterAgentRestart(t *testing.T) error {
 	return data.checkIPReleased(ipPools, ifacesIPs, ifaces)
 }
 
+// verifyPodInterfaceMAC verifies the MAC address of each interface in the Pod.
+func (data *testData) verifyPodInterfaceMAC(t *testing.T) {
+	for _, pod := range data.pods {
+		_, _, macResult, err := data.listPodAddresses(pod)
+		if err != nil {
+			t.Fatalf("Error when listing Pod addresses: %v", err)
+		}
+		for iface, expectedMAC := range pod.macAddresses {
+			actualMAC, exists := macResult[iface]
+			if !exists {
+				t.Fatalf("Interface %s not found in Pod %s", iface, pod.podName)
+			}
+			assert.Equal(t, expectedMAC, actualMAC, "MAC address mismatch for interface %s in Pod %s", iface, pod.podName)
+			logs.Infof("Interface %s in Pod %s has expected MAC address: %s", iface, pod.podName, actualMAC)
+		}
+	}
+}
+
 func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo) {
 	e2eTestData, err := antreae2e.SetupTest(t)
 	if err != nil {
@@ -449,6 +477,9 @@ func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo)
 	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns); err != nil {
 		t.Fatalf("Error when checking the Pod annotation: %v", err)
 	}
+	t.Run("testVerifyPodInterfaceMAC", func(t *testing.T) {
+		testData.verifyPodInterfaceMAC(t)
+	})
 	t.Run("testReconcilationAfterAgentRestart", func(t *testing.T) {
 		testData.reconcilationAfterAgentRestart(t)
 	})
@@ -465,16 +496,19 @@ func TestVLANNetwork(t *testing.T) {
 			podName:           "vlan-pod1",
 			nodeName:          node1,
 			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth2": "vlan-net2"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:01", "eth2": "aa:bb:cc:dd:ee:02"},
 		},
 		{
 			podName:           "vlan-pod2",
 			nodeName:          node1,
 			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth2": "vlan-net3"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:03", "eth2": "aa:bb:cc:dd:ee:04"},
 		},
 		{
 			podName:           "vlan-pod3",
 			nodeName:          node2,
 			interfaceNetworks: map[string]string{"eth1": "vlan-net2"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:05"},
 		},
 	}
 	testSecondaryNetwork(t, networkTypeVLAN, pods)
