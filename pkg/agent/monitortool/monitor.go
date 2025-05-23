@@ -47,6 +47,7 @@ const (
 	ipv6ProtocolICMPRaw = "ip6:ipv6-icmp"
 	protocolICMP        = 1
 	protocolICMPv6      = 58
+	minReportInterval   = 10 * time.Second
 )
 
 type PacketListener interface {
@@ -411,8 +412,8 @@ func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
 // monitorLoop is the main loop to monitor the latency of the Node.
 func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 	klog.InfoS("NodeLatencyMonitor is running")
-	var ticker clock.Ticker
-	var tickerCh <-chan time.Time
+	var pingTicker, reportTicker clock.Ticker
+	var pingTickerCh, reportTickerCh <-chan time.Time
 	var ipv4Socket, ipv6Socket net.PacketConn
 	var err error
 
@@ -423,31 +424,53 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		if ipv6Socket != nil {
 			ipv6Socket.Close()
 		}
-		if ticker != nil {
-			ticker.Stop()
+		if pingTicker != nil {
+			pingTicker.Stop()
+		}
+		if reportTicker != nil {
+			reportTicker.Stop()
 		}
 	}()
 
-	// Update current ticker based on the latencyConfig
-	updateTicker := func(interval time.Duration) {
-		if ticker != nil {
-			ticker.Stop() // Stop the current ticker
+	// Update the ping ticker based on latencyConfig
+	updatePingTicker := func(interval time.Duration) {
+		if pingTicker != nil {
+			pingTicker.Stop() // Stop the  pingTicker
 		}
-		ticker = m.clock.NewTicker(interval)
-		tickerCh = ticker.C()
+		pingTicker = m.clock.NewTicker(interval)
+		pingTickerCh = pingTicker.C()
+	}
+	//  report ticker with minimum interval and jitter
+	updateReportTicker := func(interval time.Duration) {
+		// Set minimum reporting interval to 10 seconds if needed
+		reportInterval := interval
+		if reportInterval < minReportInterval{
+			reportInterval = minReportInterval
+		} else {
+			// Add jitter (1 second) to avoid lockstep with ping ticker
+			reportInterval += time.Second
+		}
+
+		if reportTicker != nil {
+			reportTicker.Stop()
+		}
+		reportTicker = m.clock.NewTicker(reportInterval)
+		reportTickerCh = reportTicker.C()
 	}
 
-	wg := sync.WaitGroup{}
+        wg := sync.WaitGroup{}
 	// Start the pingAll goroutine
 	for {
 		select {
-		case <-tickerCh:
+		case <-pingTickerCh:
 			// Try to send pingAll signal
 			m.pingAll(ipv4Socket, ipv6Socket)
 			// We no not delete IPs from nodeIPLatencyMap as part of the Node delete event handler
 			// to avoid consistency issues and because it would not be sufficient to avoid stale entries completely.
 			// This means that we have to periodically invoke DeleteStaleNodeIPs to avoid stale entries in the map.
 			m.latencyStore.DeleteStaleNodeIPs()
+		case <-reportTickerCh:
+			// Report the latency stats
 			m.report()
 		case <-stopCh:
 			return
@@ -455,8 +478,9 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 			klog.InfoS("NodeLatencyMonitor configuration has changed", "enabled", latencyConfig.Enable, "interval", latencyConfig.Interval)
 			// Start or stop the pingAll goroutine based on the latencyConfig
 			if latencyConfig.Enable {
-				// latencyConfig changed
-				updateTicker(latencyConfig.Interval)
+				// latencyConfig changed for both of tickers
+				updatePingTicker(latencyConfig.Interval)
+				updateReportTicker(latencyConfig.Interval)
 
 				// If the recvPing socket is closed,
 				// recreate it if it is closed(CRD is deleted).
@@ -487,12 +511,17 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 					}()
 				}
 			} else {
-				// latencyConfig deleted
-				if ticker != nil {
-					ticker.Stop()
-					ticker = nil
+				//stop the ping ticker and report ticker if latencyConfig monitorting is disabled
+				if pingTicker != nil {
+					pingTicker.Stop()
+					pingTicker = nil
 				}
-				tickerCh = nil
+				
+				if reportTicker != nil {
+					reportTicker.Stop()
+					reportTicker = nil
+				}
+				pingTickerCh, reportTickerCh = nil, nil
 
 				// We close the sockets as a signal to recvPing that it needs to stop.
 				// Note that at that point, we are guaranteed that there is no ongoing Write
