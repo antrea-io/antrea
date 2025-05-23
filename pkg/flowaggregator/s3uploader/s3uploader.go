@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -81,7 +81,6 @@ type S3UploadProcess struct {
 	awsS3Uploader *s3manager.Uploader
 	// s3UploaderAPI wraps the call made by awsS3Uploader
 	s3UploaderAPI S3UploaderAPI
-	nameRand      *rand.Rand
 	clusterUUID   string
 }
 
@@ -135,8 +134,6 @@ func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, er
 	awsS3Uploader := s3manager.NewUploader(awsS3Client)
 
 	buf := &bytes.Buffer{}
-	// #nosec G404: random number generator not used for security purposes
-	nameRand := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	s3ExportProcess := &S3UploadProcess{
 		bucketName:       config.BucketName,
@@ -152,7 +149,6 @@ func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, er
 		awsS3Client:      awsS3Client,
 		awsS3Uploader:    awsS3Uploader,
 		s3UploaderAPI:    &S3Uploader{},
-		nameRand:         nameRand,
 		clusterUUID:      clusterUUID,
 	}
 	return s3ExportProcess, nil
@@ -337,7 +333,7 @@ func (p *S3UploadProcess) writeRecordToBuffer(record *flowrecord.FlowRecord) {
 }
 
 func (p *S3UploadProcess) uploadFile(ctx context.Context, reader *bytes.Reader) error {
-	fileName := fmt.Sprintf("records-%s.csv", randSeq(p.nameRand, 12))
+	fileName := fmt.Sprintf("records-%s.csv", randSeq(12))
 	if p.compress {
 		fileName += ".gz"
 	}
@@ -370,12 +366,12 @@ func (p *S3UploadProcess) appendBufferToQueue() {
 	}
 }
 
-func randSeq(randSrc *rand.Rand, n int) string {
+func randSeq(n int) string {
 	var alphabet = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 	b := make([]rune, n)
 	for i := range b {
-		randIdx := randSrc.Intn(len(alphabet))
-		b[i] = alphabet[randIdx]
+		// #nosec G404: random number generator not used for security purposes.
+		b[i] = alphabet[rand.IntN(len(alphabet))]
 	}
 	return string(b)
 }
