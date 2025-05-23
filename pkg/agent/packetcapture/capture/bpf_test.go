@@ -27,10 +27,14 @@ import (
 )
 
 var (
-	testTCPProtocol       = intstr.FromString("TCP")
-	testUDPProtocol       = intstr.FromString("UDP")
-	testSrcPort     int32 = 12345
-	testDstPort     int32 = 80
+	testTCPProtocol             = intstr.FromString("TCP")
+	testUDPProtocol             = intstr.FromString("UDP")
+	testICMPProtocol            = intstr.FromString("ICMP")
+	testSrcPort           int32 = 12345
+	testDstPort           int32 = 80
+	testICMPMsgDstUnreach       = intstr.FromString(string(crdv1alpha1.ICMPMsgTypeDstUnreach))
+	testICMPMsgEcho             = intstr.FromString(string(crdv1alpha1.ICMPMsgTypeEcho))
+	testICMPMsgEchoReply        = intstr.FromString(string(crdv1alpha1.ICMPMsgTypeEchoReply))
 )
 
 func TestCalculateInstructionsSize(t *testing.T) {
@@ -131,6 +135,22 @@ func TestCalculateInstructionsSize(t *testing.T) {
 				},
 			},
 			count:     21,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name: "proto with icmp messages echo and destination unreachable (host unreachable)",
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testICMPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					ICMP: &crdv1alpha1.ICMPHeader{
+						Messages: []crdv1alpha1.ICMPMsgMatcher{
+							{Type: testICMPMsgDstUnreach, Code: ptr.To(int32(1))},
+							{Type: testICMPMsgEcho},
+						},
+					},
+				},
+			},
+			count:     18,
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 		},
 		{
@@ -476,6 +496,80 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.LoadIndirect{Off: 27, Size: 1},                                      // tcp flags
 				bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 16},                            // AND with mask
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0, SkipTrue: 0, SkipFalse: 1},      // compare with flag
+				bpf.RetConstant{Val: 262144},
+				bpf.RetConstant{Val: 0},
+			},
+		},
+		{
+			name:  "with-proto-and-icmp-messages",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			spec: &crdv1alpha1.PacketCaptureSpec{
+				Packet: &crdv1alpha1.Packet{
+					Protocol: &testICMPProtocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						ICMP: &crdv1alpha1.ICMPHeader{
+							Messages: []crdv1alpha1.ICMPMsgMatcher{
+								{Type: testICMPMsgDstUnreach, Code: ptr.To(int32(1))},
+								{Type: testICMPMsgEcho},
+							},
+						}},
+				},
+				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			},
+			inst: []bpf.Instruction{
+				bpf.LoadAbsolute{Off: 12, Size: 2},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 15},
+				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipFalse: 13}, // icmp
+				bpf.LoadAbsolute{Off: 26, Size: 4},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 11},
+				bpf.LoadAbsolute{Off: 30, Size: 4},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 9},
+				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
+				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 7}, // do we have an L4 header?
+				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
+				bpf.LoadIndirect{Off: 14, Size: lengthByte},                 // load ICMP type
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3, SkipTrue: 0, SkipFalse: 2},
+				bpf.LoadIndirect{Off: 15, Size: lengthByte}, // load ICMP code
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 1, SkipFalse: 2},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x8, SkipTrue: 0, SkipFalse: 1},
+				bpf.RetConstant{Val: 262144},
+				bpf.RetConstant{Val: 0},
+			},
+		},
+		{
+			name:  "with-proto-and-icmp-messages-2",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			spec: &crdv1alpha1.PacketCaptureSpec{
+				Packet: &crdv1alpha1.Packet{
+					Protocol: &testICMPProtocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						ICMP: &crdv1alpha1.ICMPHeader{
+							Messages: []crdv1alpha1.ICMPMsgMatcher{
+								{Type: testICMPMsgEcho},
+								{Type: testICMPMsgEchoReply},
+							},
+						}},
+				},
+				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			},
+			inst: []bpf.Instruction{
+				bpf.LoadAbsolute{Off: 12, Size: 2},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 13},
+				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipFalse: 11}, // icmp
+				bpf.LoadAbsolute{Off: 26, Size: 4},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 9},
+				bpf.LoadAbsolute{Off: 30, Size: 4},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 7},
+				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
+				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 5}, // do we have an L4 header?
+				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
+				bpf.LoadIndirect{Off: 14, Size: lengthByte},                 // load ICMP type
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x8, SkipTrue: 1, SkipFalse: 0},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 1},
 				bpf.RetConstant{Val: 262144},
 				bpf.RetConstant{Val: 0},
 			},

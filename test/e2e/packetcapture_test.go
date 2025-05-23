@@ -630,6 +630,56 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 			},
 			numConnections: 1, // creating one netcat connection to capture only a syn and a syn+ack packet
 		},
+		{
+			name:      "ipv4-icmp-echo-echoreply-both-timeout",
+			ipVersion: 4,
+			pc: getPacketCaptureCR(
+				"ipv4-icmp-echo-echoreply-both-timeout",
+				data.testNamespace,
+				clientPodName,
+				tcpServerPodName,
+				sftpURL,
+				&crdv1alpha1.Packet{
+					Protocol: &icmpProto,
+					IPFamily: v1.IPv4Protocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						ICMP: &crdv1alpha1.ICMPHeader{
+							Messages: []crdv1alpha1.ICMPMsgMatcher{
+								{Type: intstr.FromInt32(8)},                                         // echo
+								{Type: intstr.FromString(string(crdv1alpha1.ICMPMsgTypeEchoReply))}, // echo reply
+							},
+						},
+					},
+				},
+				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureTimeout(ptr.To[int32](10)), // setting a high timeout to ensure capture ends due to timeout
+				packetCaptureFirstN(500),                // ensures packet capture doesn't complete early due to packet count before timeout
+				packetCaptureHostPublicKey(pubKey1),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 2,
+				FilePath:       getPcapURL("ipv4-icmp-echo-echoreply-both-timeout"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:    crdv1alpha1.PacketCaptureComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Timeout",
+						Message: "context deadline exceeded",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+			numConnections: 1, // running ping command once to capture only an echo and an echo reply packet
+		},
 	}
 	t.Run("testPacketCaptureL4Filters", func(t *testing.T) {
 		for _, tc := range testcases {
@@ -715,7 +765,7 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		switch protocol {
 		case icmpProto:
 			if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, getOSString(), "", data.testNamespace},
-				data.testNamespace, dstPodIPs, toolboxContainerName, 10, 0, false); err != nil {
+				data.testNamespace, dstPodIPs, toolboxContainerName, connections, 0, false); err != nil {
 				t.Logf("Ping(%s) '%s' -> '%v' failed: ERROR (%v)", protocol.StrVal, srcPod, *dstPodIPs, err)
 			}
 		case tcpProto:

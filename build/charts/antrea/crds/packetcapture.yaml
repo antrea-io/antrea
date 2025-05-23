@@ -129,6 +129,13 @@ spec:
                       x-kubernetes-int-or-string: true
                     transportHeader:
                       type: object
+                      oneOf:
+                        - required:
+                          - udp
+                        - required:
+                          - tcp
+                        - required:
+                          - icmp
                       properties:
                         udp:
                           type: object
@@ -164,6 +171,20 @@ spec:
                                     minimum: 0
                                     maximum: 255
                                   mask:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 255
+                        icmp:
+                          type: object
+                          properties:
+                            messages:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  type:
+                                    x-kubernetes-int-or-string: true
+                                  code:
                                     type: integer
                                     minimum: 0
                                     maximum: 255
