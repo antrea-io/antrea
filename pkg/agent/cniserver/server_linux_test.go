@@ -144,7 +144,7 @@ func TestRemoveInterface(t *testing.T) {
 			"eth0",
 			containerMAC,
 			[]net.IP{containerIP},
-			0)
+			0, "")
 		containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: fakePortUUID, OFPort: 0}
 		return containerConfig
 	}
@@ -476,7 +476,7 @@ func TestCmdDel(t *testing.T) {
 			containerID := requestMsg.CniArgs.ContainerId
 			containerIfaceConfig := interfacestore.NewContainerInterface(hostInterfaceName, containerID,
 				testPodNameA, testPodNamespace, "eth0",
-				containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0)
+				containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0, "")
 			containerIfaceConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: ovsPortID, OFPort: ovsPort}
 			ifaceStore.AddInterface(containerIfaceConfig)
 			testIfaceConfigurator := newTestInterfaceConfigurator()
@@ -541,7 +541,7 @@ func TestCmdCheck(t *testing.T) {
 		requestMsg, containerID := newRequest(podArgs, networkCfg, "", t)
 		containerIfaceConfig := interfacestore.NewContainerInterface(hostInterfaceName, containerID,
 			name, testPodNamespace, "eth0",
-			containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0)
+			containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0, "containerNS")
 		containerIfaceConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: ovsPortID, OFPort: ovsPort}
 		ifaceStore.AddInterface(containerIfaceConfig)
 		return requestMsg, hostInterfaceName
