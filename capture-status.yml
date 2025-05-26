@@ -1,0 +1,46 @@
+apiVersion: crd.antrea.io/v1alpha1
+kind: PacketCapture
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"crd.antrea.io/v1alpha1","kind":"PacketCapture","metadata":{"annotations":{},"name":"toolbox-cap"},"spec":{"captureConfig":{"firstN":{"number":5}},"destination":{"ip":"8.8.8.8"},"direction":"SourceToDestination","packet":{"ipFamily":"IPv4","protocol":"TCP","transportHeader":{"tcp":{"dstPort":53,"flags":[{"mask":2,"value":2}]}}},"source":{"pod":{"name":"toolbox-9d757c85-l96jv","namespace":"lfx-mentorship"}},"timeout":300}}
+  creationTimestamp: "2025-05-26T14:52:59Z"
+  generation: 2
+  name: toolbox-cap
+  resourceVersion: "30270"
+  uid: 39a52409-57c4-4ab0-b5e4-a0d2332d7898
+spec:
+  captureConfig:
+    firstN:
+      number: 5
+  destination:
+    ip: 8.8.8.8
+  direction: SourceToDestination
+  packet:
+    ipFamily: IPv4
+    protocol: TCP
+    transportHeader:
+      tcp:
+        dstPort: 53
+        flags:
+        - mask: 2
+          value: 2
+  source:
+    pod:
+      name: toolbox-9d757c85-l96jv
+      namespace: lfx-mentorship
+  timeout: 300
+status:
+  conditions:
+  - lastTransitionTime: "2025-05-26T15:41:11Z"
+    message: ""
+    reason: Started
+    status: "True"
+    type: PacketCaptureStarted
+  - lastTransitionTime: "2025-05-26T15:41:33Z"
+    message: ""
+    reason: Succeed
+    status: "True"
+    type: PacketCaptureComplete
+  filePath: antrea-agent-tmd9l:/tmp/antrea/packetcapture/packets/toolbox-cap.pcapng
+  numberCaptured: 5

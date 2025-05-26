@@ -1,0 +1,25 @@
+apiVersion: crd.antrea.io/v1alpha1
+kind: PacketCapture
+metadata:
+  name: toolbox-cap
+spec:
+  timeout: 300
+  captureConfig:
+    firstN:
+      number: 5
+  source:
+    pod:
+      namespace: lfx-mentorship
+      name: toolbox-9d757c85-l96jv
+  destination:
+    ip: 8.8.8.8
+  direction: SourceToDestination
+  packet:
+    ipFamily: IPv4
+    protocol: TCP
+    transportHeader:
+      tcp:
+        dstPort: 53
+        flags:
+          - value: 0x2
+            mask: 0x2 

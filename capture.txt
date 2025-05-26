@@ -1,0 +1,5 @@
+21:11:28.778887 IP 10.244.1.2.36773 > dns.google.domain: Flags [S], seq 4042551569, win 64660, options [mss 1220,sackOK,TS val 4085084122 ecr 0,nop,wscale 7], length 0
+21:11:30.103626 IP 10.244.1.2.44453 > dns.google.domain: Flags [S], seq 3954261430, win 64660, options [mss 1220,sackOK,TS val 4085085453 ecr 0,nop,wscale 7], length 0
+21:11:31.415351 IP 10.244.1.2.36093 > dns.google.domain: Flags [S], seq 416069019, win 64660, options [mss 1220,sackOK,TS val 4085086765 ecr 0,nop,wscale 7], length 0
+21:11:32.661872 IP 10.244.1.2.37613 > dns.google.domain: Flags [S], seq 3772856772, win 64660, options [mss 1220,sackOK,TS val 4085088011 ecr 0,nop,wscale 7], length 0
+21:11:33.819227 IP 10.244.1.2.42479 > dns.google.domain: Flags [S], seq 1053869812, win 64660, options [mss 1220,sackOK,TS val 4085089169 ecr 0,nop,wscale 7], length 0

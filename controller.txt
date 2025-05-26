@@ -1,0 +1,76 @@
+I0525 13:29:22.061951       1 log_file.go:93] Set log file max size to 104857600
+I0525 13:29:22.066020       1 controller.go:126] "Starting Antrea Controller" version="v2.4.0-dev-d0ae3852.dirty"
+I0525 13:29:22.066061       1 controller.go:128] "LFX Mentorship 2025_02 Task" GitHub username="Khushi-Singh" Pod="antrea-controller-676868f5f8-hlxxm"
+I0525 13:29:22.066079       1 client.go:89] No kubeconfig file was specified. Falling back to in-cluster config
+I0525 13:29:22.135861       1 selfsignedcert_provider.go:303] "Didn't find the Secret for TLS certificate and key" secret="antrea-controller-tls"
+I0525 13:29:22.135902       1 selfsignedcert_provider.go:265] "Generating self-signed cert"
+I0525 13:29:23.056204       1 selfsignedcert_provider.go:341] "Creating Secret to persist self-signed cert" secret=""
+I0525 13:29:23.366201       1 selfsignedcert_provider.go:281] "Writing certificate and key to the cert directory"
+I0525 13:29:25.858385       1 handler.go:286] Adding GroupVersion controlplane.antrea.io v1beta2 to ResourceManager
+I0525 13:29:25.861593       1 handler.go:286] Adding GroupVersion system.antrea.io v1beta1 to ResourceManager
+I0525 13:29:25.863634       1 handler.go:286] Adding GroupVersion stats.antrea.io v1alpha1 to ResourceManager
+I0525 13:29:25.875228       1 prometheus.go:124] Initializing prometheus metrics
+I0525 13:29:25.876970       1 controller.go:201] Starting ExternalIPController
+I0525 13:29:25.877513       1 shared_informer.go:313] Waiting for caches to sync for ExternalIPController
+I0525 13:29:25.879876       1 log_file.go:121] Starting log file monitoring. Maximum log file number is 4
+I0525 13:29:25.916591       1 controller.go:129] "Starting" controllerName="AntreaControllerMonitor"
+I0525 13:29:25.925525       1 shared_informer.go:313] Waiting for caches to sync for AntreaControllerMonitor
+I0525 13:29:25.925563       1 shared_informer.go:320] Caches are synced for AntreaControllerMonitor
+I0525 13:29:25.927529       1 group_entity_index.go:668] Starting GroupEntityIndex
+I0525 13:29:25.927901       1 controller.go:167] Starting GroupEntityController
+I0525 13:29:25.927967       1 shared_informer.go:313] Waiting for caches to sync for GroupEntityController
+I0525 13:29:25.928133       1 networkpolicy_controller.go:963] Starting NetworkPolicyController
+I0525 13:29:25.928215       1 shared_informer.go:313] Waiting for caches to sync for NetworkPolicyController
+I0525 13:29:25.921263       1 aggregator.go:352] Starting stats aggregator
+I0525 13:29:25.928319       1 shared_informer.go:313] Waiting for caches to sync for stats aggregator
+I0525 13:29:25.921298       1 controller.go:122] Starting TraceflowController
+I0525 13:29:25.928953       1 shared_informer.go:313] Waiting for caches to sync for TraceflowController
+I0525 13:29:25.921310       1 status_controller.go:197] Starting NetworkPolicyStatusController
+I0525 13:29:25.929101       1 shared_informer.go:313] Waiting for caches to sync for NetworkPolicyStatusController
+I0525 13:29:25.921319       1 controller.go:177] Starting ExternalIPPoolController
+I0525 13:29:25.930089       1 shared_informer.go:313] Waiting for caches to sync for ExternalIPPoolController
+I0525 13:29:25.921380       1 controller.go:158] "Starting" controller="EgressController"
+I0525 13:29:25.930201       1 shared_informer.go:313] Waiting for caches to sync for EgressController
+I0525 13:29:26.035001       1 controller.go:349] "Creating agent monitoring CRD" name="kind-control-plane"
+I0525 13:29:26.040293       1 shared_informer.go:320] Caches are synced for GroupEntityController
+I0525 13:29:26.040724       1 shared_informer.go:320] Caches are synced for NetworkPolicyController
+I0525 13:29:26.040804       1 shared_informer.go:320] Caches are synced for stats aggregator
+I0525 13:29:26.040826       1 shared_informer.go:320] Caches are synced for TraceflowController
+I0525 13:29:26.040854       1 controller.go:349] "Creating agent monitoring CRD" name="kind-worker"
+I0525 13:29:26.040884       1 shared_informer.go:320] Caches are synced for NetworkPolicyStatusController
+I0525 13:29:26.040910       1 shared_informer.go:320] Caches are synced for ExternalIPPoolController
+I0525 13:29:26.047678       1 cacert_controller.go:287] "Syncing CA certificate with ConfigMap" name="kube-system/antrea-ca"
+I0525 13:29:26.072980       1 clusteridentity.go:115] New cluster UUID: 22bf3e9b-6957-45e0-a44f-92d3f02d094d
+I0525 13:29:26.080481       1 shared_informer.go:320] Caches are synced for ExternalIPController
+I0525 13:29:26.139327       1 shared_informer.go:320] Caches are synced for EgressController
+I0525 13:29:26.335974       1 cacert_controller.go:254] "Syncing CA certificate with APIService" name="v1alpha1.stats.antrea.io"
+I0525 13:29:26.377978       1 cacert_controller.go:254] "Syncing CA certificate with APIService" name="v1beta1.system.antrea.io"
+I0525 13:29:26.438267       1 cacert_controller.go:254] "Syncing CA certificate with APIService" name="v1beta2.controlplane.antrea.io"
+I0525 13:29:26.592212       1 cacert_controller.go:194] "Syncing CA certificate with MutatingWebhookConfiguration" name="crdmutator.antrea.io"
+I0525 13:29:26.665125       1 cacert_controller.go:227] "Syncing CA certificate with ValidatingWebhookConfiguration" name="crdvalidator.antrea.io"
+I0525 13:29:26.861192       1 cacert_controller.go:174] "Syncing CA certificate with CRD that have conversion webhooks" name="ippools.crd.antrea.io"
+I0525 13:29:26.965916       1 cacert_controller.go:324] Starting CACertController
+I0525 13:29:26.966443       1 selfsignedcert_provider.go:153] Starting selfSignedCertProvider
+I0525 13:29:27.087917       1 requestheader_controller.go:172] Starting RequestHeaderAuthRequestController
+I0525 13:29:27.087970       1 shared_informer.go:313] Waiting for caches to sync for RequestHeaderAuthRequestController
+I0525 13:29:27.088051       1 configmap_cafile_content.go:205] "Starting controller" name="client-ca::kube-system::extension-apiserver-authentication::client-ca-file"
+I0525 13:29:27.088068       1 shared_informer.go:313] Waiting for caches to sync for client-ca::kube-system::extension-apiserver-authentication::client-ca-file
+I0525 13:29:27.088089       1 configmap_cafile_content.go:205] "Starting controller" name="client-ca::kube-system::extension-apiserver-authentication::requestheader-client-ca-file"
+I0525 13:29:27.088100       1 shared_informer.go:313] Waiting for caches to sync for client-ca::kube-system::extension-apiserver-authentication::requestheader-client-ca-file
+I0525 13:29:27.105988       1 dynamic_serving_content.go:135] "Starting controller" name="serving-cert::/var/run/antrea/antrea-controller-self-signed/antrea-controller.crt::/var/run/antrea/antrea-controller-self-signed/antrea-controller.key"
+I0525 13:29:27.108401       1 secure_serving.go:213] Serving securely on [::]:10349
+I0525 13:29:27.108475       1 tlsconfig.go:243] "Starting DynamicServingCertificateController"
+I0525 13:29:27.183899       1 tier.go:174] "Failed to create system Tier on init, will retry" tier="baseline" attempts=1 err="Internal error occurred: failed calling webhook \"tiervalidator.antrea.io\": failed to call webhook: Post \"https://antrea.kube-system.svc:443/validate/tier?timeout=5s\": dial tcp 10.96.97.197:443: connect: connection refused"
+I0525 13:29:27.189572       1 shared_informer.go:320] Caches are synced for RequestHeaderAuthRequestController
+I0525 13:29:27.189706       1 shared_informer.go:320] Caches are synced for client-ca::kube-system::extension-apiserver-authentication::client-ca-file
+I0525 13:29:27.191202       1 shared_informer.go:320] Caches are synced for client-ca::kube-system::extension-apiserver-authentication::requestheader-client-ca-file
+I0525 13:29:28.216017       1 tier.go:174] "Failed to create system Tier on init, will retry" tier="baseline" attempts=2 err="Internal error occurred: failed calling webhook \"tiervalidator.antrea.io\": failed to call webhook: Post \"https://antrea.kube-system.svc:443/validate/tier?timeout=5s\": dial tcp 10.96.97.197:443: connect: connection refused"
+I0525 13:29:30.269545       1 tier.go:197] "Created system Tier" tier="baseline"
+I0525 13:29:30.317468       1 tier.go:197] "Created system Tier" tier="application"
+I0525 13:29:30.345795       1 tier.go:197] "Created system Tier" tier="platform"
+I0525 13:29:30.377485       1 tier.go:197] "Created system Tier" tier="networkops"
+I0525 13:29:30.401209       1 tier.go:197] "Created system Tier" tier="securityops"
+I0525 13:29:30.417626       1 tier.go:197] "Created system Tier" tier="emergency"
+http2: server: error reading preface from client 172.18.0.3:15575: read tcp 172.18.0.3:10349->172.18.0.3:15575: read: connection reset by peer
+http2: server: error reading preface from client 172.18.0.3:13400: read tcp 172.18.0.3:10349->172.18.0.3:13400: read: connection reset by peer
+http2: server: error reading preface from client 172.18.0.3:58038: read tcp 172.18.0.3:10349->172.18.0.3:58038: read: connection reset by peer
