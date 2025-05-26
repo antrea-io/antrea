@@ -37,6 +37,9 @@ inactiveFlowRecordTimeout: 90s
 aggregatorTransportProtocol: "tls"
 # -- Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate.
 flowAggregatorAddress: ""
+# -- Provide a clusterID to be added to records. This is only consumed by the
+# flowCollector (IPFIX) exporter.
+clusterID: ""
 # recordContents enables configuring some fields in the flow records.
 recordContents:
   # -- Determine whether source and destination Pod labels will be included in the flow records.

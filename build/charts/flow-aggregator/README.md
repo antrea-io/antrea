@@ -32,6 +32,7 @@ Kubernetes: `>= 1.19.0-0`
 | clickHouse.enable | bool | `false` | Determine whether to enable exporting flow records to ClickHouse. |
 | clickHouse.tls.caCert | bool | `false` | Indicates whether to use custom CA certificate. Default root CAs will be used if this field is false. If true, a Secret named "clickhouse-ca" must be provided with the following keys: ca.crt: <CA certificate> |
 | clickHouse.tls.insecureSkipVerify | bool | `false` | Determine whether to skip the verification of the server's certificate chain and host name. Default is false. |
+| clusterID | string | `""` | Provide a clusterID to be added to records. This is only consumed by the flowCollector (IPFIX) exporter. |
 | dnsPolicy | string | `""` | DNS Policy for the flow-aggregator Pod. If empty, the Kubernetes default will be used. |
 | flowAggregator.resources | object | `{"requests":{"cpu":"500m","memory":"256Mi"}}` | Resource requests and limits for the flow-aggregator container. |
 | flowAggregator.securityContext | object | `{}` | Configure the security context for the flow-aggregator container. |

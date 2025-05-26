@@ -104,6 +104,7 @@ var (
 type flowAggregator struct {
 	aggregatorMode              flowaggregatorconfig.AggregatorMode
 	clusterUUID                 uuid.UUID
+	clusterID                   string
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
 	preprocessor                *preprocessor
@@ -162,9 +163,15 @@ func NewFlowAggregator(
 		return nil, err
 	}
 
+	clusterID := opt.Config.ClusterID
+	if clusterID == "" {
+		clusterID = clusterUUID.String()
+	}
+
 	fa := &flowAggregator{
 		aggregatorMode:              opt.AggregatorMode,
 		clusterUUID:                 clusterUUID,
+		clusterID:                   clusterID,
 		aggregatorTransportProtocol: opt.AggregatorTransportProtocol,
 		activeFlowRecordTimeout:     opt.ActiveFlowRecordTimeout,
 		inactiveFlowRecordTimeout:   opt.InactiveFlowRecordTimeout,
@@ -217,7 +224,7 @@ func NewFlowAggregator(
 	if opt.Config.FlowCollector.Enable {
 		fa.ipfixExporter = newIPFIXExporter(clusterUUID, opt, registry)
 	}
-	klog.InfoS("FlowAggregator initialized", "mode", opt.AggregatorMode)
+	klog.InfoS("FlowAggregator initialized", "mode", opt.AggregatorMode, "clusterID", fa.clusterID)
 	return fa, nil
 }
 
@@ -830,7 +837,7 @@ func (fa *flowAggregator) fillClusterID(record ipfixentities.Record) error {
 	if err != nil {
 		return fmt.Errorf("error when getting clusterId InfoElement: %w", err)
 	}
-	if err := record.AddInfoElement(ipfixentities.NewStringInfoElement(ie, fa.clusterUUID.String())); err != nil {
+	if err := record.AddInfoElement(ipfixentities.NewStringInfoElement(ie, fa.clusterID)); err != nil {
 		return fmt.Errorf("error when adding clusterId InfoElement with value: %w", err)
 	}
 	return nil
