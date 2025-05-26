@@ -134,6 +134,7 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
 				return &flowAggregator{
 					clusterUUID:                 clusterUUID,
+					clusterID:                   clusterUUID.String(),
 					aggregatorTransportProtocol: "tcp",
 					aggregationProcess:          mockAggregationProcess,
 					activeFlowRecordTimeout:     testActiveTimeout,
@@ -263,6 +264,7 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 				return &flowAggregator{
 					aggregatorMode:              flowaggregatorconfig.AggregatorModeProxy,
 					clusterUUID:                 clusterUUID,
+					clusterID:                   clusterUUID.String(),
 					aggregatorTransportProtocol: "tcp",
 					activeFlowRecordTimeout:     testActiveTimeout,
 					inactiveFlowRecordTimeout:   testInactiveTimeout,
@@ -1137,11 +1139,51 @@ func TestNewFlowAggregator(t *testing.T) {
 			Path:   "/tmp/antrea-flows.log",
 		},
 	}
-	b, err := yaml.Marshal(config)
-	require.NoError(t, err)
-	_, err = f.Write(b)
-	require.NoError(t, err)
-	fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, fileName)
-	require.NoError(t, err)
-	assert.Equal(t, clusterUUID, fa.clusterUUID)
+	clusterID := "custom-id"
+	clusterIDConfig := &flowaggregatorconfig.FlowAggregatorConfig{
+		FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+			Enable:  true,
+			Address: "10.10.10.10:155",
+		},
+		ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+			Enable: true,
+		},
+		S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+			Enable:     true,
+			BucketName: "test-bucket-name",
+		},
+		FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+			Enable: true,
+			Path:   "/tmp/antrea-flows.log",
+		},
+		ClusterID: clusterID,
+	}
+	testcases := []struct {
+		name              string
+		config            *flowaggregatorconfig.FlowAggregatorConfig
+		expectedClusterID string
+	}{
+		{
+			"ClusterID is the UUID by default",
+			config,
+			clusterUUID.String(),
+		},
+		{
+			"ClusterID is set by the user",
+			clusterIDConfig,
+			clusterID,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			b, err := yaml.Marshal(tc.config)
+			require.NoError(t, err)
+			_, err = f.Write(b)
+			require.NoError(t, err)
+			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, fileName)
+			require.NoError(t, err)
+			assert.Equal(t, clusterUUID, fa.clusterUUID)
+			assert.Equal(t, tc.expectedClusterID, fa.clusterID)
+		})
+	}
 }
