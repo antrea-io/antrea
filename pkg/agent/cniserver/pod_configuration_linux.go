@@ -38,7 +38,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	containerAccess *containerAccessArbitrator) (*interfacestore.InterfaceConfig, error) {
 	// Use the outer veth interface name as the OVS port name.
 	ovsPortName := hostIface.Name
-	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNamespace, containerIface, ips, vlanID)
+	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNamespace, containerIface, ips, vlanID, netNS)
 	return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, netNS, containerConfig)
 }
 
