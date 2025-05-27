@@ -98,6 +98,10 @@ func (fll *fakeL7Listener) ConsumeL7EventMap() map[flowexporter.ConnectionKey]L7
 	return l7EventsMap
 }
 
+func ptr[T any](v T) *T {
+	return &v
+}
+
 func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	refTime := time.Now()
@@ -105,9 +109,10 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	tc := []struct {
 		name         string
 		flowKey      flowexporter.Tuple
+		storeLimit   *int
 		oldConn      *flowexporter.Connection
 		newConn      flowexporter.Connection
-		expectedConn flowexporter.Connection
+		expectedConn *flowexporter.Connection
 	}{
 		{
 			name:    "addNewConn",
@@ -120,7 +125,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				Labels:    []byte{0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0},
 				Mark:      openflow.ServiceCTMark.GetValue(),
 			},
-			expectedConn: flowexporter.Connection{
+			expectedConn: &flowexporter.Connection{
 				StartTime:                      refTime,
 				StopTime:                       refTime,
 				LastExportTime:                 refTime,
@@ -138,8 +143,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				IngressNetworkPolicyRuleName:   rule1.Name,
 				IngressNetworkPolicyRuleAction: flowexporter.RuleActionToUint8(string(*rule1.Action)),
 			},
-		},
-		{
+		}, {
 			name:    "updateActiveConn",
 			flowKey: tuple2,
 			oldConn: &flowexporter.Connection{
@@ -163,7 +167,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:         tuple2,
 				IsPresent:       true,
 			},
-			expectedConn: flowexporter.Connection{
+			expectedConn: &flowexporter.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime,
 				LastExportTime:  refTime.Add(-(time.Second * 50)),
@@ -175,8 +179,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				IsPresent:       true,
 				IsActive:        true,
 			},
-		},
-		{
+		}, {
 			// If the polled new connection is dying, the old connection present
 			// in connection store will not be updated.
 			name:    "updateDyingConn",
@@ -204,7 +207,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				TCPState:        "TIME_WAIT",
 				IsPresent:       true,
 			},
-			expectedConn: flowexporter.Connection{
+			expectedConn: &flowexporter.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime.Add(-(time.Second * 30)),
 				LastExportTime:  refTime.Add(-(time.Second * 50)),
@@ -216,29 +219,86 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				TCPState:        "TIME_WAIT",
 				IsPresent:       true,
 			},
+		}, {
+			name:    "connection store limit reached",
+			flowKey: tuple1,
+			newConn: flowexporter.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime,
+				OriginalPackets: 0xffff,
+				OriginalBytes:   0xbaaaaa0000000000,
+				ReversePackets:  0xff,
+				ReverseBytes:    0xbaaa,
+				FlowKey:         tuple3,
+				TCPState:        "TIME_WAIT",
+				IsPresent:       true,
+			},
+			storeLimit: ptr(0),
+		}, {
+			name:    "update when store limit reached",
+			flowKey: tuple2,
+			oldConn: &flowexporter.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime.Add(-(time.Second * 30)),
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
+				OriginalPackets: 0xfff,
+				OriginalBytes:   0xbaaaaa00000000,
+				ReversePackets:  0xf,
+				ReverseBytes:    0xbaa,
+				FlowKey:         tuple2,
+				IsPresent:       true,
+			},
+			newConn: flowexporter.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime,
+				OriginalPackets: 0xffff,
+				OriginalBytes:   0xbaaaaa0000000000,
+				ReversePackets:  0xff,
+				ReverseBytes:    0xbaaa,
+				FlowKey:         tuple2,
+				IsPresent:       true,
+			},
+			expectedConn: &flowexporter.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime,
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
+				OriginalPackets: 0xffff,
+				OriginalBytes:   0xbaaaaa0000000000,
+				ReversePackets:  0xff,
+				ReverseBytes:    0xbaaa,
+				FlowKey:         tuple2,
+				IsPresent:       true,
+				IsActive:        true,
+			},
+			storeLimit: ptr(0),
 		},
 	}
 
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
-	mockProxier := proxytest.NewMockProxier(ctrl)
-	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
-
 	for _, c := range tc {
 		t.Run(c.name, func(t *testing.T) {
+			mockPodStore := podstoretest.NewMockInterface(ctrl)
+			mockProxier := proxytest.NewMockProxier(ctrl)
+			mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+
+			options := *testFlowExporterOptions
+			if c.storeLimit != nil {
+				options.ConntrackBufferLimit = *c.storeLimit
+			}
+			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, &options)
 			// Add the existing connection to the connection store.
 			if c.oldConn != nil {
 				addConnToStore(conntrackConnStore, c.oldConn)
-			} else {
+			} else if c.storeLimit == nil || *c.storeLimit > 0 {
 				testAddNewConn(mockPodStore, mockProxier, npQuerier, c.newConn)
 			}
 			conntrackConnStore.AddOrUpdateConn(&c.newConn)
 			actualConn, exist := conntrackConnStore.GetConnByKey(flowexporter.NewConnectionKey(&c.newConn))
-			require.Equal(t, exist, true, "The connection should exist in the connection store")
-			assert.Equal(t, c.expectedConn, *actualConn, "Connections should be equal")
-			assert.Equalf(t, 1, conntrackConnStore.connectionStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
-			conntrackConnStore.connectionStore.expirePriorityQueue.Pop() // empty the PQ
+			require.Equal(t, exist, c.expectedConn != nil, "The connection should exist if we expect a connection")
+			if c.expectedConn != nil {
+				assert.Equal(t, *c.expectedConn, *actualConn, "Connections should be equal")
+				assert.Equalf(t, 1, conntrackConnStore.connectionStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
+			}
 		})
 	}
 }

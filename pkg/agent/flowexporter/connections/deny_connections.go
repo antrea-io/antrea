@@ -31,10 +31,12 @@ import (
 
 type DenyConnectionStore struct {
 	connectionStore
+	limit int
 }
 
 func NewDenyConnectionStore(podStore podstore.Interface, proxier proxy.Proxier, o *flowexporter.FlowExporterOptions) *DenyConnectionStore {
 	return &DenyConnectionStore{
+		limit:           o.DenyConnectionBufferLimit,
 		connectionStore: NewConnectionStore(podStore, proxier, o),
 	}
 }
@@ -90,7 +92,7 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 				time.Now().Add(ds.connectionStore.expirePriorityQueue.IdleFlowTimeout))
 		}
 		klog.V(4).InfoS("Deny connection has been updated", "connection", conn)
-	} else {
+	} else if len(ds.connections) < ds.limit {
 		conn.StartTime = timeSeen
 		conn.StopTime = timeSeen
 		conn.LastExportTime = timeSeen

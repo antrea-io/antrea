@@ -61,6 +61,8 @@ const (
 	defaultAuditLogsMaxAge         = 28
 	defaultAuditLogsCompressed     = true
 	defaultPacketInRate            = 500
+	defaultConntrackBufferLimit    = 128000
+	defaultDenyConnBufferLimit     = 128000
 )
 
 var defaultIGMPQueryVersions = []int{1, 2, 3}
@@ -211,6 +213,7 @@ func (o *Options) setDefaults() {
 		o.config.PacketInRate = defaultPacketInRate
 	}
 	o.setAuditLoggingDefaultOptions()
+	o.setFlowExporterDefaultOptions()
 }
 
 func (o *Options) validateTLSOptions() error {
@@ -728,6 +731,17 @@ func (o *Options) setAuditLoggingDefaultOptions() {
 	if auditLogging.Compress == nil {
 		compress := defaultAuditLogsCompressed
 		auditLogging.Compress = &compress
+	}
+}
+
+func (o *Options) setFlowExporterDefaultOptions() {
+	flowExporter := &o.config.FlowExporter
+
+	if flowExporter.ConntrackBufferLimit == 0 {
+		flowExporter.ConntrackBufferLimit = defaultConntrackBufferLimit
+	}
+	if flowExporter.DenyConnectionBufferLimit == 0 {
+		flowExporter.DenyConnectionBufferLimit = defaultConntrackBufferLimit
 	}
 }
 

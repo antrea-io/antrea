@@ -701,13 +701,16 @@ func run(o *Options) error {
 	if enableFlowExporter {
 		podStore := podstore.NewPodStore(localPodInformer.Get())
 		flowExporterOptions := &flowexporter.FlowExporterOptions{
-			FlowCollectorAddr:      o.flowCollectorAddr,
-			FlowCollectorProto:     o.flowCollectorProto,
-			ActiveFlowTimeout:      o.activeFlowTimeout,
-			IdleFlowTimeout:        o.idleFlowTimeout,
-			StaleConnectionTimeout: o.staleConnectionTimeout,
-			PollInterval:           o.pollInterval,
-			ConnectUplinkToBridge:  connectUplinkToBridge}
+			FlowCollectorAddr:         o.flowCollectorAddr,
+			FlowCollectorProto:        o.flowCollectorProto,
+			ActiveFlowTimeout:         o.activeFlowTimeout,
+			IdleFlowTimeout:           o.idleFlowTimeout,
+			StaleConnectionTimeout:    o.staleConnectionTimeout,
+			PollInterval:              o.pollInterval,
+			ConnectUplinkToBridge:     connectUplinkToBridge,
+			ConntrackBufferLimit:      o.config.FlowExporter.ConntrackBufferLimit,
+			DenyConnectionBufferLimit: o.config.FlowExporter.DenyConnectionBufferLimit,
+		}
 		flowExporter, err = exporter.NewFlowExporter(
 			podStore,
 			proxier,
