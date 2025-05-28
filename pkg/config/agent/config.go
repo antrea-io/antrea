@@ -306,8 +306,13 @@ type FlowExporterConfig struct {
 	// Defaults to "15s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
 	// "m", "h".
 	IdleFlowExportTimeout string `yaml:"idleFlowExportTimeout,omitempty"`
-
-	ConntrackBufferLimit      int `yaml:"conntrackBufferLimit,omitempty"`
+	// Provide the maximum number of elements we can buffer in our connection store
+	// for conntrack connections.
+	// Defaults to "128000"
+	ConntrackBufferLimit int `yaml:"conntrackBufferLimit,omitempty"`
+	// Provide the maximum number of elements we can buffer in our connection store
+	// for denied connections.
+	// Defaults to "128000"
 	DenyConnectionBufferLimit int `yaml:"denyConnectionBufferLimit,omitempty"`
 }
 
