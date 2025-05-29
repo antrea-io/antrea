@@ -439,7 +439,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 			pingTicker.Stop() // Stop the pingTicker
 		}
 		pingTicker = m.clock.NewTicker(interval)
-		pingTickerCh = pingTicker.C() 
+		pingTickerCh = pingTicker.C()
 	}
 
 	// Update report ticker with minimum interval and jitter

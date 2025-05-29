@@ -384,24 +384,33 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// Prepare report tracking
-	reportCount := 0
+	var reportCount int
+	var reportMu sync.Mutex
 	m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		reportMu.Lock()
 		reportCount++
+		reportMu.Unlock()
 		return false, nil, nil
 	})
 
 	// Advance to 90s, expected no report yet
 	fakeClock.Step(90 * time.Second)
+	reportMu.Lock()
 	assert.Equal(t, 0, reportCount, "Expected no report yet (jitter still pending)")
+	reportMu.Unlock()
 
 	// Advance 1 more second → total 91s: report should now occur
 	fakeClock.Step(1 * time.Second)
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		reportMu.Lock()
+		defer reportMu.Unlock()
 		assert.GreaterOrEqual(t, reportCount, 1, "Expected report after jittered interval (total 91s)")
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// Clear count for next phase
+	reportMu.Lock()
 	reportCount = 0
+	reportMu.Unlock()
 
 	// Step: Update to 5s (below minReportInterval)
 	newNLM.Spec.PingIntervalSeconds = 5
@@ -414,15 +423,21 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 
 	// Advance to 5s: expected no report yet (below minReportInterval)
 	fakeClock.Step(5 * time.Second)
+	reportMu.Lock()
 	assert.Equal(t, 0, reportCount, "Expected no report at 5s (below minReportInterval)")
+	reportMu.Unlock()
 
 	// Advance 5 more second → total 10s: expected no report yet
 	fakeClock.Step(5 * time.Second)
+	reportMu.Lock()
 	assert.Equal(t, 0, reportCount, "Expected no report yet (jitter still pending)")
+	reportMu.Unlock()
 
 	// Advance 1 more second → total 11s: report should now occur
 	fakeClock.Step(1 * time.Second)
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		reportMu.Lock()
+		defer reportMu.Unlock()
 		assert.GreaterOrEqual(t, reportCount, 1, "Expected report after jittered interval (total 11s)")
 	}, 2*time.Second, 10*time.Millisecond)
 }
