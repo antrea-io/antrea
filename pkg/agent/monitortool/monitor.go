@@ -433,13 +433,13 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		}
 	}()
 
-	// Update ping ticker based on latencyConfig
+	// Update ping ticker based on the latencyConfig
 	updatePingTicker := func(interval time.Duration) {
 		if pingTicker != nil {
-			pingTicker.Stop()
+			pingTicker.Stop() // Stop the pingTicker
 		}
 		pingTicker = m.clock.NewTicker(interval)
-		pingTickerCh = pingTicker.C() // Stop the pingTicker
+		pingTickerCh = pingTicker.C() 
 	}
 
 	// Update report ticker with minimum interval and jitter
@@ -449,7 +449,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		reportInterval += reportJitter
 
 		if reportTicker != nil {
-			reportTicker.Stop()
+			reportTicker.Stop() // Stop the reportTicker
 		}
 		reportTicker = m.clock.NewTicker(reportInterval)
 		reportTickerCh = reportTicker.C()
@@ -470,7 +470,6 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 			// to avoid consistency issues and because it would not be sufficient to avoid stale entries completely.
 			// This means that we have to periodically invoke DeleteStaleNodeIPs to avoid stale entries in the map.
 			m.latencyStore.DeleteStaleNodeIPs()
-
 		case <-reportTickerCh:
 			m.report()
 		case <-stopCh:
