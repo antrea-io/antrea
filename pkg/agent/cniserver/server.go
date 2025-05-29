@@ -34,6 +34,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -49,7 +50,7 @@ import (
 	"antrea.io/antrea/pkg/cni"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/wait"
+	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -128,9 +129,9 @@ type CNIServer struct {
 	disableTXChecksumOffload   bool
 	networkConfig              *config.NetworkConfig
 	// podNetworkWait notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
-	podNetworkWait *wait.Group
+	podNetworkWait *utilwait.Group
 	// flowRestoreCompleteWait will be decremented and Pod reconciliation is completed.
-	flowRestoreCompleteWait *wait.Group
+	flowRestoreCompleteWait *utilwait.Group
 }
 
 var supportedCNIVersionSet map[string]bool
@@ -531,6 +532,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	}
 	cniVersion := cniConfig.CNIVersion
 	cniResult, _ := result.Result.GetAsVersion(cniVersion)
+
 	status, err := netdefutils.CreateNetworkStatus(cniResult, cniConfig.Name, true, nil)
 	if err != nil {
 		klog.ErrorS(err, "Create NetworkStatus failed", "Pod", klog.KRef(podNamespace, podName))
@@ -546,25 +548,19 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 }
 
 func (s *CNIServer) updatePodAnnotation(ctx context.Context, status *netdefv1.NetworkStatus, podName, podNamespace string) {
-	const maxRetries = 3
-	const retryInterval = time.Second
 	var pod *v1.Pod
-	var lastErr error
-
-	for retry := 0; retry < maxRetries; retry++ {
-		pod, lastErr = s.kubeClient.CoreV1().Pods(podNamespace).Get(ctx, podName, metav1.GetOptions{})
-		if lastErr == nil || errors.IsNotFound(lastErr) {
-			break
+	if err := wait.PollUntilContextTimeout(ctx, time.Second, 5*time.Second, true, func(ctx context.Context) (done bool, err error) {
+		pod, err = s.kubeClient.CoreV1().Pods(podNamespace).Get(ctx, podName, metav1.GetOptions{})
+		if err == nil {
+			return true, nil
 		}
-
-		if retry < maxRetries-1 {
-			klog.V(2).InfoS("Retrying Pod Get after error", "Pod", klog.KRef(podNamespace, podName), "retry", retry+1, "error", lastErr)
-			time.Sleep(retryInterval)
+		if errors.IsNotFound(err) {
+			return true, err
 		}
-	}
-
-	if lastErr != nil {
-		klog.ErrorS(lastErr, "Failed to get Pod after retries", "Pod", klog.KRef(podNamespace, podName), "retries", maxRetries)
+		klog.V(2).InfoS("Retrying Pod Get after error", "Pod", klog.KRef(podNamespace, podName), "error", err)
+		return false, nil
+	}); err != nil {
+		klog.ErrorS(err, "Failed to get Pod after retries", "Pod", klog.KRef(podNamespace, podName))
 		return
 	}
 
@@ -574,7 +570,7 @@ func (s *CNIServer) updatePodAnnotation(ctx context.Context, status *netdefv1.Ne
 	}
 	_, netObjExist := annotations[netdefv1.NetworkAttachmentAnnot]
 	if !netObjExist {
-		klog.V(2).InfoS("Skipping network status update for Pod without secondary-network annotation",
+		klog.V(2).InfoS("Skipping network status update for Pod without annotation "+netdefv1.NetworkAttachmentAnnot,
 			"Pod", klog.KObj(pod))
 		return
 	}
@@ -582,7 +578,7 @@ func (s *CNIServer) updatePodAnnotation(ctx context.Context, status *netdefv1.Ne
 	if err := netdefutils.SetNetworkStatus(s.kubeClient, pod, netStatus); err != nil {
 		klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
 	} else {
-		klog.V(2).InfoS("Successfully updated Pod network status annotation", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
+		klog.V(2).InfoS("Successfully updated Pod network status annotations", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
 	}
 }
 
@@ -686,7 +682,7 @@ func New(
 	routeClient route.Interface,
 	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
 	networkConfig *config.NetworkConfig,
-	podNetworkWait, flowRestoreCompleteWait *wait.Group,
+	podNetworkWait, flowRestoreCompleteWait *utilwait.Group,
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:                  cniSocket,
