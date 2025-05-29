@@ -84,8 +84,6 @@ type NodeLatencyMonitor struct {
 	listener PacketListener
 
 	icmpSeqNum atomic.Uint32
-
-	lastReport time.Time
 }
 
 // latencyConfig is the config for the latency monitor.
@@ -113,7 +111,6 @@ func NewNodeLatencyMonitor(
 		nodeName:             nodeConfig.Name,
 		clock:                clock.RealClock{},
 		listener:             &ICMPListener{},
-		lastReport:           clock.RealClock{}.Now(),
 	}
 
 	m.isIPv4Enabled, _ = config.IsIPv4Enabled(nodeConfig, trafficEncapMode)
@@ -399,9 +396,7 @@ func (m *NodeLatencyMonitor) report() {
 	}
 	if _, err := antreaClient.StatsV1alpha1().NodeLatencyStats().Create(context.TODO(), summary, metav1.CreateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to create NodeIPLatencyStats")
-		return
 	}
-	m.lastReport = m.clock.Now()
 }
 
 // Run starts the NodeLatencyMonitor.
@@ -444,19 +439,12 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 			pingTicker.Stop()
 		}
 		pingTicker = m.clock.NewTicker(interval)
-		pingTickerCh = pingTicker.C()
-		klog.V(4).InfoS("Updated ping interval", "interval", interval)
+		pingTickerCh = pingTicker.C() // Stop the pingTicker
 	}
 
 	// Update report ticker with minimum interval and jitter
 	updateReportTicker := func(interval time.Duration) {
-		reportInterval := interval
-		if reportInterval < minReportInterval {
-			klog.V(4).InfoS("Adjusting report interval to minimum allowed",
-				"requested", interval,
-				"minimum", minReportInterval)
-			reportInterval = minReportInterval
-		}
+		reportInterval := max(interval, minReportInterval)
 		// Add jitter to avoid lockstep reporting
 		reportInterval += reportJitter
 
@@ -466,8 +454,9 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		reportTicker = m.clock.NewTicker(reportInterval)
 		reportTickerCh = reportTicker.C()
 		klog.V(4).InfoS("Updated report interval",
-			"baseInterval", interval,
-			"actualInterval", reportInterval)
+			"requested", interval,
+			"minimum", minReportInterval,
+			"actualWithJitter", reportInterval)
 	}
 
 	wg := sync.WaitGroup{}
@@ -475,34 +464,27 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-pingTickerCh:
-			// Send probes
+			// Try to send pingAll signal
 			m.pingAll(ipv4Socket, ipv6Socket)
-			// We no not delete IPs from nodeIPLatlastReportencyMap as part of the Node delete event handler
+			// We no not delete IPs from nodeIPLatencyMap as part of the Node delete event handler
 			// to avoid consistency issues and because it would not be sufficient to avoid stale entries completely.
 			// This means that we have to periodically invoke DeleteStaleNodeIPs to avoid stale entries in the map.
 			m.latencyStore.DeleteStaleNodeIPs()
 
 		case <-reportTickerCh:
-			// Report latency stats
-			timeSinceLastReport := m.clock.Since(m.lastReport)
-			klog.V(4).InfoS("Reporting latency stats",
-				"timeSinceLastReport", timeSinceLastReport)
 			m.report()
-			m.lastReport = m.clock.Now()
-
 		case <-stopCh:
 			return
 		case latencyConfig := <-m.latencyConfigChanged:
-			klog.InfoS("NodeLatencyMonitor configuration changed",
-				"enabled", latencyConfig.Enable,
-				"interval", latencyConfig.Interval)
-
+			klog.InfoS("NodeLatencyMonitor configuration has changed", "enabled", latencyConfig.Enable, "interval", latencyConfig.Interval)
+			// Start or stop the pingAll goroutine based on the latencyConfig
 			if latencyConfig.Enable {
 				// latencyConfig changed
 				updatePingTicker(latencyConfig.Interval)
 				updateReportTicker(latencyConfig.Interval)
 
-				// Initialize sockets for IPv4/IPv6
+				// If the recvPing socket is closed,
+				// recreate it if it is closed(CRD is deleted).
 				if ipv4Socket == nil && m.isIPv4Enabled {
 					// Create a new socket for IPv4 when it is IPv4-only
 					ipv4Socket, err = m.listener.ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0")
