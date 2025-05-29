@@ -148,7 +148,8 @@ func buildContainerConfig(
 	interfaceName, containerID, podName, podNamespace string,
 	containerIface *current.Interface,
 	ips []*current.IPConfig,
-	vlanID uint16) *interfacestore.InterfaceConfig {
+	vlanID uint16,
+	containerNetNS string) *interfacestore.InterfaceConfig {
 	// A secondary interface can be created without IPs. Ignore the IP parsing error here.
 	containerIPs, _ := parseContainerIPs(ips)
 	// containerIface.Mac should be a valid MAC string, otherwise it should throw error before
@@ -161,7 +162,8 @@ func buildContainerConfig(
 		containerIface.Name,
 		containerMAC,
 		containerIPs,
-		vlanID)
+		vlanID,
+		containerNetNS)
 }
 
 // BuildOVSPortExternalIDs parses OVS port external_ids from InterfaceConfig.
@@ -230,7 +232,7 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 		ifDev,
 		containerMAC,
 		containerIPs,
-		portData.VLANID)
+		portData.VLANID, "")
 	interfaceConfig.OVSPortConfig = portConfig
 	return interfaceConfig
 }

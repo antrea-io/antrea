@@ -48,7 +48,7 @@ func TestNewInterfaceStore(t *testing.T) {
 
 func testContainerInterface(t *testing.T) {
 	store := NewInterfaceStore()
-	containerInterface := NewContainerInterface("ns0p0c0", "c0", "p0", "ns0", "eth0", podMAC, []net.IP{podIP, podIPv6}, 2)
+	containerInterface := NewContainerInterface("ns0p0c0", "c0", "p0", "ns0", "eth0", podMAC, []net.IP{podIP, podIPv6}, 2, "containerNS")
 	containerInterface.OVSPortConfig = &OVSPortConfig{
 		OFPort:   12,
 		PortUUID: "1234567890",
@@ -99,8 +99,8 @@ func testContainerInterface(t *testing.T) {
 func testSecondaryInterface(t *testing.T) {
 	store := NewInterfaceStore()
 	// Seondary interface without an IP.
-	containerInterface1 := NewContainerInterface("c0-eth1", "c0", "p0", "ns0", "eth1", podMAC, nil, 2)
-	containerInterface2 := NewContainerInterface("c0-eth2", "c0", "p0", "ns0", "eth2", podMAC, []net.IP{podIP}, 0)
+	containerInterface1 := NewContainerInterface("c0-eth1", "c0", "p0", "ns0", "eth1", podMAC, nil, 2, "containerNS")
+	containerInterface2 := NewContainerInterface("c0-eth2", "c0", "p0", "ns0", "eth2", podMAC, []net.IP{podIP}, 0, "containerNS")
 	store.Initialize([]*InterfaceConfig{containerInterface1, containerInterface2})
 	assert.Equal(t, 2, store.Len())
 

@@ -82,6 +82,12 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	c.podController.Run(stopCh)
 }
 
+func (c *Controller) GetAssignedVFDeviceNum(podName, podNamespace string) int {
+	num := c.podController.GetAssignedVFDeviceNum(podName, podNamespace)
+	klog.InfoS("Get VF device number for Pod", "podName", podName, "podNamespace", podNamespace, "num", num)
+	return num
+}
+
 // CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.
 func createNetworkAttachDefClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (netdefclient.K8sCniCncfIoV1Interface, error) {
 	kubeConfig, err := k8s.CreateRestConfig(config, kubeAPIServerOverride)
