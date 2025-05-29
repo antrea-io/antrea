@@ -328,7 +328,7 @@ function configure_vlan_subnets {
 function delete_vlan_subnets {
   echo "Deleting VLAN subnets"
 
-  bridge_id=$(docker network inspect $CLUSTER_NAME -f {{.ID}})
+  bridge_id=$(docker network inspect "$CLUSTER_NAME" -f {{.ID}}) || true
   bridge_interface="br-${bridge_id:0:12}"
   vlan_interface_prefix="br-${bridge_id:0:7}."
 
@@ -517,12 +517,16 @@ function destroy {
       if [[ -e ~/.antrea/.clusters ]]; then
           clean_kind
       fi
-  else
+  elif [[ $CLUSTER_NAME != "*" ]]; then
       kind delete cluster --name $CLUSTER_NAME
+      destroy_external_servers 
+      delete_vlan_subnets
+      delete_networks
+      # Remove the cluster from the list of clusters
+      if [[ -e ~/.antrea/.clusters ]]; then
+          sed -i "/^$CLUSTER_NAME /d" ~/.antrea/.clusters 2>/dev/null || true
+      fi
   fi
-  destroy_external_servers
-  delete_vlan_subnets
-  delete_networks
 }
 
 function printUnixTimestamp {
@@ -579,6 +583,13 @@ function clean_kind {
           if (( time_difference > 3600 )); then
               echo "The creation of $name happened more than 1 hour ago."
               kind delete cluster --name "$name" || echo "Cluster could not be deleted"
+              # For the cluster that is being deleted, we also delete the VLAN subnets and networks.
+              # Remove the cluster from the list of clusters
+              CLUSTER_NAME="$name"
+              destroy_external_servers
+              delete_vlan_subnets
+              delete_networks
+              sed -i "/^$CLUSTER_NAME /d" ~/.antrea/.clusters 2>/dev/null || true
           else
               echo "The creation of $name happened within the last hour."
               echo "$name $creationTimestamp" >> ~/.antrea/.clusters.swp
