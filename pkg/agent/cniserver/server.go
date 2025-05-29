@@ -126,6 +126,7 @@ type CNIServer struct {
 	enableBridgingMode bool
 	// Enable AntreaIPAM for secondary networks implemented by other CNIs.
 	enableSecondaryNetworkIPAM bool
+	secondaryNetworkEnabled    bool
 	disableTXChecksumOffload   bool
 	networkConfig              *config.NetworkConfig
 	// podNetworkWait notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
@@ -533,11 +534,13 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	cniVersion := cniConfig.CNIVersion
 	cniResult, _ := result.Result.GetAsVersion(cniVersion)
 
-	status, err := netdefutils.CreateNetworkStatus(cniResult, cniConfig.Name, true, nil)
-	if err != nil {
-		klog.ErrorS(err, "Create NetworkStatus failed", "Pod", klog.KRef(podNamespace, podName))
-	} else {
-		s.updatePodAnnotation(ctx, status, podName, podNamespace)
+	if s.secondaryNetworkEnabled {
+		status, err := netdefutils.CreateNetworkStatus(cniResult, cniConfig.Name, true, nil)
+		if err != nil {
+			klog.ErrorS(err, "Create NetworkStatus failed", "Pod", klog.KRef(podNamespace, podName))
+		} else {
+			s.updatePodAnnotation(ctx, status, podName, podNamespace)
+		}
 	}
 
 	klog.InfoS("CmdAdd for container succeeded", "container", cniConfig.ContainerId)
@@ -680,7 +683,7 @@ func New(
 	podInformer cache.SharedIndexInformer,
 	kubeClient clientset.Interface,
 	routeClient route.Interface,
-	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
+	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, secondaryNetworkEnabled, disableTXChecksumOffload bool,
 	networkConfig *config.NetworkConfig,
 	podNetworkWait, flowRestoreCompleteWait *utilwait.Group,
 ) *CNIServer {
@@ -697,6 +700,7 @@ func New(
 		enableBridgingMode:         enableBridgingMode,
 		disableTXChecksumOffload:   disableTXChecksumOffload,
 		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
+		secondaryNetworkEnabled:    secondaryNetworkEnabled,
 		networkConfig:              networkConfig,
 		podNetworkWait:             podNetworkWait,
 		flowRestoreCompleteWait:    flowRestoreCompleteWait.Increment(),
