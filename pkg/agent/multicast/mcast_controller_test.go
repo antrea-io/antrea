@@ -50,6 +50,7 @@ import (
 	agentutil "antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	ovsopenflow "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/channel"
 )
 
@@ -498,13 +499,14 @@ func TestClearStaleGroups(t *testing.T) {
 				{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
 			}
 			stopCh := make(chan struct{})
+			defer close(stopCh)
 			go mctrl.eventHandler(stopCh)
 
 			var wg sync.WaitGroup
 			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				mctrl.worker()
-				wg.Done()
 			}()
 
 			fakePort := int32(1)
@@ -520,10 +522,12 @@ func TestClearStaleGroups(t *testing.T) {
 				{
 					group:        net.ParseIP("224.96.1.2"),
 					localMembers: map[string]time.Time{"p1": now, "p2": validUpdateTime},
+					ofGroupID:    ovsopenflow.GroupIDType(4),
 				},
 				{
 					group:        net.ParseIP("224.96.1.3"),
 					localMembers: map[string]time.Time{"p2": validUpdateTime},
+					ofGroupID:    ovsopenflow.GroupIDType(5),
 				},
 			}
 			staleUpdateTime := now.Add(-mctrl.mcastGroupTimeout - time.Second)
@@ -531,10 +535,12 @@ func TestClearStaleGroups(t *testing.T) {
 				{
 					group:        net.ParseIP("224.96.1.4"),
 					localMembers: map[string]time.Time{"p1": staleUpdateTime, "p3": staleUpdateTime},
+					ofGroupID:    ovsopenflow.GroupIDType(6),
 				},
 				{
 					group:        net.ParseIP("224.96.1.5"),
 					localMembers: map[string]time.Time{},
+					ofGroupID:    ovsopenflow.GroupIDType(7),
 				},
 			}
 
@@ -544,6 +550,7 @@ func TestClearStaleGroups(t *testing.T) {
 					group:         net.ParseIP("224.96.1.6"),
 					localMembers:  map[string]time.Time{"p4": staleUpdateTime},
 					remoteMembers: sets.New[string]("10.10.1.2"),
+					ofGroupID:     ovsopenflow.GroupIDType(8),
 				})
 			}
 
@@ -558,10 +565,17 @@ func TestClearStaleGroups(t *testing.T) {
 				assert.NoError(t, err)
 				mctrl.addInstalledGroup(g.group.String())
 				mctrl.addInstalledLocalGroup(g.group.String())
-				mockOFClient.EXPECT().UninstallMulticastGroup(gomock.Any()).Times(1)
+				mockOFClient.EXPECT().UninstallMulticastGroup(g.ofGroupID).Times(1)
 				mockOFClient.EXPECT().UninstallMulticastFlows(gomock.Any()).Times(1)
 				mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 				mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+				if len(g.localMembers) > 1 {
+					// If multiple local members exist in the stale Multicast group, the corresponding OpenFlow group is
+					// possibly re-installed len(localMembers)-1 at most. We can't know the exact number in the mock here,
+					// since the actual execution depends on the runtime status of the local cache which is updated by the
+					// event handler in another goroutine.
+					mockOFClient.EXPECT().InstallMulticastGroup(g.ofGroupID, gomock.Any(), gomock.Any()).MaxTimes(len(g.localMembers) - 1)
+				}
 				if tc.isEncap {
 					mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 				}
@@ -576,7 +590,7 @@ func TestClearStaleGroups(t *testing.T) {
 					// Send IGMP leave message to other Nodes
 					mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 					// Update OpenFlow group corresponding to the Multicast group to remove local members
-					mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+					mockOFClient.EXPECT().InstallMulticastGroup(g.ofGroupID, gomock.Any(), gomock.Any()).Times(1)
 				}
 
 				mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
