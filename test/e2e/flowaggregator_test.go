@@ -152,6 +152,7 @@ const (
 	ingressTableInitFlowCount       = 1
 	egressTableInitFlowCount        = 1
 	serverPodPort                   = int32(80)
+	customClusterID                 = "custom-cluster-id"
 )
 
 var (
@@ -318,7 +319,8 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 
 	var err error
 	data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
-		mode: flowaggregatorconfig.AggregatorModeProxy,
+		mode:      flowaggregatorconfig.AggregatorModeProxy,
+		clusterID: customClusterID,
 	})
 	require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
 
@@ -366,7 +368,8 @@ func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool) {
 	assert.Contains(t, record, fmt.Sprintf("destinationPodNamespace: %s", data.testNamespace), "Record does not have correct destinationPodNamespace")
 	assert.Contains(t, record, fmt.Sprintf("sourcePodName: %s", "perftest-a"), "Record does not have correct sourcePodName")
 	assert.Contains(t, record, fmt.Sprintf("destinationPodName: %s", "perftest-b"), "Record does not have correct destinationPodName")
-	assert.Contains(t, record, fmt.Sprintf("clusterId: %s", antreaClusterUUID), "Record does not have the correct clusterId")
+	// Check the clusterId field, which should match the customClusterID set in the flowVisibilityTestOptions
+	assert.Contains(t, record, fmt.Sprintf("clusterId: %s", customClusterID), "Record does not have the correct clusterId")
 	assert.Contains(t, record, "originalObservationDomainId", "Record does not have originalObservationDomainId")
 	assert.Contains(t, record, "originalExporterIPv4Address", "Record does not have originalExporterIPv4Address")
 	assert.Contains(t, record, "originalExporterIPv6Address", "Record does not have originalExporterIPv6Address")
