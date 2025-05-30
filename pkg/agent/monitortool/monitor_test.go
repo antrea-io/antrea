@@ -345,7 +345,7 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 	// safely. This is not ideal, because it relies on knowledge of how the implementation
 	// creates tickers.
 	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 1
+		return fakeClock.TickersAdded() == 2
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// After advancing the clock by 60s (ping interval), we should see the ICMP requests being sent.
@@ -365,7 +365,7 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 
 	// Again, we have to wait for the second ticker to be created before we can advance the clock.
 	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 2
+		return fakeClock.TickersAdded() == 4
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// When advancing the clock by 60s (old ping iterval), we should not observe any ICMP requests.
@@ -381,6 +381,64 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		packets = collect(packets)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Prepare report tracking
+	var reportCount int
+	var reportMu sync.Mutex
+	m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		reportMu.Lock()
+		reportCount++
+		reportMu.Unlock()
+		return false, nil, nil
+	})
+
+	// Advance to 90s, expected no report yet
+	fakeClock.Step(90 * time.Second)
+	reportMu.Lock()
+	assert.Equal(t, 0, reportCount, "Expected no report yet (jitter still pending)")
+	reportMu.Unlock()
+
+	// Advance 1 more second → total 91s: report should now occur
+	fakeClock.Step(1 * time.Second)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		reportMu.Lock()
+		defer reportMu.Unlock()
+		assert.GreaterOrEqual(t, reportCount, 1, "Expected report after jittered interval (total 91s)")
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Clear count for next phase
+	reportMu.Lock()
+	reportCount = 0
+	reportMu.Unlock()
+
+	// Step: Update to 5s (below minReportInterval)
+	newNLM.Spec.PingIntervalSeconds = 5
+	newNLM.Generation = 2
+	_, err = m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Update(ctx, newNLM, metav1.UpdateOptions{})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		return fakeClock.TickersAdded() == 6
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Advance to 5s: expected no report yet (below minReportInterval)
+	fakeClock.Step(5 * time.Second)
+	reportMu.Lock()
+	assert.Equal(t, 0, reportCount, "Expected no report at 5s (below minReportInterval)")
+	reportMu.Unlock()
+
+	// Advance 5 more second → total 10s: expected no report yet
+	fakeClock.Step(5 * time.Second)
+	reportMu.Lock()
+	assert.Equal(t, 0, reportCount, "Expected no report yet (jitter still pending)")
+	reportMu.Unlock()
+
+	// Advance 1 more second → total 11s: report should now occur
+	fakeClock.Step(1 * time.Second)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		reportMu.Lock()
+		defer reportMu.Unlock()
+		assert.GreaterOrEqual(t, reportCount, 1, "Expected report after jittered interval (total 11s)")
 	}, 2*time.Second, 10*time.Millisecond)
 }
 
@@ -730,7 +788,7 @@ func TestMonitorLoop(t *testing.T) {
 	// safely. This is not ideal, because it relies on knowledge of how the implementation
 	// creates tickers.
 	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 1
+		return fakeClock.TickersAdded() == 2
 	}, 2*time.Second, 10*time.Millisecond)
 
 	require.Empty(t, m.latencyStore.getNodeIPLatencyKeys())
