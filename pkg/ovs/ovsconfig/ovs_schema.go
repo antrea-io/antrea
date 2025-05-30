@@ -15,9 +15,10 @@
 package ovsconfig
 
 type Bridge struct {
-	Name         string        `json:"name"`
-	Protocols    []interface{} `json:"protocols,omitempty"`
-	DatapathType string        `json:"datapath_type,omitempty"`
+	Name                string        `json:"name"`
+	Protocols           []interface{} `json:"protocols,omitempty"`
+	DatapathType        string        `json:"datapath_type,omitempty"`
+	McastSnoopingEnable bool          `json:"mcast_snooping_enable,omitempty"`
 }
 
 type Port struct {

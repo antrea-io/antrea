@@ -102,7 +102,11 @@ func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdb *ovsdb.OVSDB) 
 	}
 	// Only one OVS bridge is supported.
 	bridgeConfig := bridges[0]
-	ovsBridgeClient := newOVSBridgeFn(bridgeConfig.BridgeName, ovsconfig.OVSDatapathSystem, ovsdb)
+	var options []ovsconfig.OVSBridgeOption
+	if bridgeConfig.EnableMulticastSnooping {
+		options = append(options, ovsconfig.WithMcastSnooping())
+	}
+	ovsBridgeClient := newOVSBridgeFn(bridgeConfig.BridgeName, ovsconfig.OVSDatapathSystem, ovsdb, options...)
 	if err := ovsBridgeClient.Create(); err != nil {
 		return nil, fmt.Errorf("failed to create OVS bridge %s: %v", bridgeConfig.BridgeName, err)
 	}

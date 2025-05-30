@@ -32,6 +32,7 @@ type OVSBridge struct {
 	ovsdb                    *ovsdb.OVSDB
 	name                     string
 	datapathType             OVSDatapathType
+	mcastSnoopingEnable      bool
 	uuid                     string
 	isHardwareOffloadEnabled bool
 	requiredPortExternalIDs  []string
@@ -104,6 +105,12 @@ func WithRequiredPortExternalIDs(keys ...string) OVSBridgeOption {
 	}
 }
 
+func WithMcastSnooping() OVSBridgeOption {
+	return func(br *OVSBridge) {
+		br.mcastSnoopingEnable = true
+	}
+}
+
 // NewOVSBridge creates and returns a new OVSBridge struct.
 func NewOVSBridge(bridgeName string, ovsDatapathType OVSDatapathType, ovsdb *ovsdb.OVSDB, options ...OVSBridgeOption) OVSBridgeClient {
 	br := &OVSBridge{
@@ -173,7 +180,8 @@ func (br *OVSBridge) updateBridgeConfiguration() Error {
 		Row: map[string]interface{}{
 			"protocols": makeOVSDBSetFromList([]string{openflowProtoVersion10,
 				openflowProtoVersion15}),
-			"datapath_type": br.datapathType,
+			"datapath_type":         br.datapathType,
+			"mcast_snooping_enable": br.mcastSnoopingEnable,
 		},
 	})
 	_, err, temporary := tx.Commit()
@@ -191,7 +199,8 @@ func (br *OVSBridge) create() Error {
 		// Use Openflow protocol version 1.0 and 1.5.
 		Protocols: makeOVSDBSetFromList([]string{openflowProtoVersion10,
 			openflowProtoVersion15}),
-		DatapathType: string(br.datapathType),
+		DatapathType:        string(br.datapathType),
+		McastSnoopingEnable: br.mcastSnoopingEnable,
 	}
 	namedUUID := tx.Insert(dbtransaction.Insert{
 		Table: "Bridge",
@@ -1162,4 +1171,27 @@ func (br *OVSBridge) SetInterfaceMAC(name string, mac net.HardwareAddr) Error {
 
 	return nil
 
+}
+
+func (br *OVSBridge) GetBridgeMcastSnoopingEnable() (bool, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Select(dbtransaction.Select{
+		Table:   "Bridge",
+		Columns: []string{"mcast_snooping_enable"},
+		Where:   [][]interface{}{{"name", "==", br.name}},
+	})
+
+	res, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return false, NewTransactionError(err, temporary)
+	}
+
+	v := res[0].Rows[0].(map[string]interface{})["mcast_snooping_enable"]
+	switch enable := v.(type) {
+	case bool:
+		return enable, nil
+	default:
+		return false, nil
+	}
 }
