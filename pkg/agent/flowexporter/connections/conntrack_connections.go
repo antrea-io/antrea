@@ -47,6 +47,7 @@ type ConntrackConnectionStore struct {
 	pollInterval          time.Duration
 	connectUplinkToBridge bool
 	l7EventMapGetter      L7EventMapGetter
+	limit                 int
 	connectionStore
 }
 
@@ -73,6 +74,7 @@ func NewConntrackConnectionStore(
 		connectionStore:       NewConnectionStore(podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
 		l7EventMapGetter:      l7EventMapGetterFunc,
+		limit:                 o.ConntrackBufferLimit,
 	}
 }
 
@@ -268,7 +270,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 			}
 		}
 		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
-	} else {
+	} else if len(cs.connections) < cs.limit {
 		cs.fillPodInfo(conn)
 		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod

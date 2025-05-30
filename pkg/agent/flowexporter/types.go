@@ -98,11 +98,13 @@ type ItemToExpire struct {
 }
 
 type FlowExporterOptions struct {
-	FlowCollectorAddr      string
-	FlowCollectorProto     string
-	ActiveFlowTimeout      time.Duration
-	IdleFlowTimeout        time.Duration
-	StaleConnectionTimeout time.Duration
-	PollInterval           time.Duration
-	ConnectUplinkToBridge  bool
+	FlowCollectorAddr         string
+	FlowCollectorProto        string
+	ActiveFlowTimeout         time.Duration
+	IdleFlowTimeout           time.Duration
+	StaleConnectionTimeout    time.Duration
+	PollInterval              time.Duration
+	ConnectUplinkToBridge     bool
+	ConntrackBufferLimit      int
+	DenyConnectionBufferLimit int
 }

@@ -45,10 +45,11 @@ import (
 )
 
 const (
-	testTemplateIDv4      = uint16(256)
-	testTemplateIDv6      = uint16(257)
-	testActiveFlowTimeout = 3 * time.Second
-	testIdleFlowTimeout   = 1 * time.Second
+	testTemplateIDv4          = uint16(256)
+	testTemplateIDv6          = uint16(257)
+	testActiveFlowTimeout     = 3 * time.Second
+	testIdleFlowTimeout       = 1 * time.Second
+	testConnectionBufferLimit = 128000
 )
 
 func init() {
@@ -656,12 +657,15 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 	for id, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			o := &flowexporter.FlowExporterOptions{
-				FlowCollectorAddr:      "",
-				FlowCollectorProto:     "",
-				ActiveFlowTimeout:      testActiveFlowTimeout,
-				IdleFlowTimeout:        testIdleFlowTimeout,
-				StaleConnectionTimeout: 1,
-				PollInterval:           1}
+				FlowCollectorAddr:         "",
+				FlowCollectorProto:        "",
+				ActiveFlowTimeout:         testActiveFlowTimeout,
+				IdleFlowTimeout:           testIdleFlowTimeout,
+				StaleConnectionTimeout:    1,
+				PollInterval:              1,
+				ConntrackBufferLimit:      testConnectionBufferLimit,
+				DenyConnectionBufferLimit: testConnectionBufferLimit,
+			}
 			flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, !isIPv6, isIPv6, nil, nil, nil, nil, o)
 			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, o)
 			flowExp.conntrackPriorityQueue = flowExp.conntrackConnStore.GetPriorityQueue()
