@@ -27,6 +27,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 )
@@ -40,11 +41,12 @@ type connTrackSystem struct {
 	serviceCIDRv6        netip.Prefix
 	isAntreaProxyEnabled bool
 	connTrack            NetFilterConnTrack
+	protocolFilter       filter.ProtocolFilter
 }
 
 // TODO: detect the endianness of the system when initializing conntrack dumper to handle situations on big-endian platforms.
 // All connection labels are required to store in little endian format in conntrack dumper.
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool) *connTrackSystem {
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) *connTrackSystem {
 	if err := SetupConntrackParameters(); err != nil {
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
 		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
@@ -56,6 +58,7 @@ func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefi
 		serviceCIDRv6,
 		isAntreaProxyEnabled,
 		&netFilterConnTrack{},
+		protocolFilter,
 	}
 }
 
@@ -79,7 +82,7 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
 
-	filteredConns := filterAntreaConns(conns, ct.nodeConfig, svcCIDR, zoneFilter, ct.isAntreaProxyEnabled)
+	filteredConns := filterAntreaConns(conns, ct.nodeConfig, svcCIDR, zoneFilter, ct.isAntreaProxyEnabled, ct.protocolFilter)
 	klog.V(2).Infof("No. of flow exporter considered flows in Antrea zoneID: %d", len(filteredConns))
 
 	return filteredConns, len(conns), nil
