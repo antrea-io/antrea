@@ -28,8 +28,13 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
+	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	"google.golang.org/grpc"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -45,7 +50,7 @@ import (
 	"antrea.io/antrea/pkg/cni"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/wait"
+	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -121,12 +126,13 @@ type CNIServer struct {
 	enableBridgingMode bool
 	// Enable AntreaIPAM for secondary networks implemented by other CNIs.
 	enableSecondaryNetworkIPAM bool
+	secondaryNetworkEnabled    bool
 	disableTXChecksumOffload   bool
 	networkConfig              *config.NetworkConfig
 	// podNetworkWait notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
-	podNetworkWait *wait.Group
+	podNetworkWait *utilwait.Group
 	// flowRestoreCompleteWait will be decremented and Pod reconciliation is completed.
-	flowRestoreCompleteWait *wait.Group
+	flowRestoreCompleteWait *utilwait.Group
 }
 
 var supportedCNIVersionSet map[string]bool
@@ -528,11 +534,55 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	cniVersion := cniConfig.CNIVersion
 	cniResult, _ := result.Result.GetAsVersion(cniVersion)
 
+	if s.secondaryNetworkEnabled {
+		status, err := netdefutils.CreateNetworkStatus(cniResult, cniConfig.Name, true, nil)
+		if err != nil {
+			klog.ErrorS(err, "Create NetworkStatus failed", "Pod", klog.KRef(podNamespace, podName))
+		} else {
+			s.updatePodAnnotation(ctx, status, podName, podNamespace)
+		}
+	}
+
 	klog.InfoS("CmdAdd for container succeeded", "container", cniConfig.ContainerId)
 	// mark success as true to avoid rollback
 	success = true
 
 	return resultToResponse(cniResult), nil
+}
+
+func (s *CNIServer) updatePodAnnotation(ctx context.Context, status *netdefv1.NetworkStatus, podName, podNamespace string) {
+	var pod *v1.Pod
+	if err := wait.PollUntilContextTimeout(ctx, time.Second, 5*time.Second, true, func(ctx context.Context) (done bool, err error) {
+		pod, err = s.kubeClient.CoreV1().Pods(podNamespace).Get(ctx, podName, metav1.GetOptions{})
+		if err == nil {
+			return true, nil
+		}
+		if errors.IsNotFound(err) {
+			return true, err
+		}
+		klog.V(2).InfoS("Retrying Pod Get after error", "Pod", klog.KRef(podNamespace, podName), "error", err)
+		return false, nil
+	}); err != nil {
+		klog.ErrorS(err, "Failed to get Pod after retries", "Pod", klog.KRef(podNamespace, podName))
+		return
+	}
+
+	annotations := pod.GetAnnotations()
+	if annotations == nil {
+		return
+	}
+	_, netObjExist := annotations[netdefv1.NetworkAttachmentAnnot]
+	if !netObjExist {
+		klog.V(2).InfoS("Skipping network status update for Pod without annotation "+netdefv1.NetworkAttachmentAnnot,
+			"Pod", klog.KObj(pod))
+		return
+	}
+	netStatus := []netdefv1.NetworkStatus{*status}
+	if err := netdefutils.SetNetworkStatus(s.kubeClient, pod, netStatus); err != nil {
+		klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
+	} else {
+		klog.V(2).InfoS("Successfully updated Pod network status annotations", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
+	}
 }
 
 func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
@@ -633,9 +683,9 @@ func New(
 	podInformer cache.SharedIndexInformer,
 	kubeClient clientset.Interface,
 	routeClient route.Interface,
-	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
+	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, secondaryNetworkEnabled, disableTXChecksumOffload bool,
 	networkConfig *config.NetworkConfig,
-	podNetworkWait, flowRestoreCompleteWait *wait.Group,
+	podNetworkWait, flowRestoreCompleteWait *utilwait.Group,
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:                  cniSocket,
@@ -650,6 +700,7 @@ func New(
 		enableBridgingMode:         enableBridgingMode,
 		disableTXChecksumOffload:   disableTXChecksumOffload,
 		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
+		secondaryNetworkEnabled:    secondaryNetworkEnabled,
 		networkConfig:              networkConfig,
 		podNetworkWait:             podNetworkWait,
 		flowRestoreCompleteWait:    flowRestoreCompleteWait.Increment(),
