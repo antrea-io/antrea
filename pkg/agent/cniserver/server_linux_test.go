@@ -25,9 +25,12 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/google/uuid"
+	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -144,7 +147,7 @@ func TestRemoveInterface(t *testing.T) {
 			"eth0",
 			containerMAC,
 			[]net.IP{containerIP},
-			0)
+			0, "")
 		containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: fakePortUUID, OFPort: 0}
 		return containerConfig
 	}
@@ -223,7 +226,6 @@ func createCNIRequestAndInterfaceName(t *testing.T, name string, cniType string,
 
 func TestCmdAdd(t *testing.T) {
 	ctx := context.TODO()
-
 	versionedIPAMResult, err := ipamResult.GetAsVersion(supportedCNIVersion)
 	assert.NoError(t, err)
 
@@ -234,6 +236,7 @@ func TestCmdAdd(t *testing.T) {
 		ipamError                  error
 		cniType                    string
 		enableSecondaryNetworkIPAM bool
+		setNetworkAttachmentAnnot  bool
 		isChaining                 bool
 		connectOVS                 bool
 		migrateRoute               bool
@@ -276,6 +279,7 @@ func TestCmdAdd(t *testing.T) {
 			name:                       "add-general-cni",
 			ipamType:                   "test-cni-ipam",
 			ipamAdd:                    true,
+			setNetworkAttachmentAnnot:  true,
 			enableSecondaryNetworkIPAM: false,
 			isChaining:                 false,
 			connectOVS:                 true,
@@ -294,6 +298,8 @@ func TestCmdAdd(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			networkAttachmentAnnot := map[string]string{netdefv1.NetworkAttachmentAnnot: "fake-k8s.v1.cni.cncf.io/network"}
+			pod.Annotations = networkAttachmentAnnot
 			defer mockGetNSPath(nil)()
 			ipam.ResetIPAMResults()
 			controller := gomock.NewController(t)
@@ -336,6 +342,8 @@ func TestCmdAdd(t *testing.T) {
 				mockOVSBridgeClient.EXPECT().DeletePort(ovsPortID).Return(nil).Times(1)
 				ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 			}
+			kubeClient := fakeclientset.NewClientset(pod1, pod2, pod3, pod)
+			cniserver.kubeClient = kubeClient
 			resp, err := cniserver.CmdAdd(ctx, requestMsg)
 			assert.NoError(t, err)
 			assert.NotNil(t, resp)
@@ -359,6 +367,14 @@ func TestCmdAdd(t *testing.T) {
 				assert.NoError(t, err)
 				successResponse := resultToResponse(versionedResult)
 				assert.Equal(t, successResponse, resp)
+				if tc.setNetworkAttachmentAnnot {
+					podItem, err := cniserver.kubeClient.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+					assert.NoError(t, err, "Get Pod error")
+					networkStatus, err := netdefutils.GetNetworkStatus(podItem)
+					assert.NoError(t, err, "Get network status from Pod annotation error")
+					assert.Equal(t, 1, len(networkStatus), "The Pod annotation should contains "+
+						"network status of the the primary network interface")
+				}
 			}
 		})
 	}
@@ -476,7 +492,7 @@ func TestCmdDel(t *testing.T) {
 			containerID := requestMsg.CniArgs.ContainerId
 			containerIfaceConfig := interfacestore.NewContainerInterface(hostInterfaceName, containerID,
 				testPodNameA, testPodNamespace, "eth0",
-				containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0)
+				containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0, "")
 			containerIfaceConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: ovsPortID, OFPort: ovsPort}
 			ifaceStore.AddInterface(containerIfaceConfig)
 			testIfaceConfigurator := newTestInterfaceConfigurator()
@@ -541,7 +557,7 @@ func TestCmdCheck(t *testing.T) {
 		requestMsg, containerID := newRequest(podArgs, networkCfg, "", t)
 		containerIfaceConfig := interfacestore.NewContainerInterface(hostInterfaceName, containerID,
 			name, testPodNamespace, "eth0",
-			containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0)
+			containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0, "containerNS")
 		containerIfaceConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: ovsPortID, OFPort: ovsPort}
 		ifaceStore.AddInterface(containerIfaceConfig)
 		return requestMsg, hostInterfaceName

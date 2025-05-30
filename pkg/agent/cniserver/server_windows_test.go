@@ -285,6 +285,7 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, clients *mock
 	mockOFClient.EXPECT().SubscribeOFPortStatusMessage(gomock.Any()).AnyTimes()
 	cniServer.podConfigurator, _ = newPodConfigurator(kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, podUpdateNotifier, clients.localPodInformer, cniServer.containerAccess)
 	cniServer.podConfigurator.ifConfigurator.(*ifConfigurator).winnet = mockWinnet
+	cniServer.kubeClient = kubeClient
 	return cniServer
 }
 
@@ -536,7 +537,7 @@ func TestCmdDel(t *testing.T) {
 				server.podConfigurator.ifConfigurator.(*ifConfigurator).addEndpoint(hnsEndpoint)
 			}
 			if tc.ifaceExists {
-				containerIface := interfacestore.NewContainerInterface(ovsPortName, containerID, testPodNameA, testPodNamespace, "", containerMAC, []net.IP{net.ParseIP("10.1.2.100")}, 0)
+				containerIface := interfacestore.NewContainerInterface(ovsPortName, containerID, testPodNameA, testPodNamespace, "", containerMAC, []net.IP{net.ParseIP("10.1.2.100")}, 0, "containerNS")
 				containerIface.OVSPortConfig = &interfacestore.OVSPortConfig{
 					OFPort:   100,
 					PortUUID: ovsPortID,
@@ -594,7 +595,7 @@ func TestCmdCheck(t *testing.T) {
 		return &result
 	}
 	wrapperContainerInterface := func(ifaceName, containerID, podName, ovsPortID string, mac net.HardwareAddr, containerIP net.IP) *interfacestore.InterfaceConfig {
-		containerIface := interfacestore.NewContainerInterface(ifaceName, containerID, podName, testPodNamespace, "", mac, []net.IP{containerIP}, 0)
+		containerIface := interfacestore.NewContainerInterface(ifaceName, containerID, podName, testPodNamespace, "", mac, []net.IP{containerIP}, 0, "containerNS")
 		containerIface.OVSPortConfig = &interfacestore.OVSPortConfig{
 			PortUUID: ovsPortID,
 			OFPort:   10,

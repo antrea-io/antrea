@@ -28,7 +28,11 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
+	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	"google.golang.org/grpc"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -527,12 +531,59 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	}
 	cniVersion := cniConfig.CNIVersion
 	cniResult, _ := result.Result.GetAsVersion(cniVersion)
+	status, err := netdefutils.CreateNetworkStatus(cniResult, cniConfig.Name, true, nil)
+	if err != nil {
+		klog.ErrorS(err, "Create NetworkStatus failed", "Pod", klog.KRef(podNamespace, podName))
+	} else {
+		s.updatePodAnnotation(ctx, status, podName, podNamespace)
+	}
 
 	klog.InfoS("CmdAdd for container succeeded", "container", cniConfig.ContainerId)
 	// mark success as true to avoid rollback
 	success = true
 
 	return resultToResponse(cniResult), nil
+}
+
+func (s *CNIServer) updatePodAnnotation(ctx context.Context, status *netdefv1.NetworkStatus, podName, podNamespace string) {
+	const maxRetries = 3
+	const retryInterval = time.Second
+	var pod *v1.Pod
+	var lastErr error
+
+	for retry := 0; retry < maxRetries; retry++ {
+		pod, lastErr = s.kubeClient.CoreV1().Pods(podNamespace).Get(ctx, podName, metav1.GetOptions{})
+		if lastErr == nil || errors.IsNotFound(lastErr) {
+			break
+		}
+
+		if retry < maxRetries-1 {
+			klog.V(2).InfoS("Retrying Pod Get after error", "Pod", klog.KRef(podNamespace, podName), "retry", retry+1, "error", lastErr)
+			time.Sleep(retryInterval)
+		}
+	}
+
+	if lastErr != nil {
+		klog.ErrorS(lastErr, "Failed to get Pod after retries", "Pod", klog.KRef(podNamespace, podName), "retries", maxRetries)
+		return
+	}
+
+	annotations := pod.GetAnnotations()
+	if annotations == nil {
+		return
+	}
+	_, netObjExists := annotations[netdefv1.NetworkAttachmentAnnot]
+	if !netObjExists {
+		klog.V(2).InfoS("Skipping network status update for Pod without secondary-network annotation",
+			"Pod", klog.KObj(pod))
+		return
+	}
+	netStatus := []netdefv1.NetworkStatus{*status}
+	if err := netdefutils.SetNetworkStatus(s.kubeClient, pod, netStatus); err != nil {
+		klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
+	} else {
+		klog.V(2).InfoS("Successfully updated Pod network status annotation", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
+	}
 }
 
 func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
