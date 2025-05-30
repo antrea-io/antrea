@@ -47,8 +47,8 @@ const (
 )
 
 var (
-	icmpType = int32(8)
-	icmpCode = int32(0)
+	ICMPType = int32(8)
+	ICMPCode = int32(0)
 )
 
 type vmInfo struct {
@@ -591,12 +591,10 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 		SetName(namespace, name).
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{ExternalEntitySelector: eeSelector}})
-
 	ruleFunc := builder.AddIngress
 	if !ingress {
 		ruleFunc = builder.AddEgress
 	}
-
 	switch proto {
 	case ProtocolTCP:
 		fallthrough
@@ -611,13 +609,32 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 			peerIPCIDR := fmt.Sprintf("%s/32", peerVM.ip)
 			cidr = &peerIPCIDR
 		}
+		ipBlock := &crdv1beta1.IPBlock{
+			CIDR: *cidr,
+		}
 		port := int32(iperfPort)
-		ruleFunc(proto, &port, nil, nil, nil, nil, nil, nil, nil, cidr, nil, nil, peerLabel,
-			nil, nil, nil, nil, ruleAction, "", "")
+		ruleFunc(ANNPRuleBuilder{
+			EESelector: peerLabel,
+			BaseRuleBuilder: BaseRuleBuilder{
+				Protoc:  proto,
+				Port:    &port,
+				Action:  ruleAction,
+				IPBlock: ipBlock,
+			}})
 	case ProtocolICMP:
 		peerIPCIDR := fmt.Sprintf("%s/32", nodeIP(0))
-		ruleFunc(ProtocolICMP, nil, nil, nil, &icmpType, &icmpCode, nil, nil, nil, &peerIPCIDR, nil, nil, nil,
-			nil, nil, nil, nil, ruleAction, "", "")
+		cidr := &peerIPCIDR
+		ipBlock := &crdv1beta1.IPBlock{
+			CIDR: *cidr,
+		}
+		ruleFunc(ANNPRuleBuilder{
+			BaseRuleBuilder: BaseRuleBuilder{
+				Protoc:   ProtocolICMP,
+				ICMPType: &ICMPType,
+				ICMPCode: &ICMPCode,
+				Action:   ruleAction,
+				IPBlock:  ipBlock,
+			}})
 	}
 	anpRule := builder.Get()
 
@@ -639,7 +656,7 @@ func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace stri
 	for fqdn, action := range fqdnSettings {
 		ruleName := fmt.Sprintf("name-%d", i)
 		policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
-		ports, _ := GenPortsOrProtocols(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		ports, _ := GenPortsOrProtocols(BaseRuleBuilder{Protoc: ProtocolTCP})
 		newRule := crdv1beta1.Rule{
 			To:     policyPeer,
 			Ports:  ports,

@@ -89,47 +89,25 @@ func createL7NetworkPolicy(t *testing.T,
 	annpBuilder := &AntreaNetworkPolicySpecBuilder{}
 	annpBuilder = annpBuilder.SetName(data.testNamespace, name).SetPriority(priority)
 	if isIngress {
-		annpBuilder.AddIngress(l4Protocol,
-			&port,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			l7Protocols,
-			nil,
-			nil,
-			podSelector,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			[]ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
-			crdv1beta1.RuleActionAllow,
-			"",
-			"")
+		annpBuilder.AddIngress(ANNPRuleBuilder{
+			AppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
+			L7Protocols:    l7Protocols,
+			BaseRuleBuilder: BaseRuleBuilder{
+				Protoc:      l4Protocol,
+				Port:        &port,
+				PodSelector: podSelector,
+				Action:      crdv1beta1.RuleActionAllow,
+			}})
 	} else {
-		annpBuilder.AddEgress(l4Protocol,
-			&port,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			l7Protocols,
-			nil,
-			nil,
-			podSelector,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			[]ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
-			crdv1beta1.RuleActionAllow,
-			"",
-			"")
+		annpBuilder.AddEgress(ANNPRuleBuilder{
+			L7Protocols:    l7Protocols,
+			AppliedToSpecs: []ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
+			BaseRuleBuilder: BaseRuleBuilder{
+				Protoc:      l4Protocol,
+				Port:        &port,
+				PodSelector: podSelector,
+				Action:      crdv1beta1.RuleActionAllow,
+			}})
 	}
 
 	annp := annpBuilder.Get()
