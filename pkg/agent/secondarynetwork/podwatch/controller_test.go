@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netdefclientfake "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/fake"
+	"github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -417,7 +418,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		vlan                       int
 		noIPAM                     bool
 		doNotCreateNetwork         bool
-		expectedNetworkStatusAnnot string
+		expectedNetworkStatusAnnot []netdefv1.NetworkStatus
 		expectedErr                string
 		expectedCalls              func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator)
 	}{
@@ -438,13 +439,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "VLAN in IPPool",
@@ -463,13 +462,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "network VLAN overrides IPPool VLAN",
@@ -487,13 +484,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					testIPAMResult("148.14.24.100/24", 101),
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "no IPAM",
@@ -510,10 +505,10 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					&ipam.IPAMResult{},
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:        "SRIOV network",
@@ -532,13 +527,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					&testIPAMResult("148.14.24.100/24", 0).Result,
 				)
 			},
-			expectedNetworkStatusAnnot: `[{
-    "name": "net",
-    "ips": [
-        "148.14.24.100"
-    ],
-    "dns": {}
-}]`,
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}},
 		},
 		{
 			name:               "network not found",
@@ -658,13 +651,8 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			}
 			updatedPod, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			networkStatusAnnot, ok := updatedPod.GetAnnotations()[netdefv1.NetworkStatusAnnot]
-			assert.Equal(t, tc.expectedNetworkStatusAnnot, networkStatusAnnot)
-			if tc.expectedNetworkStatusAnnot != "" {
-				require.True(t, ok, "Annotations do not contain NetworkStatusAnnot", "res", networkStatusAnnot)
-			} else {
-				require.False(t, ok, "Annotations contain NetworkStatusAnnot", "res", networkStatusAnnot)
-			}
+			networkStatusAnnot, _ := utils.GetNetworkStatus(updatedPod)
+			assert.ElementsMatch(t, tc.expectedNetworkStatusAnnot, networkStatusAnnot)
 		})
 	}
 }

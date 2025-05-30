@@ -202,7 +202,7 @@ func (pc *PodController) processCNIUpdate(e interface{}) {
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
 func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo, storedInterfaces []*interfacestore.InterfaceConfig) error {
 	if len(pod.Status.PodIPs) == 0 {
-		// Primary network configuration is not complete yet. Return nil here to enqueue the
+		// Primary network configuration is not complete yet. Return nil here to dequeue the
 		// Pod event. Secondary network configuration will be handled with the following Pod
 		// update events.
 		return nil
@@ -223,7 +223,7 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 			return nil
 		}
 	}
-	klog.InfoS("Get secondaryNetwork annotation", "secondaryNetwork", secondaryNetwork, "networkList", networkList, "storedInterfaces", storedInterfaces, "Annotations", pod.Annotations)
+	klog.V(2).InfoS("Get secondaryNetwork annotation", "secondaryNetwork", secondaryNetwork, "networkList", networkList, "storedInterfaces", storedInterfaces, "Annotations", pod.Annotations)
 
 	if err := pc.removeInterfaces(pc.filterStaleInterfaces(networkList, storedInterfaces)); err != nil {
 		return err
@@ -592,11 +592,8 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 	if annotations == nil {
 		return "", false
 	}
-	netObj, netObjExist := annotations[netdefv1.NetworkAttachmentAnnot]
-	if netObj == "" {
-		netObjExist = false
-	}
-	return netObj, netObjExist
+	netObj, netObjExists := annotations[netdefv1.NetworkAttachmentAnnot]
+	return netObj, netObjExists && netObj != ""
 }
 
 // initializeSecondaryInterfaceStore restores secondary interfaceStore when agent restarts.

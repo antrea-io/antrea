@@ -572,8 +572,8 @@ func (s *CNIServer) updatePodAnnotation(ctx context.Context, status *netdefv1.Ne
 	if annotations == nil {
 		return
 	}
-	_, netObjExist := annotations[netdefv1.NetworkAttachmentAnnot]
-	if !netObjExist {
+	_, netObjExists := annotations[netdefv1.NetworkAttachmentAnnot]
+	if !netObjExists {
 		klog.V(2).InfoS("Skipping network status update for Pod without secondary-network annotation",
 			"Pod", klog.KObj(pod))
 		return
