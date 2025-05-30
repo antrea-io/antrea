@@ -398,16 +398,16 @@ func (c *NPLController) handleRemovePod(key string) error {
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
 func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	pod := obj.(*corev1.Pod)
-	klog.V(2).Infof("Got add/update event for Pod: %s", key)
+	klog.V(2).InfoS("Got add/update event for Pod", "pod", klog.KObj(pod))
 
 	podIP := pod.Status.PodIP
 	if podIP == "" {
-		klog.Infof("IP address not set for Pod: %s", key)
+		klog.V(2).InfoS("IP address not set for Pod", "pod", klog.KObj(pod))
 		return nil
 	}
 
 	targetPortsInt, targetPortsStr := c.getTargetPortsForServicesOfPod(pod)
-	klog.V(2).Infof("Pod %s is selected by a Service for which NodePortLocal is enabled", key)
+	klog.V(2).InfoS("Pod is selected by a Service for which NodePortLocal is enabled", "pod", klog.KObj(pod))
 
 	var nodePort int
 	podPorts := make(map[string]struct{})
@@ -417,7 +417,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	podAnnotation, nplExists := pod.GetAnnotations()[types.NPLAnnotationKey]
 	if nplExists {
 		if err := json.Unmarshal([]byte(podAnnotation), &nplAnnotations); err != nil {
-			klog.Warningf("Unable to unmarshal NodePortLocal annotation for Pod %s", key)
+			klog.ErrorS(err, "Unable to unmarshal NodePortLocal annotation for Pod, skipping", "pod", klog.KObj(pod))
 			return nil
 		}
 	}
@@ -430,7 +430,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		for _, cport := range container.Ports {
 			portProtoInt := util.BuildPortProto(fmt.Sprint(cport.ContainerPort), string(cport.Protocol))
 			if int(cport.HostPort) > 0 {
-				klog.V(4).Infof("Host Port is defined for Container %s in Pod %s, thus extra NPL port is not allocated", container.Name, key)
+				klog.V(4).InfoS("Host Port is defined for container, thus extra NPL port is not allocated", "pod", klog.KObj(pod), "container", container.Name)
 				hostPorts[portProtoInt] = int(cport.HostPort)
 			}
 			if cport.Name == "" {
@@ -470,7 +470,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		// Special handling for a rule that was previously marked for deletion but could not
 		// be deleted properly: we have to retry now.
 		if portData != nil && portData.Defunct() {
-			klog.InfoS("Deleting defunct rule for Pod to prevent re-use", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol)
+			klog.InfoS("Deleting defunct NodePortLocal rule for Pod to prevent re-use", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol)
 			if err := c.portTable.DeleteRule(key, port, protocol); err != nil {
 				return fmt.Errorf("failed to delete defunct rule for Pod %s, Pod Port %d, Protocol %s: %w", key, port, protocol, err)
 			}
@@ -480,6 +480,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			if hport, ok := hostPorts[targetPortProto]; ok {
 				nodePort = hport
 			} else {
+				klog.InfoS("Adding NodePortLocal rule", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol)
 				nodePort, err = c.portTable.AddRule(key, port, protocol, podIP)
 				if err != nil {
 					return fmt.Errorf("failed to add rule for Pod %s: %v", key, err)
@@ -507,6 +508,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	for _, data := range entries {
 		proto := data.Protocol
 		if _, exists := podPorts[util.BuildPortProto(fmt.Sprint(data.PodPort), proto.Protocol)]; !exists {
+			klog.InfoS("Deleting NodePortLocal rule", "pod", klog.KObj(pod), "podIP", podIP, "port", data.PodPort, "protocol", proto.Protocol)
 			if err := c.portTable.DeleteRule(key, data.PodPort, proto.Protocol); err != nil {
 				return fmt.Errorf("failed to delete rule for Pod %s, Pod Port %d, Protocol %s: %w", key, data.PodPort, proto.Protocol, err)
 			}
