@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -67,7 +68,7 @@ const (
 type InterfaceConfigurator interface {
 	ConfigureSriovSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, podSriovVFDeviceID string, result *current.Result) error
 	DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error
-	ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult) error
+	ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult, mac net.HardwareAddr) error
 	DeleteVLANSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error
 }
 
@@ -341,6 +342,7 @@ func (pc *PodController) configureSecondaryInterface(
 	resourceName string,
 	podCNIInfo *podCNIInfo,
 	networkConfig *SecondaryNetworkConfig,
+	mac net.HardwareAddr,
 ) (*current.Result, error) {
 	var ipamResult *ipam.IPAMResult
 	var ifConfigErr error
@@ -383,13 +385,14 @@ func (pc *PodController) configureSecondaryInterface(
 		ifConfigErr = pc.interfaceConfigurator.ConfigureVLANSecondaryInterface(
 			pod.Name, pod.Namespace,
 			podCNIInfo.containerID, podCNIInfo.netNS, network.InterfaceRequest,
-			int(networkConfig.MTU), ipamResult)
+			int(networkConfig.MTU), ipamResult, mac)
 	}
 	return &ipamResult.Result, ifConfigErr
 }
 
 func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkList []*netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo) error {
 	usedIFNames := sets.New[string]()
+	usedIFMac := sets.New[string]()
 	for _, network := range networkList {
 		if network.InterfaceRequest != "" {
 			usedIFNames.Insert(network.InterfaceRequest)
@@ -457,8 +460,30 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			}
 		}
 
+		// Generate a new MAC address, if the secondary interface MAC was not provided in the
+		// Pod annotation.
+		var mac net.HardwareAddr
+		if network.MacRequest != "" {
+			if networkConfig.NetworkType == sriovNetworkType {
+				klog.InfoS("User defined MAC address is not supported for SR-IOV networks",
+					"MAC", network.MacRequest, "Pod", klog.KRef(pod.Namespace, pod.Name), "Network", network.Name)
+			} else {
+				if usedIFMac.Has(network.MacRequest) {
+					klog.ErrorS(nil, "Duplicate MAC address found in NetworkAttachmentDefinition", "MAC", network.MacRequest, "Pod", klog.KRef(pod.Namespace, pod.Name))
+					return nil
+				}
+				usedIFMac.Insert(network.MacRequest)
+				var err error
+				mac, err = net.ParseMAC(network.MacRequest)
+				if err != nil {
+					klog.ErrorS(err, "Failed to parse MAC address", "Pod", klog.KRef(pod.Namespace, pod.Name), "MAC", network.MacRequest)
+					return nil
+				}
+			}
+		}
+
 		// Secondary network information retrieved from API server. Proceed to configure secondary interface now.
-		res, err := pc.configureSecondaryInterface(pod, network, resourceName, podCNIInfo, networkConfig)
+		res, err := pc.configureSecondaryInterface(pod, network, resourceName, podCNIInfo, networkConfig, mac)
 		if err != nil {
 			klog.ErrorS(err, "Secondary interface configuration failed",
 				"Pod", klog.KObj(pod), "interface", network.InterfaceRequest,
