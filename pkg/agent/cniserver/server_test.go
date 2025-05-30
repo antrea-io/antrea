@@ -77,8 +77,7 @@ var (
 	mockRoute           *routetest.MockInterface
 	mockOFClient        *openflowtest.MockClient
 	ifaceStore          interfacestore.InterfaceStore
-
-	emptyResponse = &cnipb.CniCmdResponse{CniResult: []byte("")}
+	emptyResponse       = &cnipb.CniCmdResponse{CniResult: []byte("")}
 
 	nodeName = "node1"
 	gwMAC    = utilip.MustParseMAC("00:00:11:11:11:11")
@@ -301,7 +300,6 @@ func TestIPAMService(t *testing.T) {
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 		err = ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Del error")
-
 	})
 
 	t.Run("Error on CHECK", func(t *testing.T) {
@@ -662,7 +660,7 @@ func TestValidateOVSInterface(t *testing.T) {
 	hostIface := &current.Interface{Name: hostIfaceName}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 	portUUID := uuid.New().String()
-	containerConfig := buildContainerConfig(hostIfaceName, containerID, testPodNameA, testPodNamespace, containerIface, result.IPs, 0)
+	containerConfig := buildContainerConfig(hostIfaceName, containerID, testPodNameA, testPodNamespace, containerIface, result.IPs, 0, "")
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID}
 
 	ifaceStore.AddInterface(containerConfig)
@@ -677,7 +675,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	containerIP2 := net.ParseIP("2001:fd1a::2")
 	containerIPs := []net.IP{containerIP1, containerIP2}
 	containerConfig := interfacestore.NewContainerInterface("pod1-abcd", containerID,
-		"test-1", "t1", "eth0", containerMAC, containerIPs, 0)
+		"test-1", "t1", "eth0", containerMAC, containerIPs, 0, "containerNS")
 	externalIDs := BuildOVSPortExternalIDs(containerConfig)
 	_, existed := externalIDs[ovsExternalIDIFDev]
 	assert.False(t, existed, "External IDs should not include interface name eth0")
@@ -727,7 +725,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	// Secondary interface with no IP.
 	containerIPs = nil
 	containerConfig = interfacestore.NewContainerInterface("pod1-abcd", containerID,
-		"test-1", "t1", "eth1", containerMAC, containerIPs, 0)
+		"test-1", "t1", "eth1", containerMAC, containerIPs, 0, "")
 	externalIDs = BuildOVSPortExternalIDs(containerConfig)
 	parsedIFDev, existed := externalIDs[ovsExternalIDIFDev]
 	assert.True(t, existed && parsedIFDev == "eth1")
