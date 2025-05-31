@@ -130,8 +130,6 @@ type FlowCollectorTLSConfig struct {
 	// omitted, client authentication will be disabled. The Secret must of type
 	// kubernetes.io/tls and contain the tls.crt and tls.key keys.
 	ClientSecretName string `yaml:"clientSecretName,omitempty"`
-	// Cipher suites to use.
-	CipherSuites string `yaml:"cipherSuites,omitempty"`
 	// TLS min version.
 	MinVersion string `yaml:"minVersion,omitempty"`
 }

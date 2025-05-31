@@ -44,7 +44,6 @@ Kubernetes: `>= 1.19.0-0`
 | flowCollector.recordFormat | string | `"IPFIX"` | Provide format for records sent to the configured flow collector. Supported formats are IPFIX and JSON. |
 | flowCollector.templateRefreshTimeout | string | `"600s"` | Template retransmission interval when using the udp protocol to export records. The value must be provided as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | flowCollector.tls.caSecretName | string | `""` | Name of the Secret containing the CA certificate used to authenticate the flowCollector. Default root CAs will be used if this field is empty. The certificate must contain the ca.crt key. |
-| flowCollector.tls.cipherSuites | string | `""` | Comma-separated list of cipher suites that will be used for the TLS connection. If empty, the default Go Cipher Suites will be used. See https://pkg.go.dev/crypto/tls#pkg-constants. Note that TLS 1.3 cipher suites are not configurable. |
 | flowCollector.tls.clientSecretName | string | `""` | Name of the Secret containing the client's certificate and private key for mTLS. If omitted, client authentication will be disabled. The Secret must of type kubernetes.io/tls and contain the tls.crt and tls.key keys. |
 | flowCollector.tls.enable | bool | `false` | Enable TLS. |
 | flowCollector.tls.minVersion | string | `""` | Minimum TLS version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13. The current default is TLS 1.2. |
