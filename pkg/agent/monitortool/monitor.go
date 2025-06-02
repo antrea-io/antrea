@@ -453,10 +453,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		}
 		reportTicker = m.clock.NewTicker(reportInterval)
 		reportTickerCh = reportTicker.C()
-		klog.V(4).InfoS("Updated report interval",
-			"requested", interval,
-			"minimum", minReportInterval,
-			"actualWithJitter", reportInterval)
+		klog.V(4).InfoS("Updated report interval", "requested", interval, "minimum", minReportInterval, "actualWithJitter", reportInterval)
 	}
 
 	wg := sync.WaitGroup{}
