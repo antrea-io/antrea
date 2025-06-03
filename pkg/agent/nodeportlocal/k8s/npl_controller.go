@@ -379,6 +379,7 @@ func (c *NPLController) processNextWorkItem() bool {
 }
 
 func (c *NPLController) deleteAllPortRulesIfAny(podKey string) error {
+	klog.InfoS("Deleting all NodePortLocal rules for Pod", "pod", podKey)
 	return c.portTable.DeleteRulesForPod(podKey)
 }
 
