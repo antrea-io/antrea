@@ -408,24 +408,19 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 }
 
 func TestPingIntervalBelowMinReportInterval(t *testing.T) {
-	// While investigating test flakiness in CI, we enabled verbose logging.
-	var level klog.Level
-	level.Set("4")
-	defer level.Set("0")
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	// Create a NodeLatencyMonitor with 5s ping interval (below minReportInterval of 10s)
-	nlmBelowMinReportInterval := &crdv1alpha1.NodeLatencyMonitor{
+	nlm := &crdv1alpha1.NodeLatencyMonitor{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "belowMinReportInterval",
+			Name: "default",
 		},
 		Spec: crdv1alpha1.NodeLatencyMonitorSpec{
 			PingIntervalSeconds: 5, // Below minReportInterval (10s)
 		},
 	}
 
-	m := newTestMonitor(t, nodeConfigIPv4, config.TrafficEncapModeEncap, time.Now(), []runtime.Object{node1, node2, node3}, []runtime.Object{nlmBelowMinReportInterval})
+	m := newTestMonitor(t, nodeConfigIPv4, config.TrafficEncapModeEncap, time.Now(), []runtime.Object{node1, node2, node3}, []runtime.Object{nlm})
 	m.crdInformerFactory.Start(stopCh)
 	m.informerFactory.Start(stopCh)
 	m.crdInformerFactory.WaitForCacheSync(stopCh)
@@ -902,7 +897,7 @@ func TestMonitorLoop(t *testing.T) {
 		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet (jitter still pending)")
 	}, 2*time.Second, 10*time.Millisecond)
 
-	// // Advance 1 more second → total 122s: report should now occur
+	// Advance by 1 more second (reportJitter) → total 122s: report should now occur
 	fakeClock.Step(1 * time.Second)
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 122s)")
