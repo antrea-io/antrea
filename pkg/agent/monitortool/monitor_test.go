@@ -339,13 +339,19 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, outCh)
 	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
 
+	var reportCount atomic.Int32
+	m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		reportCount.Add(1)
+		return false, nil, nil
+	})
+
 	go m.Run(stopCh)
 
-	// We wait for the first ticker to be created, which indicates that we can advance the clock
-	// safely. This is not ideal, because it relies on knowledge of how the implementation
+	// We wait for both ping and report tickers to be created, which indicates that we can advance
+	// the clock safely. This is not ideal, because it relies on knowledge of how the implementation
 	// creates tickers.
 	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 1
+		return fakeClock.TickersAdded() == 2
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// After advancing the clock by 60s (ping interval), we should see the ICMP requests being sent.
@@ -354,7 +360,17 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		packets = collect(packets)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
+		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet (jitter still pending)")
 	}, 2*time.Second, 10*time.Millisecond)
+
+	// Advance by 1 more second (reportJitter) → total 61s: report should now occur
+	fakeClock.Step(1 * time.Second)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 61s)")
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Clear count for next phase
+	reportCount.Store(0)
 
 	// We increase the ping interval from 60s to 90s.
 	newNLM := nlm.DeepCopy()
@@ -363,9 +379,9 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 	_, err := m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Update(ctx, newNLM, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
-	// Again, we have to wait for the second ticker to be created before we can advance the clock.
+	// Again, we have to wait for the 2 new tickers to be created before we can advance the clock.
 	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 2
+		return fakeClock.TickersAdded() == 4
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// When advancing the clock by 60s (old ping iterval), we should not observe any ICMP requests.
@@ -381,6 +397,78 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		packets = collect(packets)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
+		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet (jitter still pending)")
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Advance by 1 more second (reportJitter) → total 91s: report should now occur
+	fakeClock.Step(1 * time.Second)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 91s)")
+	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestPingIntervalBelowMinReportInterval(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	// Create a NodeLatencyMonitor with 5s ping interval (below minReportInterval of 10s)
+	nlm := &crdv1alpha1.NodeLatencyMonitor{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+		},
+		Spec: crdv1alpha1.NodeLatencyMonitorSpec{
+			PingIntervalSeconds: 5, // Below minReportInterval (10s)
+		},
+	}
+
+	m := newTestMonitor(t, nodeConfigIPv4, config.TrafficEncapModeEncap, time.Now(), []runtime.Object{node1, node2, node3}, []runtime.Object{nlm})
+	m.crdInformerFactory.Start(stopCh)
+	m.informerFactory.Start(stopCh)
+	m.crdInformerFactory.WaitForCacheSync(stopCh)
+	m.informerFactory.WaitForCacheSync(stopCh)
+	fakeClock := m.clock
+
+	outCh := make(chan *nettest.Packet, 10)
+	collect := collectProbePackets(t, outCh, stopCh)
+	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, outCh)
+	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
+
+	var reportCount atomic.Int32
+	m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		reportCount.Add(1)
+		return false, nil, nil
+	})
+
+	go m.Run(stopCh)
+
+	// We wait for both ping and report tickers to be created, which indicates that we can advance
+	// the clock safely. This is not ideal, because it relies on knowledge of how the implementation
+	// creates tickers.
+	require.Eventually(t, func() bool {
+		return fakeClock.TickersAdded() == 2
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// After advancing the clock by 5s (ping interval), we should see the ICMP requests being sent.
+	fakeClock.Step(5 * time.Second)
+	packets := []*nettest.Packet{}
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		packets = collect(packets)
+		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
+		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report at 5s (below minReportInterval)")
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Advance by another 5s (total 10s, second ping cycle) - should send pings but still no report
+	fakeClock.Step(5 * time.Second)
+	packets = []*nettest.Packet{}
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		packets = collect(packets)
+		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
+		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet at 10s (jitter still pending)")
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Advance by 1 more second (reportJitter) → total 11s: report should now occur
+	fakeClock.Step(1 * time.Second)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 11s)")
 	}, 2*time.Second, 10*time.Millisecond)
 }
 
@@ -724,13 +812,19 @@ func TestMonitorLoop(t *testing.T) {
 	pConnIPv6 := nettest.NewPacketConn(testAddrIPv6, in6Ch, outCh)
 	m.mockListener.EXPECT().ListenPacket(ipv6ProtocolICMPRaw, "::").Return(pConnIPv6, nil)
 
+	var reportCount atomic.Int32
+	m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		reportCount.Add(1)
+		return false, nil, nil
+	})
+
 	go m.Run(stopCh)
 
-	// We wait for the first ticker to be created, which indicates that we can advance the clock
-	// safely. This is not ideal, because it relies on knowledge of how the implementation
+	// We wait for both ping and report tickers to be created, which indicates that we can advance
+	// the clock safely. This is not ideal, because it relies on knowledge of how the implementation
 	// creates tickers.
 	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 1
+		return fakeClock.TickersAdded() == 2
 	}, 2*time.Second, 10*time.Millisecond)
 
 	require.Empty(t, m.latencyStore.getNodeIPLatencyKeys())
@@ -741,6 +835,7 @@ func TestMonitorLoop(t *testing.T) {
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		packets = collect(packets)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1", "2001:ab03:cd04:55ee:100b::1", "2001:ab03:cd04:55ee:100c::1"}, extractIPs(packets))
+		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet (jitter still pending)")
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// The store is updated when sending the ICMP requests, as we need to store the send timestamp.
@@ -780,8 +875,11 @@ func TestMonitorLoop(t *testing.T) {
 			entry, _ := m.latencyStore.getNodeIPLatencyEntry(ip)
 			assert.Equal(t, 1*time.Second, entry.LastMeasuredRTT)
 		}
+		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 61s)")
 	}, 2*time.Second, 10*time.Millisecond)
 
+	// Clear count for next phase
+	reportCount.Store(0)
 	// Delete node3 synchronously, which simplifies testing.
 	m.onNodeDelete(node3)
 
@@ -796,5 +894,12 @@ func TestMonitorLoop(t *testing.T) {
 		assert.ElementsMatch(t, []string{"10.0.2.1", "2001:ab03:cd04:55ee:100b::1"}, extractIPs(packets))
 		nodeIPs := m.latencyStore.getNodeIPLatencyKeys()
 		assert.ElementsMatch(t, []string{"10.0.2.1", "2001:ab03:cd04:55ee:100b::1"}, nodeIPs)
+		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet (jitter still pending)")
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Advance by 1 more second (reportJitter) → total 122s: report should now occur
+	fakeClock.Step(1 * time.Second)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 122s)")
 	}, 2*time.Second, 10*time.Millisecond)
 }
