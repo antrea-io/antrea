@@ -4460,7 +4460,7 @@ data:
       # on the Node, antrea-agent will create it based on the configuration.
       # The following configuration specifies an OVS bridge with name "br1" and a
       # physical interface "eth1":
-      # [{bridgeName: "br1", physicalInterfaces: ["eth1"]}]
+      # [{bridgeName: "br1", physicalInterfaces: ["eth1"], enableMulticastSnooping: false}]
       ovsBridges:
   antrea-cni.conflist: |
     {
@@ -5484,7 +5484,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 00850eea62819cbe3c83a8a8915dba2f0d91d380c1b8566c80b691c3a909b258
+        checksum/config: bbb03864efb9d6c2f831c03213e923a5c46704ffd61a4a5547bc7182635d85bf
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5776,7 +5776,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 00850eea62819cbe3c83a8a8915dba2f0d91d380c1b8566c80b691c3a909b258
+        checksum/config: bbb03864efb9d6c2f831c03213e923a5c46704ffd61a4a5547bc7182635d85bf
       labels:
         app: antrea
         component: antrea-controller
