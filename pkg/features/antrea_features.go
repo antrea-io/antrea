@@ -103,6 +103,7 @@ const (
 	NodeIPAM featuregate.Feature = "NodeIPAM"
 
 	// alpha: v1.4
+	// beta: v2.4
 	// Enable AntreaIPAM, which is required by bridging mode Pods and secondary network IPAM.
 	AntreaIPAM featuregate.Feature = "AntreaIPAM"
 
@@ -203,7 +204,7 @@ var (
 		CleanupStaleUDPSvcConntrack: {Default: true, PreRelease: featuregate.Beta},
 		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},
 		PacketCapture:               {Default: false, PreRelease: featuregate.Alpha},
-		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
+		AntreaIPAM:                  {Default: true, PreRelease: featuregate.Beta},
 		FlowExporter:                {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats:          {Default: true, PreRelease: featuregate.Beta},
 		NodePortLocal:               {Default: true, PreRelease: featuregate.GA},
