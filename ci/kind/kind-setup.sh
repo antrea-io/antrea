@@ -133,7 +133,7 @@ function configure_networks {
   # remove old networks
   nodes="$(kind get nodes --name $CLUSTER_NAME | grep worker)"
   nodes=$(echo $nodes)
-  networks+=" $CLUSTER_NAME"
+  networks+=" kind"
   echo "removing worker nodes $nodes from networks $networks"
   for n in $networks; do
     rm_nodes=$(docker network inspect $n --format '{{range $i, $conf:=.Containers}}{{$conf.Name}} {{end}}')
@@ -143,7 +143,7 @@ function configure_networks {
         echo "disconnected worker $rn from network $n"
       fi
     done
-    if [[ $n != "$CLUSTER_NAME" ]]; then
+    if [[ $n != "kind" ]]; then
       docker network rm $n > /dev/null 2>&1
       echo "removed network $n"
     fi
@@ -162,7 +162,7 @@ function configure_networks {
 
   num_networks=${#networks[@]}
   if [[ $num_networks -eq 0 ]]; then
-    networks+=("$CLUSTER_NAME")
+    networks+=("kind")
     num_networks=$((num_networks+1))
   fi
 
@@ -274,7 +274,7 @@ function configure_vlan_subnets {
   fi
   echo "Configuring VLAN subnets"
 
-  bridge_id=$(docker network inspect $CLUSTER_NAME -f {{.ID}})
+  bridge_id=$(docker network inspect kind -f {{.ID}})
   bridge_interface="br-${bridge_id:0:12}"
   
   vlan_interfaces=()
@@ -328,7 +328,7 @@ function configure_vlan_subnets {
 function delete_vlan_subnets {
   echo "Deleting VLAN subnets"
 
-  bridge_id=$(docker network inspect $CLUSTER_NAME -f {{.ID}})
+  bridge_id=$(docker network inspect kind -f {{.ID}})
   bridge_interface="br-${bridge_id:0:12}"
   vlan_interface_prefix="br-${bridge_id:0:7}."
 
@@ -349,15 +349,19 @@ function delete_vlan_subnets {
   fi
 }
 
+function delete_network_by_filter {
+  local networks=$(docker network ls -f name="$1" --format '{{.Name}}')
+  if [[ -n $networks ]]; then
+    docker network rm $networks > /dev/null 2>&1
+    echo "Deleted networks: $networks"
+  fi
+}
+
 function delete_networks {
-  networks=("$CLUSTER_NAME" "antrea")
-  for net in "${networks[@]}"; do
-    local network=$(docker network ls -f name="$net" --format '{{.Name}}')
-    if [[ -n $network ]]; then
-      docker network rm $network > /dev/null 2>&1
-      echo "Deleted networks: $network"
-    fi
-  done  
+  if [[ $FLEXIBLE_IPAM == true ]]; then
+    delete_network_by_filter "kind"
+  fi
+  delete_network_by_filter "antrea"
 }
 
 function load_images {
@@ -521,8 +525,8 @@ function destroy {
       kind delete cluster --name $CLUSTER_NAME
   fi
   destroy_external_servers
-  delete_vlan_subnets
   delete_networks
+  delete_vlan_subnets
 }
 
 function printUnixTimestamp {
@@ -536,13 +540,13 @@ function printUnixTimestamp {
 
 function setup_external_servers {
   if [[ $DEPLOY_EXTERNAL_AGNHOST == true ]]; then
-    docker run -d --name antrea-external-agnhost-$RANDOM --network $CLUSTER_NAME -it --rm registry.k8s.io/e2e-test-images/agnhost:2.40 netexec &> /dev/null
+    docker run -d --name antrea-external-agnhost-$RANDOM --network kind -it --rm registry.k8s.io/e2e-test-images/agnhost:2.40 netexec &> /dev/null
   fi
 
   if [[ $DEPLOY_EXTERNAL_FRR == true ]]; then
     docker run -d \
       --name antrea-external-frr-$RANDOM \
-      --network $CLUSTER_NAME --cap-add=NET_BIND_SERVICE \
+      --network kind --cap-add=NET_BIND_SERVICE \
       --cap-add=NET_ADMIN \
       --cap-add=NET_RAW \
       --cap-add=SYS_ADMIN \
