@@ -126,7 +126,10 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 	}
 
 	setCount := 0
-	mockIPFIXBufferedExp.EXPECT().AddRecord(mockRecord).Do(func(record ipfixentities.Record) {
+	mockRecord.EXPECT().GetOrderedElementList().Return(nil).Times(2)
+	mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
+		return record.GetTemplateID() == testTemplateIDv4
+	})).Do(func(record ipfixentities.Record) {
 		setCount += 1
 	}).Return(nil).Times(2)
 	// connection will be closed when updating the external flow collector address
@@ -183,8 +186,10 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 		observationDomainID:        testObservationDomainID,
 	}
 
-	mockIPFIXBufferedExp.EXPECT().AddRecord(mockRecord).Return(nil)
-
+	mockRecord.EXPECT().GetOrderedElementList().Return(nil)
+	mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
+		return record.GetTemplateID() == testTemplateIDv4
+	})).Return(nil)
 	assert.NoError(t, ipfixExporter.AddRecord(mockRecord, false))
 }
 
@@ -230,7 +235,10 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 		observationDomainID:        testObservationDomainID,
 	}
 
-	mockIPFIXBufferedExp.EXPECT().AddRecord(mockRecord).Return(fmt.Errorf("send error"))
+	mockRecord.EXPECT().GetOrderedElementList().Return(nil)
+	mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
+		return record.GetTemplateID() == testTemplateIDv4
+	})).Return(fmt.Errorf("send error"))
 	mockIPFIXExpProc.EXPECT().CloseConnToCollector()
 
 	assert.Error(t, ipfixExporter.AddRecord(mockRecord, false))
