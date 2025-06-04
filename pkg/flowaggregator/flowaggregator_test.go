@@ -134,6 +134,7 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
 				return &flowAggregator{
 					clusterUUID:                 clusterUUID,
+					clusterID:                   clusterUUID.String(),
 					aggregatorTransportProtocol: "tcp",
 					aggregationProcess:          mockAggregationProcess,
 					activeFlowRecordTimeout:     testActiveTimeout,
@@ -263,6 +264,7 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 				return &flowAggregator{
 					aggregatorMode:              flowaggregatorconfig.AggregatorModeProxy,
 					clusterUUID:                 clusterUUID,
+					clusterID:                   clusterUUID.String(),
 					aggregatorTransportProtocol: "tcp",
 					activeFlowRecordTimeout:     testActiveTimeout,
 					inactiveFlowRecordTimeout:   testInactiveTimeout,
@@ -1103,9 +1105,6 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 }
 
 func TestNewFlowAggregator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	client := fake.NewSimpleClientset()
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	wd, err := os.Getwd()
 	require.NoError(t, err)
 	// fsnotify does not seem to work when using the default tempdir on MacOS, which is why we
@@ -1115,33 +1114,61 @@ func TestNewFlowAggregator(t *testing.T) {
 	fileName := f.Name()
 	defer os.Remove(fileName)
 
-	clusterUUID := uuid.New()
-	// This will validate that the correct UUID is provided by the FlowAggregator when
-	// instantiating exporters.
-	mockExporters(t, ctrl, &clusterUUID)
+	newFlowAggregatorConfig := func(clusterID string) *flowaggregatorconfig.FlowAggregatorConfig {
+		return &flowaggregatorconfig.FlowAggregatorConfig{
+			FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+				Enable:  true,
+				Address: "10.10.10.10:155",
+			},
+			ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+				Enable: true,
+			},
+			S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+				Enable:     true,
+				BucketName: "test-bucket-name",
+			},
+			FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+				Enable: true,
+				Path:   "/tmp/antrea-flows.log",
+			},
+			ClusterID: clusterID,
+		}
+	}
 
-	config := &flowaggregatorconfig.FlowAggregatorConfig{
-		FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
-			Enable:  true,
-			Address: "10.10.10.10:155",
+	testcases := []struct {
+		name   string
+		config *flowaggregatorconfig.FlowAggregatorConfig
+	}{
+		{
+			"ClusterID is the UUID by default",
+			newFlowAggregatorConfig(""),
 		},
-		ClickHouse: flowaggregatorconfig.ClickHouseConfig{
-			Enable: true,
-		},
-		S3Uploader: flowaggregatorconfig.S3UploaderConfig{
-			Enable:     true,
-			BucketName: "test-bucket-name",
-		},
-		FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
-			Enable: true,
-			Path:   "/tmp/antrea-flows.log",
+		{
+			"ClusterID is set by the user",
+			newFlowAggregatorConfig("custom-cluster-id"),
 		},
 	}
-	b, err := yaml.Marshal(config)
-	require.NoError(t, err)
-	_, err = f.Write(b)
-	require.NoError(t, err)
-	fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, fileName)
-	require.NoError(t, err)
-	assert.Equal(t, clusterUUID, fa.clusterUUID)
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			client := fake.NewSimpleClientset()
+			mockPodStore := podstoretest.NewMockInterface(ctrl)
+			clusterUUID := uuid.New()
+			// This will validate that the correct UUID is provided by the FlowAggregator when
+			// instantiating exporters.
+			mockExporters(t, ctrl, &clusterUUID)
+			b, err := yaml.Marshal(tc.config)
+			require.NoError(t, err)
+			_, err = f.Write(b)
+			require.NoError(t, err)
+			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, fileName)
+			require.NoError(t, err)
+			assert.Equal(t, clusterUUID, fa.clusterUUID)
+			if tc.config.ClusterID == "" {
+				assert.Equal(t, clusterUUID.String(), fa.clusterID)
+			} else {
+				assert.Equal(t, tc.config.ClusterID, fa.clusterID)
+			}
+		})
+	}
 }

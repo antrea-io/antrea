@@ -73,36 +73,21 @@ func (a *ClusterIdentityAllocator) updateConfigMapIfNeeded() error {
 		}
 	}
 
-	// returns a triplet consisting of the cluster UUID, a boolean indicating if the UUID needs
-	// to be written to the ConfigMap, and an error if applicable
-	inspectUUID := func() (uuid.UUID, bool, error) {
-		clusterUUIDStr, ok := configMap.Data[uuidConfigMapKey]
-		if ok && clusterUUIDStr != "" {
-			clusterUUID, err := uuid.Parse(clusterUUIDStr)
-			if err != nil {
-				return uuid.Nil, false, fmt.Errorf("cluster already has UUID '%s' but it is not valid: %v", clusterUUIDStr, err)
-			}
-			return clusterUUID, false, nil
+	clusterUUIDStr, ok := configMap.Data[uuidConfigMapKey]
+	if ok && clusterUUIDStr != "" {
+		clusterUUID, err := uuid.Parse(clusterUUIDStr)
+		if err != nil {
+			return fmt.Errorf("cluster already has UUID '%s' but it is not valid: %v", clusterUUIDStr, err)
 		}
-
-		// generate a new random UUID
-		clusterUUID := uuid.New()
-
-		return clusterUUID, true, nil
-	}
-
-	clusterUUID, clusterUUIDNeedsUpdate, err := inspectUUID()
-	if err != nil {
-		return err
-	}
-	if !clusterUUIDNeedsUpdate {
 		klog.Infof("Existing cluster UUID: %v", clusterUUID)
 		return nil
 	}
 
+	generatedClusterUUID := uuid.New().String()
 	configMap.Data = map[string]string{
-		uuidConfigMapKey: clusterUUID.String(),
+		uuidConfigMapKey: generatedClusterUUID,
 	}
+
 	if exists {
 		if _, err := a.k8sClient.CoreV1().ConfigMaps(a.clusterIdentityConfigMapNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("error when updating '%s/%s' ConfigMap with new cluster identity: %v", a.clusterIdentityConfigMapNamespace, a.clusterIdentityConfigMapName, err)
@@ -112,7 +97,7 @@ func (a *ClusterIdentityAllocator) updateConfigMapIfNeeded() error {
 			return fmt.Errorf("error when creating '%s/%s' ConfigMap with new cluster identity: %v", a.clusterIdentityConfigMapNamespace, a.clusterIdentityConfigMapName, err)
 		}
 	}
-	klog.Infof("New cluster UUID: %v", clusterUUID)
+	klog.Infof("New cluster UUID: %v", generatedClusterUUID)
 	return nil
 }
 
