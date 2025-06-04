@@ -105,4 +105,5 @@ type FlowExporterOptions struct {
 	StaleConnectionTimeout time.Duration
 	PollInterval           time.Duration
 	ConnectUplinkToBridge  bool
+	ProtocolFilter         []string
 }
