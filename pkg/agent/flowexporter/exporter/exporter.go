@@ -33,6 +33,7 @@ import (
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/proxy"
@@ -174,8 +175,9 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 	}
 	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
 
-	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
-	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o)
+	protocolFilter := filter.NewProtocolFilter(o.ProtocolFilter)
+	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocolFilter)
+	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o, protocolFilter)
 	var l7Listener *connections.L7Listener
 	var eventMapGetter connections.L7EventMapGetter
 	if l7FlowExporterEnabled {

@@ -707,7 +707,9 @@ func run(o *Options) error {
 			IdleFlowTimeout:        o.idleFlowTimeout,
 			StaleConnectionTimeout: o.staleConnectionTimeout,
 			PollInterval:           o.pollInterval,
-			ConnectUplinkToBridge:  connectUplinkToBridge}
+			ConnectUplinkToBridge:  connectUplinkToBridge,
+			ProtocolFilter:         o.config.FlowExporter.ProtocolFilter,
+		}
 		flowExporter, err = exporter.NewFlowExporter(
 			podStore,
 			proxier,

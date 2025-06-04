@@ -4292,6 +4292,13 @@ data:
       # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
       idleFlowExportTimeout: "15s"
 
+      # Provide the set of protocols to filter specific flows that will be
+      # exported. Invalid protocols do not error and instead warnings are
+      # logged on the antrea agent. By default the full set of supported
+      # protocols are exported which are:
+      # "tcp", "udp", "sctp"
+      protocolFilter: 
+
     nodePortLocal:
     # Enable NodePortLocal, a feature used to make Pods reachable using port forwarding on the host. To
     # enable this feature, you need to set "enable" to true.
@@ -5484,7 +5491,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: bbb03864efb9d6c2f831c03213e923a5c46704ffd61a4a5547bc7182635d85bf
+        checksum/config: a0e8703a9e17fbdab8d5edfb5fc39dd36231caac33f6206f31e2324c2791b2fa
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5776,7 +5783,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: bbb03864efb9d6c2f831c03213e923a5c46704ffd61a4a5547bc7182635d85bf
+        checksum/config: a0e8703a9e17fbdab8d5edfb5fc39dd36231caac33f6206f31e2324c2791b2fa
       labels:
         app: antrea
         component: antrea-controller

@@ -22,11 +22,12 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 // InitializeConnTrackDumper initializes the ConnTrackDumper interface for different OS and datapath types.
-func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, ovsDatapathType ovsconfig.OVSDatapathType, isAntreaProxyEnabled bool) ConnTrackDumper {
+func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, ovsDatapathType ovsconfig.OVSDatapathType, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) ConnTrackDumper {
 	var svcCIDRv4, svcCIDRv6 netip.Prefix
 	if serviceCIDRv4 != nil {
 		svcCIDRv4 = netip.MustParsePrefix(serviceCIDRv4.String())
@@ -34,17 +35,20 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net
 	if serviceCIDRv6 != nil {
 		svcCIDRv6 = netip.MustParsePrefix(serviceCIDRv6.String())
 	}
+
 	var connTrackDumper ConnTrackDumper
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
-		connTrackDumper = NewConnTrackSystem(nodeConfig, svcCIDRv4, svcCIDRv6, isAntreaProxyEnabled)
+		connTrackDumper = NewConnTrackSystem(nodeConfig, svcCIDRv4, svcCIDRv6, isAntreaProxyEnabled, protocolFilter)
 	}
 	return connTrackDumper
 }
 
-func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool) []*flowexporter.Connection {
+func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) []*flowexporter.Connection {
+
 	filteredConns := conns[:0]
 	gwIPv4, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
 	gwIPv6, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv6)
+
 	for _, conn := range conns {
 		if conn.Zone != zoneFilter {
 			continue
@@ -74,6 +78,11 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 				continue
 			}
 		}
+
+		if !protocolFilter.Allow(conn.FlowKey.Protocol) {
+			continue
+		}
+
 		filteredConns = append(filteredConns, conn)
 	}
 	return filteredConns

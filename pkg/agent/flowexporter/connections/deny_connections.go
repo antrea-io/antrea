@@ -21,6 +21,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -31,11 +32,13 @@ import (
 
 type DenyConnectionStore struct {
 	connectionStore
+	protocolFilter filter.ProtocolFilter
 }
 
-func NewDenyConnectionStore(podStore podstore.Interface, proxier proxy.Proxier, o *flowexporter.FlowExporterOptions) *DenyConnectionStore {
+func NewDenyConnectionStore(podStore podstore.Interface, proxier proxy.Proxier, o *flowexporter.FlowExporterOptions, protocolFilter filter.ProtocolFilter) *DenyConnectionStore {
 	return &DenyConnectionStore{
 		connectionStore: NewConnectionStore(podStore, proxier, o),
+		protocolFilter:  protocolFilter,
 	}
 }
 
@@ -91,6 +94,10 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 		}
 		klog.V(4).InfoS("Deny connection has been updated", "connection", conn)
 	} else {
+		if !ds.protocolFilter.Allow(conn.FlowKey.Protocol) {
+			return
+		}
+
 		conn.StartTime = timeSeen
 		conn.StopTime = timeSeen
 		conn.LastExportTime = timeSeen

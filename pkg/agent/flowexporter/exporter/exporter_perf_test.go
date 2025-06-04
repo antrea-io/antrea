@@ -36,6 +36,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
 	"antrea.io/antrea/pkg/ipfix"
@@ -170,7 +171,7 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 	v6Enabled := testWithIPv6
 
 	l7Listener := connections.NewL7Listener(nil, nil)
-	denyConnStore := connections.NewDenyConnectionStore(nil, nil, o)
+	denyConnStore := connections.NewDenyConnectionStore(nil, nil, o, filter.NewProtocolFilter(nil))
 	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, l7Listener, o)
 
 	return &FlowExporter{
