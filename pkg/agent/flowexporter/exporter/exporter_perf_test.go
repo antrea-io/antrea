@@ -202,12 +202,14 @@ func setupExporter(isConntrackConn bool, stopCh <-chan struct{}) (*FlowExporter,
 
 	// create connection store and generate connections
 	o := &flowexporter.FlowExporterOptions{
-		FlowCollectorAddr:      collectorAddr.String(),
-		FlowCollectorProto:     collectorAddr.Network(),
-		ActiveFlowTimeout:      testActiveFlowTimeout,
-		IdleFlowTimeout:        testIdleFlowTimeout,
-		StaleConnectionTimeout: 1,
-		PollInterval:           1,
+		FlowCollectorAddr:         collectorAddr.String(),
+		FlowCollectorProto:        collectorAddr.Network(),
+		ActiveFlowTimeout:         testActiveFlowTimeout,
+		IdleFlowTimeout:           testIdleFlowTimeout,
+		StaleConnectionTimeout:    1,
+		PollInterval:              1,
+		ConntrackBufferLimit:      testConnectionBufferLimit,
+		DenyConnectionBufferLimit: testConnectionBufferLimit,
 	}
 	exp := NewFlowExporterForTest(o)
 	if isConntrackConn {

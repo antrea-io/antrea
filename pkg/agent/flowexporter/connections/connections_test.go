@@ -34,15 +34,18 @@ const (
 	testIdleFlowTimeout        = 1 * time.Second
 	testPollInterval           = 0 // Not used in these tests, hence 0.
 	testStaleConnectionTimeout = 5 * time.Minute
+	testConnectionBufferLimit  = 128000
 )
 
 var testFlowExporterOptions = &flowexporter.FlowExporterOptions{
-	FlowCollectorAddr:      "",
-	FlowCollectorProto:     "",
-	ActiveFlowTimeout:      testActiveFlowTimeout,
-	IdleFlowTimeout:        testIdleFlowTimeout,
-	StaleConnectionTimeout: testStaleConnectionTimeout,
-	PollInterval:           testPollInterval,
+	FlowCollectorAddr:         "",
+	FlowCollectorProto:        "",
+	ActiveFlowTimeout:         testActiveFlowTimeout,
+	IdleFlowTimeout:           testIdleFlowTimeout,
+	StaleConnectionTimeout:    testStaleConnectionTimeout,
+	PollInterval:              testPollInterval,
+	ConntrackBufferLimit:      testConnectionBufferLimit,
+	DenyConnectionBufferLimit: testConnectionBufferLimit,
 }
 
 func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {

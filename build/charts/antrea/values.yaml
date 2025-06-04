@@ -418,6 +418,12 @@ flowExporter:
   # -- timeout after which a flow record is sent to the collector for idle
   # flows.
   idleFlowExportTimeout: "15s"
+  # -- (int) The maximum number of conntrack entries stored by flow exporter.
+  # @default -- 128000
+  conntrackBufferLimit:
+  # -- (int) The maximum number of denied connection entries stored by flow exporter.
+  # @default -- 128000
+  denyConnectionBufferLimit:
 
 cni:
   # -- Chained plugins to use alongside antrea-cni.
