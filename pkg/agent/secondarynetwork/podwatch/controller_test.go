@@ -262,7 +262,7 @@ func TestPodControllerRun(t *testing.T) {
 		ContainerID: containerID,
 		IFName:      interfaceName}
 	containerConfig := interfacestore.NewContainerInterface(interfaceName, containerID,
-		pod.Name, pod.Namespace, interfaceName, nil, nil, 0)
+		pod.Name, pod.Namespace, interfaceName, cniInfo.netNS, nil, nil, 0)
 
 	// CNI Add event.
 	event := types.PodUpdate{
@@ -767,15 +767,16 @@ func TestPodControllerAddPod(t *testing.T) {
 		network1 := testNetwork("net1", sriovNetworkType)
 		testVLAN := 100
 		network2 := testNetworkExt("net2", "", "", vlanNetworkType, "", "", defaultMTU, testVLAN, false)
+		netNS := containerNetNs(containerID)
 
 		podOwner1 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: containerID, IFName: "eth10"}
 		podOwner2 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: containerID, IFName: "eth11"}
 		containerConfig1 := interfacestore.NewContainerInterface("interface1", containerID,
-			pod.Name, pod.Namespace, "eth10", nil, nil, 0)
+			pod.Name, pod.Namespace, "eth10", netNS, nil, nil, 0)
 		containerConfig2 := interfacestore.NewContainerInterface("interface2", containerID,
-			pod.Name, pod.Namespace, "eth11", nil, nil, 0)
+			pod.Name, pod.Namespace, "eth11", netNS, nil, nil, 0)
 		// VLAN interface should have OVSPortConfig.
 		containerConfig2.OVSPortConfig = &interfacestore.OVSPortConfig{}
 
@@ -785,9 +786,9 @@ func TestPodControllerAddPod(t *testing.T) {
 		stalePodOwner2 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: staleContainerID, IFName: "eth2"}
 		staleConfig1 := interfacestore.NewContainerInterface("interface1", staleContainerID,
-			pod.Name, pod.Namespace, "eth1", nil, nil, 0)
+			pod.Name, pod.Namespace, "eth1", containerNetNs(staleContainerID), nil, nil, 0)
 		staleConfig2 := interfacestore.NewContainerInterface("interface2", staleContainerID,
-			pod.Name, pod.Namespace, "eth2", nil, nil, 0)
+			pod.Name, pod.Namespace, "eth2", containerNetNs(staleContainerID), nil, nil, 0)
 		staleConfig1.OVSPortConfig = &interfacestore.OVSPortConfig{}
 
 		networkConfig1 := cnitypes.NetworkConfig{
@@ -821,7 +822,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			podName,
 			testNamespace,
 			containerID,
-			containerNetNs(containerID),
+			netNS,
 			"eth10",
 			interfaceDefaultMTU,
 			gomock.Any(),
@@ -831,7 +832,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			podName,
 			testNamespace,
 			containerID,
-			containerNetNs(containerID),
+			netNS,
 			"eth11",
 			defaultMTU,
 			testIPAMResult("148.14.24.101/24", 100),
@@ -1105,15 +1106,15 @@ func createTestInterfaces() (map[string]string, []ovsconfig.OVSPortData, []*inte
 	p2NetIP := net.ParseIP(p2IP)
 
 	// Create InterfaceConfig objects directly
-	containerConfig1 := interfacestore.NewContainerInterface("p1", uuid1, "Pod1", "nsA", "eth0", p1NetMAC, []net.IP{p1NetIP}, 100)
+	containerConfig1 := interfacestore.NewContainerInterface("p1", uuid1, "Pod1", "nsA", "eth0", "netns1", p1NetMAC, []net.IP{p1NetIP}, 100)
 	containerConfig1.OVSPortConfig = &interfacestore.OVSPortConfig{
 		OFPort: 11,
 	}
-	containerConfig2 := interfacestore.NewContainerInterface("p2", uuid2, "Pod2", "nsA", "eth0", p2NetMAC, []net.IP{p2NetIP}, 100)
+	containerConfig2 := interfacestore.NewContainerInterface("p2", uuid2, "Pod2", "nsA", "eth0", "netns2", p2NetMAC, []net.IP{p2NetIP}, 100)
 	containerConfig2.OVSPortConfig = &interfacestore.OVSPortConfig{
 		OFPort: 12,
 	}
-	containerConfig3 := interfacestore.NewContainerInterface("p3", uuid3, "Pod3", "nsA", "eth0", p2NetMAC, []net.IP{p2NetIP}, 100)
+	containerConfig3 := interfacestore.NewContainerInterface("p3", uuid3, "Pod3", "nsA", "eth0", "netns3", p2NetMAC, []net.IP{p2NetIP}, 100)
 	containerConfig3.OVSPortConfig = &interfacestore.OVSPortConfig{
 		OFPort: -1,
 	}
@@ -1188,15 +1189,27 @@ func TestReconcileSecondaryInterfaces(t *testing.T) {
 	mockIPAM.EXPECT().SecondaryNetworkRelease(gomock.Any()).Return(nil).Times(1)
 
 	err := pc.reconcileSecondaryInterfaces(primaryStore)
-
 	require.NoError(t, err)
 
 	// Check CNI Cache
-	_, foundPod1 := pc.cniCache.Load("nsA/Pod1")
-	assert.True(t, foundPod1, "CNI Cache should contain nsA/Pod1")
+	podCount := 0
+	pc.cniCache.Range(func(key, value interface{}) bool {
+		podCount++
+		return true
+	})
+	assert.Equal(t, 2, podCount, "CNI cache should contain two Pods")
 
-	_, foundPod2 := pc.cniCache.Load("nsA/Pod2")
-	assert.True(t, foundPod2, "CNI Cache should contain nsA/Pod2")
+	checkPodCNIInfo := func(t *testing.T, config *interfacestore.InterfaceConfig) {
+		t.Helper()
+		key := fmt.Sprintf("%s/%s", config.PodNamespace, config.PodName)
+		value, foundPod := pc.cniCache.Load(key)
+		podCNIInfo := value.(*podCNIInfo)
+		assert.True(t, foundPod, "CNI cache should contain "+key)
+		assert.Equal(t, config.ContainerID, podCNIInfo.containerID)
+		assert.Equal(t, config.NetNS, podCNIInfo.netNS)
+	}
+	checkPodCNIInfo(t, containerConfigs[0])
+	checkPodCNIInfo(t, containerConfigs[1])
 
 	// Ensure stale interfaces are removed
 	_, foundPod3 := pc.cniCache.Load("nsA/Pod3")

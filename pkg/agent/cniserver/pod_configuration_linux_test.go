@@ -267,7 +267,8 @@ func TestCreateOVSPort(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testIfaceConfigurator := &fakeInterfaceConfigurator{ovsInterfaceTypeMapping: tc.portName}
 			podConfigurator := createPodConfigurator(controller, testIfaceConfigurator)
-			containerConfig := buildContainerConfig(tc.portName, containerID, podName, podNamespace, &current.Interface{Mac: "01:02:03:04:05:06"}, ipamResult.IPs, tc.vlanID)
+			containerConfig := buildContainerConfig(tc.portName, containerID, podName, podNamespace,
+				"netns1", &current.Interface{Mac: "01:02:03:04:05:06"}, ipamResult.IPs, tc.vlanID)
 			attachInfo := BuildOVSPortExternalIDs(containerConfig)
 			if tc.createOVSPort {
 				mockOVSBridgeClient.EXPECT().CreatePort(tc.portName, tc.portName, attachInfo).Times(1).Return(generateUUID(), nil)
@@ -470,7 +471,7 @@ func TestCheckHostInterface(t *testing.T) {
 	containeIPs := ipamResult.IPs
 	ifaceMAC, _ := net.ParseMAC("01:02:03:04:05:06")
 	containerInterface := interfacestore.NewContainerInterface(hostIfaceName, containerID,
-		"pod1", testPodNamespace, "eth0", ifaceMAC, []net.IP{containerIP}, 1)
+		"pod1", testPodNamespace, "eth0", "netns1", ifaceMAC, []net.IP{containerIP}, 1)
 	containerInterface.OVSPortConfig = &interfacestore.OVSPortConfig{
 		PortUUID: generateUUID(),
 		OFPort:   int32(10),
@@ -553,6 +554,7 @@ func TestConfigureSriovSecondaryInterface(t *testing.T) {
 					PodName:      podName,
 					PodNamespace: testPodNamespace,
 					IFDev:        "eth0",
+					NetNS:        containerNS,
 				},
 			},
 		}, {
@@ -566,6 +568,7 @@ func TestConfigureSriovSecondaryInterface(t *testing.T) {
 					PodName:      podName,
 					PodNamespace: testPodNamespace,
 					IFDev:        "eth0",
+					NetNS:        containerNS,
 				},
 			},
 		},
@@ -600,7 +603,7 @@ func newTestContainerInterfaceConfig(podName, containerID, ifDev string, vlan in
 	podIPv6 := net.ParseIP("3ffe:ffff:10:1ff::111")
 	containerConfig := interfacestore.NewContainerInterface(
 		hostIfaceName, containerID, podName, testPodNamespace,
-		ifDev, podMAC, []net.IP{podIP, podIPv6}, uint16(vlan))
+		ifDev, "containerNS", podMAC, []net.IP{podIP, podIPv6}, uint16(vlan))
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: fakePortUUID, OFPort: 0}
 	return containerConfig
 }

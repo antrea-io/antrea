@@ -90,10 +90,10 @@ func TestInitInterfaceStore(t *testing.T) {
 
 	ovsPort1 := ovsconfig.OVSPortData{UUID: uuid1, Name: "p1", IFName: "p1", OFPort: 11,
 		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
-			interfacestore.NewContainerInterface("p1", uuid1, "pod1", "ns1", "eth0", p1NetMAC, []net.IP{p1NetIP}, 0)))}
+			interfacestore.NewContainerInterface("p1", uuid1, "pod1", "ns1", "eth0", "netns1", p1NetMAC, []net.IP{p1NetIP}, 0)))}
 	ovsPort2 := ovsconfig.OVSPortData{UUID: uuid2, Name: "p2", IFName: "p2", OFPort: 12,
 		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
-			interfacestore.NewContainerInterface("p2", uuid2, "pod2", "ns2", "eth0", p2NetMAC, []net.IP{p2NetIP}, 0),
+			interfacestore.NewContainerInterface("p2", uuid2, "pod2", "ns2", "eth0", "netns2", p2NetMAC, []net.IP{p2NetIP}, 0),
 		)),
 	}
 	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
@@ -112,7 +112,8 @@ func TestInitInterfaceStore(t *testing.T) {
 	container1, found1 := store.GetContainerInterface(uuid1)
 	if !found1 {
 		t.Errorf("Failed to load OVS port into local store")
-	} else if container1.OFPort != 11 || len(container1.IPs) == 0 || container1.IPs[0].String() != p1IP || container1.MAC.String() != p1MAC || container1.InterfaceName != "p1" {
+	} else if container1.OFPort != 11 || len(container1.IPs) == 0 || container1.IPs[0].String() != p1IP || container1.MAC.String() != p1MAC ||
+		container1.InterfaceName != "p1" || container1.NetNS != "netns1" {
 		t.Errorf("Failed to load OVS port configuration into local store")
 	}
 	_, found2 := store.GetContainerInterface(uuid2)
