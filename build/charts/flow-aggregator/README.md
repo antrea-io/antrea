@@ -23,7 +23,7 @@ Kubernetes: `>= 1.19.0-0`
 | antreaNamespace | string | `"kube-system"` | Namespace in which Antrea was installed. |
 | apiServer.apiPort | int | `10348` | The port for the Flow Aggregator APIServer to serve on. |
 | apiServer.tlsCipherSuites | string | `""` | Comma-separated list of cipher suites that will be used by the Flow Aggregator APIservers. If empty, the default Go Cipher Suites will be used. |
-| apiServer.tlsMinVersion | string | `""` | TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13. |
+| apiServer.tlsMinVersion | string | VersionTLS12 | TLS min version from: VersionTLS12, VersionTLS13. |
 | clickHouse.commitInterval | string | `"8s"` | CommitInterval is the periodical interval between batch commit of flow records to DB. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | clickHouse.compress | bool | `true` | Compress enables lz4 compression when committing flow records. |
 | clickHouse.connectionSecret | object | `{"password":"clickhouse_operator_password","username":"clickhouse_operator"}` | Credentials to connect to ClickHouse. They will be stored in a Secret. |

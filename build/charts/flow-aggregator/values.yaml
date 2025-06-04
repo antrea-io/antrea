@@ -54,7 +54,8 @@ apiServer:
   # -- Comma-separated list of cipher suites that will be used by the Flow Aggregator
   # APIservers. If empty, the default Go Cipher Suites will be used.
   tlsCipherSuites: ""
-  # -- TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+  # -- TLS min version from: VersionTLS12, VersionTLS13.
+  # @default -- VersionTLS12
   tlsMinVersion: ""
 # flowCollector contains external IPFIX or JSON collector related configuration options.
 flowCollector:

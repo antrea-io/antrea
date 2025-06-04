@@ -243,7 +243,8 @@ data:
       # prefer TLS1.3 Cipher Suites whenever possible.
       tlsCipherSuites: ""
 
-      # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+      # TLS min version from: VersionTLS12, VersionTLS13.
+      # The current default is VersionTLS12.
       tlsMinVersion: ""
 
     # flowCollector contains external IPFIX or JSON collector related configuration options.
@@ -292,7 +293,7 @@ data:
         # client authentication will be disabled. The Secret must of type kubernetes.io/tls and contain
         # the tls.crt and tls.key keys.
         clientSecretName: ""
-        # Minimum TLS version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+        # Minimum TLS version from: VersionTLS12, VersionTLS13.
         # The current default is TLS 1.2.
         minVersion: ""
 
@@ -475,7 +476,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: f8c03bcee94cb81997b75854578e836eb4182cc883930a70e8f3166d7d149f35
+        checksum/config: 44b99efe01ace8563cc7a9679efb398651047ac0d5ca963af23a401f89976460
       labels:
         app: flow-aggregator
     spec:
