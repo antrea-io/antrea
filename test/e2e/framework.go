@@ -239,6 +239,7 @@ type flowVisibilityTestOptions struct {
 	mode             flowaggregatorconfig.AggregatorMode
 	databaseURL      string
 	secureConnection bool
+	clusterID        string
 }
 
 var testOptions TestOptions
@@ -1131,6 +1132,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
+	flowAggregatorConf.ClusterID = o.clusterID
 
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {

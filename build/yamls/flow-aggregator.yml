@@ -383,6 +383,11 @@ data:
       # PrettyPrint enables conversion of some numeric fields to a more meaningful string
       # representation.
       prettyPrint: true
+
+    # Provide a clusterID to be added to records. By default this ID is an auto-generated UUID which
+    # can be found in the antrea-cluster-identity ConfigMap. Currently this is only consumed by the
+    # flowCollector (IPFIX) exporter.
+    clusterID: ""
 kind: ConfigMap
 metadata:
   labels:
@@ -450,7 +455,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 13cccea100703f4180b6b432d44ec50b97c0508f9bdf06dd1ef4fbad08b4bed6
+        checksum/config: 226913332e1c10fc849cb803ad124d7a6c94362bdc287775db7641539812f609
       labels:
         app: flow-aggregator
     spec:
