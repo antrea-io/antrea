@@ -123,6 +123,7 @@ var (
 			PodName:      pod1.Name,
 			PodNamespace: testPodNamespace,
 			ContainerID:  generateUUID(),
+			NetNS:        "netns1",
 		},
 	}
 	staleInterface = &interfacestore.InterfaceConfig{
@@ -136,6 +137,7 @@ var (
 			PodName:      "non-existing-pod",
 			PodNamespace: testPodNamespace,
 			ContainerID:  generateUUID(),
+			NetNS:        "netns2",
 		},
 	}
 	unconnectedInterface = &interfacestore.InterfaceConfig{
@@ -151,6 +153,7 @@ var (
 			PodName:      pod3.Name,
 			PodNamespace: testPodNamespace,
 			ContainerID:  generateUUID(),
+			NetNS:        "netns3",
 		},
 	}
 )
@@ -662,7 +665,8 @@ func TestValidateOVSInterface(t *testing.T) {
 	hostIface := &current.Interface{Name: hostIfaceName}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 	portUUID := uuid.New().String()
-	containerConfig := buildContainerConfig(hostIfaceName, containerID, testPodNameA, testPodNamespace, containerIface, result.IPs, 0)
+	containerConfig := buildContainerConfig(hostIfaceName, containerID, testPodNameA, testPodNamespace,
+		"netns1", containerIface, result.IPs, 0)
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID}
 
 	ifaceStore.AddInterface(containerConfig)
@@ -677,7 +681,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	containerIP2 := net.ParseIP("2001:fd1a::2")
 	containerIPs := []net.IP{containerIP1, containerIP2}
 	containerConfig := interfacestore.NewContainerInterface("pod1-abcd", containerID,
-		"test-1", "t1", "eth0", containerMAC, containerIPs, 0)
+		"test-1", "t1", "eth0", "netns1", containerMAC, containerIPs, 0)
 	externalIDs := BuildOVSPortExternalIDs(containerConfig)
 	_, existed := externalIDs[ovsExternalIDIFDev]
 	assert.False(t, existed, "External IDs should not include interface name eth0")
@@ -686,14 +690,12 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	if !existed || !strings.Contains(parsedIPStr, "10.1.2.100") || !strings.Contains(parsedIPStr, "2001:fd1a::2") {
 		t.Errorf("Failed to store IPs to external IDs")
 	}
-	parsedMac, existed := externalIDs[ovsExternalIDMAC]
-	if !existed || parsedMac != containerMAC.String() {
-		t.Errorf("Failed to store MAC to external IDs")
-	}
-	parsedID, existed := externalIDs[ovsExternalIDContainerID]
-	if !existed || parsedID != containerID {
-		t.Errorf("Failed to store container ID to external IDs")
-	}
+	parsedMAC := externalIDs[ovsExternalIDMAC]
+	assert.Equal(t, containerMAC.String(), parsedMAC)
+	parsedID := externalIDs[ovsExternalIDContainerID]
+	assert.Equal(t, containerID, parsedID)
+	parsedNetNS := externalIDs[ovsExternalIDNetNS]
+	assert.Equal(t, "netns1", parsedNetNS)
 
 	testConfigParsingFn := func() {
 		portExternalIDs := make(map[string]string)
@@ -727,10 +729,10 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	// Secondary interface with no IP.
 	containerIPs = nil
 	containerConfig = interfacestore.NewContainerInterface("pod1-abcd", containerID,
-		"test-1", "t1", "eth1", containerMAC, containerIPs, 0)
+		"test-1", "t1", "eth1", "netns1", containerMAC, containerIPs, 0)
 	externalIDs = BuildOVSPortExternalIDs(containerConfig)
-	parsedIFDev, existed := externalIDs[ovsExternalIDIFDev]
-	assert.True(t, existed && parsedIFDev == "eth1")
+	parsedIFDev := externalIDs[ovsExternalIDIFDev]
+	assert.Equal(t, "eth1", parsedIFDev)
 	parsedIP, existed = externalIDs[ovsExternalIDIP]
 	assert.True(t, existed && parsedIP.(string) == "")
 	testConfigParsingFn()
