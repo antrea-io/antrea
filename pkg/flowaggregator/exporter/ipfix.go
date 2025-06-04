@@ -269,30 +269,12 @@ func (e *IPFIXExporter) createAndSendTemplate(isRecordIPv6 bool) error {
 
 func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) error {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
-	ianaInfoElements := infoelements.IANAInfoElementsIPv4
-	antreaInfoElements := infoelements.AntreaInfoElementsIPv4
 	templateID := e.templateIDv4
 	if isIPv6 {
-		ianaInfoElements = infoelements.IANAInfoElementsIPv6
-		antreaInfoElements = infoelements.AntreaInfoElementsIPv6
 		templateID = e.templateIDv6
 	}
-	for _, ieName := range ianaInfoElements {
-		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAEnterpriseID)
-		if err != nil {
-			return err
-		}
-		elements = append(elements, ie)
-	}
-	for _, ieName := range infoelements.IANAReverseInfoElements {
-		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAReversedEnterpriseID)
-		if err != nil {
-			return err
-		}
-		elements = append(elements, ie)
-	}
-	for _, ieName := range antreaInfoElements {
-		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+	for _, infoElement := range infoelements.FlowExporterElements(isIPv6) {
+		ie, err := e.createInfoElementForTemplateSet(infoElement.Name, infoElement.EnterpriseID)
 		if err != nil {
 			return err
 		}

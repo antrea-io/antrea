@@ -41,6 +41,7 @@ import (
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/pkg/agent/metrics"
+	ipfixapi "antrea.io/antrea/pkg/apis/ipfix"
 	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
@@ -93,37 +94,26 @@ func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ipfixtest.MockIPFIXExportingProcess, mockIPFIXRegistry *ipfixtest.MockIPFIXRegistry, flowExp *FlowExporter, isIPv6 bool) {
 	var mockTempSet = ipfixentitiestesting.NewMockSet(ctrl)
 	flowExp.ipfixSet = mockTempSet
-	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
+	// Following consists of all information elements.
 	// Only the element name is needed, other arguments have dummy values.
 	elemList := getElementList(isIPv6)
-	ianaIE := IANAInfoElementsIPv4
-	antreaIE := AntreaInfoElementsIPv4
-	if isIPv6 {
-		ianaIE = IANAInfoElementsIPv6
-		antreaIE = AntreaInfoElementsIPv6
-	}
-	for i, ie := range ianaIE {
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[i].GetInfoElement(), nil)
-	}
-	for i, ie := range IANAReverseInfoElements {
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[i+len(ianaIE)].GetInfoElement(), nil)
-	}
-	for i, ie := range antreaIE {
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaIE)+len(IANAReverseInfoElements)].GetInfoElement(), nil)
+	ieCount := 0
+	for idx, ie := range ipfixapi.AllInfoElementsIter(isIPv6) {
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie.Name, ie.EnterpriseID).Return(elemList[idx].GetInfoElement(), nil)
+		ieCount++
 	}
 	if !isIPv6 {
 		mockTempSet.EXPECT().AddRecordV2(elemList, testTemplateIDv4).Return(nil)
 	} else {
 		mockTempSet.EXPECT().AddRecordV2(elemList, testTemplateIDv6).Return(nil)
 	}
-	// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
-	// above elements: IANAInfoElements, IANAReverseInfoElements and AntreaInfoElements.
 	mockTempSet.EXPECT().ResetSet()
 	if !isIPv6 {
 		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateIDv4).Return(nil)
 	} else {
 		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateIDv6).Return(nil)
 	}
+	// Passing 0 for sentBytes as it is not used anywhere in the test.
 	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
 	_, err := flowExp.sendTemplateSet(isIPv6)
 	assert.NoError(t, err, "Error when sending template set")
@@ -132,25 +122,13 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 	if isIPv6 {
 		eL = flowExp.elementsListv6
 	}
-	assert.Len(t, eL, len(ianaIE)+len(IANAReverseInfoElements)+len(antreaIE), "flowExp.elementsList and template record should have same number of elements")
+	assert.Len(t, eL, ieCount, "flowExp.elementsList and template record should have same number of elements")
 }
 
 func getElementList(isIPv6 bool) []ipfixentities.InfoElementWithValue {
 	elemList := make([]ipfixentities.InfoElementWithValue, 0)
-	ianaIE := IANAInfoElementsIPv4
-	antreaIE := AntreaInfoElementsIPv4
-	if isIPv6 {
-		ianaIE = IANAInfoElementsIPv6
-		antreaIE = AntreaInfoElementsIPv6
-	}
-	for _, ie := range ianaIE {
-		elemList = append(elemList, createElement(ie, ipfixregistry.IANAEnterpriseID))
-	}
-	for _, ie := range IANAReverseInfoElements {
-		elemList = append(elemList, createElement(ie, ipfixregistry.IANAReversedEnterpriseID))
-	}
-	for _, ie := range antreaIE {
-		elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
+	for _, ie := range ipfixapi.AllInfoElementsIter(isIPv6) {
+		elemList = append(elemList, createElement(ie.Name, ie.EnterpriseID))
 	}
 	return elemList
 }
@@ -202,8 +180,8 @@ func (em elementListMatcher) String() string {
 	return ""
 }
 
-// TestFlowExporter_sendDataRecord tests essentially if element names in the switch-case matches globals
-// IANAInfoElements and AntreaInfoElements.
+// TestFlowExporter_sendDataRecord tests essentially if element names in the switch-case match the
+// allInfoElements list.
 func TestFlowExporter_sendDataSet(t *testing.T) {
 	for _, tc := range []struct {
 		v4Enabled bool
@@ -227,11 +205,11 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	var elemListv4, elemListv6 []ipfixentities.InfoElementWithValue
 	if v4Enabled {
 		connv4 = getConnection(false, true, 302, 6, "ESTABLISHED")
-		elemListv4 = getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
+		elemListv4 = getElemList(false)
 	}
 	if v6Enabled {
 		connv6 = getConnection(true, true, 302, 6, "ESTABLISHED")
-		elemListv6 = getElemList(IANAInfoElementsIPv6, AntreaInfoElementsIPv6)
+		elemListv4 = getElemList(true)
 	}
 	flowExp := &FlowExporter{
 		process:        mockIPFIXExpProc,
@@ -407,18 +385,10 @@ func checkTotalReconnectionsMetric(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElementWithValue {
-	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
-	// Need only element name and other fields are set to dummy values
-	elemList := make([]ipfixentities.InfoElementWithValue, len(ianaIE)+len(IANAReverseInfoElements)+len(antreaIE))
-	for i, ie := range ianaIE {
-		elemList[i] = createElement(ie, ipfixregistry.IANAEnterpriseID)
-	}
-	for i, ie := range IANAReverseInfoElements {
-		elemList[i+len(ianaIE)] = createElement(ie, ipfixregistry.IANAReversedEnterpriseID)
-	}
-	for i, ie := range antreaIE {
-		elemList[i+len(ianaIE)+len(IANAReverseInfoElements)] = createElement(ie, ipfixregistry.AntreaEnterpriseID)
+func getElemList(isIPv6 bool) []ipfixentities.InfoElementWithValue {
+	elemList := make([]ipfixentities.InfoElementWithValue, 0)
+	for _, ie := range ipfixapi.AllInfoElementsIter(isIPv6) {
+		elemList = append(elemList, createElement(ie.Name, ie.EnterpriseID))
 	}
 
 	for i, ie := range elemList {
@@ -524,10 +494,10 @@ func TestFlowExporter_sendFlowRecords(t *testing.T) {
 func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	var elemListv4, elemListv6 []ipfixentities.InfoElementWithValue
 	if v4Enabled {
-		elemListv4 = getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
+		elemListv4 = getElemList(false)
 	}
 	if v6Enabled {
-		elemListv6 = getElemList(IANAInfoElementsIPv6, AntreaInfoElementsIPv6)
+		elemListv4 = getElemList(true)
 	}
 
 	flowExp := &FlowExporter{

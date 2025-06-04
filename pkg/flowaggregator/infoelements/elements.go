@@ -14,58 +14,17 @@
 
 package infoelements
 
+import (
+	"iter"
+
+	"antrea.io/antrea/pkg/apis/ipfix"
+)
+
+func FlowExporterElements(isIPv6 bool) iter.Seq2[int, ipfix.InfoElement] {
+	return ipfix.AllInfoElementsIter(isIPv6)
+}
+
 var (
-	IANAInfoElementsCommon = []string{
-		"flowStartSeconds",
-		"flowEndSeconds",
-		"flowEndReason",
-		"sourceTransportPort",
-		"destinationTransportPort",
-		"protocolIdentifier",
-		"packetTotalCount",
-		"octetTotalCount",
-		"packetDeltaCount",
-		"octetDeltaCount",
-	}
-	IANAInfoElementsIPv4    = append(IANAInfoElementsCommon, []string{"sourceIPv4Address", "destinationIPv4Address"}...)
-	IANAInfoElementsIPv6    = append(IANAInfoElementsCommon, []string{"sourceIPv6Address", "destinationIPv6Address"}...)
-	IANAReverseInfoElements = []string{
-		"reversePacketTotalCount",
-		"reverseOctetTotalCount",
-		"reversePacketDeltaCount",
-		"reverseOctetDeltaCount",
-	}
-
-	AntreaInfoElementsCommon = []string{
-		"sourcePodName",
-		"sourcePodNamespace",
-		"sourceNodeName",
-		"destinationPodName",
-		"destinationPodNamespace",
-		"destinationNodeName",
-		"destinationServicePort",
-		"destinationServicePortName",
-		"ingressNetworkPolicyName",
-		"ingressNetworkPolicyNamespace",
-		"ingressNetworkPolicyType",
-		"ingressNetworkPolicyRuleName",
-		"ingressNetworkPolicyRuleAction",
-		"egressNetworkPolicyName",
-		"egressNetworkPolicyNamespace",
-		"egressNetworkPolicyType",
-		"egressNetworkPolicyRuleName",
-		"egressNetworkPolicyRuleAction",
-		"tcpState",
-		"flowType",
-		"egressName",
-		"egressIP",
-		"appProtocolName",
-		"httpVals",
-		"egressNodeName",
-	}
-	AntreaInfoElementsIPv4 = append(AntreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
-	AntreaInfoElementsIPv6 = append(AntreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
-
 	NonStatsElementList = []string{
 		"flowEndSeconds",
 		"flowEndReason",

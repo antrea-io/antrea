@@ -302,31 +302,10 @@ func (fa *flowAggregator) InitPreprocessor() error {
 		return ie, err
 	}
 
-	getInfoElements := func(isIPv4 bool) ([]*ipfixentities.InfoElement, error) {
-		ianaInfoElements := infoelements.IANAInfoElementsIPv4
-		ianaReverseInfoElements := infoelements.IANAReverseInfoElements
-		antreaInfoElements := infoelements.AntreaInfoElementsIPv4
-		if !isIPv4 {
-			ianaInfoElements = infoelements.IANAInfoElementsIPv6
-			antreaInfoElements = infoelements.AntreaInfoElementsIPv6
-		}
+	getInfoElements := func(isIPv6 bool) ([]*ipfixentities.InfoElement, error) {
 		infoElements := make([]*ipfixentities.InfoElement, 0)
-		for _, ieName := range ianaInfoElements {
-			ie, err := getInfoElementFromRegistry(ieName, ipfixregistry.IANAEnterpriseID)
-			if err != nil {
-				return nil, err
-			}
-			infoElements = append(infoElements, ie)
-		}
-		for _, ieName := range ianaReverseInfoElements {
-			ie, err := getInfoElementFromRegistry(ieName, ipfixregistry.IANAReversedEnterpriseID)
-			if err != nil {
-				return nil, err
-			}
-			infoElements = append(infoElements, ie)
-		}
-		for _, ieName := range antreaInfoElements {
-			ie, err := getInfoElementFromRegistry(ieName, ipfixregistry.AntreaEnterpriseID)
+		for _, infoElement := range infoelements.FlowExporterElements(isIPv6) {
+			ie, err := getInfoElementFromRegistry(infoElement.Name, infoElement.EnterpriseID)
 			if err != nil {
 				return nil, err
 			}
@@ -335,11 +314,11 @@ func (fa *flowAggregator) InitPreprocessor() error {
 		return infoElements, nil
 	}
 
-	infoElementsIPv4, err := getInfoElements(true)
+	infoElementsIPv4, err := getInfoElements(false)
 	if err != nil {
 		return err
 	}
-	infoElementsIPv6, err := getInfoElements(false)
+	infoElementsIPv6, err := getInfoElements(true)
 	if err != nil {
 		return err
 	}

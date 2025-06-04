@@ -237,26 +237,11 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 }
 
 func createElementList(isIPv6 bool, mockIPFIXRegistry *ipfixtesting.MockIPFIXRegistry) []ipfixentities.InfoElementWithValue {
-	ianaInfoElements := infoelements.IANAInfoElementsIPv4
-	antreaInfoElements := infoelements.AntreaInfoElementsIPv4
-	if isIPv6 {
-		ianaInfoElements = infoelements.IANAInfoElementsIPv6
-		antreaInfoElements = infoelements.AntreaInfoElementsIPv6
-	}
-	// Following consists of all elements that are in ianaInfoElements and antreaInfoElements (globals)
 	// Only the element name is needed, other arguments have dummy values
 	elemList := make([]ipfixentities.InfoElementWithValue, 0)
-	for _, ie := range ianaInfoElements {
-		elemList = append(elemList, createElement(ie, ipfixregistry.IANAEnterpriseID))
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-	}
-	for _, ie := range infoelements.IANAReverseInfoElements {
-		elemList = append(elemList, createElement(ie, ipfixregistry.IANAReversedEnterpriseID))
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-	}
-	for _, ie := range antreaInfoElements {
-		elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+	for _, ie := range infoelements.FlowExporterElements(isIPv6) {
+		elemList = append(elemList, createElement(ie.Name, ie.EnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie.Name, ie.EnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
 	}
 	for i := range infoelements.StatsElementList {
 		elemList = append(elemList, createElement(infoelements.AntreaSourceStatsElementList[i], ipfixregistry.AntreaEnterpriseID))

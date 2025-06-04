@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/proxy"
+	ipfixapi "antrea.io/antrea/pkg/apis/ipfix"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ipfix"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
@@ -57,59 +58,6 @@ import (
 // number of expired connections, while having a min and a max to handle edge cases,
 // e.g. min(50 + 0.1 * connectionStore.size(), 200)
 const maxConnsToExport = 64
-
-var (
-	IANAInfoElementsCommon = []string{
-		"flowStartSeconds",
-		"flowEndSeconds",
-		"flowEndReason",
-		"sourceTransportPort",
-		"destinationTransportPort",
-		"protocolIdentifier",
-		"packetTotalCount",
-		"octetTotalCount",
-		"packetDeltaCount",
-		"octetDeltaCount",
-	}
-	IANAInfoElementsIPv4 = append(IANAInfoElementsCommon, []string{"sourceIPv4Address", "destinationIPv4Address"}...)
-	IANAInfoElementsIPv6 = append(IANAInfoElementsCommon, []string{"sourceIPv6Address", "destinationIPv6Address"}...)
-	// IANAReverseInfoElements contain substring "reverse" which is an indication to get reverse element of go-ipfix library.
-	IANAReverseInfoElements = []string{
-		"reversePacketTotalCount",
-		"reverseOctetTotalCount",
-		"reversePacketDeltaCount",
-		"reverseOctetDeltaCount",
-	}
-	antreaInfoElementsCommon = []string{
-		"sourcePodName",
-		"sourcePodNamespace",
-		"sourceNodeName",
-		"destinationPodName",
-		"destinationPodNamespace",
-		"destinationNodeName",
-		"destinationServicePort",
-		"destinationServicePortName",
-		"ingressNetworkPolicyName",
-		"ingressNetworkPolicyNamespace",
-		"ingressNetworkPolicyType",
-		"ingressNetworkPolicyRuleName",
-		"ingressNetworkPolicyRuleAction",
-		"egressNetworkPolicyName",
-		"egressNetworkPolicyNamespace",
-		"egressNetworkPolicyType",
-		"egressNetworkPolicyRuleName",
-		"egressNetworkPolicyRuleAction",
-		"tcpState",
-		"flowType",
-		"egressName",
-		"egressIP",
-		"appProtocolName",
-		"httpVals",
-		"egressNodeName",
-	}
-	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
-	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
-)
 
 type FlowExporter struct {
 	collectorAddr          string
@@ -386,47 +334,23 @@ func (exp *FlowExporter) initFlowExporter(ctx context.Context) error {
 func (exp *FlowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
 
-	IANAInfoElements := IANAInfoElementsIPv4
-	AntreaInfoElements := AntreaInfoElementsIPv4
+	for _, ie := range ipfixapi.AllInfoElementsIter(isIPv6) {
+		element, err := exp.registry.GetInfoElement(ie.Name, ie.EnterpriseID)
+		if err != nil {
+			return 0, fmt.Errorf("%s information element %q not found in registry: %w", ie.EnterpriseName, ie, err)
+		}
+		ieWithValue, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+		if err != nil {
+			return 0, fmt.Errorf("error when creating information element: %w", err)
+		}
+		elements = append(elements, ieWithValue)
+	}
+
 	templateID := exp.templateIDv4
 	if isIPv6 {
-		IANAInfoElements = IANAInfoElementsIPv6
-		AntreaInfoElements = AntreaInfoElementsIPv6
 		templateID = exp.templateIDv6
 	}
-	for _, ie := range IANAInfoElements {
-		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
-		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
-		}
-		ieWithValue, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
-		if err != nil {
-			return 0, fmt.Errorf("error when creating information element: %v", err)
-		}
-		elements = append(elements, ieWithValue)
-	}
-	for _, ie := range IANAReverseInfoElements {
-		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID)
-		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
-		}
-		ieWithValue, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
-		if err != nil {
-			return 0, fmt.Errorf("error when creating information element: %v", err)
-		}
-		elements = append(elements, ieWithValue)
-	}
-	for _, ie := range AntreaInfoElements {
-		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, fmt.Errorf("information element %s is not present in Antrea registry", ie)
-		}
-		ieWithValue, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
-		if err != nil {
-			return 0, fmt.Errorf("error when creating information element: %v", err)
-		}
-		elements = append(elements, ieWithValue)
-	}
+
 	exp.ipfixSet.ResetSet()
 	if err := exp.ipfixSet.PrepareSet(ipfixentities.Template, templateID); err != nil {
 		return 0, err
