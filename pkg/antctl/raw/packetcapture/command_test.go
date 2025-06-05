@@ -299,6 +299,51 @@ func TestNewPacketCapture(t *testing.T) {
 			},
 			expectErr: "failed to parse flow: tcp_dst=80=80 is not valid in flow",
 		},
+		{
+			name: "pod-2-pod-with-direction-both",
+			option: packetCaptureOptions{
+				source:    srcPod,
+				dest:      dstPod,
+				number:    testNum,
+				direction: "Both",
+			},
+			expectPC: &v1alpha1.PacketCapture{
+				Spec: v1alpha1.PacketCaptureSpec{
+					Source: v1alpha1.Source{
+						Pod: &v1alpha1.PodReference{
+							Namespace: "default",
+							Name:      "pod-1",
+						},
+					},
+					Destination: v1alpha1.Destination{
+						Pod: &v1alpha1.PodReference{
+							Namespace: "default",
+							Name:      "pod-2",
+						},
+					},
+					Direction: v1alpha1.CaptureDirectionBoth,
+					Timeout:   ptr.To(int32(0)),
+					CaptureConfig: v1alpha1.CaptureConfig{
+						FirstN: &v1alpha1.PacketCaptureFirstNConfig{
+							Number: testNum,
+						},
+					},
+					Packet: &v1alpha1.Packet{
+						IPFamily: v1.IPv4Protocol,
+					},
+				},
+			},
+		},
+		{
+			name: "pod-2-pod-with-invalid-direction",
+			option: packetCaptureOptions{
+				source:    srcPod,
+				dest:      dstPod,
+				number:    testNum,
+				direction: "InvalidDirection",
+			},
+			expectErr: "invalid direction: \"InvalidDirection\", must be one of SourceToDestination, DestinationToSource, or Both",
+		},
 	}
 
 	for _, tt := range tcs {
