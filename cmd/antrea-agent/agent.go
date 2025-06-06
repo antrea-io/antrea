@@ -151,6 +151,7 @@ func run(o *Options) error {
 	defer ovsdbConnection.Close()
 
 	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
+	secondaryNetworkEnabled := features.DefaultFeatureGate.Enabled(features.SecondaryNetwork)
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	nodeNetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.NodeNetworkPolicy)
@@ -622,6 +623,7 @@ func run(o *Options) error {
 			isChaining,
 			enableBridgingMode,
 			enableAntreaIPAM,
+			secondaryNetworkEnabled,
 			o.config.DisableTXChecksumOffload,
 			networkConfig,
 			podNetworkWait,

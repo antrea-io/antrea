@@ -633,7 +633,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			}
 			err = pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element1}, cniInfo)
 			if tc.expectedErr == "" {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			} else {
 				assert.True(t, strings.Contains(err.Error(), tc.expectedErr))
 			}
@@ -648,7 +648,6 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
