@@ -264,7 +264,7 @@ COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
                     "antrea/nginx:1.21.6-alpine" \
                     "antrea/toolbox:1.5-1")
 
-FLOW_VISIBILITY_IMAGE_LIST=("antrea/ipfix-collector:v0.13.0" \
+FLOW_VISIBILITY_IMAGE_LIST=("antrea/ipfix-collector:latest" \
                             "antrea/clickhouse-operator:0.21.0" \
                             "antrea/metrics-exporter:0.21.0" \
                             "antrea/clickhouse-server:23.4")

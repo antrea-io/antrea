@@ -60,8 +60,8 @@ github.com/andybalholm/brotli v1.0.4 h1:V7DdXeJtZscaqfNuAdSRuRFzuiKlHSC/Zh3zl9qY
 github.com/andybalholm/brotli v1.0.4/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
 github.com/antlr4-go/antlr/v4 v4.13.0 h1:lxCg3LAv+EUK6t1i0y1V6/SLeUi0eKEKdhQAlS8TVTI=
 github.com/antlr4-go/antlr/v4 v4.13.0/go.mod h1:pfChB/xh/Unjila75QW7+VU4TSnWnnk9UTnmpPaOR2g=
-github.com/antoninbas/vmware-go-ipfix v0.2.1-0.20250415234847-81d74cd97229 h1:V8tcUH6P21zX4bjpksfwj5ieumaq5gxGgIAETm8LAUo=
-github.com/antoninbas/vmware-go-ipfix v0.2.1-0.20250415234847-81d74cd97229/go.mod h1:C/OLnIwRKypljGzrQ139BNG/xlquq9xZsmzMe70Hfy4=
+github.com/antoninbas/vmware-go-ipfix v0.2.1-0.20250605232509-7f770ef3fe75 h1:R0N27vT3g2rE3NXS0C/drqmQQMHGFnu+iW8eb6XPT6s=
+github.com/antoninbas/vmware-go-ipfix v0.2.1-0.20250605232509-7f770ef3fe75/go.mod h1:GgFbcmEGqMQfA7jDC9UVLKAelNh2sy1jsxyV7Tor3Ig=
 github.com/antrea-io/ndp v0.0.0-20241107040829-6f35f2e50f4c h1:9BpiAOFYkjvKFzSCoQHRcOFmXBHpgq74wpSu0CkM6F8=
 github.com/antrea-io/ndp v0.0.0-20241107040829-6f35f2e50f4c/go.mod h1:FmgESgemgjl38vuOIyAHWUUL6vQKA/pQNkvXdWsdQFM=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=

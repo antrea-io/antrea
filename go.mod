@@ -258,4 +258,4 @@ require (
 // remove this when https://github.com/mdlayher/ndp/pull/32 gets merged
 replace github.com/mdlayher/ndp => github.com/antrea-io/ndp v0.0.0-20241107040829-6f35f2e50f4c
 
-replace github.com/vmware/go-ipfix => github.com/antoninbas/vmware-go-ipfix v0.2.1-0.20250415234847-81d74cd97229
+replace github.com/vmware/go-ipfix => github.com/antoninbas/vmware-go-ipfix v0.2.1-0.20250605232509-7f770ef3fe75
