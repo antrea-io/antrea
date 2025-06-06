@@ -130,11 +130,17 @@ func getFeatureGatesResponse(cfg *Config, component string) []apis.FeatureGateRe
 				status = features.DefaultFeatureGate.Enabled(df)
 			}
 			featureStatus := features.GetStatus(status)
+
+			// Get prerequisites for this feature gate
+			prerequisites := features.GetFeaturePrerequisites(df)
+			klog.V(2).InfoS("Controller: Feature gate prerequisites", "featureGate", string(df), "prerequisites", prerequisites)
+
 			gatesResp = append(gatesResp, apis.FeatureGateResponse{
-				Component: component,
-				Name:      string(df),
-				Status:    featureStatus,
-				Version:   features.GetVersion(string(features.DefaultAntreaFeatureGates[df].PreRelease)),
+				Component:     component,
+				Name:          string(df),
+				Status:        featureStatus,
+				Version:       features.GetVersion(string(features.DefaultAntreaFeatureGates[df].PreRelease)),
+				Prerequisites: prerequisites,
 			})
 		}
 	}
