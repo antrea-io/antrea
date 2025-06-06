@@ -36,22 +36,41 @@ func TestMulticlusterOptions(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:        "empty input",
-			mcConfig:    agentconfig.MulticlusterConfig{},
+			name: "empty input",
+			mcConfig: agentconfig.MulticlusterConfig{
+				WireGuard: agentconfig.WireGuardConfig{Port: 51821},
+			},
+			encapMode:   "encap",
 			expectedErr: "",
 		},
 		{
-			name:        "empty input with feature enabled",
-			mcConfig:    agentconfig.MulticlusterConfig{},
+			name: "empty input with feature enabled",
+			mcConfig: agentconfig.MulticlusterConfig{
+				WireGuard: agentconfig.WireGuardConfig{Port: 51821},
+			},
 			featureGate: true,
+			encapMode:   "encap",
 			expectedErr: "",
+		},
+		{
+			name: "invalid multi-cluster WireGuard port",
+			mcConfig: agentconfig.MulticlusterConfig{
+				EnableGateway:         true,
+				TrafficEncryptionMode: "wireGuard",
+				WireGuard:             agentconfig.WireGuardConfig{Port: 70000},
+			},
+			featureGate: true,
+			encapMode:   "encap",
+			expectedErr: "multicluster.wireGuard.port is invalid: port 70000 is out of range, valid range is 1-65535",
 		},
 		{
 			name: "EnableGateway and EnableStretchedNetworkPolicy",
 			mcConfig: agentconfig.MulticlusterConfig{
 				EnableGateway:                true,
 				EnableStretchedNetworkPolicy: true,
+				WireGuard:                    agentconfig.WireGuardConfig{Port: 51821},
 			},
+			encapMode:   "encap",
 			featureGate: true,
 			expectedErr: "",
 		},
@@ -59,7 +78,9 @@ func TestMulticlusterOptions(t *testing.T) {
 			name: "EnableGateway false and EnableStretchedNetworkPolicy",
 			mcConfig: agentconfig.MulticlusterConfig{
 				EnableStretchedNetworkPolicy: true,
+				WireGuard:                    agentconfig.WireGuardConfig{Port: 51821},
 			},
+			encapMode:   "encap",
 			featureGate: true,
 			expectedErr: "Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy",
 		},
@@ -84,10 +105,21 @@ func TestMulticlusterOptions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			enable := true
 			config := &agentconfig.AgentConfig{
-				FeatureGates:     map[string]bool{"Multicluster": tt.featureGate},
-				TrafficEncapMode: tt.encapMode,
-				Multicluster:     tt.mcConfig,
+				FeatureGates:          map[string]bool{"Multicluster": tt.featureGate},
+				TrafficEncapMode:      tt.encapMode,
+				Multicluster:          tt.mcConfig,
+				TunnelPort:            6081,
+				NodeType:              defaultNodeType.String(),
+				TunnelType:            defaultTunnelType,
+				TrafficEncryptionMode: "none",
+				IPsec:                 agentconfig.IPsecConfig{AuthenticationMode: "psk"},
+				AntreaProxy: agentconfig.AntreaProxyConfig{
+					Enable:                  &enable,
+					DefaultLoadBalancerMode: "nat",
+				},
+				DNSServerOverride: "localhost:443",
 			}
 			if tt.encryptionMode != "" {
 				config.TrafficEncryptionMode = tt.encryptionMode

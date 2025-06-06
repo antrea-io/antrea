@@ -37,6 +37,14 @@ func TestNewOptions(t *testing.T) {
 	assert.EqualValues(t, defaultClientBurst, op.config.ClientConnection.Burst)
 }
 
+func TestOptions(t *testing.T) {
+	op := &Options{
+		config: &controllerconfig.ControllerConfig{APIPort: 70000},
+	}
+	err := op.validate(nil)
+	assert.EqualError(t, err, "apiPort is invalid: port 70000 is out of range, valid range is 1-65535", "")
+}
+
 func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 	testCases := []struct {
 		name           string
