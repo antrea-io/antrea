@@ -230,29 +230,29 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 	}{
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL:      "tcp://clickhouse-clickhouse.flow-visibility.svc:9000",
-				secureConnection: false,
+				databaseURL:              "tcp://clickhouse-clickhouse.flow-visibility.svc:9000",
+				databaseSecureConnection: false,
 			},
 			name: "tcp",
 		},
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL:      "http://clickhouse-clickhouse.flow-visibility.svc:8123",
-				secureConnection: false,
+				databaseURL:              "http://clickhouse-clickhouse.flow-visibility.svc:8123",
+				databaseSecureConnection: false,
 			},
 			name: "http",
 		},
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL:      "tls://clickhouse-clickhouse.flow-visibility.svc:9440",
-				secureConnection: true,
+				databaseURL:              "tls://clickhouse-clickhouse.flow-visibility.svc:9440",
+				databaseSecureConnection: true,
 			},
 			name: "tls",
 		},
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL:      "https://clickhouse-clickhouse.flow-visibility.svc:8443",
-				secureConnection: true,
+				databaseURL:              "https://clickhouse-clickhouse.flow-visibility.svc:8443",
+				databaseSecureConnection: true,
 			},
 			name: "https",
 		},

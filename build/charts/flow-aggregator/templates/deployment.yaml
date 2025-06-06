@@ -104,8 +104,9 @@ spec:
           readOnly: true
         - mountPath: /var/log/antrea/flow-aggregator
           name: host-var-log-antrea-flow-aggregator
-        - name: clickhouse-ca
+        - name: certs
           mountPath: /etc/flow-aggregator/certs
+          readOnly: true
         {{- if .Values.flowAggregator.securityContext }}
         securityContext:
           {{- toYaml .Values.flowAggregator.securityContext | nindent 10 }}
@@ -120,6 +121,38 @@ spec:
       priorityClassName: {{ .Values.priorityClassName }}
       serviceAccountName: flow-aggregator
       volumes:
+      - name: certs
+        projected:
+          defaultMode: 0400
+          sources:
+          # We add these secrets even if flowCollector.enable is false, or if flowCollector.tls.enable
+          # is false, as it is more convenient. Note that the secrets are optional.
+          {{- with .Values.flowCollector.tls }}
+          {{- if .caSecretName }}
+          - secret:
+              name: {{ .caSecretName }}
+              items:
+              - key: ca.crt
+                path: flow-collector/ca.crt
+              optional: true
+          {{- end }}
+          {{- if .clientSecretName }}
+          - secret:
+              name: {{ .clientSecretName }}
+              items:
+              - key: tls.crt
+                path: flow-collector/tls.crt
+              - key: tls.key
+                path: flow-collector/tls.key
+              optional: true
+          {{- end }}
+          {{- end }}
+          - secret:
+              name: clickhouse-ca
+              items:
+              - key: ca.crt
+                path: clickhouse/ca.crt
+              optional: true
       - name: flow-aggregator-config
         configMap:
           name: flow-aggregator-configmap
@@ -127,9 +160,3 @@ spec:
         hostPath:
           path: /var/log/antrea/flow-aggregator
           type: DirectoryOrCreate
-      # Make it optional as we only read it when caCert=true.
-      - name: clickhouse-ca
-        secret:
-          secretName: clickhouse-ca
-          defaultMode: 0400
-          optional: true
