@@ -125,7 +125,8 @@ spec:
         projected:
           defaultMode: 0400
           sources:
-          {{- if and .Values.flowCollector.enable .Values.flowCollector.tls.enable }}
+          # We add these secrets even if flowCollector.enable is false, or if flowCollector.tls.enable
+          # is false, as it is more convenient. Note that the secrets are optional.
           {{- with .Values.flowCollector.tls }}
           {{- if .caSecretName }}
           - secret:
@@ -144,7 +145,6 @@ spec:
               - key: tls.key
                 path: flow-collector/tls.key
               optional: true
-          {{- end }}
           {{- end }}
           {{- end }}
           - secret:

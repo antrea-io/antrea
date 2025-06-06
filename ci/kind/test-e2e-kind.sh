@@ -373,10 +373,13 @@ function run_test {
   if $flow_visibility; then
       timeout="30m"
       flow_visibility_args="-run=TestFlowAggregator --flow-visibility"
+      # This is needed so that the FlowAggregator is already configured to mount the Secrets
+      # necessary for (m)TLS testing. The Secret names must match the ones expected by the e2e tests.
+      flow_visibility_manifest_args="--extra-helm-values flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca"
       if $coverage; then
-          $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
+          $FLOWAGGREGATOR_YML_CMD --coverage $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
       else
-          $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+          $FLOWAGGREGATOR_YML_CMD $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
       fi
       $HELM template "$FLOW_VISIBILITY_CHART"  | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
       $HELM template "$FLOW_VISIBILITY_CHART" --set "secureConnection.enable=true" | docker exec -i kind-control-plane dd of=/root/flow-visibility-tls.yml
