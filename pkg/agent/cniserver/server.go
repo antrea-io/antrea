@@ -40,6 +40,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/cni"
@@ -122,11 +123,13 @@ type CNIServer struct {
 	// Enable AntreaIPAM for secondary networks implemented by other CNIs.
 	enableSecondaryNetworkIPAM bool
 	disableTXChecksumOffload   bool
+	secondaryNetworkEnabled    bool
 	networkConfig              *config.NetworkConfig
 	// podNetworkWait notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	podNetworkWait *wait.Group
 	// flowRestoreCompleteWait will be decremented and Pod reconciliation is completed.
 	flowRestoreCompleteWait *wait.Group
+	vfDeviceChecker         agenttypes.VFDeviceUsageChecker
 }
 
 var supportedCNIVersionSet map[string]bool
@@ -556,6 +559,15 @@ func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniC
 	}
 	klog.InfoS("Deleted interfaces for container", "container", cniConfig.ContainerId)
 
+	// Check if any SR-IOV device is still attached before removing primary interfaces.
+	if s.secondaryNetworkEnabled && s.vfDeviceChecker != nil {
+		vfDeviceNum := s.vfDeviceChecker.GetAssignedVFDeviceNum(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE))
+		if vfDeviceNum > 0 {
+			klog.ErrorS(nil, "The container still has SR-IOV devices attached, retrying cmdDel()", "vfDeviceNum", vfDeviceNum)
+			return s.tryAgainLaterResponse(), nil
+		}
+	}
+
 	// Release IP to IPAM driver
 	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
 		klog.ErrorS(err, "Failed to delete IP addresses for container", "container", cniConfig.ContainerId)
@@ -633,9 +645,10 @@ func New(
 	podInformer cache.SharedIndexInformer,
 	kubeClient clientset.Interface,
 	routeClient route.Interface,
-	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
+	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload, secondaryNetworkEnabled bool,
 	networkConfig *config.NetworkConfig,
 	podNetworkWait, flowRestoreCompleteWait *wait.Group,
+	vfDeviceChecker agenttypes.VFDeviceUsageChecker,
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:                  cniSocket,
@@ -653,6 +666,8 @@ func New(
 		networkConfig:              networkConfig,
 		podNetworkWait:             podNetworkWait,
 		flowRestoreCompleteWait:    flowRestoreCompleteWait.Increment(),
+		secondaryNetworkEnabled:    secondaryNetworkEnabled,
+		vfDeviceChecker:            vfDeviceChecker,
 	}
 }
 
