@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"net"
 	"strings"
 	"sync"
@@ -28,6 +29,8 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
+	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	"google.golang.org/grpc"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -40,12 +43,14 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/cni"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/wait"
+	"antrea.io/antrea/pkg/util/k8s"
+	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -121,12 +126,14 @@ type CNIServer struct {
 	enableBridgingMode bool
 	// Enable AntreaIPAM for secondary networks implemented by other CNIs.
 	enableSecondaryNetworkIPAM bool
+	secondaryNetworkEnabled    bool
 	disableTXChecksumOffload   bool
 	networkConfig              *config.NetworkConfig
 	// podNetworkWait notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
-	podNetworkWait *wait.Group
+	podNetworkWait *utilwait.Group
 	// flowRestoreCompleteWait will be decremented and Pod reconciliation is completed.
-	flowRestoreCompleteWait *wait.Group
+	flowRestoreCompleteWait *utilwait.Group
+	vfDeviceChecker         agenttypes.VFDeviceUsageChecker
 }
 
 var supportedCNIVersionSet map[string]bool
@@ -528,6 +535,15 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	cniVersion := cniConfig.CNIVersion
 	cniResult, _ := result.Result.GetAsVersion(cniVersion)
 
+	if s.secondaryNetworkEnabled {
+		status, err := netdefutils.CreateNetworkStatus(cniResult, cniConfig.Name, true, nil)
+		if err != nil {
+			klog.ErrorS(err, "Create NetworkStatus failed", "Pod", klog.KRef(podNamespace, podName))
+		} else {
+			_ = k8s.UpdatePodAnnotation(s.kubeClient, ctx, []netdefv1.NetworkStatus{*status}, podName, podNamespace, true)
+		}
+	}
+
 	klog.InfoS("CmdAdd for container succeeded", "container", cniConfig.ContainerId)
 	// mark success as true to avoid rollback
 	success = true
@@ -555,6 +571,15 @@ func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniC
 		return s.configInterfaceFailureResponse(err), nil
 	}
 	klog.InfoS("Deleted interfaces for container", "container", cniConfig.ContainerId)
+
+	// Check if any SR-IOV device is still attached before removing primary interfaces.
+	if s.secondaryNetworkEnabled && s.vfDeviceChecker != nil {
+		vfDeviceNum := s.vfDeviceChecker.GetAssignedVFDeviceNum(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE))
+		if vfDeviceNum > 0 {
+			klog.ErrorS(nil, "The container still has SR-IOV devices attached, retrying cmdDel()", "vfDeviceNum", vfDeviceNum)
+			return s.tryAgainLaterResponse(), nil
+		}
+	}
 
 	// Release IP to IPAM driver
 	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
@@ -633,9 +658,10 @@ func New(
 	podInformer cache.SharedIndexInformer,
 	kubeClient clientset.Interface,
 	routeClient route.Interface,
-	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
+	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload, secondaryNetworkEnabled bool,
 	networkConfig *config.NetworkConfig,
 	podNetworkWait, flowRestoreCompleteWait *wait.Group,
+	vfDeviceChecker agenttypes.VFDeviceUsageChecker,
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:                  cniSocket,
@@ -650,9 +676,12 @@ func New(
 		enableBridgingMode:         enableBridgingMode,
 		disableTXChecksumOffload:   disableTXChecksumOffload,
 		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
+		secondaryNetworkEnabled:    secondaryNetworkEnabled,
 		networkConfig:              networkConfig,
 		podNetworkWait:             podNetworkWait,
 		flowRestoreCompleteWait:    flowRestoreCompleteWait.Increment(),
+		secondaryNetworkEnabled:    secondaryNetworkEnabled,
+		vfDeviceChecker:            vfDeviceChecker,
 	}
 }
 
