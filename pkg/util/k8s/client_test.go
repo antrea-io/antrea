@@ -74,6 +74,7 @@ func TestOverrideKubeAPIServer(t *testing.T) {
 		kubeAPIServerOverride string
 		expectHost            string
 		expectPort            string
+		expectError           string
 	}{
 		{
 			name:                  "empty",
@@ -105,15 +106,31 @@ func TestOverrideKubeAPIServer(t *testing.T) {
 			expectHost:            "192.168.0.1",
 			expectPort:            "10443",
 		},
+		{
+			name:                  "host with invalid port",
+			kubeAPIServerOverride: "192.168.0.1:70443",
+			expectError:           "error in kubeAPIServerOverride '192.168.0.1:70443': port 70443 is out of range, valid range is 1-65535",
+		},
+		{
+			name:                  "host with invalid string port",
+			kubeAPIServerOverride: "192.168.0.1:abc",
+			expectError:           "error in kubeAPIServerOverride '192.168.0.1:abc': invalid port abc: strconv.Atoi: parsing \"abc\": invalid syntax",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(kubeServiceHostEnvKey, originalHost)
 			t.Setenv(kubeServicePortEnvKey, originalPort)
 
-			OverrideKubeAPIServer(tt.kubeAPIServerOverride)
-			assert.Equal(t, tt.expectHost, os.Getenv(kubeServiceHostEnvKey))
-			assert.Equal(t, tt.expectPort, os.Getenv(kubeServicePortEnvKey))
+			actualErr := OverrideKubeAPIServer(tt.kubeAPIServerOverride)
+			if tt.expectError == "" {
+				require.NoError(t, actualErr)
+				assert.Equal(t, tt.expectHost, os.Getenv(kubeServiceHostEnvKey))
+				assert.Equal(t, tt.expectPort, os.Getenv(kubeServicePortEnvKey))
+
+			} else {
+				assert.EqualError(t, actualErr, tt.expectError)
+			}
 		})
 	}
 }

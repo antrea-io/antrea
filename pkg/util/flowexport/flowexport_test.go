@@ -68,6 +68,14 @@ func TestParseFlowCollectorAddr(t *testing.T) {
 			expectedError: nil,
 		},
 		{
+			addr:          "flow-aggregator/flow-aggregator:str:tcp",
+			expectedError: fmt.Errorf("invalid port str: strconv.Atoi: parsing \"str\": invalid syntax"),
+		},
+		{
+			addr:          "flow-aggregator/flow-aggregator:78900:tcp",
+			expectedError: fmt.Errorf("port 78900 is out of range, valid range is 1-65535"),
+		},
+		{
 			addr:          ":abbbsctp::",
 			expectedHost:  "",
 			expectedPort:  "",
