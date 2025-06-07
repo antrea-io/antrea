@@ -3088,6 +3088,25 @@ spec:
                                     type: integer
                                     minimum: 0
                                     maximum: 255
+                        icmp:
+                          type: object
+                          properties:
+                            messages:
+                              type: array
+                              items:
+                                type: object
+                                required:
+                                  - type
+                                properties:
+                                  type:
+                                    x-kubernetes-int-or-string: true
+                                  code:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 255
+                      x-kubernetes-validations:
+                        - rule: "(has(self.icmp) ? 1 : 0) + (has(self.udp) ? 1 : 0) + (has(self.tcp) ? 1: 0) <= 1"
+                          message: "At most one of 'icmp', 'udp', or 'tcp' may be set"
                 direction:
                   type: string
                   enum: ["SourceToDestination", "DestinationToSource", "Both"]

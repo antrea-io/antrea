@@ -326,6 +326,21 @@ func (c *Controller) validatePacketCapture(spec *crdv1alpha1.PacketCaptureSpec) 
 				}
 			}
 		}
+		if spec.Packet.TransportHeader.ICMP != nil {
+			for _, f := range spec.Packet.TransportHeader.ICMP.Messages {
+				switch f.Type.Type {
+				case intstr.Int:
+					if f.Type.IntVal < 0 || f.Type.IntVal > 255 {
+						return fmt.Errorf("invalid ICMP type integer: %d; must be between 0 and 255", f.Type.IntVal)
+					}
+				case intstr.String:
+					if _, ok := capture.ICMPMsgTypeMap[crdv1alpha1.ICMPMsgType(strings.ToLower(f.Type.StrVal))]; !ok {
+						return fmt.Errorf("invalid ICMP type string: %q; supported values are: %v (case insensitive)",
+							f.Type.StrVal, slices.Collect(maps.Keys(capture.ICMPMsgTypeMap)))
+					}
+				}
+			}
+		}
 	}
 	return nil
 }

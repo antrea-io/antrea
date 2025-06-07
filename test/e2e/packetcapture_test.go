@@ -41,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 
+	capture "antrea.io/antrea/pkg/agent/packetcapture/capture"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/features"
 	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
@@ -630,6 +631,53 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 			},
 			numConnections: 1, // creating one netcat connection to capture only a syn and a syn+ack packet
 		},
+		{
+			name:      "ipv4-icmp-echoreply-both",
+			ipVersion: 4,
+			pc: getPacketCaptureCR(
+				"ipv4-icmp-echoreply-both",
+				data.testNamespace,
+				clientPodName,
+				tcpServerPodName,
+				sftpURL,
+				&crdv1alpha1.Packet{
+					Protocol: &icmpProto,
+					IPFamily: v1.IPv4Protocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						ICMP: &crdv1alpha1.ICMPHeader{
+							Messages: []crdv1alpha1.ICMPMsgMatcher{
+								{Type: intstr.FromString("icmp-echoreply")},
+							},
+						},
+					},
+				},
+				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureHostPublicKey(pubKey1),
+				packetCaptureFirstN(1),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 1,
+				FilePath:       getPcapURL("ipv4-icmp-echoreply-both"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+			numConnections: 1, // running ping command once to capture only an echo reply packet
+		},
 	}
 	t.Run("testPacketCaptureL4Filters", func(t *testing.T) {
 		for _, tc := range testcases {
@@ -715,7 +763,7 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		switch protocol {
 		case icmpProto:
 			if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, getOSString(), "", data.testNamespace},
-				data.testNamespace, dstPodIPs, toolboxContainerName, 10, 0, false); err != nil {
+				data.testNamespace, dstPodIPs, toolboxContainerName, connections, 0, false); err != nil {
 				t.Logf("Ping(%s) '%s' -> '%v' failed: ERROR (%v)", protocol.StrVal, srcPod, *dstPodIPs, err)
 			}
 		case tcpProto:
@@ -932,13 +980,18 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 				ports := packetSpec.TransportHeader.TCP
 				addPortExpectations(ports.SrcPort, ports.DstPort, int32(tcp.SrcPort), int32(tcp.DstPort))
 				if packetSpec.TransportHeader.TCP.Flags != nil {
+					matched := false
 					for _, f := range packetSpec.TransportHeader.TCP.Flags {
 						m := f.Value
 						if f.Mask != nil {
 							m = *f.Mask
 						}
-						assert.Equal(t, uint8(f.Value), tcp.Contents[13]&uint8(m))
+						if tcp.Contents[13]&uint8(m) == uint8(f.Value) {
+							matched = true
+							break
+						}
 					}
+					assert.True(t, matched)
 				}
 			}
 		} else if strings.ToUpper(proto.StrVal) == "UDP" || proto.IntVal == 17 {
@@ -952,6 +1005,33 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 		} else if strings.ToUpper(proto.StrVal) == "ICMP" || proto.IntVal == 1 {
 			icmpLayer := packet.Layer(layers.LayerTypeICMPv4)
 			require.NotNil(t, icmpLayer)
+			icmp, _ := icmpLayer.(*layers.ICMPv4)
+			if packetSpec.TransportHeader.ICMP != nil {
+				matched := false
+				for _, f := range packetSpec.TransportHeader.ICMP.Messages {
+					var typeValue uint8
+					switch f.Type.Type {
+					case intstr.Int:
+						if f.Type.IntVal < 0 || f.Type.IntVal > 255 {
+							require.Fail(t, "Invalid ICMP type number value")
+						}
+						typeValue = uint8(f.Type.IntVal)
+					case intstr.String:
+						if _, ok := capture.ICMPMsgTypeMap[crdv1alpha1.ICMPMsgType(strings.ToLower(f.Type.StrVal))]; !ok {
+							require.Fail(t, "Invalid ICMP type string value")
+						}
+						typeValue = uint8(capture.ICMPMsgTypeMap[crdv1alpha1.ICMPMsgType(strings.ToLower(f.Type.StrVal))])
+					}
+
+					if icmp.TypeCode.Type() == typeValue {
+						if f.Code == nil || icmp.TypeCode.Code() == uint8(*f.Code) {
+							matched = true
+							break
+						}
+					}
+				}
+				assert.True(t, matched)
+			}
 		}
 	}
 	return nil

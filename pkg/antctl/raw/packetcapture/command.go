@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 
+	"antrea.io/antrea/pkg/agent/packetcapture/capture"
 	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
@@ -72,6 +73,10 @@ var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Po
   $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+syn-ack
   Start capturing UDP packets from pod1 to pod2, with destination port 1234
   $ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
+  Start capturing ICMP destination unreachable (host unreachable) packets from pod1 to pod2
+  $ antctl packetcapture -S pod1 -D pod2 -f icmp,icmp_type=icmp-unreach,icmp_code=1
+  Start capturing ICMP echo packets from pod1 to pod2
+  $ antctl packetcapture -S pod1 -D pod2 -f icmp,icmp_type=8
   Save the packets file to a specified directory
   $ antctl packetcapture -S 192.168.123.123 -D pod2 -f tcp,tcp_dst=80 -o /tmp
 `
@@ -89,7 +94,7 @@ func init() {
 	Command.Flags().StringVarP(&options.source, "source", "S", "", "source of the the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().StringVarP(&options.dest, "destination", "D", "", "destination of the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().Int32VarP(&options.number, "number", "n", 1, "target number of packets to capture, the capture will stop when it is reached")
-	Command.Flags().StringVarP(&options.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst")
+	Command.Flags().StringVarP(&options.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst, icmp_type, icmp_code")
 	Command.Flags().BoolVarP(&options.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 	Command.Flags().StringVarP(&options.outputDir, "output-dir", "o", ".", "save the packets file to the target directory")
 }
@@ -367,6 +372,40 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 			pkt.TransportHeader.UDP = new(v1alpha1.UDPHeader)
 		}
 		pkt.TransportHeader.UDP.DstPort = ptr.To(int32(dstPort))
+	}
+	if t, ok := fields["icmp_type"]; ok {
+		var icmpType intstr.IntOrString
+		if val, err := strconv.ParseUint(t, 0, 8); err == nil {
+			icmpType = intstr.FromInt32(int32(val))
+		} else {
+			_, found := capture.ICMPMsgTypeMap[v1alpha1.ICMPMsgType(t)]
+			if !found {
+				return nil, fmt.Errorf("unknown icmp_type: %s", t)
+			}
+			icmpType = intstr.FromString(t)
+		}
+
+		pkt.TransportHeader.ICMP = new(v1alpha1.ICMPHeader)
+
+		c, ok := fields["icmp_code"]
+		if ok {
+			icmpCode, err := strconv.ParseUint(c, 0, 8)
+			if err != nil {
+				return nil, err
+			}
+			pkt.TransportHeader.ICMP.Messages = []v1alpha1.ICMPMsgMatcher{
+				{
+					Type: icmpType,
+					Code: ptr.To(int32(icmpCode)),
+				},
+			}
+		} else {
+			pkt.TransportHeader.ICMP.Messages = []v1alpha1.ICMPMsgMatcher{
+				{Type: icmpType},
+			}
+		}
+	} else if _, codeOK := fields["icmp_code"]; codeOK {
+		return nil, fmt.Errorf("icmp_type must be specified when icmp_code is provided")
 	}
 	return &pkt, nil
 }
