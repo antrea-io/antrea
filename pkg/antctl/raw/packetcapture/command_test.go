@@ -299,6 +299,24 @@ func TestNewPacketCapture(t *testing.T) {
 			},
 			expectErr: "failed to parse flow: tcp_dst=80=80 is not valid in flow",
 		},
+		{
+			name: "bad-flow-3",
+			option: packetCaptureOptions{
+				source: srcPod,
+				dest:   dstPod,
+				flow:   "icmp,icmp_type=icmp-echoraply",
+			},
+			expectErr: "failed to parse flow: unknown icmp_type: icmp-echoraply",
+		},
+		{
+			name: "bad-flow-4",
+			option: packetCaptureOptions{
+				source: srcPod,
+				dest:   dstPod,
+				flow:   "icmp,icmp_code=3",
+			},
+			expectErr: "failed to parse flow: icmp_type must be specified when icmp_code is provided",
+		},
 	}
 
 	for _, tt := range tcs {

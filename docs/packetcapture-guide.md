@@ -33,6 +33,7 @@ the target traffic flow:
 * Transport protocol (TCP/UDP/ICMP)
 * Transport ports
 * TCP Flags
+* ICMP Messages
 * Direction (SourceToDestination/DestinationToSource/Both)
 
 You can start a new packet capture by creating a `PacketCapture` CR. An optional `fileServer`
@@ -96,5 +97,44 @@ to the port 8080 of a Pod named `backend` using TCP protocol and have the TCP SY
 will capture the first 5 packets that meet this criterion and upload them to the specified sftp
 server. Users can download the packet file from the sftp server (or from the local antrea-agent
 Pod) and analyze its content with network diagnose tools like Wireshark or tcpdump.
+
+Example of `PacketCapture` CR for capturing packets based on ICMP messages:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: PacketCapture
+metadata:
+  name: pc-test
+spec:
+  timeout: 60
+  captureConfig:
+    firstN:
+      number: 5
+  source:
+    pod:
+      namespace: default
+      name: frontend
+  destination:
+    pod:
+      namespace: default
+      name: backend
+  direction: DestinationToSource
+  packet:
+    ipFamily: IPv4
+    protocol: ICMP
+    transportHeader:
+      icmp:
+        # List of ICMP Message Matchers. Each specifies a type and optional code to match against ICMP messages in packets.
+        # type value can be provided either as a string or number. Available string options are 'icmp-echo', 'icmp-echoreply', 'icmp-unreach' and 'icmp-timxceed' 
+        # code value can only be provided as a number.
+        messages:
+          - type: icmp-unreach # destination unreachable, or 3
+            code: 1 # host unreachable
+          - type: 0 # echo reply
+```
+
+The CR above starts a new packet capture of ICMP flows from a Pod named `frontend`
+to a Pod named `backend` using ICMP protocol and targeting at either echo reply or destination (host) unreachable packets.
+It will capture the first 5 packets in the reverse direction (destination to source).
 
 Note: This feature is not supported on Windows for now.
