@@ -57,24 +57,28 @@ func TestPreprocessorProcessMsg(t *testing.T) {
 			name                  string
 			templateElementsCount int
 			msg                   *ipfixentities.Message
+			expectedTemplateID    uint16
 			expectedIEsWithValue  []ipfixentities.InfoElementWithValue
 		}{
 			{
 				name:                  "same elements",
 				templateElementsCount: 2,
 				msg:                   getTestMsg(iesWithValue[:2]),
+				expectedTemplateID:    testTemplateID,
 				expectedIEsWithValue:  iesWithValue,
 			},
 			{
 				name:                  "extra elements",
 				templateElementsCount: 1,
 				msg:                   getTestMsg(iesWithValue[:2]),
+				expectedTemplateID:    0,
 				expectedIEsWithValue:  iesWithValue[:1],
 			},
 			{
 				name:                  "missing elements",
 				templateElementsCount: 3,
 				msg:                   getTestMsg(iesWithValue[:2]),
+				expectedTemplateID:    0,
 				expectedIEsWithValue:  append(iesWithValue, ipfixentities.NewUnsigned64InfoElement(packetTotalCountIE, 0)),
 			},
 		}
@@ -96,6 +100,8 @@ func TestPreprocessorProcessMsg(t *testing.T) {
 					r = records[0]
 				default:
 				}
+				// Make sure template ID has been "reset" when the element list is mutated.
+				assert.Equal(t, tc.expectedTemplateID, r.GetTemplateID())
 				if tc.expectedIEsWithValue == nil {
 					assert.Nil(t, r, "No record expected")
 				} else {
