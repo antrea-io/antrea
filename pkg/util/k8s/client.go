@@ -33,6 +33,7 @@ import (
 
 	mcclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	validation "antrea.io/antrea/pkg/util/validation"
 )
 
 const (
@@ -113,9 +114,9 @@ func CreateRestConfig(config componentbaseconfig.ClientConnectionConfiguration, 
 // OverrideKubeAPIServer overrides the env vars related to the kubernetes service used by InClusterConfig.
 // It's required because some K8s libraries like DelegatingAuthenticationOptions and DelegatingAuthorizationOptions
 // read the information from env vars and don't support overriding via parameters.
-func OverrideKubeAPIServer(kubeAPIServerOverride string) {
+func OverrideKubeAPIServer(kubeAPIServerOverride string) error {
 	if len(kubeAPIServerOverride) == 0 {
-		return
+		return nil
 	}
 	hostPort := strings.ReplaceAll(kubeAPIServerOverride, "https://", "")
 	var host, port string
@@ -125,8 +126,12 @@ func OverrideKubeAPIServer(kubeAPIServerOverride string) {
 		host = hostPort
 		port = "443"
 	}
+	if err := validation.ValidatePortString(port); err != nil {
+		return fmt.Errorf("error in kubeAPIServerOverride '%s': %w", kubeAPIServerOverride, err)
+	}
 	os.Setenv(kubeServiceHostEnvKey, host)
 	os.Setenv(kubeServicePortEnvKey, port)
+	return nil
 }
 
 func EndpointSliceAPIAvailable(k8sClient clientset.Interface) (bool, error) {
