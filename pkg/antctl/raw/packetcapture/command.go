@@ -58,6 +58,7 @@ type packetCaptureOptions struct {
 	number    int32
 	flow      string
 	outputDir string
+	direction string
 }
 
 var options = &packetCaptureOptions{}
@@ -72,6 +73,8 @@ var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Po
   $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+syn-ack
   Start capturing UDP packets from pod1 to pod2, with destination port 1234
   $ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
+  Start capturing packets in both directions between pod1 and pod2
+  $ antctl packetcapture -S pod1 -D pod2 -d Both
   Save the packets file to a specified directory
   $ antctl packetcapture -S 192.168.123.123 -D pod2 -f tcp,tcp_dst=80 -o /tmp
 `
@@ -92,6 +95,7 @@ func init() {
 	Command.Flags().StringVarP(&options.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst")
 	Command.Flags().BoolVarP(&options.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 	Command.Flags().StringVarP(&options.outputDir, "output-dir", "o", ".", "save the packets file to the target directory")
+	Command.Flags().StringVarP(&options.direction, "direction", "d", "SourceToDestination", "direction of the traffic to capture: SourceToDestination, DestinationToSource, or Both")
 }
 
 var protocols = map[string]int32{
@@ -371,6 +375,20 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 	return &pkt, nil
 }
 
+func parseDirection(direction string) (v1alpha1.CaptureDirection, error) {
+	// This case should not occur in practice as the direction flag is defaulted to SourceToDestination
+	if direction == "" {
+		return "", nil
+	}
+
+	switch v1alpha1.CaptureDirection(direction) {
+	case v1alpha1.CaptureDirectionSourceToDestination, v1alpha1.CaptureDirectionDestinationToSource, v1alpha1.CaptureDirectionBoth:
+		return v1alpha1.CaptureDirection(direction), nil
+	default:
+		return "", fmt.Errorf("invalid direction: %q, must be one of SourceToDestination, DestinationToSource, or Both", direction)
+	}
+}
+
 func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, error) {
 	var src v1alpha1.Source
 	if options.source != "" {
@@ -396,6 +414,11 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 		return nil, fmt.Errorf("failed to parse flow: %w", err)
 	}
 
+	direction, err := parseDirection(options.direction)
+	if err != nil {
+		return nil, err
+	}
+
 	name := getPCName(options)
 	timeout := int32(options.timeout.Seconds())
 	pc := &v1alpha1.PacketCapture{
@@ -405,6 +428,7 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 		Spec: v1alpha1.PacketCaptureSpec{
 			Source:      src,
 			Destination: dst,
+			Direction:   direction,
 			Timeout:     &timeout,
 			Packet:      pkt,
 			CaptureConfig: v1alpha1.CaptureConfig{
@@ -414,5 +438,6 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 			},
 		},
 	}
+
 	return pc, nil
 }
