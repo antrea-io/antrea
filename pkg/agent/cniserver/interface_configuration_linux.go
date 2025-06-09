@@ -48,6 +48,7 @@ const (
 // Declared variables for test
 var (
 	ipSetupVethWithName            = ip.SetupVethWithName
+	ipDelLinkByName                = ip.DelLinkByName
 	ipamConfigureIface             = ipam.ConfigureIface
 	ethtoolTXHWCsumOff             = ethtool.EthtoolTXHWCsumOff
 	renameInterface                = util.RenameInterface
@@ -257,6 +258,15 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 		if err != nil {
 			return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
 		}
+		success := false
+		defer func() {
+			if !success {
+				klog.V(2).InfoS("Deleting veth devices for container during rollback", "containerID", containerID)
+				if err := ipDelLinkByName(hostVeth.Name); err != nil && err != ip.ErrLinkNotFound {
+					klog.ErrorS(err, "Failed to delete veth devices for container during rollback", "containerID", containerID)
+				}
+			}
+		}()
 		containerIface.Mac = podMAC.String()
 		hostIface.Mac = hostVeth.HardwareAddr.String()
 		// Disable TX checksum offloading when it's configured explicitly.
@@ -271,6 +281,7 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 		if err := ipamConfigureIface(containerIface.Name, result); err != nil {
 			return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
 		}
+		success = true
 		return nil
 	}); err != nil {
 		return err
