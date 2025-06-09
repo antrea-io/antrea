@@ -169,6 +169,19 @@ func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 boo
 			return fmt.Errorf("error when initializing IPFIX exporting process: %v", err)
 		}
 	}
+	templateID := e.templateIDv4
+	if isRecordIPv6 {
+		templateID = e.templateIDv6
+	}
+	// This step is necessary because the templateID used by this exporter may not match the one
+	// from the record that we received.
+	// Additionally, when there is a version mismatch between the FlowExporter and the
+	// FlowAggregator and elements needs to be added / dropped, the preprocesor always resets
+	// the templateID to 0.
+	// Ideally, we would have a way to set the templateID correctly without needing to create a
+	// new record (note that this operation is not very expensive since we reuse the same
+	// element list).
+	record = ipfixentities.NewDataRecordFromElements(templateID, record.GetOrderedElementList())
 	if err := e.bufferedExporter.AddRecord(record); err != nil {
 		return err
 	}
