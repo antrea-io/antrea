@@ -90,6 +90,24 @@ func TestPacketCaptureRun(t *testing.T) {
 			},
 		},
 		{
+			name: "src-pod-only",
+			option: packetCaptureOptions{
+				source: srcPod,
+				dest:   "",
+				flow:   "tcp,tcp_src=50060,tcp_dst=80",
+				number: testNum,
+			},
+		},
+		{
+			name: "dst-pod-only",
+			option: packetCaptureOptions{
+				source: "",
+				dest:   dstPod,
+				flow:   "tcp,tcp_src=50060,tcp_dst=80",
+				number: testNum,
+			},
+		},
+		{
 			name: "pod-2-ip",
 			option: packetCaptureOptions{
 				source: srcPod,
@@ -272,6 +290,14 @@ func TestNewPacketCapture(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "no-src-and-dst",
+			option: packetCaptureOptions{
+				source: "",
+				dest:   "",
+			},
+			expectErr: "must specify at least one of --source or --destination",
 		},
 		{
 			name: "no-pod",

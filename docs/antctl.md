@@ -581,7 +581,7 @@ local path to the pcapng file as it exits. Users can also create a PacketCapture
 with `kubectl`, but `antctl` makes it easier. For more information about PacketCapture,
 refer to [PacketCapture guide](packetcapture-guide.md).
 
-To start a PacketCapture, users must provide the following arguments:
+To start a PacketCapture, users must provide `--number` and at least one of `--source` or `--destination`.
 
 * `--source` (or `-S`)
 * `--destination` (or `-D`)
