@@ -100,11 +100,12 @@ func compareProtocol(protocol uint32, skipTrue, skipFalse uint8) bpf.Instruction
 	return bpf.JumpIf{Cond: bpf.JumpEqual, Val: protocol, SkipTrue: skipTrue, SkipFalse: skipFalse}
 }
 
-func calculateSkipFalse(transport *transportFilters) uint8 {
+func calculateSkipFalse(srcIP, dstIP net.IP, transport *transportFilters) uint8 {
 	var count uint8
-	// load dstIP and compare
-	count += 2
-
+	if srcIP != nil && dstIP != nil {
+		// load dstIP and compare
+		count += 2
+	}
 	if transport.srcPort > 0 || transport.dstPort > 0 || len(transport.tcpFlags) > 0 || len(transport.icmp) > 0 {
 		// load fragment offset
 		count += 3
@@ -134,29 +135,81 @@ func calculateSkipFalse(transport *transportFilters) uint8 {
 	return count
 }
 
-// Generates IP address and port matching instructions
-func compileIPAndTransportFilters(srcAddrVal, dstAddrVal uint32, size, curLen uint8, transport *transportFilters, needsOtherTrafficDirectionCheck bool) []bpf.Instruction {
+// Generates BPF instructions to match source and destination IP addresses
+// for SrcToDst and DstToSrc directions.
+func compileIPFilters(srcIP, dstIP net.IP, size, curLen uint8) []bpf.Instruction {
 	inst := []bpf.Instruction{}
-
-	// from here we need to check the inst length to calculate skipFalse. If no protocol is set, there will be no related bpf instructions.
 
 	// calculate skip size to jump to the final instruction (NO MATCH)
 	skipToEnd := func() uint8 {
 		return size - curLen - uint8(len(inst)) - 2
 	}
-
-	// needsOtherTrafficDirectionCheck indicates if we need to check whether the packet belongs to the return traffic flow when source IP from the
-	// packet spec and packet header don't match and we are capturing packets in both direction. If true, we calculate skipFalse to jump to the
-	// instruction that compares the destination IP from the packet spec with the loaded source IP from the packet header.
-	if needsOtherTrafficDirectionCheck {
-		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: srcAddrVal, SkipTrue: 0, SkipFalse: calculateSkipFalse(transport)})
-	} else {
-		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: srcAddrVal, SkipTrue: 0, SkipFalse: skipToEnd()})
+	if srcIP != nil {
+		inst = append(inst, loadIPv4SourceAddress)
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: binary.BigEndian.Uint32(srcIP[len(srcIP)-4:]), SkipTrue: 0, SkipFalse: skipToEnd()})
 	}
+	if dstIP != nil {
+		inst = append(inst, loadIPv4DestinationAddress)
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: binary.BigEndian.Uint32(dstIP[len(dstIP)-4:]), SkipTrue: 0, SkipFalse: skipToEnd()})
+	}
+	return inst
+}
 
-	// dst ip
-	inst = append(inst, loadIPv4DestinationAddress)
-	inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: dstAddrVal, SkipTrue: 0, SkipFalse: skipToEnd()})
+// Generates BPF instructions to match source and destination IP addresses
+// for forward traffic in the 'Both' direction.
+func compileForwardIPFilters(srcIP, dstIP net.IP, size, curLen uint8, transport *transportFilters) []bpf.Instruction {
+	inst := []bpf.Instruction{}
+
+	skipToEnd := func() uint8 {
+		return size - curLen - uint8(len(inst)) - 2
+	}
+	if srcIP != nil {
+		inst = append(inst, loadIPv4SourceAddress)
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: binary.BigEndian.Uint32(srcIP[len(srcIP)-4:]), SkipTrue: 0, SkipFalse: calculateSkipFalse(srcIP, dstIP, transport)})
+	}
+	if dstIP != nil {
+		inst = append(inst, loadIPv4DestinationAddress)
+		// Need to calculate skipFalse when srcIP == nil and dstIP != nil
+		if srcIP == nil {
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: binary.BigEndian.Uint32(dstIP[len(dstIP)-4:]), SkipTrue: 0, SkipFalse: calculateSkipFalse(srcIP, dstIP, transport)})
+		} else {
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: binary.BigEndian.Uint32(dstIP[len(dstIP)-4:]), SkipTrue: 0, SkipFalse: skipToEnd()})
+		}
+	}
+	return inst
+}
+
+// Generates BPF instructions to match source and destination IP addresses
+// for return traffic in the 'Both' direction.
+func compileReturnIPFilters(srcIP, dstIP net.IP, size, curLen uint8) []bpf.Instruction {
+	inst := []bpf.Instruction{}
+
+	skipToEnd := func() uint8 {
+		return size - curLen - uint8(len(inst)) - 2
+	}
+	if srcIP != nil {
+		// Avoid loading srcIP address if both srcIP and dstIP are non-nil
+		if dstIP == nil {
+			inst = append(inst, loadIPv4SourceAddress)
+		}
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: binary.BigEndian.Uint32(srcIP[len(srcIP)-4:]), SkipTrue: 0, SkipFalse: skipToEnd()})
+	}
+	if dstIP != nil {
+		inst = append(inst, loadIPv4DestinationAddress)
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: binary.BigEndian.Uint32(dstIP[len(dstIP)-4:]), SkipTrue: 0, SkipFalse: skipToEnd()})
+	}
+	return inst
+}
+
+// Generates BPF instructions for filtering transport-layer traffic based on ports, TCP flags,
+// and ICMP messages.
+func compileTransportFilters(size, curLen uint8, transport *transportFilters) []bpf.Instruction {
+	inst := []bpf.Instruction{}
+
+	// calculate skip size to jump to the final instruction (NO MATCH)
+	skipToEnd := func() uint8 {
+		return size - curLen - uint8(len(inst)) - 2
+	}
 
 	if transport.srcPort > 0 || transport.dstPort > 0 || len(transport.tcpFlags) > 0 || len(transport.icmp) > 0 {
 		skipTrue := skipToEnd() - 1
@@ -220,7 +273,7 @@ func compileIPAndTransportFilters(srcAddrVal, dstAddrVal uint32, size, curLen ui
 // ipv4 traffic. Compared to the raw BPF filter supported by libpcap, we only need to support
 // limited use cases, so an expression parser is not needed.
 func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) []bpf.Instruction {
-	size := uint8(calculateInstructionsSize(packetSpec, direction))
+	size := uint8(calculateInstructionsSize(packetSpec, srcIP, dstIP, direction))
 
 	// ipv4 check
 	inst := []bpf.Instruction{loadEtherKind}
@@ -244,9 +297,6 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 			inst = append(inst, compareProtocol(proto, 0, size-5))
 		}
 	}
-
-	srcAddrVal := binary.BigEndian.Uint32(srcIP[len(srcIP)-4:])
-	dstAddrVal := binary.BigEndian.Uint32(dstIP[len(dstIP)-4:])
 
 	// ports, TCP flags and ICMP messages
 	var transport transportFilters
@@ -296,19 +346,20 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 		}
 	}
 
-	inst = append(inst, loadIPv4SourceAddress)
-
 	switch direction {
 	case crdv1alpha1.CaptureDirectionSourceToDestination:
-		inst = append(inst, compileIPAndTransportFilters(srcAddrVal, dstAddrVal, size, uint8(len(inst)), &transport, false)...)
+		inst = append(inst, compileIPFilters(srcIP, dstIP, size, uint8(len(inst)))...)
 	case crdv1alpha1.CaptureDirectionDestinationToSource:
 		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
-		inst = append(inst, compileIPAndTransportFilters(dstAddrVal, srcAddrVal, size, uint8(len(inst)), &transport, false)...)
+		inst = append(inst, compileIPFilters(dstIP, srcIP, size, uint8(len(inst)))...)
 	default:
-		inst = append(inst, compileIPAndTransportFilters(srcAddrVal, dstAddrVal, size, uint8(len(inst)), &transport, true)...)
+		// the transport parameter is required to calculate skipFalse.
+		inst = append(inst, compileForwardIPFilters(srcIP, dstIP, size, uint8(len(inst)), &transport)...)
+		inst = append(inst, compileTransportFilters(size, uint8(len(inst)), &transport)...)
 		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
-		inst = append(inst, compileIPAndTransportFilters(dstAddrVal, srcAddrVal, size, uint8(len(inst)), &transport, false)...)
+		inst = append(inst, compileReturnIPFilters(dstIP, srcIP, size, uint8(len(inst)))...)
 	}
+	inst = append(inst, compileTransportFilters(size, uint8(len(inst)), &transport)...)
 
 	// return (drop)
 	inst = append(inst, returnDrop)
@@ -400,15 +451,20 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 // (015) ret      #262144								   # MATCH
 // (016) ret      #0									   # NOMATCH
 
-func calculateInstructionsSize(packet *crdv1alpha1.Packet, direction crdv1alpha1.CaptureDirection) int {
+func calculateInstructionsSize(packet *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) int {
 	count := 0
 	// load ethertype
 	count++
 	// ip check
 	count++
 
-	// src and dst ip
-	count += 4
+	// count 2 instructions for each non-nil IP (1 load + 1 compare)
+	if srcIP != nil {
+		count += 2
+	}
+	if dstIP != nil {
+		count += 2
+	}
 
 	if packet != nil {
 		// protocol check
@@ -461,7 +517,13 @@ func calculateInstructionsSize(packet *crdv1alpha1.Packet, direction crdv1alpha1
 			count++
 
 			// src and dst ip (return traffic)
-			count += 3
+			count++ // load return traffic addr
+			if srcIP != nil {
+				count++ // compare ip
+			}
+			if dstIP != nil {
+				count++ // compare ip
+			}
 
 			count += portFiltersSize
 
