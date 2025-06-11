@@ -207,15 +207,22 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 
 func (c *GroupEntityController) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
-	klog.V(2).Infof("Processing Pod %s/%s ADD event, labels: %v", pod.Namespace, pod.Name, pod.Labels)
+	klog.V(2).InfoS("Processing Pod ADD event", "pod", klog.KObj(pod), "labels", pod.Labels)
 	c.groupEntityIndex.AddPod(pod)
 	c.podAddEvents.Increment()
 }
 
 func (c *GroupEntityController) updatePod(_, curObj interface{}) {
 	curPod := curObj.(*v1.Pod)
-	klog.V(2).Infof("Processing Pod %s/%s UPDATE event, labels: %v", curPod.Namespace, curPod.Name, curPod.Labels)
-	c.groupEntityIndex.AddPod(curPod)
+	klog.V(2).InfoS("Processing Pod UPDATE event", "pod", klog.KObj(curPod), "labels", curPod.Labels, "phase", curPod.Status.Phase)
+	if curPod.Status.Phase == v1.PodSucceeded || curPod.Status.Phase == v1.PodFailed {
+		// Once a Pod is in "Succeeded" or "Failed" phase, Kubernetes will not restart the same Pod.
+		// In groupEntityIndex, this should be considered as a terminal event, and the Pod should be
+		// excluded from any Network Policy computations in appliedTo or address groups.
+		c.groupEntityIndex.DeletePod(curPod)
+	} else {
+		c.groupEntityIndex.AddPod(curPod)
+	}
 }
 
 func (c *GroupEntityController) deletePod(old interface{}) {
@@ -237,14 +244,14 @@ func (c *GroupEntityController) deletePod(old interface{}) {
 
 func (c *GroupEntityController) addNamespace(obj interface{}) {
 	namespace := obj.(*v1.Namespace)
-	klog.V(2).Infof("Processing Namespace %s ADD event, labels: %v", namespace.Name, namespace.Labels)
+	klog.V(2).InfoS("Processing Namespace ADD event", "namespace", namespace.Name, "labels", namespace.Labels)
 	c.groupEntityIndex.AddNamespace(namespace)
 	c.namespaceAddEvents.Increment()
 }
 
 func (c *GroupEntityController) updateNamespace(_, curObj interface{}) {
 	curNamespace := curObj.(*v1.Namespace)
-	klog.V(2).Infof("Processing Namespace %s UPDATE event, labels: %v", curNamespace.Name, curNamespace.Labels)
+	klog.V(2).InfoS("Processing Namespace UPDATE event", "namespace", curNamespace.Name, "labels", curNamespace.Labels)
 	c.groupEntityIndex.AddNamespace(curNamespace)
 }
 

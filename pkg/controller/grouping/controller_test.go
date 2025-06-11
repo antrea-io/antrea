@@ -15,21 +15,22 @@
 package grouping
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/features"
 )
 
 const informerDefaultResync = 30 * time.Second
@@ -68,7 +69,6 @@ func TestGroupEntityControllerRun(t *testing.T) {
 				eventChanSize = originalEventChanSize
 			}()
 
-			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, tt.antreaPolicyEnabled)
 			var objs []runtime.Object
 			for _, pod := range tt.initialPods {
 				objs = append(objs, pod)
@@ -89,6 +89,7 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 			stopCh := make(chan struct{})
+			defer close(stopCh)
 
 			c := NewGroupEntityController(index, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().ExternalEntities())
 			assert.False(t, index.HasSynced(), "GroupEntityIndex has been synced before starting InformerFactories")
@@ -104,6 +105,61 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			}, time.Second, 10*time.Millisecond, "GroupEntityIndex hasn't been synced in 1 second after starting GroupEntityController")
 		})
 	}
+}
+
+func TestGroupEntityControllerHandlePodUpdate(t *testing.T) {
+	var objs []runtime.Object
+	initialPods := []*v1.Pod{podFoo1, podFoo2, podBar1}
+	initialNamespaces := []*v1.Namespace{nsDefault, nsOther}
+	initialGroups := []*group{groupPodFooType1, groupPodFooType2, groupPodBarType1, groupPodFooAllNamespaceType1}
+	for _, pod := range initialPods {
+		objs = append(objs, pod)
+	}
+	for _, namespace := range initialNamespaces {
+		objs = append(objs, namespace)
+	}
+	index := NewGroupEntityIndex()
+	for _, group := range initialGroups {
+		index.AddGroup(group.groupType, group.groupName, group.groupSelector)
+	}
+
+	client := fake.NewSimpleClientset(objs...)
+	crdClient := fakeversioned.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	c := NewGroupEntityController(index, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().ExternalEntities())
+	informerFactory.Start(stopCh)
+	crdInformerFactory.Start(stopCh)
+	go c.groupEntityIndex.Run(stopCh)
+	go c.Run(stopCh)
+	// Wait for the GroupEntityIndex to be synced
+	require.Eventually(t, func() bool {
+		return index.HasSynced()
+	}, time.Second, 10*time.Millisecond, "GroupEntityIndex hasn't been synced in 1 second after starting GroupEntityController")
+
+	podFoo1Succeeded := podFoo1.DeepCopy()
+	podFoo1Succeeded.Status.Phase = v1.PodSucceeded
+	client.CoreV1().Pods("default").Update(context.TODO(), podFoo1Succeeded, metav1.UpdateOptions{})
+	podFoo2Failed := podFoo2.DeepCopy()
+	podFoo2Failed.Status.Phase = v1.PodFailed
+	client.CoreV1().Pods("default").Update(context.TODO(), podFoo2Failed, metav1.UpdateOptions{})
+	podBar1Running := podBar1.DeepCopy()
+	podBar1Running.Status.Phase = v1.PodRunning
+	client.CoreV1().Pods("default").Update(context.TODO(), podBar1Running, metav1.UpdateOptions{})
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		// The following two Foo Pods should be removed from all groups as they are terminated
+		_, groupForFoo1Found := index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
+		assert.False(t, groupForFoo1Found, "Succeeded Pod should be removed from the GroupEntityIndex")
+		_, groupForFoo2Found := index.GetGroupsForPod(podFoo2.Namespace, podFoo2.Name)
+		assert.False(t, groupForFoo2Found, "Failed Pod should be removed from the GroupEntityIndex")
+		// The following Bar Pod should still remain in the group that selects it
+		_, groupForBar1Found := index.GetGroupsForPod(podBar1.Namespace, podBar1.Name)
+		assert.True(t, groupForBar1Found, "Running Pod should remain in the GroupEntityIndex")
+	}, time.Second, 10*time.Millisecond, "GroupEntityIndex did not process Pod update event correctly")
 }
 
 func TestPodIPsIndexFunc(t *testing.T) {
