@@ -62,7 +62,7 @@ func TestUpdatePodNetworkStatusAnnotation(t *testing.T) {
 			name:         "get pod failure",
 			netStatus:    []netdefv1.NetworkStatus{{Name: "eth1"}},
 			getPodErr:    errors.New("api down"),
-			expectErrStr: "context deadline exceeded",
+			expectErrStr: "api down",
 		},
 		{
 			name:                   "get status failure",
@@ -72,7 +72,14 @@ func TestUpdatePodNetworkStatusAnnotation(t *testing.T) {
 			expectStatus:           []netdefv1.NetworkStatus{{Name: "eth1"}},
 		},
 		{
-			name:                   "set status failure",
+			name: "set status failure",
+			podAnnot: map[string]string{"k8s.v1.cni.cncf.io/network-status": `[{
+    "name": "eth0",
+    "ips": [
+        "192.168.1.2"
+    ],
+    "dns": {}
+}]`},
 			netStatus:              []netdefv1.NetworkStatus{{Name: "eth1"}},
 			setNetworkStatusCalled: true,
 			setStatusErr:           errors.New("update conflict"),
