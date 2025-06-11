@@ -37,6 +37,9 @@ var (
 	podFoo1                 = newPod("default", "podFoo1", map[string]string{"app": "foo"})
 	podFoo2                 = newPod("default", "podFoo2", map[string]string{"app": "foo"})
 	podBar1                 = newPod("default", "podBar1", map[string]string{"app": "bar"})
+	podFoo1Succeeded        = newPodWithPhase("default", "podFoo1", map[string]string{"app": "foo"}, v1.PodSucceeded)
+	podFoo2Failed           = newPodWithPhase("default", "podFoo2", map[string]string{"app": "foo"}, v1.PodFailed)
+	podBar1Running          = newPodWithPhase("default", "podBar1", map[string]string{"app": "bar"}, v1.PodRunning)
 	podFoo1InOtherNamespace = newPod("other", "podFoo1", map[string]string{"app": "foo"})
 	// Fake ExternalEntities
 	eeFoo1                 = newExternalEntity("default", "eeFoo1", map[string]string{"app": "foo"})
@@ -96,6 +99,19 @@ func newPod(namespace, name string, labels map[string]string) *v1.Pod {
 			Namespace: namespace,
 			Name:      name,
 			Labels:    labels,
+		},
+	}
+}
+
+func newPodWithPhase(namespace, name string, labels map[string]string, phase v1.PodPhase) *v1.Pod {
+	return &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+			Labels:    labels,
+		},
+		Status: v1.PodStatus{
+			Phase: phase,
 		},
 	}
 }
