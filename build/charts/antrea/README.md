@@ -38,6 +38,7 @@ Kubernetes: `>= 1.19.0-0`
 | agent.antreaOVS.securityContext.capabilities | list | `["SYS_NICE","NET_ADMIN","SYS_ADMIN","IPC_LOCK"]` | Capabilities for the antrea-ovs container. |
 | agent.antreaOVS.securityContext.privileged | bool | `false` | Run the antrea-ovs container as privileged. |
 | agent.apiPort | int | `10350` | Port for the antrea-agent APIServer to serve on. |
+| agent.clusterPort | int | `10351` | clusterPort is the server port used by the antrea-agent to run a gossip-based cluster membership protocol. Currently it's used only when the Egress feature is enabled. Defaults to 10351 |
 | agent.dnsPolicy | string | `""` | DNS Policy for the antrea-agent Pods. If empty, the Kubernetes default will be used. |
 | agent.dontLoadKernelModules | bool | `false` | Do not try to load any of the required Kernel modules (e.g., openvswitch) during initialization of the antrea-agent. Most users should never need to set this to true, but it may be required with some specific distributions. Note that we will never try to load a module if we can detect that it is "built-in", regardless of this value. |
 | agent.enablePrometheusMetrics | bool | `true` | Enable metrics exposure via Prometheus. |

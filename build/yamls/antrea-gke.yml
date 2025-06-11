@@ -4257,6 +4257,11 @@ data:
     # `antrea-agent` container must be set to the same value.
     apiPort: 10350
 
+    # clusterPort is the server port used by the antrea-agent to run a gossip-based cluster
+    # membership protocol. Currently it's used only when the Egress feature is enabled.
+    # Defaults to 10351.
+    clusterPort: 10351
+
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     enablePrometheusMetrics: true
 
@@ -5497,7 +5502,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: ca4745a312b3728756e021cdfa487033bcd87b7a18acc4b106825d6c5b307c74
+        checksum/config: 475d870396b24a476234ca2e6f206d5c800585b27aa8338b78202484b03808d7
       labels:
         app: antrea
         component: antrea-agent
@@ -5743,7 +5748,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: ca4745a312b3728756e021cdfa487033bcd87b7a18acc4b106825d6c5b307c74
+        checksum/config: 475d870396b24a476234ca2e6f206d5c800585b27aa8338b78202484b03808d7
       labels:
         app: antrea
         component: antrea-controller
