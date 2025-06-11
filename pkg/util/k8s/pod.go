@@ -17,13 +17,13 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"k8s.io/klog/v2"
 
 	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 )
 
 // IsPodTerminated returns true if a pod is terminated, all containers are stopped and cannot ever regress.
