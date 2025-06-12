@@ -95,7 +95,7 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) (map[string][
 // buildVFDeviceIDListPerPod is a helper function to build a cache structure with the
 // list of all the PCI addresses allocated per Pod based on their resource requests (in Pod spec).
 // When there is a request for a VF resource (to associate it for a secondary network interface),
-// getUnusedSriovVFDeviceIDPerPod will use this cache information to pick up a unique PCI address
+// assignUnusedSriovVFDeviceID will use this cache information to pick up a unique PCI address
 // which is still not associated with a network device name.
 // NOTE: buildVFDeviceIDListPerPod is called only if a Pod specific VF to Interface mapping cache
 // was not build earlier. Sample initial entry per Pod: "{18:01.1,""},{18:01.2,""},{18:01.3,""}"
@@ -192,4 +192,20 @@ func (pc *PodController) deleteSriovSecondaryInterface(interfaceConfig *interfac
 	}
 	pc.releaseSriovVFDeviceID(interfaceConfig.PodName, interfaceConfig.PodNamespace, interfaceConfig.IFDev)
 	return nil
+}
+
+func (pc *PodController) GetAssignedVFDeviceNum(podName, podNamespace string) int {
+	podKey := podKeyGet(podName, podNamespace)
+	obj, cacheFound := pc.vfDeviceIDUsageMap.Load(podKey)
+	assignedNum := 0
+	if cacheFound {
+		cache := obj.([]podSriovVFDeviceIDInfo)
+		for idx := range cache {
+			if cache[idx].ifName != "" {
+				// Used PCI address found.
+				assignedNum++
+			}
+		}
+	}
+	return assignedNum
 }
