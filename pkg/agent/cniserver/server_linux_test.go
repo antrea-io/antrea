@@ -38,12 +38,15 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	typestest "antrea.io/antrea/pkg/agent/types/testing"
 	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/channel"
 )
+
+var mockVFDeviceUsageChecker *typestest.MockVFDeviceUsageChecker
 
 func TestValidatePrevResult(t *testing.T) {
 	cniServer := newCNIServer(t)
@@ -206,6 +209,11 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ip
 	cniServer.enableSecondaryNetworkIPAM = enableSecondaryNetworkIPAM
 	cniServer.secondaryNetworkEnabled = enableSecondaryNetwork
 	cniServer.isChaining = isChaining
+	if enableSecondaryNetwork {
+		mockVFDeviceUsageChecker = typestest.NewMockVFDeviceUsageChecker(controller)
+		cniServer.enableSecondaryNetwork = enableSecondaryNetwork
+		cniServer.vfDeviceChecker = mockVFDeviceUsageChecker
+	}
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer
 }
@@ -378,6 +386,7 @@ func TestCmdDel(t *testing.T) {
 		ipamError                  error
 		cniType                    string
 		enableSecondaryNetworkIPAM bool
+		enableSecondaryNetwork     bool
 		isChaining                 bool
 		disconnectOVS              bool
 		disconnectOVSErr           error
@@ -469,11 +478,26 @@ func TestCmdDel(t *testing.T) {
 			delLocalIPAMRoute:          true,
 			delLocalIPAMRouteError:     fmt.Errorf("unable to delete flexible IPAM rule"),
 		},
+		{
+			name:                       "del-failure-with-secondary-network",
+			ipamType:                   "test-delete",
+			ipamDel:                    false,
+			enableSecondaryNetworkIPAM: false,
+			enableSecondaryNetwork:     true,
+			isChaining:                 false,
+			disconnectOVS:              true,
+			delLocalIPAMRoute:          true,
+			response: &cnipb.CniCmdResponse{
+				Error: &cnipb.Error{
+					Code:    cnipb.ErrorCode_TRY_AGAIN_LATER,
+					Message: "Server is busy, please retry later",
+				},
+			}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
-			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, false)
+			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, tc.enableSecondaryNetwork)
 			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			containerID := requestMsg.CniArgs.ContainerId
 			containerIfaceConfig := interfacestore.NewContainerInterface(hostInterfaceName, containerID,
@@ -505,6 +529,9 @@ func TestCmdDel(t *testing.T) {
 			}
 			if tc.delLocalIPAMRoute {
 				mockRoute.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(tc.delLocalIPAMRouteError).Times(1)
+			}
+			if tc.enableSecondaryNetwork {
+				mockVFDeviceUsageChecker.EXPECT().GetAssignedVFDeviceNum(gomock.Any(), gomock.Any()).Return(1).Times(1)
 			}
 			resp, err := cniserver.CmdDel(ctx, requestMsg)
 			assert.NoError(t, err)
