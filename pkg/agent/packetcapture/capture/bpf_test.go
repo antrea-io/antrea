@@ -43,6 +43,8 @@ func TestCalculateInstructionsSize(t *testing.T) {
 		packet    *crdv1alpha1.Packet
 		count     int
 		direction crdv1alpha1.CaptureDirection
+		srcIP     net.IP
+		dstIP     net.IP
 	}{
 		{
 			name: "proto and host and port",
@@ -57,6 +59,40 @@ func TestCalculateInstructionsSize(t *testing.T) {
 			},
 			count:     17,
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
+		},
+		{
+			name: "proto and src host and port",
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     15,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     nil,
+		},
+		{
+			name: "proto and dst host and port",
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     15,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			srcIP:     nil,
+			dstIP:     net.ParseIP("127.0.0.2"),
 		},
 		{
 			name: "proto and host and port and DestinationToSource",
@@ -71,9 +107,11 @@ func TestCalculateInstructionsSize(t *testing.T) {
 			},
 			count:     17,
 			direction: crdv1alpha1.CaptureDirectionDestinationToSource,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
 		},
 		{
-			name: "proto and host to port and Both",
+			name: "proto and host and port and Both",
 			packet: &crdv1alpha1.Packet{
 				Protocol: &testTCPProtocol,
 				TransportHeader: crdv1alpha1.TransportHeader{
@@ -85,6 +123,8 @@ func TestCalculateInstructionsSize(t *testing.T) {
 			},
 			count:     28,
 			direction: crdv1alpha1.CaptureDirectionBoth,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
 		},
 		{
 			name: "proto with host",
@@ -93,6 +133,8 @@ func TestCalculateInstructionsSize(t *testing.T) {
 			},
 			count:     10,
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
 		},
 		{
 			name: "proto with src port",
@@ -106,6 +148,8 @@ func TestCalculateInstructionsSize(t *testing.T) {
 			},
 			count:     15,
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
 		},
 		{
 			name: "proto with dst port",
@@ -119,6 +163,8 @@ func TestCalculateInstructionsSize(t *testing.T) {
 			},
 			count:     15,
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
 		},
 		{
 			name: "proto with dst port and syn or ack flags",
@@ -136,6 +182,8 @@ func TestCalculateInstructionsSize(t *testing.T) {
 			},
 			count:     21,
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
 		},
 		{
 			name: "proto with icmp messages echo and destination unreachable (host unreachable)",
@@ -152,18 +200,22 @@ func TestCalculateInstructionsSize(t *testing.T) {
 			},
 			count:     18,
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
 		},
 		{
 			name:      "any proto",
 			packet:    &crdv1alpha1.Packet{},
 			count:     8,
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
 		},
 	}
 
 	for _, item := range tt {
 		t.Run(item.name, func(t *testing.T) {
-			assert.Equal(t, item.count, calculateInstructionsSize(item.packet, item.direction))
+			assert.Equal(t, item.count, calculateInstructionsSize(item.packet, item.direction, item.srcIP, item.dstIP))
 		})
 	}
 }
@@ -212,6 +264,72 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 			},
 		},
 		{
+			name:  "with-proto-and-srcHost-and-port",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: nil,
+			spec: &crdv1alpha1.PacketCaptureSpec{
+				Packet: &crdv1alpha1.Packet{
+					Protocol: &testTCPProtocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						TCP: &crdv1alpha1.TCPHeader{
+							SrcPort: &testSrcPort,
+							DstPort: &testDstPort,
+						}},
+				},
+				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			},
+			inst: []bpf.Instruction{
+				bpf.LoadAbsolute{Off: 12, Size: 2},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 12},
+				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 10}, // tcp
+				bpf.LoadAbsolute{Off: 26, Size: 4},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 8},
+				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
+				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 6}, // do we have an L4 header?
+				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
+				bpf.LoadIndirect{Off: 14, Size: 2},                          // src port
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 3},  // port 12345
+				bpf.LoadIndirect{Off: 16, Size: 2},                          // dst port
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 1},    // port 80
+				bpf.RetConstant{Val: 262144},
+				bpf.RetConstant{Val: 0},
+			},
+		},
+		{
+			name:  "with-proto-and-dstHost-and-port",
+			srcIP: nil,
+			dstIP: net.ParseIP("127.0.0.2"),
+			spec: &crdv1alpha1.PacketCaptureSpec{
+				Packet: &crdv1alpha1.Packet{
+					Protocol: &testTCPProtocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						TCP: &crdv1alpha1.TCPHeader{
+							SrcPort: &testSrcPort,
+							DstPort: &testDstPort,
+						}},
+				},
+				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			},
+			inst: []bpf.Instruction{
+				bpf.LoadAbsolute{Off: 12, Size: 2},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 12},
+				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 10}, // tcp
+				bpf.LoadAbsolute{Off: 30, Size: 4},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 8},
+				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
+				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 6}, // do we have an L4 header?
+				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
+				bpf.LoadIndirect{Off: 14, Size: 2},                          // src port
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 3},  // port 12345
+				bpf.LoadIndirect{Off: 16, Size: 2},                          // dst port
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 1},    // port 80
+				bpf.RetConstant{Val: 262144},
+				bpf.RetConstant{Val: 0},
+			},
+		},
+		{
 			name:  "udp-proto-str",
 			srcIP: net.ParseIP("127.0.0.1"),
 			dstIP: net.ParseIP("127.0.0.2"),
@@ -230,7 +348,7 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.LoadAbsolute{Off: 12, Size: 2},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 14},
 				bpf.LoadAbsolute{Off: 23, Size: 1},                        // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x11, SkipFalse: 12}, // tcp
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x11, SkipFalse: 12}, // udp
 				bpf.LoadAbsolute{Off: 26, Size: 4},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 10},
 				bpf.LoadAbsolute{Off: 30, Size: 4},
