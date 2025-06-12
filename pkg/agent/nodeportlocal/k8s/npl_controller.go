@@ -378,18 +378,13 @@ func (c *NPLController) processNextWorkItem() bool {
 	return true
 }
 
-func (c *NPLController) deleteAllPortRulesIfAny(podKey string) error {
-	klog.InfoS("Deleting all NodePortLocal rules for Pod", "pod", podKey)
-	return c.portTable.DeleteRulesForPod(podKey)
-}
-
 // handleRemovePod removes rules from port table and
 // rules programmed in the system based on implementation type (e.g. IPTABLES).
 // This also removes Pod annotation from Pods that are not selected by Service annotation.
 func (c *NPLController) handleRemovePod(key string) error {
 	klog.V(2).Infof("Got delete event for Pod: %s", key)
 
-	if err := c.deleteAllPortRulesIfAny(key); err != nil {
+	if err := c.cleanupPodRules(key, nil); err != nil {
 		return err
 	}
 
@@ -411,7 +406,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	klog.V(2).InfoS("Pod is selected by a Service for which NodePortLocal is enabled", "pod", klog.KObj(pod))
 
 	var nodePort int
-	podPorts := make(map[string]struct{})
+	podPorts := sets.New[string]()
 	podContainers := pod.Spec.Containers
 	nplAnnotations := []types.NPLAnnotation{}
 
@@ -444,20 +439,6 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		}
 	}
 
-	// targetPortsInt contains list of all ports that needs to be exposed for the Pod, including container ports
-	// for named ports present in targetPortsStr. If it is empty, then all existing rules and annotations for the
-	// Pod have to be cleaned up. If a Service uses a named target port that doesn't match any named container port
-	// for the current Pod, no corresponding entry will be added to the targetPortsInt set by the code above.
-	if len(targetPortsInt) == 0 {
-		if err := c.deleteAllPortRulesIfAny(key); err != nil {
-			return err
-		}
-		if _, exists := pod.Annotations[types.NPLAnnotationKey]; exists {
-			return c.cleanupNPLAnnotationForPod(pod)
-		}
-		return nil
-	}
-
 	// first, check which rules are needed based on the target ports of the Services selecting the Pod
 	// (ignoring NPL annotations) and make sure they are present. As we do so, we build the expected list of
 	// NPL annotations for the Pod.
@@ -466,7 +447,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		if err != nil {
 			return fmt.Errorf("failed to parse port number and protocol from %s for Pod %s: %v", targetPortProto, key, err)
 		}
-		podPorts[targetPortProto] = struct{}{}
+		podPorts.Insert(targetPortProto)
 		portData := c.portTable.GetEntry(key, port, protocol)
 		// Special handling for a rule that was previously marked for deletion but could not
 		// be deleted properly: we have to retry now.
@@ -505,15 +486,8 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 
 	// second, delete any existing rule that is not needed based on the current Pod
 	// specification.
-	entries := c.portTable.GetDataForPod(key)
-	for _, data := range entries {
-		proto := data.Protocol
-		if _, exists := podPorts[util.BuildPortProto(fmt.Sprint(data.PodPort), proto.Protocol)]; !exists {
-			klog.InfoS("Deleting NodePortLocal rule", "pod", klog.KObj(pod), "podIP", podIP, "port", data.PodPort, "protocol", proto.Protocol)
-			if err := c.portTable.DeleteRule(key, data.PodPort, proto.Protocol); err != nil {
-				return fmt.Errorf("failed to delete rule for Pod %s, Pod Port %d, Protocol %s: %w", key, data.PodPort, proto.Protocol, err)
-			}
-		}
+	if err := c.cleanupPodRules(key, podPorts); err != nil {
+		return err
 	}
 
 	// finally, we can check if the current annotation matches the expected one (which we built
@@ -521,6 +495,20 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	updatePodAnnotation := !compareNPLAnnotationLists(nplAnnotations, nplAnnotationsRequired)
 	if updatePodAnnotation {
 		return c.updatePodNPLAnnotation(pod, nplAnnotationsRequired)
+	}
+	return nil
+}
+
+func (c *NPLController) cleanupPodRules(key string, podPortsToKeep sets.Set[string]) error {
+	entries := c.portTable.GetDataForPod(key)
+	for _, data := range entries {
+		proto := data.Protocol
+		if exists := podPortsToKeep.Has(util.BuildPortProto(fmt.Sprint(data.PodPort), proto.Protocol)); !exists {
+			klog.InfoS("Deleting NodePortLocal rule", "pod", key, "podIP", data.PodIP, "port", data.PodPort, "protocol", proto.Protocol)
+			if err := c.portTable.DeleteRule(key, data.PodPort, proto.Protocol); err != nil {
+				return fmt.Errorf("failed to delete rule for Pod %s, Pod Port %d, Protocol %s: %w", key, data.PodPort, proto.Protocol, err)
+			}
+		}
 	}
 	return nil
 }

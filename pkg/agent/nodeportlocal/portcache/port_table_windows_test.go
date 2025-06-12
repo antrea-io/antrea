@@ -88,42 +88,6 @@ func TestDeleteRule(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestDeleteRulesForPod(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
-	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
-	portTable := newPortTable(mockPortRules, mockPortOpener)
-
-	npData := []*NodePortData{
-		{
-			PodKey:   podKey,
-			NodePort: startPort,
-			PodIP:    podIP,
-			PodPort:  1001,
-			Protocol: ProtocolSocketData{
-				Protocol: "tcp",
-			},
-		},
-		{
-			PodKey:   podKey,
-			NodePort: startPort + 1,
-			PodIP:    podIP,
-			PodPort:  1002,
-			Protocol: ProtocolSocketData{
-				Protocol: "udp",
-			},
-		},
-	}
-
-	for _, data := range npData {
-		portTable.addPortTableCache(data)
-		mockPortRules.EXPECT().DeleteRule(data.NodePort, podIP, data.PodPort, data.Protocol.Protocol)
-	}
-
-	err := portTable.DeleteRulesForPod(podKey)
-	require.NoError(t, err)
-}
-
 func TestAddRule(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
