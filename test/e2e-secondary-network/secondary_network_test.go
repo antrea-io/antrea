@@ -544,6 +544,12 @@ func TestSRIOVNetwork(t *testing.T) {
 
 	testData := &testData{e2eTestData: e2eTestData, networkType: networkTypeSriov, pods: pods}
 
+	// Get the original VF interface name on the Node.
+	pod1 := pods[0].podName
+	node1 := pods[0].nodeName
+	vfName := GetVFInterfaceName(t, e2eTestData, node1)
+	logs.Infof("The original VF interface name is %s on Node %s", vfName, node1)
+
 	ns := e2eTestData.GetTestNamespace()
 	if err := testData.createPods(t, ns); err != nil {
 		t.Fatalf("Error when create test Pods: %v", err)
@@ -561,4 +567,27 @@ func TestSRIOVNetwork(t *testing.T) {
 	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns); err != nil {
 		t.Fatalf("Error when checking the Pod annotation: %v", err)
 	}
+	if err := testData.assertVFName(t, e2eTestData, vfName, pod1, node1, ns); err != nil {
+		t.Fatalf("Error when checking the VF device name: %v", err)
+	}
+}
+
+func (data *testData) assertVFName(t *testing.T, e2eTestData *antreae2e.TestData, vfName, podName, nodeName, ns string) error {
+	//  Delete a Pod and check the VF device is recovered with the original interface name.
+	err := e2eTestData.DeletePodAndWait(5*time.Second, podName, ns)
+	if err == nil {
+		recoveredVFName := GetVFInterfaceName(t, e2eTestData, nodeName)
+		logs.Infof("The recovered VF interface name is %s on Node %s", recoveredVFName, nodeName)
+		assert.Equal(t, vfName, recoveredVFName, "VF name is not recovered correctly on Node %s, the expected VF name is %s, but got %s", nodeName, vfName, recoveredVFName)
+	}
+	return err
+}
+
+func GetVFInterfaceName(t *testing.T, e2eTestData *antreae2e.TestData, nodeName string) string {
+	cmd := "ip -d link show | grep -B1 0000:00:04.0 | head -n 1 | awk -F': ' '{print $2}' | xargs"
+	_, vfName, _, err := e2eTestData.RunCommandOnNode(nodeName, cmd)
+	if err != nil {
+		t.Fatalf("Error when checking the VF interface name on the Node %s: %v", nodeName, err)
+	}
+	return vfName
 }
