@@ -66,6 +66,8 @@ type Interface interface {
 
 	LinkSetName(link netlink.Link, name string) error
 
+	LinkSetAlias(link netlink.Link, name string) error
+
 	LinkAddAltName(link netlink.Link, name string) error
 
 	LinkDelAltName(link netlink.Link, name string) error
