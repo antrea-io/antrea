@@ -124,13 +124,14 @@ type FlowCollectorTLSConfig struct {
 	// created in the Namespace in which the Flow Aggregator is deployed, and it must contain
 	// the ca.crt key.
 	CASecretName string `yaml:"caSecretName,omitempty"`
-	// If this field is provided, this name will be used to check the server (flowCollector)
-	// certificate. By default the provided address will be used. This name will also be
-	// included as SNI information.
+	// ServerName is used to verify the hostname on the returned certificates. It is also
+	// included in the client's handshake (SNI) to support virtual hosting unless it is an IP
+	// address. If this field is omitted, the hostname used for certificate verification will
+	// default to the provided server address (flowCollector's address).
 	ServerName string `yaml:"serverName,omitempty"`
 	// Name of the Secret containing the client's certificate and private key for mTLS. If
 	// omitted, client authentication will be disabled. The Secret must be created in Namespace
-	// in which the Flow Aggregator is deployed, and it must of type kubernetes.io/tls and
+	// in which the Flow Aggregator is deployed, and it must be of type kubernetes.io/tls and
 	// contain the tls.crt and tls.key keys.
 	ClientSecretName string `yaml:"clientSecretName,omitempty"`
 	// TLS min version.

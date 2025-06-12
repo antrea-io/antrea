@@ -175,11 +175,7 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	e.config = config
 	e.externalFlowCollectorAddr = opt.ExternalFlowCollectorAddr
 	e.externalFlowCollectorProto = opt.ExternalFlowCollectorProto
-	if config.RecordFormat == "JSON" {
-		e.sendJSONRecord = true
-	} else {
-		e.sendJSONRecord = false
-	}
+	e.sendJSONRecord = config.RecordFormat == "JSON"
 	if config.ObservationDomainID != nil {
 		e.observationDomainID = *config.ObservationDomainID
 	} else {
@@ -249,21 +245,21 @@ func (e *IPFIXExporter) prepareExportingProcessTLSClientConfig() (*exporter.Expo
 	if e.tls.externalFlowCollectorCAPath != "" {
 		caBytes, err := afero.ReadFile(defaultFS, e.tls.externalFlowCollectorCAPath)
 		if err != nil {
-			return nil, fmt.Errorf("error when reading CA cert %q: %w", e.tls.externalFlowCollectorCAPath, err)
+			return nil, fmt.Errorf("error when reading CA cert %q, ensure Secret %q exists in this Namespace and has the 'ca.crt' key: %w", e.tls.externalFlowCollectorCAPath, e.config.TLS.CASecretName, err)
 		}
 		exporterConfig.CAData = caBytes
 	}
 	if e.tls.exporterCertPath != "" {
 		certBytes, err := afero.ReadFile(defaultFS, e.tls.exporterCertPath)
 		if err != nil {
-			return nil, fmt.Errorf("error when reading client cert %q: %w", e.tls.exporterCertPath, err)
+			return nil, fmt.Errorf("error when reading client cert %q, ensure Secret %q exists in this Namespace and has the 'tls.crt' key: %w", e.tls.exporterCertPath, e.config.TLS.ClientSecretName, err)
 		}
 		exporterConfig.CertData = certBytes
 	}
 	if e.tls.exporterKeyPath != "" {
 		keyBytes, err := afero.ReadFile(defaultFS, e.tls.exporterKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("error when reading client key %q: %w", e.tls.exporterKeyPath, err)
+			return nil, fmt.Errorf("error when reading client key %q, ensure Secret %q exists in this Namespace and has the 'tls.key' key: %w", e.tls.exporterKeyPath, e.config.TLS.ClientSecretName, err)
 		}
 		exporterConfig.KeyData = keyBytes
 	}
@@ -275,6 +271,11 @@ func (e *IPFIXExporter) initExportingProcess() error {
 	tlsClientConfig, err := e.prepareExportingProcessTLSClientConfig()
 	if err != nil {
 		return fmt.Errorf("error when preparing TLS config for exporter: %w", err)
+	}
+	if tlsClientConfig != nil {
+		klog.InfoS("TLS is enabled for IPFIXExporter", "protocol", e.externalFlowCollectorProto, "customRoots", tlsClientConfig.CAData != nil, "clientAuth", tlsClientConfig.CertData != nil)
+	} else {
+		klog.InfoS("TLS is disabled for IPFIXExporter", "protocol", e.externalFlowCollectorProto)
 	}
 	var expInput exporter.ExporterInput
 	if e.externalFlowCollectorProto == "tcp" {

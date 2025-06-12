@@ -39,7 +39,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
-	tlsutil "antrea.io/antrea/pkg/util/tls"
+	"antrea.io/antrea/pkg/util/tlstest"
 )
 
 const (
@@ -305,7 +305,7 @@ func createElementList(isIPv6 bool, mockIPFIXRegistry *ipfixtesting.MockIPFIXReg
 }
 
 func generateLocalhostCert(t *testing.T, isClient bool) ([]byte, []byte) {
-	certPEM, keyPEM, err := tlsutil.GenerateCert(
+	certPEM, keyPEM, err := tlstest.GenerateCert(
 		[]string{"localhost", "127.0.0.1"},
 		time.Unix(0, 0),
 		100*365*24*time.Hour,

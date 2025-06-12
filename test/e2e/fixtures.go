@@ -29,7 +29,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/features"
-	tlsutil "antrea.io/antrea/pkg/util/tls"
+	"antrea.io/antrea/pkg/util/tlstest"
 )
 
 func skipIfNotBenchmarkTest(tb testing.TB) {
@@ -296,12 +296,12 @@ func setupFlowAggregator(tb testing.TB, testData *TestData, o flowVisibilityTest
 	var ipfixServerCert, ipfixServerKey, ipfixClientCert, ipfixClientKey []byte
 	if o.ipfixCollector.tls {
 		var err error
-		if ipfixServerCert, ipfixServerKey, err = tlsutil.GenerateCert([]string{"ipfix-collector"}, time.Unix(0, 0), 100*365*24*time.Hour, true, false, 0, "P256", false); err != nil {
+		if ipfixServerCert, ipfixServerKey, err = tlstest.GenerateCert([]string{"ipfix-collector"}, time.Unix(0, 0), 100*365*24*time.Hour, true, false, 0, "P256", false); err != nil {
 			return fmt.Errorf("failed to generate server certificate for ipfix-collector: %w", err)
 		}
 		if o.ipfixCollector.clientAuth {
 			var err error
-			if ipfixClientCert, ipfixClientKey, err = tlsutil.GenerateCert([]string{"ipfix-collector"}, time.Unix(0, 0), 100*365*24*time.Hour, true, true, 0, "P256", false); err != nil {
+			if ipfixClientCert, ipfixClientKey, err = tlstest.GenerateCert([]string{"ipfix-collector"}, time.Unix(0, 0), 100*365*24*time.Hour, true, true, 0, "P256", false); err != nil {
 				return fmt.Errorf("failed to generate client certificate for ipfix-collector: %w", err)
 			}
 		}
