@@ -202,6 +202,7 @@ func (c *ExternalIPPoolController) Run(stopCh <-chan struct{}) {
 func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.ExternalIPPool) bool {
 	changed := false
 	c.ipAllocatorMutex.Lock()
+	includeBorderIPs := ipPool.Spec.IncludeBorderIPs
 	defer c.ipAllocatorMutex.Unlock()
 
 	existingIPRanges := sets.New[string]()
@@ -231,9 +232,13 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				// Don't use the IPv4 network's broadcast address.
 				var reservedIPs []net.IP
 				if utilnet.IsIPv4CIDR(ipNet) {
-					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
+					lastAddr := make(net.IP, len(ipNet.IP.To4()))
+					if includeBorderIPs == false || (lastAddr != nil && (lastAddr[3] == 0 || lastAddr[3] == 255)) {
+						reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
+					}
 				}
-				return ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
+				newIPAllocator, _ := ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
+				return ipallocator.ValidateAllocatorforBorderIPs(newIPAllocator, ipNet, includeBorderIPs)
 			} else {
 				if existingIPRanges.Has(fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)) {
 					return nil, nil
