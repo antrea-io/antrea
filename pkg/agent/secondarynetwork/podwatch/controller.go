@@ -44,6 +44,7 @@ import (
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -383,7 +384,7 @@ func (pc *PodController) configureSecondaryInterface(
 		ifConfigErr = pc.interfaceConfigurator.ConfigureVLANSecondaryInterface(
 			pod.Name, pod.Namespace,
 			podCNIInfo.containerID, podCNIInfo.netNS, network.InterfaceRequest,
-			int(networkConfig.MTU), ipamResult)
+			networkConfig.MTU, ipamResult)
 	}
 	return &ipamResult.Result, ifConfigErr
 }
@@ -492,15 +493,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		return savedErr
 	}
 
-	// Update the Pod's network status annotation
-	if netStatus != nil {
-		if err := netdefutils.SetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
-			klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
-		} else {
-			klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
-		}
-	}
-	return nil
+	return k8s.UpdatePodNetworkStatusAnnotation(pc.kubeClient, context.TODO(), netStatus, pod.Name, pod.Namespace, false)
 }
 
 func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
@@ -513,7 +506,6 @@ func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
 	}
 	if networkConfig.Type != cniserver.AntreaCNIType {
 		return &networkConfig, fmt.Errorf("not Antrea CNI type '%s'", networkConfig.Type)
-
 	}
 	if networkConfig.NetworkType != sriovNetworkType && networkConfig.NetworkType != vlanNetworkType {
 		return &networkConfig, fmt.Errorf("secondary network type '%s' not supported", networkConfig.NetworkType)
@@ -592,7 +584,6 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 			klog.InfoS("Unknown Antrea interface type for the secondary bridge", "type", interfaceType)
 			continue
 		}
-
 		ifaceList = append(ifaceList, intf)
 	}
 
@@ -620,7 +611,7 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 	for _, containerConfig := range secondaryInterfaces {
 		_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
 		if !exists || containerConfig.OFPort == -1 {
-			// Deletes ports not in the CNI cache.
+			// Delete ports not in the CNI cache.
 			staleInterfaces = append(staleInterfaces, containerConfig)
 		}
 	}

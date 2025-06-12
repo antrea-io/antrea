@@ -578,7 +578,7 @@ func newTester() *cmdAddDelTester {
 		nil,
 		k8sFake.NewSimpleClientset(),
 		routeMock,
-		false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
+		false, false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
 		tester.podNetworkWait.Increment(),
 		tester.flowRestoreCompleteWait,
 	)
@@ -747,7 +747,7 @@ func setupChainTest(
 			nil,
 			k8sFake.NewSimpleClientset(),
 			routeMock,
-			true, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
+			true, false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
 			podNetworkWait, flowRestoreCompleteWait)
 	} else {
 		server = inServer
@@ -938,7 +938,7 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 		nil,
 		k8sClient,
 		routeMock,
-		false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
+		false, false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
 		podNetworkWait, flowRestoreCompleteWait,
 	)
 
