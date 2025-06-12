@@ -269,7 +269,7 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 		defer func() {
 			if !success {
 				klog.V(2).InfoS("Deleting veth devices for container during rollback", "containerID", containerID)
-				if err := ipDelLinkByName(hostVeth.Name); err != nil && err != ip.ErrLinkNotFound {
+				if err := ipDelLinkByName(containerVeth.Name); err != nil && err != ip.ErrLinkNotFound {
 					klog.ErrorS(err, "Failed to delete veth devices for container during rollback", "containerID", containerID)
 				}
 			}
