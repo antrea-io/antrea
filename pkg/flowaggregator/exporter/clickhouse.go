@@ -38,7 +38,7 @@ type ClickHouseExporter struct {
 
 const (
 	CACertFile      = "ca.crt"
-	CertDir         = "/etc/flow-aggregator/certs"
+	CertDir         = "/etc/flow-aggregator/certs/clickhouse"
 	DefaultInterval = 1 * time.Second
 	Timeout         = 1 * time.Minute
 )

@@ -33,7 +33,7 @@ func TestGetInfoElement(t *testing.T) {
 			testname:      "Invalid enterpriseID",
 			name:          "sourcePodNamespace",
 			enterpriseID:  1,
-			expectedError: "Registry with EnterpriseID 1 is not supported.",
+			expectedError: "registry with EnterpriseID 1 is not supported",
 		},
 		{
 			testname:          "Information element with given enterpriseID and name exists in registry",
@@ -46,7 +46,7 @@ func TestGetInfoElement(t *testing.T) {
 			testname:      "Information element with given name does not exist in registry",
 			name:          "sourcePod",
 			enterpriseID:  0,
-			expectedError: "Information element with name sourcePod in registry with enterpriseID 0 cannot be found.",
+			expectedError: "information element with name sourcePod in registry with enterpriseID 0 cannot be found",
 		},
 	}
 	for _, tt := range tc {

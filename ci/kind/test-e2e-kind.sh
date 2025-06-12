@@ -264,7 +264,7 @@ COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
                     "antrea/nginx:1.21.6-alpine" \
                     "antrea/toolbox:1.5-1")
 
-FLOW_VISIBILITY_IMAGE_LIST=("antrea/ipfix-collector:v0.13.0" \
+FLOW_VISIBILITY_IMAGE_LIST=("antrea/ipfix-collector:v0.15.0" \
                             "antrea/clickhouse-operator:0.21.0" \
                             "antrea/metrics-exporter:0.21.0" \
                             "antrea/clickhouse-server:23.4")
@@ -347,7 +347,7 @@ function setup_cluster {
     args="$args --flexible-ipam"
   fi
   echo "creating test bed with args $args"
-  eval "timeout 600 $TESTBED_CMD create kind $args"
+  eval "timeout 1200 $TESTBED_CMD create kind $args"
 }
 
 function run_test {
@@ -371,12 +371,15 @@ function run_test {
   fi
 
   if $flow_visibility; then
-      timeout="30m"
+      timeout="45m"
       flow_visibility_args="-run=TestFlowAggregator --flow-visibility"
+      # This is needed so that the FlowAggregator is already configured to mount the Secrets
+      # necessary for (m)TLS testing. The Secret names must match the ones expected by the e2e tests.
+      flow_visibility_manifest_args="--extra-helm-values flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca"
       if $coverage; then
-          $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
+          $FLOWAGGREGATOR_YML_CMD --coverage $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
       else
-          $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+          $FLOWAGGREGATOR_YML_CMD $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
       fi
       $HELM template "$FLOW_VISIBILITY_CHART"  | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
       $HELM template "$FLOW_VISIBILITY_CHART" --set "secureConnection.enable=true" | docker exec -i kind-control-plane dd of=/root/flow-visibility-tls.yml

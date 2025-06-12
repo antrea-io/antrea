@@ -230,31 +230,48 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 	}{
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL:      "tcp://clickhouse-clickhouse.flow-visibility.svc:9000",
-				secureConnection: false,
+				databaseURL: "tcp://clickhouse-clickhouse.flow-visibility.svc:9000",
 			},
-			name: "tcp",
+			name: "clickhouse-tcp",
 		},
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL:      "http://clickhouse-clickhouse.flow-visibility.svc:8123",
-				secureConnection: false,
+				databaseURL: "http://clickhouse-clickhouse.flow-visibility.svc:8123",
 			},
-			name: "http",
+			name: "clickhouse-http",
 		},
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL:      "tls://clickhouse-clickhouse.flow-visibility.svc:9440",
-				secureConnection: true,
+				databaseURL:              "tls://clickhouse-clickhouse.flow-visibility.svc:9440",
+				databaseSecureConnection: true,
 			},
-			name: "tls",
+			name: "clickhouse-tls",
 		},
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL:      "https://clickhouse-clickhouse.flow-visibility.svc:8443",
-				secureConnection: true,
+				databaseURL:              "https://clickhouse-clickhouse.flow-visibility.svc:8443",
+				databaseSecureConnection: true,
 			},
-			name: "https",
+			name: "clickhouse-https",
+		},
+		{
+			flowVisibilityTestOptions: flowVisibilityTestOptions{
+				databaseURL: "tcp://clickhouse-clickhouse.flow-visibility.svc:9000",
+				ipfixCollector: flowVisibilityIPFIXTestOptions{
+					tls: true,
+				},
+			},
+			name: "ipfix-tls",
+		},
+		{
+			flowVisibilityTestOptions: flowVisibilityTestOptions{
+				databaseURL: "tcp://clickhouse-clickhouse.flow-visibility.svc:9000",
+				ipfixCollector: flowVisibilityIPFIXTestOptions{
+					tls:        true,
+					clientAuth: true,
+				},
+			},
+			name: "ipfix-mtls",
 		},
 	}
 	for _, o := range testCases {
@@ -317,27 +334,36 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
 
-	var err error
-	data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
-		mode:      flowaggregatorconfig.AggregatorModeProxy,
-		clusterID: customClusterID,
-	})
-	require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
+	runTest := func(t *testing.T, tls bool, clientAuth bool) {
+		var err error
+		data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
+			mode:      flowaggregatorconfig.AggregatorModeProxy,
+			clusterID: customClusterID,
+			ipfixCollector: flowVisibilityIPFIXTestOptions{
+				tls:        tls,
+				clientAuth: clientAuth,
+			},
+		})
+		require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
 
-	k8sUtils, err = NewKubernetesUtils(data)
-	require.NoError(t, err, "Error when creating Kubernetes utils client")
+		k8sUtils, err = NewKubernetesUtils(data)
+		require.NoError(t, err, "Error when creating Kubernetes utils client")
 
-	podAIPs, podBIPs, _, _, _, err = createPerftestPods(data)
-	require.NoError(t, err, "Error when creating perftest Pods")
+		podAIPs, podBIPs, _, _, _, err = createPerftestPods(data)
+		require.NoError(t, err, "Error when creating perftest Pods")
 
-	if v4Enabled {
-		t.Run("IPv4", func(t *testing.T) { testHelperProxyMode(t, data, false) })
+		if v4Enabled {
+			t.Run("IPv4", func(t *testing.T) { testHelperProxyMode(t, data, false) })
+		}
+
+		if v6Enabled {
+			t.Run("IPv6", func(t *testing.T) { testHelperProxyMode(t, data, true) })
+		}
 	}
 
-	if v6Enabled {
-		t.Run("IPv6", func(t *testing.T) { testHelperProxyMode(t, data, true) })
-	}
-
+	t.Run("plaintext", func(t *testing.T) { runTest(t, false, false) })
+	t.Run("TLS", func(t *testing.T) { runTest(t, true, false) })
+	t.Run("mTLS", func(t *testing.T) { runTest(t, true, true) })
 }
 
 func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool) {
