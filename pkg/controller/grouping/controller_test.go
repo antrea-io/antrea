@@ -15,12 +15,14 @@
 package grouping
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
@@ -104,6 +106,53 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			}, time.Second, 10*time.Millisecond, "GroupEntityIndex hasn't been synced in 1 second after starting GroupEntityController")
 		})
 	}
+}
+
+func TestGroupEntityControllerHandlePodUpdate(t *testing.T) {
+	featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, true)
+	var objs []runtime.Object
+	initialPods := []*v1.Pod{podFoo1, podFoo2, podBar1}
+	initialNamespaces := []*v1.Namespace{nsDefault, nsOther}
+	initialGroups := []*group{groupPodFooType1, groupPodFooType2, groupPodBarType1, groupPodFooAllNamespaceType1}
+	for _, pod := range initialPods {
+		objs = append(objs, pod)
+	}
+	for _, namespace := range initialNamespaces {
+		objs = append(objs, namespace)
+	}
+	index := NewGroupEntityIndex()
+	for _, group := range initialGroups {
+		index.AddGroup(group.groupType, group.groupName, group.groupSelector)
+	}
+
+	client := fake.NewSimpleClientset(objs...)
+	crdClient := fakeversioned.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	stopCh := make(chan struct{})
+
+	c := NewGroupEntityController(index, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().ExternalEntities())
+	informerFactory.Start(stopCh)
+	crdInformerFactory.Start(stopCh)
+	go c.groupEntityIndex.Run(stopCh)
+	go c.Run(stopCh)
+	// Wait for the GroupEntityIndex to be synced
+	assert.Eventually(t, func() bool {
+		return index.HasSynced()
+	}, time.Second, 10*time.Millisecond, "GroupEntityIndex hasn't been synced in 1 second after starting GroupEntityController")
+
+	client.CoreV1().Pods("default").Update(context.TODO(), podFoo1Succeeded, metav1.UpdateOptions{})
+	client.CoreV1().Pods("default").Update(context.TODO(), podFoo2Failed, metav1.UpdateOptions{})
+	client.CoreV1().Pods("default").Update(context.TODO(), podBar1Running, metav1.UpdateOptions{})
+
+	assert.Eventually(t, func() bool {
+		// The following two Foo Pods should be removed from all groups as they are terminated
+		_, groupForFoo1Found := index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
+		_, groupForFoo2Found := index.GetGroupsForPod(podFoo2.Namespace, podFoo2.Name)
+		// The following Bar Pod should still remain in the group that selects it
+		_, groupForBar1Found := index.GetGroupsForPod(podBar1.Namespace, podBar1.Name)
+		return !groupForFoo1Found && !groupForFoo2Found && groupForBar1Found
+	}, time.Second, 10*time.Millisecond, "GroupEntityIndex did not process Pod update event correctly")
 }
 
 func TestPodIPsIndexFunc(t *testing.T) {
