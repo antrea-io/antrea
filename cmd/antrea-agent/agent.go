@@ -114,7 +114,6 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
-	k8s.OverrideKubeAPIServer(o.config.KubeAPIServerOverride)
 
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClient, informerDefaultResync, informers.WithTransform(k8s.NewTrimmer(k8s.TrimNode)))
 	crdInformerFactory := crdinformers.NewSharedInformerFactoryWithOptions(crdClient, informerDefaultResync, crdinformers.WithTransform(k8s.NewTrimmer()))
