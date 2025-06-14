@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,6 +69,20 @@ func (m *MockInterface) GetPodByIPAndTime(ip string, startTime time.Time) (*v1.P
 func (mr *MockInterfaceMockRecorder) GetPodByIPAndTime(ip, startTime any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPodByIPAndTime", reflect.TypeOf((*MockInterface)(nil).GetPodByIPAndTime), ip, startTime)
+}
+
+// HasSynced mocks base method.
+func (m *MockInterface) HasSynced() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasSynced")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasSynced indicates an expected call of HasSynced.
+func (mr *MockInterfaceMockRecorder) HasSynced() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasSynced", reflect.TypeOf((*MockInterface)(nil).HasSynced))
 }
 
 // Run mocks base method.
