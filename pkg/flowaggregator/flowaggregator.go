@@ -16,7 +16,9 @@ package flowaggregator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -30,6 +32,7 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
@@ -117,6 +120,7 @@ type flowAggregator struct {
 	k8sClient                   kubernetes.Interface
 	podStore                    podstore.Interface
 	numRecordsExported          int64
+	numRecordsDropped           int64
 	updateCh                    chan *options.Options
 	configFile                  string
 	configWatcher               *fsnotify.Watcher
@@ -364,6 +368,19 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	var wg, ipfixProcessesWg sync.WaitGroup
 
+	// We first wait for the PodStore to sync to avoid lookup failures when processing records.
+	const podStoreSyncTimeout = 30 * time.Second
+	klog.InfoS("Waiting for PodStore to sync", "timeout", podStoreSyncTimeout)
+	if err := wait.PollUntilContextTimeout(wait.ContextForChannel(stopCh), 100*time.Millisecond, podStoreSyncTimeout, true, func(ctx context.Context) (done bool, err error) {
+		return fa.podStore.HasSynced(), nil
+	}); err != nil {
+		// PodStore not synced within a reasonable time. We continue with the rest of the
+		// function but there may be error logs when processing records.
+		klog.ErrorS(err, "PodStore not synced", "timeout", podStoreSyncTimeout)
+	} else {
+		klog.InfoS("PodStore synced")
+	}
+
 	ipfixProcessesWg.Add(1)
 	go func() {
 		// Waiting for this function to return on stop makes it easier to set expectations
@@ -580,9 +597,15 @@ func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 			return
 		}
 
+		obsDomainID := msg.GetObsDomainID()
+		exporterAddress := msg.GetExportAddress()
 		records := set.GetRecords()
 		for _, record := range records {
-			if err := fa.proxyRecord(record, msg.GetObsDomainID(), msg.GetExportAddress()); err != nil {
+			if err := fa.proxyRecord(record, obsDomainID, exporterAddress); err != nil {
+				fa.numRecordsDropped += 1
+				if errors.Is(err, exporter.ErrIPFIXExporterBackoff) {
+					continue
+				}
 				klog.ErrorS(err, "Failed to proxy record")
 			}
 		}
@@ -607,6 +630,7 @@ func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
 			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported)
+			klog.V(4).InfoS("Total number of records dropped", "count", fa.numRecordsDropped)
 			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
 		case opt, ok := <-updateCh:
 			if !ok {
@@ -913,6 +937,7 @@ func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
 	return querier.Metrics{
 		NumRecordsExported:     fa.numRecordsExported,
 		NumRecordsReceived:     fa.collectingProcess.GetNumRecordsReceived(),
+		NumRecordsDropped:      fa.numRecordsDropped,
 		NumFlows:               fa.getNumFlows(),
 		NumConnToCollector:     fa.collectingProcess.GetNumConnToCollector(),
 		WithClickHouseExporter: fa.clickHouseExporter != nil,

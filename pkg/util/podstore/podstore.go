@@ -42,6 +42,7 @@ type PodStore struct {
 	timestampMap map[types.UID]*podTimestamps
 	clock        clock.Clock
 	mutex        sync.RWMutex
+	hasSynced    func() bool
 }
 
 type podTimestamps struct {
@@ -54,6 +55,7 @@ type podTimestamps struct {
 type Interface interface {
 	GetPodByIPAndTime(ip string, startTime time.Time) (*corev1.Pod, bool)
 	Run(stopCh <-chan struct{})
+	HasSynced() bool
 }
 
 // NewPodStoreWithClock creates a Pod Store with a custom clock,
@@ -70,7 +72,7 @@ func NewPodStoreWithClock(podInformer cache.SharedIndexInformer, clock clock.Wit
 		timestampMap: map[types.UID]*podTimestamps{},
 		mutex:        sync.RWMutex{},
 	}
-	podInformer.AddEventHandler(cache.FilteringResourceEventHandler{
+	registration, _ := podInformer.AddEventHandler(cache.FilteringResourceEventHandler{
 		// Ignore hostNetwork Pods
 		FilterFunc: func(obj interface{}) bool {
 			if pod, ok := obj.(*corev1.Pod); ok {
@@ -90,6 +92,8 @@ func NewPodStoreWithClock(podInformer cache.SharedIndexInformer, clock clock.Wit
 			DeleteFunc: s.onPodDelete,
 		},
 	})
+	// registration.HasSynced returns true when event handlers have been called for the initial list.
+	s.hasSynced = registration.HasSynced
 	return s
 }
 
@@ -271,6 +275,11 @@ func (s *PodStore) processDeleteQueueItem(podDeletionKey *corev1.Pod) bool {
 	delete(s.timestampMap, podUID)
 	klog.V(4).InfoS("Removed Pod from Pod Store", "UID", podUID)
 	return true
+}
+
+// HasSynced returns true when the event handler has been called for the initial list of Pods.
+func (s *PodStore) HasSynced() bool {
+	return s.hasSynced()
 }
 
 func podKeyFunc(obj interface{}) (string, error) {

@@ -21,6 +21,7 @@ import (
 type Metrics struct {
 	NumRecordsExported     int64
 	NumRecordsReceived     int64
+	NumRecordsDropped      int64
 	NumFlows               int64
 	NumConnToCollector     int64
 	WithClickHouseExporter bool
