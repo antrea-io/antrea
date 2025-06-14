@@ -1442,9 +1442,8 @@ Flows 1-2 match packets originating from local Pods and destined for the transpo
 them to table [L2ForwardingCalc] to bypass Egress SNAT. `ToGatewayRegMark` is loaded, indicating that the output port
 of the packets is the local Antrea gateway.
 
-Flow 3 matches packets originating from local Pods and destined for the Services listed in the option
-`antreaProxy.skipServices`, and then forwards them to table [L2ForwardingCalc] to bypass Egress SNAT. Similar to flows
-1-2, `ToGatewayRegMark` is also loaded.
+Flow 3 matches packets originating from local Pods and destined for Service CIDR, and then forwards them to table
+[L2ForwardingCalc] to bypass Egress SNAT. Similar to flows 1-2, `ToGatewayRegMark` is also loaded.
 
 The packets, matched by flows 1-3, are forwarded to this table by flow 8 in table [L3Forwarding], as they are classified
 as part of traffic destined for the external network. However, these packets are not intended to undergo Egress SNAT.
