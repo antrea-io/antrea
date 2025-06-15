@@ -25,9 +25,12 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/google/uuid"
+	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -190,7 +193,7 @@ func TestRemoveInterface(t *testing.T) {
 	})
 }
 
-func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ipam.IPAMDriver, ipamType string, enableSecondaryNetworkIPAM, isChaining bool) *CNIServer {
+func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ipam.IPAMDriver, ipamType string, enableSecondaryNetworkIPAM, isChaining, enableSecondaryNetwork bool) *CNIServer {
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
@@ -204,6 +207,7 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ip
 	cniServer.nodeConfig = &config.NodeConfig{Name: "node1", PodIPv4CIDR: nodePodCIDRv4, GatewayConfig: gateway}
 	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	cniServer.enableSecondaryNetworkIPAM = enableSecondaryNetworkIPAM
+	cniServer.secondaryNetworkEnabled = enableSecondaryNetwork
 	cniServer.isChaining = isChaining
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer
@@ -224,7 +228,6 @@ func createCNIRequestAndInterfaceName(t *testing.T, name string, cniType string,
 
 func TestCmdAdd(t *testing.T) {
 	ctx := context.TODO()
-
 	versionedIPAMResult, err := ipamResult.GetAsVersion(supportedCNIVersion)
 	assert.NoError(t, err)
 
@@ -235,6 +238,7 @@ func TestCmdAdd(t *testing.T) {
 		ipamError                  error
 		cniType                    string
 		enableSecondaryNetworkIPAM bool
+		networkAttachmentAnnotNum  int
 		isChaining                 bool
 		connectOVS                 bool
 		migrateRoute               bool
@@ -277,6 +281,7 @@ func TestCmdAdd(t *testing.T) {
 			name:                       "add-general-cni",
 			ipamType:                   "test-cni-ipam",
 			ipamAdd:                    true,
+			networkAttachmentAnnotNum:  1,
 			enableSecondaryNetworkIPAM: false,
 			isChaining:                 false,
 			connectOVS:                 true,
@@ -299,11 +304,15 @@ func TestCmdAdd(t *testing.T) {
 			ipam.ResetIPAMResults()
 			controller := gomock.NewController(t)
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
-			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining)
+			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, true)
 			testIfaceConfigurator := newTestInterfaceConfigurator()
 			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			testIfaceConfigurator.hostIfaceName = hostInterfaceName
 			cniserver.podConfigurator.ifConfigurator = testIfaceConfigurator
+			networkAttachmentAnnot := map[string]string{netdefv1.NetworkAttachmentAnnot: "fake-k8s.v1.cni.cncf.io/network"}
+			pod.Annotations = networkAttachmentAnnot
+			kubeClient := fakeclientset.NewClientset(pod)
+			cniserver.kubeClient = kubeClient
 			if tc.ipamAdd {
 				if tc.enableSecondaryNetworkIPAM {
 					mockIPAMResult := ipamResult
@@ -360,6 +369,12 @@ func TestCmdAdd(t *testing.T) {
 				assert.NoError(t, err)
 				successResponse := resultToResponse(versionedResult)
 				assert.Equal(t, successResponse, resp)
+				podItem, err := cniserver.kubeClient.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				assert.NoError(t, err, "Get Pod error")
+				networkStatus, err := netdefutils.GetNetworkStatus(podItem)
+				assert.NoError(t, err, "Get network status from Pod annotation error")
+				assert.Equal(t, tc.networkAttachmentAnnotNum, len(networkStatus), "The Pod annotation should contain "+
+					"network status of the primary network interface")
 			}
 		})
 	}
@@ -472,7 +487,7 @@ func TestCmdDel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
-			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining)
+			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, false)
 			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			containerID := requestMsg.CniArgs.ContainerId
 			containerIfaceConfig := interfacestore.NewContainerInterface(hostInterfaceName, containerID,
@@ -549,7 +564,7 @@ func TestCmdCheck(t *testing.T) {
 	}
 	t.Run("secondary-IPAM", func(t *testing.T) {
 		ipamType := ipam.AntreaIPAMType
-		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, true, false)
+		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, true, false, false)
 		requestMsg, _ := prepareRequest("pod0", "cniType", ipamType, false)
 		ipamSecondaryNetworkCheck = func(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) error {
 			return nil
@@ -563,7 +578,7 @@ func TestCmdCheck(t *testing.T) {
 	})
 	t.Run("secondary-IPAM-failure", func(t *testing.T) {
 		ipamType := ipam.AntreaIPAMType
-		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, true, false)
+		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, true, false, false)
 		requestMsg, _ := prepareRequest("pod0", "cniType", ipamType, false)
 		ipamSecondaryNetworkCheck = func(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) error {
 			return errors.New("failed to check secondary IPAM response")
@@ -583,7 +598,7 @@ func TestCmdCheck(t *testing.T) {
 	})
 	t.Run("chaining", func(t *testing.T) {
 		ipamType := "test-check"
-		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, false, true)
+		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, false, true, false)
 		requestMsg, hostInterfaceName := prepareRequest("pod1", "", ipamType, true)
 		testIfaceConfigurator := newTestInterfaceConfigurator()
 		testIfaceConfigurator.hostIfaceName = hostInterfaceName
@@ -594,7 +609,7 @@ func TestCmdCheck(t *testing.T) {
 	})
 	t.Run("check-general-cni", func(t *testing.T) {
 		ipamType := "test-check"
-		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, false, false)
+		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, false, false, false)
 		requestMsg, hostInterfaceName := prepareRequest("pod2", "", ipamType, true)
 		testIfaceConfigurator := newTestInterfaceConfigurator()
 		testIfaceConfigurator.hostIfaceName = hostInterfaceName
