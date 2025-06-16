@@ -274,8 +274,8 @@ func (l *LatencyStore) ConvertList(currentNodeName string) []statsv1alpha1.PeerN
 			}
 			entry := statsv1alpha1.TargetIPLatencyStats{
 				TargetIP:                   nodeIPStr,
-				LastSendTime:               metav1.NewTime(latencyEntry.LastSendTime),
-				LastRecvTime:               metav1.NewTime(latencyEntry.LastRecvTime),
+				LastSendTime:               metav1.NewMicroTime(latencyEntry.LastSendTime),
+				LastRecvTime:               metav1.NewMicroTime(latencyEntry.LastRecvTime),
 				LastMeasuredRTTNanoseconds: latencyEntry.LastMeasuredRTT.Nanoseconds(),
 			}
 			targetIPLatencyStats = append(targetIPLatencyStats, entry)
