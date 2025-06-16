@@ -28,7 +28,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/vmware/go-ipfix/pkg/collector"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
-	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -36,6 +35,7 @@ import (
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
+	"antrea.io/antrea/pkg/flowaggregator/intermediate"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
@@ -43,7 +43,7 @@ import (
 )
 
 var (
-	aggregationElements = &ipfixintermediate.AggregationElements{
+	aggregationElements = &intermediate.AggregationElements{
 		NonStatsElements:                   infoelements.NonStatsElementList,
 		StatsElements:                      infoelements.StatsElementList,
 		AggregatedSourceStatsElements:      infoelements.AntreaSourceStatsElementList,
@@ -108,7 +108,7 @@ type flowAggregator struct {
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
 	preprocessor                *preprocessor
-	aggregationProcess          ipfix.IPFIXAggregationProcess
+	aggregationProcess          intermediate.AggregationProcess
 	activeFlowRecordTimeout     time.Duration
 	inactiveFlowRecordTimeout   time.Duration
 	registry                    ipfix.IPFIXRegistry
@@ -349,7 +349,7 @@ func (fa *flowAggregator) InitPreprocessor() error {
 
 func (fa *flowAggregator) InitAggregationProcess() error {
 	var err error
-	apInput := ipfixintermediate.AggregationInput{
+	apInput := intermediate.AggregationInput{
 		MessageChan:           fa.preprocessorOutCh,
 		WorkerNum:             aggregationWorkerNum,
 		CorrelateFields:       correlateFields,
@@ -357,7 +357,7 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 		InactiveExpiryTimeout: fa.inactiveFlowRecordTimeout,
 		AggregateElements:     aggregationElements,
 	}
-	fa.aggregationProcess, err = ipfixintermediate.InitAggregationProcess(apInput)
+	fa.aggregationProcess, err = intermediate.InitAggregationProcess(apInput)
 	return err
 }
 
@@ -701,7 +701,7 @@ func (fa *flowAggregator) flushExporters() error {
 	return nil
 }
 
-func (fa *flowAggregator) sendAggregatedRecord(key ipfixintermediate.FlowKey, record *ipfixintermediate.AggregationFlowRecord) error {
+func (fa *flowAggregator) sendAggregatedRecord(key intermediate.FlowKey, record *intermediate.AggregationFlowRecord) error {
 	isRecordIPv4 := fa.aggregationProcess.IsAggregatedRecordIPv4(*record)
 	startTime, err := fa.getRecordStartTime(record.Record)
 	if err != nil {
@@ -895,7 +895,7 @@ func (fa *flowAggregator) addFlowDirection(record ipfixentities.Record, directio
 	return nil
 }
 
-func (fa *flowAggregator) GetFlowRecords(flowKey *ipfixintermediate.FlowKey) []map[string]interface{} {
+func (fa *flowAggregator) GetFlowRecords(flowKey *intermediate.FlowKey) []map[string]interface{} {
 	if fa.aggregationProcess != nil {
 		return fa.aggregationProcess.GetRecords(flowKey)
 	}

@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
-	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/yaml.v2"
@@ -42,6 +41,8 @@ import (
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	exportertesting "antrea.io/antrea/pkg/flowaggregator/exporter/testing"
+	"antrea.io/antrea/pkg/flowaggregator/intermediate"
+	intermediatetesting "antrea.io/antrea/pkg/flowaggregator/intermediate/testing"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
@@ -60,14 +61,14 @@ func init() {
 }
 
 func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
-	ipv4Key := ipfixintermediate.FlowKey{
+	ipv4Key := intermediate.FlowKey{
 		SourceAddress:      "10.0.0.1",
 		DestinationAddress: "10.0.0.2",
 		Protocol:           6,
 		SourcePort:         1234,
 		DestinationPort:    5678,
 	}
-	ipv6Key := ipfixintermediate.FlowKey{
+	ipv6Key := intermediate.FlowKey{
 		SourceAddress:      "2001:0:3238:dfe1:63::fefb",
 		DestinationAddress: "2001:0:3238:dfe1:63::fefc",
 		Protocol:           6,
@@ -91,7 +92,7 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 	testcases := []struct {
 		name             string
 		isIPv6           bool
-		flowKey          ipfixintermediate.FlowKey
+		flowKey          intermediate.FlowKey
 		includePodLabels bool
 	}{
 		{
@@ -128,7 +129,7 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 			mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 			mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-			mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
+			mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
 
 			clusterUUID := uuid.New()
 			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
@@ -150,7 +151,7 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 
 			mockExporters := []*exportertesting.MockInterface{mockIPFIXExporter, mockClickHouseExporter}
 
-			flowRecord := &ipfixintermediate.AggregationFlowRecord{
+			flowRecord := &intermediate.AggregationFlowRecord{
 				Record:      mockRecord,
 				ReadyToSend: true,
 			}
@@ -692,7 +693,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil)
 	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
-	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
+	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
 
 	// create dummy watcher: we will not add any files or directory to it.
 	configWatcher, err := fsnotify.NewWatcher()
@@ -952,7 +953,7 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
-	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
+	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 	mockS3Exporter := exportertesting.NewMockInterface(ctrl)

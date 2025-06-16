@@ -51,6 +51,7 @@ trap "popd; rm -rf ${ANTREA_CODEGEN_PATH}" EXIT
 function copy_generated_code_to_source {
   git ls-files --modified --others --exclude-standard | while read file; do
       if [ -e $file ]; then
+          mkdir -p $(dirname ${ANTREA_SRC_PATH}/$file)
           cp $file ${ANTREA_SRC_PATH}/$file
       else
           rm ${ANTREA_SRC_PATH}/$file
@@ -90,12 +91,13 @@ MOCKGEN_TARGETS=(
   "pkg/controller/networkpolicy EndpointQuerier,PolicyRuleQuerier testing"
   "pkg/controller/querier ControllerQuerier testing"
   "pkg/flowaggregator/exporter Interface testing"
-  "pkg/ipfix IPFIXExportingProcess,IPFIXBufferedExporter,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXBufferedExporter,IPFIXRegistry,IPFIXCollectingProcess testing"
   "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder,Group,BucketBuilder,PacketOutBuilder,Meter,MeterBandBuilder testing"
   "pkg/ovs/ovsconfig OVSBridgeClient testing"
   "pkg/ovs/ovsctl OVSCtlClient testing"
   "pkg/ovs/ovsctl OVSOfctlRunner,OVSAppctlRunner ."
   "pkg/querier AgentNetworkPolicyInfoQuerier,AgentMulticastInfoQuerier,EgressQuerier,AgentBGPPolicyInfoQuerier testing"
+  "pkg/flowaggregator/intermediate AggregationProcess testing"
   "pkg/flowaggregator/querier FlowAggregatorQuerier testing"
   "pkg/flowaggregator/s3uploader S3UploaderAPI testing"
   "pkg/util/podstore Interface testing"

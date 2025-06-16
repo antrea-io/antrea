@@ -21,10 +21,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vmware/go-ipfix/pkg/intermediate"
 	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/flowaggregator/apis"
+	"antrea.io/antrea/pkg/flowaggregator/intermediate"
 	queriertest "antrea.io/antrea/pkg/flowaggregator/querier/testing"
 )
 
