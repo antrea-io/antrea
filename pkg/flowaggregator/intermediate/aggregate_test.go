@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/registry"
@@ -575,12 +576,13 @@ func TestCorrelateRecordsForInterNodeFlow(t *testing.T) {
 		ActiveExpiryTimeout:   testActiveExpiry,
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
-	ap, _ := InitAggregationProcess(input)
+	clock := clocktesting.NewFakeClock(time.Now())
+	ap, _ := initAggregationProcessWithClock(input, clock)
 	// Test IPv4 fields.
 	// Test the scenario, where record1 is added first and then record2.
 	record1 := createDataMsgForSrc(t, false, false, false, false, false).GetSet().GetRecords()[0]
 	record2 := createDataMsgForDst(t, false, false, false, false, false).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record1, record2, false, false, true)
+	runCorrelationAndCheckResult(t, ap, clock, record1, record2, false, false, true)
 	// Cleanup the flowKeyMap in aggregation process.
 	flowKey1, _, _ := getFlowKeyFromRecord(record1)
 	err := ap.deleteFlowKeyFromMap(*flowKey1)
@@ -589,7 +591,7 @@ func TestCorrelateRecordsForInterNodeFlow(t *testing.T) {
 	// Test the scenario, where record2 is added first and then record1.
 	record1 = createDataMsgForSrc(t, false, false, false, false, false).GetSet().GetRecords()[0]
 	record2 = createDataMsgForDst(t, false, false, false, false, false).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record2, record1, false, false, true)
+	runCorrelationAndCheckResult(t, ap, clock, record2, record1, false, false, true)
 	// Cleanup the flowKeyMap in aggregation process.
 	err = ap.deleteFlowKeyFromMap(*flowKey1)
 	assert.NoError(t, err)
@@ -598,7 +600,7 @@ func TestCorrelateRecordsForInterNodeFlow(t *testing.T) {
 	// Test the scenario, where record1 is added first and then record2.
 	record1 = createDataMsgForSrc(t, true, false, false, false, false).GetSet().GetRecords()[0]
 	record2 = createDataMsgForDst(t, true, false, false, false, false).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record1, record2, true, false, true)
+	runCorrelationAndCheckResult(t, ap, clock, record1, record2, true, false, true)
 	// Cleanup the flowKeyMap in aggregation process.
 	flowKey1, _, _ = getFlowKeyFromRecord(record1)
 	err = ap.deleteFlowKeyFromMap(*flowKey1)
@@ -607,7 +609,7 @@ func TestCorrelateRecordsForInterNodeFlow(t *testing.T) {
 	// Test the scenario, where record2 is added first and then record1.
 	record1 = createDataMsgForSrc(t, true, false, false, false, false).GetSet().GetRecords()[0]
 	record2 = createDataMsgForDst(t, true, false, false, false, false).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record2, record1, true, false, true)
+	runCorrelationAndCheckResult(t, ap, clock, record2, record1, true, false, true)
 }
 
 func TestCorrelateRecordsForInterNodeDenyFlow(t *testing.T) {
@@ -617,24 +619,25 @@ func TestCorrelateRecordsForInterNodeDenyFlow(t *testing.T) {
 		WorkerNum:       2,
 		CorrelateFields: fields,
 	}
-	ap, _ := InitAggregationProcess(input)
+	clock := clocktesting.NewFakeClock(time.Now())
+	ap, _ := initAggregationProcessWithClock(input, clock)
 	// Test the scenario, where src record has egress deny rule
 	record1 := createDataMsgForSrc(t, false, false, false, false, true).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record1, nil, false, false, false)
+	runCorrelationAndCheckResult(t, ap, clock, record1, nil, false, false, false)
 	// Cleanup the flowKeyMap in aggregation process.
 	flowKey1, _, _ := getFlowKeyFromRecord(record1)
 	ap.deleteFlowKeyFromMap(*flowKey1)
 	heap.Pop(&ap.expirePriorityQueue)
 	// Test the scenario, where dst record has ingress reject rule
 	record2 := createDataMsgForDst(t, false, false, false, true, false).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record2, nil, false, false, false)
+	runCorrelationAndCheckResult(t, ap, clock, record2, nil, false, false, false)
 	// Cleanup the flowKeyMap in aggregation process.
 	ap.deleteFlowKeyFromMap(*flowKey1)
 	heap.Pop(&ap.expirePriorityQueue)
 	// Test the scenario, where dst record has ingress drop rule
 	record1 = createDataMsgForSrc(t, false, false, false, false, false).GetSet().GetRecords()[0]
 	record2 = createDataMsgForDst(t, false, false, false, false, true).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record1, record2, false, false, true)
+	runCorrelationAndCheckResult(t, ap, clock, record1, record2, false, false, true)
 	// Cleanup the flowKeyMap in aggregation process.
 	ap.deleteFlowKeyFromMap(*flowKey1)
 
@@ -649,10 +652,11 @@ func TestCorrelateRecordsForIntraNodeFlow(t *testing.T) {
 		ActiveExpiryTimeout:   testActiveExpiry,
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
-	ap, _ := InitAggregationProcess(input)
+	clock := clocktesting.NewFakeClock(time.Now())
+	ap, _ := initAggregationProcessWithClock(input, clock)
 	// Test IPv4 fields.
 	record1 := createDataMsgForSrc(t, false, true, false, false, false).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record1, nil, false, true, false)
+	runCorrelationAndCheckResult(t, ap, clock, record1, nil, false, true, false)
 	// Cleanup the flowKeyMap in aggregation process.
 	flowKey1, _, _ := getFlowKeyFromRecord(record1)
 	err := ap.deleteFlowKeyFromMap(*flowKey1)
@@ -660,7 +664,7 @@ func TestCorrelateRecordsForIntraNodeFlow(t *testing.T) {
 	heap.Pop(&ap.expirePriorityQueue)
 	// Test IPv6 fields.
 	record1 = createDataMsgForSrc(t, true, true, false, false, false).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record1, nil, true, true, false)
+	runCorrelationAndCheckResult(t, ap, clock, record1, nil, true, true, false)
 }
 
 func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
@@ -672,10 +676,11 @@ func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 		ActiveExpiryTimeout:   testActiveExpiry,
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
-	ap, _ := InitAggregationProcess(input)
+	clock := clocktesting.NewFakeClock(time.Now())
+	ap, _ := initAggregationProcessWithClock(input, clock)
 	// Test IPv4 fields.
 	record1 := createDataMsgForSrc(t, false, true, false, true, false).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record1, nil, false, true, false)
+	runCorrelationAndCheckResult(t, ap, clock, record1, nil, false, true, false)
 	// Cleanup the flowKeyMap in aggregation process.
 	flowKey1, _, _ := getFlowKeyFromRecord(record1)
 	err := ap.deleteFlowKeyFromMap(*flowKey1)
@@ -683,7 +688,7 @@ func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 	heap.Pop(&ap.expirePriorityQueue)
 	// Test IPv6 fields.
 	record1 = createDataMsgForSrc(t, true, true, false, true, false).GetSet().GetRecords()[0]
-	runCorrelationAndCheckResult(t, ap, record1, nil, true, true, false)
+	runCorrelationAndCheckResult(t, ap, clock, record1, nil, true, true, false)
 }
 
 func TestAggregateRecordsForInterNodeFlow(t *testing.T) {
@@ -706,14 +711,15 @@ func TestAggregateRecordsForInterNodeFlow(t *testing.T) {
 		ActiveExpiryTimeout:   testActiveExpiry,
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
-	ap, _ := InitAggregationProcess(input)
+	clock := clocktesting.NewFakeClock(time.Now())
+	ap, _ := initAggregationProcessWithClock(input, clock)
 
 	// Test the scenario (added in order): srcRecord, dstRecord, record1_updated, record2_updated
 	srcRecord := createDataMsgForSrc(t, false, false, false, false, false).GetSet().GetRecords()[0]
 	dstRecord := createDataMsgForDst(t, false, false, false, false, false).GetSet().GetRecords()[0]
 	latestSrcRecord := createDataMsgForSrc(t, false, false, true, false, false).GetSet().GetRecords()[0]
 	latestDstRecord := createDataMsgForDst(t, false, false, true, false, false).GetSet().GetRecords()[0]
-	runAggregationAndCheckResult(t, ap, srcRecord, dstRecord, latestSrcRecord, latestDstRecord, false)
+	runAggregationAndCheckResult(t, ap, clock, srcRecord, dstRecord, latestSrcRecord, latestDstRecord, false)
 }
 
 func TestDeleteFlowKeyFromMapWithLock(t *testing.T) {
@@ -1019,14 +1025,15 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 	}
 }
 
-func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, record1, record2 entities.Record, isIPv6, isIntraNode, needsCorrleation bool) {
+func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *clocktesting.FakeClock, record1, record2 entities.Record, isIPv6, isIntraNode, needsCorrelation bool) {
 	flowKey1, isIPv4, _ := getFlowKeyFromRecord(record1)
 	err := ap.addOrUpdateRecordInMap(flowKey1, record1, isIPv4)
 	assert.NoError(t, err)
 	item := ap.expirePriorityQueue.Peek()
 	oldActiveExpiryTime := item.activeExpireTime
 	oldInactiveExpiryTime := item.inactiveExpireTime
-	if !isIntraNode && needsCorrleation {
+	if !isIntraNode && needsCorrelation {
+		clock.Step(10 * time.Millisecond)
 		flowKey2, isIPv4, _ := getFlowKeyFromRecord(record2)
 		assert.Equalf(t, *flowKey1, *flowKey2, "flow keys should be equal.")
 		err = ap.addOrUpdateRecordInMap(flowKey2, record2, isIPv4)
@@ -1038,11 +1045,11 @@ func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, record1,
 	item = ap.expirePriorityQueue.Peek()
 	assert.Equal(t, *aggRecord, *item.flowRecord)
 	assert.Equal(t, oldActiveExpiryTime, item.activeExpireTime)
-	if !isIntraNode && needsCorrleation {
-		assert.NotEqual(t, oldInactiveExpiryTime, item.inactiveExpireTime)
+	if !isIntraNode && needsCorrelation {
+		assert.Equal(t, oldInactiveExpiryTime.Add(10*time.Millisecond), item.inactiveExpireTime)
 		assert.True(t, ap.AreCorrelatedFieldsFilled(*aggRecord))
 	}
-	if !isIntraNode && !needsCorrleation {
+	if !isIntraNode && !needsCorrelation {
 		// for inter-Node deny connections, either src or dst Pod info will be resolved.
 		sourcePodName, _, _ := aggRecord.Record.GetInfoElementWithValue("sourcePodName")
 		destinationPodName, _, _ := aggRecord.Record.GetInfoElementWithValue("destinationPodName")
@@ -1071,23 +1078,25 @@ func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, record1,
 	}
 }
 
-func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, srcRecord, dstRecord, srcRecordLatest, dstRecordLatest entities.Record, isIntraNode bool) {
+func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *clocktesting.FakeClock, srcRecord, dstRecord, srcRecordLatest, dstRecordLatest entities.Record, isIntraNode bool) {
 	flowKey, isIPv4, _ := getFlowKeyFromRecord(srcRecord)
-	err := ap.addOrUpdateRecordInMap(flowKey, srcRecord, isIPv4)
-	assert.NoError(t, err)
+	addOrUpdateRecordInMap := func(record entities.Record) error {
+		err := ap.addOrUpdateRecordInMap(flowKey, record, isIPv4)
+		clock.Step(10 * time.Millisecond)
+		return err
+	}
+
+	assert.NoError(t, addOrUpdateRecordInMap(srcRecord))
 	item := ap.expirePriorityQueue.Peek()
 	oldActiveExpiryTime := item.activeExpireTime
 	oldInactiveExpiryTime := item.inactiveExpireTime
 
 	if !isIntraNode {
-		err = ap.addOrUpdateRecordInMap(flowKey, dstRecord, isIPv4)
-		assert.NoError(t, err)
+		assert.NoError(t, addOrUpdateRecordInMap(dstRecord))
 	}
-	err = ap.addOrUpdateRecordInMap(flowKey, srcRecordLatest, isIPv4)
-	assert.NoError(t, err)
+	assert.NoError(t, addOrUpdateRecordInMap(srcRecordLatest))
 	if !isIntraNode {
-		err = ap.addOrUpdateRecordInMap(flowKey, dstRecordLatest, isIPv4)
-		assert.NoError(t, err)
+		assert.NoError(t, addOrUpdateRecordInMap(dstRecordLatest))
 	}
 	assert.Equal(t, int64(1), ap.GetNumFlows())
 	assert.Equal(t, 1, ap.expirePriorityQueue.Len())

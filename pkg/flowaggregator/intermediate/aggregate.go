@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	"github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/registry"
@@ -70,6 +71,7 @@ type aggregationProcess struct {
 	inactiveExpiryTimeout time.Duration
 	// stopChan is the channel to receive stop message
 	stopChan chan bool
+	clock    clock.Clock
 }
 
 type AggregationInput struct {
@@ -83,10 +85,7 @@ type AggregationInput struct {
 	InactiveExpiryTimeout time.Duration
 }
 
-// InitaggregationProcess takes in message channel (e.g. from collector) as input
-// channel, workerNum(number of workers to process message), and
-// correlateFields(fields to be correlated and filled).
-func InitAggregationProcess(input AggregationInput) (*aggregationProcess, error) {
+func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) (*aggregationProcess, error) {
 	if input.MessageChan == nil && input.RecordChan == nil {
 		return nil, fmt.Errorf("cannot create aggregationProcess process without input channel")
 	}
@@ -117,7 +116,15 @@ func InitAggregationProcess(input AggregationInput) (*aggregationProcess, error)
 		input.ActiveExpiryTimeout,
 		input.InactiveExpiryTimeout,
 		make(chan bool),
+		clock,
 	}, nil
+}
+
+// InitaggregationProcess takes in message channel (e.g. from collector) as input
+// channel, workerNum(number of workers to process message), and
+// correlateFields(fields to be correlated and filled).
+func InitAggregationProcess(input AggregationInput) (*aggregationProcess, error) {
+	return initAggregationProcessWithClock(input, clock.RealClock{})
 }
 
 func (a *aggregationProcess) Start() {
@@ -225,7 +232,7 @@ func (a *aggregationProcess) GetExpiryFromExpirePriorityQueue() time.Duration {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	currTime := time.Now()
+	currTime := a.clock.Now()
 	if a.expirePriorityQueue.Len() > 0 {
 		// Get the minExpireTime of the top item in expirePriorityQueue.
 		expiryDuration := MinExpiryTime + a.expirePriorityQueue.minExpireTime(0).Sub(currTime)
@@ -280,7 +287,7 @@ func (a *aggregationProcess) ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMa
 	if a.expirePriorityQueue.Len() == 0 {
 		return nil
 	}
-	currTime := time.Now()
+	currTime := a.clock.Now()
 	for a.expirePriorityQueue.Len() > 0 {
 		topItem := a.expirePriorityQueue.Peek()
 		if topItem.activeExpireTime.After(currTime) && topItem.inactiveExpireTime.After(currTime) {
@@ -362,7 +369,7 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record ent
 	}
 	correlationRequired := isCorrelationRequired(flowType, record)
 
-	currTime := time.Now()
+	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
 	if exist {
 		if correlationRequired {
