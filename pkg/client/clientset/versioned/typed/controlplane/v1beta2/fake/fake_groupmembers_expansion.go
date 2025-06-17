@@ -25,9 +25,9 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
 )
 
-func (c *FakeGroupMembers) PaginatedGet(ctx context.Context, name string, pagination v1beta2.PaginationGetOptions, options v1.GetOptions) (result *v1beta2.GroupMembers, err error) {
+func (c *fakeGroupMembers) PaginatedGet(ctx context.Context, name string, pagination v1beta2.PaginationGetOptions, options v1.GetOptions) (result *v1beta2.GroupMembers, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(groupmembersResource, c.ns, name), &v1beta2.GroupMembers{})
+		Invokes(testing.NewGetAction(c.Resource(), c.Namespace(), name), &v1beta2.GroupMembers{})
 
 	if obj == nil {
 		return nil, err
