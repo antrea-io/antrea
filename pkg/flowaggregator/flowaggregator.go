@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -119,8 +120,8 @@ type flowAggregator struct {
 	includePodLabels            bool
 	k8sClient                   kubernetes.Interface
 	podStore                    podstore.Interface
-	numRecordsExported          int64
-	numRecordsDropped           int64
+	numRecordsExported          atomic.Int64
+	numRecordsDropped           atomic.Int64
 	updateCh                    chan *options.Options
 	configFile                  string
 	configWatcher               *fsnotify.Watcher
@@ -132,6 +133,7 @@ type flowAggregator struct {
 	logExporter                 exporter.Interface
 	logTickerDuration           time.Duration
 	preprocessorOutCh           chan *ipfixentities.Message
+	exportersMutex              sync.Mutex
 }
 
 func NewFlowAggregator(
@@ -602,7 +604,7 @@ func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 		records := set.GetRecords()
 		for _, record := range records {
 			if err := fa.proxyRecord(record, obsDomainID, exporterAddress); err != nil {
-				fa.numRecordsDropped += 1
+				fa.numRecordsDropped.Add(1)
 				if errors.Is(err, exporter.ErrIPFIXExporterBackoff) {
 					continue
 				}
@@ -629,8 +631,8 @@ func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 		case <-logTicker.C:
 			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
-			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported)
-			klog.V(4).InfoS("Total number of records dropped", "count", fa.numRecordsDropped)
+			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported.Load())
+			klog.V(4).InfoS("Total number of records dropped", "count", fa.numRecordsDropped.Load())
 			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
 		case opt, ok := <-updateCh:
 			if !ok {
@@ -673,7 +675,7 @@ func (fa *flowAggregator) flowExportLoopAggregate(stopCh <-chan struct{}) {
 		case <-logTicker.C:
 			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
-			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported)
+			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported.Load())
 			klog.V(4).InfoS("Total number of flows stored in Flow Aggregator", "count", fa.aggregationProcess.GetNumFlows())
 			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
 		case opt, ok := <-updateCh:
@@ -711,7 +713,7 @@ func (fa *flowAggregator) sendRecord(record ipfixentities.Record, isRecordIPv6 b
 			return err
 		}
 	}
-	fa.numRecordsExported = fa.numRecordsExported + 1
+	fa.numRecordsExported.Add(1)
 	return nil
 }
 
@@ -934,17 +936,20 @@ func (fa *flowAggregator) getNumFlows() int64 {
 }
 
 func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
-	return querier.Metrics{
-		NumRecordsExported:     fa.numRecordsExported,
-		NumRecordsReceived:     fa.collectingProcess.GetNumRecordsReceived(),
-		NumRecordsDropped:      fa.numRecordsDropped,
-		NumFlows:               fa.getNumFlows(),
-		NumConnToCollector:     fa.collectingProcess.GetNumConnToCollector(),
-		WithClickHouseExporter: fa.clickHouseExporter != nil,
-		WithS3Exporter:         fa.s3Exporter != nil,
-		WithLogExporter:        fa.logExporter != nil,
-		WithIPFIXExporter:      fa.ipfixExporter != nil,
+	metrics := querier.Metrics{
+		NumRecordsExported: fa.numRecordsExported.Load(),
+		NumRecordsReceived: fa.collectingProcess.GetNumRecordsReceived(),
+		NumRecordsDropped:  fa.numRecordsDropped.Load(),
+		NumFlows:           fa.getNumFlows(),
+		NumConnToCollector: fa.collectingProcess.GetNumConnToCollector(),
 	}
+	fa.exportersMutex.Lock()
+	defer fa.exportersMutex.Unlock()
+	metrics.WithClickHouseExporter = fa.clickHouseExporter != nil
+	metrics.WithS3Exporter = fa.s3Exporter != nil
+	metrics.WithLogExporter = fa.logExporter != nil
+	metrics.WithIPFIXExporter = fa.ipfixExporter != nil
+	return metrics
 }
 
 func (fa *flowAggregator) watchConfiguration(stopCh <-chan struct{}) {
@@ -998,6 +1003,11 @@ func (fa *flowAggregator) handleWatcherEvent() error {
 }
 
 func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
+	// This function potentially modifies the exporter pointer fields (e.g.,
+	// fa.ipfixExporter). We protect these writes by locking fa.exportersMutex, so that
+	// GetRecordMetrics() can safely read the fields (by also locking the mutex).
+	fa.exportersMutex.Lock()
+	defer fa.exportersMutex.Unlock()
 	// If user tries to change the mode dynamically, it makes sense to error out immediately and
 	// ignore other updates, as this is such a major configuration parameter.
 	// Unsupported "minor" updates are handled at the end of this function.
