@@ -1171,7 +1171,7 @@ func TestSyncEgress(t *testing.T) {
 				assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(expectedEgress, gotEgress))
 			}
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				events, err := c.k8sClient.CoreV1().Events("").Search(scheme.Scheme, tt.existingEgress)
+				events, err := c.k8sClient.CoreV1().Events("").SearchWithContext(context.TODO(), scheme.Scheme, tt.existingEgress)
 				if assert.NoError(collect, err) && assert.Len(collect, events.Items, len(tt.expectedEvents)) {
 					for ind, items := range events.Items {
 						assert.Contains(collect, items.Message, tt.expectedEvents[ind])
