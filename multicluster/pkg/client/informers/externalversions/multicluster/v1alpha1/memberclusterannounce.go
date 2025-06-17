@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	apismulticlusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	versioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // MemberClusterAnnounces.
 type MemberClusterAnnounceInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.MemberClusterAnnounceLister
+	Lister() multiclusterv1alpha1.MemberClusterAnnounceLister
 }
 
 type memberClusterAnnounceInformer struct {
@@ -60,16 +60,28 @@ func NewFilteredMemberClusterAnnounceInformer(client versioned.Interface, namesp
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.MulticlusterV1alpha1().MemberClusterAnnounces(namespace).List(context.TODO(), options)
+				return client.MulticlusterV1alpha1().MemberClusterAnnounces(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.MulticlusterV1alpha1().MemberClusterAnnounces(namespace).Watch(context.TODO(), options)
+				return client.MulticlusterV1alpha1().MemberClusterAnnounces(namespace).Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.MulticlusterV1alpha1().MemberClusterAnnounces(namespace).List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.MulticlusterV1alpha1().MemberClusterAnnounces(namespace).Watch(ctx, options)
 			},
 		},
-		&multiclusterv1alpha1.MemberClusterAnnounce{},
+		&apismulticlusterv1alpha1.MemberClusterAnnounce{},
 		resyncPeriod,
 		indexers,
 	)
@@ -80,9 +92,9 @@ func (f *memberClusterAnnounceInformer) defaultInformer(client versioned.Interfa
 }
 
 func (f *memberClusterAnnounceInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&multiclusterv1alpha1.MemberClusterAnnounce{}, f.defaultInformer)
+	return f.factory.InformerFor(&apismulticlusterv1alpha1.MemberClusterAnnounce{}, f.defaultInformer)
 }
 
-func (f *memberClusterAnnounceInformer) Lister() v1alpha1.MemberClusterAnnounceLister {
-	return v1alpha1.NewMemberClusterAnnounceLister(f.Informer().GetIndexer())
+func (f *memberClusterAnnounceInformer) Lister() multiclusterv1alpha1.MemberClusterAnnounceLister {
+	return multiclusterv1alpha1.NewMemberClusterAnnounceLister(f.Informer().GetIndexer())
 }
