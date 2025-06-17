@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // MemberClusterAnnounceLister helps list MemberClusterAnnounces.
@@ -28,7 +28,7 @@ import (
 type MemberClusterAnnounceLister interface {
 	// List lists all MemberClusterAnnounces in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.MemberClusterAnnounce, err error)
+	List(selector labels.Selector) (ret []*multiclusterv1alpha1.MemberClusterAnnounce, err error)
 	// MemberClusterAnnounces returns an object that can list and get MemberClusterAnnounces.
 	MemberClusterAnnounces(namespace string) MemberClusterAnnounceNamespaceLister
 	MemberClusterAnnounceListerExpansion
@@ -36,17 +36,17 @@ type MemberClusterAnnounceLister interface {
 
 // memberClusterAnnounceLister implements the MemberClusterAnnounceLister interface.
 type memberClusterAnnounceLister struct {
-	listers.ResourceIndexer[*v1alpha1.MemberClusterAnnounce]
+	listers.ResourceIndexer[*multiclusterv1alpha1.MemberClusterAnnounce]
 }
 
 // NewMemberClusterAnnounceLister returns a new MemberClusterAnnounceLister.
 func NewMemberClusterAnnounceLister(indexer cache.Indexer) MemberClusterAnnounceLister {
-	return &memberClusterAnnounceLister{listers.New[*v1alpha1.MemberClusterAnnounce](indexer, v1alpha1.Resource("memberclusterannounce"))}
+	return &memberClusterAnnounceLister{listers.New[*multiclusterv1alpha1.MemberClusterAnnounce](indexer, multiclusterv1alpha1.Resource("memberclusterannounce"))}
 }
 
 // MemberClusterAnnounces returns an object that can list and get MemberClusterAnnounces.
 func (s *memberClusterAnnounceLister) MemberClusterAnnounces(namespace string) MemberClusterAnnounceNamespaceLister {
-	return memberClusterAnnounceNamespaceLister{listers.NewNamespaced[*v1alpha1.MemberClusterAnnounce](s.ResourceIndexer, namespace)}
+	return memberClusterAnnounceNamespaceLister{listers.NewNamespaced[*multiclusterv1alpha1.MemberClusterAnnounce](s.ResourceIndexer, namespace)}
 }
 
 // MemberClusterAnnounceNamespaceLister helps list and get MemberClusterAnnounces.
@@ -54,15 +54,15 @@ func (s *memberClusterAnnounceLister) MemberClusterAnnounces(namespace string) M
 type MemberClusterAnnounceNamespaceLister interface {
 	// List lists all MemberClusterAnnounces in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.MemberClusterAnnounce, err error)
+	List(selector labels.Selector) (ret []*multiclusterv1alpha1.MemberClusterAnnounce, err error)
 	// Get retrieves the MemberClusterAnnounce from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.MemberClusterAnnounce, error)
+	Get(name string) (*multiclusterv1alpha1.MemberClusterAnnounce, error)
 	MemberClusterAnnounceNamespaceListerExpansion
 }
 
 // memberClusterAnnounceNamespaceLister implements the MemberClusterAnnounceNamespaceLister
 // interface.
 type memberClusterAnnounceNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.MemberClusterAnnounce]
+	listers.ResourceIndexer[*multiclusterv1alpha1.MemberClusterAnnounce]
 }

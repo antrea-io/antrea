@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,108 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeLabelIdentities implements LabelIdentityInterface
-type FakeLabelIdentities struct {
+// fakeLabelIdentities implements LabelIdentityInterface
+type fakeLabelIdentities struct {
+	*gentype.FakeClientWithList[*v1alpha1.LabelIdentity, *v1alpha1.LabelIdentityList]
 	Fake *FakeMulticlusterV1alpha1
 }
 
-var labelidentitiesResource = v1alpha1.SchemeGroupVersion.WithResource("labelidentities")
-
-var labelidentitiesKind = v1alpha1.SchemeGroupVersion.WithKind("LabelIdentity")
-
-// Get takes name of the labelIdentity, and returns the corresponding labelIdentity object, and an error if there is any.
-func (c *FakeLabelIdentities) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.LabelIdentity, err error) {
-	emptyResult := &v1alpha1.LabelIdentity{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(labelidentitiesResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeLabelIdentities(fake *FakeMulticlusterV1alpha1) multiclusterv1alpha1.LabelIdentityInterface {
+	return &fakeLabelIdentities{
+		gentype.NewFakeClientWithList[*v1alpha1.LabelIdentity, *v1alpha1.LabelIdentityList](
+			fake.Fake,
+			"",
+			v1alpha1.SchemeGroupVersion.WithResource("labelidentities"),
+			v1alpha1.SchemeGroupVersion.WithKind("LabelIdentity"),
+			func() *v1alpha1.LabelIdentity { return &v1alpha1.LabelIdentity{} },
+			func() *v1alpha1.LabelIdentityList { return &v1alpha1.LabelIdentityList{} },
+			func(dst, src *v1alpha1.LabelIdentityList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.LabelIdentityList) []*v1alpha1.LabelIdentity {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.LabelIdentityList, items []*v1alpha1.LabelIdentity) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.LabelIdentity), err
-}
-
-// List takes label and field selectors, and returns the list of LabelIdentities that match those selectors.
-func (c *FakeLabelIdentities) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.LabelIdentityList, err error) {
-	emptyResult := &v1alpha1.LabelIdentityList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(labelidentitiesResource, labelidentitiesKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.LabelIdentityList{ListMeta: obj.(*v1alpha1.LabelIdentityList).ListMeta}
-	for _, item := range obj.(*v1alpha1.LabelIdentityList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested labelIdentities.
-func (c *FakeLabelIdentities) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(labelidentitiesResource, opts))
-}
-
-// Create takes the representation of a labelIdentity and creates it.  Returns the server's representation of the labelIdentity, and an error, if there is any.
-func (c *FakeLabelIdentities) Create(ctx context.Context, labelIdentity *v1alpha1.LabelIdentity, opts v1.CreateOptions) (result *v1alpha1.LabelIdentity, err error) {
-	emptyResult := &v1alpha1.LabelIdentity{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(labelidentitiesResource, labelIdentity, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.LabelIdentity), err
-}
-
-// Update takes the representation of a labelIdentity and updates it. Returns the server's representation of the labelIdentity, and an error, if there is any.
-func (c *FakeLabelIdentities) Update(ctx context.Context, labelIdentity *v1alpha1.LabelIdentity, opts v1.UpdateOptions) (result *v1alpha1.LabelIdentity, err error) {
-	emptyResult := &v1alpha1.LabelIdentity{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateActionWithOptions(labelidentitiesResource, labelIdentity, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.LabelIdentity), err
-}
-
-// Delete takes name of the labelIdentity and deletes it. Returns an error if one occurs.
-func (c *FakeLabelIdentities) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(labelidentitiesResource, name, opts), &v1alpha1.LabelIdentity{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeLabelIdentities) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionActionWithOptions(labelidentitiesResource, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.LabelIdentityList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched labelIdentity.
-func (c *FakeLabelIdentities) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.LabelIdentity, err error) {
-	emptyResult := &v1alpha1.LabelIdentity{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceActionWithOptions(labelidentitiesResource, name, pt, data, opts, subresources...), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.LabelIdentity), err
 }

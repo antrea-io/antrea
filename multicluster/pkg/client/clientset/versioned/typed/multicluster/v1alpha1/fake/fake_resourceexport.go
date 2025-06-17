@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,129 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeResourceExports implements ResourceExportInterface
-type FakeResourceExports struct {
+// fakeResourceExports implements ResourceExportInterface
+type fakeResourceExports struct {
+	*gentype.FakeClientWithList[*v1alpha1.ResourceExport, *v1alpha1.ResourceExportList]
 	Fake *FakeMulticlusterV1alpha1
-	ns   string
 }
 
-var resourceexportsResource = v1alpha1.SchemeGroupVersion.WithResource("resourceexports")
-
-var resourceexportsKind = v1alpha1.SchemeGroupVersion.WithKind("ResourceExport")
-
-// Get takes name of the resourceExport, and returns the corresponding resourceExport object, and an error if there is any.
-func (c *FakeResourceExports) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ResourceExport, err error) {
-	emptyResult := &v1alpha1.ResourceExport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(resourceexportsResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeResourceExports(fake *FakeMulticlusterV1alpha1, namespace string) multiclusterv1alpha1.ResourceExportInterface {
+	return &fakeResourceExports{
+		gentype.NewFakeClientWithList[*v1alpha1.ResourceExport, *v1alpha1.ResourceExportList](
+			fake.Fake,
+			namespace,
+			v1alpha1.SchemeGroupVersion.WithResource("resourceexports"),
+			v1alpha1.SchemeGroupVersion.WithKind("ResourceExport"),
+			func() *v1alpha1.ResourceExport { return &v1alpha1.ResourceExport{} },
+			func() *v1alpha1.ResourceExportList { return &v1alpha1.ResourceExportList{} },
+			func(dst, src *v1alpha1.ResourceExportList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.ResourceExportList) []*v1alpha1.ResourceExport {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.ResourceExportList, items []*v1alpha1.ResourceExport) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.ResourceExport), err
-}
-
-// List takes label and field selectors, and returns the list of ResourceExports that match those selectors.
-func (c *FakeResourceExports) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ResourceExportList, err error) {
-	emptyResult := &v1alpha1.ResourceExportList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(resourceexportsResource, resourceexportsKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.ResourceExportList{ListMeta: obj.(*v1alpha1.ResourceExportList).ListMeta}
-	for _, item := range obj.(*v1alpha1.ResourceExportList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested resourceExports.
-func (c *FakeResourceExports) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(resourceexportsResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a resourceExport and creates it.  Returns the server's representation of the resourceExport, and an error, if there is any.
-func (c *FakeResourceExports) Create(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.CreateOptions) (result *v1alpha1.ResourceExport, err error) {
-	emptyResult := &v1alpha1.ResourceExport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateActionWithOptions(resourceexportsResource, c.ns, resourceExport, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ResourceExport), err
-}
-
-// Update takes the representation of a resourceExport and updates it. Returns the server's representation of the resourceExport, and an error, if there is any.
-func (c *FakeResourceExports) Update(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.UpdateOptions) (result *v1alpha1.ResourceExport, err error) {
-	emptyResult := &v1alpha1.ResourceExport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateActionWithOptions(resourceexportsResource, c.ns, resourceExport, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ResourceExport), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeResourceExports) UpdateStatus(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.UpdateOptions) (result *v1alpha1.ResourceExport, err error) {
-	emptyResult := &v1alpha1.ResourceExport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceActionWithOptions(resourceexportsResource, "status", c.ns, resourceExport, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ResourceExport), err
-}
-
-// Delete takes name of the resourceExport and deletes it. Returns an error if one occurs.
-func (c *FakeResourceExports) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(resourceexportsResource, c.ns, name, opts), &v1alpha1.ResourceExport{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeResourceExports) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionActionWithOptions(resourceexportsResource, c.ns, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.ResourceExportList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched resourceExport.
-func (c *FakeResourceExports) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ResourceExport, err error) {
-	emptyResult := &v1alpha1.ResourceExport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceActionWithOptions(resourceexportsResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ResourceExport), err
 }

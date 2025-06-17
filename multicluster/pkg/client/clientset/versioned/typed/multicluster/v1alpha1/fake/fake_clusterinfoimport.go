@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,129 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeClusterInfoImports implements ClusterInfoImportInterface
-type FakeClusterInfoImports struct {
+// fakeClusterInfoImports implements ClusterInfoImportInterface
+type fakeClusterInfoImports struct {
+	*gentype.FakeClientWithList[*v1alpha1.ClusterInfoImport, *v1alpha1.ClusterInfoImportList]
 	Fake *FakeMulticlusterV1alpha1
-	ns   string
 }
 
-var clusterinfoimportsResource = v1alpha1.SchemeGroupVersion.WithResource("clusterinfoimports")
-
-var clusterinfoimportsKind = v1alpha1.SchemeGroupVersion.WithKind("ClusterInfoImport")
-
-// Get takes name of the clusterInfoImport, and returns the corresponding clusterInfoImport object, and an error if there is any.
-func (c *FakeClusterInfoImports) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClusterInfoImport, err error) {
-	emptyResult := &v1alpha1.ClusterInfoImport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(clusterinfoimportsResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeClusterInfoImports(fake *FakeMulticlusterV1alpha1, namespace string) multiclusterv1alpha1.ClusterInfoImportInterface {
+	return &fakeClusterInfoImports{
+		gentype.NewFakeClientWithList[*v1alpha1.ClusterInfoImport, *v1alpha1.ClusterInfoImportList](
+			fake.Fake,
+			namespace,
+			v1alpha1.SchemeGroupVersion.WithResource("clusterinfoimports"),
+			v1alpha1.SchemeGroupVersion.WithKind("ClusterInfoImport"),
+			func() *v1alpha1.ClusterInfoImport { return &v1alpha1.ClusterInfoImport{} },
+			func() *v1alpha1.ClusterInfoImportList { return &v1alpha1.ClusterInfoImportList{} },
+			func(dst, src *v1alpha1.ClusterInfoImportList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.ClusterInfoImportList) []*v1alpha1.ClusterInfoImport {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.ClusterInfoImportList, items []*v1alpha1.ClusterInfoImport) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.ClusterInfoImport), err
-}
-
-// List takes label and field selectors, and returns the list of ClusterInfoImports that match those selectors.
-func (c *FakeClusterInfoImports) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ClusterInfoImportList, err error) {
-	emptyResult := &v1alpha1.ClusterInfoImportList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(clusterinfoimportsResource, clusterinfoimportsKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.ClusterInfoImportList{ListMeta: obj.(*v1alpha1.ClusterInfoImportList).ListMeta}
-	for _, item := range obj.(*v1alpha1.ClusterInfoImportList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested clusterInfoImports.
-func (c *FakeClusterInfoImports) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(clusterinfoimportsResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a clusterInfoImport and creates it.  Returns the server's representation of the clusterInfoImport, and an error, if there is any.
-func (c *FakeClusterInfoImports) Create(ctx context.Context, clusterInfoImport *v1alpha1.ClusterInfoImport, opts v1.CreateOptions) (result *v1alpha1.ClusterInfoImport, err error) {
-	emptyResult := &v1alpha1.ClusterInfoImport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateActionWithOptions(clusterinfoimportsResource, c.ns, clusterInfoImport, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ClusterInfoImport), err
-}
-
-// Update takes the representation of a clusterInfoImport and updates it. Returns the server's representation of the clusterInfoImport, and an error, if there is any.
-func (c *FakeClusterInfoImports) Update(ctx context.Context, clusterInfoImport *v1alpha1.ClusterInfoImport, opts v1.UpdateOptions) (result *v1alpha1.ClusterInfoImport, err error) {
-	emptyResult := &v1alpha1.ClusterInfoImport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateActionWithOptions(clusterinfoimportsResource, c.ns, clusterInfoImport, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ClusterInfoImport), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeClusterInfoImports) UpdateStatus(ctx context.Context, clusterInfoImport *v1alpha1.ClusterInfoImport, opts v1.UpdateOptions) (result *v1alpha1.ClusterInfoImport, err error) {
-	emptyResult := &v1alpha1.ClusterInfoImport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceActionWithOptions(clusterinfoimportsResource, "status", c.ns, clusterInfoImport, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ClusterInfoImport), err
-}
-
-// Delete takes name of the clusterInfoImport and deletes it. Returns an error if one occurs.
-func (c *FakeClusterInfoImports) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(clusterinfoimportsResource, c.ns, name, opts), &v1alpha1.ClusterInfoImport{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeClusterInfoImports) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionActionWithOptions(clusterinfoimportsResource, c.ns, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.ClusterInfoImportList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched clusterInfoImport.
-func (c *FakeClusterInfoImports) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ClusterInfoImport, err error) {
-	emptyResult := &v1alpha1.ClusterInfoImport{}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceActionWithOptions(clusterinfoimportsResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ClusterInfoImport), err
 }

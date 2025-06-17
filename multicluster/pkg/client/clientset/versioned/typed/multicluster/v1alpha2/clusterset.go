@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha2
 
 import (
-	"context"
+	context "context"
 
-	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	scheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,33 +35,34 @@ type ClusterSetsGetter interface {
 
 // ClusterSetInterface has methods to work with ClusterSet resources.
 type ClusterSetInterface interface {
-	Create(ctx context.Context, clusterSet *v1alpha2.ClusterSet, opts v1.CreateOptions) (*v1alpha2.ClusterSet, error)
-	Update(ctx context.Context, clusterSet *v1alpha2.ClusterSet, opts v1.UpdateOptions) (*v1alpha2.ClusterSet, error)
+	Create(ctx context.Context, clusterSet *multiclusterv1alpha2.ClusterSet, opts v1.CreateOptions) (*multiclusterv1alpha2.ClusterSet, error)
+	Update(ctx context.Context, clusterSet *multiclusterv1alpha2.ClusterSet, opts v1.UpdateOptions) (*multiclusterv1alpha2.ClusterSet, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, clusterSet *v1alpha2.ClusterSet, opts v1.UpdateOptions) (*v1alpha2.ClusterSet, error)
+	UpdateStatus(ctx context.Context, clusterSet *multiclusterv1alpha2.ClusterSet, opts v1.UpdateOptions) (*multiclusterv1alpha2.ClusterSet, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha2.ClusterSet, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha2.ClusterSetList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*multiclusterv1alpha2.ClusterSet, error)
+	List(ctx context.Context, opts v1.ListOptions) (*multiclusterv1alpha2.ClusterSetList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.ClusterSet, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *multiclusterv1alpha2.ClusterSet, err error)
 	ClusterSetExpansion
 }
 
 // clusterSets implements ClusterSetInterface
 type clusterSets struct {
-	*gentype.ClientWithList[*v1alpha2.ClusterSet, *v1alpha2.ClusterSetList]
+	*gentype.ClientWithList[*multiclusterv1alpha2.ClusterSet, *multiclusterv1alpha2.ClusterSetList]
 }
 
 // newClusterSets returns a ClusterSets
 func newClusterSets(c *MulticlusterV1alpha2Client, namespace string) *clusterSets {
 	return &clusterSets{
-		gentype.NewClientWithList[*v1alpha2.ClusterSet, *v1alpha2.ClusterSetList](
+		gentype.NewClientWithList[*multiclusterv1alpha2.ClusterSet, *multiclusterv1alpha2.ClusterSetList](
 			"clustersets",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha2.ClusterSet { return &v1alpha2.ClusterSet{} },
-			func() *v1alpha2.ClusterSetList { return &v1alpha2.ClusterSetList{} }),
+			func() *multiclusterv1alpha2.ClusterSet { return &multiclusterv1alpha2.ClusterSet{} },
+			func() *multiclusterv1alpha2.ClusterSetList { return &multiclusterv1alpha2.ClusterSetList{} },
+		),
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,11 +27,11 @@ type FakeMulticlusterV1alpha2 struct {
 }
 
 func (c *FakeMulticlusterV1alpha2) ClusterClaims(namespace string) v1alpha2.ClusterClaimInterface {
-	return &FakeClusterClaims{c, namespace}
+	return newFakeClusterClaims(c, namespace)
 }
 
 func (c *FakeMulticlusterV1alpha2) ClusterSets(namespace string) v1alpha2.ClusterSetInterface {
-	return &FakeClusterSets{c, namespace}
+	return newFakeClusterSets(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate
