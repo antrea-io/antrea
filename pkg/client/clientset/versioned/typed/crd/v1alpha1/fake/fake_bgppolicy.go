@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,108 +17,32 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	crdv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeBGPPolicies implements BGPPolicyInterface
-type FakeBGPPolicies struct {
+// fakeBGPPolicies implements BGPPolicyInterface
+type fakeBGPPolicies struct {
+	*gentype.FakeClientWithList[*v1alpha1.BGPPolicy, *v1alpha1.BGPPolicyList]
 	Fake *FakeCrdV1alpha1
 }
 
-var bgppoliciesResource = v1alpha1.SchemeGroupVersion.WithResource("bgppolicies")
-
-var bgppoliciesKind = v1alpha1.SchemeGroupVersion.WithKind("BGPPolicy")
-
-// Get takes name of the bGPPolicy, and returns the corresponding bGPPolicy object, and an error if there is any.
-func (c *FakeBGPPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.BGPPolicy, err error) {
-	emptyResult := &v1alpha1.BGPPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(bgppoliciesResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeBGPPolicies(fake *FakeCrdV1alpha1) crdv1alpha1.BGPPolicyInterface {
+	return &fakeBGPPolicies{
+		gentype.NewFakeClientWithList[*v1alpha1.BGPPolicy, *v1alpha1.BGPPolicyList](
+			fake.Fake,
+			"",
+			v1alpha1.SchemeGroupVersion.WithResource("bgppolicies"),
+			v1alpha1.SchemeGroupVersion.WithKind("BGPPolicy"),
+			func() *v1alpha1.BGPPolicy { return &v1alpha1.BGPPolicy{} },
+			func() *v1alpha1.BGPPolicyList { return &v1alpha1.BGPPolicyList{} },
+			func(dst, src *v1alpha1.BGPPolicyList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.BGPPolicyList) []*v1alpha1.BGPPolicy { return gentype.ToPointerSlice(list.Items) },
+			func(list *v1alpha1.BGPPolicyList, items []*v1alpha1.BGPPolicy) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.BGPPolicy), err
-}
-
-// List takes label and field selectors, and returns the list of BGPPolicies that match those selectors.
-func (c *FakeBGPPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.BGPPolicyList, err error) {
-	emptyResult := &v1alpha1.BGPPolicyList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(bgppoliciesResource, bgppoliciesKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.BGPPolicyList{ListMeta: obj.(*v1alpha1.BGPPolicyList).ListMeta}
-	for _, item := range obj.(*v1alpha1.BGPPolicyList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested bGPPolicies.
-func (c *FakeBGPPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(bgppoliciesResource, opts))
-}
-
-// Create takes the representation of a bGPPolicy and creates it.  Returns the server's representation of the bGPPolicy, and an error, if there is any.
-func (c *FakeBGPPolicies) Create(ctx context.Context, bGPPolicy *v1alpha1.BGPPolicy, opts v1.CreateOptions) (result *v1alpha1.BGPPolicy, err error) {
-	emptyResult := &v1alpha1.BGPPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(bgppoliciesResource, bGPPolicy, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.BGPPolicy), err
-}
-
-// Update takes the representation of a bGPPolicy and updates it. Returns the server's representation of the bGPPolicy, and an error, if there is any.
-func (c *FakeBGPPolicies) Update(ctx context.Context, bGPPolicy *v1alpha1.BGPPolicy, opts v1.UpdateOptions) (result *v1alpha1.BGPPolicy, err error) {
-	emptyResult := &v1alpha1.BGPPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateActionWithOptions(bgppoliciesResource, bGPPolicy, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.BGPPolicy), err
-}
-
-// Delete takes name of the bGPPolicy and deletes it. Returns an error if one occurs.
-func (c *FakeBGPPolicies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(bgppoliciesResource, name, opts), &v1alpha1.BGPPolicy{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeBGPPolicies) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionActionWithOptions(bgppoliciesResource, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.BGPPolicyList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched bGPPolicy.
-func (c *FakeBGPPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.BGPPolicy, err error) {
-	emptyResult := &v1alpha1.BGPPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceActionWithOptions(bgppoliciesResource, name, pt, data, opts, subresources...), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.BGPPolicy), err
 }

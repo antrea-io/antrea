@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,47 +27,47 @@ type FakeCrdV1beta1 struct {
 }
 
 func (c *FakeCrdV1beta1) AntreaAgentInfos() v1beta1.AntreaAgentInfoInterface {
-	return &FakeAntreaAgentInfos{c}
+	return newFakeAntreaAgentInfos(c)
 }
 
 func (c *FakeCrdV1beta1) AntreaControllerInfos() v1beta1.AntreaControllerInfoInterface {
-	return &FakeAntreaControllerInfos{c}
+	return newFakeAntreaControllerInfos(c)
 }
 
 func (c *FakeCrdV1beta1) ClusterGroups() v1beta1.ClusterGroupInterface {
-	return &FakeClusterGroups{c}
+	return newFakeClusterGroups(c)
 }
 
 func (c *FakeCrdV1beta1) ClusterNetworkPolicies() v1beta1.ClusterNetworkPolicyInterface {
-	return &FakeClusterNetworkPolicies{c}
+	return newFakeClusterNetworkPolicies(c)
 }
 
 func (c *FakeCrdV1beta1) Egresses() v1beta1.EgressInterface {
-	return &FakeEgresses{c}
+	return newFakeEgresses(c)
 }
 
 func (c *FakeCrdV1beta1) ExternalIPPools() v1beta1.ExternalIPPoolInterface {
-	return &FakeExternalIPPools{c}
+	return newFakeExternalIPPools(c)
 }
 
 func (c *FakeCrdV1beta1) Groups(namespace string) v1beta1.GroupInterface {
-	return &FakeGroups{c, namespace}
+	return newFakeGroups(c, namespace)
 }
 
 func (c *FakeCrdV1beta1) IPPools() v1beta1.IPPoolInterface {
-	return &FakeIPPools{c}
+	return newFakeIPPools(c)
 }
 
 func (c *FakeCrdV1beta1) NetworkPolicies(namespace string) v1beta1.NetworkPolicyInterface {
-	return &FakeNetworkPolicies{c, namespace}
+	return newFakeNetworkPolicies(c, namespace)
 }
 
 func (c *FakeCrdV1beta1) Tiers() v1beta1.TierInterface {
-	return &FakeTiers{c}
+	return newFakeTiers(c)
 }
 
 func (c *FakeCrdV1beta1) Traceflows() v1beta1.TraceflowInterface {
-	return &FakeTraceflows{c}
+	return newFakeTraceflows(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate
