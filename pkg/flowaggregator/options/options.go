@@ -122,6 +122,11 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 				return nil, fmt.Errorf("maxIPFIXMsgSize cannot be greater than the maximum valid IPFIX mesage size %d", flowaggregatorconfig.MaxValidIPFIXMsgSize)
 			}
 		}
+		if opt.Config.FlowCollector.TLS.Enable {
+			if _, err := TLSVersion(opt.Config.FlowCollector.TLS.MinVersion); err != nil {
+				return nil, err
+			}
+		}
 	}
 	// Validate clickhouse specific parameters
 	if opt.Config.ClickHouse.Enable {

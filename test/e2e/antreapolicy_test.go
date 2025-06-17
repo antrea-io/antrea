@@ -6062,30 +6062,26 @@ func createHttpAgnhostPod(t *testing.T, data *TestData) *PodIPs {
 
 // createDNSPod creates the CoreDNS Pod configured to use the custom DNS ConfigMap.
 func createCustomDNSPod(t *testing.T, data *TestData, configName string) {
-	volume := []v1.Volume{
-		{
-			Name: "config-volume",
-			VolumeSource: v1.VolumeSource{
-				ConfigMap: &v1.ConfigMapVolumeSource{
-					LocalObjectReference: v1.LocalObjectReference{
-						Name: configName,
-					},
-					Items: []v1.KeyToPath{
-						{
-							Key:  "Corefile",
-							Path: "Corefile",
-						},
+	volume := v1.Volume{
+		Name: "config-volume",
+		VolumeSource: v1.VolumeSource{
+			ConfigMap: &v1.ConfigMapVolumeSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: configName,
+				},
+				Items: []v1.KeyToPath{
+					{
+						Key:  "Corefile",
+						Path: "Corefile",
 					},
 				},
 			},
 		},
 	}
 
-	volumeMount := []v1.VolumeMount{
-		{
-			Name:      "config-volume",
-			MountPath: "/etc/coredns",
-		},
+	volumeMount := v1.VolumeMount{
+		Name:      "config-volume",
+		MountPath: "/etc/coredns",
 	}
 
 	require.NoError(t, NewPodBuilder("custom-dns-server", data.testNamespace, "coredns/coredns:1.11.3").

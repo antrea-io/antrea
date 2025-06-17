@@ -15,13 +15,18 @@
 package exporter
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io"
 	"net"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
@@ -34,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
+	"antrea.io/antrea/pkg/util/tlstest"
 )
 
 const (
@@ -145,6 +151,8 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 	config.FlowCollector.Address = fmt.Sprintf("%s:%s", newAddr, newProto)
 	config.FlowCollector.RecordFormat = "JSON"
 	config.FlowCollector.TemplateRefreshTimeout = newTemplateRefreshTimeout.String()
+	config.FlowCollector.TLS.Enable = true
+	config.FlowCollector.TLS.MinVersion = "VersionTLS13"
 
 	ipfixExporter.UpdateOptions(&options.Options{
 		Config:                     config,
@@ -157,6 +165,8 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 	assert.Equal(t, newProto, ipfixExporter.externalFlowCollectorProto)
 	assert.True(t, ipfixExporter.sendJSONRecord)
 	assert.Equal(t, newTemplateRefreshTimeout, ipfixExporter.templateRefreshTimeout)
+	assert.True(t, ipfixExporter.tls.enable)
+	assert.Equal(t, uint16(tls.VersionTLS13), ipfixExporter.tls.minVersion)
 
 	require.NoError(t, ipfixExporter.AddRecord(mockRecord, false))
 	assert.Equal(t, 2, setCount, "Invalid number of flow sets sent by exporter")
@@ -294,6 +304,78 @@ func createElementList(isIPv6 bool, mockIPFIXRegistry *ipfixtesting.MockIPFIXReg
 	return elemList
 }
 
+func generateLocalhostCert(t *testing.T, isClient bool) ([]byte, []byte) {
+	certPEM, keyPEM, err := tlstest.GenerateCert(
+		[]string{"localhost", "127.0.0.1"},
+		time.Unix(0, 0),
+		100*365*24*time.Hour,
+		true,
+		isClient,
+		0,
+		"P256",
+		false,
+	)
+	require.NoError(t, err)
+	return certPEM, keyPEM
+}
+
+// runTestTLSServer starts a test TLS server using the provided config. The server will be closed
+// (alongside all active connections) when t.Context() is cancelled. All the data received across
+// all connections will be sent on the recvCh channel.
+// If any unexpected error is encountered, the test will be marked as failed.
+func runTestTLSServer(t *testing.T, tlsConfig *tls.Config, recvCh chan<- []byte) (string, string) {
+	ctx := t.Context()
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", tlsConfig)
+	require.NoError(t, err)
+	go func() {
+		<-ctx.Done()
+		listener.Close()
+	}()
+	handleConnection := func(conn net.Conn) {
+		defer conn.Close()
+		go func() {
+			for {
+				b := make([]byte, 1024)
+				// Note that if the client certificate is invalid, we will not see
+				// an error until the first Read.
+				_, err := conn.Read(b)
+				if err == io.EOF {
+					return
+				}
+				// ignore error if context is cancelled
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					break
+				}
+				if !assert.NoError(t, err) {
+					return
+				}
+				recvCh <- b
+			}
+		}()
+		<-ctx.Done()
+	}
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			// ignore error if context is cancelled
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				break
+			}
+			if !assert.NoError(t, err) {
+				return
+			}
+			go handleConnection(conn)
+		}
+	}()
+	return listener.Addr().Network(), listener.Addr().String()
+}
+
 func TestInitExportingProcess(t *testing.T) {
 	clusterUUID := uuid.New()
 
@@ -353,6 +435,95 @@ func TestInitExportingProcess(t *testing.T) {
 		exp := NewIPFIXExporter(clusterUUID, opt, mockIPFIXRegistry)
 		err := exp.initExportingProcess()
 		assert.ErrorContains(t, err, "got error when initializing IPFIX exporting process: dial tcp 127.0.0.1:0:")
+	})
+	t.Run("tls success", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
+		serverCertPEM, serverKeyPEM := generateLocalhostCert(t, false)
+		serverCert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
+		require.NoError(t, err)
+		defaultFS = afero.NewMemMapFs()
+		t.Cleanup(func() { defaultFS = afero.NewOsFs() })
+		// the certificate is used as the CA
+		require.NoError(t, afero.WriteFile(defaultFS, filepath.Join(flowCollectorCertDir, "ca.crt"), serverCertPEM, 0644))
+		opt := &options.Options{
+			AggregatorMode: flowaggregatorconfig.AggregatorModeAggregate,
+		}
+		opt.Config = &flowaggregatorconfig.FlowAggregatorConfig{}
+		flowaggregatorconfig.SetConfigDefaults(opt.Config)
+		opt.Config.FlowCollector.TLS.Enable = true
+		opt.Config.FlowCollector.TLS.CASecretName = "server-ca"
+		// It seems that (m)TLS testing requires an actual server. Using a listener which
+		// never calls Accept (what we have for the tests above) does not work and causes
+		// the test to hang.
+		// TODO: it would be more convenient to use the actual collector from the go-ipfix
+		// library, but some changes are necessary in the library first (e.g., the ability
+		// to provide a net.Listener instead of an address).
+		recvCh := make(chan []byte, 10)
+		opt.ExternalFlowCollectorProto, opt.ExternalFlowCollectorAddr = runTestTLSServer(t, &tls.Config{
+			Certificates: []tls.Certificate{serverCert},
+			MinVersion:   tls.VersionTLS12,
+		}, recvCh)
+		// Use IPFIX to guarantee that data is sent (and should be received by the server):
+		// in this case the data is the template records.
+		opt.Config.FlowCollector.RecordFormat = "IPFIX"
+		createElementList(false, mockIPFIXRegistry)
+		createElementList(true, mockIPFIXRegistry)
+		exp := NewIPFIXExporter(clusterUUID, opt, mockIPFIXRegistry)
+		defer exp.Stop()
+		err = exp.initExportingProcess()
+		assert.NoError(t, err)
+		select {
+		case <-recvCh:
+			break
+		case <-time.After(1 * time.Second):
+			assert.Fail(t, "No data received by server")
+		}
+	})
+	t.Run("mtls success", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
+		serverCertPEM, serverKeyPEM := generateLocalhostCert(t, false)
+		serverCert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
+		clientCertPEM, clientKeyPEM := generateLocalhostCert(t, true)
+		require.NoError(t, err)
+		defaultFS = afero.NewMemMapFs()
+		t.Cleanup(func() { defaultFS = afero.NewOsFs() })
+		// the certificate is used as the CA
+		require.NoError(t, afero.WriteFile(defaultFS, filepath.Join(flowCollectorCertDir, "ca.crt"), serverCertPEM, 0644))
+		require.NoError(t, afero.WriteFile(defaultFS, filepath.Join(flowCollectorCertDir, "tls.crt"), clientCertPEM, 0644))
+		require.NoError(t, afero.WriteFile(defaultFS, filepath.Join(flowCollectorCertDir, "tls.key"), clientKeyPEM, 0644))
+		opt := &options.Options{
+			AggregatorMode: flowaggregatorconfig.AggregatorModeAggregate,
+		}
+		opt.Config = &flowaggregatorconfig.FlowAggregatorConfig{}
+		flowaggregatorconfig.SetConfigDefaults(opt.Config)
+		opt.Config.FlowCollector.TLS.Enable = true
+		opt.Config.FlowCollector.TLS.CASecretName = "server-ca"
+		opt.Config.FlowCollector.TLS.ClientSecretName = "client-tls"
+		clientCAs := x509.NewCertPool()
+		// the certificate is used as the CA
+		require.True(t, clientCAs.AppendCertsFromPEM(clientCertPEM))
+		recvCh := make(chan []byte, 10)
+		opt.ExternalFlowCollectorProto, opt.ExternalFlowCollectorAddr = runTestTLSServer(t, &tls.Config{
+			Certificates: []tls.Certificate{serverCert},
+			ClientCAs:    clientCAs,
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			MinVersion:   tls.VersionTLS12,
+		}, recvCh)
+		opt.Config.FlowCollector.RecordFormat = "IPFIX"
+		createElementList(false, mockIPFIXRegistry)
+		createElementList(true, mockIPFIXRegistry)
+		exp := NewIPFIXExporter(clusterUUID, opt, mockIPFIXRegistry)
+		defer exp.Stop()
+		err = exp.initExportingProcess()
+		assert.NoError(t, err)
+		select {
+		case <-recvCh:
+			break
+		case <-time.After(1 * time.Second):
+			assert.Fail(t, "No data received by server")
+		}
 	})
 }
 
