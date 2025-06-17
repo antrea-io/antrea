@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,28 +34,31 @@ type AntreaClusterNetworkPolicyStatsGetter interface {
 
 // AntreaClusterNetworkPolicyStatsInterface has methods to work with AntreaClusterNetworkPolicyStats resources.
 type AntreaClusterNetworkPolicyStatsInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.AntreaClusterNetworkPolicyStats, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.AntreaClusterNetworkPolicyStatsList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*statsv1alpha1.AntreaClusterNetworkPolicyStats, error)
+	List(ctx context.Context, opts v1.ListOptions) (*statsv1alpha1.AntreaClusterNetworkPolicyStatsList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	AntreaClusterNetworkPolicyStatsExpansion
 }
 
 // antreaClusterNetworkPolicyStats implements AntreaClusterNetworkPolicyStatsInterface
 type antreaClusterNetworkPolicyStats struct {
-	*gentype.ClientWithList[*v1alpha1.AntreaClusterNetworkPolicyStats, *v1alpha1.AntreaClusterNetworkPolicyStatsList]
+	*gentype.ClientWithList[*statsv1alpha1.AntreaClusterNetworkPolicyStats, *statsv1alpha1.AntreaClusterNetworkPolicyStatsList]
 }
 
 // newAntreaClusterNetworkPolicyStats returns a AntreaClusterNetworkPolicyStats
 func newAntreaClusterNetworkPolicyStats(c *StatsV1alpha1Client) *antreaClusterNetworkPolicyStats {
 	return &antreaClusterNetworkPolicyStats{
-		gentype.NewClientWithList[*v1alpha1.AntreaClusterNetworkPolicyStats, *v1alpha1.AntreaClusterNetworkPolicyStatsList](
+		gentype.NewClientWithList[*statsv1alpha1.AntreaClusterNetworkPolicyStats, *statsv1alpha1.AntreaClusterNetworkPolicyStatsList](
 			"antreaclusternetworkpolicystats",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha1.AntreaClusterNetworkPolicyStats { return &v1alpha1.AntreaClusterNetworkPolicyStats{} },
-			func() *v1alpha1.AntreaClusterNetworkPolicyStatsList {
-				return &v1alpha1.AntreaClusterNetworkPolicyStatsList{}
-			}),
+			func() *statsv1alpha1.AntreaClusterNetworkPolicyStats {
+				return &statsv1alpha1.AntreaClusterNetworkPolicyStats{}
+			},
+			func() *statsv1alpha1.AntreaClusterNetworkPolicyStatsList {
+				return &statsv1alpha1.AntreaClusterNetworkPolicyStatsList{}
+			},
+		),
 	}
 }

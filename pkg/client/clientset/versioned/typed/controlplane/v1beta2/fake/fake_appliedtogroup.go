@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,59 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeAppliedToGroups implements AppliedToGroupInterface
-type FakeAppliedToGroups struct {
+// fakeAppliedToGroups implements AppliedToGroupInterface
+type fakeAppliedToGroups struct {
+	*gentype.FakeClientWithList[*v1beta2.AppliedToGroup, *v1beta2.AppliedToGroupList]
 	Fake *FakeControlplaneV1beta2
 }
 
-var appliedtogroupsResource = v1beta2.SchemeGroupVersion.WithResource("appliedtogroups")
-
-var appliedtogroupsKind = v1beta2.SchemeGroupVersion.WithKind("AppliedToGroup")
-
-// Get takes name of the appliedToGroup, and returns the corresponding appliedToGroup object, and an error if there is any.
-func (c *FakeAppliedToGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.AppliedToGroup, err error) {
-	emptyResult := &v1beta2.AppliedToGroup{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(appliedtogroupsResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeAppliedToGroups(fake *FakeControlplaneV1beta2) controlplanev1beta2.AppliedToGroupInterface {
+	return &fakeAppliedToGroups{
+		gentype.NewFakeClientWithList[*v1beta2.AppliedToGroup, *v1beta2.AppliedToGroupList](
+			fake.Fake,
+			"",
+			v1beta2.SchemeGroupVersion.WithResource("appliedtogroups"),
+			v1beta2.SchemeGroupVersion.WithKind("AppliedToGroup"),
+			func() *v1beta2.AppliedToGroup { return &v1beta2.AppliedToGroup{} },
+			func() *v1beta2.AppliedToGroupList { return &v1beta2.AppliedToGroupList{} },
+			func(dst, src *v1beta2.AppliedToGroupList) { dst.ListMeta = src.ListMeta },
+			func(list *v1beta2.AppliedToGroupList) []*v1beta2.AppliedToGroup {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1beta2.AppliedToGroupList, items []*v1beta2.AppliedToGroup) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1beta2.AppliedToGroup), err
-}
-
-// List takes label and field selectors, and returns the list of AppliedToGroups that match those selectors.
-func (c *FakeAppliedToGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.AppliedToGroupList, err error) {
-	emptyResult := &v1beta2.AppliedToGroupList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(appliedtogroupsResource, appliedtogroupsKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1beta2.AppliedToGroupList{ListMeta: obj.(*v1beta2.AppliedToGroupList).ListMeta}
-	for _, item := range obj.(*v1beta2.AppliedToGroupList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested appliedToGroups.
-func (c *FakeAppliedToGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(appliedtogroupsResource, opts))
 }

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta2
 
 import (
-	"context"
+	context "context"
 
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,26 +34,31 @@ type SupportBundleCollectionsGetter interface {
 
 // SupportBundleCollectionInterface has methods to work with SupportBundleCollection resources.
 type SupportBundleCollectionInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta2.SupportBundleCollection, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta2.SupportBundleCollectionList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*controlplanev1beta2.SupportBundleCollection, error)
+	List(ctx context.Context, opts v1.ListOptions) (*controlplanev1beta2.SupportBundleCollectionList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	SupportBundleCollectionExpansion
 }
 
 // supportBundleCollections implements SupportBundleCollectionInterface
 type supportBundleCollections struct {
-	*gentype.ClientWithList[*v1beta2.SupportBundleCollection, *v1beta2.SupportBundleCollectionList]
+	*gentype.ClientWithList[*controlplanev1beta2.SupportBundleCollection, *controlplanev1beta2.SupportBundleCollectionList]
 }
 
 // newSupportBundleCollections returns a SupportBundleCollections
 func newSupportBundleCollections(c *ControlplaneV1beta2Client) *supportBundleCollections {
 	return &supportBundleCollections{
-		gentype.NewClientWithList[*v1beta2.SupportBundleCollection, *v1beta2.SupportBundleCollectionList](
+		gentype.NewClientWithList[*controlplanev1beta2.SupportBundleCollection, *controlplanev1beta2.SupportBundleCollectionList](
 			"supportbundlecollections",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta2.SupportBundleCollection { return &v1beta2.SupportBundleCollection{} },
-			func() *v1beta2.SupportBundleCollectionList { return &v1beta2.SupportBundleCollectionList{} }),
+			func() *controlplanev1beta2.SupportBundleCollection {
+				return &controlplanev1beta2.SupportBundleCollection{}
+			},
+			func() *controlplanev1beta2.SupportBundleCollectionList {
+				return &controlplanev1beta2.SupportBundleCollectionList{}
+			},
+		),
 	}
 }

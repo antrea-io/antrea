@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta2
 
 import (
-	"context"
+	context "context"
 
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
@@ -33,23 +33,26 @@ type NetworkPolicyEvaluationsGetter interface {
 
 // NetworkPolicyEvaluationInterface has methods to work with NetworkPolicyEvaluation resources.
 type NetworkPolicyEvaluationInterface interface {
-	Create(ctx context.Context, networkPolicyEvaluation *v1beta2.NetworkPolicyEvaluation, opts v1.CreateOptions) (*v1beta2.NetworkPolicyEvaluation, error)
+	Create(ctx context.Context, networkPolicyEvaluation *controlplanev1beta2.NetworkPolicyEvaluation, opts v1.CreateOptions) (*controlplanev1beta2.NetworkPolicyEvaluation, error)
 	NetworkPolicyEvaluationExpansion
 }
 
 // networkPolicyEvaluations implements NetworkPolicyEvaluationInterface
 type networkPolicyEvaluations struct {
-	*gentype.Client[*v1beta2.NetworkPolicyEvaluation]
+	*gentype.Client[*controlplanev1beta2.NetworkPolicyEvaluation]
 }
 
 // newNetworkPolicyEvaluations returns a NetworkPolicyEvaluations
 func newNetworkPolicyEvaluations(c *ControlplaneV1beta2Client) *networkPolicyEvaluations {
 	return &networkPolicyEvaluations{
-		gentype.NewClient[*v1beta2.NetworkPolicyEvaluation](
+		gentype.NewClient[*controlplanev1beta2.NetworkPolicyEvaluation](
 			"networkpolicyevaluations",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta2.NetworkPolicyEvaluation { return &v1beta2.NetworkPolicyEvaluation{} }),
+			func() *controlplanev1beta2.NetworkPolicyEvaluation {
+				return &controlplanev1beta2.NetworkPolicyEvaluation{}
+			},
+		),
 	}
 }

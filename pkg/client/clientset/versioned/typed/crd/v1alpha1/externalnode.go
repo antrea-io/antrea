@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,31 +35,32 @@ type ExternalNodesGetter interface {
 
 // ExternalNodeInterface has methods to work with ExternalNode resources.
 type ExternalNodeInterface interface {
-	Create(ctx context.Context, externalNode *v1alpha1.ExternalNode, opts v1.CreateOptions) (*v1alpha1.ExternalNode, error)
-	Update(ctx context.Context, externalNode *v1alpha1.ExternalNode, opts v1.UpdateOptions) (*v1alpha1.ExternalNode, error)
+	Create(ctx context.Context, externalNode *crdv1alpha1.ExternalNode, opts v1.CreateOptions) (*crdv1alpha1.ExternalNode, error)
+	Update(ctx context.Context, externalNode *crdv1alpha1.ExternalNode, opts v1.UpdateOptions) (*crdv1alpha1.ExternalNode, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ExternalNode, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ExternalNodeList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1alpha1.ExternalNode, error)
+	List(ctx context.Context, opts v1.ListOptions) (*crdv1alpha1.ExternalNodeList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ExternalNode, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *crdv1alpha1.ExternalNode, err error)
 	ExternalNodeExpansion
 }
 
 // externalNodes implements ExternalNodeInterface
 type externalNodes struct {
-	*gentype.ClientWithList[*v1alpha1.ExternalNode, *v1alpha1.ExternalNodeList]
+	*gentype.ClientWithList[*crdv1alpha1.ExternalNode, *crdv1alpha1.ExternalNodeList]
 }
 
 // newExternalNodes returns a ExternalNodes
 func newExternalNodes(c *CrdV1alpha1Client, namespace string) *externalNodes {
 	return &externalNodes{
-		gentype.NewClientWithList[*v1alpha1.ExternalNode, *v1alpha1.ExternalNodeList](
+		gentype.NewClientWithList[*crdv1alpha1.ExternalNode, *crdv1alpha1.ExternalNodeList](
 			"externalnodes",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.ExternalNode { return &v1alpha1.ExternalNode{} },
-			func() *v1alpha1.ExternalNodeList { return &v1alpha1.ExternalNodeList{} }),
+			func() *crdv1alpha1.ExternalNode { return &crdv1alpha1.ExternalNode{} },
+			func() *crdv1alpha1.ExternalNodeList { return &crdv1alpha1.ExternalNodeList{} },
+		),
 	}
 }

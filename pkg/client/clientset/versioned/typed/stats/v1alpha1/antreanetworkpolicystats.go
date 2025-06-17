@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,26 +34,29 @@ type AntreaNetworkPolicyStatsGetter interface {
 
 // AntreaNetworkPolicyStatsInterface has methods to work with AntreaNetworkPolicyStats resources.
 type AntreaNetworkPolicyStatsInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.AntreaNetworkPolicyStats, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.AntreaNetworkPolicyStatsList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*statsv1alpha1.AntreaNetworkPolicyStats, error)
+	List(ctx context.Context, opts v1.ListOptions) (*statsv1alpha1.AntreaNetworkPolicyStatsList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	AntreaNetworkPolicyStatsExpansion
 }
 
 // antreaNetworkPolicyStats implements AntreaNetworkPolicyStatsInterface
 type antreaNetworkPolicyStats struct {
-	*gentype.ClientWithList[*v1alpha1.AntreaNetworkPolicyStats, *v1alpha1.AntreaNetworkPolicyStatsList]
+	*gentype.ClientWithList[*statsv1alpha1.AntreaNetworkPolicyStats, *statsv1alpha1.AntreaNetworkPolicyStatsList]
 }
 
 // newAntreaNetworkPolicyStats returns a AntreaNetworkPolicyStats
 func newAntreaNetworkPolicyStats(c *StatsV1alpha1Client, namespace string) *antreaNetworkPolicyStats {
 	return &antreaNetworkPolicyStats{
-		gentype.NewClientWithList[*v1alpha1.AntreaNetworkPolicyStats, *v1alpha1.AntreaNetworkPolicyStatsList](
+		gentype.NewClientWithList[*statsv1alpha1.AntreaNetworkPolicyStats, *statsv1alpha1.AntreaNetworkPolicyStatsList](
 			"antreanetworkpolicystats",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.AntreaNetworkPolicyStats { return &v1alpha1.AntreaNetworkPolicyStats{} },
-			func() *v1alpha1.AntreaNetworkPolicyStatsList { return &v1alpha1.AntreaNetworkPolicyStatsList{} }),
+			func() *statsv1alpha1.AntreaNetworkPolicyStats { return &statsv1alpha1.AntreaNetworkPolicyStats{} },
+			func() *statsv1alpha1.AntreaNetworkPolicyStatsList {
+				return &statsv1alpha1.AntreaNetworkPolicyStatsList{}
+			},
+		),
 	}
 }
