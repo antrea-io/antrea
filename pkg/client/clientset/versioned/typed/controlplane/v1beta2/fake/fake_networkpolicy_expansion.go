@@ -20,6 +20,6 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
-func (c *FakeNetworkPolicies) UpdateStatus(ctx context.Context, name string, status *v1beta2.NetworkPolicyStatus) error {
+func (c *fakeNetworkPolicies) UpdateStatus(ctx context.Context, name string, status *v1beta2.NetworkPolicyStatus) error {
 	return nil
 }
