@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta2
 
 import (
-	"context"
+	context "context"
 
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
@@ -33,23 +33,24 @@ type IPGroupAssociationsGetter interface {
 
 // IPGroupAssociationInterface has methods to work with IPGroupAssociation resources.
 type IPGroupAssociationInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta2.IPGroupAssociation, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*controlplanev1beta2.IPGroupAssociation, error)
 	IPGroupAssociationExpansion
 }
 
 // iPGroupAssociations implements IPGroupAssociationInterface
 type iPGroupAssociations struct {
-	*gentype.Client[*v1beta2.IPGroupAssociation]
+	*gentype.Client[*controlplanev1beta2.IPGroupAssociation]
 }
 
 // newIPGroupAssociations returns a IPGroupAssociations
 func newIPGroupAssociations(c *ControlplaneV1beta2Client) *iPGroupAssociations {
 	return &iPGroupAssociations{
-		gentype.NewClient[*v1beta2.IPGroupAssociation](
+		gentype.NewClient[*controlplanev1beta2.IPGroupAssociation](
 			"ipgroupassociations",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta2.IPGroupAssociation { return &v1beta2.IPGroupAssociation{} }),
+			func() *controlplanev1beta2.IPGroupAssociation { return &controlplanev1beta2.IPGroupAssociation{} },
+		),
 	}
 }

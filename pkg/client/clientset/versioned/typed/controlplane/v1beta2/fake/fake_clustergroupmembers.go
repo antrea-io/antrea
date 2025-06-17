@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,29 +17,26 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeClusterGroupMembers implements ClusterGroupMembersInterface
-type FakeClusterGroupMembers struct {
+// fakeClusterGroupMembers implements ClusterGroupMembersInterface
+type fakeClusterGroupMembers struct {
+	*gentype.FakeClient[*v1beta2.ClusterGroupMembers]
 	Fake *FakeControlplaneV1beta2
 }
 
-var clustergroupmembersResource = v1beta2.SchemeGroupVersion.WithResource("clustergroupmembers")
-
-var clustergroupmembersKind = v1beta2.SchemeGroupVersion.WithKind("ClusterGroupMembers")
-
-// Get takes name of the clusterGroupMembers, and returns the corresponding clusterGroupMembers object, and an error if there is any.
-func (c *FakeClusterGroupMembers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.ClusterGroupMembers, err error) {
-	emptyResult := &v1beta2.ClusterGroupMembers{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(clustergroupmembersResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeClusterGroupMembers(fake *FakeControlplaneV1beta2) controlplanev1beta2.ClusterGroupMembersInterface {
+	return &fakeClusterGroupMembers{
+		gentype.NewFakeClient[*v1beta2.ClusterGroupMembers](
+			fake.Fake,
+			"",
+			v1beta2.SchemeGroupVersion.WithResource("clustergroupmembers"),
+			v1beta2.SchemeGroupVersion.WithKind("ClusterGroupMembers"),
+			func() *v1beta2.ClusterGroupMembers { return &v1beta2.ClusterGroupMembers{} },
+		),
+		fake,
 	}
-	return obj.(*v1beta2.ClusterGroupMembers), err
 }

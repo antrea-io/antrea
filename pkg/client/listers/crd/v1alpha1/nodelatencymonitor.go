@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // NodeLatencyMonitorLister helps list NodeLatencyMonitors.
@@ -28,19 +28,19 @@ import (
 type NodeLatencyMonitorLister interface {
 	// List lists all NodeLatencyMonitors in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.NodeLatencyMonitor, err error)
+	List(selector labels.Selector) (ret []*crdv1alpha1.NodeLatencyMonitor, err error)
 	// Get retrieves the NodeLatencyMonitor from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.NodeLatencyMonitor, error)
+	Get(name string) (*crdv1alpha1.NodeLatencyMonitor, error)
 	NodeLatencyMonitorListerExpansion
 }
 
 // nodeLatencyMonitorLister implements the NodeLatencyMonitorLister interface.
 type nodeLatencyMonitorLister struct {
-	listers.ResourceIndexer[*v1alpha1.NodeLatencyMonitor]
+	listers.ResourceIndexer[*crdv1alpha1.NodeLatencyMonitor]
 }
 
 // NewNodeLatencyMonitorLister returns a new NodeLatencyMonitorLister.
 func NewNodeLatencyMonitorLister(indexer cache.Indexer) NodeLatencyMonitorLister {
-	return &nodeLatencyMonitorLister{listers.New[*v1alpha1.NodeLatencyMonitor](indexer, v1alpha1.Resource("nodelatencymonitor"))}
+	return &nodeLatencyMonitorLister{listers.New[*crdv1alpha1.NodeLatencyMonitor](indexer, crdv1alpha1.Resource("nodelatencymonitor"))}
 }

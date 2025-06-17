@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1alpha2
 
 import (
-	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // TrafficControlLister helps list TrafficControls.
@@ -28,19 +28,19 @@ import (
 type TrafficControlLister interface {
 	// List lists all TrafficControls in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha2.TrafficControl, err error)
+	List(selector labels.Selector) (ret []*crdv1alpha2.TrafficControl, err error)
 	// Get retrieves the TrafficControl from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha2.TrafficControl, error)
+	Get(name string) (*crdv1alpha2.TrafficControl, error)
 	TrafficControlListerExpansion
 }
 
 // trafficControlLister implements the TrafficControlLister interface.
 type trafficControlLister struct {
-	listers.ResourceIndexer[*v1alpha2.TrafficControl]
+	listers.ResourceIndexer[*crdv1alpha2.TrafficControl]
 }
 
 // NewTrafficControlLister returns a new TrafficControlLister.
 func NewTrafficControlLister(indexer cache.Indexer) TrafficControlLister {
-	return &trafficControlLister{listers.New[*v1alpha2.TrafficControl](indexer, v1alpha2.Resource("trafficcontrol"))}
+	return &trafficControlLister{listers.New[*crdv1alpha2.TrafficControl](indexer, crdv1alpha2.Resource("trafficcontrol"))}
 }

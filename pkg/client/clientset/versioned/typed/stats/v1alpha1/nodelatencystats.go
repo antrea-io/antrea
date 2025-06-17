@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
@@ -33,27 +33,28 @@ type NodeLatencyStatsGetter interface {
 
 // NodeLatencyStatsInterface has methods to work with NodeLatencyStats resources.
 type NodeLatencyStatsInterface interface {
-	Create(ctx context.Context, nodeLatencyStats *v1alpha1.NodeLatencyStats, opts v1.CreateOptions) (*v1alpha1.NodeLatencyStats, error)
+	Create(ctx context.Context, nodeLatencyStats *statsv1alpha1.NodeLatencyStats, opts v1.CreateOptions) (*statsv1alpha1.NodeLatencyStats, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.NodeLatencyStats, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.NodeLatencyStatsList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*statsv1alpha1.NodeLatencyStats, error)
+	List(ctx context.Context, opts v1.ListOptions) (*statsv1alpha1.NodeLatencyStatsList, error)
 	NodeLatencyStatsExpansion
 }
 
 // nodeLatencyStats implements NodeLatencyStatsInterface
 type nodeLatencyStats struct {
-	*gentype.ClientWithList[*v1alpha1.NodeLatencyStats, *v1alpha1.NodeLatencyStatsList]
+	*gentype.ClientWithList[*statsv1alpha1.NodeLatencyStats, *statsv1alpha1.NodeLatencyStatsList]
 }
 
 // newNodeLatencyStats returns a NodeLatencyStats
 func newNodeLatencyStats(c *StatsV1alpha1Client) *nodeLatencyStats {
 	return &nodeLatencyStats{
-		gentype.NewClientWithList[*v1alpha1.NodeLatencyStats, *v1alpha1.NodeLatencyStatsList](
+		gentype.NewClientWithList[*statsv1alpha1.NodeLatencyStats, *statsv1alpha1.NodeLatencyStatsList](
 			"nodelatencystats",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha1.NodeLatencyStats { return &v1alpha1.NodeLatencyStats{} },
-			func() *v1alpha1.NodeLatencyStatsList { return &v1alpha1.NodeLatencyStatsList{} }),
+			func() *statsv1alpha1.NodeLatencyStats { return &statsv1alpha1.NodeLatencyStats{} },
+			func() *statsv1alpha1.NodeLatencyStatsList { return &statsv1alpha1.NodeLatencyStatsList{} },
+		),
 	}
 }

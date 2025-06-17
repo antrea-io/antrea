@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta2
 
 import (
-	"context"
+	context "context"
 
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,26 +34,27 @@ type AppliedToGroupsGetter interface {
 
 // AppliedToGroupInterface has methods to work with AppliedToGroup resources.
 type AppliedToGroupInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta2.AppliedToGroup, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta2.AppliedToGroupList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*controlplanev1beta2.AppliedToGroup, error)
+	List(ctx context.Context, opts v1.ListOptions) (*controlplanev1beta2.AppliedToGroupList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	AppliedToGroupExpansion
 }
 
 // appliedToGroups implements AppliedToGroupInterface
 type appliedToGroups struct {
-	*gentype.ClientWithList[*v1beta2.AppliedToGroup, *v1beta2.AppliedToGroupList]
+	*gentype.ClientWithList[*controlplanev1beta2.AppliedToGroup, *controlplanev1beta2.AppliedToGroupList]
 }
 
 // newAppliedToGroups returns a AppliedToGroups
 func newAppliedToGroups(c *ControlplaneV1beta2Client) *appliedToGroups {
 	return &appliedToGroups{
-		gentype.NewClientWithList[*v1beta2.AppliedToGroup, *v1beta2.AppliedToGroupList](
+		gentype.NewClientWithList[*controlplanev1beta2.AppliedToGroup, *controlplanev1beta2.AppliedToGroupList](
 			"appliedtogroups",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta2.AppliedToGroup { return &v1beta2.AppliedToGroup{} },
-			func() *v1beta2.AppliedToGroupList { return &v1beta2.AppliedToGroupList{} }),
+			func() *controlplanev1beta2.AppliedToGroup { return &controlplanev1beta2.AppliedToGroup{} },
+			func() *controlplanev1beta2.AppliedToGroupList { return &controlplanev1beta2.AppliedToGroupList{} },
+		),
 	}
 }

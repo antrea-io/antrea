@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,59 +17,32 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeEgressGroups implements EgressGroupInterface
-type FakeEgressGroups struct {
+// fakeEgressGroups implements EgressGroupInterface
+type fakeEgressGroups struct {
+	*gentype.FakeClientWithList[*v1beta2.EgressGroup, *v1beta2.EgressGroupList]
 	Fake *FakeControlplaneV1beta2
 }
 
-var egressgroupsResource = v1beta2.SchemeGroupVersion.WithResource("egressgroups")
-
-var egressgroupsKind = v1beta2.SchemeGroupVersion.WithKind("EgressGroup")
-
-// Get takes name of the egressGroup, and returns the corresponding egressGroup object, and an error if there is any.
-func (c *FakeEgressGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.EgressGroup, err error) {
-	emptyResult := &v1beta2.EgressGroup{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(egressgroupsResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeEgressGroups(fake *FakeControlplaneV1beta2) controlplanev1beta2.EgressGroupInterface {
+	return &fakeEgressGroups{
+		gentype.NewFakeClientWithList[*v1beta2.EgressGroup, *v1beta2.EgressGroupList](
+			fake.Fake,
+			"",
+			v1beta2.SchemeGroupVersion.WithResource("egressgroups"),
+			v1beta2.SchemeGroupVersion.WithKind("EgressGroup"),
+			func() *v1beta2.EgressGroup { return &v1beta2.EgressGroup{} },
+			func() *v1beta2.EgressGroupList { return &v1beta2.EgressGroupList{} },
+			func(dst, src *v1beta2.EgressGroupList) { dst.ListMeta = src.ListMeta },
+			func(list *v1beta2.EgressGroupList) []*v1beta2.EgressGroup { return gentype.ToPointerSlice(list.Items) },
+			func(list *v1beta2.EgressGroupList, items []*v1beta2.EgressGroup) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1beta2.EgressGroup), err
-}
-
-// List takes label and field selectors, and returns the list of EgressGroups that match those selectors.
-func (c *FakeEgressGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.EgressGroupList, err error) {
-	emptyResult := &v1beta2.EgressGroupList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(egressgroupsResource, egressgroupsKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1beta2.EgressGroupList{ListMeta: obj.(*v1beta2.EgressGroupList).ListMeta}
-	for _, item := range obj.(*v1beta2.EgressGroupList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested egressGroups.
-func (c *FakeEgressGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(egressgroupsResource, opts))
 }

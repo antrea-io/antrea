@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta1
 
 import (
-	"context"
+	context "context"
 
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,33 +35,34 @@ type ExternalIPPoolsGetter interface {
 
 // ExternalIPPoolInterface has methods to work with ExternalIPPool resources.
 type ExternalIPPoolInterface interface {
-	Create(ctx context.Context, externalIPPool *v1beta1.ExternalIPPool, opts v1.CreateOptions) (*v1beta1.ExternalIPPool, error)
-	Update(ctx context.Context, externalIPPool *v1beta1.ExternalIPPool, opts v1.UpdateOptions) (*v1beta1.ExternalIPPool, error)
+	Create(ctx context.Context, externalIPPool *crdv1beta1.ExternalIPPool, opts v1.CreateOptions) (*crdv1beta1.ExternalIPPool, error)
+	Update(ctx context.Context, externalIPPool *crdv1beta1.ExternalIPPool, opts v1.UpdateOptions) (*crdv1beta1.ExternalIPPool, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, externalIPPool *v1beta1.ExternalIPPool, opts v1.UpdateOptions) (*v1beta1.ExternalIPPool, error)
+	UpdateStatus(ctx context.Context, externalIPPool *crdv1beta1.ExternalIPPool, opts v1.UpdateOptions) (*crdv1beta1.ExternalIPPool, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.ExternalIPPool, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.ExternalIPPoolList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1beta1.ExternalIPPool, error)
+	List(ctx context.Context, opts v1.ListOptions) (*crdv1beta1.ExternalIPPoolList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.ExternalIPPool, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *crdv1beta1.ExternalIPPool, err error)
 	ExternalIPPoolExpansion
 }
 
 // externalIPPools implements ExternalIPPoolInterface
 type externalIPPools struct {
-	*gentype.ClientWithList[*v1beta1.ExternalIPPool, *v1beta1.ExternalIPPoolList]
+	*gentype.ClientWithList[*crdv1beta1.ExternalIPPool, *crdv1beta1.ExternalIPPoolList]
 }
 
 // newExternalIPPools returns a ExternalIPPools
 func newExternalIPPools(c *CrdV1beta1Client) *externalIPPools {
 	return &externalIPPools{
-		gentype.NewClientWithList[*v1beta1.ExternalIPPool, *v1beta1.ExternalIPPoolList](
+		gentype.NewClientWithList[*crdv1beta1.ExternalIPPool, *crdv1beta1.ExternalIPPoolList](
 			"externalippools",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta1.ExternalIPPool { return &v1beta1.ExternalIPPool{} },
-			func() *v1beta1.ExternalIPPoolList { return &v1beta1.ExternalIPPoolList{} }),
+			func() *crdv1beta1.ExternalIPPool { return &crdv1beta1.ExternalIPPool{} },
+			func() *crdv1beta1.ExternalIPPoolList { return &crdv1beta1.ExternalIPPoolList{} },
+		),
 	}
 }

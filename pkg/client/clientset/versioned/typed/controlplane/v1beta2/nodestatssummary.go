@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta2
 
 import (
-	"context"
+	context "context"
 
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
@@ -33,23 +33,24 @@ type NodeStatsSummariesGetter interface {
 
 // NodeStatsSummaryInterface has methods to work with NodeStatsSummary resources.
 type NodeStatsSummaryInterface interface {
-	Create(ctx context.Context, nodeStatsSummary *v1beta2.NodeStatsSummary, opts v1.CreateOptions) (*v1beta2.NodeStatsSummary, error)
+	Create(ctx context.Context, nodeStatsSummary *controlplanev1beta2.NodeStatsSummary, opts v1.CreateOptions) (*controlplanev1beta2.NodeStatsSummary, error)
 	NodeStatsSummaryExpansion
 }
 
 // nodeStatsSummaries implements NodeStatsSummaryInterface
 type nodeStatsSummaries struct {
-	*gentype.Client[*v1beta2.NodeStatsSummary]
+	*gentype.Client[*controlplanev1beta2.NodeStatsSummary]
 }
 
 // newNodeStatsSummaries returns a NodeStatsSummaries
 func newNodeStatsSummaries(c *ControlplaneV1beta2Client) *nodeStatsSummaries {
 	return &nodeStatsSummaries{
-		gentype.NewClient[*v1beta2.NodeStatsSummary](
+		gentype.NewClient[*controlplanev1beta2.NodeStatsSummary](
 			"nodestatssummaries",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta2.NodeStatsSummary { return &v1beta2.NodeStatsSummary{} }),
+			func() *controlplanev1beta2.NodeStatsSummary { return &controlplanev1beta2.NodeStatsSummary{} },
+		),
 	}
 }

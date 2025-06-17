@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	apiscrdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // BGPPolicies.
 type BGPPolicyInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.BGPPolicyLister
+	Lister() crdv1alpha1.BGPPolicyLister
 }
 
 type bGPPolicyInformer struct {
@@ -59,16 +59,28 @@ func NewFilteredBGPPolicyInformer(client versioned.Interface, resyncPeriod time.
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().BGPPolicies().List(context.TODO(), options)
+				return client.CrdV1alpha1().BGPPolicies().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().BGPPolicies().Watch(context.TODO(), options)
+				return client.CrdV1alpha1().BGPPolicies().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha1().BGPPolicies().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha1().BGPPolicies().Watch(ctx, options)
 			},
 		},
-		&crdv1alpha1.BGPPolicy{},
+		&apiscrdv1alpha1.BGPPolicy{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,9 +91,9 @@ func (f *bGPPolicyInformer) defaultInformer(client versioned.Interface, resyncPe
 }
 
 func (f *bGPPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdv1alpha1.BGPPolicy{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiscrdv1alpha1.BGPPolicy{}, f.defaultInformer)
 }
 
-func (f *bGPPolicyInformer) Lister() v1alpha1.BGPPolicyLister {
-	return v1alpha1.NewBGPPolicyLister(f.Informer().GetIndexer())
+func (f *bGPPolicyInformer) Lister() crdv1alpha1.BGPPolicyLister {
+	return crdv1alpha1.NewBGPPolicyLister(f.Informer().GetIndexer())
 }

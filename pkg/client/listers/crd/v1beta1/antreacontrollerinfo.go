@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1beta1
 
 import (
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // AntreaControllerInfoLister helps list AntreaControllerInfos.
@@ -28,19 +28,19 @@ import (
 type AntreaControllerInfoLister interface {
 	// List lists all AntreaControllerInfos in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1beta1.AntreaControllerInfo, err error)
+	List(selector labels.Selector) (ret []*crdv1beta1.AntreaControllerInfo, err error)
 	// Get retrieves the AntreaControllerInfo from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1beta1.AntreaControllerInfo, error)
+	Get(name string) (*crdv1beta1.AntreaControllerInfo, error)
 	AntreaControllerInfoListerExpansion
 }
 
 // antreaControllerInfoLister implements the AntreaControllerInfoLister interface.
 type antreaControllerInfoLister struct {
-	listers.ResourceIndexer[*v1beta1.AntreaControllerInfo]
+	listers.ResourceIndexer[*crdv1beta1.AntreaControllerInfo]
 }
 
 // NewAntreaControllerInfoLister returns a new AntreaControllerInfoLister.
 func NewAntreaControllerInfoLister(indexer cache.Indexer) AntreaControllerInfoLister {
-	return &antreaControllerInfoLister{listers.New[*v1beta1.AntreaControllerInfo](indexer, v1beta1.Resource("antreacontrollerinfo"))}
+	return &antreaControllerInfoLister{listers.New[*crdv1beta1.AntreaControllerInfo](indexer, crdv1beta1.Resource("antreacontrollerinfo"))}
 }

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,59 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeSupportBundleCollections implements SupportBundleCollectionInterface
-type FakeSupportBundleCollections struct {
+// fakeSupportBundleCollections implements SupportBundleCollectionInterface
+type fakeSupportBundleCollections struct {
+	*gentype.FakeClientWithList[*v1beta2.SupportBundleCollection, *v1beta2.SupportBundleCollectionList]
 	Fake *FakeControlplaneV1beta2
 }
 
-var supportbundlecollectionsResource = v1beta2.SchemeGroupVersion.WithResource("supportbundlecollections")
-
-var supportbundlecollectionsKind = v1beta2.SchemeGroupVersion.WithKind("SupportBundleCollection")
-
-// Get takes name of the supportBundleCollection, and returns the corresponding supportBundleCollection object, and an error if there is any.
-func (c *FakeSupportBundleCollections) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.SupportBundleCollection, err error) {
-	emptyResult := &v1beta2.SupportBundleCollection{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(supportbundlecollectionsResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeSupportBundleCollections(fake *FakeControlplaneV1beta2) controlplanev1beta2.SupportBundleCollectionInterface {
+	return &fakeSupportBundleCollections{
+		gentype.NewFakeClientWithList[*v1beta2.SupportBundleCollection, *v1beta2.SupportBundleCollectionList](
+			fake.Fake,
+			"",
+			v1beta2.SchemeGroupVersion.WithResource("supportbundlecollections"),
+			v1beta2.SchemeGroupVersion.WithKind("SupportBundleCollection"),
+			func() *v1beta2.SupportBundleCollection { return &v1beta2.SupportBundleCollection{} },
+			func() *v1beta2.SupportBundleCollectionList { return &v1beta2.SupportBundleCollectionList{} },
+			func(dst, src *v1beta2.SupportBundleCollectionList) { dst.ListMeta = src.ListMeta },
+			func(list *v1beta2.SupportBundleCollectionList) []*v1beta2.SupportBundleCollection {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1beta2.SupportBundleCollectionList, items []*v1beta2.SupportBundleCollection) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1beta2.SupportBundleCollection), err
-}
-
-// List takes label and field selectors, and returns the list of SupportBundleCollections that match those selectors.
-func (c *FakeSupportBundleCollections) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.SupportBundleCollectionList, err error) {
-	emptyResult := &v1beta2.SupportBundleCollectionList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(supportbundlecollectionsResource, supportbundlecollectionsKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1beta2.SupportBundleCollectionList{ListMeta: obj.(*v1beta2.SupportBundleCollectionList).ListMeta}
-	for _, item := range obj.(*v1beta2.SupportBundleCollectionList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested supportBundleCollections.
-func (c *FakeSupportBundleCollections) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(supportbundlecollectionsResource, opts))
 }

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,63 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	statsv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeAntreaNetworkPolicyStats implements AntreaNetworkPolicyStatsInterface
-type FakeAntreaNetworkPolicyStats struct {
+// fakeAntreaNetworkPolicyStats implements AntreaNetworkPolicyStatsInterface
+type fakeAntreaNetworkPolicyStats struct {
+	*gentype.FakeClientWithList[*v1alpha1.AntreaNetworkPolicyStats, *v1alpha1.AntreaNetworkPolicyStatsList]
 	Fake *FakeStatsV1alpha1
-	ns   string
 }
 
-var antreanetworkpolicystatsResource = v1alpha1.SchemeGroupVersion.WithResource("antreanetworkpolicystats")
-
-var antreanetworkpolicystatsKind = v1alpha1.SchemeGroupVersion.WithKind("AntreaNetworkPolicyStats")
-
-// Get takes name of the antreaNetworkPolicyStats, and returns the corresponding antreaNetworkPolicyStats object, and an error if there is any.
-func (c *FakeAntreaNetworkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.AntreaNetworkPolicyStats, err error) {
-	emptyResult := &v1alpha1.AntreaNetworkPolicyStats{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(antreanetworkpolicystatsResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeAntreaNetworkPolicyStats(fake *FakeStatsV1alpha1, namespace string) statsv1alpha1.AntreaNetworkPolicyStatsInterface {
+	return &fakeAntreaNetworkPolicyStats{
+		gentype.NewFakeClientWithList[*v1alpha1.AntreaNetworkPolicyStats, *v1alpha1.AntreaNetworkPolicyStatsList](
+			fake.Fake,
+			namespace,
+			v1alpha1.SchemeGroupVersion.WithResource("antreanetworkpolicystats"),
+			v1alpha1.SchemeGroupVersion.WithKind("AntreaNetworkPolicyStats"),
+			func() *v1alpha1.AntreaNetworkPolicyStats { return &v1alpha1.AntreaNetworkPolicyStats{} },
+			func() *v1alpha1.AntreaNetworkPolicyStatsList { return &v1alpha1.AntreaNetworkPolicyStatsList{} },
+			func(dst, src *v1alpha1.AntreaNetworkPolicyStatsList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.AntreaNetworkPolicyStatsList) []*v1alpha1.AntreaNetworkPolicyStats {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.AntreaNetworkPolicyStatsList, items []*v1alpha1.AntreaNetworkPolicyStats) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.AntreaNetworkPolicyStats), err
-}
-
-// List takes label and field selectors, and returns the list of AntreaNetworkPolicyStats that match those selectors.
-func (c *FakeAntreaNetworkPolicyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.AntreaNetworkPolicyStatsList, err error) {
-	emptyResult := &v1alpha1.AntreaNetworkPolicyStatsList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(antreanetworkpolicystatsResource, antreanetworkpolicystatsKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.AntreaNetworkPolicyStatsList{ListMeta: obj.(*v1alpha1.AntreaNetworkPolicyStatsList).ListMeta}
-	for _, item := range obj.(*v1alpha1.AntreaNetworkPolicyStatsList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested antreaNetworkPolicyStats.
-func (c *FakeAntreaNetworkPolicyStats) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(antreanetworkpolicystatsResource, c.ns, opts))
-
 }

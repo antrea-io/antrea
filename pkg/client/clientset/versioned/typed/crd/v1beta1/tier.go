@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta1
 
 import (
-	"context"
+	context "context"
 
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,31 +35,32 @@ type TiersGetter interface {
 
 // TierInterface has methods to work with Tier resources.
 type TierInterface interface {
-	Create(ctx context.Context, tier *v1beta1.Tier, opts v1.CreateOptions) (*v1beta1.Tier, error)
-	Update(ctx context.Context, tier *v1beta1.Tier, opts v1.UpdateOptions) (*v1beta1.Tier, error)
+	Create(ctx context.Context, tier *crdv1beta1.Tier, opts v1.CreateOptions) (*crdv1beta1.Tier, error)
+	Update(ctx context.Context, tier *crdv1beta1.Tier, opts v1.UpdateOptions) (*crdv1beta1.Tier, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.Tier, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.TierList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1beta1.Tier, error)
+	List(ctx context.Context, opts v1.ListOptions) (*crdv1beta1.TierList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.Tier, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *crdv1beta1.Tier, err error)
 	TierExpansion
 }
 
 // tiers implements TierInterface
 type tiers struct {
-	*gentype.ClientWithList[*v1beta1.Tier, *v1beta1.TierList]
+	*gentype.ClientWithList[*crdv1beta1.Tier, *crdv1beta1.TierList]
 }
 
 // newTiers returns a Tiers
 func newTiers(c *CrdV1beta1Client) *tiers {
 	return &tiers{
-		gentype.NewClientWithList[*v1beta1.Tier, *v1beta1.TierList](
+		gentype.NewClientWithList[*crdv1beta1.Tier, *crdv1beta1.TierList](
 			"tiers",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta1.Tier { return &v1beta1.Tier{} },
-			func() *v1beta1.TierList { return &v1beta1.TierList{} }),
+			func() *crdv1beta1.Tier { return &crdv1beta1.Tier{} },
+			func() *crdv1beta1.TierList { return &crdv1beta1.TierList{} },
+		),
 	}
 }

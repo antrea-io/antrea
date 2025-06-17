@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,116 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	crdv1alpha2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeExternalEntities implements ExternalEntityInterface
-type FakeExternalEntities struct {
+// fakeExternalEntities implements ExternalEntityInterface
+type fakeExternalEntities struct {
+	*gentype.FakeClientWithList[*v1alpha2.ExternalEntity, *v1alpha2.ExternalEntityList]
 	Fake *FakeCrdV1alpha2
-	ns   string
 }
 
-var externalentitiesResource = v1alpha2.SchemeGroupVersion.WithResource("externalentities")
-
-var externalentitiesKind = v1alpha2.SchemeGroupVersion.WithKind("ExternalEntity")
-
-// Get takes name of the externalEntity, and returns the corresponding externalEntity object, and an error if there is any.
-func (c *FakeExternalEntities) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.ExternalEntity, err error) {
-	emptyResult := &v1alpha2.ExternalEntity{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(externalentitiesResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeExternalEntities(fake *FakeCrdV1alpha2, namespace string) crdv1alpha2.ExternalEntityInterface {
+	return &fakeExternalEntities{
+		gentype.NewFakeClientWithList[*v1alpha2.ExternalEntity, *v1alpha2.ExternalEntityList](
+			fake.Fake,
+			namespace,
+			v1alpha2.SchemeGroupVersion.WithResource("externalentities"),
+			v1alpha2.SchemeGroupVersion.WithKind("ExternalEntity"),
+			func() *v1alpha2.ExternalEntity { return &v1alpha2.ExternalEntity{} },
+			func() *v1alpha2.ExternalEntityList { return &v1alpha2.ExternalEntityList{} },
+			func(dst, src *v1alpha2.ExternalEntityList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha2.ExternalEntityList) []*v1alpha2.ExternalEntity {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha2.ExternalEntityList, items []*v1alpha2.ExternalEntity) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha2.ExternalEntity), err
-}
-
-// List takes label and field selectors, and returns the list of ExternalEntities that match those selectors.
-func (c *FakeExternalEntities) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.ExternalEntityList, err error) {
-	emptyResult := &v1alpha2.ExternalEntityList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(externalentitiesResource, externalentitiesKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha2.ExternalEntityList{ListMeta: obj.(*v1alpha2.ExternalEntityList).ListMeta}
-	for _, item := range obj.(*v1alpha2.ExternalEntityList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested externalEntities.
-func (c *FakeExternalEntities) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(externalentitiesResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a externalEntity and creates it.  Returns the server's representation of the externalEntity, and an error, if there is any.
-func (c *FakeExternalEntities) Create(ctx context.Context, externalEntity *v1alpha2.ExternalEntity, opts v1.CreateOptions) (result *v1alpha2.ExternalEntity, err error) {
-	emptyResult := &v1alpha2.ExternalEntity{}
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateActionWithOptions(externalentitiesResource, c.ns, externalEntity, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha2.ExternalEntity), err
-}
-
-// Update takes the representation of a externalEntity and updates it. Returns the server's representation of the externalEntity, and an error, if there is any.
-func (c *FakeExternalEntities) Update(ctx context.Context, externalEntity *v1alpha2.ExternalEntity, opts v1.UpdateOptions) (result *v1alpha2.ExternalEntity, err error) {
-	emptyResult := &v1alpha2.ExternalEntity{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateActionWithOptions(externalentitiesResource, c.ns, externalEntity, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha2.ExternalEntity), err
-}
-
-// Delete takes name of the externalEntity and deletes it. Returns an error if one occurs.
-func (c *FakeExternalEntities) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(externalentitiesResource, c.ns, name, opts), &v1alpha2.ExternalEntity{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeExternalEntities) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionActionWithOptions(externalentitiesResource, c.ns, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha2.ExternalEntityList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched externalEntity.
-func (c *FakeExternalEntities) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.ExternalEntity, err error) {
-	emptyResult := &v1alpha2.ExternalEntity{}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceActionWithOptions(externalentitiesResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha2.ExternalEntity), err
 }
