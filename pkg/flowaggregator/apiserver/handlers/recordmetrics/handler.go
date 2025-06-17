@@ -31,6 +31,7 @@ func HandleFunc(faq querier.FlowAggregatorQuerier) http.HandlerFunc {
 		metricsResponse := apis.RecordMetricsResponse{
 			NumRecordsExported:     metrics.NumRecordsExported,
 			NumRecordsReceived:     metrics.NumRecordsReceived,
+			NumRecordsDropped:      metrics.NumRecordsDropped,
 			NumFlows:               metrics.NumFlows,
 			NumConnToCollector:     metrics.NumConnToCollector,
 			WithClickHouseExporter: metrics.WithClickHouseExporter,

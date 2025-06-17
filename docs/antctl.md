@@ -766,14 +766,15 @@ the following:
 
 * number of records received by the collector process in the Flow Aggregator
 * number of records exported by the Flow Aggregator
-* number of active flows that are being tracked
+* number of records dropped by the Flow Aggregator (Proxy mode)
+* number of active flows that are being tracked (Aggregate mode)
 * number of exporters connected to the Flow Aggregator
 
 Example outputs of record metrics:
 
 ```bash
-RECORDS-EXPORTED RECORDS-RECEIVED FLOWS EXPORTERS-CONNECTED
-46               118              7     2      
+RECORDS-EXPORTED RECORDS-RECEIVED RECORDS-DROPPED FLOWS EXPORTERS-CONNECTED
+46               118              0               7     2
 ```
 
 ### Multi-cluster commands

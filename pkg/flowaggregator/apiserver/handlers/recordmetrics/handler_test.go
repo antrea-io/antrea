@@ -34,6 +34,7 @@ func TestRecordMetricsQuery(t *testing.T) {
 	faq.EXPECT().GetRecordMetrics().Return(querier.Metrics{
 		NumRecordsExported:     20,
 		NumRecordsReceived:     15,
+		NumRecordsDropped:      5,
 		NumFlows:               30,
 		NumConnToCollector:     1,
 		WithClickHouseExporter: true,
@@ -55,6 +56,7 @@ func TestRecordMetricsQuery(t *testing.T) {
 	assert.Equal(t, apis.RecordMetricsResponse{
 		NumRecordsExported:     20,
 		NumRecordsReceived:     15,
+		NumRecordsDropped:      5,
 		NumFlows:               30,
 		NumConnToCollector:     1,
 		WithClickHouseExporter: true,
@@ -63,6 +65,6 @@ func TestRecordMetricsQuery(t *testing.T) {
 		WithIPFIXExporter:      true,
 	}, received)
 
-	assert.Equal(t, received.GetTableRow(0), []string{"20", "15", "30", "1", "true", "true", "true", "true"})
+	assert.Equal(t, received.GetTableRow(0), []string{"20", "15", "5", "30", "1", "true", "true", "true", "true"})
 
 }
