@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	scheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,31 +35,32 @@ type LabelIdentitiesGetter interface {
 
 // LabelIdentityInterface has methods to work with LabelIdentity resources.
 type LabelIdentityInterface interface {
-	Create(ctx context.Context, labelIdentity *v1alpha1.LabelIdentity, opts v1.CreateOptions) (*v1alpha1.LabelIdentity, error)
-	Update(ctx context.Context, labelIdentity *v1alpha1.LabelIdentity, opts v1.UpdateOptions) (*v1alpha1.LabelIdentity, error)
+	Create(ctx context.Context, labelIdentity *multiclusterv1alpha1.LabelIdentity, opts v1.CreateOptions) (*multiclusterv1alpha1.LabelIdentity, error)
+	Update(ctx context.Context, labelIdentity *multiclusterv1alpha1.LabelIdentity, opts v1.UpdateOptions) (*multiclusterv1alpha1.LabelIdentity, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.LabelIdentity, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.LabelIdentityList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*multiclusterv1alpha1.LabelIdentity, error)
+	List(ctx context.Context, opts v1.ListOptions) (*multiclusterv1alpha1.LabelIdentityList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.LabelIdentity, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *multiclusterv1alpha1.LabelIdentity, err error)
 	LabelIdentityExpansion
 }
 
 // labelIdentities implements LabelIdentityInterface
 type labelIdentities struct {
-	*gentype.ClientWithList[*v1alpha1.LabelIdentity, *v1alpha1.LabelIdentityList]
+	*gentype.ClientWithList[*multiclusterv1alpha1.LabelIdentity, *multiclusterv1alpha1.LabelIdentityList]
 }
 
 // newLabelIdentities returns a LabelIdentities
 func newLabelIdentities(c *MulticlusterV1alpha1Client) *labelIdentities {
 	return &labelIdentities{
-		gentype.NewClientWithList[*v1alpha1.LabelIdentity, *v1alpha1.LabelIdentityList](
+		gentype.NewClientWithList[*multiclusterv1alpha1.LabelIdentity, *multiclusterv1alpha1.LabelIdentityList](
 			"labelidentities",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha1.LabelIdentity { return &v1alpha1.LabelIdentity{} },
-			func() *v1alpha1.LabelIdentityList { return &v1alpha1.LabelIdentityList{} }),
+			func() *multiclusterv1alpha1.LabelIdentity { return &multiclusterv1alpha1.LabelIdentity{} },
+			func() *multiclusterv1alpha1.LabelIdentityList { return &multiclusterv1alpha1.LabelIdentityList{} },
+		),
 	}
 }
