@@ -30,7 +30,7 @@ FROM golang:${GO_VERSION}
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image based on the golang image, which includes codegen tools."
 
-ARG K8S_VERSION=1.31.1
+ARG K8S_VERSION=1.33.1
 # The k8s.io/kube-openapi repo does not have tag, using a workable commit hash.
 # We use the version that is referenced in the Kubernetes go.mod (for the
 # correct K8s version).
@@ -44,11 +44,11 @@ RUN go install k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go install k8s.io/kube-openapi/cmd/openapi-gen@$KUBEOPENAPI_VERSION && \
     go install k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \
     go install k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION && \
-    go install go.uber.org/mock/mockgen@v0.5.0 && \
+    go install go.uber.org/mock/mockgen@v0.5.2 && \
     go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0 && \
     go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0 && \
     go install golang.org/x/tools/cmd/goimports@latest && \
-    go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.3
+    go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.18.0
 
 COPY --from=protoc /tmp/protoc/bin /usr/local/bin
 COPY --from=protoc /tmp/protoc/include /usr/local/include
