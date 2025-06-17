@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"net"
@@ -27,7 +28,9 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
@@ -39,13 +42,15 @@ import (
 var (
 	// this is used for unit testing
 	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
-		return exporter.initExportingProcess()
+		return exporter.initExportingProcessImpl()
 	}
 
 	defaultFS = afero.NewOsFs()
 )
 
 const flowCollectorCertDir = "/etc/flow-aggregator/certs/flow-collector"
+
+var ErrIPFIXExporterBackoff = errors.New("backoff needed")
 
 type IPFIXExporter struct {
 	config                     flowaggregatorconfig.FlowCollectorConfig
@@ -63,6 +68,11 @@ type IPFIXExporter struct {
 	clusterUUID                uuid.UUID
 	maxIPFIXMsgSize            int
 	tls                        ipfixExporterTLSConfig
+	// initBackoff is used to enforce some minimum delay between initialization attempts.
+	initBackoff wait.Backoff
+	// initNextAttempt is the time after which the next initialization can be attempted.
+	initNextAttempt time.Time
+	clock           clock.Clock
 }
 
 type ipfixExporterTLSConfig struct {
@@ -102,10 +112,29 @@ func genObservationDomainID(clusterUUID uuid.UUID) uint32 {
 	return observationDomainID
 }
 
+func newInitBackoff() wait.Backoff {
+	return wait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   2,
+		Jitter:   0,
+		Steps:    10,
+		Cap:      30 * time.Second,
+	}
+}
+
 func NewIPFIXExporter(
 	clusterUUID uuid.UUID,
 	opt *options.Options,
 	registry ipfix.IPFIXRegistry,
+) *IPFIXExporter {
+	return newIPFIXExporterWithClock(clusterUUID, opt, registry, clock.RealClock{})
+}
+
+func newIPFIXExporterWithClock(
+	clusterUUID uuid.UUID,
+	opt *options.Options,
+	registry ipfix.IPFIXRegistry,
+	clock clock.Clock,
 ) *IPFIXExporter {
 	var sendJSONRecord bool
 	if opt.Config.FlowCollector.RecordFormat == "JSON" {
@@ -134,13 +163,21 @@ func NewIPFIXExporter(
 		clusterUUID:                clusterUUID,
 		maxIPFIXMsgSize:            int(opt.Config.FlowCollector.MaxIPFIXMsgSize),
 		tls:                        newIPFIXExporterTLSConfig(opt.Config.FlowCollector.TLS),
+		initBackoff:                newInitBackoff(),
+		initNextAttempt:            clock.Now(),
+		clock:                      clock,
 	}
 
 	return exporter
 }
 
+func (e *IPFIXExporter) reset() {
+	e.exportingProcess.CloseConnToCollector()
+	e.exportingProcess = nil
+}
+
 func (e *IPFIXExporter) Start() {
-	// no-op, initIPFIXExportingProcess will be called whenever AddRecord is
+	// no-op, initExportingProcessWithBackoff will be called whenever AddRecord is
 	// called as needed.
 }
 
@@ -149,19 +186,24 @@ func (e *IPFIXExporter) Stop() {
 		if err := e.bufferedExporter.Flush(); err != nil {
 			klog.ErrorS(err, "Error when flushing buffered IPFIX exporter")
 		}
-		e.exportingProcess.CloseConnToCollector()
-		e.exportingProcess = nil
+		e.reset()
 	}
 }
 
+// AddRecord will send the record to the destination IPFIX collector.
+// If necessary, it will initialize the exporting process (i.e., the connection to the
+// connector). An exponential backoff mechanism is used to limit the number of initialization
+// attempts. If a delay is required before the next initialization attempt, an error wrapping
+// ErrIPFIXExporterBackoff will be returned.
 func (e *IPFIXExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
 	if err := e.sendRecord(record, isRecordIPv6); err != nil {
 		if e.exportingProcess != nil {
-			e.exportingProcess.CloseConnToCollector()
-			e.exportingProcess = nil
+			e.reset()
 		}
-		// in case of error, the FlowAggregator flowExportLoop will retry after activeFlowRecordTimeout
-		return fmt.Errorf("error when sending IPFIX record: %v", err)
+		// in case of error:
+		// in Aggregate mode: the FlowAggregator flowExportLoop will retry after activeFlowRecordTimeout
+		// in Proxy mode: the FlowAggregator flowExportLoop will retry the next time a record is proxied
+		return fmt.Errorf("error when sending IPFIX record: %w", err)
 	}
 	return nil
 }
@@ -190,16 +232,17 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 		if err := e.bufferedExporter.Flush(); err != nil {
 			klog.ErrorS(err, "Error when flushing buffered IPFIX exporter")
 		}
-		e.exportingProcess.CloseConnToCollector()
-		e.exportingProcess = nil
+		e.reset()
 	}
 }
 
 func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
 	if e.exportingProcess == nil {
-		if err := initIPFIXExportingProcess(e); err != nil {
-			// in case of error, the FlowAggregator flowExportLoop will retry after activeFlowRecordTimeout
-			return fmt.Errorf("error when initializing IPFIX exporting process: %v", err)
+		if err := e.initExportingProcessWithBackoff(); err != nil {
+			// in case of error:
+			// in Aggregate mode: the FlowAggregator flowExportLoop will retry after activeFlowRecordTimeout
+			// in Proxy mode: the FlowAggregator flowExportLoop will retry the next time a record is proxied
+			return fmt.Errorf("error when initializing IPFIX exporting process: %w", err)
 		}
 	}
 	templateID := e.templateIDv4
@@ -267,6 +310,25 @@ func (e *IPFIXExporter) prepareExportingProcessTLSClientConfig() (*exporter.Expo
 }
 
 func (e *IPFIXExporter) initExportingProcess() error {
+	return initIPFIXExportingProcess(e)
+}
+
+func (e *IPFIXExporter) initExportingProcessWithBackoff() error {
+	now := e.clock.Now()
+	if e.initNextAttempt.After(now) {
+		return ErrIPFIXExporterBackoff
+	}
+	e.initNextAttempt = now.Add(e.initBackoff.Step())
+	if err := e.initExportingProcess(); err != nil {
+		return err
+	}
+	// Reset backoff after a successful initialization.
+	e.initBackoff = newInitBackoff()
+	e.initNextAttempt = now
+	return nil
+}
+
+func (e *IPFIXExporter) initExportingProcessImpl() error {
 	// We reload the certificate data every time, in case the files have been updated.
 	tlsClientConfig, err := e.prepareExportingProcessTLSClientConfig()
 	if err != nil {
@@ -347,9 +409,8 @@ func (e *IPFIXExporter) createAndSendTemplate(isRecordIPv6 bool) error {
 	}
 	if err := e.sendTemplateSet(isRecordIPv6); err != nil {
 		// No need to flush first, as no data records should have been sent yet.
-		e.exportingProcess.CloseConnToCollector()
-		e.exportingProcess = nil
-		return fmt.Errorf("sending %s template set failed, err: %v", recordIPFamily, err)
+		e.reset()
+		return fmt.Errorf("sending %s template set failed, err: %w", recordIPFamily, err)
 	}
 	klog.V(2).InfoS("Exporting process initialized", "templateSetIPFamily", recordIPFamily)
 	return nil
@@ -466,7 +527,7 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) error {
 func (e *IPFIXExporter) createInfoElementForTemplateSet(ieName string, enterpriseID uint32) (ipfixentities.InfoElementWithValue, error) {
 	element, err := e.registry.GetInfoElement(ieName, enterpriseID)
 	if err != nil {
-		return nil, fmt.Errorf("%s not present. returned error: %v", ieName, err)
+		return nil, fmt.Errorf("%s not present. returned error: %w", ieName, err)
 	}
 	ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
 	if err != nil {
@@ -479,5 +540,9 @@ func (e *IPFIXExporter) Flush() error {
 	if e.exportingProcess == nil {
 		return nil
 	}
-	return e.bufferedExporter.Flush()
+	if err := e.bufferedExporter.Flush(); err != nil {
+		e.reset()
+		return err
+	}
+	return nil
 }

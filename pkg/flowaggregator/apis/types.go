@@ -57,6 +57,7 @@ func (r FlowRecordsResponse) SortRows() bool {
 type RecordMetricsResponse struct {
 	NumRecordsExported     int64 `json:"numRecordsExported,omitempty"`
 	NumRecordsReceived     int64 `json:"numRecordsReceived,omitempty"`
+	NumRecordsDropped      int64 `json:"numRecordsDropped,omitempty"`
 	NumFlows               int64 `json:"numFlows,omitempty"`
 	NumConnToCollector     int64 `json:"numConnToCollector,omitempty"`
 	WithClickHouseExporter bool  `json:"withClickHouseExporter,omitempty"`
@@ -66,13 +67,14 @@ type RecordMetricsResponse struct {
 }
 
 func (r RecordMetricsResponse) GetTableHeader() []string {
-	return []string{"RECORDS-EXPORTED", "RECORDS-RECEIVED", "FLOWS", "EXPORTERS-CONNECTED", "CLICKHOUSE-EXPORTER", "S3-EXPORTER", "LOG-EXPORTER", "IPFIX-EXPORTER"}
+	return []string{"RECORDS-EXPORTED", "RECORDS-RECEIVED", "RECORDS-DROPPED", "FLOWS", "EXPORTERS-CONNECTED", "CLICKHOUSE-EXPORTER", "S3-EXPORTER", "LOG-EXPORTER", "IPFIX-EXPORTER"}
 }
 
 func (r RecordMetricsResponse) GetTableRow(maxColumnLength int) []string {
 	return []string{
 		strconv.Itoa(int(r.NumRecordsExported)),
 		strconv.Itoa(int(r.NumRecordsReceived)),
+		strconv.Itoa(int(r.NumRecordsDropped)),
 		strconv.Itoa(int(r.NumFlows)),
 		strconv.Itoa(int(r.NumConnToCollector)),
 		strconv.FormatBool(r.WithClickHouseExporter),
