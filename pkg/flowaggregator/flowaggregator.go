@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -112,7 +113,7 @@ type flowAggregator struct {
 	includePodLabels            bool
 	k8sClient                   kubernetes.Interface
 	podStore                    podstore.Interface
-	numRecordsExported          int64
+	numRecordsExported          atomic.Int64
 	updateCh                    chan *options.Options
 	configFile                  string
 	configWatcher               *fsnotify.Watcher
@@ -123,6 +124,7 @@ type flowAggregator struct {
 	s3Exporter                  exporter.Interface
 	logExporter                 exporter.Interface
 	logTickerDuration           time.Duration
+	exportersMutex              sync.Mutex
 }
 
 func NewFlowAggregator(
@@ -394,7 +396,7 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 		case <-logTicker.C:
 			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
-			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported)
+			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported.Load())
 			klog.V(4).InfoS("Total number of flows stored in Flow Aggregator", "count", fa.aggregationProcess.GetNumFlows())
 			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
 		case opt, ok := <-updateCh:
@@ -449,7 +451,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	if err := fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
 		return err
 	}
-	fa.numRecordsExported = fa.numRecordsExported + 1
+	fa.numRecordsExported.Add(1)
 	return nil
 }
 
@@ -564,16 +566,19 @@ func (fa *flowAggregator) GetFlowRecords(flowKey *ipfixintermediate.FlowKey) []m
 }
 
 func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
-	return querier.Metrics{
-		NumRecordsExported:     fa.numRecordsExported,
-		NumRecordsReceived:     fa.collectingProcess.GetNumRecordsReceived(),
-		NumFlows:               fa.aggregationProcess.GetNumFlows(),
-		NumConnToCollector:     fa.collectingProcess.GetNumConnToCollector(),
-		WithClickHouseExporter: fa.clickHouseExporter != nil,
-		WithS3Exporter:         fa.s3Exporter != nil,
-		WithLogExporter:        fa.logExporter != nil,
-		WithIPFIXExporter:      fa.ipfixExporter != nil,
+	metrics := querier.Metrics{
+		NumRecordsExported: fa.numRecordsExported.Load(),
+		NumRecordsReceived: fa.collectingProcess.GetNumRecordsReceived(),
+		NumFlows:           fa.aggregationProcess.GetNumFlows(),
+		NumConnToCollector: fa.collectingProcess.GetNumConnToCollector(),
 	}
+	fa.exportersMutex.Lock()
+	defer fa.exportersMutex.Unlock()
+	metrics.WithClickHouseExporter = fa.clickHouseExporter != nil
+	metrics.WithS3Exporter = fa.s3Exporter != nil
+	metrics.WithLogExporter = fa.logExporter != nil
+	metrics.WithIPFIXExporter = fa.ipfixExporter != nil
+	return metrics
 }
 
 func (fa *flowAggregator) watchConfiguration(stopCh <-chan struct{}) {
@@ -627,6 +632,11 @@ func (fa *flowAggregator) handleWatcherEvent() error {
 }
 
 func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
+	// This function potentially modifies the exporter pointer fields (e.g.,
+	// fa.ipfixExporter). We protect these writes by locking fa.exportersMutex, so that
+	// GetRecordMetrics() can safely read the fields (by also locking the mutex).
+	fa.exportersMutex.Lock()
+	defer fa.exportersMutex.Unlock()
 	if opt.Config.FlowCollector.Enable {
 		if fa.ipfixExporter == nil {
 			klog.InfoS("Enabling Flow-Collector")
