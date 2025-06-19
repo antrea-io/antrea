@@ -83,7 +83,6 @@ const (
 	antreaPostRoutingChain = "ANTREA-POSTROUTING"
 	antreaInputChain       = "ANTREA-INPUT"
 	antreaOutputChain      = "ANTREA-OUTPUT"
-	antreaMangleChain      = "ANTREA-MANGLE"
 
 	kubeProxyServiceChain = "KUBE-SERVICES"
 
@@ -585,7 +584,7 @@ func (c *Client) writeEKSMangleRules(iptablesData *bytes.Buffer) {
 	// whether we need to install this rule.
 	klog.V(2).InfoS("Add iptables mangle rules for EKS")
 	writeLine(iptablesData, []string{
-		"-A", antreaMangleChain,
+		"-A", antreaPreRoutingChain,
 		"-m", "comment", "--comment", `"Antrea: AWS, primary ENI"`,
 		"-i", c.nodeConfig.GatewayConfig.Name, "-j", "CONNMARK",
 		"--restore-mark", "--nfmask", "0x80", "--ctmask", "0x80",
@@ -691,7 +690,7 @@ func (c *Client) syncIPTables() error {
 		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
 		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules", false},
 		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules", false},
-		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules", false}, // TODO: unify the chain naming style
+		{iptables.MangleTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules", false},
 		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
 	}
 	if c.proxyAll || c.isCloudEKS {
@@ -893,7 +892,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 
 	// Write head lines anyway so the undesired rules can be deleted when noEncap -> encap.
 	writeLine(iptablesData, "*mangle")
-	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
+	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
 
 	// When Antrea is used to enforce NetworkPolicies in EKS, additional iptables
