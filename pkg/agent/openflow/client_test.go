@@ -683,6 +683,37 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.77.101 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 			},
 		},
+		{
+			name:             "IPv4 Hybrid",
+			enableIPv4:       true,
+			skipWindows:      true,
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			ipsecTunOFPort:   uint32(100),
+			trafficEncapMode: config.TrafficEncapModeHybrid,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT",
+				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=100 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=201,pkt_mark=0x40000000/0x40000000,ip,reg0=0x2/0xf,reg4=0x8000000/0x8000000,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.77.101 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
+		{
+			name:             "IPv6 Hybrid",
+			enableIPv6:       true,
+			skipWindows:      true,
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv6: peerGwIPv6},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv6: tunnelPeerIPv6},
+			ipsecTunOFPort:   uint32(100),
+			trafficEncapMode: config.TrafficEncapModeHybrid,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=100 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=fec0:192:168:77::101 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=201,pkt_mark=0x40000000/0x40000000,ipv6,reg0=0x2/0xf,reg4=0x8000000/0x8000000,ipv6_dst=fec0:10:10:1::/80 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:fec0:192:168:77::101->tun_ipv6_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,ipv6_dst=fec0:10:10:1::/80 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

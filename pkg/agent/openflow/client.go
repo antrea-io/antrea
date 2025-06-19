@@ -592,6 +592,9 @@ func (c *client) InstallNodeFlows(hostname string,
 			flows = append(flows, c.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP)...)
 		} else {
 			flows = append(flows, c.featurePodConnectivity.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, tunnelPeerIP, peerPodCIDR)...)
+			if c.enableEgress && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+				flows = append(flows, c.featurePodConnectivity.l3FwdFlowFromGWToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP))
+			}
 		}
 		if c.enableEgress {
 			flows = append(flows, c.featureEgress.snatSkipNodeFlow(tunnelPeerIP))

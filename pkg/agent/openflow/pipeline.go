@@ -1364,6 +1364,25 @@ func (f *featurePodConnectivity) l3FwdFlowsToRemoteViaTun(localGatewayMAC net.Ha
 	return flows
 }
 
+// l3FwdFlowFromGWToRemoteViaTun generates the flow to match the packets sourced from the Antrea gateway and destined for
+// remote Pods and forward them via tunnel. This flow is installed only in hybrid mode.
+func (f *featurePodConnectivity) l3FwdFlowFromGWToRemoteViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) binding.Flow {
+	ipProtocol := getIPProtocol(peerSubnet.IP)
+	flow := L3ForwardingTable.ofTable.BuildFlow(priorityNormal+1).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(ipProtocol).
+		MatchRegMark(FromGatewayRegMark, FromExternalRegMark).
+		MatchPktMark(types.RemotePodSourceMark, &types.RemotePodSourceMark).
+		MatchDstIPNet(peerSubnet).
+		Action().SetSrcMAC(localGatewayMAC).  // Rewrite src MAC to local gateway MAC.
+		Action().SetDstMAC(GlobalVirtualMAC). // Rewrite dst MAC to virtual MAC.
+		Action().SetTunnelDst(tunnelPeer).    // Flow based tunnel. Set tunnel destination.
+		Action().LoadRegMark(ToTunnelRegMark).
+		Action().GotoTable(L3DecTTLTable.GetID()).
+		Done()
+	return flow
+}
+
 // l3FwdFlowToRemoteViaGW generates the flow to match the packets destined for remote Pods via the Antrea gateway. It is
 // used when the cross-Node connections that do not require encapsulation (in noEncap, networkPolicyOnly, or hybrid mode).
 func (f *featurePodConnectivity) l3FwdFlowToRemoteViaGW(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet) binding.Flow {
