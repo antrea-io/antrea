@@ -235,9 +235,9 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local Pods" -j ACCEPT
 -A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local Pods" -j ACCEPT
 `,
-				"mangle": `:ANTREA-MANGLE - [0:0]
-:ANTREA-OUTPUT - [0:0]
--A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE
+				"mangle": `:ANTREA-OUTPUT - [0:0]
+:ANTREA-PREROUTING - [0:0]
+-A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
 -A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
 -A ANTREA-OUTPUT -o antrea-gw0 -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -j MARK --set-xmark 0x80000000/0x80000000
 `,
