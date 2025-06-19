@@ -316,7 +316,11 @@ func (c *Client) syncIPInfra() {
 	if err := c.syncRoute(); err != nil {
 		klog.ErrorS(err, "Failed to sync route")
 	}
-	klog.V(3).Info("Successfully synced iptables, ipset and route")
+	if err := c.syncNeighbor(); err != nil {
+		klog.ErrorS(err, "Failed to sync neighbor")
+	}
+
+	klog.V(3).Info("Successfully synced iptables, ipset, route and neighbor")
 }
 
 type routeKey struct {
@@ -414,6 +418,41 @@ func (c *Client) syncRoute() error {
 	for _, route := range gwAutoconfRoutes {
 		restoreRoute(route)
 	}
+	return nil
+}
+
+func (c *Client) syncNeighbor() error {
+	neighborList, err := c.netlink.NeighList(c.nodeConfig.GatewayConfig.LinkIndex, netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	neighborKeys := sets.New[string]()
+	for i := range neighborList {
+		n := &neighborList[i]
+		if n.State != netlink.NUD_PERMANENT {
+			continue
+		}
+		neighborKeys.Insert(n.IP.String())
+	}
+	restoreNeighbor := func(neighbor *netlink.Neigh) bool {
+		if neighborKeys.Has(neighbor.IP.String()) {
+			return true
+		}
+		if err := c.netlink.NeighSet(neighbor); err != nil {
+			klog.ErrorS(err, "failed to sync neighbor", "Neighbor", neighbor)
+			return false
+		}
+		return true
+	}
+	c.nodeNeighbors.Range(func(_, v interface{}) bool {
+		return restoreNeighbor(v.(*netlink.Neigh))
+	})
+	if c.proxyAll {
+		c.serviceNeighbors.Range(func(_, v interface{}) bool {
+			return restoreNeighbor(v.(*netlink.Neigh))
+		})
+	}
+
 	return nil
 }
 
