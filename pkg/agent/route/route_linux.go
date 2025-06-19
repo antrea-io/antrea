@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -83,7 +84,6 @@ const (
 	antreaPostRoutingChain = "ANTREA-POSTROUTING"
 	antreaInputChain       = "ANTREA-INPUT"
 	antreaOutputChain      = "ANTREA-OUTPUT"
-	antreaMangleChain      = "ANTREA-MANGLE"
 
 	kubeProxyServiceChain = "KUBE-SERVICES"
 
@@ -585,7 +585,7 @@ func (c *Client) writeEKSMangleRules(iptablesData *bytes.Buffer) {
 	// whether we need to install this rule.
 	klog.V(2).InfoS("Add iptables mangle rules for EKS")
 	writeLine(iptablesData, []string{
-		"-A", antreaMangleChain,
+		"-A", antreaPreRoutingChain,
 		"-m", "comment", "--comment", `"Antrea: AWS, primary ENI"`,
 		"-i", c.nodeConfig.GatewayConfig.Name, "-j", "CONNMARK",
 		"--restore-mark", "--nfmask", "0x80", "--ctmask", "0x80",
@@ -647,6 +647,20 @@ type jumpRule struct {
 	insert   bool
 }
 
+func (j *jumpRule) GetKey() *jumpRuleKey {
+	return &jumpRuleKey{
+		table:    j.table,
+		srcChain: j.srcChain,
+		dstChain: j.dstChain,
+	}
+}
+
+type jumpRuleKey struct {
+	table    string
+	srcChain string
+	dstChain string
+}
+
 func (c *Client) removeUnexpectedAntreaJumpRule(protocol iptables.Protocol, jumpRule jumpRule) error {
 	// List all the existing rules of the table and the chain where the Antrea jump rule will be added.
 	allExistingRules, err := c.iptables.ListRules(protocol, jumpRule.table, jumpRule.srcChain)
@@ -691,7 +705,7 @@ func (c *Client) syncIPTables() error {
 		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
 		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules", false},
 		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules", false},
-		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules", false}, // TODO: unify the chain naming style
+		{iptables.MangleTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules", false},
 		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
 	}
 	if c.proxyAll || c.isCloudEKS {
@@ -704,6 +718,8 @@ func (c *Client) syncIPTables() error {
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false})
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false})
 	}
+
+	jumpRuleKeys := sets.New[jumpRuleKey]()
 	for _, rule := range jumpRules {
 		if err := c.iptables.EnsureChain(ipProtocol, rule.table, rule.dstChain); err != nil {
 			return err
@@ -719,6 +735,21 @@ func (c *Client) syncIPTables() error {
 		} else {
 			if err := c.iptables.AppendRule(ipProtocol, rule.table, rule.srcChain, ruleSpec); err != nil {
 				return err
+			}
+		}
+		jumpRuleKeys.Insert(*rule.GetKey())
+	}
+
+	existingJumpRuleKeys := c.getJumpRuleKeys(ipProtocol)
+	for key := range existingJumpRuleKeys {
+		if !jumpRuleKeys.Has(key) {
+			err := c.iptables.DeleteRule(ipProtocol, key.table, key.srcChain, []string{"-j", key.dstChain})
+			if err != nil {
+				klog.ErrorS(err, "Failed to delete orphan jump rule", "table", key.table, "srcChain", key.srcChain, "dstChain", key.dstChain)
+			}
+			err = c.iptables.DeleteChain(ipProtocol, key.table, key.dstChain)
+			if err != nil {
+				klog.ErrorS(err, "Failed to delete orphan chain", "table", key.table, "dstChain", key.dstChain)
 			}
 		}
 	}
@@ -797,6 +828,36 @@ func (c *Client) syncIPTables() error {
 	}
 
 	return nil
+}
+
+func (c *Client) getJumpRuleKeys(ipProtocol iptables.Protocol) sets.Set[jumpRuleKey] {
+	allChains := map[string][]string{
+		iptables.RawTable:    {iptables.PreRoutingChain, iptables.OutputChain},
+		iptables.MangleTable: {iptables.PreRoutingChain, iptables.InputChain, iptables.ForwardChain, iptables.OutputChain, iptables.PostRoutingChain},
+		iptables.NATTable:    {iptables.PreRoutingChain, iptables.InputChain, iptables.OutputChain, iptables.PostRoutingChain},
+		iptables.FilterTable: {iptables.InputChain, iptables.ForwardChain, iptables.OutputChain},
+	}
+	jumpRuleKeys := sets.New[jumpRuleKey]()
+	re := regexp.MustCompile(`-j\s+(ANTREA-[A-Z0-9-]+)$`)
+	for table, chains := range allChains {
+		for _, chain := range chains {
+			allRules, err := c.iptables.ListRules(ipProtocol, table, chain)
+			if err != nil {
+				klog.ErrorS(err, "failed to list rules", "table", table, "chain", chain)
+				continue
+			}
+			for _, rules := range allRules {
+				for _, rule := range rules {
+					matches := re.FindStringSubmatch(rule)
+					if len(matches) > 1 {
+						key := jumpRuleKey{table, chain, matches[1]}
+						jumpRuleKeys.Insert(key)
+					}
+				}
+			}
+		}
+	}
+	return jumpRuleKeys
 }
 
 func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
@@ -893,7 +954,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 
 	// Write head lines anyway so the undesired rules can be deleted when noEncap -> encap.
 	writeLine(iptablesData, "*mangle")
-	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
+	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
 
 	// When Antrea is used to enforce NetworkPolicies in EKS, additional iptables
