@@ -16,12 +16,18 @@ package podwatch
 
 import (
 	"context"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	current "github.com/containernetworking/cni/pkg/types/100"
+	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
+	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -31,14 +37,10 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	current "github.com/containernetworking/cni/pkg/types/100"
-	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
-	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
-
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	cnitypes "antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/pkg/agent/filestore"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/types"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -62,6 +64,9 @@ const (
 
 	interfaceDefaultMTU = 1500
 	vlanIDMax           = 4094
+
+	dataPath          = "/var/run/antrea"
+	sriovInterfaceDir = "sriov"
 )
 
 type InterfaceConfigurator interface {
@@ -94,6 +99,15 @@ type PodController struct {
 	// Map from "namespace/pod" to podCNIInfo.
 	cniCache           sync.Map
 	vfDeviceIDUsageMap sync.Map
+	// sriovInterfaceStore stores the SRIOV interface configs of containers in files.
+	// The SRIOV interface config will be saved as a file per interface, the file name
+	// is container ID + interface name.
+	sriovInterfaceStore *filestore.FileStore
+}
+
+func init() {
+	// This is for Gob encoding and decoding, which is using by filestore.FileStore.
+	gob.Register(&interfacestore.InterfaceConfig{})
 }
 
 func NewPodController(
@@ -105,7 +119,13 @@ func NewPodController(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 ) (*PodController, error) {
 	ifaceStore := interfacestore.NewInterfaceStore()
-	interfaceConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore)
+	fs := afero.NewBasePathFs(afero.NewOsFs(), dataPath)
+	serializer := &filestore.GobSerializer{}
+	sriovInterfaceStore, err := filestore.NewFileStore(fs, sriovInterfaceDir, serializer)
+	if err != nil {
+		return nil, fmt.Errorf("error creating file store for SRIOV Interfaces: %w", err)
+	}
+	interfaceConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore, sriovInterfaceStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SecondaryInterfaceConfigurator: %v", err)
 	}
@@ -122,6 +142,7 @@ func NewPodController(
 		podUpdateSubscriber:   podUpdateSubscriber,
 		ovsBridgeClient:       ovsBridgeClient,
 		interfaceStore:        ifaceStore,
+		sriovInterfaceStore:   sriovInterfaceStore,
 		interfaceConfigurator: interfaceConfigurator,
 		ipamAllocator:         ipam.GetSecondaryNetworkAllocator(),
 	}
@@ -134,16 +155,16 @@ func NewPodController(
 		resyncPeriod,
 	)
 
-	// This is the case when secondary bridge is not configured and no VLAN interfaces at all. In this case,
-	// we should skip both initializeSecondaryInterfaceStore and reconcileSecondaryInterfaces.
-	if ovsBridgeClient != nil {
-		if err := pc.initializeSecondaryInterfaceStore(); err != nil {
-			return nil, fmt.Errorf("failed to initialize secondary interface store: %w", err)
-		}
+	if err := pc.initializeOVSSecondaryInterfaceStore(); err != nil {
+		return nil, fmt.Errorf("failed to initialize secondary interface store from OVS: %w", err)
+	}
 
-		if err := pc.reconcileSecondaryInterfaces(primaryInterfaceStore); err != nil {
-			return nil, fmt.Errorf("failed to restore CNI cache and reconcile secondary interfaces: %w", err)
-		}
+	if err := pc.initializeSRIOVSecondaryInterfaceStore(); err != nil {
+		return nil, fmt.Errorf("failed to initialize secondary interface store for SRIOV devices: %w", err)
+	}
+
+	if err := pc.reconcileSecondaryInterfaces(primaryInterfaceStore); err != nil {
+		return nil, fmt.Errorf("failed to restore CNI cache and reconcile secondary interfaces: %w", err)
 	}
 
 	// podUpdateSubscriber can be nil with test code.
@@ -563,8 +584,13 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 	return netObj, netObjExist
 }
 
-// initializeSecondaryInterfaceStore restores secondary interfaceStore when agent restarts.
-func (pc *PodController) initializeSecondaryInterfaceStore() error {
+// initializeOVSSecondaryInterfaceStore restores secondary interfaceStore for VLAN interfaces when agent restarts.
+func (pc *PodController) initializeOVSSecondaryInterfaceStore() error {
+	// This is the case when secondary bridge is not configured and no VLAN interfaces at all. In this case,
+	// we should skip initializeOVSSecondaryInterfaceStore.
+	if pc.ovsBridgeClient == nil {
+		return nil
+	}
 	ovsPorts, err := pc.ovsBridgeClient.GetPortList()
 	if err != nil {
 		return fmt.Errorf("failed to list OVS ports for the secondary bridge: %w", err)
@@ -602,6 +628,37 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 	return nil
 }
 
+// initializeSRIOVSecondaryInterfaceStore restores secondary interfaceStore for SRIOV interfaces when agent restarts.
+func (pc *PodController) initializeSRIOVSecondaryInterfaceStore() error {
+	objects, err := pc.sriovInterfaceStore.LoadAll()
+	if err != nil {
+		return err
+	}
+
+	var podCache []podSriovVFDeviceIDInfo
+	for _, obj := range objects {
+		ifconf := obj.Object.(*interfacestore.InterfaceConfig)
+		pc.interfaceStore.AddInterface(ifconf)
+		podKey := podKeyGet(ifconf.PodName, ifconf.PodNamespace)
+		if _, ok := pc.vfDeviceIDUsageMap.Load(podKey); !ok {
+			podCache, err = pc.buildVFDeviceIDListPerPod(ifconf.PodName, ifconf.PodNamespace)
+			if err != nil {
+				return err
+			}
+		}
+		var updatedSRIOVInfo []podSriovVFDeviceIDInfo
+		for _, vf := range podCache {
+			if vf.vfDeviceID == ifconf.InterfaceName {
+				vf.ifName = ifconf.IFDev
+			}
+			updatedSRIOVInfo = append(updatedSRIOVInfo, vf)
+		}
+		pc.vfDeviceIDUsageMap.Store(podKey, updatedSRIOVInfo)
+	}
+	klog.InfoS("Successfully initialized the secondary bridge interface store for SRIOV devices")
+	return nil
+}
+
 // reconcileSecondaryInterfaces restores cniCache when agent restarts using primary interfaceStore.
 func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore interfacestore.InterfaceStore) error {
 	knownInterfaces := primaryInterfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
@@ -614,21 +671,24 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 		})
 	}
 
-	var staleInterfaces []*interfacestore.InterfaceConfig
-	// secondaryInterfaces is the list of interfaces currently in the secondary local cache.
-	secondaryInterfaces := pc.interfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
-	for _, containerConfig := range secondaryInterfaces {
-		_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
-		if !exists || containerConfig.OFPort == -1 {
-			// Deletes ports not in the CNI cache.
-			staleInterfaces = append(staleInterfaces, containerConfig)
+	// Clean up stale VLAN interfaces when agent restarts.
+	if pc.ovsBridgeClient != nil {
+		var staleInterfaces []*interfacestore.InterfaceConfig
+		// secondaryInterfaces is the list of interfaces currently in the secondary local cache.
+		secondaryInterfaces := pc.interfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+		for _, containerConfig := range secondaryInterfaces {
+			_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
+			if !exists || containerConfig.OFPort == -1 {
+				// Deletes ports not in the CNI cache.
+				staleInterfaces = append(staleInterfaces, containerConfig)
+			}
 		}
-	}
 
-	// If there are any stale interfaces, pass them to removeInterfaces()
-	if len(staleInterfaces) > 0 {
-		if err := pc.removeInterfaces(staleInterfaces); err != nil {
-			klog.ErrorS(err, "Failed to remove stale secondary interfaces", "staleInterfaces", staleInterfaces)
+		// If there are any stale interfaces, pass them to removeInterfaces()
+		if len(staleInterfaces) > 0 {
+			if err := pc.removeInterfaces(staleInterfaces); err != nil {
+				klog.ErrorS(err, "Failed to remove stale secondary interfaces", "staleInterfaces", staleInterfaces)
+			}
 		}
 	}
 

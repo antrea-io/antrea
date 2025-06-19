@@ -664,7 +664,7 @@ func (s *CNIServer) Initialize(
 ) error {
 	var err error
 	s.podConfigurator, err = newPodConfigurator(
-		s.kubeClient, ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
+		s.kubeClient, ovsBridgeClient, ofClient, s.routeClient, ifaceStore, nil, s.nodeConfig.GatewayConfig.MAC,
 		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(),
 		s.disableTXChecksumOffload, podUpdateNotifier, s.podInformer, s.containerAccess)
 	if err != nil {
