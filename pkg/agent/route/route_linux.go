@@ -156,8 +156,8 @@ type Client struct {
 	clusterNodeIP6s sync.Map
 	// egressRoutes caches ip routes about Egresses.
 	egressRoutes sync.Map
-	// ipRules caches ip rules.
-	ipRules sync.Map
+	// egressRules caches ip rules about Egresses.
+	egressRules sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
@@ -280,10 +280,33 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		}
 	}
 
+	// In hybrid mode, traffic originating from remote Pod CIDRs is forwarded like this:
+	//     remote Pods -> tunnel (remote Node OVS) -> tunnel (local Node OVS) -> antrea-gw0 (local Node) -> external network.
+	//
+	// To ensure reply packets follow a symmetric path, Antrea uses policy routing on the local Node. However, the
+	// kernel's strict RPF check only validates source paths against the main routing table. Since the transport
+	// interface (not antrea‑gw0) is listed as the next-hop for these routes, strict RPF drops the reply packets
+	// (because policy routing is ignored by rp_filter). As a result, we set its rp_filter to loose mode (2).
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		if err := sysctl.EnsureSysctlNetValue(fmt.Sprintf("ipv4/conf/%s/rp_filter", c.nodeConfig.GatewayConfig.Name), 2); err != nil {
+			return fmt.Errorf("failed to set %s rp_filter to 2 (loose mode): %w", c.nodeConfig.GatewayConfig.Name, err)
+		}
+	} else {
+		if err := sysctl.EnsureSysctlNetValue(fmt.Sprintf("ipv4/conf/%s/rp_filter", c.nodeConfig.GatewayConfig.Name), 1); err != nil {
+			return fmt.Errorf("failed to set %s rp_filter to 1 (strict mode): %w", c.nodeConfig.GatewayConfig.Name, err)
+		}
+	}
+
 	// Set up the IP routes and sysctl parameters to support all Services in AntreaProxy.
 	if c.proxyAll {
 		if err := c.initServiceIPRoutes(); err != nil {
 			return fmt.Errorf("failed to initialize Service IP routes: %v", err)
+		}
+	}
+	// Set up the policy routing ip rule to support Egress in hybrid mode.
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		if err := c.initEgressPolicyIPRules(); err != nil {
+			return fmt.Errorf("failed to initialize ip rules in hybrid mode: %v", err)
 		}
 	}
 	// Build static iptables rules for NodeNetworkPolicy.
@@ -523,7 +546,7 @@ func (c *Client) syncIPRule() error {
 		}
 		return true
 	}
-	c.ipRules.Range(func(_, v interface{}) bool {
+	c.egressRules.Range(func(_, v interface{}) bool {
 		return restoreRule(v.(*netlink.Rule))
 	})
 
@@ -1088,6 +1111,31 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		c.writeEKSMangleRules(iptablesData)
 	}
 
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: restore fwmark from connmark for reply Egress packets from remote Pods"`,
+			"!", "-i", c.nodeConfig.GatewayConfig.Name, // Don't match packets from the local gateway to exclude request Egress packets.
+			"-m", "conntrack", "--ctstate", "ESTABLISHED", // Match packets from established connections.
+			"-m", "conntrack", "--ctdir", "REPLY", // Match reply packets.
+			// Match packets with conntrack mark.
+			"-m", "connmark", "--mark", fmt.Sprintf("%#08x/%#08x", types.EgressReturnToRemoteMark, types.EgressReturnToRemoteMark),
+			// Restore fwmark from the conntrack mark.
+			"-j", "CONNMARK", "--restore-mark", "--nfmask", fmt.Sprintf("%#08x", types.EgressReturnToRemoteMark), "--ctmask", fmt.Sprintf("%#08x", types.EgressReturnToRemoteMark),
+		}...)
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: persist connmark for the first Egress request packet from remote Pods"`,
+			"-i", c.nodeConfig.GatewayConfig.Name,
+			"!", "-s", podCIDR.String(), // Don't match packets from local Pods.
+			"-m", "conntrack", "--ctstate", "NEW", // Match the first packet.
+			// Match packets whose fwmark value (0–7) is non-zero. In the OVS pipeline, this mark is set for Egress connections.
+			"-m", "mark", "!", "--mark", fmt.Sprintf("%#08x/%#08x", 0, types.SNATIPMarkMask),
+			// Load EgressReturnToRemoteMark into the conntrack mark so it persists for the lifetime of the Egress connection.
+			"-j", "CONNMARK", "--set-mark", fmt.Sprintf("%#08x/%#08x", types.EgressReturnToRemoteMark, types.EgressReturnToRemoteMark),
+		}...)
+	}
+
 	// To make liveness/readiness probe traffic bypass ingress rules of Network Policies, mark locally generated packets
 	// that will be sent to OVS so we can identify them later in the OVS pipeline.
 	// It must match source address because kube-proxy ipvs mode will redirect ingress packets to output chain, and they
@@ -1495,6 +1543,38 @@ func (c *Client) initNodeLatencyRules() {
 	}
 }
 
+func (c *Client) initEgressPolicyIPRules() error {
+	rules, err := c.netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	for i := range rules {
+		rule := rules[i]
+		if rule.Table != types.EgressPolicyRouteTable {
+			continue
+		}
+		// Delete all rules whose table is EgressPolicyRouteTable on startup. These rules will be reinstalled each time
+		// after restart.
+		c.netlink.RuleDel(&rule)
+	}
+
+	if c.networkConfig.IPv6Enabled {
+		rule := generateRule(types.EgressPolicyRouteTable, types.EgressReturnToRemoteMark, &types.EgressReturnToRemoteMark, netlink.FAMILY_V6)
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
+		}
+		c.egressRules.Store(generateRuleKey(rule), rule)
+	}
+	if c.networkConfig.IPv4Enabled {
+		rule := generateRule(types.EgressPolicyRouteTable, types.EgressReturnToRemoteMark, &types.EgressReturnToRemoteMark, netlink.FAMILY_V4)
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
+		}
+		c.egressRules.Store(generateRuleKey(rule), rule)
+	}
+	return nil
+}
+
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
 // based on the desired podCIDRs.
 func (c *Client) Reconcile(podCIDRs []string) error {
@@ -1523,6 +1603,13 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			route := &netlink.Route{Dst: cidr}
 			if err := c.netlink.RouteDel(route); err != nil && err != unix.ESRCH {
 				return err
+			}
+			// In hybrid mode, a policy route might be installed, remove it.
+			if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+				route = &netlink.Route{Dst: cidr, Table: types.EgressPolicyRouteTable}
+				if err := c.netlink.RouteDel(route); err != nil && err != unix.ESRCH {
+					return err
+				}
 			}
 		}
 	}
@@ -1674,7 +1761,7 @@ func (c *Client) listIPv6NeighborsOnGateway() (map[string]*netlink.Neigh, error)
 }
 
 // AddRoutes adds routes to a new podCIDR. It overrides the routes if they already exist.
-func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP net.IP) error {
+func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGWIP net.IP) error {
 	var nodeTransportIPAddr *net.IPNet
 	if podCIDR.IP.To4() == nil {
 		nodeTransportIPAddr = c.nodeConfig.NodeTransportIPv6Addr
@@ -1693,7 +1780,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		Dst: podCIDR,
 	}
 	var routes []*netlink.Route
-	requireNodeGwIPv6RouteAndNeigh := false
+	requireNodeGWIPv6RouteAndNeigh := false
 	// If WireGuard is enabled, create a route via WireGuard device regardless of the traffic encapsulation modes.
 	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		podCIDRRoute.LinkIndex = c.nodeConfig.WireGuardConfig.LinkIndex
@@ -1706,25 +1793,49 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		routes = append(routes, podCIDRRoute)
 	} else if c.networkConfig.NeedsTunnelToPeer(nodeIP, nodeTransportIPAddr) {
 		if podCIDR.IP.To4() == nil {
-			requireNodeGwIPv6RouteAndNeigh = true
+			requireNodeGWIPv6RouteAndNeigh = true
 			// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
 			// TODO: Kernel >= 4.16 supports adding IPv6 route with onlink flag. Delete this route after Kernel version
 			//       requirement bump in future.
 			routes = append(routes, &netlink.Route{
-				Dst:       &net.IPNet{IP: nodeGwIP, Mask: net.CIDRMask(128, 128)},
+				Dst:       &net.IPNet{IP: nodeGWIP, Mask: net.CIDRMask(128, 128)},
 				LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
 			})
 		} else {
 			podCIDRRoute.Flags = int(netlink.FLAG_ONLINK)
 		}
 		podCIDRRoute.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
-		podCIDRRoute.Gw = nodeGwIP
+		podCIDRRoute.Gw = nodeGWIP
 		routes = append(routes, podCIDRRoute)
 	} else if c.networkConfig.NeedsDirectRoutingToPeer(nodeIP, nodeTransportIPAddr) {
 		// NoEncap traffic to Node on the same subnet.
 		// Set the peerNodeIP as next hop.
 		podCIDRRoute.Gw = nodeIP
 		routes = append(routes, podCIDRRoute)
+
+		// In hybrid, install a policy route destined for remote Pod CIDR via antrea-gw0.
+		if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+			policyRoute := &netlink.Route{
+				Dst:       podCIDR,
+				LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+				Gw:        nodeGWIP,
+				Table:     types.EgressPolicyRouteTable,
+			}
+			if podCIDR.IP.To4() == nil {
+				requireNodeGWIPv6RouteAndNeigh = true
+				// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
+				// TODO: Kernel >= 4.16 supports adding IPv6 routes with onlink flag. Delete this route after kernel version
+				//       requirement bumps in future.
+				routes = append(routes, &netlink.Route{
+					Dst:       &net.IPNet{IP: nodeGWIP, Mask: net.CIDRMask(128, 128)},
+					LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+					Table:     types.EgressPolicyRouteTable,
+				})
+			} else {
+				policyRoute.Flags = int(netlink.FLAG_ONLINK)
+			}
+			routes = append(routes, policyRoute)
+		}
 	} else {
 		// NetworkPolicyOnly mode or NoEncap traffic to a Node on a different subnet.
 		// Routing should be handled by a route which is already present on the host.
@@ -1736,12 +1847,12 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		}
 	}
 	// Delete stale route and neigh to peer gateway.
-	if !requireNodeGwIPv6RouteAndNeigh && utilnet.IsIPv6(nodeGwIP) {
+	if !requireNodeGWIPv6RouteAndNeigh && utilnet.IsIPv6(nodeGWIP) {
 		routeToNodeGwIPNetv6 := &netlink.Route{
-			Dst: &net.IPNet{IP: nodeGwIP, Mask: net.CIDRMask(128, 128)},
+			Dst: &net.IPNet{IP: nodeGWIP, Mask: net.CIDRMask(128, 128)},
 		}
 		if err := c.netlink.RouteDel(routeToNodeGwIPNetv6); err == nil {
-			klog.InfoS("Deleted route to peer gateway", "node", nodeName, "nodeIP", nodeIP, "nodeGatewayIP", nodeGwIP)
+			klog.InfoS("Deleted route to peer gateway", "node", nodeName, "nodeIP", nodeIP, "nodeGatewayIP", nodeGWIP)
 		} else if err != unix.ESRCH {
 			return fmt.Errorf("failed to delete route to peer gateway on Node %s (%s) with netlink. Route config: %s. Error: %v",
 				nodeName, nodeIP, routeToNodeGwIPNetv6, err)
@@ -1749,22 +1860,22 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		neigh := &netlink.Neigh{
 			LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
 			Family:    netlink.FAMILY_V6,
-			IP:        nodeGwIP,
+			IP:        nodeGWIP,
 		}
 		if err := c.netlink.NeighDel(neigh); err == nil {
-			klog.InfoS("Deleted neigh to peer gateway", "node", nodeName, "nodeIP", nodeIP, "nodeGatewayIP", nodeGwIP)
+			klog.InfoS("Deleted neigh to peer gateway", "node", nodeName, "nodeIP", nodeIP, "nodeGatewayIP", nodeGWIP)
 			c.nodeNeighbors.Delete(podCIDRStr)
 		} else if err != unix.ENOENT {
 			return fmt.Errorf("failed to delete neigh %v to gw %s: %v", neigh, c.nodeConfig.GatewayConfig.Name, err)
 		}
 	}
 	// Add IPv6 neighbor if the given podCIDR is using IPv6 address.
-	if requireNodeGwIPv6RouteAndNeigh && utilnet.IsIPv6(nodeGwIP) {
+	if requireNodeGWIPv6RouteAndNeigh && utilnet.IsIPv6(nodeGWIP) {
 		neigh := &netlink.Neigh{
 			LinkIndex:    c.nodeConfig.GatewayConfig.LinkIndex,
 			Family:       netlink.FAMILY_V6,
 			State:        netlink.NUD_PERMANENT,
-			IP:           nodeGwIP,
+			IP:           nodeGWIP,
 			HardwareAddr: globalVMAC,
 		}
 		if err := c.netlink.NeighSet(neigh); err != nil {
@@ -2004,27 +2115,39 @@ func (c *Client) DeleteEgressRoutes(tableID uint32) error {
 	return nil
 }
 
-func (c *Client) AddEgressRule(tableID uint32, mark uint32) error {
+func (c *Client) AddEgressRule(tableID uint32, mark uint32, isIPv6 bool) error {
+	family := netlink.FAMILY_V4
+	if isIPv6 {
+		family = netlink.FAMILY_V6
+	}
 	rule := netlink.NewRule()
 	rule.Table = int(tableID)
 	rule.Mark = mark
 	rule.Mask = ptr.To(types.SNATIPMarkMask)
+	rule.Family = family
 	if err := c.netlink.RuleAdd(rule); err != nil {
 		return fmt.Errorf("error adding ip rule %v: %w", rule, err)
 	}
+	c.egressRules.Store(generateRuleKey(rule), rule)
 	return nil
 }
 
-func (c *Client) DeleteEgressRule(tableID uint32, mark uint32) error {
+func (c *Client) DeleteEgressRule(tableID uint32, mark uint32, isIPv6 bool) error {
+	family := netlink.FAMILY_V4
+	if isIPv6 {
+		family = netlink.FAMILY_V6
+	}
 	rule := netlink.NewRule()
 	rule.Table = int(tableID)
 	rule.Mark = mark
 	rule.Mask = ptr.To(types.SNATIPMarkMask)
+	rule.Family = family
 	if err := c.netlink.RuleDel(rule); err != nil {
 		if err.Error() != "no such process" {
 			return fmt.Errorf("error deleting ip rule %v: %w", rule, err)
 		}
 	}
+	c.egressRules.Delete(generateRuleKey(rule))
 	return nil
 }
 
@@ -2457,6 +2580,15 @@ func isIPv6Protocol(protocol binding.Protocol) bool {
 		return true
 	}
 	return false
+}
+
+func generateRule(table int, mark uint32, mask *uint32, family int) *netlink.Rule {
+	rule := netlink.NewRule()
+	rule.Table = table
+	rule.Mark = mark
+	rule.Mask = mask
+	rule.Family = family
+	return rule
 }
 
 func generateRoute(ip net.IP, mask int, gw net.IP, linkIndex int, scope netlink.Scope) *netlink.Route {

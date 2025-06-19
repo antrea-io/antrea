@@ -62,8 +62,9 @@ func TestEgress(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	// Egress works for encap mode only.
-	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+	// Egress works for encap and hybrid modes.
+	skipIfEncapModeIs(t, data, config.TrafficEncapModeNoEncap)
+	skipIfEncapModeIs(t, data, config.TrafficEncapModeNetworkPolicyOnly)
 
 	t.Run("testEgressClientIP", func(t *testing.T) { testEgressClientIP(t, data) })
 	t.Run("testEgressClientIPFromVLANSubnet", func(t *testing.T) { testEgressClientIPFromVLANSubnet(t, data) })
@@ -632,6 +633,9 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 }
 
 func testEgressUpdateNodeSelector(t *testing.T, data *TestData) {
+	// This test relies on IP neighbors to determine the effective Egress IP and requires all Nodes to be in the same subnet.
+	// In hybrid mode, Nodes are in different subnets, so the test is skipped.
+	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 	tests := []struct {
 		name      string
 		ipRange   v1beta1.IPRange
@@ -685,6 +689,9 @@ func testEgressUpdateNodeSelector(t *testing.T, data *TestData) {
 }
 
 func testEgressNodeFailure(t *testing.T, data *TestData) {
+	// This test relies on IP neighbors to determine the effective Egress IP and requires all Nodes to be in the same subnet.
+	// In hybrid mode, Nodes are in different subnets, so the test is skipped.
+	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 	tests := []struct {
 		name      string
 		ipRange   v1beta1.IPRange

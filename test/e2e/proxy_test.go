@@ -286,7 +286,7 @@ func TestProxyNodePortServiceIPv6(t *testing.T) {
 
 func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	skipIfHasWindowsNodes(t)
-	skipIfNumNodesLessThan(t, 2)
+	skipIfNumNodesLessThan(t, 3)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -296,11 +296,11 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
 
-	nodes := []string{nodeName(0), nodeName(1)}
-	nodeIPs := []string{controlPlaneNodeIPv4(), workerNodeIPv4(1)}
+	nodes := []string{nodeName(1), nodeName(2)}
+	nodeIPs := []string{workerNodeIPv4(1), workerNodeIPv4(2)}
 	ipProtocol := corev1.IPv4Protocol
 	if isIPv6 {
-		nodeIPs = []string{controlPlaneNodeIPv6(), workerNodeIPv6(1)}
+		nodeIPs = []string{workerNodeIPv6(1), workerNodeIPv6(2)}
 		ipProtocol = corev1.IPv6Protocol
 	}
 
@@ -550,11 +550,11 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 	skipIfProxyAllDisabled(t, data)
 
 	svcName := fmt.Sprintf("nodeport-external-traffic-policy-test-ipv6-%v", isIPv6)
-	nodes := []string{nodeName(0), nodeName(1)}
-	nodeIPs := []string{controlPlaneNodeIPv4(), workerNodeIPv4(1)}
+	nodes := []string{nodeName(1), nodeName(2)}
+	nodeIPs := []string{workerNodeIPv4(1), workerNodeIPv4(2)}
 	ipProtocol := corev1.IPv4Protocol
 	if isIPv6 {
-		nodeIPs = []string{controlPlaneNodeIPv6(), workerNodeIPv6(1)}
+		nodeIPs = []string{workerNodeIPv6(1), workerNodeIPv6(2)}
 		ipProtocol = corev1.IPv6Protocol
 	}
 
@@ -1096,7 +1096,8 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 	defer teardownTest(t, data)
 	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
-	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+	skipIfEncapModeIs(t, data, config.TrafficEncapModeNoEncap)
+	skipIfEncapModeIs(t, data, config.TrafficEncapModeNetworkPolicyOnly)
 
 	ingressNode := controlPlaneNodeName()
 	backendNode1 := workerNodeName(1)
@@ -1125,12 +1126,12 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 		withSessionAffinity bool
 	}{
 		{
-			name:                "IPv4,withSessionAffinity",
-			withSessionAffinity: true,
-		},
-		{
 			name:                "IPv4,withoutSessionAffinity",
 			withSessionAffinity: false,
+		},
+		{
+			name:                "IPv4,withSessionAffinity",
+			withSessionAffinity: true,
 		},
 	}
 	for _, tc := range testCases {

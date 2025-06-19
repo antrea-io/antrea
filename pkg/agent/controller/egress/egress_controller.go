@@ -599,6 +599,8 @@ func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo
 	if subnetInfo == nil {
 		return nil
 	}
+
+	subnetGateway := net.ParseIP(subnetInfo.Gateway)
 	// Get or create a route table for this subnet.
 	rt, exists := c.egressRouteTables[*subnetInfo]
 	if !exists {
@@ -613,14 +615,14 @@ func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo
 		if !ok {
 			return fmt.Errorf("interface for subnet %v not found", subnetInfo)
 		}
-		if err := c.routeClient.AddEgressRoutes(tableID, devID, net.ParseIP(subnetInfo.Gateway), int(subnetInfo.PrefixLength)); err != nil {
+		if err := c.routeClient.AddEgressRoutes(tableID, devID, subnetGateway, int(subnetInfo.PrefixLength)); err != nil {
 			return fmt.Errorf("error creating route table for subnet %v: %w", subnetInfo, err)
 		}
 		rt = &egressRouteTable{tableID: tableID, marks: sets.New[uint32]()}
 		c.egressRouteTables[*subnetInfo] = rt
 	}
 	// Add an IP rule to make the marked Egress traffic look up the table.
-	if err := c.routeClient.AddEgressRule(rt.tableID, ipState.mark); err != nil {
+	if err := c.routeClient.AddEgressRule(rt.tableID, ipState.mark, subnetGateway.To4() == nil); err != nil {
 		return fmt.Errorf("error adding ip rule for mark %v: %w", ipState.mark, err)
 	}
 	// Track the route table's usage.
@@ -642,7 +644,8 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState) error {
 	if !exists {
 		return nil
 	}
-	if err := c.routeClient.DeleteEgressRule(rt.tableID, ipState.mark); err != nil {
+	subnetGateway := net.ParseIP(ipState.subnetInfo.Gateway)
+	if err := c.routeClient.DeleteEgressRule(rt.tableID, ipState.mark, subnetGateway.To4() == nil); err != nil {
 		return fmt.Errorf("error deleting ip rule for mark %v: %w", ipState.mark, err)
 	}
 	rt.marks.Delete(ipState.mark)
