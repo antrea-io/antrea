@@ -45,6 +45,7 @@ var (
 type fakeInterfaceConfigurator struct {
 	configureContainerLinkError         error
 	removeContainerLinkError            error
+	recoverVFInterfaceNameError         error
 	advertiseContainerAddrError         error
 	ovsInterfaceTypeMapping             string
 	validateVFRepInterfaceError         error
@@ -56,6 +57,13 @@ type fakeInterfaceConfigurator struct {
 	getInterceptedInterfacesError       error
 	checkContainerInterfaceError        error
 	containerVFLink                     interface{}
+}
+
+func (c *fakeInterfaceConfigurator) recoverVFInterfaceName(containerNetNS string, containerIfaceName string) error {
+	if c.recoverVFInterfaceNameError != nil {
+		return c.recoverVFInterfaceNameError
+	}
+	return nil
 }
 
 func (c *fakeInterfaceConfigurator) configureContainerLink(podName string, podNamespace string, containerID string, containerNetNS string, containerIfaceName string, mtu int, brSriovVFDeviceID string, podSriovVFDeviceID string, result *current.Result, containerAccess *containerAccessArbitrator) error {
