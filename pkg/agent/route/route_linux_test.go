@@ -115,6 +115,41 @@ func TestSyncRoutes(t *testing.T) {
 	assert.NoError(t, c.syncRoute())
 }
 
+func TestSyncNeighbors(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockNetlink := netlinktest.NewMockInterface(ctrl)
+
+	c := &Client{
+		netlink:          mockNetlink,
+		proxyAll:         true,
+		nodeNeighbors:    sync.Map{},
+		serviceNeighbors: sync.Map{},
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{LinkIndex: 10, IPv4: net.ParseIP("192.168.0.1"), IPv6: net.ParseIP("aabb:ccdd::1")},
+			PodIPv4CIDR:   ip.MustParseCIDR("192.168.0.0/24"),
+			PodIPv6CIDR:   ip.MustParseCIDR("aabb:ccdd::/64"),
+		},
+	}
+
+	tamperedMAC, _ := net.ParseMAC("de:ad:be:ef:12:34")
+	tamperedNodeNeighbor1 := &netlink.Neigh{LinkIndex: 10, Family: netlink.FAMILY_V6, State: netlink.NUD_PERMANENT, IP: net.ParseIP("aabb:ccee::1"), HardwareAddr: tamperedMAC}
+	nodeNeighbor1 := &netlink.Neigh{LinkIndex: 10, Family: netlink.FAMILY_V6, State: netlink.NUD_PERMANENT, IP: net.ParseIP("aabb:ccee::1"), HardwareAddr: globalVMAC}
+	nodeNeighbor2 := &netlink.Neigh{LinkIndex: 10, Family: netlink.FAMILY_V6, State: netlink.NUD_PERMANENT, IP: net.ParseIP("aabb:ccdd::1"), HardwareAddr: globalVMAC}
+	serviceNeighbor1 := &netlink.Neigh{LinkIndex: 10, Family: netlink.FAMILY_V4, State: netlink.NUD_PERMANENT, IP: config.VirtualServiceIPv4, HardwareAddr: globalVMAC}
+	serviceNeighbor2 := &netlink.Neigh{LinkIndex: 10, Family: netlink.FAMILY_V6, State: netlink.NUD_PERMANENT, IP: config.VirtualServiceIPv6, HardwareAddr: globalVMAC}
+	mockNetlink.EXPECT().NeighListExecute(netlink.Ndmsg{Family: netlink.FAMILY_ALL, Index: 10, State: netlink.NUD_PERMANENT}).Return([]netlink.Neigh{*tamperedNodeNeighbor1, *serviceNeighbor1}, nil)
+	mockNetlink.EXPECT().NeighSet(nodeNeighbor1)
+	mockNetlink.EXPECT().NeighSet(nodeNeighbor2)
+	mockNetlink.EXPECT().NeighSet(serviceNeighbor2)
+
+	c.nodeNeighbors.Store("aabb:ccee::1", nodeNeighbor1)
+	c.nodeNeighbors.Store("aabb:ccdd::1", nodeNeighbor2)
+	c.serviceNeighbors.Store(config.VirtualServiceIPv4.String(), serviceNeighbor1)
+	c.serviceNeighbors.Store(config.VirtualServiceIPv6.String(), serviceNeighbor2)
+
+	assert.NoError(t, c.syncNeighbor())
+}
+
 func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
