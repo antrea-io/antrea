@@ -67,7 +67,7 @@ func NewController(
 	// k8s.v1.cni.cncf.io/networks Annotation defined.
 	podWatchController, err := podwatch.NewPodController(
 		k8sClient, netAttachDefClient, podInformer,
-		podUpdateSubscriber, primaryInterfaceStore, ovsBridgeClient)
+		podUpdateSubscriber, primaryInterfaceStore, nil, ovsBridgeClient)
 	if err != nil {
 		return nil, err
 	}

@@ -15,18 +15,21 @@
 package cniserver
 
 import (
+	"encoding/gob"
 	"fmt"
 	"net"
 	"testing"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"
+	"antrea.io/antrea/pkg/agent/filestore"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
@@ -40,6 +43,11 @@ var (
 	containerMAC = "01:02:03:04:05:06"
 	hostIfaceMAC = "06:05:04:03:02:01"
 	containerIP  = net.ParseIP("10.1.2.100")
+)
+
+const (
+	testDataPath = "/var/run/antrea-test/file-store"
+	testSRIOVDir = "sriov"
 )
 
 type fakeInterfaceConfigurator struct {
@@ -577,22 +585,31 @@ func TestConfigureSriovSecondaryInterface(t *testing.T) {
 			ifaceConfigurator := newTestInterfaceConfigurator()
 			ifaceConfigurator.configureContainerLinkError = tc.configureLinkErr
 			ifaceConfigurator.advertiseContainerAddrError = tc.advertiseErr
-			podConfigurator, _ := NewSecondaryInterfaceConfigurator(nil, interfacestore.NewInterfaceStore())
+			sriovIfaceStore := getSRIOVIfaceStore()
+			podConfigurator, _ := NewSecondaryInterfaceConfigurator(nil, interfacestore.NewInterfaceStore(), sriovIfaceStore)
 			podConfigurator.ifConfigurator = ifaceConfigurator
 			err := podConfigurator.ConfigureSriovSecondaryInterface(podName, testPodNamespace, containerID, containerNS, containerIfaceName, mtu, tc.podSriovVFDeviceID, &current.Result{})
 			assert.Equal(t, tc.expectedErr, err)
 			if tc.expectedErr != nil {
 				assert.Equal(t, 0, podConfigurator.ifaceStore.Len())
+				assertSRIOVIfaceStoreLen(t, 0, podConfigurator.sriovIfaceStore)
 				return
 			}
 
 			assert.Equal(t, 1, podConfigurator.ifaceStore.Len())
+			assertSRIOVIfaceStoreLen(t, 1, podConfigurator.sriovIfaceStore)
 			intfConfig, _ := podConfigurator.ifaceStore.GetContainerInterface(containerID)
 			assert.Equal(t, tc.intfConfig, intfConfig)
 			assert.NoError(t, podConfigurator.DeleteSriovSecondaryInterface(intfConfig))
 			assert.Equal(t, 0, podConfigurator.ifaceStore.Len())
+			assertSRIOVIfaceStoreLen(t, 0, podConfigurator.sriovIfaceStore)
 		})
 	}
+}
+
+func assertSRIOVIfaceStoreLen(t *testing.T, expectdLen int, store *filestore.FileStore) {
+	objs, _ := store.LoadAll()
+	assert.Equal(t, expectdLen, len(objs))
 }
 
 func newTestContainerInterfaceConfig(podName, containerID, ifDev string, vlan int) *interfacestore.InterfaceConfig {
@@ -612,7 +629,7 @@ func TestConfigureVLANSecondaryInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	ifaceStore := interfacestore.NewInterfaceStore()
-	pc, err := NewSecondaryInterfaceConfigurator(mockOVSBridgeClient, ifaceStore)
+	pc, err := NewSecondaryInterfaceConfigurator(mockOVSBridgeClient, ifaceStore, nil)
 	require.NoError(t, err, "No error expected in podConfigurator constructor")
 	testIfaceConfigurator := newTestInterfaceConfigurator()
 	pc.ifConfigurator = testIfaceConfigurator
@@ -661,7 +678,7 @@ func TestDeleteVLANSecondaryInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	ifaceStore := interfacestore.NewInterfaceStore()
-	pc, err := NewSecondaryInterfaceConfigurator(mockOVSBridgeClient, ifaceStore)
+	pc, err := NewSecondaryInterfaceConfigurator(mockOVSBridgeClient, ifaceStore, nil)
 	require.Nil(t, err, "No error expected in podConfigurator constructor")
 
 	podName := "pod1"
@@ -684,13 +701,22 @@ func TestDeleteVLANSecondaryInterface(t *testing.T) {
 	assert.False(t, found, "Interface should not be in the local cache anymore")
 }
 
+func getSRIOVIfaceStore() *filestore.FileStore {
+	gob.Register(&interfacestore.InterfaceConfig{})
+	serializer := &filestore.GobSerializer{}
+	fs := afero.NewBasePathFs(afero.NewMemMapFs(), testDataPath)
+	sriovIfaceStore, _ := filestore.NewFileStore(fs, testSRIOVDir, serializer)
+	return sriovIfaceStore
+}
+
 func createPodConfigurator(controller *gomock.Controller, testIfaceConfigurator *fakeInterfaceConfigurator) *podConfigurator {
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
-	configurator, _ := newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
+	sriovIfaceStore := getSRIOVIfaceStore()
+	configurator, _ := newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, sriovIfaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	configurator.ifConfigurator = testIfaceConfigurator
 	return configurator
 }
