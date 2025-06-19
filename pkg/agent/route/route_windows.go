@@ -88,6 +88,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 	nodeNetworkPolicyEnabled bool,
 	nodeLatencyMonitorEnabled bool,
 	multicastEnabled bool,
+	egressEnabled bool, // ignored
 	nodeSNATRandomFully bool, // ignored
 	egressSNATRandomFully bool, // ignored
 	serviceCIDRProvider servicecidr.Interface,
@@ -626,11 +627,11 @@ func (c *Client) DeleteEgressRoutes(tableID uint32) error {
 	return errors.New("DeleteEgressRoutes is not implemented on Windows")
 }
 
-func (c *Client) AddEgressRule(tableID uint32, mark uint32) error {
+func (c *Client) AddEgressRule(tableID uint32, mark uint32, isIPv6 bool) error {
 	return errors.New("AddEgressRule is not implemented on Windows")
 }
 
-func (c *Client) DeleteEgressRule(tableID uint32, mark uint32) error {
+func (c *Client) DeleteEgressRule(tableID uint32, mark uint32, isIPv6 bool) error {
 	return errors.New("DeleteEgressRule is not implemented on Windows")
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,17 +73,17 @@ func (mr *MockInterfaceMockRecorder) AddEgressRoutes(tableID, dev, gateway, pref
 }
 
 // AddEgressRule mocks base method.
-func (m *MockInterface) AddEgressRule(tableID, mark uint32) error {
+func (m *MockInterface) AddEgressRule(tableID, mark uint32, isIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddEgressRule", tableID, mark)
+	ret := m.ctrl.Call(m, "AddEgressRule", tableID, mark, isIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddEgressRule indicates an expected call of AddEgressRule.
-func (mr *MockInterfaceMockRecorder) AddEgressRule(tableID, mark any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddEgressRule(tableID, mark, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressRule", reflect.TypeOf((*MockInterface)(nil).AddEgressRule), tableID, mark)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressRule", reflect.TypeOf((*MockInterface)(nil).AddEgressRule), tableID, mark, isIPv6)
 }
 
 // AddExternalIPConfigs mocks base method.
@@ -227,17 +227,17 @@ func (mr *MockInterfaceMockRecorder) DeleteEgressRoutes(tableID any) *gomock.Cal
 }
 
 // DeleteEgressRule mocks base method.
-func (m *MockInterface) DeleteEgressRule(tableID, mark uint32) error {
+func (m *MockInterface) DeleteEgressRule(tableID, mark uint32, isIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteEgressRule", tableID, mark)
+	ret := m.ctrl.Call(m, "DeleteEgressRule", tableID, mark, isIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteEgressRule indicates an expected call of DeleteEgressRule.
-func (mr *MockInterfaceMockRecorder) DeleteEgressRule(tableID, mark any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) DeleteEgressRule(tableID, mark, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressRule", reflect.TypeOf((*MockInterface)(nil).DeleteEgressRule), tableID, mark)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressRule", reflect.TypeOf((*MockInterface)(nil).DeleteEgressRule), tableID, mark, isIPv6)
 }
 
 // DeleteExternalIPConfigs mocks base method.
