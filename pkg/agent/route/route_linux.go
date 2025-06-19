@@ -152,6 +152,8 @@ type Client struct {
 	clusterNodeIP6s sync.Map
 	// egressRoutes caches ip routes about Egresses.
 	egressRoutes sync.Map
+	// egressNeighbors caches neighbors for Egress.
+	egressNeighbors sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
@@ -280,6 +282,13 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 			return fmt.Errorf("failed to initialize Service IP routes: %v", err)
 		}
 	}
+
+	if c.networkConfig.TrafficEncapMode.IsHybrid() {
+		if err := c.initEgressSNATIPRoutes(); err != nil {
+			return fmt.Errorf("failed to initialize egress SNAT routes: %v", err)
+		}
+	}
+
 	// Build static iptables rules for NodeNetworkPolicy.
 	if c.nodeNetworkPolicyEnabled {
 		c.initNodeNetworkPolicy()
@@ -1131,6 +1140,20 @@ func (c *Client) initIPRoutes() error {
 	return nil
 }
 
+func (c *Client) initEgressSNATIPRoutes() error {
+	if c.networkConfig.IPv4Enabled {
+		if err := c.addVirtualEgressSNATIPRoute(false); err != nil {
+			return err
+		}
+	}
+	if c.networkConfig.IPv6Enabled {
+		if err := c.addVirtualEgressSNATIPRoute(true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *Client) initServiceIPRoutes() error {
 	if c.networkConfig.IPv4Enabled {
 		if err := c.addVirtualServiceIPRoute(false); err != nil {
@@ -1866,6 +1889,31 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	}
 	c.serviceRoutes.Store(svcIP.String(), route)
 	klog.InfoS("Added virtual Service IP route", "route", route)
+
+	return nil
+}
+
+func (c *Client) addVirtualEgressSNATIPRoute(isIPv6 bool) error {
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	virtualIP := config.VirtualEgressSNATIPv4
+	mask := net.IPv4len * 8
+	if isIPv6 {
+		virtualIP = config.VirtualEgressSNATIPv6
+		mask = net.IPv6len * 8
+	}
+
+	neigh := generateNeigh(virtualIP, linkIndex)
+	if err := c.netlink.NeighSet(neigh); err != nil {
+		return fmt.Errorf("failed to add new IP neighbour for %s: %w", virtualIP, err)
+	}
+	c.egressNeighbors.Store(virtualIP.String(), neigh)
+
+	route := generateRoute(virtualIP, mask, nil, linkIndex, netlink.SCOPE_LINK)
+	if err := c.netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to install route for virtual Egress SNAT IP %s: %w", virtualIP.String(), err)
+	}
+	c.egressRoutes.Store(virtualIP.String(), []*netlink.Route{route})
+	klog.InfoS("Added virtual Egress SNAT IP route", "route", route)
 
 	return nil
 }

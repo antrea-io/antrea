@@ -82,6 +82,9 @@ var (
 	// - The IP is used as destination IP in host routing entry to forward DNATed NodePort packets to Antrea gateway
 	VirtualNodePortDNATIPv4 = net.ParseIP("169.254.0.252")
 	VirtualNodePortDNATIPv6 = net.ParseIP("fc01::aabb:ccdd:eefe")
+
+	VirtualEgressSNATIPv4 = net.ParseIP("169.254.0.252")
+	VirtualEgressSNATIPv6 = net.ParseIP("fc01::aabb:ccdd:eefd")
 )
 
 type NodeType uint8

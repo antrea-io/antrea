@@ -70,6 +70,10 @@ func (m TrafficEncapModeType) IsNetworkPolicyOnly() bool {
 	return m == TrafficEncapModeNetworkPolicyOnly
 }
 
+func (m TrafficEncapModeType) IsHybrid() bool {
+	return m == TrafficEncapModeHybrid
+}
+
 // SupportsNoEncap returns true if TrafficEncapModeType supports noEncap.
 func (m TrafficEncapModeType) SupportsNoEncap() bool {
 	return m == TrafficEncapModeNoEncap || m == TrafficEncapModeHybrid || m.IsNetworkPolicyOnly()
