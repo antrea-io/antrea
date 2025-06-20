@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1beta1
 
 import (
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // TierLister helps list Tiers.
@@ -28,19 +28,19 @@ import (
 type TierLister interface {
 	// List lists all Tiers in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1beta1.Tier, err error)
+	List(selector labels.Selector) (ret []*crdv1beta1.Tier, err error)
 	// Get retrieves the Tier from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1beta1.Tier, error)
+	Get(name string) (*crdv1beta1.Tier, error)
 	TierListerExpansion
 }
 
 // tierLister implements the TierLister interface.
 type tierLister struct {
-	listers.ResourceIndexer[*v1beta1.Tier]
+	listers.ResourceIndexer[*crdv1beta1.Tier]
 }
 
 // NewTierLister returns a new TierLister.
 func NewTierLister(indexer cache.Indexer) TierLister {
-	return &tierLister{listers.New[*v1beta1.Tier](indexer, v1beta1.Resource("tier"))}
+	return &tierLister{listers.New[*crdv1beta1.Tier](indexer, crdv1beta1.Resource("tier"))}
 }

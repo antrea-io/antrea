@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // GatewayLister helps list Gateways.
@@ -28,7 +28,7 @@ import (
 type GatewayLister interface {
 	// List lists all Gateways in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.Gateway, err error)
+	List(selector labels.Selector) (ret []*multiclusterv1alpha1.Gateway, err error)
 	// Gateways returns an object that can list and get Gateways.
 	Gateways(namespace string) GatewayNamespaceLister
 	GatewayListerExpansion
@@ -36,17 +36,17 @@ type GatewayLister interface {
 
 // gatewayLister implements the GatewayLister interface.
 type gatewayLister struct {
-	listers.ResourceIndexer[*v1alpha1.Gateway]
+	listers.ResourceIndexer[*multiclusterv1alpha1.Gateway]
 }
 
 // NewGatewayLister returns a new GatewayLister.
 func NewGatewayLister(indexer cache.Indexer) GatewayLister {
-	return &gatewayLister{listers.New[*v1alpha1.Gateway](indexer, v1alpha1.Resource("gateway"))}
+	return &gatewayLister{listers.New[*multiclusterv1alpha1.Gateway](indexer, multiclusterv1alpha1.Resource("gateway"))}
 }
 
 // Gateways returns an object that can list and get Gateways.
 func (s *gatewayLister) Gateways(namespace string) GatewayNamespaceLister {
-	return gatewayNamespaceLister{listers.NewNamespaced[*v1alpha1.Gateway](s.ResourceIndexer, namespace)}
+	return gatewayNamespaceLister{listers.NewNamespaced[*multiclusterv1alpha1.Gateway](s.ResourceIndexer, namespace)}
 }
 
 // GatewayNamespaceLister helps list and get Gateways.
@@ -54,15 +54,15 @@ func (s *gatewayLister) Gateways(namespace string) GatewayNamespaceLister {
 type GatewayNamespaceLister interface {
 	// List lists all Gateways in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.Gateway, err error)
+	List(selector labels.Selector) (ret []*multiclusterv1alpha1.Gateway, err error)
 	// Get retrieves the Gateway from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.Gateway, error)
+	Get(name string) (*multiclusterv1alpha1.Gateway, error)
 	GatewayNamespaceListerExpansion
 }
 
 // gatewayNamespaceLister implements the GatewayNamespaceLister
 // interface.
 type gatewayNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.Gateway]
+	listers.ResourceIndexer[*multiclusterv1alpha1.Gateway]
 }

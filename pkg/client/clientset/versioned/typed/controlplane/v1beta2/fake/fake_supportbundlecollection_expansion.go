@@ -22,8 +22,8 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
-func (c *FakeSupportBundleCollections) UpdateStatus(ctx context.Context, name string, status *v1beta2.SupportBundleCollectionStatus) error {
+func (c *fakeSupportBundleCollections) UpdateStatus(ctx context.Context, name string, status *v1beta2.SupportBundleCollectionStatus) error {
 	_, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(supportbundlecollectionsResource, "status", "", status), &v1beta2.SupportBundleCollectionStatus{})
+		Invokes(testing.NewUpdateSubresourceAction(c.Resource(), "status", "", status), &v1beta2.SupportBundleCollectionStatus{})
 	return err
 }

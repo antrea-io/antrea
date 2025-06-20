@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.3
+    controller-gen.kubebuilder.io/version: v0.18.0
   name: resourceexports.multicluster.crd.antrea.io
 spec:
   group: multicluster.crd.antrea.io
@@ -2376,15 +2376,17 @@ spec:
                         \ Ports:     [{\"name\": \"a\", \"port\": 8675}, {\"name\":
                         \"b\", \"port\": 309}]\n\t}\n\nThe resulting set of endpoints
                         can be viewed as:\n\n\ta: [ 10.10.1.1:8675, 10.10.2.2:8675
-                        ],\n\tb: [ 10.10.1.1:309, 10.10.2.2:309 ]"
+                        ],\n\tb: [ 10.10.1.1:309, 10.10.2.2:309 ]\n\nDeprecated: This
+                        API is deprecated in v1.33+."
                       properties:
                         addresses:
                           description: |-
                             IP addresses which offer the related ports that are marked as ready. These endpoints
                             should be considered safe for load balancers and clients to utilize.
                           items:
-                            description: EndpointAddress is a tuple that describes
-                              single IP address.
+                            description: |-
+                              EndpointAddress is a tuple that describes single IP address.
+                              Deprecated: This API is deprecated in v1.33+.
                             properties:
                               hostname:
                                 description: The Hostname of this endpoint
@@ -2455,8 +2457,9 @@ spec:
                             because they have not yet finished starting, have recently failed a readiness check,
                             or have recently failed a liveness check.
                           items:
-                            description: EndpointAddress is a tuple that describes
-                              single IP address.
+                            description: |-
+                              EndpointAddress is a tuple that describes single IP address.
+                              Deprecated: This API is deprecated in v1.33+.
                             properties:
                               hostname:
                                 description: The Hostname of this endpoint
@@ -2524,8 +2527,9 @@ spec:
                         ports:
                           description: Port numbers available on the related IP addresses.
                           items:
-                            description: EndpointPort is a tuple that describes a
-                              single port.
+                            description: |-
+                              EndpointPort is a tuple that describes a single port.
+                              Deprecated: This API is deprecated in v1.33+.
                             properties:
                               appProtocol:
                                 description: |-
@@ -2962,13 +2966,12 @@ spec:
                         type: object
                       trafficDistribution:
                         description: |-
-                          TrafficDistribution offers a way to express preferences for how traffic is
-                          distributed to Service endpoints. Implementations can use this field as a
-                          hint, but are not required to guarantee strict adherence. If the field is
-                          not set, the implementation will apply its default routing strategy. If set
-                          to "PreferClose", implementations should prioritize endpoints that are
-                          topologically close (e.g., same zone).
-                          This is an alpha field and requires enabling ServiceTrafficDistribution feature.
+                          TrafficDistribution offers a way to express preferences for how traffic
+                          is distributed to Service endpoints. Implementations can use this field
+                          as a hint, but are not required to guarantee strict adherence. If the
+                          field is not set, the implementation will apply its default routing
+                          strategy. If set to "PreferClose", implementations should prioritize
+                          endpoints that are in the same zone.
                         type: string
                       type:
                         description: |-

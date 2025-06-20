@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -1170,13 +1171,34 @@ func TestSyncEgress(t *testing.T) {
 				require.NoError(t, err)
 				assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(expectedEgress, gotEgress))
 			}
-			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				events, err := c.k8sClient.CoreV1().Events("").Search(scheme.Scheme, tt.existingEgress)
-				if assert.NoError(collect, err) && assert.Len(collect, events.Items, len(tt.expectedEvents)) {
-					for ind, items := range events.Items {
-						assert.Contains(collect, items.Message, tt.expectedEvents[ind])
-					}
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				events, err := c.k8sClient.CoreV1().Events("").SearchWithContext(context.TODO(), scheme.Scheme, tt.existingEgress)
+				if !assert.NoError(t, err) || !assert.Len(t, events.Items, len(tt.expectedEvents)) {
+					return
 				}
+				// If tt.expectedEvents is empty, we can stop here as we already
+				// know events.Items is also empty (we asserted that the lengths are
+				// the same).
+				if len(tt.expectedEvents) == 0 {
+					return
+				}
+				// SearchWithContext is not guaranteed to return the Events in any
+				// specific order. We sort them by timestamp before matching the
+				// list against our expectations.
+				slices.SortFunc(events.Items, func(e1, e2 v1.Event) int {
+					if e1.LastTimestamp.Before(&e2.LastTimestamp) {
+						return -1
+					}
+					if e2.LastTimestamp.Before(&e1.LastTimestamp) {
+						return 1
+					}
+					return 0
+				})
+				messages := make([]string, len(events.Items))
+				for idx := range events.Items {
+					messages[idx] = events.Items[idx].Message
+				}
+				assert.Equal(t, tt.expectedEvents, messages)
 			}, 2*time.Second, 200*time.Millisecond)
 		})
 	}

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta1
 
 import (
-	"context"
+	context "context"
 
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,33 +35,34 @@ type GroupsGetter interface {
 
 // GroupInterface has methods to work with Group resources.
 type GroupInterface interface {
-	Create(ctx context.Context, group *v1beta1.Group, opts v1.CreateOptions) (*v1beta1.Group, error)
-	Update(ctx context.Context, group *v1beta1.Group, opts v1.UpdateOptions) (*v1beta1.Group, error)
+	Create(ctx context.Context, group *crdv1beta1.Group, opts v1.CreateOptions) (*crdv1beta1.Group, error)
+	Update(ctx context.Context, group *crdv1beta1.Group, opts v1.UpdateOptions) (*crdv1beta1.Group, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, group *v1beta1.Group, opts v1.UpdateOptions) (*v1beta1.Group, error)
+	UpdateStatus(ctx context.Context, group *crdv1beta1.Group, opts v1.UpdateOptions) (*crdv1beta1.Group, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.Group, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.GroupList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1beta1.Group, error)
+	List(ctx context.Context, opts v1.ListOptions) (*crdv1beta1.GroupList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.Group, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *crdv1beta1.Group, err error)
 	GroupExpansion
 }
 
 // groups implements GroupInterface
 type groups struct {
-	*gentype.ClientWithList[*v1beta1.Group, *v1beta1.GroupList]
+	*gentype.ClientWithList[*crdv1beta1.Group, *crdv1beta1.GroupList]
 }
 
 // newGroups returns a Groups
 func newGroups(c *CrdV1beta1Client, namespace string) *groups {
 	return &groups{
-		gentype.NewClientWithList[*v1beta1.Group, *v1beta1.GroupList](
+		gentype.NewClientWithList[*crdv1beta1.Group, *crdv1beta1.GroupList](
 			"groups",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1beta1.Group { return &v1beta1.Group{} },
-			func() *v1beta1.GroupList { return &v1beta1.GroupList{} }),
+			func() *crdv1beta1.Group { return &crdv1beta1.Group{} },
+			func() *crdv1beta1.GroupList { return &crdv1beta1.GroupList{} },
+		),
 	}
 }

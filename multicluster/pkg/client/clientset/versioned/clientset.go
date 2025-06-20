@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 package versioned
 
 import (
-	"fmt"
-	"net/http"
+	fmt "fmt"
+	http "net/http"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
 	multiclusterv1alpha2 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2"

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta1
 
 import (
-	"context"
+	context "context"
 
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,33 +35,34 @@ type ClusterGroupsGetter interface {
 
 // ClusterGroupInterface has methods to work with ClusterGroup resources.
 type ClusterGroupInterface interface {
-	Create(ctx context.Context, clusterGroup *v1beta1.ClusterGroup, opts v1.CreateOptions) (*v1beta1.ClusterGroup, error)
-	Update(ctx context.Context, clusterGroup *v1beta1.ClusterGroup, opts v1.UpdateOptions) (*v1beta1.ClusterGroup, error)
+	Create(ctx context.Context, clusterGroup *crdv1beta1.ClusterGroup, opts v1.CreateOptions) (*crdv1beta1.ClusterGroup, error)
+	Update(ctx context.Context, clusterGroup *crdv1beta1.ClusterGroup, opts v1.UpdateOptions) (*crdv1beta1.ClusterGroup, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, clusterGroup *v1beta1.ClusterGroup, opts v1.UpdateOptions) (*v1beta1.ClusterGroup, error)
+	UpdateStatus(ctx context.Context, clusterGroup *crdv1beta1.ClusterGroup, opts v1.UpdateOptions) (*crdv1beta1.ClusterGroup, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.ClusterGroup, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.ClusterGroupList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1beta1.ClusterGroup, error)
+	List(ctx context.Context, opts v1.ListOptions) (*crdv1beta1.ClusterGroupList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.ClusterGroup, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *crdv1beta1.ClusterGroup, err error)
 	ClusterGroupExpansion
 }
 
 // clusterGroups implements ClusterGroupInterface
 type clusterGroups struct {
-	*gentype.ClientWithList[*v1beta1.ClusterGroup, *v1beta1.ClusterGroupList]
+	*gentype.ClientWithList[*crdv1beta1.ClusterGroup, *crdv1beta1.ClusterGroupList]
 }
 
 // newClusterGroups returns a ClusterGroups
 func newClusterGroups(c *CrdV1beta1Client) *clusterGroups {
 	return &clusterGroups{
-		gentype.NewClientWithList[*v1beta1.ClusterGroup, *v1beta1.ClusterGroupList](
+		gentype.NewClientWithList[*crdv1beta1.ClusterGroup, *crdv1beta1.ClusterGroupList](
 			"clustergroups",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta1.ClusterGroup { return &v1beta1.ClusterGroup{} },
-			func() *v1beta1.ClusterGroupList { return &v1beta1.ClusterGroupList{} }),
+			func() *crdv1beta1.ClusterGroup { return &crdv1beta1.ClusterGroup{} },
+			func() *crdv1beta1.ClusterGroupList { return &crdv1beta1.ClusterGroupList{} },
+		),
 	}
 }
