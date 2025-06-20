@@ -47,6 +47,7 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	cnitypes "antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/pkg/agent/filestore"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	podwatchtesting "antrea.io/antrea/pkg/agent/secondarynetwork/podwatch/testing"
 	"antrea.io/antrea/pkg/agent/types"
@@ -228,11 +229,12 @@ func TestPodControllerRun(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	interfaceConfigurator := podwatchtesting.NewMockInterfaceConfigurator(ctrl)
 	mockIPAM := podwatchtesting.NewMockIPAMAllocator(ctrl)
+	sriovIfaceStore := filestore.NewFakeFileStore()
 	podController, _ := NewPodController(
 		client,
 		netdefclient,
 		informerFactory.Core().V1().Pods().Informer(),
-		nil, primaryInterfaceStore, mockOVSBridgeClient)
+		nil, primaryInterfaceStore, sriovIfaceStore, mockOVSBridgeClient)
 	podController.interfaceConfigurator = interfaceConfigurator
 	podController.ipamAllocator = mockIPAM
 	cniCache := &podController.cniCache
@@ -1028,7 +1030,7 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("updating deviceID cache per Pod", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		podController, _, _, _ := testPodController(ctrl)
+		podController, _, _, _ := testPodController(ctrl, nil)
 		_, err := podController.assignUnusedSriovVFDeviceID(podName, testNamespace, sriovResourceName1, interfaceName)
 		_, exists := podController.vfDeviceIDUsageMap.Load(podKey)
 		assert.True(t, exists)
@@ -1042,7 +1044,7 @@ func TestPodControllerAddPod(t *testing.T) {
 	})
 }
 
-func testPodController(ctrl *gomock.Controller) (
+func testPodController(ctrl *gomock.Controller, sriovIfaceStore *filestore.FileStore) (
 	*PodController, *podwatchtesting.MockIPAMAllocator,
 	*podwatchtesting.MockInterfaceConfigurator, *ovsconfigtest.MockOVSBridgeClient) {
 	client := fake.NewSimpleClientset()
@@ -1067,6 +1069,7 @@ func testPodController(ctrl *gomock.Controller) (
 		interfaceConfigurator: interfaceConfigurator,
 		ipamAllocator:         mockIPAM,
 		interfaceStore:        interfacestore.NewInterfaceStore(),
+		sriovInterfaceStore:   sriovIfaceStore,
 	}, mockIPAM, interfaceConfigurator, mockOVSBridgeClient
 }
 
@@ -1074,7 +1077,7 @@ func testPodController(ctrl *gomock.Controller) (
 func testPodControllerStart(ctrl *gomock.Controller) (
 	*PodController, *podwatchtesting.MockIPAMAllocator,
 	*podwatchtesting.MockInterfaceConfigurator) {
-	podController, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)
+	podController, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl, nil)
 	informerFactory := informers.NewSharedInformerFactory(podController.kubeClient, resyncPeriod)
 	podController.podInformer = informerFactory.Core().V1().Pods().Informer()
 	stopCh := make(chan struct{})
@@ -1144,13 +1147,13 @@ func createTestInterfaces() (map[string]string, []ovsconfig.OVSPortData, []*inte
 	return map[string]string{"uuid1": uuid1, "uuid2": uuid2, "uuid3": uuid3, "uuid4": uuid4}, []ovsconfig.OVSPortData{ovsPort1, ovsPort2, ovsPort3, ovsPort4}, []*interfacestore.InterfaceConfig{containerConfig1, containerConfig2, containerConfig3}
 }
 
-func TestInitializeSecondaryInterfaceStore(t *testing.T) {
+func TestInitializeOVSSecondaryInterfaceStore(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	pc, _, _, mockOVSBridgeClient := testPodController(ctrl)
+	pc, _, _, mockOVSBridgeClient := testPodController(ctrl, nil)
 	uuids, ovsPorts, _ := createTestInterfaces()
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts, nil)
 
-	err := pc.initializeSecondaryInterfaceStore()
+	err := pc.initializeOVSSecondaryInterfaceStore()
 	require.NoError(t, err, "OVS ports list successfully")
 
 	// Validate stored interfaces
@@ -1171,7 +1174,7 @@ func TestInitializeSecondaryInterfaceStore(t *testing.T) {
 
 func TestReconcileSecondaryInterfaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	pc, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)
+	pc, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl, nil)
 	primaryStore := interfacestore.NewInterfaceStore()
 	_, _, containerConfigs := createTestInterfaces()
 
@@ -1214,4 +1217,26 @@ func TestReconcileSecondaryInterfaces(t *testing.T) {
 	// Ensure stale interfaces are removed
 	_, foundPod3 := pc.cniCache.Load("nsA/Pod3")
 	assert.False(t, foundPod3, "Stale interface should have been removed")
+}
+
+func TestInitializeSRIOVSecondaryInterfaceStore(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	sriovIfaceStore := filestore.NewFakeFileStore()
+	sriovIfaceStore.Save(filestore.AnyObjectWithUID{
+		UID: "containerID",
+		Object: &interfacestore.InterfaceConfig{
+			InterfaceName: "eth0",
+			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
+				PodName:      "poda",
+				PodNamespace: "ns",
+				NetNS:        "netNS",
+			},
+		},
+	})
+	pc, _, _, _ := testPodController(ctrl, sriovIfaceStore)
+	err := pc.initializeSRIOVSecondaryInterfaceStore()
+	require.NoError(t, err, "initialize successfully")
+	require.Equal(t, 1, pc.interfaceStore.Len())
+	_, ok := pc.vfDeviceIDUsageMap.Load(podKeyGet("poda", "ns"))
+	require.Equal(t, true, ok)
 }

@@ -283,7 +283,7 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, clients *mock
 	gateway := &config.GatewayConfig{Name: "", IPv4: gwIPv4, MAC: gwMAC}
 	cniServer.nodeConfig = &config.NodeConfig{Name: "node1", PodIPv4CIDR: nodePodCIDRv4, GatewayConfig: gateway}
 	mockOFClient.EXPECT().SubscribeOFPortStatusMessage(gomock.Any()).AnyTimes()
-	cniServer.podConfigurator, _ = newPodConfigurator(kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, podUpdateNotifier, clients.localPodInformer, cniServer.containerAccess)
+	cniServer.podConfigurator, _ = newPodConfigurator(kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, nil, gwMAC, "system", false, false, podUpdateNotifier, clients.localPodInformer, cniServer.containerAccess)
 	cniServer.podConfigurator.ifConfigurator.(*ifConfigurator).winnet = mockWinnet
 	return cniServer
 }
@@ -754,7 +754,7 @@ func TestReconcile(t *testing.T) {
 		ifaceStore.AddInterface(containerIface)
 	}
 	waiter := newAsyncWaiter(unconnectedInterface.PodName, unconnectedInterface.ContainerID, stopCh)
-	cniServer.podConfigurator, _ = newPodConfigurator(kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, waiter.notifier, clients.localPodInformer, cniServer.containerAccess)
+	cniServer.podConfigurator, _ = newPodConfigurator(kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, nil, gwMAC, "system", false, false, waiter.notifier, clients.localPodInformer, cniServer.containerAccess)
 	cniServer.nodeConfig = &config.NodeConfig{Name: nodeName}
 	go cniServer.podConfigurator.Run(stopCh)
 
