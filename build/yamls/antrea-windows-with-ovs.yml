@@ -82,18 +82,22 @@ data:
     $OVS_VERSION=$(Get-Item $OVSDriverDir\OVSExt.sys).VersionInfo.ProductVersion
     ovs-vsctl --no-wait set Open_vSwitch . ovs_version=$OVS_VERSION
 
-    ovs-vswitchd --log-file=/var/log/antrea/openvswitch/ovs-vswitchd.log --pidfile -vfile:info --detach
-
+    # Use RetryInterval to reduce the wait time after restarting the OVS process, accelerating process recovery.
+    $RetryInterval = 2
     $SleepInterval = 30
     Write-Host "Started the loop that checks OVS status every $SleepInterval seconds"
     while ($true) {
-        if ( !( Get-Process ovsdb-server ) ) {
+        if ( !( Get-Process ovsdb-server -ErrorAction SilentlyContinue) ) {
             Write-Host "ovsdb-server is not running, starting it again..."
             ovsdb-server $OVS_DB_PATH -vfile:info --remote=punix:db.sock --log-file=/var/log/antrea/openvswitch/ovsdb-server.log --pidfile --detach
+            Start-Sleep -Seconds $RetryInterval
+            continue
         }
-        if ( !( Get-Process ovs-vswitchd ) ) {
+        if ( !( Get-Process ovs-vswitchd -ErrorAction SilentlyContinue) ) {
             Write-Host "ovs-vswitchd is not running, starting it again..."
             ovs-vswitchd --log-file=/var/log/antrea/openvswitch/ovs-vswitchd.log --pidfile -vfile:info --detach
+            Start-Sleep -Seconds $RetryInterval
+            continue
         }
         Start-Sleep -Seconds $SleepInterval
     }
@@ -305,7 +309,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/agent-windows: cd61458cbe274d2d6117702c6220c55ae75b38b71806d18e569682998ff83d79
+        checksum/agent-windows: 4a8b62e6d8076e1792f4a0a880a806016eb6991994c7cc63ac71bcf5bb2f9432
         checksum/windows-config: 4f07164f32afc61e20b4aef984a8781142e5d99f7c58f7581e4ccfeabb34855f
         microsoft.com/hostprocess-inherit-user: "true"
       labels:

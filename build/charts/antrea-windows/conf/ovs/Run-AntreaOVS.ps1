@@ -22,18 +22,22 @@ ovs-vsctl --no-wait init
 $OVS_VERSION=$(Get-Item $OVSDriverDir\OVSExt.sys).VersionInfo.ProductVersion
 ovs-vsctl --no-wait set Open_vSwitch . ovs_version=$OVS_VERSION
 
-ovs-vswitchd --log-file=/var/log/antrea/openvswitch/ovs-vswitchd.log --pidfile -vfile:info --detach
-
+# Use RetryInterval to reduce the wait time after restarting the OVS process, accelerating process recovery.
+$RetryInterval = 2
 $SleepInterval = 30
 Write-Host "Started the loop that checks OVS status every $SleepInterval seconds"
 while ($true) {
-    if ( !( Get-Process ovsdb-server ) ) {
+    if ( !( Get-Process ovsdb-server -ErrorAction SilentlyContinue) ) {
         Write-Host "ovsdb-server is not running, starting it again..."
         ovsdb-server $OVS_DB_PATH -vfile:info --remote=punix:db.sock --log-file=/var/log/antrea/openvswitch/ovsdb-server.log --pidfile --detach
+        Start-Sleep -Seconds $RetryInterval
+        continue
     }
-    if ( !( Get-Process ovs-vswitchd ) ) {
+    if ( !( Get-Process ovs-vswitchd -ErrorAction SilentlyContinue) ) {
         Write-Host "ovs-vswitchd is not running, starting it again..."
         ovs-vswitchd --log-file=/var/log/antrea/openvswitch/ovs-vswitchd.log --pidfile -vfile:info --detach
+        Start-Sleep -Seconds $RetryInterval
+        continue
     }
     Start-Sleep -Seconds $SleepInterval
 }
