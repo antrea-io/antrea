@@ -473,6 +473,39 @@ func TestGroupEntityIndexEventHandlers(t *testing.T) {
 			expectedGroupsCalled: map[GroupType][]string{},
 		},
 		{
+			name:           "update an existing pod's phase to running",
+			existingPods:   []*v1.Pod{podFoo1, podBar1, podFoo1InOtherNamespace},
+			existingGroups: []*group{groupPodFooType1, groupPodFooAllNamespaceType1, groupEEFooType1, groupPodAllNamespaceType1},
+			inputEvent: func(i *GroupEntityIndex) {
+				i.AddPod(copyAndMutatePod(podFoo1, func(pod *v1.Pod) {
+					pod.Status.Phase = v1.PodRunning
+				}))
+			},
+			expectedGroupsCalled: map[GroupType][]string{},
+		},
+		{
+			name:           "update an existing pod's phase to succeeded",
+			existingPods:   []*v1.Pod{podFoo1, podBar1, podFoo1InOtherNamespace},
+			existingGroups: []*group{groupPodFooType1, groupPodFooAllNamespaceType1, groupEEFooType1, groupPodAllNamespaceType1},
+			inputEvent: func(i *GroupEntityIndex) {
+				i.AddPod(copyAndMutatePod(podFoo1, func(pod *v1.Pod) {
+					pod.Status.Phase = v1.PodSucceeded
+				}))
+			},
+			expectedGroupsCalled: map[GroupType][]string{groupType1: {groupPodFooType1.groupName, groupPodFooAllNamespaceType1.groupName, groupPodAllNamespaceType1.groupName}},
+		},
+		{
+			name:           "update an existing pod's phase to failed",
+			existingPods:   []*v1.Pod{podFoo1, podBar1, podFoo1InOtherNamespace},
+			existingGroups: []*group{groupPodFooType1, groupPodFooAllNamespaceType1, groupPodBarType1, groupPodAllNamespaceType1},
+			inputEvent: func(i *GroupEntityIndex) {
+				i.AddPod(copyAndMutatePod(podBar1, func(pod *v1.Pod) {
+					pod.Status.Phase = v1.PodFailed
+				}))
+			},
+			expectedGroupsCalled: map[GroupType][]string{groupType1: {groupPodBarType1.groupName, groupPodAllNamespaceType1.groupName}},
+		},
+		{
 			name:                     "delete an existing pod",
 			existingPods:             []*v1.Pod{podFoo1, podBar1, podFoo1InOtherNamespace},
 			existingExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeBar1, eeFoo1InOtherNamespace},

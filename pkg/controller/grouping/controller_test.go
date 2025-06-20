@@ -24,12 +24,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/features"
 )
 
 const informerDefaultResync = 30 * time.Second
@@ -68,7 +66,6 @@ func TestGroupEntityControllerRun(t *testing.T) {
 				eventChanSize = originalEventChanSize
 			}()
 
-			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, tt.antreaPolicyEnabled)
 			var objs []runtime.Object
 			for _, pod := range tt.initialPods {
 				objs = append(objs, pod)
@@ -89,6 +86,7 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 			stopCh := make(chan struct{})
+			defer close(stopCh)
 
 			c := NewGroupEntityController(index, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().ExternalEntities())
 			assert.False(t, index.HasSynced(), "GroupEntityIndex has been synced before starting InformerFactories")
