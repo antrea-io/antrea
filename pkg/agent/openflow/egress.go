@@ -38,6 +38,11 @@ type featureEgress struct {
 
 	category                   cookie.Category
 	enableEgressTrafficShaping bool
+
+	trafficEncapMode config.TrafficEncapModeType
+
+	virtualIPs  map[binding.Protocol]net.IP
+	snatCtZones map[binding.Protocol]int
 }
 
 func (f *featureEgress) getFeatureName() string {
@@ -48,7 +53,8 @@ func newFeatureEgress(cookieAllocator cookie.Allocator,
 	ipProtocols []binding.Protocol,
 	nodeConfig *config.NodeConfig,
 	egressConfig *config.EgressConfig,
-	enableEgressTrafficShaping bool) *featureEgress {
+	enableEgressTrafficShaping bool,
+	trafficEncapMode config.TrafficEncapModeType) *featureEgress {
 	exceptCIDRs := make(map[binding.Protocol][]net.IPNet)
 	for _, cidr := range egressConfig.ExceptCIDRs {
 		if cidr.IP.To4() == nil {
@@ -59,14 +65,21 @@ func newFeatureEgress(cookieAllocator cookie.Allocator,
 	}
 
 	nodeIPs := make(map[binding.Protocol]net.IP)
+	virtualIPs := make(map[binding.Protocol]net.IP)
+	snatCtZones := make(map[binding.Protocol]int)
 	for _, ipProtocol := range ipProtocols {
 		switch ipProtocol {
 		case binding.ProtocolIP:
 			nodeIPs[ipProtocol] = nodeConfig.NodeIPv4Addr.IP
+			virtualIPs[ipProtocol] = config.VirtualEgressSNATIPv4
+			snatCtZones[ipProtocol] = SNATCtZone
 		case binding.ProtocolIPv6:
 			nodeIPs[ipProtocol] = nodeConfig.NodeIPv6Addr.IP
+			virtualIPs[ipProtocol] = config.VirtualEgressSNATIPv6
+			snatCtZones[ipProtocol] = SNATCtZoneV6
 		}
 	}
+
 	return &featureEgress{
 		cachedFlows:                newFlowCategoryCache(),
 		cachedMeter:                sync.Map{},
@@ -77,6 +90,9 @@ func newFeatureEgress(cookieAllocator cookie.Allocator,
 		gatewayMAC:                 nodeConfig.GatewayConfig.MAC,
 		category:                   cookie.Egress,
 		enableEgressTrafficShaping: enableEgressTrafficShaping,
+		trafficEncapMode:           trafficEncapMode,
+		virtualIPs:                 virtualIPs,
+		snatCtZones:                snatCtZones,
 	}
 }
 
@@ -86,6 +102,9 @@ func (f *featureEgress) initFlows() []*openflow15.FlowMod {
 	initialFlows := f.externalFlows()
 	if f.enableEgressTrafficShaping {
 		initialFlows = append(initialFlows, f.egressQoSDefaultFlow())
+	}
+	if f.trafficEncapMode.IsHybrid() {
+		initialFlows = append(initialFlows, f.unSNATConntrackFlows()...)
 	}
 	return GetFlowModMessages(initialFlows, binding.AddMessage)
 }
@@ -111,4 +130,51 @@ func (f *featureEgress) replayMeters() []binding.OFEntry {
 		return true
 	})
 	return meters
+}
+
+func (f *featureEgress) unSNATConntrackFlows() []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	var flows []binding.Flow
+	for _, ipProtocol := range f.ipProtocols {
+		flows = append(flows, UnSNATTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchProtocol(ipProtocol).
+			MatchDstIP(f.virtualIPs[ipProtocol]).
+			Action().CT(false, ConntrackStateTable.GetID(), f.snatCtZones[ipProtocol], nil).
+			NAT().
+			CTDone().
+			Done())
+	}
+	return flows
+}
+
+// l3FwdFlowsFromGWToRemoteViaTun generates the flows to match the packets sourced from gateway and destined for remote
+// Pods via tunnel in hybrid mode.
+func (f *featureEgress) l3FwdFlowsFromGWToRemoteViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) []binding.Flow {
+	ipProtocol := getIPProtocol(peerSubnet.IP)
+	flow := L3ForwardingTable.ofTable.BuildFlow(priorityNormal + 1).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(ipProtocol).
+		MatchRegMark(FromGatewayRegMark).
+		MatchDstIPNet(peerSubnet).
+		Action().SetSrcMAC(localGatewayMAC).  // Rewrite src MAC to local gateway MAC.
+		Action().SetDstMAC(GlobalVirtualMAC). // Rewrite dst MAC to virtual MAC.
+		Action().SetTunnelDst(tunnelPeer).    // Flow based tunnel. Set tunnel destination.
+		Action().LoadRegMark(ToTunnelRegMark).
+		Action().GotoTable(L3DecTTLTable.GetID()).
+		Done()
+	return []binding.Flow{flow}
+}
+
+func (f *featureEgress) snatConntrackFlowFromTun(peerSubnet net.IPNet) binding.Flow {
+	ipProtocol := getIPProtocol(peerSubnet.IP)
+	return UnSNATTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(ipProtocol).
+		MatchRegMark(FromTunnelRegMark).
+		MatchSrcIPNet(peerSubnet).
+		Action().CT(false, ConntrackStateTable.GetID(), f.snatCtZones[ipProtocol], nil).
+		NAT().
+		CTDone().
+		Done()
 }

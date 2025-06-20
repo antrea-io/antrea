@@ -592,6 +592,10 @@ func (c *client) InstallNodeFlows(hostname string,
 			flows = append(flows, c.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP)...)
 		} else {
 			flows = append(flows, c.featurePodConnectivity.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, tunnelPeerIP, peerPodCIDR)...)
+			if c.networkConfig.TrafficEncapMode.IsHybrid() && c.enableEgress {
+				flows = append(flows, c.featureEgress.l3FwdFlowsFromGWToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP)...)
+				flows = append(flows, c.featureEgress.snatConntrackFlowFromTun(*peerPodCIDR))
+			}
 		}
 		if c.enableEgress {
 			flows = append(flows, c.featureEgress.snatSkipNodeFlow(tunnelPeerIP))
@@ -973,7 +977,7 @@ func (c *client) generatePipelines() {
 	c.traceableFeatures = append(c.traceableFeatures, c.featureNetworkPolicy)
 
 	if c.enableEgress {
-		c.featureEgress = newFeatureEgress(c.cookieAllocator, c.ipProtocols, c.nodeConfig, c.egressConfig, c.ovsMetersAreSupported && c.enableEgressTrafficShaping)
+		c.featureEgress = newFeatureEgress(c.cookieAllocator, c.ipProtocols, c.nodeConfig, c.egressConfig, c.ovsMetersAreSupported && c.enableEgressTrafficShaping, c.networkConfig.TrafficEncapMode)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureEgress)
 	}
 
@@ -1055,11 +1059,11 @@ func (c *client) InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error 
 }
 
 func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
-	flow := c.featureEgress.snatIPFromTunnelFlow(snatIP, mark)
+	flows := c.featureEgress.snatIPFromTunnelFlows(snatIP, mark)
 	cacheKey := fmt.Sprintf("s%x", mark)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, []binding.Flow{flow})
+	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) UninstallSNATMarkFlows(mark uint32) error {

@@ -2203,12 +2203,15 @@ func (f *featureEgress) snatSkipNodeFlow(nodeIP net.IP) binding.Flow {
 		Done()
 }
 
-// snatIPFromTunnelFlow generates the flow that marks SNAT packets tunnelled from remote Nodes. The SNAT IP matches the
+// snatIPFromTunnelFlows generates the flows that marks SNAT packets tunnelled from remote Nodes. The SNAT IP matches the
 // packet's tunnel destination IP.
-func (f *featureEgress) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding.Flow {
+func (f *featureEgress) snatIPFromTunnelFlows(snatIP net.IP, mark uint32) []binding.Flow {
+	var flows []binding.Flow
 	ipProtocol := getIPProtocol(snatIP)
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+
 	fb := EgressMarkTable.ofTable.BuildFlow(priorityNormal).
-		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		Cookie(cookieID).
 		MatchProtocol(ipProtocol).
 		MatchCTStateTrk(true).
 		MatchTunnelDst(snatIP).
@@ -2220,7 +2223,36 @@ func (f *featureEgress) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding
 	} else {
 		fb = fb.Action().GotoStage(stageSwitching)
 	}
-	return fb.Done()
+	flows = append(flows, fb.Done())
+
+	if f.trafficEncapMode.IsHybrid() {
+		virtualIP := f.virtualIPs[ipProtocol]
+		snatPktMask := snatPktMarkRange.ToNXRange().ToUint32Mask()
+		flows = append(flows,
+			EgressMarkTable.ofTable.BuildFlow(priorityNormal+1).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(true).
+				MatchCTStateTrk(true).
+				MatchTunnelDst(snatIP).
+				Action().LoadPktMarkRange(mark, snatPktMarkRange).
+				Action().LoadRegMark(ToGatewayRegMark).
+				Action().GotoStage(stagePostRouting).
+				Done(),
+			SNATTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(true).
+				MatchCTStateTrk(true).
+				MatchPktMark(mark, &snatPktMask).
+				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
+				SNAT(&binding.IPRange{StartIP: virtualIP, EndIP: virtualIP}, nil).
+				CTDone().
+				Done(),
+		)
+	}
+
+	return flows
 }
 
 // snatRuleFlow generates the flow that applies the SNAT rule for a local Pod. If the SNAT IP exists on the local Node,

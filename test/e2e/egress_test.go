@@ -63,7 +63,7 @@ func TestEgress(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	// Egress works for encap mode only.
-	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+	skipIfEncapModeIs(t, data, config.TrafficEncapModeNoEncap)
 
 	t.Run("testEgressClientIP", func(t *testing.T) { testEgressClientIP(t, data) })
 	t.Run("testEgressClientIPFromVLANSubnet", func(t *testing.T) { testEgressClientIPFromVLANSubnet(t, data) })
