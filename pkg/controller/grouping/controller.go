@@ -215,14 +215,7 @@ func (c *GroupEntityController) addPod(obj interface{}) {
 func (c *GroupEntityController) updatePod(_, curObj interface{}) {
 	curPod := curObj.(*v1.Pod)
 	klog.V(2).InfoS("Processing Pod UPDATE event", "pod", klog.KObj(curPod), "labels", curPod.Labels, "phase", curPod.Status.Phase)
-	if curPod.Status.Phase == v1.PodSucceeded || curPod.Status.Phase == v1.PodFailed {
-		// Once a Pod is in "Succeeded" or "Failed" phase, Kubernetes will not restart the same Pod.
-		// In groupEntityIndex, this should be considered as a terminal event, and the Pod should be
-		// excluded from any Network Policy computations in appliedTo or address groups.
-		c.groupEntityIndex.DeletePod(curPod)
-	} else {
-		c.groupEntityIndex.AddPod(curPod)
-	}
+	c.groupEntityIndex.AddPod(curPod)
 }
 
 func (c *GroupEntityController) deletePod(old interface{}) {

@@ -29,6 +29,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/k8s"
 	utilsets "antrea.io/antrea/pkg/util/sets"
 )
 
@@ -744,12 +745,18 @@ func entityAttrsUpdated(oldEntity, newEntity metav1.Object) bool {
 	switch oldValue := oldEntity.(type) {
 	case *v1.Pod:
 		// For Pod, we only care about PodIP and NodeName update.
+		// Also, when a Pod is updated to terminated state, the selectorItems need to be
+		// notified so that they are excluded from any Network Policy computations in
+		// appliedTo or address groups.
 		// Some other attributes we care about are immutable, e.g. the named ContainerPort.
 		newValue := newEntity.(*v1.Pod)
 		if oldValue.Status.PodIP != newValue.Status.PodIP {
 			return true
 		}
 		if oldValue.Spec.NodeName != newValue.Spec.NodeName {
+			return true
+		}
+		if k8s.IsPodTerminated(oldValue) != k8s.IsPodTerminated(newValue) {
 			return true
 		}
 		return false
