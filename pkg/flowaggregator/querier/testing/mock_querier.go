@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@ package testing
 import (
 	reflect "reflect"
 
+	intermediate "antrea.io/antrea/pkg/flowaggregator/intermediate"
 	querier "antrea.io/antrea/pkg/flowaggregator/querier"
-	intermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	gomock "go.uber.org/mock/gomock"
 )
 
