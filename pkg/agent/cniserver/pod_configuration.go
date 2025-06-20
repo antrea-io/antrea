@@ -37,6 +37,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/pkg/agent/filestore"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
@@ -81,6 +82,7 @@ type podConfigurator struct {
 	ofClient        openflow.Client
 	routeClient     route.Interface
 	ifaceStore      interfacestore.InterfaceStore
+	sriovIfaceStore *filestore.FileStore
 	gatewayMAC      net.HardwareAddr
 	ifConfigurator  podInterfaceConfigurator
 	// podUpdateNotifier is used for notifying updates of local Pods to other components which may benefit from this
@@ -106,6 +108,7 @@ func newPodConfigurator(
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	ifaceStore interfacestore.InterfaceStore,
+	sriovIfaceStore *filestore.FileStore,
 	gatewayMAC net.HardwareAddr,
 	ovsDatapathType ovsconfig.OVSDatapathType,
 	isOvsHardwareOffloadEnabled bool,
@@ -123,6 +126,7 @@ func newPodConfigurator(
 		ofClient:          ofClient,
 		routeClient:       routeClient,
 		ifaceStore:        ifaceStore,
+		sriovIfaceStore:   sriovIfaceStore,
 		gatewayMAC:        gatewayMAC,
 		ifConfigurator:    ifConfigurator,
 		podUpdateNotifier: podUpdateNotifier,

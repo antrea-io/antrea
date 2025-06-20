@@ -38,12 +38,15 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	typestest "antrea.io/antrea/pkg/agent/types/testing"
 	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/channel"
 )
+
+var mockVFDeviceUsageChecker *typestest.MockVFDeviceUsageChecker
 
 func TestValidatePrevResult(t *testing.T) {
 	cniServer := newCNIServer(t)
@@ -95,7 +98,7 @@ func TestValidatePrevResult(t *testing.T) {
 		cniConfig.Ifname = ifname
 		cniConfig.Netns = "invalid_netns"
 		sriovVFDeviceID := ""
-		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, nil, "", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
+		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, nil, nil, "", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
@@ -106,7 +109,7 @@ func TestValidatePrevResult(t *testing.T) {
 		cniConfig.Netns = "invalid_netns"
 		sriovVFDeviceID := "0000:03:00.6"
 		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, nil, "", true, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
+		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, nil, nil, "", true, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
@@ -119,7 +122,7 @@ func TestRemoveInterface(t *testing.T) {
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
-	podConfigurator, err := newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
+	podConfigurator, err := newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, nil, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	require.Nil(t, err, "No error expected in podConfigurator constructor")
 
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
@@ -190,7 +193,7 @@ func TestRemoveInterface(t *testing.T) {
 	})
 }
 
-func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ipam.IPAMDriver, ipamType string, enableSecondaryNetworkIPAM, isChaining bool) *CNIServer {
+func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ipam.IPAMDriver, ipamType string, enableSecondaryNetworkIPAM, isChaining, enableSecondaryNetwork bool) *CNIServer {
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
@@ -202,9 +205,13 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ip
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
 	gateway := &config.GatewayConfig{Name: "", IPv4: gwIPv4, MAC: gwMAC}
 	cniServer.nodeConfig = &config.NodeConfig{Name: "node1", PodIPv4CIDR: nodePodCIDRv4, GatewayConfig: gateway}
-	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
+	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, nil, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	cniServer.enableSecondaryNetworkIPAM = enableSecondaryNetworkIPAM
 	cniServer.isChaining = isChaining
+	if enableSecondaryNetwork {
+		mockVFDeviceUsageChecker = typestest.NewMockVFDeviceUsageChecker(controller)
+		cniServer.vfDeviceChecker = mockVFDeviceUsageChecker
+	}
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer
 }
@@ -299,7 +306,7 @@ func TestCmdAdd(t *testing.T) {
 			ipam.ResetIPAMResults()
 			controller := gomock.NewController(t)
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
-			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining)
+			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, false)
 			testIfaceConfigurator := newTestInterfaceConfigurator()
 			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			testIfaceConfigurator.hostIfaceName = hostInterfaceName
@@ -377,6 +384,7 @@ func TestCmdDel(t *testing.T) {
 		ipamError                  error
 		cniType                    string
 		enableSecondaryNetworkIPAM bool
+		enableSecondaryNetwork     bool
 		isChaining                 bool
 		disconnectOVS              bool
 		disconnectOVSErr           error
@@ -468,11 +476,26 @@ func TestCmdDel(t *testing.T) {
 			delLocalIPAMRoute:          true,
 			delLocalIPAMRouteError:     fmt.Errorf("unable to delete flexible IPAM rule"),
 		},
+		{
+			name:                       "del-failure-with-secondary-network",
+			ipamType:                   "test-delete",
+			ipamDel:                    false,
+			enableSecondaryNetworkIPAM: false,
+			enableSecondaryNetwork:     true,
+			isChaining:                 false,
+			disconnectOVS:              true,
+			delLocalIPAMRoute:          true,
+			response: &cnipb.CniCmdResponse{
+				Error: &cnipb.Error{
+					Code:    cnipb.ErrorCode_TRY_AGAIN_LATER,
+					Message: "Server is busy, please retry later",
+				},
+			}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
-			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining)
+			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining, tc.enableSecondaryNetwork)
 			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			containerID := requestMsg.CniArgs.ContainerId
 			containerIfaceConfig := interfacestore.NewContainerInterface(hostInterfaceName, containerID,
@@ -504,6 +527,9 @@ func TestCmdDel(t *testing.T) {
 			}
 			if tc.delLocalIPAMRoute {
 				mockRoute.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(tc.delLocalIPAMRouteError).Times(1)
+			}
+			if tc.enableSecondaryNetwork {
+				mockVFDeviceUsageChecker.EXPECT().GetAssignedVFDeviceNum(gomock.Any(), gomock.Any()).Return(1).Times(1)
 			}
 			resp, err := cniserver.CmdDel(ctx, requestMsg)
 			assert.NoError(t, err)
@@ -549,7 +575,7 @@ func TestCmdCheck(t *testing.T) {
 	}
 	t.Run("secondary-IPAM", func(t *testing.T) {
 		ipamType := ipam.AntreaIPAMType
-		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, true, false)
+		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, true, false, false)
 		requestMsg, _ := prepareRequest("pod0", "cniType", ipamType, false)
 		ipamSecondaryNetworkCheck = func(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) error {
 			return nil
@@ -563,7 +589,7 @@ func TestCmdCheck(t *testing.T) {
 	})
 	t.Run("secondary-IPAM-failure", func(t *testing.T) {
 		ipamType := ipam.AntreaIPAMType
-		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, true, false)
+		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, true, false, false)
 		requestMsg, _ := prepareRequest("pod0", "cniType", ipamType, false)
 		ipamSecondaryNetworkCheck = func(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) error {
 			return errors.New("failed to check secondary IPAM response")
@@ -583,7 +609,7 @@ func TestCmdCheck(t *testing.T) {
 	})
 	t.Run("chaining", func(t *testing.T) {
 		ipamType := "test-check"
-		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, false, true)
+		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, false, true, false)
 		requestMsg, hostInterfaceName := prepareRequest("pod1", "", ipamType, true)
 		testIfaceConfigurator := newTestInterfaceConfigurator()
 		testIfaceConfigurator.hostIfaceName = hostInterfaceName
@@ -594,7 +620,7 @@ func TestCmdCheck(t *testing.T) {
 	})
 	t.Run("check-general-cni", func(t *testing.T) {
 		ipamType := "test-check"
-		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, false, false)
+		cniserver := newMockCNIServer(t, controller, ipamMock, ipamType, false, false, false)
 		requestMsg, hostInterfaceName := prepareRequest("pod2", "", ipamType, true)
 		testIfaceConfigurator := newTestInterfaceConfigurator()
 		testIfaceConfigurator.hostIfaceName = hostInterfaceName
@@ -620,7 +646,7 @@ func TestReconcile(t *testing.T) {
 	mockRoute = routetest.NewMockInterface(controller)
 	cniServer := newCNIServer(t)
 	cniServer.routeClient = mockRoute
-	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
+	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, nil, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	cniServer.podConfigurator.ifConfigurator = newTestInterfaceConfigurator()
 	cniServer.nodeConfig = &config.NodeConfig{
 		Name: nodeName,

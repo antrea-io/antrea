@@ -1144,13 +1144,13 @@ func createTestInterfaces() (map[string]string, []ovsconfig.OVSPortData, []*inte
 	return map[string]string{"uuid1": uuid1, "uuid2": uuid2, "uuid3": uuid3, "uuid4": uuid4}, []ovsconfig.OVSPortData{ovsPort1, ovsPort2, ovsPort3, ovsPort4}, []*interfacestore.InterfaceConfig{containerConfig1, containerConfig2, containerConfig3}
 }
 
-func TestInitializeSecondaryInterfaceStore(t *testing.T) {
+func TestInitializeOVSSecondaryInterfaceStore(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	pc, _, _, mockOVSBridgeClient := testPodController(ctrl)
 	uuids, ovsPorts, _ := createTestInterfaces()
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts, nil)
 
-	err := pc.initializeSecondaryInterfaceStore()
+	err := pc.initializeOVSSecondaryInterfaceStore()
 	require.NoError(t, err, "OVS ports list successfully")
 
 	// Validate stored interfaces

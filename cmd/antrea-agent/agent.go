@@ -610,6 +610,19 @@ func run(o *Options) error {
 	var externalNodeController *externalnode.ExternalNodeController
 	var localExternalNodeInformer cache.SharedIndexInformer
 
+	var secondaryNetworkController *secondarynetwork.Controller
+	// Secondary network controller should be created before CNIServer.Run() to make sure no Pod CNI updates will be missed.
+	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		secondaryNetworkController, err = secondarynetwork.NewController(
+			o.config.ClientConnection, o.config.KubeAPIServerOverride,
+			k8sClient, localPodInformer.Get(),
+			podUpdateChannel, ifaceStore,
+			&o.config.SecondaryNetwork, ovsdbConnection)
+		if err != nil {
+			return fmt.Errorf("failed to create secondary network controller: %w", err)
+		}
+	}
+
 	if o.nodeType == config.K8sNode {
 		isChaining := networkConfig.TrafficEncapMode.IsNetworkPolicyOnly()
 		cniServer = cniserver.New(
@@ -625,7 +638,8 @@ func run(o *Options) error {
 			o.config.DisableTXChecksumOffload,
 			networkConfig,
 			podNetworkWait,
-			flowRestoreCompleteWait)
+			flowRestoreCompleteWait,
+			secondaryNetworkController)
 
 		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel)
 		if err != nil {
@@ -647,19 +661,6 @@ func run(o *Options) error {
 			ifaceStore, externalEntityUpdateChannel, o.config.ExternalNode.ExternalNodeNamespace, o.config.ExternalNode.PolicyBypassRules)
 		if err != nil {
 			return fmt.Errorf("error creating ExternalNode controller: %v", err)
-		}
-	}
-
-	// Secondary network controller should be created before CNIServer.Run() to make sure no Pod CNI updates will be missed.
-	var secondaryNetworkController *secondarynetwork.Controller
-	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-		secondaryNetworkController, err = secondarynetwork.NewController(
-			o.config.ClientConnection, o.config.KubeAPIServerOverride,
-			k8sClient, localPodInformer.Get(),
-			podUpdateChannel, ifaceStore,
-			&o.config.SecondaryNetwork, ovsdbConnection)
-		if err != nil {
-			return fmt.Errorf("failed to create secondary network controller: %w", err)
 		}
 	}
 

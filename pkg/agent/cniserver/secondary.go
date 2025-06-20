@@ -21,16 +21,21 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/pkg/agent/filestore"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
-func NewSecondaryInterfaceConfigurator(ovsBridgeClient ovsconfig.OVSBridgeClient, interfaceStore interfacestore.InterfaceStore) (*podConfigurator, error) {
-	pc, err := newPodConfigurator(nil, ovsBridgeClient, nil, nil, interfaceStore, nil, ovsconfig.OVSDatapathSystem, false, false, nil, nil, nil)
+func NewSecondaryInterfaceConfigurator(ovsBridgeClient ovsconfig.OVSBridgeClient, interfaceStore interfacestore.InterfaceStore, sriovIfaceStore *filestore.FileStore) (*podConfigurator, error) {
+	pc, err := newPodConfigurator(nil, ovsBridgeClient, nil, nil, interfaceStore, sriovIfaceStore, nil, ovsconfig.OVSDatapathSystem, false, false, nil, nil, nil)
 	if err == nil {
 		pc.isSecondaryNetwork = true
 	}
 	return pc, err
+}
+
+func getSRIOVInterfaceStoreUID(containerID, interfaceName string) string {
+	return containerID + interfaceName
 }
 
 // ConfigureSriovSecondaryInterface configures a SR-IOV secondary interface for a Pod.
@@ -56,6 +61,10 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	containerConfig := buildContainerConfig(hostInterfaceName, containerID, podName, podNamespace,
 		containerNetNS, containerIface, result.IPs, 0)
 	pc.ifaceStore.AddInterface(containerConfig)
+	pc.sriovIfaceStore.Save(filestore.AnyObjectWithID{
+		UID:    getSRIOVInterfaceStoreUID(containerID, containerConfig.IFDev),
+		Object: containerConfig,
+	})
 
 	if result.IPs != nil {
 		if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
@@ -68,7 +77,19 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 
 // DeleteSriovSecondaryInterface deletes a SRIOV secondary interface.
 func (pc *podConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
+	if err := pc.ifConfigurator.recoverVFInterfaceName(interfaceConfig.IFDev, interfaceConfig.NetNS); err != nil {
+		klog.ErrorS(err, "Failed to rename the container interface link to the original VF name",
+			"Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
+			"interface", interfaceConfig.IFDev)
+		return err
+	}
+
 	pc.ifaceStore.DeleteInterface(interfaceConfig)
+	pc.sriovIfaceStore.Delete(filestore.AnyObjectWithID{
+		UID:    getSRIOVInterfaceStoreUID(interfaceConfig.ContainerID, interfaceConfig.IFDev),
+		Object: interfaceConfig,
+	})
+
 	klog.InfoS("Deleted SR-IOV interface", "Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
 		"interface", interfaceConfig.IFDev)
 	return nil
