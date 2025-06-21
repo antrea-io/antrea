@@ -1,10 +1,10 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,13 +14,7 @@
 
 package types
 
-import v1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-
-type PodUpdate struct {
-	PodNamespace  string
-	PodName       string
-	ContainerID   string
-	NetNS         string
-	IsAdd         bool
-	NetworkStatus *v1.NetworkStatus
+type VFDeviceUsageChecker interface {
+	// GetAssignedVFDeviceNum returns the total number of VF device IDs used by the Pod.
+	GetAssignedVFDeviceNum(podName, podNamespace string) int
 }

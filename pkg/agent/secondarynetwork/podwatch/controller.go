@@ -94,6 +94,7 @@ type PodController struct {
 	// Map from "namespace/pod" to podCNIInfo.
 	cniCache           sync.Map
 	vfDeviceIDUsageMap sync.Map
+	networkStatusMap   sync.Map
 }
 
 func NewPodController(
@@ -191,49 +192,59 @@ func (pc *PodController) enqueuePod(obj interface{}) {
 // processCNIUpdate will be called when CNIServer publishes a Pod update event.
 func (pc *PodController) processCNIUpdate(e interface{}) {
 	event := e.(types.PodUpdate)
+	networkStatus := event.NetworkStatus
 	podKey := podKeyGet(event.PodName, event.PodNamespace)
-	if event.IsAdd {
-		pc.cniCache.Store(podKey, &podCNIInfo{containerID: event.ContainerID, netNS: event.NetNS})
+	if networkStatus == nil {
+		if event.IsAdd {
+			pc.cniCache.Store(podKey, &podCNIInfo{containerID: event.ContainerID, netNS: event.NetNS})
+		} else {
+			pc.cniCache.Delete(podKey)
+		}
 	} else {
-		pc.cniCache.Delete(podKey)
+		pc.networkStatusMap.Store(podKey, networkStatus)
 	}
+
 	pc.queue.Add(podKeyGet(event.PodName, event.PodNamespace))
 }
 
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
-func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo,
-	storedInterfaces []*interfacestore.InterfaceConfig) error {
-	if len(storedInterfaces) > 0 {
-		// We do not support secondary network update at the moment. Return as long as one
-		// secondary interface has been created for the Pod.
-		klog.V(1).InfoS("Secondary network already configured on this Pod and update not supported, skipping update",
-			"Pod", klog.KObj(pod))
-		return nil
-	}
-
+func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo, storedInterfaces []*interfacestore.InterfaceConfig) error {
 	if len(pod.Status.PodIPs) == 0 {
-		// Primary network configuration is not complete yet. Return nil here to unqueue the
+		// Primary network configuration is not complete yet. Return nil here to dequeue the
 		// Pod event. Secondary network configuration will be handled with the following Pod
 		// update events.
 		return nil
 	}
 
+	var networkList []*netdefv1.NetworkSelectionElement
 	secondaryNetwork, ok := checkForPodSecondaryNetworkAttachment(pod)
 	if !ok {
-		// NOTE: We do not handle Pod annotation deletion/update scenario at present.
 		klog.V(2).InfoS("Pod does not have a NetworkAttachmentDefinition", "Pod", klog.KObj(pod))
-		return nil
+	} else {
+		// Parse Pod annotation and proceed with the secondary network configuration.
+		var err error
+		networkList, err = netdefutils.ParseNetworkAnnotation(secondaryNetwork, pod.Namespace)
+		if err != nil {
+			klog.ErrorS(err, "Error when parsing network annotation", "annotation", secondaryNetwork)
+			// Do not return an error as a retry is not appropriate.
+			// When the annotation is fixed, the Pod will be enqueued again.
+			return nil
+		}
 	}
-	// Parse Pod annotation and proceed with the secondary network configuration.
-	networklist, err := netdefutils.ParseNetworkAnnotation(secondaryNetwork, pod.Namespace)
-	if err != nil {
-		klog.ErrorS(err, "Error when parsing network annotation", "annotation", secondaryNetwork)
-		// Do not return an error as a retry is not appropriate.
-		// When the annotation is fixed, the Pod will be enqueued again.
-		return nil
+	klog.V(2).InfoS("Get secondaryNetwork annotation", "secondaryNetwork", secondaryNetwork, "networkList", networkList, "storedInterfaces", storedInterfaces, "Annotations", pod.Annotations)
+
+	if err := pc.removeInterfaces(pc.filterStaleInterfaces(networkList, storedInterfaces)); err != nil {
+		return err
 	}
 
-	return pc.configurePodSecondaryNetwork(pod, networklist, podCNIInfo)
+	return pc.configurePodSecondaryNetwork(pod, networkList, podCNIInfo)
+}
+
+func (pc *PodController) filterStaleInterfaces(networkList []*netdefv1.NetworkSelectionElement, storedInterfaces []*interfacestore.InterfaceConfig) (staleInfs []*interfacestore.InterfaceConfig) {
+	if len(networkList) == 0 {
+		return storedInterfaces
+	}
+	return
 }
 
 func (pc *PodController) removeInterfaces(interfaces []*interfacestore.InterfaceConfig) error {
@@ -311,6 +322,15 @@ func (pc *PodController) syncPod(key string) error {
 		pc.deleteVFDeviceIDListPerPod(podName, podNamespace)
 		return nil
 	}
+
+	if obj, primaryNetworkStatusUpdate := pc.networkStatusMap.Load(key); primaryNetworkStatusUpdate {
+		networkStatus := obj.(*netdefv1.NetworkStatus)
+		if err := updatePodNetworkStatusAnnotation(pc.kubeClient, context.TODO(), []netdefv1.NetworkStatus{*networkStatus}, pod.Name, pod.Namespace); err != nil {
+			return fmt.Errorf("error update Pod networkstatus annotation: %w", err)
+		}
+		pc.networkStatusMap.Delete(key)
+	}
+
 	return pc.handleAddUpdatePod(pod, cniInfo, storedInterfaces)
 }
 
@@ -373,7 +393,7 @@ func (pc *PodController) configureSecondaryInterface(
 
 	switch networkConfig.NetworkType {
 	case sriovNetworkType:
-		ifConfigErr = pc.configureSriovAsSecondaryInterface(pod, network, resourceName, podCNIInfo, int(networkConfig.MTU), &ipamResult.Result)
+		ifConfigErr = pc.configureSriovAsSecondaryInterface(pod, network, resourceName, podCNIInfo, networkConfig.MTU, &ipamResult.Result)
 	case vlanNetworkType:
 		if networkConfig.VLAN > 0 {
 			// Let VLAN ID in the CNI network configuration override the IPPool subnet
@@ -383,7 +403,7 @@ func (pc *PodController) configureSecondaryInterface(
 		ifConfigErr = pc.interfaceConfigurator.ConfigureVLANSecondaryInterface(
 			pod.Name, pod.Namespace,
 			podCNIInfo.containerID, podCNIInfo.netNS, network.InterfaceRequest,
-			int(networkConfig.MTU), ipamResult)
+			networkConfig.MTU, ipamResult)
 	}
 	return &ipamResult.Result, ifConfigErr
 }
@@ -397,7 +417,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 	}
 
 	var savedErr error
-	interfacesConfigured := 0
 	var netStatus []netdefv1.NetworkStatus
 	for _, network := range networkList {
 		klog.V(2).InfoS("Secondary Network attached to Pod", "network", network, "Pod", klog.KObj(pod))
@@ -483,24 +502,12 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		}
 
 		netStatus = append(netStatus, *status)
-		interfacesConfigured++
 	}
 
-	if savedErr != nil && interfacesConfigured == 0 {
-		// As we do not support secondary network update, do not return error to
-		// retry, if at least one secondary network is configured.
+	if savedErr != nil {
 		return savedErr
 	}
-
-	// Update the Pod's network status annotation
-	if netStatus != nil {
-		if err := netdefutils.SetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
-			klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
-		} else {
-			klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KObj(pod), "NetworkStatus", netStatus)
-		}
-	}
-	return nil
+	return updatePodNetworkStatusAnnotation(pc.kubeClient, context.TODO(), netStatus, pod.Name, pod.Namespace)
 }
 
 func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
@@ -513,7 +520,6 @@ func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
 	}
 	if networkConfig.Type != cniserver.AntreaCNIType {
 		return &networkConfig, fmt.Errorf("not Antrea CNI type '%s'", networkConfig.Type)
-
 	}
 	if networkConfig.NetworkType != sriovNetworkType && networkConfig.NetworkType != vlanNetworkType {
 		return &networkConfig, fmt.Errorf("secondary network type '%s' not supported", networkConfig.NetworkType)
@@ -559,8 +565,8 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 	if annotations == nil {
 		return "", false
 	}
-	netObj, netObjExist := annotations[netdefv1.NetworkAttachmentAnnot]
-	return netObj, netObjExist
+	netObj, netObjExists := annotations[netdefv1.NetworkAttachmentAnnot]
+	return netObj, netObjExists && netObj != ""
 }
 
 // initializeSecondaryInterfaceStore restores secondary interfaceStore when agent restarts.
@@ -592,7 +598,6 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 			klog.InfoS("Unknown Antrea interface type for the secondary bridge", "type", interfaceType)
 			continue
 		}
-
 		ifaceList = append(ifaceList, intf)
 	}
 
@@ -620,7 +625,7 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 	for _, containerConfig := range secondaryInterfaces {
 		_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
 		if !exists || containerConfig.OFPort == -1 {
-			// Deletes ports not in the CNI cache.
+			// Delete ports not in the CNI cache.
 			staleInterfaces = append(staleInterfaces, containerConfig)
 		}
 	}
@@ -632,5 +637,90 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 		}
 	}
 
+	return nil
+}
+
+var (
+	netdefutilsSetNetworkStatus = netdefutils.SetNetworkStatus
+)
+
+// mergeNetworkStatusLists merges two lists of network statuses according to specific rules:
+// 1. When new list contains items matching old items (by key), update old items with new values
+// 2. When new list is empty, preserve only old items with Default=true
+// 3. Add new items that don't exist in old list
+func mergeNetworkStatusLists(oldNetworkStatus []netdefv1.NetworkStatus, netStatus []netdefv1.NetworkStatus) []netdefv1.NetworkStatus {
+	// Rule 2: Handle empty new list case - preserve only default items from old list
+	if len(netStatus) == 0 {
+		var primaryNetStatus []netdefv1.NetworkStatus
+		for i, status := range oldNetworkStatus {
+			// Only include statuses marked as default(primary network status)
+			if status.Default {
+				primaryNetStatus = append(primaryNetStatus, oldNetworkStatus[i])
+			}
+		}
+		return primaryNetStatus
+	}
+
+	type key [3]string
+	getKey := func(s netdefv1.NetworkStatus) key {
+		return key{s.Name, s.Interface, s.Mac}
+	}
+	// Create lookup structures:
+	// oldKeySet - tracks which keys exist in old list for existence checks
+	// newMap - provides O(1) access to new items by key
+	oldKeySet := make(map[key]struct{})
+	newMap := make(map[key]netdefv1.NetworkStatus)
+	for _, item := range oldNetworkStatus {
+		oldKeySet[getKey(item)] = struct{}{}
+	}
+	for _, item := range netStatus {
+		newMap[getKey(item)] = item
+	}
+
+	var result []netdefv1.NetworkStatus
+	// Process old items:
+	// - If item exists in new list, use the updated version from newMap
+	// - Otherwise preserve original item
+	for _, oldItem := range oldNetworkStatus {
+		if newItem, exists := newMap[getKey(oldItem)]; exists {
+			result = append(result, newItem)
+		} else {
+			result = append(result, oldItem)
+		}
+	}
+
+	// Add new items that don't exist in old list
+	// (Iterate original slice to preserve new list order)
+	for _, newItem := range netStatus {
+		if _, exists := oldKeySet[getKey(newItem)]; !exists {
+			result = append(result, newItem)
+		}
+	}
+
+	return result
+}
+
+// updatePodNetworkStatusAnnotation update the Pod's network status annotation
+func updatePodNetworkStatusAnnotation(kubeClient clientset.Interface, ctx context.Context, netStatus []netdefv1.NetworkStatus, podName, podNamespace string) error {
+	podItem, err := kubeClient.CoreV1().Pods(podNamespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get Pod:%w", err)
+	}
+
+	var oldNetworkStatus []netdefv1.NetworkStatus
+	netStatusesJson, ok := podItem.Annotations[netdefv1.NetworkStatusAnnot]
+	if ok {
+		err := json.Unmarshal([]byte(netStatusesJson), &oldNetworkStatus)
+		if err != nil {
+			return fmt.Errorf("error unmarshal Pod network status annotation: %w", err)
+		}
+	}
+
+	mergedNetStatus := mergeNetworkStatusLists(oldNetworkStatus, netStatus)
+
+	if err := netdefutilsSetNetworkStatus(kubeClient, podItem, mergedNetStatus); err != nil {
+		return fmt.Errorf("error setting Pod network status annotation: %w", err)
+	}
+	klog.V(2).InfoS("Pod network status annotation updated", "Pod", klog.KRef(podNamespace, podName), "NetworkStatus", netStatus)
 	return nil
 }
