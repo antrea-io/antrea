@@ -141,17 +141,3 @@ func (pt *PortTable) DeleteRule(podKey string, podPort int, protocol string) err
 	pt.deletePortTableCache(data)
 	return nil
 }
-
-func (pt *PortTable) DeleteRulesForPod(podKey string) error {
-	pt.tableLock.Lock()
-	defer pt.tableLock.Unlock()
-	podEntries := pt.getDataForPod(podKey)
-	for _, podEntry := range podEntries {
-		protocolSocketData := podEntry.Protocol
-		if err := pt.PodPortRules.DeleteRule(podEntry.NodePort, podEntry.PodIP, podEntry.PodPort, protocolSocketData.Protocol); err != nil {
-			return err
-		}
-		pt.deletePortTableCache(podEntry)
-	}
-	return nil
-}
