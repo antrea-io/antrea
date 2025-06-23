@@ -137,16 +137,6 @@ func (pt *PortTable) DeleteRule(podKey string, podPort int, protocol string) err
 	return pt.deleteRule(data)
 }
 
-func (pt *PortTable) DeleteRulesForPod(podKey string) error {
-	pt.tableLock.Lock()
-	defer pt.tableLock.Unlock()
-	podEntries := pt.getDataForPod(podKey)
-	for _, podEntry := range podEntries {
-		return pt.deleteRule(podEntry)
-	}
-	return nil
-}
-
 // syncRules ensures that contents of the port table matches the iptables rules present on the Node.
 func (pt *PortTable) syncRules() error {
 	pt.tableLock.Lock()
