@@ -27,8 +27,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
-	"github.com/vmware/go-ipfix/pkg/registry"
 	"go.uber.org/mock/gomock"
 
 	s3uploadertesting "antrea.io/antrea/pkg/flowaggregator/s3uploader/testing"
@@ -37,13 +35,9 @@ import (
 
 var (
 	fakeClusterUUID = uuid.New().String()
-	recordStrIPv4   = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,5,4,TIME_WAIT,11,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,172.18.0.1,http,mockHttpString,test-egress-node"
-	recordStrIPv6   = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,5,4,TIME_WAIT,11,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,172.18.0.1,http,mockHttpString,test-egress-node"
+	recordStrIPv4   = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,172.18.0.1,http,mockHttpString,test-egress-node"
+	recordStrIPv6   = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,2001:0:3238:dfe1::ac12:1,http,mockHttpString,test-egress-node"
 )
-
-func init() {
-	registry.LoadRegistry()
-}
 
 func TestUpdateS3Uploader(t *testing.T) {
 	s3UploadProc := S3UploadProcess{
@@ -64,7 +58,6 @@ func TestUpdateS3Uploader(t *testing.T) {
 }
 
 func TestCacheRecord(t *testing.T) {
-	ctrl := gomock.NewController(t)
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 2,
@@ -74,18 +67,16 @@ func TestCacheRecord(t *testing.T) {
 	}
 
 	// First call, cache the record in currentBuffer.
-	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
-	s3UploadProc.CacheRecord(mockRecord)
+	record := flowaggregatortesting.PrepareTestFlowRecord(true)
+	s3UploadProc.CacheRecord(record)
 	assert.Equal(t, int32(1), s3UploadProc.cachedRecordCount)
 	currentBuffer := strings.TrimRight(s3UploadProc.currentBuffer.String(), "\n")
 	assert.Equal(t, strings.Split(currentBuffer, ",")[:50], strings.Split(recordStrIPv4, ",")[:50])
 	assert.Equal(t, strings.Split(currentBuffer, ",")[51:], strings.Split(recordStrIPv4, ",")[51:])
 
 	// Second call, reach currentBuffer max size, add the currentBuffer to bufferQueue.
-	mockRecord = ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, false)
-	s3UploadProc.CacheRecord(mockRecord)
+	record = flowaggregatortesting.PrepareTestFlowRecord(false)
+	s3UploadProc.CacheRecord(record)
 	assert.Equal(t, 1, len(s3UploadProc.bufferQueue))
 	buf := s3UploadProc.bufferQueue[0]
 	currentBuf := strings.TrimRight(strings.Split(buf.String(), "\n")[1], "\n")
@@ -109,9 +100,8 @@ func TestBatchUploadAll(t *testing.T) {
 		s3UploaderAPI:    mockS3Uploader,
 		clusterUUID:      fakeClusterUUID,
 	}
-	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
-	s3UploadProc.CacheRecord(mockRecord)
+	record := flowaggregatortesting.PrepareTestFlowRecord(true)
+	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
 	err := s3UploadProc.batchUploadAll(ctx)
@@ -139,12 +129,10 @@ func TestBatchUploadAllPartialSuccess(t *testing.T) {
 		s3UploaderAPI:    mockS3Uploader,
 		clusterUUID:      fakeClusterUUID,
 	}
-	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
-	s3UploadProc.CacheRecord(mockRecord)
-	mockRecord = ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
-	s3UploadProc.CacheRecord(mockRecord)
+	record := flowaggregatortesting.PrepareTestFlowRecord(true)
+	s3UploadProc.CacheRecord(record)
+	record = flowaggregatortesting.PrepareTestFlowRecord(false)
+	s3UploadProc.CacheRecord(record)
 
 	err := s3UploadProc.batchUploadAll(ctx)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
@@ -153,7 +141,6 @@ func TestBatchUploadAllPartialSuccess(t *testing.T) {
 }
 
 func TestBatchUploadAllError(t *testing.T) {
-	ctrl := gomock.NewController(t)
 	ctx := context.Background()
 	s3uploader := &S3Uploader{}
 	s3UploadProc := S3UploadProcess{
@@ -169,9 +156,8 @@ func TestBatchUploadAllError(t *testing.T) {
 	s3UploadProc.awsS3Client = s3.NewFromConfig(cfg)
 	s3UploadProc.awsS3Uploader = s3manager.NewUploader(s3UploadProc.awsS3Client)
 
-	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
-	s3UploadProc.CacheRecord(mockRecord)
+	record := flowaggregatortesting.PrepareTestFlowRecord(true)
+	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
 	// It is expected to fail when calling uploadFile, as the correct S3 bucket
@@ -205,9 +191,8 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 		s3UploaderAPI:    mockS3Uploader,
 		clusterUUID:      fakeClusterUUID,
 	}
-	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
-	s3UploadProc.CacheRecord(mockRecord)
+	record := flowaggregatortesting.PrepareTestFlowRecord(true)
+	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
 	s3UploadProc.startExportProcess()
@@ -242,9 +227,8 @@ func TestFlushCacheOnStop(t *testing.T) {
 		s3UploaderAPI:    mockS3Uploader,
 		clusterUUID:      fakeClusterUUID,
 	}
-	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
-	s3UploadProc.CacheRecord(mockRecord)
+	record := flowaggregatortesting.PrepareTestFlowRecord(true)
+	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
 	s3UploadProc.startExportProcess()

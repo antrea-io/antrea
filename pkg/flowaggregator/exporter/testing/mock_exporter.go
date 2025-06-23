@@ -27,8 +27,8 @@ package testing
 import (
 	reflect "reflect"
 
+	v1alpha1 "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	options "antrea.io/antrea/pkg/flowaggregator/options"
-	entities "github.com/vmware/go-ipfix/pkg/entities"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -57,7 +57,7 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AddRecord mocks base method.
-func (m *MockInterface) AddRecord(record entities.Record, isRecordIPv6 bool) error {
+func (m *MockInterface) AddRecord(record *v1alpha1.Flow, isRecordIPv6 bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddRecord", record, isRecordIPv6)
 	ret0, _ := ret[0].(error)
