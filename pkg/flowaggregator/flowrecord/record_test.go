@@ -19,35 +19,19 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
-	"github.com/vmware/go-ipfix/pkg/registry"
-	"go.uber.org/mock/gomock"
 
 	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
 )
 
-func init() {
-	registry.LoadRegistry()
-}
-
 func TestGetFlowRecord(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	testcases := []struct {
-		isIPv4 bool
-	}{
-		{true},
-		{false},
-	}
+	runTest := func(t *testing.T, isIPv4 bool) {
+		record := flowaggregatortesting.PrepareTestFlowRecord(isIPv4)
 
-	for _, tc := range testcases {
-		mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-		flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, tc.isIPv4)
-
-		flowRecord := GetFlowRecord(mockRecord)
-		assert.Equal(t, time.Unix(int64(1637706961), 0), flowRecord.FlowStartSeconds)
-		assert.Equal(t, time.Unix(int64(1637706973), 0), flowRecord.FlowEndSeconds)
-		assert.Equal(t, time.Unix(int64(1637706974), 0), flowRecord.FlowEndSecondsFromSourceNode)
-		assert.Equal(t, time.Unix(int64(1637706975), 0), flowRecord.FlowEndSecondsFromDestinationNode)
+		flowRecord := GetFlowRecord(record)
+		assert.Equal(t, time.Unix(int64(1637706961), 0).UTC(), flowRecord.FlowStartSeconds)
+		assert.Equal(t, time.Unix(int64(1637706973), 0).UTC(), flowRecord.FlowEndSeconds)
+		assert.Equal(t, time.Unix(int64(1637706974), 0).UTC(), flowRecord.FlowEndSecondsFromSourceNode)
+		assert.Equal(t, time.Unix(int64(1637706975), 0).UTC(), flowRecord.FlowEndSecondsFromDestinationNode)
 		assert.Equal(t, uint8(3), flowRecord.FlowEndReason)
 		assert.Equal(t, uint16(44752), flowRecord.SourceTransportPort)
 		assert.Equal(t, uint16(5201), flowRecord.DestinationTransportPort)
@@ -76,10 +60,10 @@ func TestGetFlowRecord(t *testing.T) {
 		assert.Equal(t, "test-flow-aggregator-networkpolicy-egress-allow", flowRecord.EgressNetworkPolicyName)
 		assert.Equal(t, "antrea-test-ns-e", flowRecord.EgressNetworkPolicyNamespace)
 		assert.Equal(t, "test-flow-aggregator-networkpolicy-rule-e", flowRecord.EgressNetworkPolicyRuleName)
-		assert.Equal(t, uint8(4), flowRecord.EgressNetworkPolicyType)
-		assert.Equal(t, uint8(5), flowRecord.EgressNetworkPolicyRuleAction)
+		assert.Equal(t, uint8(3), flowRecord.EgressNetworkPolicyType)
+		assert.Equal(t, uint8(1), flowRecord.EgressNetworkPolicyRuleAction)
 		assert.Equal(t, "TIME_WAIT", flowRecord.TcpState)
-		assert.Equal(t, uint8(11), flowRecord.FlowType)
+		assert.Equal(t, uint8(2), flowRecord.FlowType)
 		assert.Equal(t, "{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}", flowRecord.SourcePodLabels)
 		assert.Equal(t, "{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}", flowRecord.DestinationPodLabels)
 		assert.Equal(t, uint64(15902813472), flowRecord.Throughput)
@@ -89,18 +73,22 @@ func TestGetFlowRecord(t *testing.T) {
 		assert.Equal(t, uint64(12381345), flowRecord.ReverseThroughputFromSourceNode)
 		assert.Equal(t, uint64(12381346), flowRecord.ReverseThroughputFromDestinationNode)
 		assert.Equal(t, "test-egress", flowRecord.EgressName)
-		assert.Equal(t, "172.18.0.1", flowRecord.EgressIP)
 		assert.Equal(t, "http", flowRecord.AppProtocolName)
 		assert.Equal(t, "mockHttpString", flowRecord.HttpVals)
 
-		if tc.isIPv4 {
+		if isIPv4 {
 			assert.Equal(t, "10.10.0.79", flowRecord.SourceIP)
 			assert.Equal(t, "10.10.0.80", flowRecord.DestinationIP)
 			assert.Equal(t, "10.10.1.10", flowRecord.DestinationClusterIP)
+			assert.Equal(t, "172.18.0.1", flowRecord.EgressIP)
 		} else {
 			assert.Equal(t, "2001:0:3238:dfe1:63::fefb", flowRecord.SourceIP)
 			assert.Equal(t, "2001:0:3238:dfe1:63::fefc", flowRecord.DestinationIP)
 			assert.Equal(t, "2001:0:3238:dfe1:64::a", flowRecord.DestinationClusterIP)
+			assert.Equal(t, "2001:0:3238:dfe1::ac12:1", flowRecord.EgressIP)
 		}
 	}
+
+	t.Run("ipv4", func(t *testing.T) { runTest(t, true) })
+	t.Run("ipv6", func(t *testing.T) { runTest(t, false) })
 }

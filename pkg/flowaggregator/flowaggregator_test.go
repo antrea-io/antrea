@@ -16,7 +16,7 @@ package flowaggregator
 
 import (
 	"bytes"
-	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sync"
@@ -24,13 +24,14 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
-	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/testing/protocmp"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +39,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/klog/v2"
 
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	exportertesting "antrea.io/antrea/pkg/flowaggregator/exporter/testing"
@@ -128,14 +130,10 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 			mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 			mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
-			mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 			mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
 
-			clusterUUID := uuid.New()
 			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
 				return &flowAggregator{
-					clusterUUID:                 clusterUUID,
-					clusterID:                   clusterUUID.String(),
 					aggregatorTransportProtocol: "tcp",
 					aggregationProcess:          mockAggregationProcess,
 					activeFlowRecordTimeout:     testActiveTimeout,
@@ -151,55 +149,49 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 
 			mockExporters := []*exportertesting.MockInterface{mockIPFIXExporter, mockClickHouseExporter}
 
+			startTime := time.Now().UTC().Truncate(time.Second)
+			record := &flowpb.Flow{
+				StartTs:   timestamppb.New(startTime),
+				EndTs:     &timestamppb.Timestamp{},
+				Ip:        &flowpb.IP{},
+				Transport: &flowpb.Transport{},
+				K8S: &flowpb.Kubernetes{
+					SourcePodNamespace:      "default",
+					SourcePodName:           "podA",
+					DestinationPodNamespace: "default",
+					DestinationPodName:      "podB",
+				},
+				Stats:        &flowpb.Stats{},
+				ReverseStats: &flowpb.Stats{},
+				App:          &flowpb.App{},
+			}
 			flowRecord := &intermediate.AggregationFlowRecord{
-				Record:      mockRecord,
+				Record:      record,
 				ReadyToSend: true,
 			}
 
 			fa := newFlowAggregator(tc.includePodLabels)
 			for _, exporter := range mockExporters {
-				exporter.EXPECT().AddRecord(mockRecord, tc.isIPv6)
+				exporter.EXPECT().AddRecord(record, tc.isIPv6)
 			}
 
-			startTime := time.Now().Truncate(time.Second)
-
-			mockAggregationProcess.EXPECT().ResetStatAndThroughputElementsInRecord(mockRecord).Return(nil)
-			flowStartSecondsIE := ipfixentities.NewDateTimeSecondsInfoElement(ipfixentities.NewInfoElement("flowStartSeconds", 150, 14, ipfixregistry.IANAEnterpriseID, 4), uint32(startTime.Unix()))
-			mockRecord.EXPECT().GetInfoElementWithValue("flowStartSeconds").Return(flowStartSecondsIE, 0, true)
+			mockAggregationProcess.EXPECT().ResetStatAndThroughputElementsInRecord(record).Return(nil)
 			mockAggregationProcess.EXPECT().AreCorrelatedFieldsFilled(*flowRecord).Return(false)
-			sourcePodNameIE := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("sourcePodName", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), "podA")
-			mockRecord.EXPECT().GetInfoElementWithValue("sourcePodName").Return(sourcePodNameIE, 0, true).MinTimes(1)
-			destinationPodNameIE := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("destinationPodName", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), "podB")
-			mockRecord.EXPECT().GetInfoElementWithValue("destinationPodName").Return(destinationPodNameIE, 0, true).MinTimes(1)
 			mockAggregationProcess.EXPECT().SetCorrelatedFieldsFilled(flowRecord, true)
 			mockAggregationProcess.EXPECT().AreExternalFieldsFilled(*flowRecord).Return(false)
-			podLabels := ""
 			if tc.includePodLabels {
-				podLabels = "{}"
-				sourcePodNamespaceIE := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("sourcePodNamespace", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), "default")
-				mockRecord.EXPECT().GetInfoElementWithValue("sourcePodNamespace").Return(sourcePodNamespaceIE, 0, true)
-				destinationPodNamespaceIE := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("destinationPodNamespace", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), "default")
-				mockRecord.EXPECT().GetInfoElementWithValue("destinationPodNamespace").Return(destinationPodNamespaceIE, 0, true)
 				mockPodStore.EXPECT().GetPodByIPAndTime(tc.flowKey.SourceAddress, startTime).Return(podA, true)
 				mockPodStore.EXPECT().GetPodByIPAndTime(tc.flowKey.DestinationAddress, startTime).Return(podB, true)
 			}
-			sourcePodLabelsElement := ipfixentities.NewInfoElement("sourcePodLabels", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("sourcePodLabels", ipfixregistry.AntreaEnterpriseID).Return(sourcePodLabelsElement, nil)
-			sourcePodLabelsIE := ipfixentities.NewStringInfoElement(sourcePodLabelsElement, podLabels)
-			mockRecord.EXPECT().AddInfoElement(sourcePodLabelsIE).Return(nil)
-			destinationPodLabelsElement := ipfixentities.NewInfoElement("destinationPodLabels", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID).Return(destinationPodLabelsElement, nil)
-			destinationPodLabelsIE := ipfixentities.NewStringInfoElement(destinationPodLabelsElement, podLabels)
-			mockRecord.EXPECT().AddInfoElement(destinationPodLabelsIE).Return(nil)
-			clusterIDElement := ipfixentities.NewInfoElement("clusterId", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("clusterId", ipfixregistry.AntreaEnterpriseID).Return(clusterIDElement, nil)
-			clusterIDIE := ipfixentities.NewStringInfoElement(clusterIDElement, clusterUUID.String())
-			mockRecord.EXPECT().AddInfoElement(clusterIDIE).Return(nil)
 			mockAggregationProcess.EXPECT().SetExternalFieldsFilled(flowRecord, true)
 			mockAggregationProcess.EXPECT().IsAggregatedRecordIPv4(*flowRecord).Return(!tc.isIPv6)
 
 			err := fa.sendAggregatedRecord(tc.flowKey, flowRecord)
 			assert.NoError(t, err, "Error when sending flow key record, key: %v, record: %v", tc.flowKey, flowRecord)
+			if tc.includePodLabels {
+				assert.NotNil(t, record.K8S.SourcePodLabels)
+				assert.NotNil(t, record.K8S.DestinationPodLabels)
+			}
 		})
 	}
 }
@@ -222,8 +214,6 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 	const destinationAddressIPv4 = "10.0.0.2"
 	const sourceAddressIPv6 = "2001:0:3238:dfe1:63::fefb"
 	const destinationAddressIPv6 = "2001:0:3238:dfe1:63::fefc"
-	const nodeAddressIPv4 = "192.168.77.100"
-	const nodeAddressIPv6 = "fd3b:fcf5:3e92:d732::100"
 
 	testcases := []struct {
 		name             string
@@ -258,14 +248,10 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 			mockPodStore := podstoretest.NewMockInterface(ctrl)
 			mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
-			mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 
-			clusterUUID := uuid.New()
 			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
 				return &flowAggregator{
 					aggregatorMode:              flowaggregatorconfig.AggregatorModeProxy,
-					clusterUUID:                 clusterUUID,
-					clusterID:                   clusterUUID.String(),
 					aggregatorTransportProtocol: "tcp",
 					activeFlowRecordTimeout:     testActiveTimeout,
 					inactiveFlowRecordTimeout:   testInactiveTimeout,
@@ -278,93 +264,78 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 			}
 
 			fa := newFlowAggregator(tc.includePodLabels)
-			mockIPFIXExporter.EXPECT().AddRecord(mockRecord, tc.isIPv6)
 
-			startTime := time.Now().Truncate(time.Second)
+			startTime := time.Now().UTC().Truncate(time.Second)
+			record := &flowpb.Flow{
+				StartTs:   timestamppb.New(startTime),
+				EndTs:     &timestamppb.Timestamp{},
+				Ip:        &flowpb.IP{},
+				Transport: &flowpb.Transport{},
+				K8S: &flowpb.Kubernetes{
+					FlowType:                flowpb.FlowType_FLOW_TYPE_INTER_NODE,
+					SourcePodNamespace:      "default",
+					SourcePodName:           "podA",
+					DestinationPodNamespace: "default",
+					DestinationPodName:      "podB",
+				},
+				Stats:        &flowpb.Stats{},
+				ReverseStats: &flowpb.Stats{},
+				App:          &flowpb.App{},
+			}
 
-			flowTypeIE := ipfixentities.NewUnsigned8InfoElement(ipfixentities.NewInfoElement("flowType", 0, ipfixentities.Unsigned8, ipfixregistry.AntreaEnterpriseID, 0), ipfixregistry.FlowTypeInterNode)
-			mockRecord.EXPECT().GetInfoElementWithValue("flowType").Return(flowTypeIE, 0, true)
+			mockIPFIXExporter.EXPECT().AddRecord(record, tc.isIPv6)
 
 			var sourceAddress, destinationAddress string
-			var sourceIPv4Address, sourceIPv6Address, destinationIPv4Address, destinationIPv6Address string
 			if tc.isIPv6 {
+				record.Ip.Version = flowpb.IPVersion_IP_VERSION_6
 				sourceAddress = sourceAddressIPv6
 				destinationAddress = destinationAddressIPv6
-				sourceIPv6Address = sourceAddressIPv6
-				destinationIPv6Address = destinationAddressIPv6
 			} else {
+				record.Ip.Version = flowpb.IPVersion_IP_VERSION_4
 				sourceAddress = sourceAddressIPv4
 				destinationAddress = destinationAddressIPv4
-				sourceIPv4Address = sourceAddressIPv4
-				destinationIPv4Address = destinationAddressIPv4
 			}
-			sourceIPv4AddressIE := ipfixentities.NewIPAddressInfoElement(ipfixentities.NewInfoElement("sourceIPv4Address", 0, ipfixentities.Ipv4Address, ipfixregistry.IANAEnterpriseID, 0), net.ParseIP(sourceIPv4Address))
-			mockRecord.EXPECT().GetInfoElementWithValue("sourceIPv4Address").Return(sourceIPv4AddressIE, 0, !tc.isIPv6)
-			destinationIPv4AddressIE := ipfixentities.NewIPAddressInfoElement(ipfixentities.NewInfoElement("destinationIPv4Address", 0, ipfixentities.Ipv4Address, ipfixregistry.IANAEnterpriseID, 0), net.ParseIP(destinationIPv4Address))
-			mockRecord.EXPECT().GetInfoElementWithValue("destinationIPv4Address").Return(destinationIPv4AddressIE, 0, !tc.isIPv6)
-			sourceIPv6AddressIE := ipfixentities.NewIPAddressInfoElement(ipfixentities.NewInfoElement("sourceIPv6Address", 0, ipfixentities.Ipv6Address, ipfixregistry.IANAEnterpriseID, 0), net.ParseIP(sourceIPv6Address))
-			mockRecord.EXPECT().GetInfoElementWithValue("sourceIPv6Address").Return(sourceIPv6AddressIE, 0, tc.isIPv6)
-			destinationIPv6AddressIE := ipfixentities.NewIPAddressInfoElement(ipfixentities.NewInfoElement("destinationIPv6Address", 0, ipfixentities.Ipv6Address, ipfixregistry.IANAEnterpriseID, 0), net.ParseIP(destinationIPv6Address))
-			mockRecord.EXPECT().GetInfoElementWithValue("destinationIPv6Address").Return(destinationIPv6AddressIE, 0, tc.isIPv6)
+			record.Ip.Source = netip.MustParseAddr(sourceAddress).AsSlice()
+			record.Ip.Destination = netip.MustParseAddr(destinationAddress).AsSlice()
 
-			flowStartSecondsIE := ipfixentities.NewDateTimeSecondsInfoElement(ipfixentities.NewInfoElement("flowStartSeconds", 150, 14, ipfixregistry.IANAEnterpriseID, 4), uint32(startTime.Unix()))
-			mockRecord.EXPECT().GetInfoElementWithValue("flowStartSeconds").Return(flowStartSecondsIE, 0, true)
-			sourcePodNameIE := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("sourcePodName", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), "podA")
-			mockRecord.EXPECT().GetInfoElementWithValue("sourcePodName").Return(sourcePodNameIE, 0, true).MinTimes(1)
-			destinationPodNameIE := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("destinationPodName", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), "podB")
-			mockRecord.EXPECT().GetInfoElementWithValue("destinationPodName").Return(destinationPodNameIE, 0, true).MinTimes(1)
-			podLabels := ""
 			if tc.includePodLabels {
-				podLabels = "{}"
-				sourcePodNamespaceIE := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("sourcePodNamespace", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), "default")
-				mockRecord.EXPECT().GetInfoElementWithValue("sourcePodNamespace").Return(sourcePodNamespaceIE, 0, true)
-				destinationPodNamespaceIE := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("destinationPodNamespace", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), "default")
-				mockRecord.EXPECT().GetInfoElementWithValue("destinationPodNamespace").Return(destinationPodNamespaceIE, 0, true)
 				mockPodStore.EXPECT().GetPodByIPAndTime(sourceAddress, startTime).Return(podA, true)
 				mockPodStore.EXPECT().GetPodByIPAndTime(destinationAddress, startTime).Return(podB, true)
 			}
-			sourcePodLabelsElement := ipfixentities.NewInfoElement("sourcePodLabels", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("sourcePodLabels", ipfixregistry.AntreaEnterpriseID).Return(sourcePodLabelsElement, nil)
-			sourcePodLabelsIE := ipfixentities.NewStringInfoElement(sourcePodLabelsElement, podLabels)
-			mockRecord.EXPECT().AddInfoElement(sourcePodLabelsIE).Return(nil)
-			destinationPodLabelsElement := ipfixentities.NewInfoElement("destinationPodLabels", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID).Return(destinationPodLabelsElement, nil)
-			destinationPodLabelsIE := ipfixentities.NewStringInfoElement(destinationPodLabelsElement, podLabels)
-			mockRecord.EXPECT().AddInfoElement(destinationPodLabelsIE).Return(nil)
-			clusterIDElement := ipfixentities.NewInfoElement("clusterId", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("clusterId", ipfixregistry.AntreaEnterpriseID).Return(clusterIDElement, nil)
-			clusterIDIE := ipfixentities.NewStringInfoElement(clusterIDElement, clusterUUID.String())
-			mockRecord.EXPECT().AddInfoElement(clusterIDIE).Return(nil)
 
-			const obsDomainID = 123
-			originalObservationDomainIE := ipfixentities.NewInfoElement("originalObservationDomainId", 0, 0, ipfixregistry.IANAEnterpriseID, 4)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("originalObservationDomainId", ipfixregistry.IANAEnterpriseID).Return(originalObservationDomainIE, nil)
-			mockRecord.EXPECT().AddInfoElement(ipfixentities.NewUnsigned32InfoElement(originalObservationDomainIE, obsDomainID))
+			// const obsDomainID = 123
+			// originalObservationDomainIE := ipfixentities.NewInfoElement("originalObservationDomainId", 0, 0, ipfixregistry.IANAEnterpriseID, 4)
+			// mockIPFIXRegistry.EXPECT().GetInfoElement("originalObservationDomainId", ipfixregistry.IANAEnterpriseID).Return(originalObservationDomainIE, nil)
+			// mockRecord.EXPECT().AddInfoElement(ipfixentities.NewUnsigned32InfoElement(originalObservationDomainIE, obsDomainID))
 
-			var exporterAddress string
-			var exporterAddressIPv4, exporterAddressIPv6 net.IP
-			if tc.isIPv6 {
-				exporterAddressIPv4 = net.IPv4zero
-				exporterAddressIPv6 = net.ParseIP(nodeAddressIPv6)
-				exporterAddress = nodeAddressIPv6
-			} else {
-				exporterAddressIPv4 = net.ParseIP(nodeAddressIPv4)
-				exporterAddressIPv6 = net.IPv6zero
-				exporterAddress = nodeAddressIPv4
-			}
+			// var exporterAddress string
+			// var exporterAddressIPv4, exporterAddressIPv6 net.IP
+			// if tc.isIPv6 {
+			// 	exporterAddressIPv4 = net.IPv4zero
+			// 	exporterAddressIPv6 = net.ParseIP(nodeAddressIPv6)
+			// 	exporterAddress = nodeAddressIPv6
+			// } else {
+			// 	exporterAddressIPv4 = net.ParseIP(nodeAddressIPv4)
+			// 	exporterAddressIPv6 = net.IPv6zero
+			// 	exporterAddress = nodeAddressIPv4
+			// }
 
-			originalExporterIPv6AddressIE := ipfixentities.NewInfoElement("originalExporterIPv6Address", 0, 0, ipfixregistry.IANAEnterpriseID, 16)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("originalExporterIPv6Address", ipfixregistry.IANAEnterpriseID).Return(originalExporterIPv6AddressIE, nil)
-			mockRecord.EXPECT().AddInfoElement(ipfixentities.NewIPAddressInfoElement(originalExporterIPv6AddressIE, exporterAddressIPv6))
-			originalExporterIPv4AddressIE := ipfixentities.NewInfoElement("originalExporterIPv4Address", 0, 0, ipfixregistry.IANAEnterpriseID, 4)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("originalExporterIPv4Address", ipfixregistry.IANAEnterpriseID).Return(originalExporterIPv4AddressIE, nil)
-			mockRecord.EXPECT().AddInfoElement(ipfixentities.NewIPAddressInfoElement(originalExporterIPv4AddressIE, exporterAddressIPv4))
-			flowDirectionIE := ipfixentities.NewInfoElement("flowDirection", 0, 0, ipfixregistry.IANAEnterpriseID, 1)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("flowDirection", ipfixregistry.IANAEnterpriseID).Return(flowDirectionIE, nil)
-			mockRecord.EXPECT().AddInfoElement(ipfixentities.NewUnsigned8InfoElement(flowDirectionIE, uint8(0xff)))
+			// originalExporterIPv6AddressIE := ipfixentities.NewInfoElement("originalExporterIPv6Address", 0, 0, ipfixregistry.IANAEnterpriseID, 16)
+			// mockIPFIXRegistry.EXPECT().GetInfoElement("originalExporterIPv6Address", ipfixregistry.IANAEnterpriseID).Return(originalExporterIPv6AddressIE, nil)
+			// mockRecord.EXPECT().AddInfoElement(ipfixentities.NewIPAddressInfoElement(originalExporterIPv6AddressIE, exporterAddressIPv6))
+			// originalExporterIPv4AddressIE := ipfixentities.NewInfoElement("originalExporterIPv4Address", 0, 0, ipfixregistry.IANAEnterpriseID, 4)
+			// mockIPFIXRegistry.EXPECT().GetInfoElement("originalExporterIPv4Address", ipfixregistry.IANAEnterpriseID).Return(originalExporterIPv4AddressIE, nil)
+			// mockRecord.EXPECT().AddInfoElement(ipfixentities.NewIPAddressInfoElement(originalExporterIPv4AddressIE, exporterAddressIPv4))
+			// flowDirectionIE := ipfixentities.NewInfoElement("flowDirection", 0, 0, ipfixregistry.IANAEnterpriseID, 1)
+			// mockIPFIXRegistry.EXPECT().GetInfoElement("flowDirection", ipfixregistry.IANAEnterpriseID).Return(flowDirectionIE, nil)
+			// mockRecord.EXPECT().AddInfoElement(ipfixentities.NewUnsigned8InfoElement(flowDirectionIE, uint8(0xff)))
 
-			err := fa.proxyRecord(mockRecord, obsDomainID, exporterAddress)
+			err := fa.proxyRecord(record)
 			assert.NoError(t, err, "Error when proxying flow record")
+			if tc.includePodLabels {
+				assert.NotNil(t, record.K8S.SourcePodLabels)
+				assert.NotNil(t, record.K8S.DestinationPodLabels)
+			}
 		})
 	}
 }
@@ -452,8 +423,9 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 // global functions used by the FlowAggregator to instantiate the exporters, so that the mocks are
 // returned. The functions will be automatically restored at the end of the test. If
 // expectedClusterUUID is not nil, the functions will assert that the correct UUID is provided by
-// the FlowAggregator when instantiating an exporter, if applicable.
-func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *uuid.UUID) (
+// the FlowAggregator when instantiating an exporter, if applicable. Same for clusterID for the
+// IPFIX exporter.
+func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *uuid.UUID, expectedClusterID *string) (
 	*exportertesting.MockInterface,
 	*exportertesting.MockInterface,
 	*exportertesting.MockInterface,
@@ -474,9 +446,12 @@ func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *u
 		newS3Exporter = newS3ExporterSaved
 		newLogExporter = newLogExporterSaved
 	})
-	newIPFIXExporter = func(clusterUUID uuid.UUID, opts *options.Options, registry ipfix.IPFIXRegistry) exporter.Interface {
+	newIPFIXExporter = func(clusterUUID uuid.UUID, clusterID string, opts *options.Options, registry ipfix.IPFIXRegistry) exporter.Interface {
 		if expectedClusterUUID != nil {
 			assert.Equal(t, *expectedClusterUUID, clusterUUID)
+		}
+		if expectedClusterID != nil {
+			assert.Equal(t, *expectedClusterID, clusterID)
 		}
 		return mockIPFIXExporter
 	}
@@ -502,7 +477,7 @@ func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *u
 func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil)
+	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
 
 	t.Run("updateIPFIX", func(t *testing.T) {
 		flowAggregator := &flowAggregator{
@@ -692,7 +667,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	mockPodStore.EXPECT().HasSynced().Return(true)
-	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil)
+	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
 	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
 	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
 
@@ -886,13 +861,13 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 		name string
 		ip   string
 		pod  *v1.Pod
-		want string
+		want *flowpb.Labels
 	}{
 		{
 			name: "no pod object",
 			ip:   "192.168.1.2",
 			pod:  nil,
-			want: "",
+			want: nil,
 		},
 		{
 			name: "pod with label",
@@ -906,7 +881,11 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 					},
 				},
 			},
-			want: "{\"test\":\"ut\"}",
+			want: &flowpb.Labels{
+				Labels: map[string]string{
+					"test": "ut",
+				},
+			},
 		},
 		{
 			name: "pod with empty labels",
@@ -918,7 +897,7 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 					Labels:    map[string]string{},
 				},
 			},
-			want: "{}",
+			want: &flowpb.Labels{},
 		},
 		{
 			name: "pod with null labels",
@@ -930,7 +909,7 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 					Labels:    nil,
 				},
 			},
-			want: "{}",
+			want: &flowpb.Labels{},
 		},
 	}
 
@@ -946,7 +925,7 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 				podStore:         mockPodStore,
 			}
 			got := fa.fetchPodLabels(tt.ip, time.Now())
-			assert.Equal(t, tt.want, got)
+			assert.Empty(t, cmp.Diff(tt.want, got, protocmp.Transform()))
 		})
 	}
 }
@@ -1033,7 +1012,7 @@ func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
 		inactiveFlowRecordTimeout:   testInactiveTimeout,
 		aggregatorTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTCP,
 		registry:                    ipfix.NewIPFIXRegistry(),
-		preprocessorOutCh:           make(chan *ipfixentities.Message),
+		preprocessorOutCh:           make(chan *flowpb.Flow),
 	}
 	require.NoError(t, fa.InitCollectingProcess())
 	require.NoError(t, fa.InitPreprocessor())
@@ -1075,19 +1054,9 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 			},
 		},
 	}
-	sourcePodNameElem := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("sourcePodName", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0), "")
-	sourcePodNamespaceElem := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("sourcePodNamespace", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0), "")
-	sourceNodeNameElem := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("sourceNodeName", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0), "")
-	destinationPodNameElem := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("destinationPodName", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0), "")
-	destinationPodNamespaceElem := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("destinationPodNamespace", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0), "")
-	destinationNodeNameElem := ipfixentities.NewStringInfoElement(ipfixentities.NewInfoElement("destinationNodeName", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0), "")
 
 	ctrl := gomock.NewController(t)
-	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
-
-	stopCh := make(chan struct{})
-	defer close(stopCh)
 
 	sourceAdress := "192.168.1.2"
 	destinationAddress := "192.168.1.3"
@@ -1096,16 +1065,20 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 		podStore: mockPodStore,
 	}
 
-	mockRecord.EXPECT().GetInfoElementWithValue("sourcePodName").Return(sourcePodNameElem, 0, true)
-	mockRecord.EXPECT().GetInfoElementWithValue("sourcePodNamespace").Return(sourcePodNamespaceElem, 0, true)
-	mockRecord.EXPECT().GetInfoElementWithValue("sourceNodeName").Return(sourceNodeNameElem, 0, true)
-	mockRecord.EXPECT().GetInfoElementWithValue("destinationPodName").Return(destinationPodNameElem, 0, true)
-	mockRecord.EXPECT().GetInfoElementWithValue("destinationPodNamespace").Return(destinationPodNamespaceElem, 0, true)
-	mockRecord.EXPECT().GetInfoElementWithValue("destinationNodeName").Return(destinationNodeNameElem, 0, true)
+	record := &flowpb.Flow{
+		K8S: &flowpb.Kubernetes{},
+	}
+
 	mockPodStore.EXPECT().GetPodByIPAndTime("192.168.1.2", gomock.Any()).Return(srcPod, true)
 	mockPodStore.EXPECT().GetPodByIPAndTime("192.168.1.3", gomock.Any()).Return(dstPod, true)
 
-	fa.fillK8sMetadata(sourceAdress, destinationAddress, mockRecord, time.Now())
+	fa.fillK8sMetadata(sourceAdress, destinationAddress, record, time.Now())
+	assert.Equal(t, "sourcePod", record.K8S.SourcePodName)
+	assert.Equal(t, "default", record.K8S.SourcePodNamespace)
+	assert.Equal(t, "sourceNode", record.K8S.SourceNodeName)
+	assert.Equal(t, "destinationPod", record.K8S.DestinationPodName)
+	assert.Equal(t, "default", record.K8S.DestinationPodNamespace)
+	assert.Equal(t, "destinationNode", record.K8S.DestinationNodeName)
 }
 
 func TestNewFlowAggregator(t *testing.T) {
@@ -1158,9 +1131,13 @@ func TestNewFlowAggregator(t *testing.T) {
 			client := fake.NewSimpleClientset()
 			mockPodStore := podstoretest.NewMockInterface(ctrl)
 			clusterUUID := uuid.New()
-			// This will validate that the correct UUID is provided by the FlowAggregator when
-			// instantiating exporters.
-			mockExporters(t, ctrl, &clusterUUID)
+			clusterID := tc.config.ClusterID
+			if clusterID == "" {
+				clusterID = clusterUUID.String()
+			}
+			// This will validate that the correct UUID / ID is provided by the
+			// FlowAggregator when instantiating exporters.
+			mockExporters(t, ctrl, &clusterUUID, &clusterID)
 			b, err := yaml.Marshal(tc.config)
 			require.NoError(t, err)
 			_, err = f.Write(b)
@@ -1168,11 +1145,7 @@ func TestNewFlowAggregator(t *testing.T) {
 			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, fileName)
 			require.NoError(t, err)
 			assert.Equal(t, clusterUUID, fa.clusterUUID)
-			if tc.config.ClusterID == "" {
-				assert.Equal(t, clusterUUID.String(), fa.clusterID)
-			} else {
-				assert.Equal(t, tc.config.ClusterID, fa.clusterID)
-			}
+			assert.Equal(t, clusterID, fa.clusterID)
 		})
 	}
 }

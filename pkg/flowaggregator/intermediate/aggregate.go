@@ -19,15 +19,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
-	"github.com/vmware/go-ipfix/pkg/entities"
-	"github.com/vmware/go-ipfix/pkg/registry"
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 )
 
 var (
@@ -43,23 +42,12 @@ type aggregationProcess struct {
 	expirePriorityQueue TimeToExpirePriorityQueue
 	// mutex allows multiple readers or one writer at the same time
 	mutex sync.RWMutex
-	// messageChan is the channel to receive the messages to process
-	messageChan <-chan *entities.Message
-	// recordChan is the channel to receive the records to process
-	recordChan <-chan entities.Record
+	// recordChan is the channel to receive the flow records to process
+	recordChan <-chan *flowpb.Flow
 	// workerNum is the number of workers to process the messages
 	workerNum int
 	// workerList is the list of workers
 	workerList []aggregationWorker
-	// correlateFields are the fields to be filled when correlating records of the
-	// flow whose type is registry.InterNode(pkg/registry/registry.go).
-	correlateFields []string
-	// aggregateElements consists of stats and non-stats elements that need to be
-	// updated. In addition, new aggregation elements that has to be added to record
-	// to handle correlated records from two nodes should be given.
-	// TODO: Add checks to validate the lists inside such as no duplicates, order
-	// of stats etc.
-	aggregateElements *AggregationElements
 	// activeExpiryTimeout helps in identifying records that elapsed active expiry
 	// timeout. Active expiry timeout is a periodic expiry interval for every flow
 	// record in the aggregation record map.
@@ -75,44 +63,26 @@ type aggregationProcess struct {
 }
 
 type AggregationInput struct {
-	// Exactly one of MessageChan or RecordChan must be set.
-	MessageChan           <-chan *entities.Message
-	RecordChan            <-chan entities.Record
+	RecordChan            <-chan *flowpb.Flow
 	WorkerNum             int
-	CorrelateFields       []string
-	AggregateElements     *AggregationElements
 	ActiveExpiryTimeout   time.Duration
 	InactiveExpiryTimeout time.Duration
 }
 
 func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) (*aggregationProcess, error) {
-	if input.MessageChan == nil && input.RecordChan == nil {
+	if input.RecordChan == nil {
 		return nil, fmt.Errorf("cannot create aggregationProcess process without input channel")
-	}
-	if input.MessageChan != nil && input.RecordChan != nil {
-		return nil, fmt.Errorf("only one input channel should be provided")
 	}
 	if input.WorkerNum <= 0 {
 		return nil, fmt.Errorf("worker number cannot be <= 0")
-	}
-	if input.AggregateElements != nil {
-		if (len(input.AggregateElements.StatsElements) != len(input.AggregateElements.AggregatedSourceStatsElements)) || (len(input.AggregateElements.StatsElements) != len(input.AggregateElements.AggregatedDestinationStatsElements)) {
-			return nil, fmt.Errorf("stats elements, source stats elements and destination stats elemenst length should be equal")
-		}
-		if (len(input.AggregateElements.ThroughputElements) != len(input.AggregateElements.SourceThroughputElements)) || (len(input.AggregateElements.ThroughputElements) != len(input.AggregateElements.DestinationThroughputElements)) {
-			return nil, fmt.Errorf("throughput elements, source throughput elements and destination throughput elemenst length should be equal")
-		}
 	}
 	return &aggregationProcess{
 		make(map[FlowKey]*AggregationFlowRecord),
 		make(TimeToExpirePriorityQueue, 0),
 		sync.RWMutex{},
-		input.MessageChan,
 		input.RecordChan,
 		input.WorkerNum,
 		make([]aggregationWorker, 0),
-		input.CorrelateFields,
-		input.AggregateElements,
 		input.ActiveExpiryTimeout,
 		input.InactiveExpiryTimeout,
 		make(chan bool),
@@ -120,9 +90,6 @@ func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) 
 	}, nil
 }
 
-// InitaggregationProcess takes in message channel (e.g. from collector) as input
-// channel, workerNum(number of workers to process message), and
-// correlateFields(fields to be correlated and filled).
 func InitAggregationProcess(input AggregationInput) (*aggregationProcess, error) {
 	return initAggregationProcessWithClock(input, clock.RealClock{})
 }
@@ -130,12 +97,7 @@ func InitAggregationProcess(input AggregationInput) (*aggregationProcess, error)
 func (a *aggregationProcess) Start() {
 	a.mutex.Lock()
 	for i := 0; i < a.workerNum; i++ {
-		var w aggregationWorker
-		if a.messageChan != nil {
-			w = createWorker(i, a.messageChan, a.AggregateMsgByFlowKey)
-		} else {
-			w = createWorker(i, a.recordChan, a.aggregateRecordByFlowKey)
-		}
+		w := createWorker(i, a.recordChan, a.aggregateRecordByFlowKey)
 		w.start()
 		a.workerList = append(a.workerList, w)
 	}
@@ -159,41 +121,9 @@ func (a *aggregationProcess) GetNumFlows() int64 {
 	return int64(len(a.flowKeyRecordMap))
 }
 
-func (a *aggregationProcess) aggregateRecordByFlowKey(record entities.Record) error {
-	flowKey, isIPv4, err := getFlowKeyFromRecord(record)
-	if err != nil {
-		return err
-	}
-	if err = a.addOrUpdateRecordInMap(flowKey, record, isIPv4); err != nil {
-		return err
-	}
-	return nil
-}
-
-// AggregateMsgByFlowKey gets flow key from records in message and stores in cache
-func (a *aggregationProcess) AggregateMsgByFlowKey(message *entities.Message) error {
-	set := message.GetSet()
-	if set.GetSetType() != entities.Data { // only process data records
-		return nil
-	}
-
-	records := set.GetRecords()
-	invalidRecs := 0
-	for _, record := range records {
-		// Validate the data record. If invalid, we log the error and move to the next
-		// record.
-		if !validateDataRecord(record) {
-			klog.Errorf("Invalid data record because decoded values of elements are not valid.")
-			invalidRecs = invalidRecs + 1
-		} else {
-			if err := a.aggregateRecordByFlowKey(record); err != nil {
-				return err
-			}
-		}
-	}
-	if invalidRecs == len(records) {
-		return fmt.Errorf("all data records in the message are invalid")
-	}
+func (a *aggregationProcess) aggregateRecordByFlowKey(record *flowpb.Flow) error {
+	flowKey, isIPv4 := getFlowKeyFromRecord(record)
+	a.addOrUpdateRecordInMap(flowKey, record, isIPv4)
 	return nil
 }
 
@@ -248,10 +178,66 @@ func (a *aggregationProcess) GetExpiryFromExpirePriorityQueue() time.Duration {
 }
 
 // GetRecords returns map format flow records given a flow key.
-// The key of the map is the element name and the value is the IE object.
+// In order to preserve backwards-compatibility (after migrating to Protobuf to represent flow
+// records), map keys are the names of the corresponding information elements, and values are typed
+// based on the IE type. Not all "elements" are included.
 // Returns partially matched flow records if the flow key is not complete.
 // Returns all the flow records if the flow key is not provided.
 func (a *aggregationProcess) GetRecords(flowKey *FlowKey) []map[string]interface{} {
+	flowToMap := func(f *flowpb.Flow) map[string]interface{} {
+		m := map[string]interface{}{
+			"sourceTransportPort":               uint16(f.Transport.SourcePort),
+			"destinationTransportPort":          uint16(f.Transport.DestinationPort),
+			"protocolIdentifier":                uint8(f.Transport.ProtocolNumber),
+			"tcpState":                          f.Transport.GetTCP().GetStateName(),
+			"flowStartSeconds":                  uint32(f.StartTs.Seconds),
+			"flowEndSeconds":                    uint32(f.EndTs.Seconds),
+			"flowEndSecondsFromSourceNode":      uint32(f.Aggregation.EndTsFromSource.Seconds),
+			"flowEndSecondsFromDestinationNode": uint32(f.Aggregation.EndTsFromDestination.Seconds),
+			"flowType":                          uint8(f.K8S.FlowType),
+			"sourcePodName":                     f.K8S.SourcePodName,
+			"sourcePodNamespace":                f.K8S.SourcePodNamespace,
+			"sourceNodeName":                    f.K8S.SourceNodeName,
+			"destinationPodName":                f.K8S.DestinationPodName,
+			"destinationPodNamespace":           f.K8S.DestinationPodNamespace,
+			"destinationNodeName":               f.K8S.DestinationNodeName,
+			"destinationServicePort":            uint16(f.K8S.DestinationServicePort),
+			"destinationServicePortName":        f.K8S.DestinationServicePortName,
+			"ingressNetworkPolicyNamespace":     f.K8S.IngressNetworkPolicyNamespace,
+			"ingressNetworkPolicyName":          f.K8S.IngressNetworkPolicyName,
+			"ingressNetworkPolicyRuleName":      f.K8S.IngressNetworkPolicyRuleName,
+			"ingressNetworkPolicyRuleAction":    uint8(f.K8S.IngressNetworkPolicyRuleAction),
+			"egressNetworkPolicyNamespace":      f.K8S.EgressNetworkPolicyNamespace,
+			"egressNetworkPolicyName":           f.K8S.EgressNetworkPolicyName,
+			"egressNetworkPolicyRuleName":       f.K8S.EgressNetworkPolicyRuleName,
+			"egressNetworkPolicyRuleAction":     uint8(f.K8S.EgressNetworkPolicyRuleAction),
+			"flowEndReason":                     uint8(f.EndReason),
+			"egressName":                        f.K8S.EgressName,
+			"egressIP":                          net.IP(f.K8S.EgressIp),
+			"egressNodeName":                    f.K8S.EgressNodeName,
+			"packetTotalCount":                  f.Stats.PacketTotalCount,
+			"reversePacketTotalCount":           f.ReverseStats.PacketTotalCount,
+			"octetTotalCount":                   f.Stats.OctetTotalCount,
+			"reverseOctetTotalCount":            f.ReverseStats.OctetTotalCount,
+			"packetDeltaCount":                  f.Stats.PacketDeltaCount,
+			"reversePacketDeltaCount":           f.ReverseStats.PacketDeltaCount,
+			"octetDeltaCount":                   f.Stats.OctetDeltaCount,
+			"reverseOctetDeltaCount":            f.ReverseStats.OctetDeltaCount,
+			"throughput":                        f.Aggregation.Throughput,
+			"reverseThroughput":                 f.Aggregation.ReverseThroughput,
+		}
+		if f.Ip.Version == flowpb.IPVersion_IP_VERSION_4 {
+			m["sourceIPv4Address"] = net.IP(f.Ip.Source)
+			m["destinationIPv4Address"] = net.IP(f.Ip.Destination)
+			m["destinationClusterIPv4"] = net.IP(f.K8S.DestinationClusterIp)
+		} else {
+			m["sourceIPv6Address"] = net.IP(f.Ip.Source)
+			m["destinationIPv6Address"] = net.IP(f.Ip.Destination)
+			m["destinationClusterIPv6"] = net.IP(f.K8S.DestinationClusterIp)
+		}
+		return m
+	}
+
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
@@ -260,7 +246,7 @@ func (a *aggregationProcess) GetRecords(flowKey *FlowKey) []map[string]interface
 	if flowKey != nil && flowKey.SourceAddress != "" && flowKey.DestinationAddress != "" &&
 		flowKey.Protocol != 0 && flowKey.SourcePort != 0 && flowKey.DestinationPort != 0 {
 		if record, ok := a.flowKeyRecordMap[*flowKey]; ok {
-			records = append(records, record.Record.GetElementMap())
+			records = append(records, flowToMap(record.Record))
 		}
 		return records
 	}
@@ -275,7 +261,7 @@ func (a *aggregationProcess) GetRecords(flowKey *FlowKey) []map[string]interface
 				continue
 			}
 		}
-		records = append(records, record.Record.GetElementMap())
+		records = append(records, flowToMap(record.Record))
 	}
 	return records
 }
@@ -356,18 +342,11 @@ func (a *aggregationProcess) IsAggregatedRecordIPv4(record AggregationFlowRecord
 
 // addOrUpdateRecordInMap either adds the record to flowKeyMap or updates the record in
 // flowKeyMap by doing correlation or updating the stats.
-func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record entities.Record, isIPv4 bool) error {
+func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *flowpb.Flow, isIPv4 bool) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	var flowType uint8
-	var err error
-	if flowTypeIE, _, exist := record.GetInfoElementWithValue("flowType"); exist {
-		flowType = flowTypeIE.GetUnsigned8Value()
-	} else {
-		klog.Warning("FlowType does not exist in current record.")
-	}
-	correlationRequired := isCorrelationRequired(flowType, record)
+	correlationRequired := isCorrelationRequired(record.K8S.FlowType, record)
 
 	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
@@ -376,59 +355,40 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record ent
 			// Do correlation of records if record belongs to inter-node flow and
 			// records from source and destination node are not received.
 			if !aggregationRecord.ReadyToSend && !areRecordsFromSameNode(record, aggregationRecord.Record) {
-				if err = a.correlateRecords(record, aggregationRecord.Record); err != nil {
-					return err
-				}
+				a.correlateRecords(record, aggregationRecord.Record)
 				aggregationRecord.ReadyToSend = true
 				aggregationRecord.areCorrelatedFieldsFilled = true
 			}
 			// Aggregation of incoming flow record with existing by updating stats
 			// and flow timestamps.
 			if isRecordFromSrc(record) {
-				if err = a.aggregateRecords(record, aggregationRecord.Record, true, false); err != nil {
-					return err
-				}
+				a.aggregateRecords(record, aggregationRecord.Record, true, false)
 			} else {
-				if err = a.aggregateRecords(record, aggregationRecord.Record, false, true); err != nil {
-					return err
-				}
+				a.aggregateRecords(record, aggregationRecord.Record, false, true)
 			}
 		} else {
 			// For flows that do not need correlation, just do aggregation of the
 			// flow record with existing record by updating the stats and flow timestamps.
-			if err = a.aggregateRecords(record, aggregationRecord.Record, true, true); err != nil {
-				return err
-			}
+			a.aggregateRecords(record, aggregationRecord.Record, true, true)
 		}
 		// Reset the inactive expiry time in the queue item with updated aggregate
 		// record.
 		a.expirePriorityQueue.Update(aggregationRecord.PriorityQueueItem,
 			flowKey, aggregationRecord, aggregationRecord.PriorityQueueItem.activeExpireTime, currTime.Add(a.inactiveExpiryTimeout))
 	} else {
+		record.Aggregation = &flowpb.Aggregation{}
 		// Add all the new stat fields and initialize them.
 		if correlationRequired {
 			if isRecordFromSrc(record) {
-				if err := a.addFieldsForStatsAggregation(record, true, false); err != nil {
-					return err
-				}
-				if err := a.addFieldsForThroughputCalculation(record, true, false); err != nil {
-					return err
-				}
+				a.addFieldsForStatsAggregation(record, true, false)
+				a.addFieldsForThroughputCalculation(record, true, false)
 			} else {
-				if err := a.addFieldsForStatsAggregation(record, false, true); err != nil {
-					return err
-				}
-				if err := a.addFieldsForThroughputCalculation(record, false, true); err != nil {
-					return err
-				}
+				a.addFieldsForStatsAggregation(record, false, true)
+				a.addFieldsForThroughputCalculation(record, false, true)
 			}
 		} else {
-			if err := a.addFieldsForStatsAggregation(record, true, true); err != nil {
-				return err
-			}
-			if err := a.addFieldsForThroughputCalculation(record, true, true); err != nil {
-				return err
-			}
+			a.addFieldsForStatsAggregation(record, true, true)
+			a.addFieldsForThroughputCalculation(record, true, true)
 		}
 		aggregationRecord = &AggregationFlowRecord{
 			Record:                    record,
@@ -442,7 +402,7 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record ent
 			// If no correlation is required for an Inter-Node record, K8s metadata is
 			// expected to be not completely filled. For Intra-Node flows and ToExternal
 			// flows, areCorrelatedFieldsFilled is set to true by default.
-			if flowType == registry.FlowTypeInterNode {
+			if record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE {
 				aggregationRecord.areCorrelatedFieldsFilled = false
 			} else {
 				aggregationRecord.areCorrelatedFieldsFilled = true
@@ -461,468 +421,302 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record ent
 		heap.Push(&a.expirePriorityQueue, pqItem)
 	}
 	a.flowKeyRecordMap[*flowKey] = aggregationRecord
-	return nil
 }
 
 // correlateRecords correlate the incomingRecord with existingRecord using correlation
-// fields. This is called for records whose flowType is InterNode(pkg/registry/registry.go).
-func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord entities.Record) error {
-	for _, field := range a.correlateFields {
-		if ieWithValue, _, exist := incomingRecord.GetInfoElementWithValue(field); exist {
-			switch ieWithValue.GetDataType() {
-			case entities.String:
-				val := ieWithValue.GetStringValue()
-				if val != "" {
-					existingIeWithValue, _, _ := existingRecord.GetInfoElementWithValue(field)
-					existingIeWithValue.SetStringValue(val)
-				}
-			case entities.Unsigned8:
-				val := ieWithValue.GetUnsigned8Value()
-				if val != uint8(0) {
-					existingIeWithValue, _, _ := existingRecord.GetInfoElementWithValue(field)
-					existingIeWithValue.SetUnsigned8Value(val)
-				}
-			case entities.Unsigned16:
-				val := ieWithValue.GetUnsigned16Value()
-				if val != uint16(0) {
-					existingIeWithValue, _, _ := existingRecord.GetInfoElementWithValue(field)
-					existingIeWithValue.SetUnsigned16Value(val)
-				}
-			case entities.Signed32:
-				val := ieWithValue.GetSigned32Value()
-				if val != int32(0) {
-					existingIeWithValue, _, _ := existingRecord.GetInfoElementWithValue(field)
-					existingIeWithValue.SetSigned32Value(val)
-				}
-			case entities.Ipv4Address:
-				val := ieWithValue.GetIPAddressValue()
-				ipInString := val.To4().String()
-				if ipInString != "0.0.0.0" {
-					existingIeWithValue, _, _ := existingRecord.GetInfoElementWithValue(field)
-					existingIeWithValue.SetIPAddressValue(val)
-				}
-			case entities.Ipv6Address:
-				val := ieWithValue.GetIPAddressValue()
-				ipInString := val.To16().String()
-				if ipInString != net.ParseIP("::0").To16().String() {
-					existingIeWithValue, _, _ := existingRecord.GetInfoElementWithValue(field)
-					existingIeWithValue.SetIPAddressValue(val)
-				}
-			default:
-				klog.Errorf("Fields with dataType %v is not supported in correlation fields list.", ieWithValue.GetDataType())
-			}
-		}
+// fields. This is called for records whose flowType is InterNode.
+func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *flowpb.Flow) {
+	if sourcePodName := incomingRecord.K8S.SourcePodName; sourcePodName != "" {
+		existingRecord.K8S.SourcePodName = sourcePodName
 	}
-	return nil
+	if sourcePodNamespace := incomingRecord.K8S.SourcePodNamespace; sourcePodNamespace != "" {
+		existingRecord.K8S.SourcePodNamespace = sourcePodNamespace
+	}
+	if sourceNodeName := incomingRecord.K8S.SourceNodeName; sourceNodeName != "" {
+		existingRecord.K8S.SourceNodeName = sourceNodeName
+	}
+	if destinationPodName := incomingRecord.K8S.DestinationPodName; destinationPodName != "" {
+		existingRecord.K8S.DestinationPodName = destinationPodName
+	}
+	if destinationPodNamespace := incomingRecord.K8S.DestinationPodNamespace; destinationPodNamespace != "" {
+		existingRecord.K8S.DestinationPodNamespace = destinationPodNamespace
+	}
+	if destinationNodeName := incomingRecord.K8S.DestinationNodeName; destinationNodeName != "" {
+		existingRecord.K8S.DestinationNodeName = destinationNodeName
+	}
+	if destinationClusterIP := incomingRecord.K8S.DestinationClusterIp; destinationClusterIP != nil {
+		existingRecord.K8S.DestinationClusterIp = destinationClusterIP
+	}
+	if destinationServicePort := incomingRecord.K8S.DestinationServicePort; destinationServicePort != 0 {
+		existingRecord.K8S.DestinationServicePort = destinationServicePort
+	}
+	if destinationServicePortName := incomingRecord.K8S.DestinationServicePortName; destinationServicePortName != "" {
+		existingRecord.K8S.DestinationServicePortName = destinationServicePortName
+	}
+	if ingressNetworkPolicyName := incomingRecord.K8S.IngressNetworkPolicyName; ingressNetworkPolicyName != "" {
+		existingRecord.K8S.IngressNetworkPolicyName = ingressNetworkPolicyName
+	}
+	if ingressNetworkPolicyNamespace := incomingRecord.K8S.IngressNetworkPolicyNamespace; ingressNetworkPolicyNamespace != "" {
+		existingRecord.K8S.IngressNetworkPolicyNamespace = ingressNetworkPolicyNamespace
+	}
+	if ingressNetworkPolicyRuleAction := incomingRecord.K8S.IngressNetworkPolicyRuleAction; ingressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION {
+		existingRecord.K8S.IngressNetworkPolicyRuleAction = ingressNetworkPolicyRuleAction
+	}
+	if ingressNetworkPolicyType := incomingRecord.K8S.IngressNetworkPolicyType; ingressNetworkPolicyType != flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_UNSPECIFIED {
+		existingRecord.K8S.IngressNetworkPolicyType = ingressNetworkPolicyType
+	}
+	if ingressNetworkPolicyRuleName := incomingRecord.K8S.IngressNetworkPolicyRuleName; ingressNetworkPolicyRuleName != "" {
+		existingRecord.K8S.IngressNetworkPolicyRuleName = ingressNetworkPolicyRuleName
+	}
+	if egressNetworkPolicyName := incomingRecord.K8S.EgressNetworkPolicyName; egressNetworkPolicyName != "" {
+		existingRecord.K8S.EgressNetworkPolicyName = egressNetworkPolicyName
+	}
+	if egressNetworkPolicyNamespace := incomingRecord.K8S.EgressNetworkPolicyNamespace; egressNetworkPolicyNamespace != "" {
+		existingRecord.K8S.EgressNetworkPolicyNamespace = egressNetworkPolicyNamespace
+	}
+	if egressNetworkPolicyRuleAction := incomingRecord.K8S.EgressNetworkPolicyRuleAction; egressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION {
+		existingRecord.K8S.EgressNetworkPolicyRuleAction = egressNetworkPolicyRuleAction
+	}
+	if egressNetworkPolicyType := incomingRecord.K8S.EgressNetworkPolicyType; egressNetworkPolicyType != flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_UNSPECIFIED {
+		existingRecord.K8S.EgressNetworkPolicyType = egressNetworkPolicyType
+	}
+	if egressNetworkPolicyRuleName := incomingRecord.K8S.EgressNetworkPolicyRuleName; egressNetworkPolicyRuleName != "" {
+		existingRecord.K8S.EgressNetworkPolicyRuleName = egressNetworkPolicyRuleName
+	}
 }
 
 // aggregateRecords aggregate the incomingRecord with existingRecord by updating
 // stats and flow timestamps.
-func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord entities.Record, fillSrcStats, fillDstStats bool) error {
-	if a.aggregateElements == nil {
-		return nil
-	}
+func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *flowpb.Flow, fillSrcStats, fillDstStats bool) {
 	isLatest := false
-	var prevFlowEndSeconds, flowEndSecondsDiff uint32
-	if ieWithValue, _, exist := incomingRecord.GetInfoElementWithValue("flowEndSeconds"); exist {
-		if existingIeWithValue, _, exist2 := existingRecord.GetInfoElementWithValue("flowEndSeconds"); exist2 {
-			incomingVal := ieWithValue.GetUnsigned32Value()
-			existingVal := existingIeWithValue.GetUnsigned32Value()
-			if incomingVal >= existingVal {
-				isLatest = true
-				existingIeWithValue.SetUnsigned32Value(incomingVal)
-			}
-			// Update the flowEndSecondsFromSource/DestinationNode fields, and compute
-			// the time difference between the incoming record and the last record.
-			if fillSrcStats {
-				prevFlowEndSeconds = a.updateFlowEndSecondsFromNodes(incomingRecord, existingRecord, true, incomingVal)
-			}
-			if fillDstStats {
-				prevFlowEndSeconds = a.updateFlowEndSecondsFromNodes(incomingRecord, existingRecord, false, incomingVal)
-			}
-			// Skip the aggregation process if the incoming record is not the latest
-			// from its coming node; for intra-node flows. Also to avoid to assign
-			// zero value to flowEndSecondsDiff.
-			if incomingVal <= prevFlowEndSeconds {
-				klog.V(4).InfoS("The incoming record doesn't have the latest flowEndSeconds", "previous value", prevFlowEndSeconds, "incoming value", incomingVal, "from source node", fillSrcStats, "from destination node", fillDstStats)
-				return nil
-			}
-			flowEndSecondsDiff = incomingVal - prevFlowEndSeconds
+	var prevFlowEndSeconds, flowEndSecondsDiff int64
+	if incomingRecord.EndTs != nil && existingRecord.EndTs != nil {
+		incomingVal := incomingRecord.EndTs.Seconds
+		existingVal := existingRecord.EndTs.Seconds
+		if incomingVal >= existingVal {
+			isLatest = true
+			existingRecord.EndTs.Seconds = incomingVal
 		}
+		// Update the flowEndSecondsFromSource/DestinationNode fields, and compute
+		// the time difference between the incoming record and the last record.
+		if fillSrcStats {
+			prevFlowEndSeconds = a.updateFlowEndSecondsFromNodes(incomingRecord, existingRecord, true, incomingVal)
+		}
+		if fillDstStats {
+			prevFlowEndSeconds = a.updateFlowEndSecondsFromNodes(incomingRecord, existingRecord, false, incomingVal)
+		}
+		// Skip the aggregation process if the incoming record is not the latest
+		// from its coming node; for intra-node flows. Also to avoid to assign
+		// zero value to flowEndSecondsDiff.
+		if incomingVal <= prevFlowEndSeconds {
+			klog.V(4).InfoS("The incoming record doesn't have the latest flowEndSeconds", "previous value", prevFlowEndSeconds, "incoming value", incomingVal, "from source node", fillSrcStats, "from destination node", fillDstStats)
+			return
+		}
+		flowEndSecondsDiff = incomingVal - prevFlowEndSeconds
 	}
-	for _, element := range a.aggregateElements.NonStatsElements {
-		if ieWithValue, _, exist := incomingRecord.GetInfoElementWithValue(element); exist {
-			existingIeWithValue, _, _ := existingRecord.GetInfoElementWithValue(element)
-			switch ieWithValue.GetName() {
-			case "flowEndSeconds":
-				// Flow end timestamp is already updated.
-				break
-			case "flowEndReason":
-				// If the aggregated flow is set with flowEndReason as "EndOfFlowReason",
-				// then we do not have to set again.
-				existingVal := existingIeWithValue.GetUnsigned8Value()
-				incomingVal := ieWithValue.GetUnsigned8Value()
-				if existingVal != registry.EndOfFlowReason {
-					existingIeWithValue.SetUnsigned8Value(incomingVal)
-				}
-			case "tcpState":
-				// Update tcpState when flow end timestamp is the latest
-				if isLatest {
-					incomingVal := ieWithValue.GetStringValue()
-					existingIeWithValue.SetStringValue(incomingVal)
-				}
-			case "httpVals":
-				incomingVal := ieWithValue.GetStringValue()
-				existingVal := existingIeWithValue.GetStringValue()
-				updatedHttpVals, err := fillHttpVals(incomingVal, existingVal)
-				if err != nil {
-					klog.Errorf("httpVals could not be updated, err: %v", err)
-					existingIeWithValue.SetStringValue(incomingVal)
-				} else {
-					existingIeWithValue.SetStringValue(updatedHttpVals)
-				}
-			default:
-				klog.Errorf("Fields with name %v is not supported in aggregation fields list.", element)
-			}
+	// If the aggregated flow is set with flowEndReason as "EndOfFlowReason", then we do not have to set again.
+	if existingRecord.EndReason != flowpb.FlowEndReason_FLOW_END_REASON_END_OF_FLOW {
+		existingRecord.EndReason = incomingRecord.EndReason
+	}
+	// Update tcpState when flow end timestamp is the latest.
+	if isLatest {
+		// This code will need to change if more fields are added to Transport.Protocol.
+		existingRecord.Transport.Protocol = incomingRecord.Transport.Protocol
+	}
+	if incomingRecord.App.HttpVals != nil {
+		updatedHttpVals, err := fillHttpVals(incomingRecord.App.HttpVals, existingRecord.App.HttpVals)
+		if err != nil {
+			klog.ErrorS(err, "httpVals could not be updated")
+			existingRecord.App.HttpVals = incomingRecord.App.HttpVals
 		} else {
-			return fmt.Errorf("element with name %v in nonStatsElements not present in the incoming record", element)
+			existingRecord.App.HttpVals = updatedHttpVals
 		}
 	}
 
-	statsElementList := a.aggregateElements.StatsElements
-	antreaSourceStatsElements := a.aggregateElements.AggregatedSourceStatsElements
-	antreaDestinationStatsElements := a.aggregateElements.AggregatedDestinationStatsElements
+	aggregateStats := func(incoming, existing *flowpb.Stats) {
+		existing.PacketTotalCount = incoming.PacketTotalCount
+		existing.PacketDeltaCount += incoming.PacketDeltaCount
+		existing.OctetTotalCount = incoming.OctetTotalCount
+		existing.OctetDeltaCount += incoming.OctetDeltaCount
+	}
+
 	var totalCountDiff, reverseTotalCountDiff uint64
-	for i, element := range statsElementList {
-		isDelta := strings.Contains(element, "Delta")
-		if ieWithValue, _, exist := incomingRecord.GetInfoElementWithValue(element); exist {
-			incomingVal := ieWithValue.GetUnsigned64Value()
-			// Update the source fields in antreaSourceStatsElements list
-			if fillSrcStats {
-				if srcExistingIeWithValue, _, exist := existingRecord.GetInfoElementWithValue(antreaSourceStatsElements[i]); exist {
-					existingVal := srcExistingIeWithValue.GetUnsigned64Value()
-					if !isDelta {
-						srcExistingIeWithValue.SetUnsigned64Value(incomingVal)
-						switch antreaSourceStatsElements[i] {
-						case "octetTotalCountFromSourceNode":
-							totalCountDiff = incomingVal - existingVal
-						case "reverseOctetTotalCountFromSourceNode":
-							reverseTotalCountDiff = incomingVal - existingVal
-						}
-					} else {
-						srcExistingIeWithValue.SetUnsigned64Value(incomingVal + existingVal)
-					}
-				} else {
-					return fmt.Errorf("element does not exist in the record: %v", antreaSourceStatsElements[i])
-				}
-			}
-			// Update the destination fields in antreaDestinationStatsElements list
-			if fillDstStats {
-				if dstExistingIeWithValue, _, exist := existingRecord.GetInfoElementWithValue(antreaDestinationStatsElements[i]); exist {
-					existingVal := dstExistingIeWithValue.GetUnsigned64Value()
-					if !isDelta {
-						dstExistingIeWithValue.SetUnsigned64Value(incomingVal)
-						switch antreaDestinationStatsElements[i] {
-						case "octetTotalCountFromDestinationNode":
-							totalCountDiff = incomingVal - existingVal
-						case "reverseOctetTotalCountFromDestinationNode":
-							reverseTotalCountDiff = incomingVal - existingVal
-						}
-					} else {
-						dstExistingIeWithValue.SetUnsigned64Value(incomingVal + existingVal)
-					}
-				} else {
-					return fmt.Errorf("element does not exist in the record: %v", antreaDestinationStatsElements[i])
-				}
-			}
-			// Update the corresponding common element in statsElement list.
-			commonExistingIeWithValue, _, _ := existingRecord.GetInfoElementWithValue(element)
-			if isLatest {
-				if !isDelta {
-					if commonExistingIeWithValue.GetUnsigned64Value() < incomingVal {
-						commonExistingIeWithValue.SetUnsigned64Value(incomingVal)
-					}
-				} else {
-					if fillSrcStats {
-						srcIe, _, _ := existingRecord.GetInfoElementWithValue(antreaSourceStatsElements[i])
-						commonExistingIeWithValue.SetUnsigned64Value(srcIe.GetUnsigned64Value())
-					}
-					if fillDstStats {
-						dstIe, _, _ := existingRecord.GetInfoElementWithValue(antreaDestinationStatsElements[i])
-						commonExistingIeWithValue.SetUnsigned64Value(dstIe.GetUnsigned64Value())
-					}
-				}
-			}
-		} else {
-			return fmt.Errorf("element with name %v in statsElements not present in the incoming record", element)
+	if fillSrcStats {
+		incoming := incomingRecord.Stats
+		existing := existingRecord.Aggregation.StatsFromSource
+		totalCountDiff = incoming.OctetTotalCount - existing.OctetTotalCount
+		aggregateStats(incoming, existing)
+		incoming = incomingRecord.ReverseStats
+		existing = existingRecord.Aggregation.ReverseStatsFromSource
+		reverseTotalCountDiff = incoming.OctetTotalCount - existing.OctetTotalCount
+		aggregateStats(incoming, existing)
+	}
+	if fillDstStats {
+		incoming := incomingRecord.Stats
+		existing := existingRecord.Aggregation.StatsFromDestination
+		totalCountDiff = incoming.OctetTotalCount - existing.OctetTotalCount
+		aggregateStats(incoming, existing)
+		incoming = incomingRecord.ReverseStats
+		existing = existingRecord.Aggregation.ReverseStatsFromDestination
+		reverseTotalCountDiff = incoming.OctetTotalCount - existing.OctetTotalCount
+		aggregateStats(incoming, existing)
+	}
+
+	updateCommonStats := func(from, existing *flowpb.Stats) {
+		if existing.PacketTotalCount < from.PacketTotalCount {
+			existing.PacketTotalCount = from.PacketTotalCount
+		}
+		existing.PacketDeltaCount = from.PacketDeltaCount
+		if existing.OctetTotalCount < from.OctetTotalCount {
+			existing.OctetTotalCount = from.OctetTotalCount
+		}
+		existing.OctetDeltaCount = from.OctetDeltaCount
+	}
+
+	if isLatest {
+		if fillSrcStats {
+			updateCommonStats(existingRecord.Aggregation.StatsFromSource, existingRecord.Stats)
+			updateCommonStats(existingRecord.Aggregation.ReverseStatsFromSource, existingRecord.ReverseStats)
+		}
+		if fillDstStats {
+			updateCommonStats(existingRecord.Aggregation.StatsFromDestination, existingRecord.Stats)
+			updateCommonStats(existingRecord.Aggregation.ReverseStatsFromDestination, existingRecord.ReverseStats)
 		}
 	}
 
 	// Update the throughput & reverseThroughput fields:
 	// throughput = (octetTotalCount - prevOctetTotalCount) / (flowEndSeconds - prevFlowEndSeconds)
 	// reverseThroughput = (reverseOctetTotalCount - prevReverseOctetTotalCount) / (flowEndSeconds - prevFlowEndSeconds)
-	antreaThroughputElements := a.aggregateElements.ThroughputElements
-	antreaSourceThroughputElements := a.aggregateElements.SourceThroughputElements
-	antreaDestinationThroughputElements := a.aggregateElements.DestinationThroughputElements
 	throughput := totalCountDiff * 8 / uint64(flowEndSecondsDiff)
 	reverseThroughput := reverseTotalCountDiff * 8 / uint64(flowEndSecondsDiff)
-	throughputVals := []uint64{throughput, reverseThroughput}
-	for i, element := range antreaThroughputElements {
-		if fillSrcStats {
-			ie, _, _ := existingRecord.GetInfoElementWithValue(antreaSourceThroughputElements[i])
-			ie.SetUnsigned64Value(throughputVals[i])
-		}
-		if fillDstStats {
-			ie, _, _ := existingRecord.GetInfoElementWithValue(antreaDestinationThroughputElements[i])
-			ie.SetUnsigned64Value(throughputVals[i])
-		}
-		if isLatest {
-			ie, _, _ := existingRecord.GetInfoElementWithValue(element)
-			ie.SetUnsigned64Value(throughputVals[i])
-		}
+	if fillSrcStats {
+		existingRecord.Aggregation.ThroughputFromSource = throughput
+		existingRecord.Aggregation.ReverseThroughputFromSource = reverseThroughput
 	}
-	return nil
+	if fillDstStats {
+		existingRecord.Aggregation.ThroughputFromDestination = throughput
+		existingRecord.Aggregation.ReverseThroughputFromDestination = reverseThroughput
+	}
+	if isLatest {
+		existingRecord.Aggregation.Throughput = throughput
+		existingRecord.Aggregation.ReverseThroughput = reverseThroughput
+	}
 }
 
 // ResetStatAndThroughputElementsInRecord is called by the user after the aggregation
 // record is sent after its expiry either by active or inactive expiry interval. This
 // should be called by user after acquiring the mutex in the Aggregation process.
-func (a *aggregationProcess) ResetStatAndThroughputElementsInRecord(record entities.Record) error {
-	statsElementList := a.aggregateElements.StatsElements
-	antreaSourceStatsElements := a.aggregateElements.AggregatedSourceStatsElements
-	antreaDestinationStatsElements := a.aggregateElements.AggregatedDestinationStatsElements
-	for i, element := range statsElementList {
-		// TotalCount statistic elements should not be reset to zeroes as they are used in the
-		// throughput calculation.
-		isDelta := strings.Contains(element, "Delta")
-		if !isDelta {
-			continue
-		}
-		for _, array := range [][]string{statsElementList, antreaSourceStatsElements, antreaDestinationStatsElements} {
-			if ieWithValue, _, exist := record.GetInfoElementWithValue(array[i]); exist {
-				ieWithValue.ResetValue()
-			} else {
-				return fmt.Errorf("element with name %v in statsElements is not present in the record", array[i])
-			}
-		}
+func (a *aggregationProcess) ResetStatAndThroughputElementsInRecord(record *flowpb.Flow) error {
+	// TotalCount statistic elements should not be reset to zeroes as they are used in the
+	// throughput calculation.
+	resetDeltaStats := func(stats *flowpb.Stats) {
+		stats.PacketDeltaCount = 0
+		stats.OctetDeltaCount = 0
 	}
-	throughputElements := a.aggregateElements.ThroughputElements
-	sourceThroughputElements := a.aggregateElements.SourceThroughputElements
-	destinationThroughputElements := a.aggregateElements.DestinationThroughputElements
-	for i := range throughputElements {
-		for _, array := range [][]string{throughputElements, sourceThroughputElements, destinationThroughputElements} {
-			if ieWithValue, _, exist := record.GetInfoElementWithValue(array[i]); exist {
-				ieWithValue.ResetValue()
-			} else {
-				return fmt.Errorf("element with name %v in throughputElements is not present in the record", array[i])
-			}
-		}
-	}
+	resetDeltaStats(record.Stats)
+	resetDeltaStats(record.ReverseStats)
+	resetDeltaStats(record.Aggregation.StatsFromSource)
+	resetDeltaStats(record.Aggregation.ReverseStatsFromSource)
+	resetDeltaStats(record.Aggregation.StatsFromDestination)
+	resetDeltaStats(record.Aggregation.ReverseStatsFromDestination)
+
+	record.Aggregation.ThroughputFromSource = 0
+	record.Aggregation.ReverseThroughputFromSource = 0
+	record.Aggregation.ThroughputFromDestination = 0
+	record.Aggregation.ReverseThroughputFromDestination = 0
+	record.Aggregation.Throughput = 0
+	record.Aggregation.ReverseThroughput = 0
+
 	return nil
 }
 
-func (a *aggregationProcess) addFieldsForStatsAggregation(record entities.Record, fillSrcStats, fillDstStats bool) error {
-	if a.aggregateElements == nil {
-		return nil
+func (a *aggregationProcess) addFieldsForStatsAggregation(record *flowpb.Flow, fillSrcStats, fillDstStats bool) {
+	record.Aggregation.StatsFromSource = &flowpb.Stats{}
+	record.Aggregation.ReverseStatsFromSource = &flowpb.Stats{}
+	record.Aggregation.StatsFromDestination = &flowpb.Stats{}
+	record.Aggregation.ReverseStatsFromDestination = &flowpb.Stats{}
+	copyStats := func(from, to *flowpb.Stats) {
+		to.PacketTotalCount = from.PacketTotalCount
+		to.PacketDeltaCount = from.PacketDeltaCount
+		to.OctetTotalCount = from.OctetTotalCount
+		to.OctetDeltaCount = from.OctetDeltaCount
 	}
-	statsElementList := a.aggregateElements.StatsElements
-	antreaSourceStatsElements := a.aggregateElements.AggregatedSourceStatsElements
-	antreaDestinationStatsElements := a.aggregateElements.AggregatedDestinationStatsElements
-
-	// Initialize the values of newly added stats info elements.
-	for i, element := range statsElementList {
-		if ieWithValue, _, exist := record.GetInfoElementWithValue(element); exist {
-			// Initialize the corresponding source element in antreaStatsElement list.
-			value := uint64(0)
-			ie, err := registry.GetInfoElement(antreaSourceStatsElements[i], registry.AntreaEnterpriseID)
-			if err != nil {
-				return err
-			}
-			if fillSrcStats {
-				value = ieWithValue.GetUnsigned64Value()
-			}
-			if err = record.AddInfoElement(entities.NewUnsigned64InfoElement(ie, value)); err != nil {
-				return err
-			}
-
-			// Initialize the corresponding destination element in antreaStatsElement list.
-			ie, err = registry.GetInfoElement(antreaDestinationStatsElements[i], registry.AntreaEnterpriseID)
-			if err != nil {
-				return err
-			}
-			value = uint64(0)
-			if fillDstStats {
-				value = ieWithValue.GetUnsigned64Value()
-			}
-			if err = record.AddInfoElement(entities.NewUnsigned64InfoElement(ie, value)); err != nil {
-				return err
-			}
-		}
+	if fillSrcStats {
+		copyStats(record.Stats, record.Aggregation.StatsFromSource)
+		copyStats(record.ReverseStats, record.Aggregation.ReverseStatsFromSource)
 	}
-	return nil
+	if fillDstStats {
+		copyStats(record.Stats, record.Aggregation.StatsFromDestination)
+		copyStats(record.ReverseStats, record.Aggregation.ReverseStatsFromDestination)
+	}
 }
 
-func (a *aggregationProcess) addFieldsForThroughputCalculation(record entities.Record, fillSrcStats, fillDstStats bool) error {
-	if a.aggregateElements == nil {
-		return nil
-	}
-	antreaFlowEndSecondsElements := a.aggregateElements.AntreaFlowEndSecondsElements
-	antreaThroughputElements := a.aggregateElements.ThroughputElements
-	antreaSourceThroughputElements := a.aggregateElements.SourceThroughputElements
-	antreaDestinationThroughputElements := a.aggregateElements.DestinationThroughputElements
+func (a *aggregationProcess) addFieldsForThroughputCalculation(record *flowpb.Flow, fillSrcStats, fillDstStats bool) {
+	timeStart := record.StartTs.Seconds
+	timeEnd := record.EndTs.Seconds
+	byteCount := record.Stats.OctetTotalCount
+	reverseByteCount := record.ReverseStats.OctetTotalCount
 
-	var timeStart, timeEnd uint32
-	var byteCount, reverseByteCount uint64
-	timeStart, err := getUnsigned32ValueByIeName(record, "flowStartSeconds")
-	if err != nil {
-		return err
+	record.Aggregation.EndTsFromSource = &timestamppb.Timestamp{}
+	if fillSrcStats {
+		record.Aggregation.EndTsFromSource.Seconds = timeEnd
 	}
-	timeEnd, err = getUnsigned32ValueByIeName(record, "flowEndSeconds")
-	if err != nil {
-		return err
-	}
-	byteCount, err = getUnsigned64ValueByIeName(record, "octetTotalCount")
-	if err != nil {
-		return err
-	}
-	reverseByteCount, err = getUnsigned64ValueByIeName(record, "reverseOctetTotalCount")
-	if err != nil {
-		return err
-	}
-
-	// Initialize flowEndSecondsFromSourceNode and flowEndSecondsFromDestinationNode.
-	for _, ieName := range antreaFlowEndSecondsElements {
-		ie, err := registry.GetInfoElement(ieName, registry.AntreaEnterpriseID)
-		if err != nil {
-			return err
-		}
-		value := uint32(0)
-		if (fillSrcStats && strings.Contains(ieName, "Source")) || (fillDstStats && strings.Contains(ieName, "Destination")) {
-			value = timeEnd
-		}
-		if err = record.AddInfoElement(entities.NewUnsigned32InfoElement(ie, value)); err != nil {
-			return err
-		}
+	record.Aggregation.EndTsFromDestination = &timestamppb.Timestamp{}
+	if fillDstStats {
+		record.Aggregation.EndTsFromDestination.Seconds = timeEnd
 	}
 
 	// Initialize the throughput elements.
-	var incomingVal, reverseIncomingVal uint64
+	var throughput, reverseThroughput uint64
 	// For the edge case when the record has the same timeEnd and timeStart values,
 	// we will initialize the throughput fields with zero values.
 	if timeEnd > timeStart {
-		incomingVal = byteCount * 8 / (uint64(timeEnd - timeStart))
-		reverseIncomingVal = reverseByteCount * 8 / (uint64(timeEnd - timeStart))
+		throughput = byteCount * 8 / uint64(timeEnd-timeStart)
+		reverseThroughput = reverseByteCount * 8 / uint64(timeEnd-timeStart)
 	}
-	throughputVals := []uint64{incomingVal, reverseIncomingVal}
-	for i, element := range antreaThroughputElements {
-		// add common throughput elements
-		value := throughputVals[i]
-		ie, err := registry.GetInfoElement(element, registry.AntreaEnterpriseID)
-		if err != nil {
-			return err
-		}
-		if err = record.AddInfoElement(entities.NewUnsigned64InfoElement(ie, value)); err != nil {
-			return err
-		}
-		// add source throughput elements
-		value = uint64(0)
-		ie, err = registry.GetInfoElement(antreaSourceThroughputElements[i], registry.AntreaEnterpriseID)
-		if err != nil {
-			return err
-		}
-		if fillSrcStats {
-			value = throughputVals[i]
-		}
-		if err = record.AddInfoElement(entities.NewUnsigned64InfoElement(ie, value)); err != nil {
-			return err
-		}
-		// add destination throughput elements
-		value = uint64(0)
-		ie, err = registry.GetInfoElement(antreaDestinationThroughputElements[i], registry.AntreaEnterpriseID)
-		if err != nil {
-			return err
-		}
-		if fillDstStats {
-			value = throughputVals[i]
-		}
-		if err = record.AddInfoElement(entities.NewUnsigned64InfoElement(ie, value)); err != nil {
-			return err
-		}
+	record.Aggregation.Throughput = throughput
+	record.Aggregation.ReverseThroughput = reverseThroughput
+	if fillSrcStats {
+		record.Aggregation.ThroughputFromSource = throughput
+		record.Aggregation.ReverseThroughputFromSource = reverseThroughput
 	}
-	return nil
+	if fillDstStats {
+		record.Aggregation.ThroughputFromDestination = throughput
+		record.Aggregation.ReverseThroughputFromDestination = reverseThroughput
+	}
 }
 
 // updateFlowEndSecondsFromNodes updates the value of flowEndSecondsFromSourceNode
 // or flowEndSecondsFromDestinationNode, returning the previous value before update.
-func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, existingRecord entities.Record, isSrc bool, incomingVal uint32) uint32 {
-	ieName := "flowEndSecondsFromSourceNode"
+func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, existingRecord *flowpb.Flow, isSrc bool, incomingVal int64) int64 {
+	existingVal := existingRecord.Aggregation.EndTsFromSource.Seconds
 	if !isSrc {
-		ieName = "flowEndSecondsFromDestinationNode"
+		existingVal = existingRecord.Aggregation.EndTsFromDestination.Seconds
 	}
-	existingIe, _, _ := existingRecord.GetInfoElementWithValue(ieName)
-	existingVal := existingIe.GetUnsigned32Value()
 	// When the incoming record is the first record from its node, the existingVal of the field
 	// is zero, we set it by flowStartSeconds. time_diff = flowEndSeconds - flowStartSeconds
 	if existingVal == 0 {
-		incomingIe, _, _ := incomingRecord.GetInfoElementWithValue("flowStartSeconds")
-		existingVal = incomingIe.GetUnsigned32Value()
+		existingVal = incomingRecord.StartTs.Seconds
 	}
-	existingIe.SetUnsigned32Value(incomingVal)
+	if isSrc {
+		existingRecord.Aggregation.EndTsFromSource.Seconds = incomingVal
+	} else {
+		existingRecord.Aggregation.EndTsFromDestination.Seconds = incomingVal
+	}
 	return existingVal
 }
 
-// TODO: We can consider to add similar methods into record interface.
-func getUnsigned64ValueByIeName(record entities.Record, ieName string) (uint64, error) {
-	if ieWithValue, _, exist := record.GetInfoElementWithValue(ieName); exist {
-		return ieWithValue.GetUnsigned64Value(), nil
-	} else {
-		return uint64(0), fmt.Errorf("element with name %s not present in the incoming record", ieName)
-	}
-}
-
-func getUnsigned32ValueByIeName(record entities.Record, ieName string) (uint32, error) {
-	if ieWithValue, _, exist := record.GetInfoElementWithValue(ieName); exist {
-		return ieWithValue.GetUnsigned32Value(), nil
-	} else {
-		return uint32(0), fmt.Errorf("element with name %s not present in the incoming record", ieName)
-	}
-}
-
 // isRecordFromSrc returns true if record belongs to inter-node flow and from source node.
-func isRecordFromSrc(record entities.Record) bool {
-	if srcIEWithValue, _, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
-		if srcIEWithValue.GetStringValue() == "" {
-			return false
-		}
-	} else {
-		return false
-	}
-	if dstIEWithValue, _, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
-		if dstIEWithValue.GetStringValue() != "" {
-			return false
-		}
-	}
-	return true
+func isRecordFromSrc(record *flowpb.Flow) bool {
+	return record.K8S.SourcePodName != "" && record.K8S.DestinationPodName == ""
 }
 
 // isRecordFromDst returns true if record belongs to inter-node flow and from destination node.
-func isRecordFromDst(record entities.Record) bool {
-	if dstIEWithValue, _, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
-		if dstIEWithValue.GetStringValue() == "" {
-			return false
-		}
-	} else {
-		return false
-	}
-	if srcIEWithValue, _, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
-		if srcIEWithValue.GetStringValue() != "" {
-			return false
-		}
-	}
-	return true
+func isRecordFromDst(record *flowpb.Flow) bool {
+	return record.K8S.DestinationPodName != "" && record.K8S.SourcePodName == ""
 }
 
-func areRecordsFromSameNode(record1 entities.Record, record2 entities.Record) bool {
+func areRecordsFromSameNode(record1, record2 *flowpb.Flow) bool {
 	// If both records of inter-node flow are from source node, then send true.
 	if isRecordFromSrc(record1) && isRecordFromSrc(record2) {
 		return true
@@ -935,107 +729,41 @@ func areRecordsFromSameNode(record1 entities.Record, record2 entities.Record) bo
 }
 
 // getFlowKeyFromRecord returns 5-tuple from data record
-func getFlowKeyFromRecord(record entities.Record) (*FlowKey, bool, error) {
-	flowKey := &FlowKey{}
-	elementList := []string{
-		"sourceTransportPort",
-		"destinationTransportPort",
-		"protocolIdentifier",
-		"sourceIPv4Address",
-		"destinationIPv4Address",
-		"sourceIPv6Address",
-		"destinationIPv6Address",
+func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
+	source := net.IP(record.Ip.Source).String()
+	destination := net.IP(record.Ip.Destination).String()
+	flowKey := &FlowKey{
+		SourceAddress:      source,
+		DestinationAddress: destination,
+		Protocol:           uint8(record.Transport.ProtocolNumber),
+		SourcePort:         uint16(record.Transport.SourcePort),
+		DestinationPort:    uint16(record.Transport.DestinationPort),
 	}
-	var isSrcIPv4Filled, isDstIPv4Filled bool
-	for _, name := range elementList {
-		switch name {
-		case "sourceTransportPort", "destinationTransportPort":
-			element, _, exist := record.GetInfoElementWithValue(name)
-			if !exist {
-				return nil, false, fmt.Errorf("%s does not exist", name)
-			}
-			if name == "sourceTransportPort" {
-				flowKey.SourcePort = element.GetUnsigned16Value()
-			} else {
-				flowKey.DestinationPort = element.GetUnsigned16Value()
-			}
-		case "sourceIPv4Address", "destinationIPv4Address":
-			element, _, exist := record.GetInfoElementWithValue(name)
-			if !exist {
-				break
-			}
-			if strings.Contains(name, "source") {
-				isSrcIPv4Filled = true
-				flowKey.SourceAddress = element.GetIPAddressValue().String()
-			} else {
-				isDstIPv4Filled = true
-				flowKey.DestinationAddress = element.GetIPAddressValue().String()
-			}
-		case "sourceIPv6Address", "destinationIPv6Address":
-			element, _, exist := record.GetInfoElementWithValue(name)
-			if (isSrcIPv4Filled && strings.Contains(name, "source")) || (isDstIPv4Filled && strings.Contains(name, "destination")) {
-				if exist {
-					klog.Warning("Two ip versions (IPv4 and IPv6) are not supported for flow key.")
-				}
-				break
-			}
-			if !exist {
-				return nil, false, fmt.Errorf("%s does not exist", name)
-			}
-			if strings.Contains(name, "source") {
-				flowKey.SourceAddress = element.GetIPAddressValue().String()
-			} else {
-				flowKey.DestinationAddress = element.GetIPAddressValue().String()
-			}
-		case "protocolIdentifier":
-			element, _, exist := record.GetInfoElementWithValue(name)
-			if !exist {
-				return nil, false, fmt.Errorf("%s does not exist", name)
-			}
-			flowKey.Protocol = element.GetUnsigned8Value()
-		}
-	}
-	return flowKey, isSrcIPv4Filled && isDstIPv4Filled, nil
-}
-
-func validateDataRecord(record entities.Record) bool {
-	return record.GetFieldCount() == uint16(len(record.GetOrderedElementList()))
+	return flowKey, record.Ip.Version == flowpb.IPVersion_IP_VERSION_4
 }
 
 // isCorrelationRequired returns true for InterNode flowType when
 // either the egressNetworkPolicyRuleAction is not deny (drop/reject) or
 // the ingressNetworkPolicyRuleAction is not reject.
-func isCorrelationRequired(flowType uint8, record entities.Record) bool {
-	if flowType == registry.FlowTypeInterNode {
-		if egressRuleActionIe, _, exist := record.GetInfoElementWithValue("egressNetworkPolicyRuleAction"); exist {
-			egressRuleAction := egressRuleActionIe.GetUnsigned8Value()
-			if egressRuleAction == registry.NetworkPolicyRuleActionDrop || egressRuleAction == registry.NetworkPolicyRuleActionReject {
-				return false
-			}
-		}
-		if ingressRuleActionIe, _, exist := record.GetInfoElementWithValue("ingressNetworkPolicyRuleAction"); exist {
-			ingressRuleAction := ingressRuleActionIe.GetUnsigned8Value()
-			if ingressRuleAction == registry.NetworkPolicyRuleActionReject {
-				return false
-			}
-		}
-		return true
-	}
-	return false
+func isCorrelationRequired(flowType flowpb.FlowType, record *flowpb.Flow) bool {
+	return flowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE &&
+		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP &&
+		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT &&
+		record.K8S.IngressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
 }
 
-func fillHttpVals(incomingHttpVals, existingHttpVals string) (string, error) {
+func fillHttpVals(incomingHttpVals, existingHttpVals []byte) ([]byte, error) {
 	incomingHttpValsJson := make(map[int32]string)
 	existingHttpValsJson := make(map[int32]string)
 
-	if incomingHttpVals != "" {
-		if err := json.Unmarshal([]byte(incomingHttpVals), &incomingHttpValsJson); err != nil {
-			return "", fmt.Errorf("error parsing JSON: %v", err)
+	if len(incomingHttpVals) > 0 {
+		if err := json.Unmarshal(incomingHttpVals, &incomingHttpValsJson); err != nil {
+			return nil, fmt.Errorf("error parsing JSON: %w", err)
 		}
 	}
-	if existingHttpVals != "" {
-		if err := json.Unmarshal([]byte(existingHttpVals), &existingHttpValsJson); err != nil {
-			return "", fmt.Errorf("error parsing JSON: %v", err)
+	if len(existingHttpVals) > 0 {
+		if err := json.Unmarshal(existingHttpVals, &existingHttpValsJson); err != nil {
+			return nil, fmt.Errorf("error parsing JSON: %w", err)
 		}
 	}
 	for key, value := range existingHttpValsJson {
@@ -1043,7 +771,7 @@ func fillHttpVals(incomingHttpVals, existingHttpVals string) (string, error) {
 	}
 	updatedHttpVals, err := json.Marshal(incomingHttpValsJson)
 	if err != nil {
-		return "", fmt.Errorf("error converting JSON to string: %v", err)
+		return nil, fmt.Errorf("error converting JSON to string: %w", err)
 	}
-	return string(updatedHttpVals), nil
+	return updatedHttpVals, nil
 }
