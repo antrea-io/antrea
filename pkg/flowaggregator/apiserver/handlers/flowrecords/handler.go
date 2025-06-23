@@ -19,9 +19,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/vmware/go-ipfix/pkg/intermediate"
-
 	"antrea.io/antrea/pkg/flowaggregator/apis"
+	"antrea.io/antrea/pkg/flowaggregator/intermediate"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 )
 
