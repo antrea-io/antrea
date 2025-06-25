@@ -60,7 +60,7 @@ const (
 	defaultAuditLogsMaxBackups     = 3
 	defaultAuditLogsMaxAge         = 28
 	defaultAuditLogsCompressed     = true
-	defaultPacketInRate            = 500
+	defaultPacketInRate            = 5000
 )
 
 var defaultIGMPQueryVersions = []int{1, 2, 3}
