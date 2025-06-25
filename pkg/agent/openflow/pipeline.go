@@ -20,6 +20,7 @@ import (
 	"net"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"antrea.io/libOpenflow/openflow15"
@@ -439,6 +440,8 @@ type client struct {
 	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 	// ovsMetersAreSupported indicates whether the OVS datapath supports OpenFlow meters.
 	ovsMetersAreSupported bool
+	// ovsMeterPacketDrops tracks the number of packets dropped by each OVS meter, keyed by meter ID.
+	ovsMeterPacketDrops map[int]*atomic.Int64
 	// packetInRate defines the OVS controller packet rate limits for different
 	// features. All features will apply this rate-limit individually on packet-in
 	// messages sent to antrea-agent. The number stands for the rate as packets per
@@ -2865,6 +2868,14 @@ func NewClient(bridgeName string,
 		groupIDAllocator:           groupIDAllocator,
 	}
 	c.ofEntryOperations = operations.NewOFEntryOperations(bridge)
+	if c.ovsMetersAreSupported {
+		// Pre-initialize the map with all possible keys to avoid concurrent updates and potential race conditions later.
+		c.ovsMeterPacketDrops = map[int]*atomic.Int64{
+			PacketInMeterIDNP:  {},
+			PacketInMeterIDTF:  {},
+			PacketInMeterIDDNS: {},
+		}
+	}
 	return c
 }
 
