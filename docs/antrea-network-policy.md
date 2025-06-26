@@ -2006,14 +2006,13 @@ annotation for K8s NetworkPolicies). Starting with Antrea v1.13, logging is
 rather than start dropping packets or rather than risking to overrun the Antrea
 Agent, which could impact cluster health or other workloads. This behavior
 cannot be changed, and the logging feature is therefore not meant to be used for
-compliance purposes. By default, the Antrea datapath will send up to 500 packets
-per second (with a burst size of 1000 packets) to the Agent for logging. This
-rate applies to all the traffic that needs to be logged, and is enforced at the
-level of each Node. A rate of 500 packets per second roughly translates to 500
-new TCP connections per second, or 500 UDP requests per second. While it is
-possible to adjust the rate and burst size by modifying the `packetInRate`
-parameter in the antrea-agent configuration, we do not recommend doing so. The
-default value was set to 500 after careful consideration.
+compliance purposes. By default, the Antrea datapath will send up to 5000 (was
+500 prior to Antrea v2.4) packets per second (with a burst size of 10,000 packets)
+to the Agent for logging. This rate applies to all the traffic that needs to be
+logged, and is enforced at the level of each Node. A rate of 5000 packets per
+second roughly translates to 5000 new TCP connections per second, or 5000 UDP
+requests per second. The rate and burst size can be adjusted by modifying the
+`packetInRate` parameter in the antrea-agent configuration.
 
 #### Logging prior to Antrea v1.13
 
@@ -2025,7 +2024,7 @@ action. This meant that the logging feature was more suited for audit /
 compliance applications, however, we ultimately decided that the behavior was
 too aggressive and that it was too easy to disrupt application workloads by
 enabling logging - the rate limit was also lower than the default one we use
-today (100 packets per second instead of 500). For example, the following policy
+today (100 packets per second instead of 5000). For example, the following policy
 which allows ingress DNS traffic for coreDNS Pods, and has logging enabled,
 would drastically restrict the number of possible DNS requests in the cluster,
 which in turn would cause a lot of errors in applications which rely on DNS:

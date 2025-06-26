@@ -68,7 +68,7 @@ var (
 	fakeL7NPTargetOFPort = uint32(10)
 	fakeL7NPReturnOFPort = uint32(11)
 
-	defaultPacketInRate = 500
+	defaultPacketInRate = 5000
 )
 
 func skipTest(tb testing.TB, skipLinux, skipWindows bool) {
