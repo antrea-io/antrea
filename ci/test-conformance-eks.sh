@@ -193,6 +193,14 @@ function setup_eks() {
     export AWS_DEFAULT_OUTPUT=json
     export AWS_DEFAULT_REGION=$REGION
     if [[ "$AWS_SERVICE_USER_ROLE_ARN" != "" ]]; then
+      # Use AWS CLI to assume an IAM role and obtain temporary security credentials
+      # Source: AWS CLI Command Reference - https://docs.aws.amazon.com/cli/latest/reference/sts/assume-role.html
+      # When --duration-seconds is NOT specified, AWS uses DEFAULT VALUE: 3600 seconds (1 hour)
+      # Source: AWS STS AssumeRole API Documentation -
+      # https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_RequestParameters
+      # "By default, the value is set to 3600 seconds."
+      # From previous observations, this Jenkins job process has taken over an hour, usually within 1 hour and 10 minutes,
+      # so it's set to 2 hours here.
         TEMP_CRED=$(aws sts assume-role \
           --role-arn "$AWS_SERVICE_USER_ROLE_ARN" \
           --role-session-name "cli-session" \
