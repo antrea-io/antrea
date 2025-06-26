@@ -692,7 +692,7 @@
           builders:
           - shell: |-
               #!/bin/bash
-              sudo ./ci/test-conformance-eks.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
+              sudo timeout --preserve-status -k 5s 2h ./ci/test-conformance-eks.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
                 --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --aws-service-user ${{AWS_SERVICE_USER_NAME}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} \
                 --log-mode detail --setup-only
           triggers:
@@ -758,7 +758,7 @@
               # This is to avoid other developers removing this set+x by accident
               set +x
               sudo gcloud auth login --cred-file=${CREDENTIAL_PATH}
-              sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
+              sudo timeout --preserve-status -k 5s 2h ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
                 --svc-account ${{SERVICE_ACCOUNT}} --gcloud-sdk-path ${{GCLOUD_PATH}} \
                 --log-mode detail --setup-only --gke-project ${GKE_PROJECT} --shared-network \
                 --gke-network ${{GKE_NETWORK}} --gke-subnet ${{GKE_SUBNET}}
@@ -827,7 +827,7 @@
           builders:
           - shell: |-
               #!/bin/bash
-              sudo ./ci/test-conformance-aks.sh --azure-app-id ${{AZURE_APP_ID}} --azure-password ${{AZURE_PASSWORD}} \
+              sudo timeout --preserve-status -k 5s 2h ./ci/test-conformance-aks.sh --azure-app-id ${{AZURE_APP_ID}} --azure-password ${{AZURE_PASSWORD}} \
                 --azure-tenant-id ${{AZURE_TENANT_ID}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} \
                 --log-mode detail --setup-only
           triggers:
@@ -1691,7 +1691,7 @@
               chmod 400 ${{AWS_EC2_SSH_KEY_NAME}}
               DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
               [ "$DOCKER_REGISTRY" != "docker.io" ] || ./ci/jenkins/docker_login.sh --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
-              sudo ./ci/test-sriov-secondary-network-aws.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
+              sudo timeout --preserve-status -k 5s 2h ./ci/test-sriov-secondary-network-aws.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
                 --aws-security-group-id ${{AWS_SECURITY_GROUP}} --aws-subnet-id ${{AWS_SUBNET_ID}} \
                 --aws-ec2-ssh-key-name ${{AWS_EC2_SSH_KEY_NAME}} --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --aws-service-user ${{AWS_SERVICE_USER_NAME}}
           publishers:

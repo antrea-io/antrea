@@ -19,7 +19,6 @@ function echoerr {
     >&2 echo "$@"
 }
 
-TIMEOUT="10m"
 K8S_VERSION="v1.32"
 # Set AWS related variables
 REGION="us-west-2"  # AWS region
