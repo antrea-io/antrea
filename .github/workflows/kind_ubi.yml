@@ -62,7 +62,7 @@ jobs:
     - name: Run basic e2e tests
       run: |
         mkdir log
-        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-e2e-kind.sh --encap-mode encap \
+        ANTREA_LOG_DIR=$PWD/log timeout --preserve-status -k 5s 2h ./ci/kind/test-e2e-kind.sh --encap-mode encap \
         --antrea-controller-image antrea/antrea-controller-ubi \
         --antrea-agent-image antrea/antrea-agent-ubi \
         --run '^TestBasic$'

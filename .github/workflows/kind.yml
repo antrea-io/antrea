@@ -105,7 +105,7 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-encap-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-coverage timeout --preserve-status -k 5s 2h ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-coverage.tar.gz test-e2e-encap-coverage
     - name: Upload coverage for test-e2e-encap-coverage
@@ -168,7 +168,7 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-encap-non-default-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-non-default-coverage ./ci/kind/test-e2e-kind.sh \
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-non-default-coverage timeout --preserve-status -k 5s 2h ./ci/kind/test-e2e-kind.sh \
           --coverage \
           --encap-mode encap \
           --proxy-all \
@@ -238,7 +238,7 @@ jobs:
         run: |
           mkdir log
           mkdir test-e2e-encap-all-features-enabled-coverage
-          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-all-features-enabled-coverage ./ci/kind/test-e2e-kind.sh \
+          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-all-features-enabled-coverage timeout --preserve-status -k 5s 2h ./ci/kind/test-e2e-kind.sh \
             --encap-mode encap \
             --coverage \
             --feature-gates AllAlpha=true,AllBeta=true \
@@ -306,7 +306,7 @@ jobs:
         run: |
           mkdir log
           mkdir test-ipam-e2e-coverage
-          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-ipam-e2e-coverage ./ci/kind/test-e2e-kind.sh \
+          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-ipam-e2e-coverage timeout --preserve-status -k 5s 2h ./ci/kind/test-e2e-kind.sh \
            --encap-mode noEncap \
            --coverage \
            --skip mode-irrelevant \
@@ -374,7 +374,7 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-noencap-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-noencap-coverage ./ci/kind/test-e2e-kind.sh --encap-mode noEncap --coverage --skip mode-irrelevant
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-noencap-coverage timeout --preserve-status -k 5s 2h ./ci/kind/test-e2e-kind.sh --encap-mode noEncap --coverage --skip mode-irrelevant
     - name: Tar coverage files
       run: tar -czf test-e2e-noencap-coverage.tar.gz test-e2e-noencap-coverage
     - name: Upload coverage for test-e2e-noencap-coverage
@@ -437,7 +437,7 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-hybrid-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-hybrid-coverage ./ci/kind/test-e2e-kind.sh --encap-mode hybrid --coverage --skip mode-irrelevant
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-hybrid-coverage timeout --preserve-status -k 5s 2h ./ci/kind/test-e2e-kind.sh --encap-mode hybrid --coverage --skip mode-irrelevant
     - name: Tar coverage files
       run: tar -czf test-e2e-hybrid-coverage.tar.gz test-e2e-hybrid-coverage
     - name: Upload coverage for test-e2e-hybrid-coverage
@@ -512,7 +512,7 @@ jobs:
         run: |
           mkdir log
           mkdir test-e2e-fa-coverage
-          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-fa-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --flow-visibility --ip-family dual
+          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-fa-coverage timeout --preserve-status -k 5s 2h ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --flow-visibility --ip-family dual
       - name: Tar coverage files
         run: tar -czf test-e2e-fa-coverage.tar.gz test-e2e-fa-coverage
       - name: Upload coverage for test-e2e-fa-coverage
@@ -622,7 +622,7 @@ jobs:
     - name: Run secondary network tests
       run: |
         mkdir log
-        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-secondary-network-kind.sh
+        ANTREA_LOG_DIR=$PWD/log timeout --preserve-status -k 5s 2h ./ci/kind/test-secondary-network-kind.sh
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
