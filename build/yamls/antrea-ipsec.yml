@@ -4235,7 +4235,7 @@ data:
     # messages sent to antrea-agent. The number stands for the rate as packets per
     # second(pps) and the burst size will be automatically set to twice the rate.
     # When the rate and burst size are exceeded, new packets will be dropped.
-    packetInRate: 500
+    packetInRate: 5000
 
     # wireGuard specifies WireGuard related configurations.
     wireGuard:
@@ -5515,7 +5515,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 07f74e09d929360c51e8706fec0e834ac5b418d8b887445c0516c552da20a398
+        checksum/config: 6414ca725655527881a6ff216eaa1d78efcc2e5c2c83f2f1f7fc5f9596360955
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5807,7 +5807,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 07f74e09d929360c51e8706fec0e834ac5b418d8b887445c0516c552da20a398
+        checksum/config: 6414ca725655527881a6ff216eaa1d78efcc2e5c2c83f2f1f7fc5f9596360955
       labels:
         app: antrea
         component: antrea-controller

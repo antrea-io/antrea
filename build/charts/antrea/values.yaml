@@ -83,7 +83,7 @@ defaultMTU: 0
 # messages sent to antrea-agent. The number stands for the rate as packets per
 # second(pps) and the burst size will be automatically set to twice the rate.
 # When the rate and burst size are exceeded, new packets will be dropped.
-packetInRate: 500
+packetInRate: 5000
 
 ovs:
   # -- Name of the OVS bridge antrea-agent will create and use.
