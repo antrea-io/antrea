@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -exu
+set -eu
 
 function echoerr {
     >&2 echo "$@"
@@ -35,7 +35,7 @@ TEST_SCRIPT_RC=0
 KUBE_CONFORMANCE_IMAGE_VERSION=auto
 INSTALL_EKSCTL=true
 AWS_SERVICE_USER_ROLE_ARN=""
-AWS_SERVICE_USER_NAME=""
+AWS_DURATION_SECONDS=7200
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--aws-service-user <ServiceUserName>]\
@@ -186,7 +186,7 @@ function setup_eks() {
     echo "=== Using the following awscli version ==="
     aws --version
 
-    set +ex
+    set +e
     export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY
     export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
 
@@ -203,14 +203,23 @@ function setup_eks() {
       # so it's set to 2 hours here.
         TEMP_CRED=$(aws sts assume-role \
           --role-arn "$AWS_SERVICE_USER_ROLE_ARN" \
-          --role-session-name "cli-session" \
-          --duration-seconds 7200 \
+          --role-session-name "aws-cli-session-$(date +%s)" \
+          --duration-seconds $AWS_DURATION_SECONDS \
           --query "Credentials" \
           --output json)
+
+        # Handle assume-role errors immediately
+        if [ $? -ne 0 ] || [ -z "$TEMP_CRED" ]; then
+          echo "ERROR: Failed to assume role $AWS_SERVICE_USER_ROLE_ARN"
+          exit 1
+        fi
 
         export AWS_ACCESS_KEY_ID=$(echo "$TEMP_CRED" | jq -r .AccessKeyId)
         export AWS_SECRET_ACCESS_KEY=$(echo "$TEMP_CRED" | jq -r .SecretAccessKey)
         export AWS_SESSION_TOKEN=$(echo "$TEMP_CRED" | jq -r .SessionToken)
+
+        # Clear sensitive variables from memory
+        unset AWS_ACCESS_KEY AWS_SECRET_KEY TEMP_CRED
     fi
 
     if [[ "$INSTALL_EKSCTL" == true ]]; then
@@ -218,7 +227,7 @@ function setup_eks() {
         curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
         sudo mv /tmp/eksctl /usr/local/bin
     fi
-    set -ex
+    set -e
     printf "\n"
     echo "=== Using the following eksctl ==="
     which eksctl
@@ -356,14 +365,33 @@ pushd "$THIS_DIR" > /dev/null
 
 source ${THIS_DIR}/jenkins/utils.sh
 
+function start_timeout_watcher() {
+    local timeout_seconds=$1
+    local parent_pid=$2
+
+    local safe_timeout=$((timeout_seconds - 300))
+
+    echo "Timeout watcher started. Will signal after ${safe_timeout} seconds."
+
+    sleep $safe_timeout
+
+    echo "Process timed out before AWS credential expiration! Sending termination signal to main process (PID: $parent_pid)"
+    kill -SIGTERM $parent_pid 2>/dev/null || true
+}
+
+start_timeout_watcher "$AWS_DURATION_SECONDS" $$ &
+timeout_watcher_pid=$!
+
+if [[ "$RUN_SETUP_ONLY" != true ]]; then
+    trap "kill -9 $timeout_watcher_pid 2>/dev/null ; cleanup_cluster" EXIT
+else
+    trap "kill -9 $timeout_watcher_pid 2>/dev/null || true" EXIT
+fi
+
 if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
     setup_eks
     deliver_antrea_to_eks
     run_conformance
-fi
-
-if [[ "$RUN_ALL" == true || "$RUN_CLEANUP_ONLY" == true ]]; then
-    cleanup_cluster
 fi
 
 if [[ "$RUN_CLEANUP_ONLY" == false && $TEST_SCRIPT_RC -ne 0 ]]; then

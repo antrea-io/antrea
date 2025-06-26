@@ -13,13 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -exu
+set -eu
 
 function echoerr {
     >&2 echo "$@"
 }
 
 TIMEOUT="10m"
+AWS_DURATION_SECONDS=7200
 K8S_VERSION="v1.32"
 # Set AWS related variables
 REGION="us-west-2"  # AWS region
@@ -122,7 +123,7 @@ case $key in
 esac
 done
 
-set +ex
+set +e
 export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY
 export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
 export AWS_DEFAULT_REGION=$REGION
@@ -133,18 +134,28 @@ export AWS_DEFAULT_REGION=$REGION
 # Source: AWS STS AssumeRole API Documentation -
 # https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_RequestParameters
 # "By default, the value is set to 3600 seconds."
-# From previous observations, this Jenkins job process has taken less than an hour, usually within 20 minutes,
-# so it's set to the default 1 hour here.
 TEMP_CRED=$(aws sts assume-role \
   --role-arn "$AWS_SERVICE_USER_ROLE_ARN" \
-  --role-session-name "cli-session" \
+  --duration-seconds $AWS_DURATION_SECONDS \
+  --role-session-name "aws-cli-session-$(date +%s)" \
   --query "Credentials" \
   --output json)
+
+# Handle assume-role errors immediately
+if [ $? -ne 0 ] || [ -z "$TEMP_CRED" ]; then
+  echo "ERROR: Failed to assume role $AWS_SERVICE_USER_ROLE_ARN"
+  exit 1
+fi
+
 
 export AWS_ACCESS_KEY_ID=$(echo "$TEMP_CRED" | jq -r .AccessKeyId)
 export AWS_SECRET_ACCESS_KEY=$(echo "$TEMP_CRED" | jq -r .SecretAccessKey)
 export AWS_SESSION_TOKEN=$(echo "$TEMP_CRED" | jq -r .SessionToken)
-set -ex
+
+# Clear sensitive variables from memory
+unset AWS_ACCESS_KEY AWS_SECRET_KEY TEMP_CRED
+
+set -e
 
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
@@ -244,7 +255,6 @@ function install_kubernetes() {
     done
     echo "Installing Kubernetes on node $node_ip..."
     ssh -o StrictHostKeyChecking=no -i "$AWS_EC2_SSH_KEY_NAME" ubuntu@"$node_ip" << EOF
-        set -x
         sudo apt update && sudo apt upgrade -y
         sudo apt install -y docker.io
         sudo docker --version
@@ -563,10 +573,29 @@ function clean_up_all() {
       delete_subnet_cidr_reservation
 }
 
+function start_timeout_watcher() {
+    local timeout_seconds=$1
+    local parent_pid=$2
+
+    local safe_timeout=$((timeout_seconds - 300))
+
+    echo "Timeout watcher started. Will signal after ${safe_timeout} seconds."
+
+    sleep $safe_timeout
+
+    echo "Process timed out before AWS credential expiration! Sending termination signal to main process (PID: $parent_pid)"
+    kill -SIGTERM $parent_pid 2>/dev/null || true
+}
+
 echo "===========Test SR-IOV secondary network in AWS============="
 
+start_timeout_watcher "$AWS_DURATION_SECONDS" $$ &
+timeout_watcher_pid=$!
+
 if [[ "$RUN_SETUP_ONLY" != true ]]; then
-    trap clean_up_all EXIT
+    trap "kill -9 $timeout_watcher_pid 2>/dev/null ; clean_up_all" EXIT
+else
+    trap "kill -9 $timeout_watcher_pid 2>/dev/null || true" EXIT
 fi
 
 if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
