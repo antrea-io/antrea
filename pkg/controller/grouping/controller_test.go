@@ -90,6 +90,7 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 			stopCh := make(chan struct{})
+			defer close(stopCh)
 
 			c := NewGroupEntityController(index, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().ExternalEntities())
 			assert.False(t, index.HasSynced(), "GroupEntityIndex has been synced before starting InformerFactories")
