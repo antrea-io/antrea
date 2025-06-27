@@ -303,33 +303,6 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 				mockPodStore.EXPECT().GetPodByIPAndTime(destinationAddress, startTime).Return(podB, true)
 			}
 
-			// const obsDomainID = 123
-			// originalObservationDomainIE := ipfixentities.NewInfoElement("originalObservationDomainId", 0, 0, ipfixregistry.IANAEnterpriseID, 4)
-			// mockIPFIXRegistry.EXPECT().GetInfoElement("originalObservationDomainId", ipfixregistry.IANAEnterpriseID).Return(originalObservationDomainIE, nil)
-			// mockRecord.EXPECT().AddInfoElement(ipfixentities.NewUnsigned32InfoElement(originalObservationDomainIE, obsDomainID))
-
-			// var exporterAddress string
-			// var exporterAddressIPv4, exporterAddressIPv6 net.IP
-			// if tc.isIPv6 {
-			// 	exporterAddressIPv4 = net.IPv4zero
-			// 	exporterAddressIPv6 = net.ParseIP(nodeAddressIPv6)
-			// 	exporterAddress = nodeAddressIPv6
-			// } else {
-			// 	exporterAddressIPv4 = net.ParseIP(nodeAddressIPv4)
-			// 	exporterAddressIPv6 = net.IPv6zero
-			// 	exporterAddress = nodeAddressIPv4
-			// }
-
-			// originalExporterIPv6AddressIE := ipfixentities.NewInfoElement("originalExporterIPv6Address", 0, 0, ipfixregistry.IANAEnterpriseID, 16)
-			// mockIPFIXRegistry.EXPECT().GetInfoElement("originalExporterIPv6Address", ipfixregistry.IANAEnterpriseID).Return(originalExporterIPv6AddressIE, nil)
-			// mockRecord.EXPECT().AddInfoElement(ipfixentities.NewIPAddressInfoElement(originalExporterIPv6AddressIE, exporterAddressIPv6))
-			// originalExporterIPv4AddressIE := ipfixentities.NewInfoElement("originalExporterIPv4Address", 0, 0, ipfixregistry.IANAEnterpriseID, 4)
-			// mockIPFIXRegistry.EXPECT().GetInfoElement("originalExporterIPv4Address", ipfixregistry.IANAEnterpriseID).Return(originalExporterIPv4AddressIE, nil)
-			// mockRecord.EXPECT().AddInfoElement(ipfixentities.NewIPAddressInfoElement(originalExporterIPv4AddressIE, exporterAddressIPv4))
-			// flowDirectionIE := ipfixentities.NewInfoElement("flowDirection", 0, 0, ipfixregistry.IANAEnterpriseID, 1)
-			// mockIPFIXRegistry.EXPECT().GetInfoElement("flowDirection", ipfixregistry.IANAEnterpriseID).Return(flowDirectionIE, nil)
-			// mockRecord.EXPECT().AddInfoElement(ipfixentities.NewUnsigned8InfoElement(flowDirectionIE, uint8(0xff)))
-
 			err := fa.proxyRecord(record)
 			assert.NoError(t, err, "Error when proxying flow record")
 			if tc.includePodLabels {

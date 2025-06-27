@@ -157,8 +157,11 @@ func NewClickHouseClient(config ClickHouseConfig, clusterUUID string) (*ClickHou
 	return chClient, nil
 }
 
-func (ch *ClickHouseExportProcess) CacheRecord(record *flowpb.Flow) {
-	chRow := flowrecord.GetFlowRecord(record)
+func (ch *ClickHouseExportProcess) CacheRecord(record *flowpb.Flow) error {
+	chRow, err := flowrecord.GetFlowRecord(record)
+	if err != nil {
+		return err
+	}
 
 	ch.dequeMutex.Lock()
 	defer ch.dequeMutex.Unlock()
@@ -166,6 +169,8 @@ func (ch *ClickHouseExportProcess) CacheRecord(record *flowpb.Flow) {
 		ch.deque.PopFront()
 	}
 	ch.deque.PushBack(chRow)
+
+	return nil
 }
 
 func (ch *ClickHouseExportProcess) Start() {

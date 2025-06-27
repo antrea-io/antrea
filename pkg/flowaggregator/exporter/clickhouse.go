@@ -88,8 +88,7 @@ func NewClickHouseExporter(clusterUUID uuid.UUID, opt *options.Options) (*ClickH
 }
 
 func (e *ClickHouseExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
-	e.chExportProcess.CacheRecord(record)
-	return nil
+	return e.chExportProcess.CacheRecord(record)
 }
 
 func (e *ClickHouseExporter) Start() {

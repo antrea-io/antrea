@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
 )
@@ -27,7 +28,8 @@ func TestGetFlowRecord(t *testing.T) {
 	runTest := func(t *testing.T, isIPv4 bool) {
 		record := flowaggregatortesting.PrepareTestFlowRecord(isIPv4)
 
-		flowRecord := GetFlowRecord(record)
+		flowRecord, err := GetFlowRecord(record)
+		require.NoError(t, err)
 		assert.Equal(t, time.Unix(int64(1637706961), 0).UTC(), flowRecord.FlowStartSeconds)
 		assert.Equal(t, time.Unix(int64(1637706973), 0).UTC(), flowRecord.FlowEndSeconds)
 		assert.Equal(t, time.Unix(int64(1637706974), 0).UTC(), flowRecord.FlowEndSecondsFromSourceNode)

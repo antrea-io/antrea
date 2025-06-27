@@ -268,6 +268,7 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 				registry:                   mockIPFIXRegistry,
 				aggregatorMode:             tc.aggregatorMode,
 				observationDomainID:        testObservationDomainID,
+				clusterID:                  "foobar",
 				clock:                      clock.RealClock{},
 			}
 			createElementList(tc.aggregatorMode, false, mockIPFIXRegistry)
@@ -280,9 +281,11 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 				testTemplateID = testTemplateIDv6
 			}
 
-			// TODO: validate record contents?
 			mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
-				return record.GetTemplateID() == testTemplateID
+				elems := record.GetOrderedElementList()
+				// We make sure that all elements have been set by checking the last element.
+				// TODO: also validate record contents?
+				return record.GetTemplateID() == testTemplateID && !elems[len(elems)-1].IsValueEmpty()
 			})).Return(nil)
 			assert.NoError(t, ipfixExporter.AddRecord(record, tc.isIPv6))
 		})

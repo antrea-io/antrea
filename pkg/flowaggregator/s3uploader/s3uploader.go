@@ -210,8 +210,11 @@ func (p *S3UploadProcess) SetUploadInterval(uploadInterval time.Duration) {
 	}
 }
 
-func (p *S3UploadProcess) CacheRecord(record *flowpb.Flow) {
-	r := flowrecord.GetFlowRecord(record)
+func (p *S3UploadProcess) CacheRecord(record *flowpb.Flow) error {
+	r, err := flowrecord.GetFlowRecord(record)
+	if err != nil {
+		return err
+	}
 	p.queueMutex.Lock()
 	defer p.queueMutex.Unlock()
 	p.writeRecordToBuffer(r)
@@ -220,6 +223,7 @@ func (p *S3UploadProcess) CacheRecord(record *flowpb.Flow) {
 	if int32(p.cachedRecordCount) == p.maxRecordPerFile {
 		p.appendBufferToQueue()
 	}
+	return nil
 }
 
 func (p *S3UploadProcess) Start() {

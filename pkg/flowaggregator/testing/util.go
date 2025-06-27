@@ -131,5 +131,6 @@ func PrepareTestFlowRecord(isIPv4 bool) *flowpb.Flow {
 			ReverseThroughputFromSource:      12381345,
 			ReverseThroughputFromDestination: 12381346,
 		},
+		FlowDirection: flowpb.FlowDirection_FLOW_DIRECTION_UNKNOWN,
 	}
 }
