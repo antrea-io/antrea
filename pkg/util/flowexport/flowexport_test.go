@@ -141,22 +141,23 @@ func TestParseTransportProtocol(t *testing.T) {
 		{
 			transportProtocolInput:    "tcp",
 			expectedTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTCP,
-			expectedError:             nil,
 		},
 		{
 			transportProtocolInput:    "UDP",
 			expectedTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolUDP,
-			expectedError:             nil,
 		},
 		{
 			transportProtocolInput:    "Tcp",
 			expectedTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTCP,
-			expectedError:             nil,
 		},
 		{
 			transportProtocolInput:    "sctp",
 			expectedTransportProtocol: "",
 			expectedError:             fmt.Errorf("collecting process over %s proto is not supported", "sctp"),
+		},
+		{
+			transportProtocolInput:    "None",
+			expectedTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolNone,
 		},
 	}
 	for _, tc := range testcases {

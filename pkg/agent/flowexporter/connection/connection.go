@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package flowexporter
+package connection
 
 import (
 	"net/netip"
@@ -89,21 +89,7 @@ type Connection struct {
 	EgressNodeName                       string
 }
 
-type ItemToExpire struct {
-	Conn             *Connection
-	ActiveExpireTime time.Time
-	IdleExpireTime   time.Time
-	// Index in the priority queue (heap)
-	Index int
-}
-
-type FlowExporterOptions struct {
-	FlowCollectorAddr      string
-	FlowCollectorProto     string
-	ActiveFlowTimeout      time.Duration
-	IdleFlowTimeout        time.Duration
-	StaleConnectionTimeout time.Duration
-	PollInterval           time.Duration
-	ConnectUplinkToBridge  bool
-	ProtocolFilter         []string
+// NewConnectionKey creates 5-tuple of flow as connection key
+func NewConnectionKey(conn *Connection) ConnectionKey {
+	return conn.FlowKey
 }

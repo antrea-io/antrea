@@ -471,6 +471,9 @@ jobs:
     name: E2e tests on a Kind cluster on Linux for Flow Visibility
     needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image]
     runs-on: [ubuntu-latest]
+    strategy:
+      matrix:
+        protocol: [grpc, ipfix]
     steps:
       - name: Free disk space
         # https://github.com/actions/virtual-environments/issues/709
@@ -511,15 +514,15 @@ jobs:
       - name: Run e2e tests
         run: |
           mkdir log
-          mkdir test-e2e-fa-coverage
-          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-fa-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --flow-visibility --ip-family dual
+          mkdir test-e2e-fa-${{ matrix.protocol }}-coverage
+          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-fa-${{ matrix.protocol }}-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --flow-visibility --flow-visibility-protocol ${{ matrix.protocol }} --ip-family dual
       - name: Tar coverage files
-        run: tar -czf test-e2e-fa-coverage.tar.gz test-e2e-fa-coverage
-      - name: Upload coverage for test-e2e-fa-coverage
+        run: tar -czf test-e2e-fa-${{ matrix.protocol }}-coverage.tar.gz test-e2e-fa-${{ matrix.protocol }}-coverage
+      - name: Upload coverage for test-e2e-fa-${{ matrix.protocol }}-coverage
         uses: actions/upload-artifact@v4
         with:
-          name: test-e2e-fa-coverage
-          path: test-e2e-fa-coverage.tar.gz
+          name: test-e2e-fa-${{ matrix.protocol }}-coverage
+          path: test-e2e-fa-${{ matrix.protocol }}-coverage.tar.gz
           retention-days: 30
       - name: Codecov
         uses: codecov/codecov-action@v5
@@ -529,7 +532,7 @@ jobs:
           disable_search: true
           flags: kind-e2e-tests
           name: codecov-test-e2e-fa
-          directory: test-e2e-fa-coverage
+          directory: test-e2e-fa-${{ matrix.protocol }}-coverage
           fail_ci_if_error: ${{ github.event_name == 'push' }}
       - name: Tar log files
         if: ${{ failure() }}
@@ -538,7 +541,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{ failure() }}
         with:
-          name: e2e-kind-fa.tar.gz
+          name: e2e-kind-fa-${{ matrix.protocol }}.tar.gz
           path: log.tar.gz
           retention-days: 30
 

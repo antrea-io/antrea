@@ -30,7 +30,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	k8sutil "antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/util/podstore"
 )
@@ -74,7 +75,7 @@ type JsonToEvent struct {
 }
 
 type L7Listener struct {
-	l7Events                    map[flowexporter.ConnectionKey]L7ProtocolFields
+	l7Events                    map[connection.ConnectionKey]L7ProtocolFields
 	l7mut                       sync.Mutex
 	suricataEventSocketPath     string
 	podL7FlowExporterAttrGetter PodL7FlowExporterAttrGetter
@@ -85,7 +86,7 @@ func NewL7Listener(
 	podL7FlowExporterAttrGetter PodL7FlowExporterAttrGetter,
 	podStore podstore.Interface) *L7Listener {
 	return &L7Listener{
-		l7Events:                    make(map[flowexporter.ConnectionKey]L7ProtocolFields),
+		l7Events:                    make(map[connection.ConnectionKey]L7ProtocolFields),
 		suricataEventSocketPath:     config.L7SuricataSocketPath,
 		podL7FlowExporterAttrGetter: podL7FlowExporterAttrGetter,
 		podStore:                    podStore,
@@ -179,12 +180,12 @@ func (l *L7Listener) processLog(data []byte) error {
 }
 
 func (l *L7Listener) addOrUpdateL7EventMap(event *JsonToEvent) error {
-	protocol, err := flowexporter.LookupProtocolMap(event.Proto)
+	protocol, err := utils.LookupProtocolMap(event.Proto)
 	if err != nil {
 		return fmt.Errorf("invalid protocol type, err: %v", err)
 	}
-	conn := flowexporter.Connection{
-		FlowKey: flowexporter.Tuple{
+	conn := connection.Connection{
+		FlowKey: connection.Tuple{
 			SourceAddress:      event.SrcIP,
 			DestinationAddress: event.DestIP,
 			Protocol:           protocol,
@@ -192,7 +193,7 @@ func (l *L7Listener) addOrUpdateL7EventMap(event *JsonToEvent) error {
 			DestinationPort:    uint16(event.DestPort),
 		},
 	}
-	connKey := flowexporter.NewConnectionKey(&conn)
+	connKey := connection.NewConnectionKey(&conn)
 	srcIP := conn.FlowKey.SourceAddress.String()
 	dstIP := conn.FlowKey.DestinationAddress.String()
 	startTime, _ := time.Parse(time.RFC3339Nano, event.Timestamp)
@@ -226,10 +227,10 @@ func (l *L7Listener) addOrUpdateL7EventMap(event *JsonToEvent) error {
 	return nil
 }
 
-func (l *L7Listener) ConsumeL7EventMap() map[flowexporter.ConnectionKey]L7ProtocolFields {
+func (l *L7Listener) ConsumeL7EventMap() map[connection.ConnectionKey]L7ProtocolFields {
 	l.l7mut.Lock()
 	defer l.l7mut.Unlock()
 	l7EventsMap := l.l7Events
-	l.l7Events = make(map[flowexporter.ConnectionKey]L7ProtocolFields)
+	l.l7Events = make(map[connection.ConnectionKey]L7ProtocolFields)
 	return l7EventsMap
 }

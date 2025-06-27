@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/openflow"
 )
 

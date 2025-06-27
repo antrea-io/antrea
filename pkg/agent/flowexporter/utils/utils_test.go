@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package flowexporter
+package utils
 
 import (
 	"testing"
@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
@@ -35,7 +36,7 @@ func TestIsConnectionDying(t *testing.T) {
 		{"", 512, true, true},
 		{"ESTABLISHED", 256, false, true},
 	} {
-		conn := &Connection{
+		conn := &connection.Connection{
 			TCPState:   tc.tcpState,
 			StatusFlag: tc.statusFlag,
 			IsPresent:  tc.isPresent,
@@ -56,7 +57,7 @@ func TestConntrackConnActive(t *testing.T) {
 		{0, 0, 0, 0, "TIME_WAIT", "ESTABLISHED", true},
 		{0, 0, 0, 0, "ESTABLISHED", "ESTABLISHED", false},
 	} {
-		conn := &Connection{
+		conn := &connection.Connection{
 			OriginalPackets:    tc.originalPackets,
 			PrevPackets:        tc.prevPackets,
 			ReversePackets:     tc.reversePackets,

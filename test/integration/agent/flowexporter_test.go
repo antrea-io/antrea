@@ -30,9 +30,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
@@ -48,20 +49,20 @@ const (
 
 type fakel7EventMapGetter struct{}
 
-func (fll *fakel7EventMapGetter) ConsumeL7EventMap() map[flowexporter.ConnectionKey]connections.L7ProtocolFields {
-	l7EventsMap := make(map[flowexporter.ConnectionKey]connections.L7ProtocolFields)
+func (fll *fakel7EventMapGetter) ConsumeL7EventMap() map[connection.ConnectionKey]connections.L7ProtocolFields {
+	l7EventsMap := make(map[connection.ConnectionKey]connections.L7ProtocolFields)
 	return l7EventsMap
 }
 
-func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.ConnectionKey) {
+func createConnsForTest() ([]*connection.Connection, []*connection.ConnectionKey) {
 	// Reference for flow timestamp
 	refTime := time.Now()
 
-	testConns := make([]*flowexporter.Connection, 2)
-	testConnKeys := make([]*flowexporter.ConnectionKey, 2)
+	testConns := make([]*connection.Connection, 2)
+	testConnKeys := make([]*connection.ConnectionKey, 2)
 	// Flow-1
-	tuple1 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
-	testConn1 := &flowexporter.Connection{
+	tuple1 := connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	testConn1 := &connection.Connection{
 		StartTime:       refTime.Add(-(time.Second * 50)),
 		StopTime:        refTime,
 		OriginalPackets: 0xffff,
@@ -70,12 +71,12 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 		ReverseBytes:    0xbaaa,
 		FlowKey:         tuple1,
 	}
-	testConnKey1 := flowexporter.NewConnectionKey(testConn1)
+	testConnKey1 := connection.NewConnectionKey(testConn1)
 	testConns[0] = testConn1
 	testConnKeys[0] = &testConnKey1
 	// Flow-2
-	tuple2 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	testConn2 := &flowexporter.Connection{
+	tuple2 := connection.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	testConn2 := &connection.Connection{
 		StartTime:       refTime.Add(-(time.Second * 20)),
 		StopTime:        refTime,
 		OriginalPackets: 0xbb,
@@ -84,7 +85,7 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 		ReverseBytes:    0xcbbbb0000000000,
 		FlowKey:         tuple2,
 	}
-	testConnKey2 := flowexporter.NewConnectionKey(testConn2)
+	testConnKey2 := connection.NewConnectionKey(testConn2)
 	testConns[1] = testConn2
 	testConnKeys[1] = &testConnKey2
 
@@ -127,7 +128,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	o := &flowexporter.FlowExporterOptions{
+	o := &options.FlowExporterOptions{
 		ActiveFlowTimeout:      testActiveFlowTimeout,
 		IdleFlowTimeout:        testIdleFlowTimeout,
 		StaleConnectionTimeout: testStaleConnectionTimeout,

@@ -26,7 +26,8 @@ import (
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	flowexporterutils "antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
@@ -113,7 +114,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	// Get 5-tuple information
 	sourceAddr, _ := netip.AddrFromSlice(packet.SourceIP)
 	destinationAddr, _ := netip.AddrFromSlice(packet.DestinationIP)
-	tuple := flowexporter.Tuple{
+	tuple := connection.Tuple{
 		SourceAddress:      sourceAddr,
 		DestinationAddress: destinationAddr,
 		SourcePort:         packet.SourcePort,
@@ -122,7 +123,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	}
 
 	// Generate deny connection and add to deny connection store
-	denyConn := flowexporter.Connection{}
+	denyConn := connection.Connection{}
 	denyConn.FlowKey = tuple
 	denyConn.OriginalDestinationAddress = tuple.DestinationAddress
 	denyConn.OriginalDestinationPort = tuple.DestinationPort
@@ -137,7 +138,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	}
 
 	// No need to obtain connection info again if it already exists in denyConnectionStore.
-	if conn, exist := c.denyConnStore.GetConnByKey(flowexporter.NewConnectionKey(&denyConn)); exist {
+	if conn, exist := c.denyConnStore.GetConnByKey(connection.NewConnectionKey(&denyConn)); exist {
 		c.denyConnStore.AddOrUpdateConn(conn, time.Now(), uint64(packet.IPLength))
 		return nil
 	}
@@ -172,24 +173,24 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 		if isAntreaPolicyIngressTable(tableID) {
 			denyConn.IngressNetworkPolicyName = policy.Name
 			denyConn.IngressNetworkPolicyNamespace = policy.Namespace
-			denyConn.IngressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+			denyConn.IngressNetworkPolicyType = flowexporterutils.PolicyTypeToUint8(policy.Type)
 			denyConn.IngressNetworkPolicyRuleName = rule.Name
-			denyConn.IngressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
+			denyConn.IngressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
 		} else if isAntreaPolicyEgressTable(tableID) {
 			denyConn.EgressNetworkPolicyName = policy.Name
 			denyConn.EgressNetworkPolicyNamespace = policy.Namespace
-			denyConn.EgressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+			denyConn.EgressNetworkPolicyType = flowexporterutils.PolicyTypeToUint8(policy.Type)
 			denyConn.EgressNetworkPolicyRuleName = rule.Name
-			denyConn.EgressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
+			denyConn.EgressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
 		}
 	} else {
 		// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
 		if tableID == openflow.IngressDefaultTable.GetID() {
 			denyConn.IngressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
-			denyConn.IngressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
+			denyConn.IngressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
 		} else if tableID == openflow.EgressDefaultTable.GetID() {
 			denyConn.EgressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
-			denyConn.EgressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
+			denyConn.EgressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
 		}
 	}
 	c.denyConnStore.AddOrUpdateConn(&denyConn, time.Now(), uint64(packet.IPLength))

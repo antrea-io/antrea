@@ -17,7 +17,7 @@ import (
 	"container/heap"
 	"time"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 )
 
 // minExpiryTime provides two usages: 1. We want to avoid passing a non positive
@@ -27,18 +27,18 @@ import (
 const minExpiryTime = 100 * time.Millisecond
 
 type ExpirePriorityQueue struct {
-	items             []*flowexporter.ItemToExpire
+	items             []*ItemToExpire
 	ActiveFlowTimeout time.Duration
 	IdleFlowTimeout   time.Duration
-	KeyToItem         map[flowexporter.ConnectionKey]*flowexporter.ItemToExpire
+	KeyToItem         map[connection.ConnectionKey]*ItemToExpire
 }
 
 func NewExpirePriorityQueue(activeFlowTimeout time.Duration, idleFlowTimeout time.Duration) *ExpirePriorityQueue {
 	return &ExpirePriorityQueue{
-		items:             make([]*flowexporter.ItemToExpire, 0),
+		items:             make([]*ItemToExpire, 0),
 		ActiveFlowTimeout: activeFlowTimeout,
 		IdleFlowTimeout:   idleFlowTimeout,
-		KeyToItem:         make(map[flowexporter.ConnectionKey]*flowexporter.ItemToExpire),
+		KeyToItem:         make(map[connection.ConnectionKey]*ItemToExpire),
 	}
 }
 
@@ -66,7 +66,7 @@ func (pq *ExpirePriorityQueue) Swap(i, j int) {
 
 func (pq *ExpirePriorityQueue) Push(x interface{}) {
 	n := len((*pq).items)
-	item := x.(*flowexporter.ItemToExpire)
+	item := x.(*ItemToExpire)
 	item.Index = n
 	(*pq).items = append((*pq).items, item)
 }
@@ -81,7 +81,7 @@ func (pq *ExpirePriorityQueue) Pop() interface{} {
 
 // Peek returns the item at the beginning of the queue, without removing the
 // item or otherwise mutating the queue. It is safe to call directly.
-func (pq *ExpirePriorityQueue) Peek() *flowexporter.ItemToExpire {
+func (pq *ExpirePriorityQueue) Peek() *ItemToExpire {
 	if pq.Len() == 0 {
 		return nil
 	}
@@ -89,7 +89,7 @@ func (pq *ExpirePriorityQueue) Peek() *flowexporter.ItemToExpire {
 }
 
 // Update modifies the priority of an Item in the queue.
-func (pq *ExpirePriorityQueue) Update(item *flowexporter.ItemToExpire, activeExpireTime time.Time, idleExpireTime time.Time) {
+func (pq *ExpirePriorityQueue) Update(item *ItemToExpire, activeExpireTime time.Time, idleExpireTime time.Time) {
 	item.ActiveExpireTime = activeExpireTime
 	item.IdleExpireTime = idleExpireTime
 
@@ -97,7 +97,7 @@ func (pq *ExpirePriorityQueue) Update(item *flowexporter.ItemToExpire, activeExp
 }
 
 // Remove removes and returns an Item by key from priority queue if it exists.
-func (pq *ExpirePriorityQueue) Remove(connKey flowexporter.ConnectionKey) *flowexporter.ItemToExpire {
+func (pq *ExpirePriorityQueue) Remove(connKey connection.ConnectionKey) *ItemToExpire {
 	item, exists := pq.KeyToItem[connKey]
 	if !exists {
 		return nil
@@ -105,7 +105,7 @@ func (pq *ExpirePriorityQueue) Remove(connKey flowexporter.ConnectionKey) *flowe
 
 	removedItem := heap.Remove(pq, item.Index)
 	delete(pq.KeyToItem, connKey)
-	return removedItem.(*flowexporter.ItemToExpire)
+	return removedItem.(*ItemToExpire)
 }
 
 // GetExpiryFromExpirePriorityQueue returns the shortest expire time duration
@@ -128,9 +128,9 @@ func (pq *ExpirePriorityQueue) GetExpiryFromExpirePriorityQueue() time.Duration 
 
 // WriteItemToQueue adds conn with connKey into the queue. If an existing item
 // has the same connKey, it will be overwritten by the new item.
-func (pq *ExpirePriorityQueue) WriteItemToQueue(connKey flowexporter.ConnectionKey, conn *flowexporter.Connection) {
+func (pq *ExpirePriorityQueue) WriteItemToQueue(connKey connection.ConnectionKey, conn *connection.Connection) {
 	currTime := time.Now()
-	pqItem := &flowexporter.ItemToExpire{
+	pqItem := &ItemToExpire{
 		Conn:             conn,
 		ActiveExpireTime: currTime.Add(pq.ActiveFlowTimeout),
 		IdleExpireTime:   currTime.Add(pq.IdleFlowTimeout),
@@ -142,23 +142,23 @@ func (pq *ExpirePriorityQueue) WriteItemToQueue(connKey flowexporter.ConnectionK
 	pq.KeyToItem[connKey] = pqItem
 }
 
-func (pq *ExpirePriorityQueue) ResetActiveExpireTimeAndPush(pqItem *flowexporter.ItemToExpire, currTime time.Time) {
+func (pq *ExpirePriorityQueue) ResetActiveExpireTimeAndPush(pqItem *ItemToExpire, currTime time.Time) {
 	pqItem.ActiveExpireTime = currTime.Add(pq.ActiveFlowTimeout)
 	heap.Push(pq, pqItem)
 }
 
-func (pq *ExpirePriorityQueue) RemoveItemFromMap(conn *flowexporter.Connection) {
-	connKey := flowexporter.NewConnectionKey(conn)
+func (pq *ExpirePriorityQueue) RemoveItemFromMap(conn *connection.Connection) {
+	connKey := connection.NewConnectionKey(conn)
 	delete(pq.KeyToItem, connKey)
 }
 
-func (pq *ExpirePriorityQueue) GetTopExpiredItem(currTime time.Time) *flowexporter.ItemToExpire {
+func (pq *ExpirePriorityQueue) GetTopExpiredItem(currTime time.Time) *ItemToExpire {
 	// If the queue is empty or top item is not timeout, then we do not have to
 	// check the following items.
 	topItem := pq.Peek()
 	if topItem == nil || (topItem.ActiveExpireTime.After(currTime) && topItem.IdleExpireTime.After(currTime)) {
 		return nil
 	}
-	pqItem := heap.Pop(pq).(*flowexporter.ItemToExpire)
+	pqItem := heap.Pop(pq).(*ItemToExpire)
 	return pqItem
 }

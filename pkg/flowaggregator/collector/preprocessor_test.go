@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package flowaggregator
+package collector
 
 import (
 	"net/netip"
@@ -29,6 +29,10 @@ import (
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 )
+
+func init() {
+	ipfixregistry.LoadRegistry()
+}
 
 func createTestElement(name string, enterpriseID uint32) ipfixentities.InfoElementWithValue {
 	element, _ := ipfixregistry.GetInfoElement(name, enterpriseID)

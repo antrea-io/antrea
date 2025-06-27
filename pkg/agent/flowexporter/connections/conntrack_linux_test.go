@@ -29,9 +29,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
@@ -71,37 +71,37 @@ var (
 
 func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	// Create flows for test
-	tuple := flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: dstAddr, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
-	antreaFlow := &flowexporter.Connection{
+	tuple := connection.Tuple{SourceAddress: srcAddr, DestinationAddress: dstAddr, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	antreaFlow := &connection.Connection{
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
 	}
-	tuple = flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: svcAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	antreaServiceFlow := &flowexporter.Connection{
+	tuple = connection.Tuple{SourceAddress: srcAddr, DestinationAddress: svcAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	antreaServiceFlow := &connection.Connection{
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
 	}
-	tuple = flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: gwAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	antreaGWFlow := &flowexporter.Connection{
+	tuple = connection.Tuple{SourceAddress: srcAddr, DestinationAddress: gwAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	antreaGWFlow := &connection.Connection{
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
 	}
-	nonAntreaFlow := &flowexporter.Connection{
+	nonAntreaFlow := &connection.Connection{
 		FlowKey: tuple,
 		Zone:    100,
 	}
-	testVarietyFlows := []*flowexporter.Connection{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow}
-	tuple = flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: netip.MustParseAddr("5.3.2.1"), Protocol: 17, SourcePort: 60001, DestinationPort: 200}
-	antreaUPDFlow := &flowexporter.Connection{
+	testVarietyFlows := []*connection.Connection{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow}
+	tuple = connection.Tuple{SourceAddress: srcAddr, DestinationAddress: netip.MustParseAddr("5.3.2.1"), Protocol: 17, SourcePort: 60001, DestinationPort: 200}
+	antreaUPDFlow := &connection.Connection{
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
 	}
-	tuple = flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: netip.MustParseAddr("5.3.2.1"), Protocol: 132, SourcePort: 60001, DestinationPort: 200}
-	antreaSCTPFlow := &flowexporter.Connection{
+	tuple = connection.Tuple{SourceAddress: srcAddr, DestinationAddress: netip.MustParseAddr("5.3.2.1"), Protocol: 132, SourcePort: 60001, DestinationPort: 200}
+	antreaSCTPFlow := &connection.Connection{
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
 	}
-	testFlowsMixedProtocols := []*flowexporter.Connection{antreaFlow, antreaFlow, antreaFlow, antreaUPDFlow, antreaUPDFlow, antreaSCTPFlow}
+	testFlowsMixedProtocols := []*connection.Connection{antreaFlow, antreaFlow, antreaFlow, antreaUPDFlow, antreaUPDFlow, antreaSCTPFlow}
 
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
@@ -115,7 +115,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	testCases := []struct {
 		name                string
 		protocols           []string
-		testFlows           []*flowexporter.Connection
+		testFlows           []*connection.Connection
 		expectedConnections int
 	}{
 		{
@@ -145,7 +145,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 		{
 			"Filter for TCP on empty flows",
 			[]string{"tcp"},
-			[]*flowexporter.Connection{},
+			[]*connection.Connection{},
 			0,
 		},
 	}
@@ -197,7 +197,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		"tcp,orig=(src=127.0.0.1,dst=8.7.6.5,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=8.7.6.5,dst=127.0.0.1,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
 		"tcp,orig=(src=100.10.0.105,dst=100.50.25.1,sport=41284,dport=443,packets=343260,bytes=19340621),reply=(src=100.10.0.106,dst=100.10.0.105,sport=6443,dport=41284,packets=381035,bytes=181176472),start=2020-07-25T08:40:08.959,id=982464968,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|DST_NAT|DST_NAT_DONE,timeout=86399,labels=0x200000001,mark=16,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)")
 	outputFlow := strings.Split(string(ovsctlCmdOutput), "\n")
-	expConn := &flowexporter.Connection{
+	expConn := &connection.Connection{
 		ID:         982464968,
 		Timeout:    86399,
 		StartTime:  time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC),
@@ -206,7 +206,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		Zone:       65520,
 		StatusFlag: 302,
 		Mark:       openflow.ServiceCTMark.GetValue(),
-		FlowKey: flowexporter.Tuple{
+		FlowKey: connection.Tuple{
 			SourceAddress:      netip.MustParseAddr("100.10.0.105"),
 			DestinationAddress: netip.MustParseAddr("100.10.0.106"),
 			Protocol:           6,
@@ -274,14 +274,14 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		Timestamp: conntrack.Timestamp{Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC)},
 	}
 
-	tuple := flowexporter.Tuple{
+	tuple := connection.Tuple{
 		SourceAddress:      conntrackFlowTuple.IP.SourceAddress,
 		DestinationAddress: conntrackFlowTupleReply.IP.SourceAddress,
 		Protocol:           conntrackFlowTuple.Proto.Protocol,
 		SourcePort:         conntrackFlowTuple.Proto.SourcePort,
 		DestinationPort:    conntrackFlowTupleReply.Proto.SourcePort,
 	}
-	expectedAntreaFlow := &flowexporter.Connection{
+	expectedAntreaFlow := &connection.Connection{
 		Timeout:                    netlinkFlow.Timeout,
 		StartTime:                  netlinkFlow.Timestamp.Start,
 		IsPresent:                  true,
@@ -317,7 +317,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 			Stop:  time.Date(2020, 7, 25, 8, 45, 10, 959683808, time.UTC),
 		},
 	}
-	expectedAntreaFlow = &flowexporter.Connection{
+	expectedAntreaFlow = &connection.Connection{
 		Timeout:                    netlinkFlow.Timeout,
 		StartTime:                  netlinkFlow.Timestamp.Start,
 		StopTime:                   netlinkFlow.Timestamp.Stop,

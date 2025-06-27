@@ -24,8 +24,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
@@ -51,7 +53,7 @@ type ConntrackConnectionStore struct {
 }
 
 type L7EventMapGetter interface {
-	ConsumeL7EventMap() map[flowexporter.ConnectionKey]L7ProtocolFields
+	ConsumeL7EventMap() map[connection.ConnectionKey]L7ProtocolFields
 }
 
 func NewConntrackConnectionStore(
@@ -62,7 +64,7 @@ func NewConntrackConnectionStore(
 	podStore podstore.Interface,
 	proxier proxy.Proxier,
 	l7EventMapGetterFunc L7EventMapGetter,
-	o *flowexporter.FlowExporterOptions,
+	o *options.FlowExporterOptions,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
 		connDumper:            connTrackDumper,
@@ -106,7 +108,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	klog.V(2).Infof("Polling conntrack")
 	// DeepCopy the L7EventMap before polling the conntrack table to match corresponding L4 connection with L7 events
 	// and avoid missing the L7 events for corresponding L4 connection
-	var l7EventMap map[flowexporter.ConnectionKey]L7ProtocolFields
+	var l7EventMap map[connection.ConnectionKey]L7ProtocolFields
 	if cs.l7EventMapGetter != nil {
 		l7EventMap = cs.l7EventMapGetter.ConsumeL7EventMap()
 	}
@@ -128,7 +130,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 		}
 	}
 	var totalConns int
-	var filteredConnsList []*flowexporter.Connection
+	var filteredConnsList []*connection.Connection
 	for _, zone := range zones {
 		filteredConnsListPerZone, totalConnsPerZone, err := cs.connDumper.DumpFlows(zone)
 		if err != nil {
@@ -144,7 +146,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	// exist in conntrack table and has been exported, then we will delete it from
 	// connection map. In addition, if the connection was not exported for a specific
 	// time period, then we consider it to be stale and delete it.
-	deleteIfStaleOrResetConn := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
+	deleteIfStaleOrResetConn := func(key connection.ConnectionKey, conn *connection.Connection) error {
 		if !conn.IsPresent {
 			// Delete the connection if it is ready to delete or it was not exported
 			// in the time period as specified by the stale connection timeout.
@@ -194,7 +196,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	return connsLens, nil
 }
 
-func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *flowexporter.Connection) {
+func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *connection.Connection) {
 	// Retrieve NetworkPolicy Name and Namespace by using the ingress and egress
 	// IDs stored in the connection label.
 	if len(conn.Labels) != 0 {
@@ -211,7 +213,7 @@ func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *flowexporter.
 			} else {
 				conn.IngressNetworkPolicyName = policy.Name
 				conn.IngressNetworkPolicyNamespace = policy.Namespace
-				conn.IngressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+				conn.IngressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
 				conn.IngressNetworkPolicyRuleName = rule.Name
 				conn.IngressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
 			}
@@ -226,7 +228,7 @@ func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *flowexporter.
 			} else {
 				conn.EgressNetworkPolicyName = policy.Name
 				conn.EgressNetworkPolicyNamespace = policy.Namespace
-				conn.EgressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+				conn.EgressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
 				conn.EgressNetworkPolicyRuleName = rule.Name
 				conn.EgressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
 			}
@@ -236,14 +238,14 @@ func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *flowexporter.
 
 // AddOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
 // or adds a new connection with the resolved K8s metadata.
-func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection) {
+func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection) {
 	conn.IsPresent = true
-	connKey := flowexporter.NewConnectionKey(conn)
+	connKey := connection.NewConnectionKey(conn)
 
 	existingConn, exists := cs.connections[connKey]
 	if exists {
 		existingConn.IsPresent = conn.IsPresent
-		if flowexporter.IsConnectionDying(existingConn) {
+		if utils.IsConnectionDying(existingConn) {
 			return
 		}
 		// Update the necessary fields that are used in generating flow records.
@@ -254,7 +256,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 		existingConn.ReverseBytes = conn.ReverseBytes
 		existingConn.ReversePackets = conn.ReversePackets
 		existingConn.TCPState = conn.TCPState
-		existingConn.IsActive = flowexporter.CheckConntrackConnActive(existingConn)
+		existingConn.IsActive = utils.CheckConntrackConnActive(existingConn)
 		if existingConn.IsActive {
 			existingItem, exists := cs.expirePriorityQueue.KeyToItem[connKey]
 			if !exists {
@@ -302,7 +304,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 	}
 }
 
-func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []flowexporter.Connection, currTime time.Time, maxSize int) ([]flowexporter.Connection, time.Duration) {
+func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
 	cs.AcquireConnStoreLock()
 	defer cs.ReleaseConnStoreLock()
 	for i := 0; i < maxSize; i++ {
@@ -311,7 +313,7 @@ func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []flowexporter.
 			break
 		}
 		expiredConns = append(expiredConns, *pqItem.Conn)
-		if flowexporter.IsConnectionDying(pqItem.Conn) {
+		if utils.IsConnectionDying(pqItem.Conn) {
 			// If a conntrack connection is in dying state or connection is not
 			// in the conntrack table, we set the ReadyToDelete flag to true to
 			// do the deletion later.
@@ -329,7 +331,7 @@ func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []flowexporter.
 
 // deleteConnWithoutLock deletes the connection from the connection map given
 // the connection key without grabbing the lock. Caller is expected to grab lock.
-func (cs *ConntrackConnectionStore) deleteConnWithoutLock(connKey flowexporter.ConnectionKey) error {
+func (cs *ConntrackConnectionStore) deleteConnWithoutLock(connKey connection.ConnectionKey) error {
 	_, exists := cs.connections[connKey]
 	if !exists {
 		return fmt.Errorf("connection with key %v doesn't exist in map", connKey)
@@ -343,7 +345,7 @@ func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePrio
 	return cs.connectionStore.expirePriorityQueue
 }
 
-func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[flowexporter.Tuple]L7ProtocolFields) {
+func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[connection.Tuple]L7ProtocolFields) {
 	// In case the L7 event is received after the connection is removed from the cs.connections store
 	// we will discard such event
 	for connKey, conn := range cs.connections {
