@@ -23,26 +23,26 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/afero"
 )
 
-// Sanitize archive file pathing from "G305: Zip Slip vulnerability"
+// sanitizeExtractPath ensures that the target extract path (when joining the destination directory
+// and the path from the archive) is within the intended destination directory.
+// This is meant to address the "Zip Slip" vulnerability (G305).
+// See https://security.snyk.io/research/zip-slip-vulnerability.
 func sanitizeExtractPath(filePath string, destination string) (string, error) {
-	destPath := filepath.Join(destination, filePath) // result will be "clean"
-	destDir := filepath.Clean(destination)
-	// As a special case, if destDir is the current working directory (as "."), we just check that
-	// the extract path matches the path in the archive. This is because when calling Join with "."
-	// as the directory, the leading "./" is removed, which is not handled correctly by the general
-	// case (prefix check) below.
-	if destDir == "." && filePath == destPath {
-		return destPath, nil
+	// If IsLocal(path) returns true, then Join(base, path) will always produce a path contained
+	// within base and Clean(path) will always produce an unrooted path with no ".." path
+	// elements.
+	// IsLocal was introduced in Go 1.20.
+	// This will also reject absolute paths, which is not strictly required (e.g., tar can
+	// produce such archives when it is run with -P).
+	if !filepath.IsLocal(filePath) {
+		return "", fmt.Errorf("illegal file path: %s", filePath)
 	}
-	if strings.HasPrefix(destPath, destDir+string(filepath.Separator)) {
-		return destPath, nil
-	}
-	return "", fmt.Errorf("illegal file path: %s", filePath)
+	// Join also calls Clean on the path.
+	return filepath.Join(destination, filePath), nil
 }
 
 func UnpackDir(fs afero.Fs, fileName string, targetDir string) error {
@@ -101,6 +101,7 @@ func UnpackReader(fs afero.Fs, file io.Reader, useGzip bool, targetDir string) e
 				}
 			}
 		default:
+			// Note in particular that we do not handle symlinks.
 			return errors.New("unknown type found when reading tgz file")
 		}
 	}
@@ -122,9 +123,11 @@ func PackDir(fs afero.Fs, dir string, writer io.Writer) ([]byte, error) {
 		if err != nil {
 			return err
 		}
-		header.Name = strings.TrimPrefix(strings.ReplaceAll(filePath, dir, ""), string(filepath.Separator))
-		err = targzWriter.WriteHeader(header)
-		if err != nil {
+
+		if header.Name, err = filepath.Rel(dir, filePath); err != nil {
+			return err
+		}
+		if err := targzWriter.WriteHeader(header); err != nil {
 			return err
 		}
 		f, err := fs.Open(filePath)
