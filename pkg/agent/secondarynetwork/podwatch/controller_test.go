@@ -928,7 +928,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		createPodFn(podController, pod)
 		podController.cniCache.Store(podKey, cniConfig)
 		podController.primaryInterfaceStore.AddInterface(primaryInterface)
-		assert.Error(t, podController.syncPod(podKey), "Should return error when primary network configuration is not complete yet")
+		assert.NoError(t, podController.syncPod(podKey))
 	})
 
 	t.Run("different Namespace for Pod and NetworkAttachmentDefinition", func(t *testing.T) {
