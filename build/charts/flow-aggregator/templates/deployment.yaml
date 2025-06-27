@@ -1,3 +1,4 @@
+{{- include "validateReplicas" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,7 +7,7 @@ metadata:
   name: flow-aggregator
   namespace: {{ .Release.Namespace }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       app: flow-aggregator
@@ -49,16 +50,15 @@ spec:
           - --v=4
         {{- else }}
         args:
-        - --config
-        - /etc/flow-aggregator/flow-aggregator.conf
-        - --logtostderr=false
-        - --log_dir=/var/log/antrea/flow-aggregator
-        - --alsologtostderr
-        - --log_file_max_size=100
-        - --log_file_max_num=4
-        {{- if .Values.logVerbosity }}
-        - "--v={{ .Values.logVerbosity }}"
-        {{- end }}
+          - --config=/etc/flow-aggregator/flow-aggregator.conf
+          - --logtostderr=false
+          - --log_dir=/var/log/antrea/flow-aggregator
+          - --alsologtostderr
+          - --log_file_max_size=100
+          - --log_file_max_num=4
+          {{- if .Values.logVerbosity }}
+          - "--v={{ .Values.logVerbosity }}"
+          {{- end }}
         {{- end }}
         env:
           - name: POD_NAME
