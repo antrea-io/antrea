@@ -46,6 +46,8 @@ type Interface interface {
 
 	NeighList(linkIndex, family int) ([]netlink.Neigh, error)
 
+	NeighListExecute(msg netlink.Ndmsg) ([]netlink.Neigh, error)
+
 	NeighSet(neigh *netlink.Neigh) error
 
 	NeighDel(neigh *netlink.Neigh) error
