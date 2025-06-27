@@ -316,7 +316,11 @@ func (c *Client) syncIPInfra() {
 	if err := c.syncRoute(); err != nil {
 		klog.ErrorS(err, "Failed to sync route")
 	}
-	klog.V(3).Info("Successfully synced iptables, ipset and route")
+	if err := c.syncNeighbor(); err != nil {
+		klog.ErrorS(err, "Failed to sync neighbor")
+	}
+
+	klog.V(3).Info("Successfully synced iptables, ipset, route and neighbor")
 }
 
 type routeKey struct {
@@ -414,6 +418,56 @@ func (c *Client) syncRoute() error {
 	for _, route := range gwAutoconfRoutes {
 		restoreRoute(route)
 	}
+	return nil
+}
+
+type neighborKey struct {
+	ip  string
+	mac string
+}
+
+// syncNeighbor ensures that necessary neighbors exist on the Antrea gateway interface, as some routes managed by Antrea
+// depend on these neighbors.
+func (c *Client) syncNeighbor() error {
+	msg := netlink.Ndmsg{
+		Family: netlink.FAMILY_ALL,
+		Index:  uint32(c.nodeConfig.GatewayConfig.LinkIndex),
+		State:  netlink.NUD_PERMANENT,
+	}
+	neighborList, err := c.netlink.NeighListExecute(msg)
+	if err != nil {
+		return err
+	}
+	neighborKeys := sets.New[neighborKey]()
+	for i := range neighborList {
+		n := neighborList[i]
+		neighborKeys.Insert(neighborKey{
+			ip:  n.IP.String(),
+			mac: n.HardwareAddr.String(),
+		})
+	}
+	restoreNeighbor := func(neighbor *netlink.Neigh) bool {
+		if neighborKeys.Has(neighborKey{
+			ip:  neighbor.IP.String(),
+			mac: neighbor.HardwareAddr.String(),
+		}) {
+			return true
+		}
+		if err := c.netlink.NeighSet(neighbor); err != nil {
+			klog.ErrorS(err, "failed to sync neighbor", "Neighbor", neighbor)
+			return false
+		}
+		return true
+	}
+	c.nodeNeighbors.Range(func(_, v interface{}) bool {
+		return restoreNeighbor(v.(*netlink.Neigh))
+	})
+	if c.proxyAll {
+		c.serviceNeighbors.Range(func(_, v interface{}) bool {
+			return restoreNeighbor(v.(*netlink.Neigh))
+		})
+	}
+
 	return nil
 }
 

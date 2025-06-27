@@ -314,6 +314,21 @@ func (mr *MockInterfaceMockRecorder) NeighList(linkIndex, family any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NeighList", reflect.TypeOf((*MockInterface)(nil).NeighList), linkIndex, family)
 }
 
+// NeighListExecute mocks base method.
+func (m *MockInterface) NeighListExecute(msg netlink.Ndmsg) ([]netlink.Neigh, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NeighListExecute", msg)
+	ret0, _ := ret[0].([]netlink.Neigh)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NeighListExecute indicates an expected call of NeighListExecute.
+func (mr *MockInterfaceMockRecorder) NeighListExecute(msg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NeighListExecute", reflect.TypeOf((*MockInterface)(nil).NeighListExecute), msg)
+}
+
 // NeighSet mocks base method.
 func (m *MockInterface) NeighSet(neigh *netlink.Neigh) error {
 	m.ctrl.T.Helper()
