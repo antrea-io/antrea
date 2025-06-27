@@ -269,7 +269,7 @@ if $IPSEC; then
 fi
 
 if $FLEXIBLE_IPAM; then
-    HELM_VALUES+=("featureGates.AntreaIPAM=true" "enableBridgingMode=true" "trafficEncapMode=noEncap" "noSNAT=true")
+    HELM_VALUES+=("enableBridgingMode=true" "trafficEncapMode=noEncap" "noSNAT=true")
 fi
 
 if $MULTICAST; then

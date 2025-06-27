@@ -31,7 +31,7 @@ edit the Agent configuration in the
 ## List of Available Features
 
 | Feature Name                  | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes                                         |
-| ----------------------------- | ------------------ |---------|-------| ------------- |--------------| ---------- | ------------------ | --------------------------------------------- |
+| ----------------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | --------------------------------------------- |
 | `AntreaProxy`                 | Agent              | `true`  | GA    | v0.8          | v0.11        | v1.14      | Yes                | Must be enabled for Windows.                  |
 | `EndpointSlice`               | Agent              | `true`  | GA    | v0.13.0       | v1.11        | v1.14      | Yes                |                                               |
 | `TopologyAwareHints`          | Agent              | `true`  | Beta  | v1.8          | v1.12        | N/A        | Yes                |                                               |
