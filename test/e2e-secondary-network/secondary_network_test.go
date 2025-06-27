@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
+	"antrea.io/antrea/pkg/agent/cniserver"
 	antreae2e "antrea.io/antrea/test/e2e"
 	"antrea.io/antrea/test/e2e-secondary-network/aws"
 )
@@ -148,6 +149,7 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 			for i, network := range networkStatus {
 				if network.Interface == "eth0" {
 					assert.Equal(t, macMap[network.Interface], network.Mac, "The primary network status `Mac` is not as expected")
+					assert.Equal(t, cniserver.AntreaCNIType, network.Name, "The primary network status `Name` is not as expected")
 					assert.Equal(t, true, network.Default, "The primary network status `Default` is not as expected")
 				} else {
 					secondaryNetworkStatus = append(secondaryNetworkStatus, networkStatus[i])

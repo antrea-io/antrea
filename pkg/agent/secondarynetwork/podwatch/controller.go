@@ -405,7 +405,7 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 	if len(storedPrimaryInterfaces) > 0 {
 		primaryInterface := storedPrimaryInterfaces[0]
 		primaryNetworkStatus := netdefv1.NetworkStatus{
-			Name:      primaryInterface.InterfaceName,
+			Name:      cniserver.AntreaCNIType,
 			Interface: primaryInterface.IFDev,
 			Mac:       primaryInterface.MAC.String(),
 			Default:   true,

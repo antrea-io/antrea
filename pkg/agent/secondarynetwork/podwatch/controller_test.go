@@ -96,7 +96,7 @@ const (
 	podIP              = "1.2.3.4"
 	networkName        = "net"
 	interfaceName      = "eth2"
-	gatwayIP           = "1.1.1.1"
+	gatewayIP          = "1.1.1.1"
 )
 
 func testNetwork(name string, networkType networkType) *netdefv1.NetworkAttachmentDefinition {
@@ -231,7 +231,7 @@ func TestPodControllerRun(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	interfaceConfigurator := podwatchtesting.NewMockInterfaceConfigurator(ctrl)
 	mockIPAM := podwatchtesting.NewMockIPAMAllocator(ctrl)
-	gateway := &config.GatewayConfig{Name: "", IPv4: net.ParseIP(gatwayIP)}
+	gateway := &config.GatewayConfig{Name: "", IPv4: net.ParseIP(gatewayIP)}
 	nodeConfig := &config.NodeConfig{Name: "", PodIPv4CIDR: nil, GatewayConfig: gateway}
 	podController, _ := NewPodController(
 		client,
@@ -416,11 +416,11 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		},
 	}
 	primaryNetworkStatus := netdefv1.NetworkStatus{
-		Name:      "fake-primary-interface-name",
+		Name:      cniserver.AntreaCNIType,
 		Interface: "eth0",
 		IPs:       []string{"192.168.1.2"},
 		Default:   true,
-		Gateway:   []string{gatwayIP},
+		Gateway:   []string{gatewayIP},
 	}
 
 	tests := []struct {
@@ -1092,8 +1092,8 @@ func testPodController(ctrl *gomock.Controller) (
 	mockIPAM := podwatchtesting.NewMockIPAMAllocator(ctrl)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 
-	gatwayIP := "1.1.1.1"
-	gateway := &config.GatewayConfig{Name: "", IPv4: net.ParseIP(gatwayIP)}
+	gatewayIP := "1.1.1.1"
+	gateway := &config.GatewayConfig{Name: "", IPv4: net.ParseIP(gatewayIP)}
 	nodeConfig := &config.NodeConfig{Name: "", PodIPv4CIDR: nil, GatewayConfig: gateway}
 
 	// PodController without event handlers.
