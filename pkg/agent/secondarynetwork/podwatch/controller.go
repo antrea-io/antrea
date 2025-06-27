@@ -216,8 +216,10 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 		return nil
 	}
 	if len(pod.Status.PodIPs) == 0 {
-		// Primary network configuration is not complete yet. Return error here to enqueue.
-		return fmt.Errorf("primary network configuration is not complete yet")
+		// Primary network configuration is not complete yet. Return nil here to dequeue the
+		// Pod event. Secondary network configuration will be handled with the following Pod
+		// update events.
+		return nil
 	}
 
 	secondaryNetwork, ok := checkForPodSecondaryNetworkAttachment(pod)
