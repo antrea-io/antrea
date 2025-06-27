@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	scheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,33 +35,34 @@ type ResourceExportsGetter interface {
 
 // ResourceExportInterface has methods to work with ResourceExport resources.
 type ResourceExportInterface interface {
-	Create(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.CreateOptions) (*v1alpha1.ResourceExport, error)
-	Update(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.UpdateOptions) (*v1alpha1.ResourceExport, error)
+	Create(ctx context.Context, resourceExport *multiclusterv1alpha1.ResourceExport, opts v1.CreateOptions) (*multiclusterv1alpha1.ResourceExport, error)
+	Update(ctx context.Context, resourceExport *multiclusterv1alpha1.ResourceExport, opts v1.UpdateOptions) (*multiclusterv1alpha1.ResourceExport, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, resourceExport *v1alpha1.ResourceExport, opts v1.UpdateOptions) (*v1alpha1.ResourceExport, error)
+	UpdateStatus(ctx context.Context, resourceExport *multiclusterv1alpha1.ResourceExport, opts v1.UpdateOptions) (*multiclusterv1alpha1.ResourceExport, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ResourceExport, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ResourceExportList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*multiclusterv1alpha1.ResourceExport, error)
+	List(ctx context.Context, opts v1.ListOptions) (*multiclusterv1alpha1.ResourceExportList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ResourceExport, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *multiclusterv1alpha1.ResourceExport, err error)
 	ResourceExportExpansion
 }
 
 // resourceExports implements ResourceExportInterface
 type resourceExports struct {
-	*gentype.ClientWithList[*v1alpha1.ResourceExport, *v1alpha1.ResourceExportList]
+	*gentype.ClientWithList[*multiclusterv1alpha1.ResourceExport, *multiclusterv1alpha1.ResourceExportList]
 }
 
 // newResourceExports returns a ResourceExports
 func newResourceExports(c *MulticlusterV1alpha1Client, namespace string) *resourceExports {
 	return &resourceExports{
-		gentype.NewClientWithList[*v1alpha1.ResourceExport, *v1alpha1.ResourceExportList](
+		gentype.NewClientWithList[*multiclusterv1alpha1.ResourceExport, *multiclusterv1alpha1.ResourceExportList](
 			"resourceexports",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.ResourceExport { return &v1alpha1.ResourceExport{} },
-			func() *v1alpha1.ResourceExportList { return &v1alpha1.ResourceExportList{} }),
+			func() *multiclusterv1alpha1.ResourceExport { return &multiclusterv1alpha1.ResourceExport{} },
+			func() *multiclusterv1alpha1.ResourceExportList { return &multiclusterv1alpha1.ResourceExportList{} },
+		),
 	}
 }

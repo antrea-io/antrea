@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1beta1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	apiscrdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1beta1 "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // AntreaAgentInfos.
 type AntreaAgentInfoInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1beta1.AntreaAgentInfoLister
+	Lister() crdv1beta1.AntreaAgentInfoLister
 }
 
 type antreaAgentInfoInformer struct {
@@ -59,16 +59,28 @@ func NewFilteredAntreaAgentInfoInformer(client versioned.Interface, resyncPeriod
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), options)
+				return client.CrdV1beta1().AntreaAgentInfos().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1beta1().AntreaAgentInfos().Watch(context.TODO(), options)
+				return client.CrdV1beta1().AntreaAgentInfos().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1beta1().AntreaAgentInfos().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1beta1().AntreaAgentInfos().Watch(ctx, options)
 			},
 		},
-		&crdv1beta1.AntreaAgentInfo{},
+		&apiscrdv1beta1.AntreaAgentInfo{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,9 +91,9 @@ func (f *antreaAgentInfoInformer) defaultInformer(client versioned.Interface, re
 }
 
 func (f *antreaAgentInfoInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdv1beta1.AntreaAgentInfo{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiscrdv1beta1.AntreaAgentInfo{}, f.defaultInformer)
 }
 
-func (f *antreaAgentInfoInformer) Lister() v1beta1.AntreaAgentInfoLister {
-	return v1beta1.NewAntreaAgentInfoLister(f.Informer().GetIndexer())
+func (f *antreaAgentInfoInformer) Lister() crdv1beta1.AntreaAgentInfoLister {
+	return crdv1beta1.NewAntreaAgentInfoLister(f.Informer().GetIndexer())
 }

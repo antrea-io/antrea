@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,31 +35,32 @@ type NodeLatencyMonitorsGetter interface {
 
 // NodeLatencyMonitorInterface has methods to work with NodeLatencyMonitor resources.
 type NodeLatencyMonitorInterface interface {
-	Create(ctx context.Context, nodeLatencyMonitor *v1alpha1.NodeLatencyMonitor, opts v1.CreateOptions) (*v1alpha1.NodeLatencyMonitor, error)
-	Update(ctx context.Context, nodeLatencyMonitor *v1alpha1.NodeLatencyMonitor, opts v1.UpdateOptions) (*v1alpha1.NodeLatencyMonitor, error)
+	Create(ctx context.Context, nodeLatencyMonitor *crdv1alpha1.NodeLatencyMonitor, opts v1.CreateOptions) (*crdv1alpha1.NodeLatencyMonitor, error)
+	Update(ctx context.Context, nodeLatencyMonitor *crdv1alpha1.NodeLatencyMonitor, opts v1.UpdateOptions) (*crdv1alpha1.NodeLatencyMonitor, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.NodeLatencyMonitor, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.NodeLatencyMonitorList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1alpha1.NodeLatencyMonitor, error)
+	List(ctx context.Context, opts v1.ListOptions) (*crdv1alpha1.NodeLatencyMonitorList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.NodeLatencyMonitor, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *crdv1alpha1.NodeLatencyMonitor, err error)
 	NodeLatencyMonitorExpansion
 }
 
 // nodeLatencyMonitors implements NodeLatencyMonitorInterface
 type nodeLatencyMonitors struct {
-	*gentype.ClientWithList[*v1alpha1.NodeLatencyMonitor, *v1alpha1.NodeLatencyMonitorList]
+	*gentype.ClientWithList[*crdv1alpha1.NodeLatencyMonitor, *crdv1alpha1.NodeLatencyMonitorList]
 }
 
 // newNodeLatencyMonitors returns a NodeLatencyMonitors
 func newNodeLatencyMonitors(c *CrdV1alpha1Client) *nodeLatencyMonitors {
 	return &nodeLatencyMonitors{
-		gentype.NewClientWithList[*v1alpha1.NodeLatencyMonitor, *v1alpha1.NodeLatencyMonitorList](
+		gentype.NewClientWithList[*crdv1alpha1.NodeLatencyMonitor, *crdv1alpha1.NodeLatencyMonitorList](
 			"nodelatencymonitors",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha1.NodeLatencyMonitor { return &v1alpha1.NodeLatencyMonitor{} },
-			func() *v1alpha1.NodeLatencyMonitorList { return &v1alpha1.NodeLatencyMonitorList{} }),
+			func() *crdv1alpha1.NodeLatencyMonitor { return &crdv1alpha1.NodeLatencyMonitor{} },
+			func() *crdv1alpha1.NodeLatencyMonitorList { return &crdv1alpha1.NodeLatencyMonitorList{} },
+		),
 	}
 }

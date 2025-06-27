@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1beta1
 
 import (
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ExternalIPPoolLister helps list ExternalIPPools.
@@ -28,19 +28,19 @@ import (
 type ExternalIPPoolLister interface {
 	// List lists all ExternalIPPools in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1beta1.ExternalIPPool, err error)
+	List(selector labels.Selector) (ret []*crdv1beta1.ExternalIPPool, err error)
 	// Get retrieves the ExternalIPPool from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1beta1.ExternalIPPool, error)
+	Get(name string) (*crdv1beta1.ExternalIPPool, error)
 	ExternalIPPoolListerExpansion
 }
 
 // externalIPPoolLister implements the ExternalIPPoolLister interface.
 type externalIPPoolLister struct {
-	listers.ResourceIndexer[*v1beta1.ExternalIPPool]
+	listers.ResourceIndexer[*crdv1beta1.ExternalIPPool]
 }
 
 // NewExternalIPPoolLister returns a new ExternalIPPoolLister.
 func NewExternalIPPoolLister(indexer cache.Indexer) ExternalIPPoolLister {
-	return &externalIPPoolLister{listers.New[*v1beta1.ExternalIPPool](indexer, v1beta1.Resource("externalippool"))}
+	return &externalIPPoolLister{listers.New[*crdv1beta1.ExternalIPPool](indexer, crdv1beta1.Resource("externalippool"))}
 }

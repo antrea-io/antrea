@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ type FakeSystemV1beta1 struct {
 }
 
 func (c *FakeSystemV1beta1) SupportBundles() v1beta1.SupportBundleInterface {
-	return &FakeSupportBundles{c}
+	return newFakeSupportBundles(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

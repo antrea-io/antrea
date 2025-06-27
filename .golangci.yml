@@ -50,6 +50,12 @@ linters:
         # QF1008: unneccessary use of embedded struct name before field e.g:
         #   ClusterNetworkPolicy.Metadata.Name vs ClusterNetworkPolicy.Name
         text: "(ST1005:|QF1008:)"
+      - linters:
+          - staticcheck
+        text: "SA1019: (v1|corev1).Endpoints is deprecated"
+      - linters:
+          - staticcheck
+        text: "SA1019: (v1|corev1).EndpointSubset is deprecated"
 formatters:
   enable:
     - gofmt

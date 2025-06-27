@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta2
 
 import (
-	"context"
+	context "context"
 
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,26 +34,27 @@ type NetworkPoliciesGetter interface {
 
 // NetworkPolicyInterface has methods to work with NetworkPolicy resources.
 type NetworkPolicyInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta2.NetworkPolicy, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta2.NetworkPolicyList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*controlplanev1beta2.NetworkPolicy, error)
+	List(ctx context.Context, opts v1.ListOptions) (*controlplanev1beta2.NetworkPolicyList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	NetworkPolicyExpansion
 }
 
 // networkPolicies implements NetworkPolicyInterface
 type networkPolicies struct {
-	*gentype.ClientWithList[*v1beta2.NetworkPolicy, *v1beta2.NetworkPolicyList]
+	*gentype.ClientWithList[*controlplanev1beta2.NetworkPolicy, *controlplanev1beta2.NetworkPolicyList]
 }
 
 // newNetworkPolicies returns a NetworkPolicies
 func newNetworkPolicies(c *ControlplaneV1beta2Client) *networkPolicies {
 	return &networkPolicies{
-		gentype.NewClientWithList[*v1beta2.NetworkPolicy, *v1beta2.NetworkPolicyList](
+		gentype.NewClientWithList[*controlplanev1beta2.NetworkPolicy, *controlplanev1beta2.NetworkPolicyList](
 			"networkpolicies",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta2.NetworkPolicy { return &v1beta2.NetworkPolicy{} },
-			func() *v1beta2.NetworkPolicyList { return &v1beta2.NetworkPolicyList{} }),
+			func() *controlplanev1beta2.NetworkPolicy { return &controlplanev1beta2.NetworkPolicy{} },
+			func() *controlplanev1beta2.NetworkPolicyList { return &controlplanev1beta2.NetworkPolicyList{} },
+		),
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,23 +27,23 @@ type FakeStatsV1alpha1 struct {
 }
 
 func (c *FakeStatsV1alpha1) AntreaClusterNetworkPolicyStats() v1alpha1.AntreaClusterNetworkPolicyStatsInterface {
-	return &FakeAntreaClusterNetworkPolicyStats{c}
+	return newFakeAntreaClusterNetworkPolicyStats(c)
 }
 
 func (c *FakeStatsV1alpha1) AntreaNetworkPolicyStats(namespace string) v1alpha1.AntreaNetworkPolicyStatsInterface {
-	return &FakeAntreaNetworkPolicyStats{c, namespace}
+	return newFakeAntreaNetworkPolicyStats(c, namespace)
 }
 
 func (c *FakeStatsV1alpha1) MulticastGroups() v1alpha1.MulticastGroupInterface {
-	return &FakeMulticastGroups{c}
+	return newFakeMulticastGroups(c)
 }
 
 func (c *FakeStatsV1alpha1) NetworkPolicyStats(namespace string) v1alpha1.NetworkPolicyStatsInterface {
-	return &FakeNetworkPolicyStats{c, namespace}
+	return newFakeNetworkPolicyStats(c, namespace)
 }
 
 func (c *FakeStatsV1alpha1) NodeLatencyStats() v1alpha1.NodeLatencyStatsInterface {
-	return &FakeNodeLatencyStats{c}
+	return newFakeNodeLatencyStats(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate
