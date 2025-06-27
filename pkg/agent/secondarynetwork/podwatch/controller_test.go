@@ -96,6 +96,7 @@ const (
 	podIP              = "1.2.3.4"
 	networkName        = "net"
 	interfaceName      = "eth2"
+	gatwayIP           = "1.1.1.1"
 )
 
 func testNetwork(name string, networkType networkType) *netdefv1.NetworkAttachmentDefinition {
@@ -230,14 +231,13 @@ func TestPodControllerRun(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	interfaceConfigurator := podwatchtesting.NewMockInterfaceConfigurator(ctrl)
 	mockIPAM := podwatchtesting.NewMockIPAMAllocator(ctrl)
-	gatwayIP := "1.1.1.1"
 	gateway := &config.GatewayConfig{Name: "", IPv4: net.ParseIP(gatwayIP)}
 	nodeConfig := &config.NodeConfig{Name: "", PodIPv4CIDR: nil, GatewayConfig: gateway}
 	podController, _ := NewPodController(
 		client,
 		netdefclient,
 		informerFactory.Core().V1().Pods().Informer(),
-		nil, primaryInterfaceStore, mockOVSBridgeClient, nodeConfig)
+		nil, primaryInterfaceStore, nodeConfig, mockOVSBridgeClient)
 	podController.interfaceConfigurator = interfaceConfigurator
 	podController.ipamAllocator = mockIPAM
 	cniCache := &podController.cniCache
@@ -245,7 +245,7 @@ func TestPodControllerRun(t *testing.T) {
 
 	primaryInterface := &interfacestore.InterfaceConfig{
 		InterfaceName: "primary-interface-name",
-		IPs:           []net.IP{net.IP("192.168.1.2")},
+		IPs:           []net.IP{net.ParseIP("192.168.1.2")},
 		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
 			ContainerID:  containerID,
 			PodName:      podName,
@@ -405,6 +405,24 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
+	primaryInterface := &interfacestore.InterfaceConfig{
+		InterfaceName: "fake-primary-interface-name",
+		IPs:           []net.IP{net.ParseIP("192.168.1.2")},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
+			ContainerID:  containerID,
+			PodName:      podName,
+			PodNamespace: testNamespace,
+			IFDev:        "eth0",
+		},
+	}
+	primaryNetworkStatus := netdefv1.NetworkStatus{
+		Name:      "fake-primary-interface-name",
+		Interface: "eth0",
+		IPs:       []string{"192.168.1.2"},
+		Default:   true,
+		Gateway:   []string{gatwayIP},
+	}
+
 	tests := []struct {
 		name                       string
 		cniVersion                 string
@@ -440,7 +458,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 				Name: "net",
 				IPs:  []string{"148.14.24.100"},
 				DNS:  netdefv1.DNS{},
-			}},
+			}, primaryNetworkStatus},
 		},
 		{
 			name:        "VLAN in IPPool",
@@ -463,7 +481,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 				Name: "net",
 				IPs:  []string{"148.14.24.100"},
 				DNS:  netdefv1.DNS{},
-			}},
+			}, primaryNetworkStatus},
 		},
 		{
 			name:        "network VLAN overrides IPPool VLAN",
@@ -485,7 +503,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 				Name: "net",
 				IPs:  []string{"148.14.24.100"},
 				DNS:  netdefv1.DNS{},
-			}},
+			}, primaryNetworkStatus},
 		},
 		{
 			name:        "no IPAM",
@@ -505,7 +523,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
 				Name: "net",
 				DNS:  netdefv1.DNS{},
-			}},
+			}, primaryNetworkStatus},
 		},
 		{
 			name:        "SRIOV network",
@@ -528,7 +546,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 				Name: "net",
 				IPs:  []string{"148.14.24.100"},
 				DNS:  netdefv1.DNS{},
-			}},
+			}, primaryNetworkStatus},
 		},
 		{
 			name:               "network not found",
@@ -630,6 +648,8 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			pc, mockIPAM, interfaceConfigurator := testPodControllerStart(ctrl)
 			_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 			require.NoError(t, err)
+
+			pc.primaryInterfaceStore.AddInterface(primaryInterface)
 
 			if !tc.doNotCreateNetwork {
 				network1 := testNetworkExt(networkName, tc.cniVersion, tc.cniType,
@@ -734,7 +754,7 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	primaryInterface := &interfacestore.InterfaceConfig{
 		InterfaceName: interfaceName,
-		IPs:           []net.IP{net.IP("192.168.1.2")},
+		IPs:           []net.IP{net.ParseIP("192.168.1.2")},
 		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
 			ContainerID:  containerID,
 			PodName:      podName,
@@ -1198,12 +1218,11 @@ func TestInitializeSecondaryInterfaceStore(t *testing.T) {
 func TestReconcileSecondaryInterfaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	pc, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)
-	primaryStore := interfacestore.NewInterfaceStore()
 	_, _, containerConfigs := createTestInterfaces()
 
 	// Add interfaces to primary store
-	primaryStore.AddInterface(containerConfigs[0])
-	primaryStore.AddInterface(containerConfigs[1])
+	pc.primaryInterfaceStore.AddInterface(containerConfigs[0])
+	pc.primaryInterfaceStore.AddInterface(containerConfigs[1])
 
 	// Add interfaces to controller secondaryInterfaceStore
 	pc.interfaceStore.AddInterface(containerConfigs[0])
@@ -1214,7 +1233,7 @@ func TestReconcileSecondaryInterfaces(t *testing.T) {
 	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(gomock.Any()).Return(nil).Times(1)
 	mockIPAM.EXPECT().SecondaryNetworkRelease(gomock.Any()).Return(nil).Times(1)
 
-	err := pc.reconcileSecondaryInterfaces(primaryStore)
+	err := pc.reconcileSecondaryInterfaces()
 	require.NoError(t, err)
 
 	// Check CNI Cache

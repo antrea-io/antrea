@@ -105,8 +105,8 @@ func NewPodController(
 	podInformer cache.SharedIndexInformer,
 	podUpdateSubscriber channel.Subscriber,
 	primaryInterfaceStore interfacestore.InterfaceStore,
-	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	nodeConfig *config.NodeConfig,
+	ovsBridgeClient ovsconfig.OVSBridgeClient,
 ) (*PodController, error) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	interfaceConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore)
@@ -147,7 +147,7 @@ func NewPodController(
 			return nil, fmt.Errorf("failed to initialize secondary interface store: %w", err)
 		}
 
-		if err := pc.reconcileSecondaryInterfaces(primaryInterfaceStore); err != nil {
+		if err := pc.reconcileSecondaryInterfaces(); err != nil {
 			return nil, fmt.Errorf("failed to restore CNI cache and reconcile secondary interfaces: %w", err)
 		}
 	}
@@ -401,10 +401,9 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 	var savedErr error
 	interfacesConfigured := 0
 	var netStatus []netdefv1.NetworkStatus
-	var primaryInterface *interfacestore.InterfaceConfig
 	storedPrimaryInterfaces := pc.primaryInterfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace)
 	if len(storedPrimaryInterfaces) > 0 {
-		primaryInterface = storedPrimaryInterfaces[0]
+		primaryInterface := storedPrimaryInterfaces[0]
 		primaryNetworkStatus := netdefv1.NetworkStatus{
 			Name:      primaryInterface.InterfaceName,
 			Interface: primaryInterface.IFDev,
@@ -625,8 +624,8 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 }
 
 // reconcileSecondaryInterfaces restores cniCache when agent restarts using primary interfaceStore.
-func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore interfacestore.InterfaceStore) error {
-	knownInterfaces := primaryInterfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+func (pc *PodController) reconcileSecondaryInterfaces() error {
+	knownInterfaces := pc.primaryInterfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
 	for _, containerConfig := range knownInterfaces {
 		config := containerConfig.ContainerInterfaceConfig
 		podKey := podKeyGet(config.PodName, config.PodNamespace)
@@ -640,7 +639,7 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 	// secondaryInterfaces is the list of interfaces currently in the secondary local cache.
 	secondaryInterfaces := pc.interfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
 	for _, containerConfig := range secondaryInterfaces {
-		_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
+		_, exists := pc.primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
 		if !exists || containerConfig.OFPort == -1 {
 			// Delete ports not in the CNI cache.
 			staleInterfaces = append(staleInterfaces, containerConfig)

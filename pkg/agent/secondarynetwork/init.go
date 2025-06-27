@@ -50,8 +50,8 @@ func NewController(
 	podInformer cache.SharedIndexInformer,
 	podUpdateSubscriber channel.Subscriber,
 	primaryInterfaceStore interfacestore.InterfaceStore,
-	secNetConfig *agentconfig.SecondaryNetworkConfig, ovsdb *ovsdb.OVSDB,
 	nodeConfig *config.NodeConfig,
+	secNetConfig *agentconfig.SecondaryNetworkConfig, ovsdb *ovsdb.OVSDB,
 ) (*Controller, error) {
 	ovsBridgeClient, err := createOVSBridge(secNetConfig.OVSBridges, ovsdb)
 	if err != nil {
@@ -69,7 +69,7 @@ func NewController(
 	// k8s.v1.cni.cncf.io/networks Annotation defined.
 	podWatchController, err := podwatch.NewPodController(
 		k8sClient, netAttachDefClient, podInformer,
-		podUpdateSubscriber, primaryInterfaceStore, ovsBridgeClient, nodeConfig)
+		podUpdateSubscriber, primaryInterfaceStore, nodeConfig, ovsBridgeClient)
 	if err != nil {
 		return nil, err
 	}
