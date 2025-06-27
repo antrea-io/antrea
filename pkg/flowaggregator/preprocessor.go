@@ -194,11 +194,14 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 			case "egressName":
 				flow.K8S.EgressName = ie.GetStringValue()
 			case "egressIP":
-				addr, err := netip.ParseAddr(ie.GetStringValue())
-				if err != nil {
-					klog.ErrorS(err, "Invalid egressIP in flow record", "egressIP", ie.GetStringValue())
-				} else {
-					flow.K8S.EgressIp = addr.AsSlice()
+				ipStr := ie.GetStringValue()
+				if ipStr != "" {
+					addr, err := netip.ParseAddr(ipStr)
+					if err != nil {
+						klog.ErrorS(err, "Invalid egressIP in flow record", "egressIP", ipStr)
+					} else {
+						flow.K8S.EgressIp = addr.AsSlice()
+					}
 				}
 			case "appProtocolName":
 				flow.App.ProtocolName = ie.GetStringValue()

@@ -251,11 +251,27 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 	} else {
 		elements = e.elementsV4
 	}
+	// next is a convenience function to access and write information elements sequentially.
+	// All elements in the slice should be set. In other words, the number of calls to next() in
+	// this function should exactly match the length of the elements slice (created by
+	// prepareElements). We rely on unit testing to ensure this.
 	idx := 0
 	next := func() ipfixentities.InfoElementWithValue {
 		e := elements[idx]
 		idx += 1
 		return e
+	}
+
+	setIPAddress := func(bytes []byte) {
+		if len(bytes) > 0 {
+			next().SetIPAddressValue(bytes)
+			return
+		}
+		if isIPv6 {
+			next().SetIPAddressValue(net.IPv6zero)
+		} else {
+			next().SetIPAddressValue(net.IPv4zero)
+		}
 	}
 
 	// IANA IEs
@@ -269,8 +285,8 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 	next().SetUnsigned64Value(flow.Stats.OctetTotalCount)
 	next().SetUnsigned64Value(flow.Stats.PacketDeltaCount)
 	next().SetUnsigned64Value(flow.Stats.OctetDeltaCount)
-	next().SetIPAddressValue(flow.Ip.Source)
-	next().SetIPAddressValue(flow.Ip.Destination)
+	setIPAddress(flow.Ip.Source)
+	setIPAddress(flow.Ip.Destination)
 	// IANAReverse IEs
 	next().SetUnsigned64Value(flow.ReverseStats.PacketTotalCount)
 	next().SetUnsigned64Value(flow.ReverseStats.OctetTotalCount)
@@ -298,11 +314,15 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 	next().SetStringValue(flow.Transport.GetTCP().GetStateName()) // Use Getter functions in case transport is not TCP
 	next().SetUnsigned8Value(uint8(flow.K8S.FlowType))
 	next().SetStringValue(flow.K8S.EgressName)
-	next().SetStringValue(net.IP(flow.K8S.EgressIp).String())
+	if flow.K8S.EgressIp == nil {
+		next().SetStringValue("")
+	} else {
+		next().SetStringValue(net.IP(flow.K8S.EgressIp).String())
+	}
 	next().SetStringValue(flow.App.ProtocolName)
 	next().SetStringValue(string(flow.App.HttpVals))
 	next().SetStringValue(flow.K8S.EgressNodeName)
-	next().SetIPAddressValue(flow.K8S.DestinationClusterIp)
+	setIPAddress(flow.K8S.DestinationClusterIp)
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		// Add Antrea source stats fields
 		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.PacketTotalCount)
@@ -337,17 +357,31 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 	// Add Pod label fields
 	var sourcePodLabels string
 	if flow.K8S.SourcePodLabels != nil {
-		b, err := json.Marshal(flow.K8S.SourcePodLabels.Labels)
-		if err == nil {
-			sourcePodLabels = string(b)
+		// flow.K8S.SourcePodLabels.Labels can be nil or an empty map
+		// both cases should be treated the same
+		if len(flow.K8S.SourcePodLabels.Labels) > 0 {
+			b, err := json.Marshal(flow.K8S.SourcePodLabels.Labels)
+			if err != nil {
+				klog.ErrorS(err, "Error when marshalling sourcePodLabels")
+			} else {
+				sourcePodLabels = string(b)
+			}
+		} else {
+			sourcePodLabels = "{}"
 		}
 	}
 	next().SetStringValue(sourcePodLabels)
 	var destinationPodLabels string
 	if flow.K8S.DestinationPodLabels != nil {
-		b, err := json.Marshal(flow.K8S.DestinationPodLabels.Labels)
-		if err == nil {
-			destinationPodLabels = string(b)
+		if len(flow.K8S.DestinationPodLabels.Labels) > 0 {
+			b, err := json.Marshal(flow.K8S.DestinationPodLabels.Labels)
+			if err != nil {
+				klog.ErrorS(err, "Error when marshalling destinationPodLabels")
+			} else {
+				destinationPodLabels = string(b)
+			}
+		} else {
+			destinationPodLabels = "{}"
 		}
 	}
 	next().SetStringValue(destinationPodLabels)

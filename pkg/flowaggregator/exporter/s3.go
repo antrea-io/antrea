@@ -49,8 +49,7 @@ func NewS3Exporter(clusterUUID uuid.UUID, opt *options.Options) (*S3Exporter, er
 }
 
 func (e *S3Exporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
-	e.s3UploadProcess.CacheRecord(record)
-	return nil
+	return e.s3UploadProcess.CacheRecord(record)
 }
 
 func (e *S3Exporter) Start() {

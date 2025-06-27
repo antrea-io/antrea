@@ -88,7 +88,10 @@ func (e *LogExporter) buildFilters() {
 }
 
 func (e *LogExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
-	r := flowrecord.GetFlowRecord(record)
+	r, err := flowrecord.GetFlowRecord(record)
+	if err != nil {
+		return err
+	}
 	if !e.applyFilters(r) {
 		klog.V(5).InfoS("Ignoring record in FlowLogger because filters do not match")
 		return nil

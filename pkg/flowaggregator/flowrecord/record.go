@@ -16,6 +16,7 @@ package flowrecord
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"time"
 
@@ -77,19 +78,37 @@ type FlowRecord struct {
 	EgressNodeName                       string
 }
 
-// GetFlowRecord converts flowpb.Flow to FlowRecord
-func GetFlowRecord(record *flowpb.Flow) *FlowRecord {
+// GetFlowRecord converts flowpb.Flow to FlowRecord.
+// It assumes that record.Aggregation is set, so it should only be used in Aggregate mode.
+func GetFlowRecord(record *flowpb.Flow) (*FlowRecord, error) {
+	if record.Aggregation == nil {
+		return nil, fmt.Errorf("aggregation section is unset")
+	}
 	var sourcePodLabels, destinationPodLabels string
 	if record.K8S.SourcePodLabels != nil {
-		b, err := json.Marshal(record.K8S.SourcePodLabels.Labels)
-		if err == nil {
-			sourcePodLabels = string(b)
+		// flow.K8S.SourcePodLabels.Labels can be nil or an empty map
+		// both cases should be treated the same
+		if len(record.K8S.SourcePodLabels.Labels) > 0 {
+			b, err := json.Marshal(record.K8S.SourcePodLabels.Labels)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal sourcePodLabels: %w", err)
+			} else {
+				sourcePodLabels = string(b)
+			}
+		} else {
+			sourcePodLabels = "{}"
 		}
 	}
 	if record.K8S.DestinationPodLabels != nil {
-		b, err := json.Marshal(record.K8S.DestinationPodLabels.Labels)
-		if err == nil {
-			destinationPodLabels = string(b)
+		if len(record.K8S.DestinationPodLabels.Labels) > 0 {
+			b, err := json.Marshal(record.K8S.DestinationPodLabels.Labels)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal destinationPodLabels: %w", err)
+			} else {
+				destinationPodLabels = string(b)
+			}
+		} else {
+			destinationPodLabels = "{}"
 		}
 	}
 	return &FlowRecord{
@@ -146,5 +165,5 @@ func GetFlowRecord(record *flowpb.Flow) *FlowRecord {
 		AppProtocolName:                      record.App.ProtocolName,
 		HttpVals:                             string(record.App.HttpVals),
 		EgressNodeName:                       record.K8S.EgressNodeName,
-	}
+	}, nil
 }
