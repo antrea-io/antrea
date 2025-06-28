@@ -18,10 +18,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"time"
 
+	current "github.com/containernetworking/cni/pkg/types/100"
+	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
+	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -30,11 +35,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-	current "github.com/containernetworking/cni/pkg/types/100"
-	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
-	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -134,16 +134,16 @@ func NewPodController(
 		resyncPeriod,
 	)
 
-	// This is the case when secondary bridge is not configured and no VLAN interfaces at all. In this case,
-	// we should skip both initializeSecondaryInterfaceStore and reconcileSecondaryInterfaces.
-	if ovsBridgeClient != nil {
-		if err := pc.initializeSecondaryInterfaceStore(); err != nil {
-			return nil, fmt.Errorf("failed to initialize secondary interface store: %w", err)
-		}
+	if err := pc.initializeOVSSecondaryInterfaceStore(); err != nil {
+		return nil, fmt.Errorf("failed to initialize secondary interface store from OVS: %w", err)
+	}
 
-		if err := pc.reconcileSecondaryInterfaces(primaryInterfaceStore); err != nil {
-			return nil, fmt.Errorf("failed to restore CNI cache and reconcile secondary interfaces: %w", err)
-		}
+	if err := pc.initializeSRIOVSecondaryInterfaceStore(primaryInterfaceStore); err != nil {
+		return nil, fmt.Errorf("failed to initialize secondary interface store for SR-IOV devices: %w", err)
+	}
+
+	if err := pc.reconcileSecondaryInterfaces(primaryInterfaceStore); err != nil {
+		return nil, fmt.Errorf("failed to restore CNI cache and reconcile secondary interfaces: %w", err)
 	}
 
 	// podUpdateSubscriber can be nil with test code.
@@ -471,6 +471,13 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			Default: false, // Secondary interfaces are not for the default Pod network
 		}
 
+		if networkConfig.NetworkType == sriovNetworkType && len(res.Interfaces) > 1 {
+			status.DeviceInfo = &netdefv1.DeviceInfo{
+				Type: netdefv1.DeviceInfoTypePCI,
+				Pci:  &netdefv1.PciDevice{PciAddress: res.Interfaces[1].PciID},
+			}
+		}
+
 		for _, iface := range res.Interfaces {
 			if iface.Sandbox != "" {
 				status.Interface = iface.Name
@@ -563,8 +570,13 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 	return netObj, netObjExist
 }
 
-// initializeSecondaryInterfaceStore restores secondary interfaceStore when agent restarts.
-func (pc *PodController) initializeSecondaryInterfaceStore() error {
+// initializeOVSSecondaryInterfaceStore restores secondary interfaceStore for VLAN interfaces when agent restarts.
+func (pc *PodController) initializeOVSSecondaryInterfaceStore() error {
+	// This is the case when secondary bridge is not configured and no VLAN interfaces at all. In this case,
+	// we should skip initializeOVSSecondaryInterfaceStore.
+	if pc.ovsBridgeClient == nil {
+		return nil
+	}
 	ovsPorts, err := pc.ovsBridgeClient.GetPortList()
 	if err != nil {
 		return fmt.Errorf("failed to list OVS ports for the secondary bridge: %w", err)
@@ -602,6 +614,112 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 	return nil
 }
 
+// initializeSRIOVSecondaryInterfaceStore restores secondary interfaceStore for SR-IOV interfaces when agent restarts.
+// The source of truth for SR-IOV interfaces is the NetworkStatus annotation of Pods.
+func (pc *PodController) initializeSRIOVSecondaryInterfaceStore(primaryInterfaceStore interfacestore.InterfaceStore) error {
+	knownInterfaces := primaryInterfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+	for _, ifconf := range knownInterfaces {
+		podNamespace := ifconf.ContainerInterfaceConfig.PodNamespace
+		podName := ifconf.ContainerInterfaceConfig.PodName
+		pod, err := pc.kubeClient.CoreV1().Pods(podNamespace).Get(context.TODO(), podName, metav1.GetOptions{})
+		if err != nil {
+			klog.ErrorS(err, "Failed to get Pod", "Pod", klog.KRef(podNamespace, podName))
+			continue
+		}
+		objRef := klog.KObj(pod)
+		_, found := checkForPodSecondaryNetworkAttachment(pod)
+		if !found {
+			klog.V(2).InfoS("Pod does not have a NetworkAttachmentDefinition", "Pod", objRef)
+			continue
+		}
+		netStatus, err := netdefutils.GetNetworkStatus(pod)
+		if err != nil {
+			klog.V(2).ErrorS(err, "Failed to get NetworkStatus for Pod", "Pod", objRef)
+			continue
+		}
+
+		cache, err := pc.buildVFDeviceIDListPerPod(podName, podNamespace)
+		if err != nil {
+			return err
+		}
+
+		podKey := podKeyGet(podName, podNamespace)
+		var sriovInfo []podSriovVFDeviceIDInfo
+		for _, status := range netStatus {
+			if status.DeviceInfo == nil {
+				continue
+			}
+			resourceName, err := getNADResourceName(pc.netAttachDefClient, pod, status.Name)
+			if err != nil || resourceName == "" {
+				klog.ErrorS(err, "Failed to get resourceName", "Pod", objRef, "network", status.Name)
+				continue
+			}
+			for _, vfDeviceInfo := range cache {
+				if vfDeviceInfo.resourceName == resourceName && vfDeviceInfo.vfDeviceID == status.DeviceInfo.Pci.PciAddress {
+					vf := podSriovVFDeviceIDInfo{
+						resourceName: resourceName,
+						vfDeviceID:   vfDeviceInfo.vfDeviceID,
+						ifName:       status.Interface,
+					}
+					sriovInfo = append(sriovInfo, vf)
+					// Add the interface to the Secondary interfaceStore.
+					containerMAC, _ := net.ParseMAC(status.Mac)
+					secondaryInterfaceConfig := interfacestore.NewContainerInterface(
+						vfDeviceInfo.vfDeviceID,
+						ifconf.ContainerInterfaceConfig.ContainerID,
+						podName,
+						podNamespace,
+						status.Interface,
+						ifconf.ContainerInterfaceConfig.NetNS,
+						containerMAC,
+						parseIPs(status.IPs),
+						0)
+					klog.InfoS("Adding secondary interface to interfaceStore", "Pod", objRef, "interface", status.Interface)
+					pc.interfaceStore.AddInterface(secondaryInterfaceConfig)
+				}
+			}
+		}
+		pc.vfDeviceIDUsageMap.Store(podKey, sriovInfo)
+	}
+	klog.InfoS("Successfully initialized the secondary bridge interface store for SRIOV devices")
+	return nil
+}
+
+func getNADResourceName(netAttachDefClient netdefclient.K8sCniCncfIoV1Interface, pod *corev1.Pod, nadName string) (string, error) {
+	netObj := pod.Annotations[netdefv1.NetworkAttachmentAnnot]
+	// Parse Pod annotation and proceed with the secondary network configuration.
+	networklist, err := netdefutils.ParseNetworkAnnotation(netObj, pod.Namespace)
+	if err != nil {
+		klog.ErrorS(err, "Error when parsing network annotation", "annotation", netObj)
+		return "", err
+	}
+	for _, network := range networklist {
+		if network.Name == nadName {
+			netAttachDef, err := netAttachDefClient.NetworkAttachmentDefinitions(network.Namespace).Get(context.TODO(), network.Name, metav1.GetOptions{})
+			if err != nil {
+				klog.ErrorS(err, "Failed to get NetworkAttachmentDefinition", "network", network, "Pod", klog.KObj(pod))
+				return "", err
+			}
+			resourceName := netAttachDef.Annotations[resourceNameAnnotationKey]
+			return resourceName, nil
+		}
+	}
+
+	return "", nil
+}
+
+func parseIPs(ips []string) []net.IP {
+	containerIPs := make([]net.IP, 0, len(ips))
+	for _, ip := range ips {
+		if parsedIP := net.ParseIP(ip); parsedIP != nil {
+			containerIPs = append(containerIPs, parsedIP)
+		} else {
+			klog.ErrorS(nil, "Failed to parse IP address", "ip", ip)
+		}
+	}
+	return containerIPs
+}
+
 // reconcileSecondaryInterfaces restores cniCache when agent restarts using primary interfaceStore.
 func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore interfacestore.InterfaceStore) error {
 	knownInterfaces := primaryInterfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
@@ -614,21 +732,24 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 		})
 	}
 
-	var staleInterfaces []*interfacestore.InterfaceConfig
-	// secondaryInterfaces is the list of interfaces currently in the secondary local cache.
-	secondaryInterfaces := pc.interfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
-	for _, containerConfig := range secondaryInterfaces {
-		_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
-		if !exists || containerConfig.OFPort == -1 {
-			// Deletes ports not in the CNI cache.
-			staleInterfaces = append(staleInterfaces, containerConfig)
+	// Clean up stale VLAN interfaces when agent restarts.
+	if pc.ovsBridgeClient != nil {
+		var staleInterfaces []*interfacestore.InterfaceConfig
+		// secondaryInterfaces is the list of interfaces currently in the secondary local cache.
+		secondaryInterfaces := pc.interfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+		for _, containerConfig := range secondaryInterfaces {
+			_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
+			if !exists || containerConfig.OFPort == -1 {
+				// Deletes ports not in the CNI cache.
+				staleInterfaces = append(staleInterfaces, containerConfig)
+			}
 		}
-	}
 
-	// If there are any stale interfaces, pass them to removeInterfaces()
-	if len(staleInterfaces) > 0 {
-		if err := pc.removeInterfaces(staleInterfaces); err != nil {
-			klog.ErrorS(err, "Failed to remove stale secondary interfaces", "staleInterfaces", staleInterfaces)
+		// If there are any stale interfaces, pass them to removeInterfaces()
+		if len(staleInterfaces) > 0 {
+			if err := pc.removeInterfaces(staleInterfaces); err != nil {
+				klog.ErrorS(err, "Failed to remove stale secondary interfaces", "staleInterfaces", staleInterfaces)
+			}
 		}
 	}
 

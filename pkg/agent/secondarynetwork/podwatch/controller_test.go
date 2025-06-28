@@ -189,6 +189,17 @@ func testPod(name string, container string, podIP string, networks ...netdefv1.N
 	return pod, cniInfo
 }
 
+func testIPAMResultWithSRIOV(cidr string, vlan int, sriov *current.Interface) *ipam.IPAMResult {
+	result := testIPAMResult(cidr, vlan)
+	result.Interfaces = []*current.Interface{
+		{
+			Name: "eth1",
+		},
+		sriov,
+	}
+	return result
+}
+
 func testIPAMResult(cidr string, vlan int) *ipam.IPAMResult {
 	ip, _, _ := net.ParseCIDR(cidr)
 	mask := net.CIDRMask(32, 32)
@@ -255,7 +266,7 @@ func TestPodControllerRun(t *testing.T) {
 	})
 	podKey := podKeyGet(pod.Name, pod.Namespace)
 	network := testNetwork(networkName, sriovNetworkType)
-	ipamResult := testIPAMResult("148.14.24.100/24", 0)
+	ipamResult := testIPAMResultWithSRIOV("148.14.24.100/24", 0, &current.Interface{PciID: sriovDeviceID11})
 	podOwner := &crdv1beta1.PodOwner{
 		Name:        pod.Name,
 		Namespace:   pod.Namespace,
@@ -501,7 +512,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			networkType: sriovNetworkType,
 			mtu:         1500,
 			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
-				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 0), nil)
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResultWithSRIOV("148.14.24.100/24", 0, &current.Interface{PciID: "sriov-device-id-11"}), nil)
 				mockIC.EXPECT().ConfigureSriovSecondaryInterface(
 					podName,
 					testNamespace,
@@ -510,7 +521,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					interfaceName,
 					1500,
 					sriovDeviceID11,
-					&testIPAMResult("148.14.24.100/24", 0).Result,
+					&testIPAMResultWithSRIOV("148.14.24.100/24", 0, &current.Interface{PciID: "sriov-device-id-11"}).Result,
 				)
 			},
 			expectedNetworkStatusAnnot: `[{
@@ -518,7 +529,13 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
     "ips": [
         "148.14.24.100"
     ],
-    "dns": {}
+    "dns": {},
+    "device-info": {
+        "type": "pci",
+        "pci": {
+            "pci-address": "sriov-device-id-11"
+        }
+    }
 }]`,
 		},
 		{
@@ -1051,7 +1068,6 @@ func testPodController(ctrl *gomock.Controller) (
 	interfaceConfigurator := podwatchtesting.NewMockInterfaceConfigurator(ctrl)
 	mockIPAM := podwatchtesting.NewMockIPAMAllocator(ctrl)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
-
 	// PodController without event handlers.
 	return &PodController{
 		kubeClient:         client,
@@ -1144,13 +1160,13 @@ func createTestInterfaces() (map[string]string, []ovsconfig.OVSPortData, []*inte
 	return map[string]string{"uuid1": uuid1, "uuid2": uuid2, "uuid3": uuid3, "uuid4": uuid4}, []ovsconfig.OVSPortData{ovsPort1, ovsPort2, ovsPort3, ovsPort4}, []*interfacestore.InterfaceConfig{containerConfig1, containerConfig2, containerConfig3}
 }
 
-func TestInitializeSecondaryInterfaceStore(t *testing.T) {
+func TestInitializeOVSSecondaryInterfaceStore(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	pc, _, _, mockOVSBridgeClient := testPodController(ctrl)
 	uuids, ovsPorts, _ := createTestInterfaces()
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts, nil)
 
-	err := pc.initializeSecondaryInterfaceStore()
+	err := pc.initializeOVSSecondaryInterfaceStore()
 	require.NoError(t, err, "OVS ports list successfully")
 
 	// Validate stored interfaces
@@ -1214,4 +1230,55 @@ func TestReconcileSecondaryInterfaces(t *testing.T) {
 	// Ensure stale interfaces are removed
 	_, foundPod3 := pc.cniCache.Load("nsA/Pod3")
 	assert.False(t, foundPod3, "Stale interface should have been removed")
+}
+
+func TestInitializeSRIOVSecondaryInterfaceStore(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, _, _, _ := testPodController(ctrl)
+	primaryStore := interfacestore.NewInterfaceStore()
+	_, _, containerConfigs := createTestInterfaces()
+	primaryStore.AddInterface(containerConfigs[0])
+	primaryStore.AddInterface(containerConfigs[1])
+	primaryStore.AddInterface(containerConfigs[2])
+	pod1, _ := testPod("Pod1", containerID, podIP, netdefv1.NetworkSelectionElement{
+		Name:             networkName,
+		InterfaceRequest: interfaceName,
+	})
+	pod1.Annotations[netdefv1.NetworkStatusAnnot] = `[{
+    "name": "net",
+    "ips": [
+        "148.14.24.100"
+    ],
+    "dns": {},
+    "device-info": {
+        "type": "pci",
+        "pci": {
+            "pci-address": "sriov-device-id-11"
+        }
+    }
+}]`
+	_, err := pc.kubeClient.CoreV1().Pods(pod1.Namespace).Create(context.TODO(), pod1, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// A Pod without NetworkStatusAnnot should not be added to the store.
+	pod2, _ := testPod("Pod2", containerID, podIP, netdefv1.NetworkSelectionElement{
+		Name:             networkName,
+		InterfaceRequest: interfaceName,
+	})
+	_, err = pc.kubeClient.CoreV1().Pods(pod2.Namespace).Create(context.TODO(), pod2, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// A Pod without NetworkAttachmentDefinition should not be added to the store.
+	pod3, _ := testPod("Pod3", containerID, podIP)
+	_, err = pc.kubeClient.CoreV1().Pods(pod3.Namespace).Create(context.TODO(), pod3, metav1.CreateOptions{})
+	require.NoError(t, err)
+	network1 := testNetworkExt(networkName, "", "", sriovNetworkType, sriovResourceName1, "", 1500, 0, true)
+	pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(),
+		network1, metav1.CreateOptions{})
+
+	err = pc.initializeSRIOVSecondaryInterfaceStore(primaryStore)
+	require.NoError(t, err, "failed to initialize SR-IOV interface store")
+	require.Equal(t, 1, pc.interfaceStore.Len())
+	_, ok := pc.vfDeviceIDUsageMap.Load(podKeyGet(pod1.Name, pod1.Namespace))
+	require.Equal(t, true, ok)
 }
