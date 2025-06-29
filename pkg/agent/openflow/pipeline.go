@@ -1322,43 +1322,41 @@ func (f *featurePodConnectivity) l3FwdFlowToGateway() []binding.Flow {
 }
 
 // l3FwdFlowsToRemoteViaTun generates the flows to match the packets destined for remote Pods via tunnel.
-func (f *featurePodConnectivity) l3FwdFlowsToRemoteViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) []binding.Flow {
+func (f *featurePodConnectivity) l3FwdFlowsToRemoteViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) binding.Flow {
 	ipProtocol := getIPProtocol(peerSubnet.IP)
-	buildFlow := func(matcher func(b binding.FlowBuilder) binding.FlowBuilder) binding.Flow {
-		builder := L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(f.cookieAllocator.Request(f.category).Raw()).
-			MatchProtocol(ipProtocol)
-		builder = matcher(builder)
-		return builder.
-			Action().SetSrcMAC(localGatewayMAC).  // Rewrite src MAC to local gateway MAC.
-			Action().SetDstMAC(GlobalVirtualMAC). // Rewrite dst MAC to virtual MAC.
-			Action().SetTunnelDst(tunnelPeer).    // Flow based tunnel. Set tunnel destination.
-			Action().LoadRegMark(ToTunnelRegMark).
-			Action().GotoTable(L3DecTTLTable.GetID()).
-			Done()
-	}
-	flows := []binding.Flow{
-		// The flow handles packets whose destination IP is in the peer subnet.
-		buildFlow(func(b binding.FlowBuilder) binding.FlowBuilder {
-			return b.MatchDstIPNet(peerSubnet)
-		}),
-	}
-	// If DSR is enabled, packets accessing a DSR Service will not be DNATed on the ingress Node, but EndpointIPField
-	// holds the selected backend Pod IP, we match it and DSRServiceRegMark to send these packets to corresponding Nodes.
-	if f.enableDSR {
-		// Like matching destination IP, we only check if the prefix of the EndpointIP stored in EndpointIPField is in
-		// the subnet. For example, if the peerSubnet is 10.10.1.0/24, we will check reg3=0xa0a0100/0xffffff00.
-		ones, bits := peerSubnet.Mask.Size()
-		if ipProtocol == binding.ProtocolIP {
-			maskedEndpointIPField := binding.NewRegField(EndpointIPField.GetRegID(), uint32(bits-ones), 31)
-			maskedEndpointIPValue := binary.BigEndian.Uint32(peerSubnet.IP.To4()) >> (bits - ones)
-			flows = append(flows, buildFlow(func(b binding.FlowBuilder) binding.FlowBuilder {
-				return b.MatchRegMark(DSRServiceRegMark).MatchRegFieldWithValue(maskedEndpointIPField, maskedEndpointIPValue)
-			}))
-		}
-		// TODO: MatchXXReg must support mask to support IPv6.
-	}
-	return flows
+	return L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(ipProtocol).
+		MatchDstIPNet(peerSubnet).
+		Action().SetSrcMAC(localGatewayMAC).  // Rewrite src MAC to local gateway MAC.
+		Action().SetDstMAC(GlobalVirtualMAC). // Rewrite dst MAC to virtual MAC.
+		Action().SetTunnelDst(tunnelPeer).    // Flow based tunnel. Set tunnel destination.
+		Action().LoadRegMark(ToTunnelRegMark).
+		Action().GotoTable(L3DecTTLTable.GetID()).
+		Done()
+}
+
+// l3FwdDSRFlowToRemoteViaTun generates the flow to match packets accessing a DSR Service. It will not be DNATed on the
+// ingress Node, but EndpointIPField holds the selected backend Pod IP, the flow matches it and DSRServiceRegMark to send these
+// packets to corresponding Nodes.
+func (f *featurePodConnectivity) l3FwdDSRFlowToRemoteViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) binding.Flow {
+	ipProtocol := getIPProtocol(peerSubnet.IP)
+	// Like matching destination IP, we only check if the prefix of the EndpointIP stored in EndpointIPField is in
+	// the subnet. For example, if the peerSubnet is 10.10.1.0/24, we will check reg3=0xa0a0100/0xffffff00.
+	ones, bits := peerSubnet.Mask.Size()
+	maskedEndpointIPField := binding.NewRegField(EndpointIPField.GetRegID(), uint32(bits-ones), 31)
+	maskedEndpointIPValue := binary.BigEndian.Uint32(peerSubnet.IP.To4()) >> (bits - ones)
+	return L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(ipProtocol).
+		MatchRegMark(DSRServiceRegMark).
+		MatchRegFieldWithValue(maskedEndpointIPField, maskedEndpointIPValue). // TODO: MatchXXReg must support mask to support IPv6.
+		Action().SetSrcMAC(localGatewayMAC).                                  // Rewrite src MAC to local gateway MAC.
+		Action().SetDstMAC(GlobalVirtualMAC).                                 // Rewrite dst MAC to virtual MAC.
+		Action().SetTunnelDst(tunnelPeer).                                    // Flow based tunnel. Set tunnel destination.
+		Action().LoadRegMark(ToTunnelRegMark).
+		Action().GotoTable(L3DecTTLTable.GetID()).
+		Done()
 }
 
 // l3FwdFlowToRemoteViaGW generates the flow to match the packets destined for remote Pods via the Antrea gateway. It is

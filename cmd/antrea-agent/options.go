@@ -266,8 +266,8 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 		if !features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) {
 			return fmt.Errorf("LoadBalancerMode DSR requires feature gate %s to be enabled", features.LoadBalancerModeDSR)
 		}
-		if encapMode != config.TrafficEncapModeEncap {
-			return fmt.Errorf("LoadBalancerMode DSR requires %s mode", config.TrafficEncapModeEncap)
+		if encapMode != config.TrafficEncapModeEncap && encapMode != config.TrafficEncapModeHybrid {
+			return fmt.Errorf("LoadBalancerMode DSR requires %s or %s mode", config.TrafficEncapModeEncap, config.TrafficEncapModeHybrid)
 		}
 	}
 	o.defaultLoadBalancerMode = defaultLoadBalancerMode
