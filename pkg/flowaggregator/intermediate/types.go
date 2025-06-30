@@ -14,7 +14,9 @@
 
 package intermediate
 
-import "github.com/vmware/go-ipfix/pkg/entities"
+import (
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+)
 
 type FlowKey struct {
 	SourceAddress      string
@@ -25,7 +27,7 @@ type FlowKey struct {
 }
 
 type AggregationFlowRecord struct {
-	Record entities.Record
+	Record *flowpb.Flow
 	// Flow record contains mapping to its reference in priority queue.
 	PriorityQueueItem *ItemToExpire
 	// ReadyToSend is an indicator that we received all required records for the

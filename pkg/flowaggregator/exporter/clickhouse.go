@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 )
@@ -87,9 +87,8 @@ func NewClickHouseExporter(clusterUUID uuid.UUID, opt *options.Options) (*ClickH
 	}, nil
 }
 
-func (e *ClickHouseExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
-	e.chExportProcess.CacheRecord(record)
-	return nil
+func (e *ClickHouseExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
+	return e.chExportProcess.CacheRecord(record)
 }
 
 func (e *ClickHouseExporter) Start() {

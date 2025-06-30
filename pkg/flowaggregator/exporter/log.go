@@ -20,10 +20,9 @@ import (
 	"slices"
 	"sync"
 
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
-	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
 
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/flowlogger"
 	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
@@ -57,13 +56,13 @@ func (e *LogExporter) buildFilters() {
 	ruleActionToUint8 := func(a flowaggregatorconfig.NetworkPolicyRuleAction) uint8 {
 		switch a {
 		case flowaggregatorconfig.NetworkPolicyRuleActionNone:
-			return registry.NetworkPolicyRuleActionNoAction
+			return uint8(flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 		case flowaggregatorconfig.NetworkPolicyRuleActionAllow:
-			return registry.NetworkPolicyRuleActionAllow
+			return uint8(flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_ALLOW)
 		case flowaggregatorconfig.NetworkPolicyRuleActionDrop:
-			return registry.NetworkPolicyRuleActionDrop
+			return uint8(flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP)
 		case flowaggregatorconfig.NetworkPolicyRuleActionReject:
-			return registry.NetworkPolicyRuleActionReject
+			return uint8(flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT)
 		default: // invalid case
 			return math.MaxUint8
 		}
@@ -88,8 +87,11 @@ func (e *LogExporter) buildFilters() {
 	}
 }
 
-func (e *LogExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
-	r := flowrecord.GetFlowRecord(record)
+func (e *LogExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
+	r, err := flowrecord.GetFlowRecord(record)
+	if err != nil {
+		return err
+	}
 	if !e.applyFilters(r) {
 		klog.V(5).InfoS("Ignoring record in FlowLogger because filters do not match")
 		return nil

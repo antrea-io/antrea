@@ -28,9 +28,9 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"k8s.io/klog/v2"
 
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	config "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 )
@@ -210,8 +210,11 @@ func (p *S3UploadProcess) SetUploadInterval(uploadInterval time.Duration) {
 	}
 }
 
-func (p *S3UploadProcess) CacheRecord(record ipfixentities.Record) {
-	r := flowrecord.GetFlowRecord(record)
+func (p *S3UploadProcess) CacheRecord(record *flowpb.Flow) error {
+	r, err := flowrecord.GetFlowRecord(record)
+	if err != nil {
+		return err
+	}
 	p.queueMutex.Lock()
 	defer p.queueMutex.Unlock()
 	p.writeRecordToBuffer(r)
@@ -220,6 +223,7 @@ func (p *S3UploadProcess) CacheRecord(record ipfixentities.Record) {
 	if int32(p.cachedRecordCount) == p.maxRecordPerFile {
 		p.appendBufferToQueue()
 	}
+	return nil
 }
 
 func (p *S3UploadProcess) Start() {

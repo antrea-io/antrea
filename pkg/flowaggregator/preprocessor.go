@@ -15,107 +15,29 @@
 package flowaggregator
 
 import (
-	"fmt"
 	"net"
+	"net/netip"
 
 	"github.com/vmware/go-ipfix/pkg/entities"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/klog/v2"
+
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 )
 
-// preprocessor is in charge of processing messages received from the IPFIX collector, prior to
-// proxying them to another collector of handing them over to the aggregation process. At the
-// moment, its only task is to ensure that all records have the expected fields. If a record has
-// extra fields, they will be discarded. If some fields are missing, they will be "appended" to the
-// record with a "zero" value. For example, we will use 0 for integral types, "" for strings,
-// 0.0.0.0 for IPv4 address, etc. Note that we are able to keep the implementation simple by
-// assuming that a record either has missing fields or extra fields (not a combination of both), and
-// that such fields are always at the tail of the field list. This assumption is based on
-// implementation knowledge of the FlowExporter and the FlowAggregator.
+// preprocessor is in charge of converting data records in IPFIX messages received from the IPFIX
+// collector to individual Protobuf messages (one per record). If an IPFIX record has extra fields
+// (no corresponding field in Protobuf), these will be discarded. If some fields are missing, the
+// default Protobuf field value will be used.
 type preprocessor struct {
 	inCh  <-chan *entities.Message
-	outCh chan<- *entities.Message
-
-	expectedElementsV4 int
-	expectedElementsV6 int
-
-	defaultElementsWithValueV4 []entities.InfoElementWithValue
-	defaultElementsWithValueV6 []entities.InfoElementWithValue
+	outCh chan<- *flowpb.Flow
 }
 
-func makeDefaultElementWithValue(ie *entities.InfoElement) (entities.InfoElementWithValue, error) {
-	switch ie.DataType {
-	case entities.OctetArray:
-		var val []byte
-		if ie.Len < entities.VariableLength {
-			val = make([]byte, ie.Len)
-		}
-		return entities.NewOctetArrayInfoElement(ie, val), nil
-	case entities.Unsigned8:
-		return entities.NewUnsigned8InfoElement(ie, 0), nil
-	case entities.Unsigned16:
-		return entities.NewUnsigned16InfoElement(ie, 0), nil
-	case entities.Unsigned32:
-		return entities.NewUnsigned32InfoElement(ie, 0), nil
-	case entities.Unsigned64:
-		return entities.NewUnsigned64InfoElement(ie, 0), nil
-	case entities.Signed8:
-		return entities.NewSigned8InfoElement(ie, 0), nil
-	case entities.Signed16:
-		return entities.NewSigned16InfoElement(ie, 0), nil
-	case entities.Signed32:
-		return entities.NewSigned32InfoElement(ie, 0), nil
-	case entities.Signed64:
-		return entities.NewSigned64InfoElement(ie, 0), nil
-	case entities.Float32:
-		return entities.NewFloat32InfoElement(ie, 0), nil
-	case entities.Float64:
-		return entities.NewFloat64InfoElement(ie, 0), nil
-	case entities.Boolean:
-		return entities.NewBoolInfoElement(ie, false), nil
-	case entities.DateTimeSeconds:
-		return entities.NewDateTimeSecondsInfoElement(ie, 0), nil
-	case entities.DateTimeMilliseconds:
-		return entities.NewDateTimeMillisecondsInfoElement(ie, 0), nil
-	case entities.MacAddress:
-		return entities.NewMacAddressInfoElement(ie, make([]byte, 6)), nil
-	case entities.Ipv4Address:
-		return entities.NewIPAddressInfoElement(ie, net.IPv4zero), nil
-	case entities.Ipv6Address:
-		return entities.NewIPAddressInfoElement(ie, net.IPv6zero), nil
-	case entities.String:
-		return entities.NewStringInfoElement(ie, ""), nil
-	default:
-		return nil, fmt.Errorf("unexpected Information Element data type: %d", ie.DataType)
-	}
-}
-
-func makeDefaultElementsWithValue(infoElements []*entities.InfoElement) ([]entities.InfoElementWithValue, error) {
-	elementsWithValue := make([]entities.InfoElementWithValue, len(infoElements))
-	for idx := range infoElements {
-		var err error
-		if elementsWithValue[idx], err = makeDefaultElementWithValue(infoElements[idx]); err != nil {
-			return nil, err
-		}
-	}
-	return elementsWithValue, nil
-}
-
-func newPreprocessor(infoElementsV4, infoElementsV6 []*entities.InfoElement, inCh <-chan *entities.Message, outCh chan<- *entities.Message) (*preprocessor, error) {
-	defaultElementsWithValueV4, err := makeDefaultElementsWithValue(infoElementsV4)
-	if err != nil {
-		return nil, fmt.Errorf("error when generating default values for IPv4 Information Elements expected from exporter: %w", err)
-	}
-	defaultElementsWithValueV6, err := makeDefaultElementsWithValue(infoElementsV6)
-	if err != nil {
-		return nil, fmt.Errorf("error when generating default values for IPv6 Information Elements expected from exporter: %w", err)
-	}
+func newPreprocessor(inCh <-chan *entities.Message, outCh chan<- *flowpb.Flow) (*preprocessor, error) {
 	return &preprocessor{
-		inCh:                       inCh,
-		outCh:                      outCh,
-		expectedElementsV4:         len(infoElementsV4),
-		expectedElementsV6:         len(infoElementsV6),
-		defaultElementsWithValueV4: defaultElementsWithValueV4,
-		defaultElementsWithValueV6: defaultElementsWithValueV6,
+		inCh:  inCh,
+		outCh: outCh,
 	}, nil
 }
 
@@ -133,11 +55,6 @@ func (p *preprocessor) Run(stopCh <-chan struct{}) {
 	}
 }
 
-func isRecordIPv4(record entities.Record) bool {
-	_, _, exist := record.GetInfoElementWithValue("sourceIPv4Address")
-	return exist
-}
-
 func (p *preprocessor) processMsg(msg *entities.Message) {
 	set := msg.GetSet()
 	if set.GetSetType() != entities.Data {
@@ -147,50 +64,154 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 	if len(records) == 0 {
 		return
 	}
-	// All the records in the data set must match a given template, so we only need to look at
-	// the first one to decide how to proceed.
-	firstRecord := records[0]
-	elementList := firstRecord.GetOrderedElementList()
-	numElements := len(elementList)
-	isIPv4 := isRecordIPv4(firstRecord)
-	expectedElements := p.expectedElementsV4
-	if !isIPv4 {
-		expectedElements = p.expectedElementsV6
-	}
-	// Fast path: everything matches so we can just forward the message as is.
-	if numElements == expectedElements {
-		p.outCh <- msg
-		return
-	}
-	newSet := entities.NewSet(true)
-	// Set templateID to 0: the set records will not match the template any more.
-	if err := newSet.PrepareSet(entities.Data, 0); err != nil {
-		klog.ErrorS(err, "Failed to prepare modified set")
-		return
-	}
+	exportTime := msg.GetExportTime()
+	sequenceNum := msg.GetSequenceNum()
+	obsDomainID := msg.GetObsDomainID()
+	exportAddr := msg.GetExportAddress()
 	for _, record := range records {
 		elementList := record.GetOrderedElementList()
-		if numElements > expectedElements {
-			if klog.V(5).Enabled() {
-				klog.InfoS("Record received from exporter includes unexpected elements, truncating", "expectedElements", expectedElements, "receivedElements", numElements)
-			}
-			// Creating a new Record seems like the best option here. By using
-			// AddRecordV2, we should minimize the number of allocations required.
-			newSet.AddRecordV2(elementList[:expectedElements], 0)
-		} else {
-			if klog.V(5).Enabled() {
-				klog.InfoS("Record received from exporter is missing information elements, adding fields with zero values", "expectedElements", expectedElements, "receivedElements", numElements)
-			}
-			if isIPv4 {
-				elementList = append(elementList, p.defaultElementsWithValueV4[numElements:]...)
-			} else {
-				elementList = append(elementList, p.defaultElementsWithValueV6[numElements:]...)
-			}
-			newSet.AddRecordV2(elementList, 0)
+		flow := &flowpb.Flow{
+			Ipfix: &flowpb.IPFIX{
+				ExportTime: &timestamppb.Timestamp{
+					Seconds: int64(exportTime),
+				},
+				SequenceNumber:      sequenceNum,
+				ObservationDomainId: obsDomainID,
+				ExporterIp:          exportAddr,
+			},
+			StartTs:      &timestamppb.Timestamp{},
+			EndTs:        &timestamppb.Timestamp{},
+			Ip:           &flowpb.IP{},
+			Transport:    &flowpb.Transport{},
+			K8S:          &flowpb.Kubernetes{},
+			Stats:        &flowpb.Stats{},
+			ReverseStats: &flowpb.Stats{},
+			App:          &flowpb.App{},
 		}
+		sequenceNum++
+		for _, ie := range elementList {
+			name := ie.GetName()
+			switch name {
+			case "flowStartSeconds":
+				flow.StartTs.Seconds = int64(ie.GetUnsigned32Value())
+			case "flowEndSeconds":
+				flow.EndTs.Seconds = int64(ie.GetUnsigned32Value())
+			case "flowEndReason":
+				flow.EndReason = flowpb.FlowEndReason(ie.GetUnsigned8Value())
+			case "sourceIPv4Address":
+				flow.Ip.Version = flowpb.IPVersion_IP_VERSION_4
+				// This is guaranteed to be a slice of length 4, as the Information
+				// Element has length 4.
+				flow.Ip.Source = ie.GetIPAddressValue()
+			case "destinationIPv4Address":
+				flow.Ip.Destination = ie.GetIPAddressValue()
+			case "sourceIPv6Address":
+				flow.Ip.Version = flowpb.IPVersion_IP_VERSION_6
+				flow.Ip.Source = ie.GetIPAddressValue()
+			case "destinationIPv6Address":
+				flow.Ip.Destination = ie.GetIPAddressValue()
+			case "sourceTransportPort":
+				flow.Transport.SourcePort = uint32(ie.GetUnsigned16Value())
+			case "destinationTransportPort":
+				flow.Transport.DestinationPort = uint32(ie.GetUnsigned16Value())
+			case "protocolIdentifier":
+				flow.Transport.ProtocolNumber = uint32(ie.GetUnsigned8Value())
+			case "packetTotalCount":
+				flow.Stats.PacketTotalCount = ie.GetUnsigned64Value()
+			case "octetTotalCount":
+				flow.Stats.OctetTotalCount = ie.GetUnsigned64Value()
+			case "packetDeltaCount":
+				flow.Stats.PacketDeltaCount = ie.GetUnsigned64Value()
+			case "octetDeltaCount":
+				flow.Stats.OctetDeltaCount = ie.GetUnsigned64Value()
+			case "reversePacketTotalCount":
+				flow.ReverseStats.PacketTotalCount = ie.GetUnsigned64Value()
+			case "reverseOctetTotalCount":
+				flow.ReverseStats.OctetTotalCount = ie.GetUnsigned64Value()
+			case "reversePacketDeltaCount":
+				flow.ReverseStats.PacketDeltaCount = ie.GetUnsigned64Value()
+			case "reverseOctetDeltaCount":
+				flow.ReverseStats.OctetDeltaCount = ie.GetUnsigned64Value()
+			case "sourcePodNamespace":
+				flow.K8S.SourcePodNamespace = ie.GetStringValue()
+			case "sourcePodName":
+				flow.K8S.SourcePodName = ie.GetStringValue()
+			case "sourceNodeName":
+				flow.K8S.SourceNodeName = ie.GetStringValue()
+			case "destinationPodNamespace":
+				flow.K8S.DestinationPodNamespace = ie.GetStringValue()
+			case "destinationPodName":
+				flow.K8S.DestinationPodName = ie.GetStringValue()
+			case "destinationNodeName":
+				flow.K8S.DestinationNodeName = ie.GetStringValue()
+			case "destinationClusterIPv4":
+				// The IE will be a slice of zeros when this IP is not available,
+				// but for the protobuf message we prefer using the default value (nil).
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv4zero) {
+					flow.K8S.DestinationClusterIp = ie.GetIPAddressValue()
+				}
+			case "destinationClusterIPv6":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv6zero) {
+					flow.K8S.DestinationClusterIp = ie.GetIPAddressValue()
+				}
+			case "destinationServicePort":
+				flow.K8S.DestinationServicePort = uint32(ie.GetUnsigned16Value())
+			case "destinationServicePortName":
+				flow.K8S.DestinationServicePortName = ie.GetStringValue()
+			case "ingressNetworkPolicyName":
+				flow.K8S.IngressNetworkPolicyName = ie.GetStringValue()
+			case "ingressNetworkPolicyNamespace":
+				flow.K8S.IngressNetworkPolicyNamespace = ie.GetStringValue()
+			case "ingressNetworkPolicyType":
+				flow.K8S.IngressNetworkPolicyType = flowpb.NetworkPolicyType(ie.GetUnsigned8Value())
+			case "ingressNetworkPolicyRuleName":
+				flow.K8S.IngressNetworkPolicyRuleName = ie.GetStringValue()
+			case "ingressNetworkPolicyRuleAction":
+				flow.K8S.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction(ie.GetUnsigned8Value())
+			case "egressNetworkPolicyName":
+				flow.K8S.EgressNetworkPolicyName = ie.GetStringValue()
+			case "egressNetworkPolicyNamespace":
+				flow.K8S.EgressNetworkPolicyNamespace = ie.GetStringValue()
+			case "egressNetworkPolicyType":
+				flow.K8S.EgressNetworkPolicyType = flowpb.NetworkPolicyType(ie.GetUnsigned8Value())
+			case "egressNetworkPolicyRuleName":
+				flow.K8S.EgressNetworkPolicyRuleName = ie.GetStringValue()
+			case "egressNetworkPolicyRuleAction":
+				flow.K8S.EgressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction(ie.GetUnsigned8Value())
+			case "tcpState":
+				state := ie.GetStringValue()
+				if state != "" {
+					flow.Transport.Protocol = &flowpb.Transport_TCP{
+						TCP: &flowpb.TCP{
+							StateName: state,
+						},
+					}
+				}
+			case "flowType":
+				flow.K8S.FlowType = flowpb.FlowType(ie.GetUnsigned8Value())
+			case "egressName":
+				flow.K8S.EgressName = ie.GetStringValue()
+			case "egressIP":
+				ipStr := ie.GetStringValue()
+				if ipStr != "" {
+					addr, err := netip.ParseAddr(ipStr)
+					if err != nil {
+						klog.ErrorS(err, "Invalid egressIP in flow record", "egressIP", ipStr)
+					} else {
+						flow.K8S.EgressIp = addr.AsSlice()
+					}
+				}
+			case "appProtocolName":
+				flow.App.ProtocolName = ie.GetStringValue()
+			case "httpVals":
+				flow.App.HttpVals = []byte(ie.GetStringValue())
+			case "egressNodeName":
+				flow.K8S.EgressNodeName = ie.GetStringValue()
+			}
+		}
+
+		p.outCh <- flow
 	}
-	// This will overwrite the existing set with the new one.
-	// Note that the message length will no longer be correct, but this should not matter.
-	msg.AddSet(newSet)
-	p.outCh <- msg
 }

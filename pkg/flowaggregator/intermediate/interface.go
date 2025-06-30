@@ -17,7 +17,7 @@ package intermediate
 import (
 	"time"
 
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 )
 
 type AggregationProcess interface {
@@ -26,7 +26,7 @@ type AggregationProcess interface {
 	ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMapCallBack) error
 	GetExpiryFromExpirePriorityQueue() time.Duration
 	GetRecords(flowKey *FlowKey) []map[string]interface{}
-	ResetStatAndThroughputElementsInRecord(record ipfixentities.Record) error
+	ResetStatAndThroughputElementsInRecord(record *flowpb.Flow) error
 	SetCorrelatedFieldsFilled(record *AggregationFlowRecord, isFilled bool)
 	AreCorrelatedFieldsFilled(record AggregationFlowRecord) bool
 	IsAggregatedRecordIPv4(record AggregationFlowRecord) bool

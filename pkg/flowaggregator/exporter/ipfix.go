@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -32,6 +33,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
@@ -64,8 +66,11 @@ type IPFIXExporter struct {
 	templateRefreshTimeout     time.Duration
 	templateIDv4               uint16
 	templateIDv6               uint16
+	elementsV4                 []ipfixentities.InfoElementWithValue
+	elementsV6                 []ipfixentities.InfoElementWithValue
 	registry                   ipfix.IPFIXRegistry
 	clusterUUID                uuid.UUID
+	clusterID                  string
 	maxIPFIXMsgSize            int
 	tls                        ipfixExporterTLSConfig
 	// initBackoff is used to enforce some minimum delay between initialization attempts.
@@ -124,14 +129,16 @@ func newInitBackoff() wait.Backoff {
 
 func NewIPFIXExporter(
 	clusterUUID uuid.UUID,
+	clusterID string,
 	opt *options.Options,
 	registry ipfix.IPFIXRegistry,
 ) *IPFIXExporter {
-	return newIPFIXExporterWithClock(clusterUUID, opt, registry, clock.RealClock{})
+	return newIPFIXExporterWithClock(clusterUUID, clusterID, opt, registry, clock.RealClock{})
 }
 
 func newIPFIXExporterWithClock(
 	clusterUUID uuid.UUID,
+	clusterID string,
 	opt *options.Options,
 	registry ipfix.IPFIXRegistry,
 	clock clock.Clock,
@@ -161,6 +168,7 @@ func newIPFIXExporterWithClock(
 		templateRefreshTimeout:     opt.TemplateRefreshTimeout,
 		registry:                   registry,
 		clusterUUID:                clusterUUID,
+		clusterID:                  clusterID,
 		maxIPFIXMsgSize:            int(opt.Config.FlowCollector.MaxIPFIXMsgSize),
 		tls:                        newIPFIXExporterTLSConfig(opt.Config.FlowCollector.TLS),
 		initBackoff:                newInitBackoff(),
@@ -195,7 +203,7 @@ func (e *IPFIXExporter) Stop() {
 // connector). An exponential backoff mechanism is used to limit the number of initialization
 // attempts. If a delay is required before the next initialization attempt, an error wrapping
 // ErrIPFIXExporterBackoff will be returned.
-func (e *IPFIXExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
+func (e *IPFIXExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
 	if err := e.sendRecord(record, isRecordIPv6); err != nil {
 		if e.exportingProcess != nil {
 			e.reset()
@@ -236,7 +244,175 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	}
 }
 
-func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
+func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixentities.Record {
+	var elements []ipfixentities.InfoElementWithValue
+	if isIPv6 {
+		elements = e.elementsV6
+	} else {
+		elements = e.elementsV4
+	}
+	// next is a convenience function to access and write information elements sequentially.
+	// All elements in the slice should be set. In other words, the number of calls to next() in
+	// this function should exactly match the length of the elements slice (created by
+	// prepareElements). We rely on unit testing to ensure this.
+	idx := 0
+	next := func() ipfixentities.InfoElementWithValue {
+		e := elements[idx]
+		idx += 1
+		return e
+	}
+
+	setIPAddress := func(bytes []byte) {
+		if len(bytes) > 0 {
+			next().SetIPAddressValue(bytes)
+			return
+		}
+		if isIPv6 {
+			next().SetIPAddressValue(net.IPv6zero)
+		} else {
+			next().SetIPAddressValue(net.IPv4zero)
+		}
+	}
+
+	// IANA IEs
+	next().SetUnsigned32Value(uint32(flow.StartTs.Seconds))
+	next().SetUnsigned32Value(uint32(flow.EndTs.Seconds))
+	next().SetUnsigned8Value(uint8(flow.EndReason))
+	next().SetUnsigned16Value(uint16(flow.Transport.SourcePort))
+	next().SetUnsigned16Value(uint16(flow.Transport.DestinationPort))
+	next().SetUnsigned8Value(uint8(flow.Transport.ProtocolNumber))
+	next().SetUnsigned64Value(flow.Stats.PacketTotalCount)
+	next().SetUnsigned64Value(flow.Stats.OctetTotalCount)
+	next().SetUnsigned64Value(flow.Stats.PacketDeltaCount)
+	next().SetUnsigned64Value(flow.Stats.OctetDeltaCount)
+	setIPAddress(flow.Ip.Source)
+	setIPAddress(flow.Ip.Destination)
+	// IANAReverse IEs
+	next().SetUnsigned64Value(flow.ReverseStats.PacketTotalCount)
+	next().SetUnsigned64Value(flow.ReverseStats.OctetTotalCount)
+	next().SetUnsigned64Value(flow.ReverseStats.PacketDeltaCount)
+	next().SetUnsigned64Value(flow.ReverseStats.OctetDeltaCount)
+	// Antrea IEs
+	next().SetStringValue(flow.K8S.SourcePodName)
+	next().SetStringValue(flow.K8S.SourcePodNamespace)
+	next().SetStringValue(flow.K8S.SourceNodeName)
+	next().SetStringValue(flow.K8S.DestinationPodName)
+	next().SetStringValue(flow.K8S.DestinationPodNamespace)
+	next().SetStringValue(flow.K8S.DestinationNodeName)
+	next().SetUnsigned16Value(uint16(flow.K8S.DestinationServicePort))
+	next().SetStringValue(flow.K8S.DestinationServicePortName)
+	next().SetStringValue(flow.K8S.IngressNetworkPolicyName)
+	next().SetStringValue(flow.K8S.IngressNetworkPolicyNamespace)
+	next().SetUnsigned8Value(uint8(flow.K8S.IngressNetworkPolicyType))
+	next().SetStringValue(flow.K8S.IngressNetworkPolicyRuleName)
+	next().SetUnsigned8Value(uint8(flow.K8S.IngressNetworkPolicyRuleAction))
+	next().SetStringValue(flow.K8S.EgressNetworkPolicyName)
+	next().SetStringValue(flow.K8S.EgressNetworkPolicyNamespace)
+	next().SetUnsigned8Value(uint8(flow.K8S.EgressNetworkPolicyType))
+	next().SetStringValue(flow.K8S.EgressNetworkPolicyRuleName)
+	next().SetUnsigned8Value(uint8(flow.K8S.EgressNetworkPolicyRuleAction))
+	next().SetStringValue(flow.Transport.GetTCP().GetStateName()) // Use Getter functions in case transport is not TCP
+	next().SetUnsigned8Value(uint8(flow.K8S.FlowType))
+	next().SetStringValue(flow.K8S.EgressName)
+	if flow.K8S.EgressIp == nil {
+		next().SetStringValue("")
+	} else {
+		next().SetStringValue(net.IP(flow.K8S.EgressIp).String())
+	}
+	next().SetStringValue(flow.App.ProtocolName)
+	next().SetStringValue(string(flow.App.HttpVals))
+	next().SetStringValue(flow.K8S.EgressNodeName)
+	setIPAddress(flow.K8S.DestinationClusterIp)
+	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
+		// Add Antrea source stats fields
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.PacketTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.OctetTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.PacketDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.OctetDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.PacketTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.OctetTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.PacketDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.OctetDeltaCount)
+		// Add Antrea destination stats fields
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.PacketTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.OctetTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.PacketDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.OctetDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.PacketTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.OctetTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.PacketDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.OctetDeltaCount)
+		// Add Antrea flow end seconds fields
+		next().SetUnsigned32Value(uint32(flow.Aggregation.EndTsFromSource.Seconds))
+		next().SetUnsigned32Value(uint32(flow.Aggregation.EndTsFromDestination.Seconds))
+		// Add common throughput fields
+		next().SetUnsigned64Value(flow.Aggregation.Throughput)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseThroughput)
+		next().SetUnsigned64Value(flow.Aggregation.ThroughputFromSource)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseThroughputFromSource)
+		next().SetUnsigned64Value(flow.Aggregation.ThroughputFromDestination)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseThroughputFromDestination)
+	}
+
+	// Add Pod label fields
+	var sourcePodLabels string
+	if flow.K8S.SourcePodLabels != nil {
+		// flow.K8S.SourcePodLabels.Labels can be nil or an empty map
+		// both cases should be treated the same
+		if len(flow.K8S.SourcePodLabels.Labels) > 0 {
+			b, err := json.Marshal(flow.K8S.SourcePodLabels.Labels)
+			if err != nil {
+				klog.ErrorS(err, "Error when marshalling sourcePodLabels")
+			} else {
+				sourcePodLabels = string(b)
+			}
+		} else {
+			sourcePodLabels = "{}"
+		}
+	}
+	next().SetStringValue(sourcePodLabels)
+	var destinationPodLabels string
+	if flow.K8S.DestinationPodLabels != nil {
+		if len(flow.K8S.DestinationPodLabels.Labels) > 0 {
+			b, err := json.Marshal(flow.K8S.DestinationPodLabels.Labels)
+			if err != nil {
+				klog.ErrorS(err, "Error when marshalling destinationPodLabels")
+			} else {
+				destinationPodLabels = string(b)
+			}
+		} else {
+			destinationPodLabels = "{}"
+		}
+	}
+	next().SetStringValue(destinationPodLabels)
+
+	next().SetStringValue(e.clusterID)
+
+	// Proxy-mode specific IEs
+	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeProxy {
+		next().SetUnsigned32Value(flow.Ipfix.ObservationDomainId)
+		exporterIP := net.ParseIP(flow.Ipfix.ExporterIp)
+		if ip := exporterIP.To4(); ip != nil {
+			next().SetIPAddressValue(ip)
+		} else {
+			next().SetIPAddressValue(net.IPv4zero)
+		}
+		if exporterIP.To4() == nil {
+			next().SetIPAddressValue(exporterIP)
+		} else {
+			next().SetIPAddressValue(net.IPv6zero)
+		}
+		next().SetUnsigned8Value(uint8(flow.FlowDirection))
+	}
+
+	templateID := e.templateIDv4
+	if isIPv6 {
+		templateID = e.templateIDv6
+	}
+	return ipfixentities.NewDataRecordFromElements(templateID, elements)
+}
+
+func (e *IPFIXExporter) sendRecord(flow *flowpb.Flow, isRecordIPv6 bool) error {
 	if e.exportingProcess == nil {
 		if err := e.initExportingProcessWithBackoff(); err != nil {
 			// in case of error:
@@ -245,19 +421,7 @@ func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 boo
 			return fmt.Errorf("error when initializing IPFIX exporting process: %w", err)
 		}
 	}
-	templateID := e.templateIDv4
-	if isRecordIPv6 {
-		templateID = e.templateIDv6
-	}
-	// This step is necessary because the templateID used by this exporter may not match the one
-	// from the record that we received.
-	// Additionally, when there is a version mismatch between the FlowExporter and the
-	// FlowAggregator and elements needs to be added / dropped, the preprocesor always resets
-	// the templateID to 0.
-	// Ideally, we would have a way to set the templateID correctly without needing to create a
-	// new record (note that this operation is not very expensive since we reuse the same
-	// element list).
-	record = ipfixentities.NewDataRecordFromElements(templateID, record.GetOrderedElementList())
+	record := e.makeIPFIXRecord(flow, isRecordIPv6)
 	if err := e.bufferedExporter.AddRecord(record); err != nil {
 		return err
 	}
@@ -407,6 +571,16 @@ func (e *IPFIXExporter) createAndSendTemplate(isRecordIPv6 bool) error {
 	} else {
 		e.templateIDv4 = templateID
 	}
+	// These elements will be used for data records as well, to avoid extra memory allocations.
+	elements, err := e.prepareElements(isRecordIPv6)
+	if err != nil {
+		return err
+	}
+	if isRecordIPv6 {
+		e.elementsV6 = elements
+	} else {
+		e.elementsV4 = elements
+	}
 	if err := e.sendTemplateSet(isRecordIPv6); err != nil {
 		// No need to flush first, as no data records should have been sent yet.
 		e.reset()
@@ -416,107 +590,115 @@ func (e *IPFIXExporter) createAndSendTemplate(isRecordIPv6 bool) error {
 	return nil
 }
 
-func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) error {
+func (e *IPFIXExporter) prepareElements(isIPv6 bool) ([]ipfixentities.InfoElementWithValue, error) {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
 	ianaInfoElements := infoelements.IANAInfoElementsIPv4
 	antreaInfoElements := infoelements.AntreaInfoElementsIPv4
-	templateID := e.templateIDv4
 	if isIPv6 {
 		ianaInfoElements = infoelements.IANAInfoElementsIPv6
 		antreaInfoElements = infoelements.AntreaInfoElementsIPv6
-		templateID = e.templateIDv6
 	}
+
 	for _, ieName := range ianaInfoElements {
-		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAEnterpriseID)
+		ie, err := e.createInfoElement(ieName, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		elements = append(elements, ie)
 	}
 	for _, ieName := range infoelements.IANAReverseInfoElements {
-		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAReversedEnterpriseID)
+		ie, err := e.createInfoElement(ieName, ipfixregistry.IANAReversedEnterpriseID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		elements = append(elements, ie)
 	}
 	for _, ieName := range antreaInfoElements {
-		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+		ie, err := e.createInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		elements = append(elements, ie)
 	}
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
-		// The order of source and destination stats elements needs to match the order specified in
-		// addFieldsForStatsAggregation method in go-ipfix aggregation process.
 		for i := range infoelements.StatsElementList {
 			// Add Antrea source stats fields
 			ieName := infoelements.AntreaSourceStatsElementList[i]
-			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			ie, err := e.createInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			elements = append(elements, ie)
 			// Add Antrea destination stats fields
 			ieName = infoelements.AntreaDestinationStatsElementList[i]
-			ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			ie, err = e.createInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			elements = append(elements, ie)
 		}
 		for _, ieName := range infoelements.AntreaFlowEndSecondsElementList {
-			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			ie, err := e.createInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			elements = append(elements, ie)
 		}
 		for i := range infoelements.AntreaThroughputElementList {
 			// Add common throughput fields
 			ieName := infoelements.AntreaThroughputElementList[i]
-			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			ie, err := e.createInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			elements = append(elements, ie)
 			// Add source node specific throughput fields
 			ieName = infoelements.AntreaSourceThroughputElementList[i]
-			ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			ie, err = e.createInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			elements = append(elements, ie)
 			// Add destination node specific throughput fields
 			ieName = infoelements.AntreaDestinationThroughputElementList[i]
-			ie, err = e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+			ie, err = e.createInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			elements = append(elements, ie)
 		}
 	}
 	for _, ieName := range infoelements.AntreaLabelsElementList {
-		ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+		ie, err := e.createInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		elements = append(elements, ie)
 	}
-	ie, err := e.createInfoElementForTemplateSet("clusterId", ipfixregistry.AntreaEnterpriseID)
+	ie, err := e.createInfoElement("clusterId", ipfixregistry.AntreaEnterpriseID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	elements = append(elements, ie)
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeProxy {
 		for _, ieName := range infoelements.IANAProxyModeElementList {
-			ie, err := e.createInfoElementForTemplateSet(ieName, ipfixregistry.IANAEnterpriseID)
+			ie, err := e.createInfoElement(ieName, ipfixregistry.IANAEnterpriseID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			elements = append(elements, ie)
 		}
+	}
+
+	return elements, nil
+}
+
+func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) error {
+	elements := e.elementsV4
+	templateID := e.templateIDv4
+	if isIPv6 {
+		elements = e.elementsV6
+		templateID = e.templateIDv6
 	}
 	record := ipfixentities.NewTemplateRecordFromElements(templateID, elements)
 	// Ideally we would not have to do it explicitly, it would be taken care of by the go-ipfix library.
@@ -524,7 +706,7 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) error {
 	return e.bufferedExporter.AddRecord(record)
 }
 
-func (e *IPFIXExporter) createInfoElementForTemplateSet(ieName string, enterpriseID uint32) (ipfixentities.InfoElementWithValue, error) {
+func (e *IPFIXExporter) createInfoElement(ieName string, enterpriseID uint32) (ipfixentities.InfoElementWithValue, error) {
 	element, err := e.registry.GetInfoElement(ieName, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("%s not present. returned error: %w", ieName, err)
