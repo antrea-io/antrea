@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
+	"antrea.io/antrea/pkg/agent/cniserver"
 	antreae2e "antrea.io/antrea/test/e2e"
 	"antrea.io/antrea/test/e2e-secondary-network/aws"
 )
@@ -137,11 +138,25 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 
 			networkStatus, err := utils.GetNetworkStatus(podItem)
 			assert.NoError(collect, err, "Failed to parse network status from Pod annotation")
-			assert.Equal(collect, true, len(networkStatus) == len(ips)-2, "The number of network interface statuses in `k8s.v1.cni.cncf.io/network-status` should match the number of secondary network interface IPs in the Pod")
-			assert.Equal(collect, true, len(networkStatus) == len(secondaryNetworkList), "The number of network interface statuses in `k8s.v1.cni.cncf.io/network-status` should be consistent with the number of network interface defined in `k8s.v1.cni.cncf.io/networks`")
+			assert.Equal(collect, true, len(networkStatus) == len(ips)-1, "The number of network "+
+				"interface statuses in `k8s.v1.cni.cncf.io/network-status` should match the total number of interfaces "+
+				"IPs in the Pod except the loopback interface", "networkStatus", networkStatus)
+			assert.Equal(collect, true, len(networkStatus) == len(secondaryNetworkList)+1, "The number of network "+
+				"interface statuses in `k8s.v1.cni.cncf.io/network-status` should be consistent with the total number of "+
+				"the network interface defined in `k8s.v1.cni.cncf.io/networks` plus the primary interface", "secondaryNetworkList", secondaryNetworkList)
 
+			var secondaryNetworkStatus []nadv1.NetworkStatus
+			for i, network := range networkStatus {
+				if network.Interface == "eth0" {
+					assert.Equal(t, macMap[network.Interface], network.Mac, "The primary network status `Mac` is not as expected")
+					assert.Equal(t, cniserver.AntreaCNIType, network.Name, "The primary network status `Name` is not as expected")
+					assert.Equal(t, true, network.Default, "The primary network status `Default` is not as expected")
+				} else {
+					secondaryNetworkStatus = append(secondaryNetworkStatus, networkStatus[i])
+				}
+			}
 			expectedSecondaryNetworkStatuses := generateExpectedNetworks(pod, ips, ipv6Addrs, macMap)
-			assert.ElementsMatch(collect, expectedSecondaryNetworkStatuses, networkStatus, "The Pod network-status annotation is not as expected")
+			assert.ElementsMatch(collect, expectedSecondaryNetworkStatuses, secondaryNetworkStatus, "The Pod network-status annotation is not as expected")
 		}, 20*time.Second, time.Second, "Pod %s network status validation timed out", pod.podName)
 	}
 	return nil

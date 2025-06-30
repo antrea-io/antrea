@@ -39,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	cnitypes "antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/types"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -89,11 +90,13 @@ type PodController struct {
 	podUpdateSubscriber   channel.Subscriber
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	interfaceStore        interfacestore.InterfaceStore
+	primaryInterfaceStore interfacestore.InterfaceStore
 	interfaceConfigurator InterfaceConfigurator
 	ipamAllocator         IPAMAllocator
 	// Map from "namespace/pod" to podCNIInfo.
 	cniCache           sync.Map
 	vfDeviceIDUsageMap sync.Map
+	nodeConfig         *config.NodeConfig
 }
 
 func NewPodController(
@@ -102,6 +105,7 @@ func NewPodController(
 	podInformer cache.SharedIndexInformer,
 	podUpdateSubscriber channel.Subscriber,
 	primaryInterfaceStore interfacestore.InterfaceStore,
+	nodeConfig *config.NodeConfig,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 ) (*PodController, error) {
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -122,8 +126,10 @@ func NewPodController(
 		podUpdateSubscriber:   podUpdateSubscriber,
 		ovsBridgeClient:       ovsBridgeClient,
 		interfaceStore:        ifaceStore,
+		primaryInterfaceStore: primaryInterfaceStore,
 		interfaceConfigurator: interfaceConfigurator,
 		ipamAllocator:         ipam.GetSecondaryNetworkAllocator(),
+		nodeConfig:            nodeConfig,
 	}
 	podInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -141,7 +147,7 @@ func NewPodController(
 			return nil, fmt.Errorf("failed to initialize secondary interface store: %w", err)
 		}
 
-		if err := pc.reconcileSecondaryInterfaces(primaryInterfaceStore); err != nil {
+		if err := pc.reconcileSecondaryInterfaces(); err != nil {
 			return nil, fmt.Errorf("failed to restore CNI cache and reconcile secondary interfaces: %w", err)
 		}
 	}
@@ -201,18 +207,16 @@ func (pc *PodController) processCNIUpdate(e interface{}) {
 }
 
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
-func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo,
-	storedInterfaces []*interfacestore.InterfaceConfig) error {
-	if len(storedInterfaces) > 0 {
+func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo, storedSecondaryInterfaces []*interfacestore.InterfaceConfig) error {
+	if len(storedSecondaryInterfaces) > 0 {
 		// We do not support secondary network update at the moment. Return as long as one
 		// secondary interface has been created for the Pod.
 		klog.V(1).InfoS("Secondary network already configured on this Pod and update not supported, skipping update",
 			"Pod", klog.KObj(pod))
 		return nil
 	}
-
 	if len(pod.Status.PodIPs) == 0 {
-		// Primary network configuration is not complete yet. Return nil here to unqueue the
+		// Primary network configuration is not complete yet. Return nil here to dequeue the
 		// Pod event. Secondary network configuration will be handled with the following Pod
 		// update events.
 		return nil
@@ -293,15 +297,15 @@ func (pc *PodController) syncPod(key string) error {
 	namespacePod := strings.Split(key, "/")
 	podNamespace := namespacePod[0]
 	podName := namespacePod[1]
-	storedInterfaces := pc.interfaceStore.GetContainerInterfacesByPod(podName, podNamespace)
-	if len(storedInterfaces) != 0 {
+	storedSecondaryInterfaces := pc.interfaceStore.GetContainerInterfacesByPod(podName, podNamespace)
+	if len(storedSecondaryInterfaces) > 0 {
 		// Pod or its primary interface has been deleted. Remove secondary interfaces too.
 		if !podExists ||
 			// Interfaces created for a previous Pod with the same Namespace/name are
 			// not deleted yet. First delete them before processing the new Pod's
 			// secondary networks.
-			storedInterfaces[0].ContainerID != cniInfo.containerID {
-			if err := pc.removeInterfaces(storedInterfaces); err != nil {
+			storedSecondaryInterfaces[0].ContainerID != cniInfo.containerID {
+			if err := pc.removeInterfaces(storedSecondaryInterfaces); err != nil {
 				return err
 			}
 		}
@@ -311,7 +315,7 @@ func (pc *PodController) syncPod(key string) error {
 		pc.deleteVFDeviceIDListPerPod(podName, podNamespace)
 		return nil
 	}
-	return pc.handleAddUpdatePod(pod, cniInfo, storedInterfaces)
+	return pc.handleAddUpdatePod(pod, cniInfo, storedSecondaryInterfaces)
 }
 
 func (pc *PodController) Worker() {
@@ -383,7 +387,7 @@ func (pc *PodController) configureSecondaryInterface(
 		ifConfigErr = pc.interfaceConfigurator.ConfigureVLANSecondaryInterface(
 			pod.Name, pod.Namespace,
 			podCNIInfo.containerID, podCNIInfo.netNS, network.InterfaceRequest,
-			int(networkConfig.MTU), ipamResult)
+			networkConfig.MTU, ipamResult)
 	}
 	return &ipamResult.Result, ifConfigErr
 }
@@ -399,6 +403,27 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 	var savedErr error
 	interfacesConfigured := 0
 	var netStatus []netdefv1.NetworkStatus
+	storedPrimaryInterfaces := pc.primaryInterfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace)
+	if len(storedPrimaryInterfaces) > 0 {
+		primaryInterface := storedPrimaryInterfaces[0]
+		primaryNetworkStatus := netdefv1.NetworkStatus{
+			Name:      cniserver.AntreaCNIType,
+			Interface: primaryInterface.IFDev,
+			Mac:       primaryInterface.MAC.String(),
+			Default:   true,
+		}
+		if pc.nodeConfig.GatewayConfig.IPv4 != nil {
+			primaryNetworkStatus.Gateway = append(primaryNetworkStatus.Gateway, pc.nodeConfig.GatewayConfig.IPv4.String())
+		}
+		if pc.nodeConfig.GatewayConfig.IPv6 != nil {
+			primaryNetworkStatus.Gateway = append(primaryNetworkStatus.Gateway, pc.nodeConfig.GatewayConfig.IPv6.String())
+		}
+		for _, ip := range primaryInterface.IPs {
+			primaryNetworkStatus.IPs = append(primaryNetworkStatus.IPs, ip.String())
+		}
+		netStatus = append(netStatus, primaryNetworkStatus)
+	}
+
 	for _, network := range networkList {
 		klog.V(2).InfoS("Secondary Network attached to Pod", "network", network, "Pod", klog.KObj(pod))
 		netAttachDef, err := pc.netAttachDefClient.NetworkAttachmentDefinitions(network.Namespace).Get(context.TODO(), network.Name, metav1.GetOptions{})
@@ -513,7 +538,6 @@ func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
 	}
 	if networkConfig.Type != cniserver.AntreaCNIType {
 		return &networkConfig, fmt.Errorf("not Antrea CNI type '%s'", networkConfig.Type)
-
 	}
 	if networkConfig.NetworkType != sriovNetworkType && networkConfig.NetworkType != vlanNetworkType {
 		return &networkConfig, fmt.Errorf("secondary network type '%s' not supported", networkConfig.NetworkType)
@@ -592,7 +616,6 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 			klog.InfoS("Unknown Antrea interface type for the secondary bridge", "type", interfaceType)
 			continue
 		}
-
 		ifaceList = append(ifaceList, intf)
 	}
 
@@ -603,8 +626,8 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 }
 
 // reconcileSecondaryInterfaces restores cniCache when agent restarts using primary interfaceStore.
-func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore interfacestore.InterfaceStore) error {
-	knownInterfaces := primaryInterfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+func (pc *PodController) reconcileSecondaryInterfaces() error {
+	knownInterfaces := pc.primaryInterfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
 	for _, containerConfig := range knownInterfaces {
 		config := containerConfig.ContainerInterfaceConfig
 		podKey := podKeyGet(config.PodName, config.PodNamespace)
@@ -618,9 +641,9 @@ func (pc *PodController) reconcileSecondaryInterfaces(primaryInterfaceStore inte
 	// secondaryInterfaces is the list of interfaces currently in the secondary local cache.
 	secondaryInterfaces := pc.interfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
 	for _, containerConfig := range secondaryInterfaces {
-		_, exists := primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
+		_, exists := pc.primaryInterfaceStore.GetContainerInterface(containerConfig.ContainerID)
 		if !exists || containerConfig.OFPort == -1 {
-			// Deletes ports not in the CNI cache.
+			// Delete ports not in the CNI cache.
 			staleInterfaces = append(staleInterfaces, containerConfig)
 		}
 	}
