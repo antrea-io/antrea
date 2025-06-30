@@ -122,19 +122,29 @@ case $key in
 esac
 done
 
-mkdir -p ~/.aws
-cat > ~/.aws/config <<EOF
-[default]
-region = $REGION
-role_arn = $AWS_SERVICE_USER_ROLE_ARN
-source_profile = $AWS_SERVICE_USER_NAME
-output = json
-EOF
-cat > ~/.aws/credentials <<EOF
-[$AWS_SERVICE_USER_NAME]
-aws_access_key_id = $AWS_ACCESS_KEY
-aws_secret_access_key = $AWS_SECRET_KEY
-EOF
+set +ex
+export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY
+export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
+export AWS_DEFAULT_REGION=$REGION
+
+# Use AWS CLI to assume an IAM role and obtain temporary security credentials
+# Source: AWS CLI Command Reference - https://docs.aws.amazon.com/cli/latest/reference/sts/assume-role.html
+# When --duration-seconds is NOT specified, AWS uses DEFAULT VALUE: 3600 seconds (1 hour)
+# Source: AWS STS AssumeRole API Documentation -
+# https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_RequestParameters
+# "By default, the value is set to 3600 seconds."
+# From previous observations, this Jenkins job process has taken less than an hour, usually within 20 minutes,
+# so it's set to the default 1 hour here.
+TEMP_CRED=$(aws sts assume-role \
+  --role-arn "$AWS_SERVICE_USER_ROLE_ARN" \
+  --role-session-name "cli-session" \
+  --query "Credentials" \
+  --output json)
+
+export AWS_ACCESS_KEY_ID=$(echo "$TEMP_CRED" | jq -r .AccessKeyId)
+export AWS_SECRET_ACCESS_KEY=$(echo "$TEMP_CRED" | jq -r .SecretAccessKey)
+export AWS_SESSION_TOKEN=$(echo "$TEMP_CRED" | jq -r .SessionToken)
+set -ex
 
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
