@@ -783,35 +783,3 @@ func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *c
 	assert.EqualValues(t, 915, aggRecord.Record.Aggregation.ThroughputFromDestination)
 	assert.EqualValues(t, 915, aggRecord.Record.Aggregation.ReverseThroughputFromDestination)
 }
-
-// func TestFillHttpVals(t *testing.T) {
-// 	testCases := []struct {
-// 		name             string
-// 		incomingHttpVals string
-// 		existingHttpVals string
-// 		updatedHttpVals  string
-// 	}{
-// 		{
-// 			name:             "Normal case",
-// 			incomingHttpVals: "{\"1\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}",
-// 			existingHttpVals: "{\"0\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}",
-// 			updatedHttpVals:  "{\"0\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\",\"1\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}",
-// 		}, {
-// 			name:             "Existing httpVals empty",
-// 			incomingHttpVals: "{\"1\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}",
-// 			existingHttpVals: "",
-// 			updatedHttpVals:  "{\"1\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}",
-// 		}, {
-// 			name:             "Overlapping httpVals",
-// 			incomingHttpVals: "{\"1\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}",
-// 			existingHttpVals: "{\"1\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}",
-// 			updatedHttpVals:  "{\"1\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}",
-// 		},
-// 	}
-// 	for _, tt := range testCases {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			retVals, _ := fillHttpVals(tt.incomingHttpVals, tt.existingHttpVals)
-// 			assert.Equal(t, tt.updatedHttpVals, retVals)
-// 		})
-// 	}
-// }
