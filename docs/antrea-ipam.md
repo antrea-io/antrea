@@ -122,8 +122,7 @@ IPPool annotation, or when the `AntreaIPAM` feature is disabled.
 
 #### Enable AntreaIPAM feature gate and bridging mode
 
-To enable flexible IPAM, you need to enable the `AntreaIPAM` feature gate for
-both `antrea-controller` and `antrea-agent`, and set the `enableBridgingMode`
+To enable flexible IPAM, you need to set the `enableBridgingMode`
 configuration parameter of `antrea-agent` to `true`.
 
 When Antrea is installed from YAML, the needed changes in the Antrea
@@ -136,12 +135,7 @@ metadata:
   name: antrea-config
   namespace: kube-system
 data:
-  antrea-controller.conf: |
-    featureGates:
-      AntreaIPAM: true
   antrea-agent.conf: |
-    featureGates:
-      AntreaIPAM: true
     enableBridgingMode: true
     trafficEncapMode: "noEncap"
     noSNAT: true

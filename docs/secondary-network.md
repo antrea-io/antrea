@@ -44,11 +44,10 @@ secondary networks.
 
 Native secondary network support is still an alpha feature and is disabled by
 default. To use the feature, the `SecondaryNetwork` feature gate must be enabled
-in the `antrea-agent` configuration. If you need IPAM for the secondary
-interfaces, you should also enable the `AntreaIPAM` feature gate in both
-`antrea-agent` and `antrea-controller` configuration. At the moment, Antrea IPAM
-is the only available IPAM option for secondary networks managed by Antrea. The
-`antrea-config` ConfigMap with the two feature gates enables is like the
+in the `antrea-agent` configuration. Antrea IPAM, which is the only available  
+IPAM option for secondary networks managed by Antrea, is now a beta feature and  
+enabled by default. No additional feature gate configuration is required for Antrea IPAM.
+The `antrea-config` ConfigMap with the required feature gate enabled is like the
 following:
 
 ```yaml
@@ -58,12 +57,8 @@ metadata:
   name: antrea-config
   namespace: kube-system
 data:
-  antrea-controller.conf: |
-    featureGates:
-      AntreaIPAM: true
   antrea-agent.conf: |
     featureGates:
-      AntreaIPAM: true
       SecondaryNetwork: true
 ```
 
