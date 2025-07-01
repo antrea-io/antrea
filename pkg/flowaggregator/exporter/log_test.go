@@ -22,8 +22,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
-	"go.uber.org/mock/gomock"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
@@ -32,11 +30,8 @@ import (
 )
 
 func TestLog_UpdateOptions(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockRecord1 := ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord1, true)
-	mockRecord2 := ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord2, true)
+	record1 := flowaggregatortesting.PrepareTestFlowRecord(true)
+	record2 := flowaggregatortesting.PrepareTestFlowRecord(true)
 
 	dir, err := os.MkdirTemp("", "flows")
 	defer os.RemoveAll(dir)
@@ -69,10 +64,10 @@ func TestLog_UpdateOptions(t *testing.T) {
 
 	logExporter, _ := NewLogExporter(opt(path1))
 	logExporter.Start()
-	require.NoError(t, logExporter.AddRecord(mockRecord1, false))
+	require.NoError(t, logExporter.AddRecord(record1, false))
 	logExporter.UpdateOptions(opt(path2))
 	assert.Equal(t, 1, countRecords(path1))
-	require.NoError(t, logExporter.AddRecord(mockRecord2, false))
+	require.NoError(t, logExporter.AddRecord(record2, false))
 	logExporter.Stop()
 	assert.Equal(t, 1, countRecords(path2))
 }

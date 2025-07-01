@@ -26,10 +26,10 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/gammazero/deque"
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 )
 
@@ -157,8 +157,11 @@ func NewClickHouseClient(config ClickHouseConfig, clusterUUID string) (*ClickHou
 	return chClient, nil
 }
 
-func (ch *ClickHouseExportProcess) CacheRecord(record ipfixentities.Record) {
-	chRow := flowrecord.GetFlowRecord(record)
+func (ch *ClickHouseExportProcess) CacheRecord(record *flowpb.Flow) error {
+	chRow, err := flowrecord.GetFlowRecord(record)
+	if err != nil {
+		return err
+	}
 
 	ch.dequeMutex.Lock()
 	defer ch.dequeMutex.Unlock()
@@ -166,6 +169,8 @@ func (ch *ClickHouseExportProcess) CacheRecord(record ipfixentities.Record) {
 		ch.deque.PopFront()
 	}
 	ch.deque.PushBack(chRow)
+
+	return nil
 }
 
 func (ch *ClickHouseExportProcess) Start() {
