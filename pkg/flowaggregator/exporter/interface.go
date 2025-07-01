@@ -15,8 +15,7 @@
 package exporter
 
 import (
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
-
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 )
 
@@ -26,7 +25,7 @@ import (
 type Interface interface {
 	Start()
 	Stop()
-	AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error
+	AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error
 	UpdateOptions(opt *options.Options)
 	// Some exporters may be buffered, in which case the FlowAggregator
 	// should call this method periodically.

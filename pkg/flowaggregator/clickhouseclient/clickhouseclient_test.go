@@ -27,39 +27,28 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
-	"github.com/vmware/go-ipfix/pkg/registry"
-	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 	flowrecordtesting "antrea.io/antrea/pkg/flowaggregator/flowrecord/testing"
 	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
 )
 
-func init() {
-	registry.LoadRegistry()
-}
-
 var fakeClusterUUID = uuid.New().String()
 
 func TestCacheRecord(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
 	chExportProc := &ClickHouseExportProcess{
 		queueSize: 1,
 	}
 
 	// First call. only populate row.
-	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
-	chExportProc.CacheRecord(mockRecord)
+	record := flowaggregatortesting.PrepareTestFlowRecord(true)
+	chExportProc.CacheRecord(record)
 	assert.Equal(t, 1, chExportProc.deque.Len())
 	assert.Equal(t, "10.10.0.79", chExportProc.deque.At(0).SourceIP)
 
 	// Second call. discard prev row and add new row.
-	mockRecord = ipfixentitiestesting.NewMockRecord(ctrl)
-	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, false)
-	chExportProc.CacheRecord(mockRecord)
+	record = flowaggregatortesting.PrepareTestFlowRecord(false)
+	chExportProc.CacheRecord(record)
 	assert.Equal(t, 1, chExportProc.deque.Len())
 	assert.Equal(t, "2001:0:3238:dfe1:63::fefb", chExportProc.deque.At(0).SourceIP)
 }

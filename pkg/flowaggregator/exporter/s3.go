@@ -16,9 +16,9 @@ package exporter
 
 import (
 	"github.com/google/uuid"
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"k8s.io/klog/v2"
 
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/flowaggregator/s3uploader"
 )
@@ -48,9 +48,8 @@ func NewS3Exporter(clusterUUID uuid.UUID, opt *options.Options) (*S3Exporter, er
 	}, nil
 }
 
-func (e *S3Exporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
-	e.s3UploadProcess.CacheRecord(record)
-	return nil
+func (e *S3Exporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
+	return e.s3UploadProcess.CacheRecord(record)
 }
 
 func (e *S3Exporter) Start() {

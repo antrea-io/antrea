@@ -28,8 +28,8 @@ import (
 	reflect "reflect"
 	time "time"
 
+	v1alpha1 "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	intermediate "antrea.io/antrea/pkg/flowaggregator/intermediate"
-	entities "github.com/vmware/go-ipfix/pkg/entities"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -156,7 +156,7 @@ func (mr *MockAggregationProcessMockRecorder) IsAggregatedRecordIPv4(record any)
 }
 
 // ResetStatAndThroughputElementsInRecord mocks base method.
-func (m *MockAggregationProcess) ResetStatAndThroughputElementsInRecord(record entities.Record) error {
+func (m *MockAggregationProcess) ResetStatAndThroughputElementsInRecord(record *v1alpha1.Flow) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ResetStatAndThroughputElementsInRecord", record)
 	ret0, _ := ret[0].(error)
