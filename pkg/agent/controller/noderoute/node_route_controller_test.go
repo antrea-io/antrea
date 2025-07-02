@@ -58,6 +58,8 @@ var (
 	dsIPs1            = utilip.DualStackIPs{IPv4: nodeIP1}
 	nodeIP2           = net.ParseIP("10.10.10.11")
 	dsIPs2            = utilip.DualStackIPs{IPv4: nodeIP2}
+	gatewayIfindex    = 10
+	transportIfindex  = 11
 
 	node1 = &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -81,9 +83,11 @@ var (
 		PodIPv4CIDR: podCIDR,
 		PodIPv6CIDR: podCIDRv6,
 		GatewayConfig: &config.GatewayConfig{
-			IPv4: nil,
-			MAC:  gatewayMAC,
+			LinkIndex: gatewayIfindex,
+			IPv4:      nil,
+			MAC:       gatewayMAC,
 		},
+		NodeTransportInterfaceIndex: transportIfindex,
 	}
 )
 
@@ -172,6 +176,8 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
+		c.routeClient.EXPECT().AddTcFiltersRedirectBetweenGwAndTransport(podCIDR, podCIDR1, nodeIP1, gatewayIfindex, transportIfindex).Times(1)
+		c.routeClient.EXPECT().AddTcFiltersRedirectBetweenGwAndTransport(podCIDRv6, podCIDR1v6, nil, gatewayIfindex, transportIfindex).Times(1)
 		c.processNextWorkItem()
 
 		// Since node1 is not deleted yet, routes and flows for otherNode shouldn't be installed as its PodCIDR is duplicate.
@@ -183,11 +189,14 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		c.ofClient.EXPECT().UninstallNodeFlows("node1").Times(1)
 		c.routeClient.EXPECT().DeleteRoutes(podCIDR1).Times(1)
 		c.routeClient.EXPECT().DeleteRoutes(podCIDR1v6).Times(1)
+		c.routeClient.EXPECT().DeleteTcFiltersRedirectBetweenGwAndTransport(podCIDR1).Times(1)
+		c.routeClient.EXPECT().DeleteTcFiltersRedirectBetweenGwAndTransport(podCIDR1v6).Times(1)
 		c.processNextWorkItem()
 
 		// After node1 is deleted, routes and flows should be installed for otherNode successfully.
 		c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1, "otherNode", nodeIP2, podCIDR1Gateway).Times(1)
+		c.routeClient.EXPECT().AddTcFiltersRedirectBetweenGwAndTransport(podCIDR, podCIDR1, nodeIP2, gatewayIfindex, transportIfindex).Times(1)
 		c.processNextWorkItem()
 	}()
 
@@ -214,6 +223,8 @@ func TestLookupIPInPodSubnets(t *testing.T) {
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
+	c.routeClient.EXPECT().AddTcFiltersRedirectBetweenGwAndTransport(podCIDR, podCIDR1, nodeIP1, gatewayIfindex, transportIfindex).Times(1)
+	c.routeClient.EXPECT().AddTcFiltersRedirectBetweenGwAndTransport(podCIDRv6, podCIDR1v6, nil, gatewayIfindex, transportIfindex).Times(1)
 	c.processNextWorkItem()
 
 	testCases := []struct {
@@ -281,6 +292,8 @@ func BenchmarkLookupIPInPodSubnets(b *testing.B) {
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
+	c.routeClient.EXPECT().AddTcFiltersRedirectBetweenGwAndTransport(podCIDR, podCIDR1, nodeIP1, gatewayIfindex, transportIfindex).Times(1)
+	c.routeClient.EXPECT().AddTcFiltersRedirectBetweenGwAndTransport(podCIDRv6, podCIDR1v6, nil, gatewayIfindex, transportIfindex).Times(1)
 	c.processNextWorkItem()
 
 	localPodIP := netip.MustParseAddr("1.1.0.99")
@@ -731,6 +744,7 @@ func TestDeleteNodeRoute(t *testing.T) {
 				ofClient *oftest.MockClient, wgClient *wgtest.MockInterface) {
 				ovsClient.EXPECT().DeletePort("123")
 				routeClient.EXPECT().DeleteRoutes(podCIDR1)
+				routeClient.EXPECT().DeleteTcFiltersRedirectBetweenGwAndTransport(podCIDR1)
 				ofClient.EXPECT().UninstallNodeFlows(node1.Name)
 			},
 		},
@@ -741,6 +755,7 @@ func TestDeleteNodeRoute(t *testing.T) {
 			expectedCalls: func(ovsClient *ovsconfigtest.MockOVSBridgeClient, routeClient *routetest.MockInterface,
 				ofClient *oftest.MockClient, wgClient *wgtest.MockInterface) {
 				routeClient.EXPECT().DeleteRoutes(podCIDR1)
+				routeClient.EXPECT().DeleteTcFiltersRedirectBetweenGwAndTransport(podCIDR1)
 				ofClient.EXPECT().UninstallNodeFlows(nodeWithWireGuard.Name)
 				wgClient.EXPECT().DeletePeer(nodeWithWireGuard.Name)
 			},
@@ -789,6 +804,8 @@ func TestInitialListHasSynced(t *testing.T) {
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
+	c.routeClient.EXPECT().AddTcFiltersRedirectBetweenGwAndTransport(podCIDR, podCIDR1, nodeIP1, gatewayIfindex, transportIfindex).Times(1)
+	c.routeClient.EXPECT().AddTcFiltersRedirectBetweenGwAndTransport(podCIDRv6, podCIDR1v6, nil, gatewayIfindex, transportIfindex).Times(1)
 	c.processNextWorkItem()
 
 	assert.True(t, c.hasProcessedInitialList.HasSynced())

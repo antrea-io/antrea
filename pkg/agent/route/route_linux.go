@@ -83,7 +83,6 @@ const (
 	antreaPostRoutingChain = "ANTREA-POSTROUTING"
 	antreaInputChain       = "ANTREA-INPUT"
 	antreaOutputChain      = "ANTREA-OUTPUT"
-	antreaMangleChain      = "ANTREA-MANGLE"
 
 	kubeProxyServiceChain = "KUBE-SERVICES"
 
@@ -92,6 +91,13 @@ const (
 
 	preNodeNetworkPolicyIngressRulesChain = "ANTREA-POL-PRE-INGRESS-RULES"
 	preNodeNetworkPolicyEgressRulesChain  = "ANTREA-POL-PRE-EGRESS-RULES"
+
+	// tcChain is the default chain of tc.
+	tcChain uint32 = 0
+	// tcPriorityHigh and tcPriorityNormal define the priorities of filters added by Antrea.
+	// Note: lower values indicate higher priority.
+	tcPriorityHigh   uint16 = 40000
+	tcPriorityNormal uint16 = 40010
 )
 
 // Client implements Interface.
@@ -152,6 +158,8 @@ type Client struct {
 	clusterNodeIP6s sync.Map
 	// egressRoutes caches ip routes about Egresses.
 	egressRoutes sync.Map
+	// egressRules caches ip rules about Egresses.
+	egressRules sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
@@ -177,6 +185,10 @@ type Client struct {
 	// wireguardPort is the port used for the WireGuard UDP tunnels. When WireGuard is enabled (used as the encryption
 	// mode), we add iptables rules to the filter table to accept input and output UDP traffic destined to this port.
 	wireguardPort int
+	// tcFilters caches tc filters to bypass Node host network for Pod-to-Pod traffic.
+	tcFilters sync.Map
+	// tcHandleAllocator is responsible for allocating IDs for tc filter handles.
+	tcHandleAllocator *tcHandleAllocator
 }
 
 // NewClient returns a route client.
@@ -212,7 +224,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 			antreaExternalIPIPSet:  {},
 			antreaExternalIPIP6Set: {},
 		},
-		wireguardPort: wireguardPort,
+		wireguardPort:     wireguardPort,
+		tcHandleAllocator: newTcHandleAllocator(),
 	}, nil
 }
 
@@ -274,12 +287,37 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		}
 	}
 
+	// In hybrid mode, traffic originating from remote Pod CIDRs is forwarded like this:
+	//     remote Pods -> tunnel (remote Node OVS) -> tunnel (local Node OVS) -> antrea-gw0 (local Node) -> external network.
+	//
+	// To ensure reply packets follow a symmetric path, Antrea uses policy routing on the local Node. However, the
+	// kernel's strict RPF check only validates source paths against the main routing table. Since the transport
+	// interface (not antrea‑gw0) is listed as the next-hop for these routes, strict RPF drops the reply packets
+	// (because policy routing is ignored by rp_filter). As a result, we set its rp_filter to loose mode (2).
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		if err := sysctl.EnsureSysctlNetValue(fmt.Sprintf("ipv4/conf/%s/rp_filter", c.nodeConfig.GatewayConfig.Name), 2); err != nil {
+			return fmt.Errorf("failed to set %s rp_filter to 2 (loose mode): %w", c.nodeConfig.GatewayConfig.Name, err)
+		}
+	} else {
+		if err := sysctl.EnsureSysctlNetValue(fmt.Sprintf("ipv4/conf/%s/rp_filter", c.nodeConfig.GatewayConfig.Name), 1); err != nil {
+			return fmt.Errorf("failed to set %s rp_filter to 1 (strict mode): %w", c.nodeConfig.GatewayConfig.Name, err)
+		}
+	}
+
 	// Set up the IP routes and sysctl parameters to support all Services in AntreaProxy.
 	if c.proxyAll {
 		if err := c.initServiceIPRoutes(); err != nil {
 			return fmt.Errorf("failed to initialize Service IP routes: %v", err)
 		}
 	}
+
+	// Set up the policy routing ip rule to support some features in hybrid mode.
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		if err := c.initHybridIPRules(); err != nil {
+			return fmt.Errorf("failed to initialize ip rule in hybrid mode: %v", err)
+		}
+	}
+
 	// Build static iptables rules for NodeNetworkPolicy.
 	if c.nodeNetworkPolicyEnabled {
 		c.initNodeNetworkPolicy()
@@ -318,6 +356,9 @@ func (c *Client) syncIPInfra() {
 	}
 	if err := c.syncNeighbor(); err != nil {
 		klog.ErrorS(err, "Failed to sync neighbor")
+	}
+	if err := c.syncIPRule(); err != nil {
+		klog.ErrorS(err, "Failed to sync ip rule")
 	}
 
 	klog.V(3).Info("Successfully synced iptables, ipset, route and neighbor")
@@ -467,6 +508,54 @@ func (c *Client) syncNeighbor() error {
 			return restoreNeighbor(v.(*netlink.Neigh))
 		})
 	}
+
+	return nil
+}
+
+type ipRuleKey struct {
+	family int
+	mark   uint32
+	mask   uint32
+	table  int
+}
+
+// syncIPRule ensures that necessary ip rules managed by Antrea.
+func (c *Client) syncIPRule() error {
+	ruleList, err := c.netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	ruleKeys := sets.New[ipRuleKey]()
+	for i := range ruleList {
+		rule := ruleList[i]
+		// Only process rules with both mark and mask, as Antrea currently adds only such rules.
+		if rule.Mark != 0 && rule.Mask != nil {
+			ruleKeys.Insert(ipRuleKey{
+				family: rule.Family,
+				mark:   rule.Mark,
+				mask:   *rule.Mask,
+				table:  rule.Table,
+			})
+		}
+	}
+	restoreRule := func(rule *netlink.Rule) bool {
+		if ruleKeys.Has(ipRuleKey{
+			family: rule.Family,
+			mark:   rule.Mark,
+			mask:   *rule.Mask,
+			table:  rule.Table,
+		}) {
+			return true
+		}
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			klog.ErrorS(err, "failed to sync ip rule", "RUle", rule)
+			return false
+		}
+		return true
+	}
+	c.egressRules.Range(func(_, v interface{}) bool {
+		return restoreRule(v.(*netlink.Rule))
+	})
 
 	return nil
 }
@@ -639,7 +728,7 @@ func (c *Client) writeEKSMangleRules(iptablesData *bytes.Buffer) {
 	// whether we need to install this rule.
 	klog.V(2).InfoS("Add iptables mangle rules for EKS")
 	writeLine(iptablesData, []string{
-		"-A", antreaMangleChain,
+		"-A", antreaPreRoutingChain,
 		"-m", "comment", "--comment", `"Antrea: AWS, primary ENI"`,
 		"-i", c.nodeConfig.GatewayConfig.Name, "-j", "CONNMARK",
 		"--restore-mark", "--nfmask", "0x80", "--ctmask", "0x80",
@@ -745,7 +834,7 @@ func (c *Client) syncIPTables() error {
 		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
 		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules", false},
 		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules", false},
-		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules", false}, // TODO: unify the chain naming style
+		{iptables.MangleTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules", false},
 		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
 	}
 	if c.proxyAll || c.isCloudEKS {
@@ -947,7 +1036,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 
 	// Write head lines anyway so the undesired rules can be deleted when noEncap -> encap.
 	writeLine(iptablesData, "*mangle")
-	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
+	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
 
 	// When Antrea is used to enforce NetworkPolicies in EKS, additional iptables
@@ -955,6 +1044,27 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	// These rules are only needed for IPv4.
 	if c.isCloudEKS && !isIPv6 {
 		c.writeEKSMangleRules(iptablesData)
+	}
+
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: restore fwmark from connmark for reply packets sourced from remote Pods"`,
+			"!", "-i", c.nodeConfig.GatewayConfig.Name,
+			"-m", "conntrack", "--ctstate", "ESTABLISHED",
+			"-m", "conntrack", "--ctdir", "REPLY",
+			"-m", "connmark", "--mark", fmt.Sprintf("%#08x/%#08x", types.RemotePodSourceMark, types.RemotePodSourceMark),
+			"-j", "CONNMARK", "--restore-mark", "--nfmask", fmt.Sprintf("%#08x", types.RemotePodSourceMark), "--ctmask", fmt.Sprintf("%#08x", types.RemotePodSourceMark),
+		}...)
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: set connmark for the first Egress request packet"`,
+			"-i", c.nodeConfig.GatewayConfig.Name,
+			"!", "-s", podCIDR.String(),
+			"-m", "conntrack", "--ctstate", "NEW",
+			"-m", "mark", "!", "--mark", fmt.Sprintf("%#08x/%#08x", 0, types.SNATIPMarkMask),
+			"-j", "CONNMARK", "--set-mark", fmt.Sprintf("%#08x/%#08x", types.RemotePodSourceMark, types.RemotePodSourceMark),
+		}...)
 	}
 
 	// To make liveness/readiness probe traffic bypass ingress rules of Network Policies, mark locally generated packets
@@ -1364,6 +1474,36 @@ func (c *Client) initNodeLatencyRules() {
 	}
 }
 
+func (c *Client) initHybridIPRules() error {
+	rules, err := c.netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	for i := range rules {
+		rule := rules[i]
+		if rule.Table != types.HybridModePolicyRouteTable {
+			continue
+		}
+		c.netlink.RuleDel(&rule)
+	}
+
+	if c.networkConfig.IPv6Enabled {
+		rule := generateRule(types.HybridModePolicyRouteTable, types.RemotePodSourceMark, &types.RemotePodSourceMark, netlink.FAMILY_V6)
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
+		}
+		c.egressRules.Store(fmt.Sprintf("%d_%d", netlink.FAMILY_V6, types.HybridModePolicyRouteTable), rule)
+	}
+	if c.networkConfig.IPv4Enabled {
+		rule := generateRule(types.HybridModePolicyRouteTable, types.RemotePodSourceMark, &types.RemotePodSourceMark, netlink.FAMILY_V4)
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
+		}
+		c.egressRules.Store(fmt.Sprintf("%d_%d", netlink.FAMILY_V4, types.HybridModePolicyRouteTable), rule)
+	}
+	return nil
+}
+
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
 // based on the desired podCIDRs.
 func (c *Client) Reconcile(podCIDRs []string) error {
@@ -1392,6 +1532,13 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			route := &netlink.Route{Dst: cidr}
 			if err := c.netlink.RouteDel(route); err != nil && err != unix.ESRCH {
 				return err
+			}
+			// In hybrid mode, a policy route might be installed, remove it.
+			if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+				route = &netlink.Route{Dst: cidr, Table: types.HybridModePolicyRouteTable}
+				if err := c.netlink.RouteDel(route); err != nil && err != unix.ESRCH {
+					return err
+				}
 			}
 		}
 	}
@@ -1594,6 +1741,30 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		// Set the peerNodeIP as next hop.
 		podCIDRRoute.Gw = nodeIP
 		routes = append(routes, podCIDRRoute)
+
+		// In hybrid, install a policy route destined for remote Pod CIDR via antrea-gw0.
+		if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+			policyRoute := &netlink.Route{
+				Dst:       podCIDR,
+				LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+				Gw:        nodeGwIP,
+				Table:     types.HybridModePolicyRouteTable,
+			}
+			if podCIDR.IP.To4() == nil {
+				requireNodeGwIPv6RouteAndNeigh = true
+				// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
+				// TODO: Kernel >= 4.16 supports adding IPv6 route with onlink flag. Delete this route after Kernel version
+				//       requirement bump in future.
+				routes = append(routes, &netlink.Route{
+					Dst:       &net.IPNet{IP: nodeGwIP, Mask: net.CIDRMask(128, 128)},
+					LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+					Table:     types.HybridModePolicyRouteTable,
+				})
+			} else {
+				policyRoute.Flags = int(netlink.FLAG_ONLINK)
+			}
+			routes = append(routes, policyRoute)
+		}
 	} else {
 		// NetworkPolicyOnly mode or NoEncap traffic to a Node on a different subnet.
 		// Routing should be handled by a route which is already present on the host.
@@ -1873,14 +2044,20 @@ func (c *Client) DeleteEgressRoutes(tableID uint32) error {
 	return nil
 }
 
-func (c *Client) AddEgressRule(tableID uint32, mark uint32) error {
+func (c *Client) AddEgressRule(tableID uint32, mark uint32, isIPv6 bool) error {
+	family := netlink.FAMILY_V4
+	if isIPv6 {
+		family = netlink.FAMILY_V6
+	}
 	rule := netlink.NewRule()
 	rule.Table = int(tableID)
 	rule.Mark = mark
 	rule.Mask = ptr.To(types.SNATIPMarkMask)
+	rule.Family = family
 	if err := c.netlink.RuleAdd(rule); err != nil {
 		return fmt.Errorf("error adding ip rule %v: %w", rule, err)
 	}
+	c.egressRules.Store(tableID, rule)
 	return nil
 }
 
@@ -1894,6 +2071,7 @@ func (c *Client) DeleteEgressRule(tableID uint32, mark uint32) error {
 			return fmt.Errorf("error deleting ip rule %v: %w", rule, err)
 		}
 	}
+	c.egressRules.Delete(tableID)
 	return nil
 }
 
@@ -2328,6 +2506,15 @@ func isIPv6Protocol(protocol binding.Protocol) bool {
 	return false
 }
 
+func generateRule(table int, mark uint32, mask *uint32, family int) *netlink.Rule {
+	rule := netlink.NewRule()
+	rule.Table = table
+	rule.Mark = mark
+	rule.Mask = mask
+	rule.Family = family
+	return rule
+}
+
 func generateRoute(ip net.IP, mask int, gw net.IP, linkIndex int, scope netlink.Scope) *netlink.Route {
 	addrBits := net.IPv4len * 8
 	if ip.To4() == nil {
@@ -2455,6 +2642,255 @@ func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6
 			c.nodeNetworkPolicyIPTablesIPv4.Delete(iptablesChain)
 		}
 	}
+
+	return nil
+}
+
+func (c *Client) AddTcQdiscClsAct(ifindex int) error {
+	qdisc := &netlink.Clsact{
+		QdiscAttrs: netlink.QdiscAttrs{
+			LinkIndex: ifindex,
+			Parent:    netlink.HANDLE_CLSACT,
+		},
+	}
+
+	err := c.netlink.QdiscDel(qdisc)
+	klog.Info("Cleaning stale tc qdisc clsact on interface to clear stale tc filters")
+	if err != nil {
+		klog.ErrorS(err, "Failed to clean stale tc qdisc")
+	}
+
+	klog.InfoS("Adding tc qdisc clsact on interface", "qdisc", qdisc, "ifindex", ifindex)
+	err = c.netlink.QdiscReplace(qdisc)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type tcHandleKey struct {
+	ifIndex  int
+	priority uint16
+}
+
+type allocatorState struct {
+	handleCounter uint32
+	recycled      []uint32
+}
+type tcHandleAllocator struct {
+	mu         sync.Mutex
+	allocators map[tcHandleKey]*allocatorState
+}
+
+func newTcHandleAllocator() *tcHandleAllocator {
+	return &tcHandleAllocator{
+		allocators: make(map[tcHandleKey]*allocatorState),
+	}
+}
+
+func (t *tcHandleAllocator) allocate(ifIndex int, priority uint16) uint32 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	key := tcHandleKey{ifIndex, priority}
+	allocator, exist := t.allocators[key]
+
+	if !exist {
+		allocator = &allocatorState{}
+		t.allocators[key] = allocator
+	}
+
+	var id uint32
+	if len(allocator.recycled) != 0 {
+		id = allocator.recycled[len(allocator.recycled)-1]
+		allocator.recycled = allocator.recycled[:len(allocator.recycled)-1]
+	} else {
+		allocator.handleCounter += 1
+		id = allocator.handleCounter
+	}
+	return id
+}
+
+func (t *tcHandleAllocator) release(ifIndex int, priority uint16, id uint32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	key := tcHandleKey{ifIndex, priority}
+	allocator, exists := t.allocators[key]
+	if exists {
+		allocator.recycled = append(allocator.recycled, id)
+	}
+}
+
+func generateTcFilterWithActionPass(fromIfindex int,
+	protocol uint16,
+	destCIDR *net.IPNet,
+	priority uint16,
+	handle uint32) *netlink.Flower {
+	filter := &netlink.Flower{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: fromIfindex,
+			Parent:    netlink.HANDLE_MIN_INGRESS,
+			Protocol:  protocol,
+			Priority:  priority,
+			Chain:     ptr.To(tcChain),
+			Handle:    handle,
+		},
+		EthType:    protocol,
+		DestIP:     destCIDR.IP,
+		DestIPMask: destCIDR.Mask,
+		Actions: []netlink.Action{
+			&netlink.GenericAction{
+				ActionAttrs: netlink.ActionAttrs{
+					Action: netlink.TC_ACT_OK,
+				},
+			},
+		},
+	}
+	return filter
+}
+
+func generateTcFilterWithActionRedirect(fromIfindex int,
+	toIfindex int,
+	protocol uint16,
+	sourceCIDR *net.IPNet,
+	destCIDR *net.IPNet,
+	priority uint16,
+	handle uint32) *netlink.Flower {
+	filter := &netlink.Flower{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: fromIfindex,
+			Parent:    netlink.HANDLE_MIN_INGRESS,
+			Protocol:  protocol,
+			Priority:  priority,
+			Chain:     ptr.To(tcChain),
+			Handle:    handle,
+		},
+		EthType:    protocol,
+		SrcIP:      sourceCIDR.IP,
+		SrcIPMask:  sourceCIDR.Mask,
+		DestIP:     destCIDR.IP,
+		DestIPMask: destCIDR.Mask,
+		Actions: []netlink.Action{
+			netlink.NewMirredAction(toIfindex),
+		},
+	}
+	return filter
+}
+
+func (c *Client) AddTcFiltersRedirectBetweenGwAndTransport(podCIDR *net.IPNet,
+	peerPodCIDR *net.IPNet,
+	peerNodeIP net.IP,
+	gwIfindex int,
+	transportIfindex int) error {
+	if c.connectUplinkToBridge ||
+		c.networkConfig.TrafficEncapMode != config.TrafficEncapModeNoEncap &&
+			c.networkConfig.TrafficEncapMode != config.TrafficEncapModeHybrid {
+		return nil
+	}
+
+	isIPv6 := peerPodCIDR.IP.To4() == nil
+	// If the remote Pod CIDR is reachable through tunnel, skip it.
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid &&
+		(!isIPv6 && !c.nodeConfig.NodeTransportIPv4Addr.Contains(peerNodeIP) ||
+			isIPv6 && !c.nodeConfig.NodeTransportIPv6Addr.Contains(peerNodeIP)) {
+		return nil
+	}
+
+	protocol := uint16(unix.ETH_P_IP)
+	if isIPv6 {
+		protocol = uint16(unix.ETH_P_IPV6)
+	}
+
+	// Allocate handles for tc filters.
+	gwTcHandle := c.tcHandleAllocator.allocate(gwIfindex, tcPriorityNormal)
+	transPortTcHandle := c.tcHandleAllocator.allocate(transportIfindex, tcPriorityNormal)
+
+	// Rollback if the tc filters are not installed successfully.
+	success := false
+	defer func() {
+		if !success {
+			c.tcHandleAllocator.release(gwIfindex, tcPriorityNormal, gwTcHandle)
+			c.tcHandleAllocator.release(transportIfindex, tcPriorityNormal, transPortTcHandle)
+		}
+	}()
+
+	// Create bidirectional tc redirect filters
+	filters := []netlink.Filter{
+		generateTcFilterWithActionRedirect(gwIfindex, transportIfindex, protocol, podCIDR, peerPodCIDR, tcPriorityNormal, gwTcHandle),
+		generateTcFilterWithActionRedirect(transportIfindex, gwIfindex, protocol, peerPodCIDR, podCIDR, tcPriorityNormal, transPortTcHandle),
+	}
+
+	// Install all tc filters.
+	for _, filter := range filters {
+		klog.InfoS("Adding tc filter to redirect Pod-to-Pod traffic between gateway and transport interface", "filter", filter)
+		if err := c.netlink.FilterReplace(filter); err != nil {
+			return err
+		}
+	}
+	c.tcFilters.Store(peerPodCIDR.String(), filters)
+	success = true
+
+	return nil
+}
+
+func (c *Client) DeleteTcFiltersRedirectBetweenGwAndTransport(peerPodCIDR *net.IPNet) error {
+	podCIDRStr := peerPodCIDR.String()
+	filtersRaw, exists := c.tcFilters.Load(podCIDRStr)
+	if !exists {
+		return nil
+	}
+
+	filters := filtersRaw.([]netlink.Filter)
+	// Delete all tc filters.
+	for _, filter := range filters {
+		klog.InfoS("Deleting tc filter to redirect Pod-to-Pod traffic between gateway and transport interface", "filter", filter)
+		if err := c.netlink.FilterDel(filter); err != nil && err.Error() != "no such file or directory" {
+			return err
+		}
+	}
+	// Release tc handles after all tc filters are deleted successfully.
+	for _, filter := range filters {
+		c.tcHandleAllocator.release(filter.Attrs().LinkIndex, filter.Attrs().Priority, filter.Attrs().Handle)
+	}
+	c.tcFilters.Delete(podCIDRStr)
+
+	return nil
+}
+
+func (c *Client) AddTcFilterPassToGw(gatewayIP net.IP, transportIfindex int) error {
+	var protocol uint16
+	var gatewayIPNet *net.IPNet
+	if gatewayIP.To4() == nil {
+		protocol = unix.ETH_P_IPV6
+		gatewayIPNet = &net.IPNet{IP: gatewayIP, Mask: net.CIDRMask(128, 128)}
+	} else {
+		protocol = unix.ETH_P_IP
+		gatewayIPNet = &net.IPNet{IP: gatewayIP, Mask: net.CIDRMask(32, 32)}
+	}
+
+	handle := c.tcHandleAllocator.allocate(transportIfindex, tcPriorityHigh)
+	success := false
+	defer func() {
+		if !success {
+			c.tcHandleAllocator.release(transportIfindex, tcPriorityHigh, handle)
+		}
+	}()
+
+	filter := generateTcFilterWithActionPass(transportIfindex,
+		protocol,
+		gatewayIPNet,
+		tcPriorityHigh,
+		handle)
+	// Add the tc filter to ignore the packets destined for the gateway IP because this IP is on host network, and it
+	// should not be bypassed.
+	klog.InfoS("Adding tc filter to pass traffic destined from gateway IP", "filter", filter)
+	err := c.netlink.FilterReplace(filter)
+	if err != nil {
+		return err
+	}
+	c.tcFilters.Store(gatewayIPNet.String(), []netlink.Filter{filter})
+	success = true
 
 	return nil
 }

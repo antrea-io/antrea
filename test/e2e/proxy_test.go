@@ -835,10 +835,21 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 		}
 	}
 
+	verifyClientIP := func(t *testing.T, clientIP string) {
+		// Only verify the client IP when the traffic mode is noEncap which ensures that all Nodes are on the same
+		// subnet. In hybrid mode, the client IP might be SNATed when accessing a Service on another Node in a
+		// different subnet.
+		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeNoEncap)
+		require.Equal(t, expectedClientIP, clientIP)
+	}
+
 	t.Run("InterNode/ClusterIP", func(t *testing.T) {
+		// If kube-proxy is running, kube-proxy takes precedence over AntreaProxy to handle the ClusterIP traffic, skip
+		// the test.
+		skipIfKubeProxyEnabled(t, data)
 		clientIP, err := probeClientIPFromNode(node, clusterIPUrl, data)
 		require.NoError(t, err, "ClusterIP hairpin should be able to be connected")
-		require.Equal(t, expectedClientIP, clientIP)
+		verifyClientIP(t, clientIP)
 	})
 	t.Run("InterNode/NodePort/ExternalTrafficPolicy:Cluster", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
@@ -847,7 +858,7 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 		}
 		clientIP, err := probeClientIPFromNode(node, nodePortClusterUrl, data)
 		require.NoError(t, err, "NodePort whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
-		require.Equal(t, expectedClientIP, clientIP)
+		verifyClientIP(t, clientIP)
 	})
 	t.Run("InterNode/LoadBalancer/ExternalTrafficPolicy:Cluster", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
@@ -856,7 +867,7 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 		}
 		clientIP, err := probeClientIPFromNode(node, lbClusterUrl, data)
 		require.NoError(t, err, "LoadBalancer whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
-		require.Equal(t, expectedClientIP, clientIP)
+		verifyClientIP(t, clientIP)
 	})
 }
 

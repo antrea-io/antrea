@@ -464,6 +464,18 @@ func (i *Initializer) Initialize() error {
 		}
 	}
 
+	// Initialize the necessary tc qdiscs and filters when traffic mode is noEncap (not bridge uplink to OVS) or hybrid
+	// to bypass Node host networking for Pod-to-Pod traffic.
+	if !i.connectUplinkToBridge && i.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap ||
+		i.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		if err := i.addTcQdiscs(); err != nil {
+			return err
+		}
+		if err := i.addTcFiltersPassToGw(); err != nil {
+			return err
+		}
+	}
+
 	if i.nodeType == config.K8sNode {
 		i.podNetworkWait.Increment()
 		// routeClient.Initialize() should be after i.setupOVSBridge() which
@@ -993,18 +1005,19 @@ func (i *Initializer) initK8sNodeLocalConfig(nodeName string) error {
 	}
 
 	i.nodeConfig = &config.NodeConfig{
-		Name:                       nodeName,
-		Type:                       config.K8sNode,
-		OVSBridge:                  i.ovsBridge,
-		DefaultTunName:             defaultTunInterfaceName,
-		NodeIPv4Addr:               nodeIPv4Addr,
-		NodeIPv6Addr:               nodeIPv6Addr,
-		NodeTransportInterfaceName: transportInterface.Name,
-		NodeTransportIPv4Addr:      transportIPv4Addr,
-		NodeTransportIPv6Addr:      transportIPv6Addr,
-		UplinkNetConfig:            new(config.AdapterNetConfig),
-		NodeTransportInterfaceMTU:  transportInterface.MTU,
-		WireGuardConfig:            i.wireGuardConfig,
+		Name:                        nodeName,
+		Type:                        config.K8sNode,
+		OVSBridge:                   i.ovsBridge,
+		DefaultTunName:              defaultTunInterfaceName,
+		NodeIPv4Addr:                nodeIPv4Addr,
+		NodeIPv6Addr:                nodeIPv6Addr,
+		NodeTransportInterfaceName:  transportInterface.Name,
+		NodeTransportIPv4Addr:       transportIPv4Addr,
+		NodeTransportIPv6Addr:       transportIPv6Addr,
+		UplinkNetConfig:             new(config.AdapterNetConfig),
+		NodeTransportInterfaceMTU:   transportInterface.MTU,
+		NodeTransportInterfaceIndex: transportInterface.Index,
+		WireGuardConfig:             i.wireGuardConfig,
 	}
 
 	i.networkConfig.InterfaceMTU, err = i.getInterfaceMTU(transportInterface)
