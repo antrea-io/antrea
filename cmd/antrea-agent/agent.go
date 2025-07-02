@@ -672,6 +672,7 @@ func run(o *Options) error {
 			k8sClient,
 			crdClient,
 			serviceInformer,
+			nodeInformer,
 			traceflowInformer,
 			ofClient,
 			networkPolicyController,
