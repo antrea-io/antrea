@@ -1654,7 +1654,9 @@ only a NodePort Service can be referred by `service` field.
 
 There are a few **restrictions** on configuring a policy/rule that applies to NodePort Services:
 
-1. This feature can only work when Antrea proxyAll is enabled and kube-proxy is disabled.
+1. This feature can only work when Antrea proxyAll is enabled.
+   - For Antrea versions prior to v2.1.0, kube-proxy must also be disabled.
+   - For Antrea v2.1.0 and later, disabling kube-proxy is no longer required.
 2. `service` field cannot be used with any other fields in `appliedTo`.
 3. a policy or a rule can't be applied to both a NodePort Service and other entities at the same time.
 4. If a `appliedTo` with `service` is used at policy level, then this policy can only contain ingress rules.
