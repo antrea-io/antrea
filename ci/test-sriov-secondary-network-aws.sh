@@ -29,14 +29,13 @@ AMI_ID="ami-05d38da78ce859165"  # AMI ID for Ubuntu 24.04
 
 RUN_ALL=true
 RUN_SETUP_ONLY=false
-RUN_CLEANUP_ONLY=false
 
 SUBNET_CIDR_RES_ID="${SUBNET_CIDR_RES_ID:-}"
 
 _usage="Usage: $0 [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] \
                   [--aws-security-group-id <SecurityGroupID>] [--aws-subnet-id <SubnetID>] \
                   [--aws-ec2-ssh-key-name <SSHKeyName>]
-                  [--aws-service-user-role-arn <ServiceUserRoleARN>]  [--aws-service-user <ServiceUserName>] \
+                  [--aws-service-user-role-arn <ServiceUserRoleARN>] \
                   [--aws-region <Region>] [--k8s-version <ClusterVersion>]
 
 Setup a Kubernetes cluster and test SR-IOV secondary network in AWS.
@@ -47,7 +46,6 @@ Setup a Kubernetes cluster and test SR-IOV secondary network in AWS.
         --aws-subnet-id               The subnet in which the ec2 instance network interface is located.
         --aws-ec2-ssh-key-name        The key name to be used for ssh access to ec2 instances.
         --aws-service-user-role-arn   AWS Service User Role ARN for logging in to awscli.
-        --aws-service-user            AWS Service User Name for logging in to awscli.
         --aws-region                  The AWS region where the cluster will be initiated. Defaults to $REGION.
         --setup-only                  Only perform setting up the cluster and run test.
         --cleanup-only                Only perform cleaning up the cluster.
@@ -90,10 +88,6 @@ case $key in
     AWS_SERVICE_USER_ROLE_ARN="$2"
     shift 2
     ;;
-    --aws-service-user)
-    AWS_SERVICE_USER_NAME="$2"
-    shift 2
-    ;;
     --aws-region)
     REGION="$2"
     shift 2
@@ -108,7 +102,7 @@ case $key in
     shift
     ;;
     --cleanup-only)
-    RUN_CLEANUP_ONLY=true
+    RUN_SETUP_ONLY=false
     RUN_ALL=false
     shift
     ;;
@@ -501,20 +495,27 @@ function run_test() {
 function clean_up() {
     set +e
     INSTANCE_ID=$1
-    ENI_ID=$2
 
-    echo "Terminating EC2 instance: $INSTANCE_ID"
-    aws ec2 terminate-instances --instance-ids "$INSTANCE_ID"
+    echo "Retrieving all network interfaces for instance: $INSTANCE_ID"
+    ENI_IDS=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+        --query "Reservations[].Instances[].NetworkInterfaces[].NetworkInterfaceId" \
+        --output text)
 
-    # Check if the EC2 instance termination was successful
-    if [ $? -eq 0 ]; then
-      echo "Successfully terminated EC2 instance: $INSTANCE_ID"
+    if [ -z "$ENI_IDS" ]; then
+        echo "No network interfaces found for instance: $INSTANCE_ID"
+        ENI_IDS=()
     else
-      echo "Failed to terminate EC2 instance: $INSTANCE_ID"
-      return 1
+        echo "Found network interfaces: $ENI_IDS"
+        read -ra ENI_IDS <<< "$ENI_IDS"
     fi
 
-    # Wait for the instance to reach the 'terminated' state
+    echo "Terminating EC2 instance: $INSTANCE_ID"
+    if ! aws ec2 terminate-instances --instance-ids "$INSTANCE_ID"; then
+        echo "Failed to terminate EC2 instance: $INSTANCE_ID"
+        return 1
+    fi
+    echo "Successfully terminated EC2 instance: $INSTANCE_ID"
+
     echo "Waiting for EC2 instance to terminate..."
     if ! aws ec2 wait instance-terminated --instance-ids "$INSTANCE_ID"; then
         echo "EC2 instance did not terminate successfully: $INSTANCE_ID"
@@ -522,36 +523,45 @@ function clean_up() {
     fi
     echo "EC2 instance terminated successfully: $INSTANCE_ID"
 
-    echo "Detaching network interface: $ENI_ID"
-    ATTACHMENT_ID=$(aws ec2 describe-network-interfaces --network-interface-ids "$ENI_ID" --query "NetworkInterfaces[0].Attachment.AttachmentId" --output text)
+    for ENI_ID in "${ENI_IDS[@]}"; do
+        if ! aws ec2 describe-network-interfaces --network-interface-ids "$ENI_ID" &>/dev/null; then
+            echo "Network interface $ENI_ID no longer exists (likely auto-deleted with instance)"
+            continue
+        fi
 
-    if [ "$ATTACHMENT_ID" != "None" ]; then
-      aws ec2 detach-network-interface --attachment-id "$ATTACHMENT_ID"
-      if [ $? -eq 0 ]; then
-        echo "Successfully detached network interface: $ENI_ID"
-      else
-        echo "Failed to detach network interface: $ENI_ID"
-        return 1
-      fi
-      # Wait for the ENI to become available
-      echo "Waiting for network interface to become available..."
-      if ! aws ec2 wait network-interface-available --network-interface-ids "$ENI_ID"; then
-          echo "Network interface did not become available: $ENI_ID"
-          return 1
-      fi
-      echo "Network interface is now available: $ENI_ID"
-    else
-      echo "Network interface is not attached to any instance."
-    fi
+        ATTACHMENT_INFO=$(aws ec2 describe-network-interfaces \
+            --network-interface-ids "$ENI_ID" \
+            --query "NetworkInterfaces[0].Attachment.{AttachmentId: AttachmentId, Status: Status}" \
+            --output json)
 
-    echo "Deleting network interface: $ENI_ID"
-    aws ec2 delete-network-interface --network-interface-id "$ENI_ID"
-    if [ $? -eq 0 ]; then
-      echo "Successfully deleted network interface: $ENI_ID"
-    else
-      echo "Failed to delete network interface: $ENI_ID"
-      return 1
-    fi
+        ATTACHMENT_ID=$(echo "$ATTACHMENT_INFO" | jq -r '.AttachmentId')
+        ATTACHMENT_STATUS=$(echo "$ATTACHMENT_INFO" | jq -r '.Status')
+
+        if [[ "$ATTACHMENT_ID" != "None" && "$ATTACHMENT_STATUS" == "attached" ]]; then
+            echo "Detaching network interface: $ENI_ID"
+            if aws ec2 detach-network-interface --attachment-id "$ATTACHMENT_ID"; then
+                echo "Successfully detached network interface: $ENI_ID"
+                echo "Waiting for network interface to become available..."
+                if aws ec2 wait network-interface-available --network-interface-ids "$ENI_ID"; then
+                    echo "Network interface is now available: $ENI_ID"
+                else
+                    echo "Failed waiting for network interface availability: $ENI_ID"
+                    continue
+                fi
+            else
+                echo "Failed to detach network interface: $ENI_ID"
+                continue
+            fi
+        fi
+
+        echo "Deleting network interface: $ENI_ID"
+        if aws ec2 delete-network-interface --network-interface-id "$ENI_ID"; then
+            echo "Successfully deleted network interface: $ENI_ID"
+        else
+            echo "Failed to delete network interface: $ENI_ID"
+        fi
+    done
+
     set -e
 }
 
@@ -568,8 +578,8 @@ function delete_subnet_cidr_reservation() {
 }
 
 function clean_up_all() {
-      clean_up "$CONTROLPLANE_INSTANCE_ID" "$CONTROLPLANE_NODE_ENI"
-      clean_up "$WORKER_INSTANCE_ID" "$WORKER_NODE_ENI"
+      clean_up "$CONTROLPLANE_INSTANCE_ID"
+      clean_up "$WORKER_INSTANCE_ID"
       delete_subnet_cidr_reservation
 }
 
