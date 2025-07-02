@@ -71,7 +71,7 @@ type Interface interface {
 	DeleteEgressRoutes(tableID uint32) error
 
 	// AddEgressRule creates an IP rule which makes Egress traffic with the provided mark look up the specified table.
-	AddEgressRule(tableID uint32, mark uint32) error
+	AddEgressRule(tableID uint32, mark uint32, isIPv6 bool) error
 
 	// DeleteEgressRule deletes the IP rule installed by AddEgressRule.
 	DeleteEgressRule(tableID uint32, mark uint32) error
