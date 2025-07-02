@@ -593,7 +593,7 @@ func testMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, send
 
 func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestcase, nodeMulticastInterfaces map[int][]string, testNamespace string, transportInterface string, checkReceiverRoute bool, checkSenderRoute bool) {
 	currentEncapMode, _ := data.GetEncapMode()
-	if requiresExternalHostSupport(mc) && currentEncapMode == config.TrafficEncapModeEncap {
+	if requiresExternalHostSupport(mc) && currentEncapMode.SupportsEncap() {
 		t.Skipf("Multicast does not support using hostNetwork Pod to simulate the external host with encap mode, skip the case")
 	}
 	mcjoinWaitTimeout := defaultTimeout / time.Second

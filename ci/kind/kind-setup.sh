@@ -42,6 +42,8 @@ DEPLOY_EXTERNAL_FRR=false
 FLEXIBLE_IPAM=false
 positional_args=()
 options=()
+runtimeOS="$(uname)"
+runtimeArch="$(uname -m)"
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -154,8 +156,12 @@ function configure_networks {
   networks=()
   for s in $SUBNETS; do
     network=antrea-$i
-    echo "creating network $network with $s"
-    docker network create -d bridge --subnet $s $network >/dev/null 2>&1
+    docker_network_args=("-d" "bridge" "--subnet" "$s")
+    if ! ([[ "$runtimeOS" == "Darwin" ]] && [[ "$runtimeArch" == "arm64" ]]); then
+      docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv4=nat-unprotected")
+    fi
+    echo "Creating docker network $network with args: ${docker_network_args[@]}"
+    docker network create "${docker_network_args[@]}" $network >/dev/null 2>&1
     networks+=($network)
     i=$((i+1))
   done
@@ -232,8 +238,13 @@ function configure_extra_networks {
   networks=()
   for s in $EXTRA_NETWORKS ; do
     network=antrea-$i
-    echo "creating network $network with $s"
     docker network create -d bridge --subnet $s $network >/dev/null 2>&1
+    docker_network_args=("-d" "bridge" "--subnet" "$s")
+    if ! ([[ "$runtimeOS" == "Darwin" ]] && [[ "$runtimeArch" == "arm64" ]]); then
+      docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv4=nat-unprotected")
+    fi
+    echo "Creating docker network $network with args: ${docker_network_args[@]}"
+    docker network create "${docker_network_args[@]}" $network >/dev/null 2>&1
     networks+=($network)
     i=$((i+1))
   done
@@ -530,7 +541,6 @@ function destroy {
 }
 
 function printUnixTimestamp {
-    runtimeOS="$(uname)"
     if [[ "$runtimeOS" == "Darwin" ]]; then
         echo $(date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$1" "+%s")
     else
@@ -794,9 +804,13 @@ if [[ $ACTION == "create" ]]; then
     # See https://www.docker.com/blog/docker-engine-28-hardening-container-networking-by-default/
     # While this is only required when we create extra docker networks, it's easier to use it
     # consistently. It is also better than modifying the iptables rules installed by docker.
-    docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv4=nat-unprotected")
+    if ! ([[ "$runtimeOS" == "Darwin" ]] && [[ "$runtimeArch" == "arm64" ]]); then
+       docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv4=nat-unprotected")
+    fi
     if [[ "$IP_FAMILY" != "ipv4" ]]; then
-        docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv6=nat-unprotected")
+        if ! ([[ "$runtimeOS" == "Darwin" ]] && [[ "$runtimeArch" == "arm64" ]]); then
+          docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv6=nat-unprotected")
+        fi
         docker_network_args+=("--ipv6")
     fi
     if [[ $FLEXIBLE_IPAM == true ]]; then
