@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -296,6 +296,21 @@ func (m *MockInterface) NeighList(arg0, arg1 int) ([]netlink.Neigh, error) {
 func (mr *MockInterfaceMockRecorder) NeighList(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NeighList", reflect.TypeOf((*MockInterface)(nil).NeighList), arg0, arg1)
+}
+
+// NeighListExecute mocks base method.
+func (m *MockInterface) NeighListExecute(arg0 netlink.Ndmsg) ([]netlink.Neigh, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NeighListExecute", arg0)
+	ret0, _ := ret[0].([]netlink.Neigh)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NeighListExecute indicates an expected call of NeighListExecute.
+func (mr *MockInterfaceMockRecorder) NeighListExecute(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NeighListExecute", reflect.TypeOf((*MockInterface)(nil).NeighListExecute), arg0)
 }
 
 // NeighSet mocks base method.
