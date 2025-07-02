@@ -117,6 +117,7 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 	kubeClient := fake.NewSimpleClientset(&pod1, &pod2, &pod3, &svc1)
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
 	serviceInformer := informerFactory.Core().V1().Services()
+	nodeInformer := informerFactory.Core().V1().Nodes()
 	mockOFClient := openflowtest.NewMockClient(controller)
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
@@ -134,6 +135,8 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		kubeClient:            kubeClient,
 		serviceLister:         serviceInformer.Lister(),
 		serviceListerSynced:   serviceInformer.Informer().HasSynced,
+		nodeLister:            nodeInformer.Lister(),
+		nodeListerSynced:      nodeInformer.Informer().HasSynced,
 		crdClient:             crdClient,
 		traceflowInformer:     traceflowInformer,
 		traceflowLister:       traceflowInformer.Lister(),

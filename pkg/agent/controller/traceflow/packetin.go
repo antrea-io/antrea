@@ -26,6 +26,7 @@ import (
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -81,6 +82,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 	var err error
 	var tag uint8
 	var ctNwDst, ctNwSrc, ipDst, ipSrc, ns, srcPod string
+	var netIPDst net.IP
 	etherData := new(protocol.Ethernet)
 	if err := etherData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
@@ -102,6 +104,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		}
 		ipDst = ipPacket.NWDst.String()
 		ipSrc = ipPacket.NWSrc.String()
+		netIPDst = ipPacket.NWDst
 	case protocol.IPv6_MSG:
 		ipv6Packet, ok := etherData.Data.(*protocol.IPv6)
 		if !ok {
@@ -118,6 +121,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		}
 		ipDst = ipv6Packet.NWDst.String()
 		ipSrc = ipv6Packet.NWSrc.String()
+		netIPDst = ipv6Packet.NWDst
 	default:
 		return nil, nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", etherData.Ethertype)
 	}
@@ -344,7 +348,26 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			}
 			ob.Action = crdv1beta1.ActionForwardedOutOfOverlay
 		} else if outputPort == gwPort { // noEncap
-			ob.Action = crdv1beta1.ActionForwarded
+			isPodIP := false
+			nodes, _ := c.nodeLister.List(labels.Everything())
+		nodeLoop:
+			for _, node := range nodes {
+				for _, cidr := range node.Spec.PodCIDRs {
+					_, netCIDR, err := net.ParseCIDR(cidr)
+					if err != nil {
+						continue
+					}
+					if netCIDR.Contains(netIPDst) {
+						isPodIP = true
+						break nodeLoop
+					}
+				}
+			}
+			if isPodIP {
+				ob.Action = crdv1beta1.ActionForwarded
+			} else {
+				ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
+			}
 		} else {
 			// Output port is Pod port, packet is delivered.
 			ob.Action = crdv1beta1.ActionDelivered
