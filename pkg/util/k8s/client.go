@@ -117,6 +117,12 @@ func OverrideKubeAPIServer(kubeAPIServerOverride string) {
 	if len(kubeAPIServerOverride) == 0 {
 		return
 	}
+	host, port := ParseKubeAPIServerOverride(kubeAPIServerOverride)
+	os.Setenv(kubeServiceHostEnvKey, host)
+	os.Setenv(kubeServicePortEnvKey, port)
+}
+
+func ParseKubeAPIServerOverride(kubeAPIServerOverride string) (string, string) {
 	hostPort := strings.ReplaceAll(kubeAPIServerOverride, "https://", "")
 	var host, port string
 	var err error
@@ -125,8 +131,7 @@ func OverrideKubeAPIServer(kubeAPIServerOverride string) {
 		host = hostPort
 		port = "443"
 	}
-	os.Setenv(kubeServiceHostEnvKey, host)
-	os.Setenv(kubeServicePortEnvKey, port)
+	return host, port
 }
 
 func EndpointSliceAPIAvailable(k8sClient clientset.Interface) (bool, error) {

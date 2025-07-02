@@ -21,6 +21,7 @@ import (
 	"time"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/util/validation"
 )
 
 // ParseFlowCollectorAddr parses the flow collector address input for flow exporter and aggregator
@@ -44,6 +45,9 @@ func ParseFlowCollectorAddr(addr string, defaultPort string, defaultProtocol str
 			port = defaultPort
 		} else {
 			port = strSlice[1]
+			if err := validation.ValidatePortString(port); err != nil {
+				return host, port, proto, err
+			}
 		}
 		if (strSlice[2] != "tls") && (strSlice[2] != "tcp") && (strSlice[2] != "udp") {
 			return host, port, proto, fmt.Errorf("connection over %s transport proto is not supported", strSlice[2])
@@ -52,6 +56,9 @@ func ParseFlowCollectorAddr(addr string, defaultPort string, defaultProtocol str
 	} else if len(strSlice) == 2 {
 		host = strSlice[0]
 		port = strSlice[1]
+		if err := validation.ValidatePortString(port); err != nil {
+			return host, port, proto, err
+		}
 		proto = defaultProtocol
 	} else if len(strSlice) == 1 {
 		host = strSlice[0]

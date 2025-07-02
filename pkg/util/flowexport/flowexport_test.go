@@ -37,55 +37,63 @@ func TestParseFlowCollectorAddr(t *testing.T) {
 		expectedHost  string
 		expectedPort  string
 		expectedProto string
-		expectedError error
+		expectedError string
 	}{
 		{
 			addr:          "1.2.3.4:80:udp",
 			expectedHost:  "1.2.3.4",
 			expectedPort:  "80",
 			expectedProto: "udp",
-			expectedError: nil,
+			expectedError: "",
 		},
 		{
 			addr:          "1.2.3.4:80",
 			expectedHost:  "1.2.3.4",
 			expectedPort:  "80",
 			expectedProto: defaultFlowCollectorProtocol,
-			expectedError: nil,
+			expectedError: "",
 		},
 		{
 			addr:          "[fe80:ffff:ffff:ffff:ffff:ffff:ffff:ffff]:80:tcp",
 			expectedHost:  "fe80:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
 			expectedPort:  "80",
 			expectedProto: "tcp",
-			expectedError: nil,
+			expectedError: "",
 		},
 		{
 			addr:          "flow-aggregator/flow-aggregator::tcp",
 			expectedHost:  "flow-aggregator/flow-aggregator",
 			expectedPort:  defaultFlowCollectorPort,
 			expectedProto: "tcp",
-			expectedError: nil,
+			expectedError: "",
+		},
+		{
+			addr:          "flow-aggregator/flow-aggregator:str:tcp",
+			expectedError: "invalid port str: strconv.Atoi: parsing \"str\": invalid syntax",
+		},
+		{
+			addr:          "flow-aggregator/flow-aggregator:78900:tcp",
+			expectedError: "port 78900 is out of range, valid range is 1-65535",
 		},
 		{
 			addr:          ":abbbsctp::",
 			expectedHost:  "",
 			expectedPort:  "",
 			expectedProto: "",
-			expectedError: fmt.Errorf("flow collector address is given in invalid format"),
+			expectedError: "flow collector address is given in invalid format",
 		},
 		{
 			addr:          "1.2.3.4:80:sctp",
 			expectedHost:  "",
 			expectedPort:  "",
 			expectedProto: "",
-			expectedError: fmt.Errorf("connection over %s transport proto is not supported", "sctp"),
+			expectedError: "connection over sctp transport proto is not supported",
 		},
 	}
 	for _, tc := range testcases {
 		host, port, proto, err := ParseFlowCollectorAddr(tc.addr, defaultFlowCollectorPort, defaultFlowCollectorProtocol)
-		if tc.expectedError != nil {
-			assert.Equal(t, tc.expectedError, err)
+		if tc.expectedError != "" {
+			assert.ErrorContains(t, err, tc.expectedError)
 		} else {
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedHost, host)
