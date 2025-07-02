@@ -38,6 +38,7 @@ func TestGetRejectType(t *testing.T) {
 		antreaProxyEnabled bool
 		srcIsLocal         bool
 		dstIsLocal         bool
+		srcFromTun         bool
 		expectRejectType   rejectType
 	}{
 		{
@@ -105,12 +106,21 @@ func TestGetRejectType(t *testing.T) {
 			expectRejectType:   rejectNoAPServiceRemoteToLocal,
 		},
 		{
-			name:               "rejectServiceRemoteToExternal",
+			name:               "rejectServiceRemoteFromTunToExternal",
 			isServiceTraffic:   true,
 			antreaProxyEnabled: true,
 			srcIsLocal:         false,
 			dstIsLocal:         false,
-			expectRejectType:   rejectServiceRemoteToExternal,
+			srcFromTun:         true,
+			expectRejectType:   rejectServiceRemoteFromTunToExternal,
+		},
+		{
+			name:               "rejectServiceRemoteFromGwToExternal",
+			isServiceTraffic:   true,
+			antreaProxyEnabled: true,
+			srcIsLocal:         false,
+			dstIsLocal:         false,
+			expectRejectType:   rejectServiceRemoteFromGwToExternal,
 		},
 		{
 			name:               "unsupported pod2pod remote2remote",
@@ -131,7 +141,7 @@ func TestGetRejectType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rejectType := getRejectType(tt.isServiceTraffic, tt.antreaProxyEnabled, tt.srcIsLocal, tt.dstIsLocal)
+			rejectType := getRejectType(tt.isServiceTraffic, tt.antreaProxyEnabled, tt.srcIsLocal, tt.dstIsLocal, tt.srcFromTun)
 			assert.Equal(t, tt.expectRejectType, rejectType)
 		})
 	}
@@ -358,15 +368,15 @@ func TestGetRejectOFPorts(t *testing.T) {
 			expectOutPort: gwPort,
 		},
 		{
-			name:          "rejectServiceRemoteToExternal",
-			rejectType:    rejectServiceRemoteToExternal,
+			name:          "RejectServiceRemoteFromTunToExternal",
+			rejectType:    rejectServiceRemoteFromTunToExternal,
 			tunPort:       tunPort,
 			expectInPort:  tunPort,
 			expectOutPort: unsetPort,
 		},
 		{
-			name:          "RejectServiceRemoteToExternalWithoutTun",
-			rejectType:    rejectServiceRemoteToExternal,
+			name:          "RejectServiceRemoteFromGatewayToExternal",
+			rejectType:    rejectServiceRemoteFromGwToExternal,
 			tunPort:       unsetPort,
 			expectInPort:  gwPort,
 			expectOutPort: unsetPort,
