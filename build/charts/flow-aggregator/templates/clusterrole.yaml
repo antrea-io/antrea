@@ -6,5 +6,5 @@ metadata:
   name: flow-aggregator-role
 rules:
   - apiGroups: [""]
-    resources: ["pods"]
+    resources: ["pods", "nodes", "services"]
     verbs: ["get", "list", "watch"]

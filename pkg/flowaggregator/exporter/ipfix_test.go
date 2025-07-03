@@ -79,12 +79,13 @@ func TestIPFIXExporter_createAndSendTemplate(t *testing.T) {
 			externalFlowCollectorProto: "",
 			exportingProcess:           mockIPFIXExpProc,
 			bufferedExporter:           mockIPFIXBufferedExp,
+			includeK8sNames:            true,
 			registry:                   mockIPFIXRegistry,
 			aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
 			observationDomainID:        testObservationDomainID,
 			clock:                      clock.RealClock{},
 		}
-		elemList := createElementList(flowaggregatorconfig.AggregatorModeAggregate, isIPv6, mockIPFIXRegistry)
+		elemList := createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, isIPv6, mockIPFIXRegistry)
 		mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
 			return record.GetTemplateID() == testTemplateID && reflect.DeepEqual(record.GetOrderedElementList(), elemList)
 		})).Return(nil)
@@ -125,12 +126,15 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 			Address:             "",
 			ObservationDomainID: ptr.To[uint32](testObservationDomainID),
 			RecordFormat:        "IPFIX",
+			IncludeK8sNames:     ptr.To(true),
+			IncludeK8sUIDs:      ptr.To(false),
 		},
 	}
 	ipfixExporter := &IPFIXExporter{
 		config:                     config.FlowCollector,
 		externalFlowCollectorAddr:  "",
 		externalFlowCollectorProto: "",
+		includeK8sNames:            true,
 		templateIDv4:               testTemplateIDv4,
 		templateIDv6:               testTemplateIDv6,
 		registry:                   mockIPFIXRegistry,
@@ -138,7 +142,7 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 		observationDomainID:        testObservationDomainID,
 		clock:                      clock.RealClock{},
 	}
-	createElementList(flowaggregatorconfig.AggregatorModeAggregate, false, mockIPFIXRegistry)
+	createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
 	ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
 
 	setCount := 0
@@ -159,6 +163,8 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 	const newTemplateRefreshTimeout = 1200 * time.Second
 	config.FlowCollector.Address = fmt.Sprintf("%s:%s", newAddr, newProto)
 	config.FlowCollector.RecordFormat = "JSON"
+	config.FlowCollector.IncludeK8sNames = ptr.To(false)
+	config.FlowCollector.IncludeK8sUIDs = ptr.To(true)
 	config.FlowCollector.TemplateRefreshTimeout = newTemplateRefreshTimeout.String()
 	config.FlowCollector.TLS.Enable = true
 	config.FlowCollector.TLS.MinVersion = "VersionTLS13"
@@ -176,6 +182,12 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 	assert.Equal(t, newTemplateRefreshTimeout, ipfixExporter.templateRefreshTimeout)
 	assert.True(t, ipfixExporter.tls.enable)
 	assert.Equal(t, uint16(tls.VersionTLS13), ipfixExporter.tls.minVersion)
+	assert.False(t, ipfixExporter.includeK8sNames)
+	assert.True(t, ipfixExporter.includeK8sUIDs)
+
+	// We have switched includeK8sNames and includeK8sUIDs
+	createElementList(flowaggregatorconfig.AggregatorModeAggregate, false, true, false, mockIPFIXRegistry)
+	ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
 
 	require.NoError(t, ipfixExporter.AddRecord(record, false))
 	assert.Equal(t, 2, setCount, "Invalid number of flow sets sent by exporter")
@@ -211,6 +223,7 @@ func TestIPFIXExporter_Stop(t *testing.T) {
 		config:                     config.FlowCollector,
 		externalFlowCollectorAddr:  "",
 		externalFlowCollectorProto: "",
+		includeK8sNames:            true,
 		templateIDv4:               testTemplateIDv4,
 		templateIDv6:               testTemplateIDv6,
 		registry:                   mockIPFIXRegistry,
@@ -218,7 +231,7 @@ func TestIPFIXExporter_Stop(t *testing.T) {
 		observationDomainID:        testObservationDomainID,
 		clock:                      clock.RealClock{},
 	}
-	createElementList(flowaggregatorconfig.AggregatorModeAggregate, false, mockIPFIXRegistry)
+	createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
 	ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
 
 	mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
@@ -263,6 +276,7 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 			ipfixExporter := &IPFIXExporter{
 				externalFlowCollectorAddr:  "",
 				externalFlowCollectorProto: "",
+				includeK8sNames:            true,
 				templateIDv4:               testTemplateIDv4,
 				templateIDv6:               testTemplateIDv6,
 				registry:                   mockIPFIXRegistry,
@@ -271,9 +285,9 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 				clusterID:                  "foobar",
 				clock:                      clock.RealClock{},
 			}
-			createElementList(tc.aggregatorMode, false, mockIPFIXRegistry)
+			createElementList(tc.aggregatorMode, true, false, false, mockIPFIXRegistry)
 			ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
-			createElementList(tc.aggregatorMode, true, mockIPFIXRegistry)
+			createElementList(tc.aggregatorMode, true, false, true, mockIPFIXRegistry)
 			ipfixExporter.elementsV6, _ = ipfixExporter.prepareElements(true)
 
 			testTemplateID := testTemplateIDv4
@@ -308,6 +322,7 @@ func TestIPFIXExporter_initIPFIXExportingProcess_Error(t *testing.T) {
 	ipfixExporter := &IPFIXExporter{
 		externalFlowCollectorAddr:  "",
 		externalFlowCollectorProto: "",
+		includeK8sNames:            true,
 		aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
 		clock:                      clock.RealClock{},
 	}
@@ -328,6 +343,7 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 		externalFlowCollectorProto: "",
 		exportingProcess:           mockIPFIXExpProc,
 		bufferedExporter:           mockIPFIXBufferedExp,
+		includeK8sNames:            true,
 		templateIDv4:               testTemplateIDv4,
 		templateIDv6:               testTemplateIDv6,
 		registry:                   mockIPFIXRegistry,
@@ -335,7 +351,7 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 		observationDomainID:        testObservationDomainID,
 		clock:                      clock.RealClock{},
 	}
-	createElementList(flowaggregatorconfig.AggregatorModeAggregate, false, mockIPFIXRegistry)
+	createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
 	ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
 
 	mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
@@ -346,13 +362,9 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 	assert.Error(t, ipfixExporter.AddRecord(record, false))
 }
 
-func createElementList(mode flowaggregatorconfig.AggregatorMode, isIPv6 bool, mockIPFIXRegistry *ipfixtesting.MockIPFIXRegistry) []ipfixentities.InfoElementWithValue {
-	ianaInfoElements := infoelements.IANAInfoElementsIPv4
-	antreaInfoElements := infoelements.AntreaInfoElementsIPv4
-	if isIPv6 {
-		ianaInfoElements = infoelements.IANAInfoElementsIPv6
-		antreaInfoElements = infoelements.AntreaInfoElementsIPv6
-	}
+func createElementList(mode flowaggregatorconfig.AggregatorMode, includeK8sNames, includeK8sUIDs, isIPv6 bool, mockIPFIXRegistry *ipfixtesting.MockIPFIXRegistry) []ipfixentities.InfoElementWithValue {
+	ianaInfoElements := infoelements.IANAInfoElements(isIPv6)
+	antreaInfoElements := infoelements.AntreaInfoElements(includeK8sNames, includeK8sUIDs, isIPv6)
 	elemList := make([]ipfixentities.InfoElementWithValue, 0)
 	for _, ie := range ianaInfoElements {
 		elemList = append(elemList, createElement(ie, ipfixregistry.IANAEnterpriseID))
@@ -490,8 +502,8 @@ func TestInitExportingProcess(t *testing.T) {
 		opt.ExternalFlowCollectorAddr = listener.Addr().String()
 		opt.ExternalFlowCollectorProto = listener.Addr().Network()
 		opt.Config.FlowCollector.RecordFormat = "JSON"
-		createElementList(flowaggregatorconfig.AggregatorModeAggregate, false, mockIPFIXRegistry)
-		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, mockIPFIXRegistry)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, true, mockIPFIXRegistry)
 		exp := NewIPFIXExporter(clusterUUID, clusterUUID.String(), opt, mockIPFIXRegistry)
 		err = exp.initExportingProcess()
 		assert.NoError(t, err)
@@ -512,8 +524,8 @@ func TestInitExportingProcess(t *testing.T) {
 		opt.ExternalFlowCollectorAddr = listener.LocalAddr().String()
 		opt.ExternalFlowCollectorProto = listener.LocalAddr().Network()
 		opt.Config.FlowCollector.RecordFormat = "JSON"
-		createElementList(flowaggregatorconfig.AggregatorModeAggregate, false, mockIPFIXRegistry)
-		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, mockIPFIXRegistry)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, true, mockIPFIXRegistry)
 		exp := NewIPFIXExporter(clusterUUID, clusterUUID.String(), opt, mockIPFIXRegistry)
 		err = exp.initExportingProcess()
 		assert.NoError(t, err)
@@ -531,7 +543,7 @@ func TestInitExportingProcess(t *testing.T) {
 		opt.ExternalFlowCollectorProto = "tcp"
 		exp := NewIPFIXExporter(clusterUUID, clusterUUID.String(), opt, mockIPFIXRegistry)
 		err := exp.initExportingProcess()
-		assert.ErrorContains(t, err, "got error when initializing IPFIX exporting process: dial tcp 127.0.0.1:0:")
+		assert.ErrorContains(t, err, "got error when initializing IPFIX exporting process: cannot create the connection to the Collector")
 	})
 	t.Run("tls success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -564,8 +576,8 @@ func TestInitExportingProcess(t *testing.T) {
 		// Use IPFIX to guarantee that data is sent (and should be received by the server):
 		// in this case the data is the template records.
 		opt.Config.FlowCollector.RecordFormat = "IPFIX"
-		createElementList(flowaggregatorconfig.AggregatorModeAggregate, false, mockIPFIXRegistry)
-		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, mockIPFIXRegistry)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, true, mockIPFIXRegistry)
 		exp := NewIPFIXExporter(clusterUUID, clusterUUID.String(), opt, mockIPFIXRegistry)
 		defer exp.Stop()
 		err = exp.initExportingProcess()
@@ -609,8 +621,8 @@ func TestInitExportingProcess(t *testing.T) {
 			MinVersion:   tls.VersionTLS12,
 		}, recvCh)
 		opt.Config.FlowCollector.RecordFormat = "IPFIX"
-		createElementList(flowaggregatorconfig.AggregatorModeAggregate, false, mockIPFIXRegistry)
-		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, mockIPFIXRegistry)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, true, mockIPFIXRegistry)
 		exp := NewIPFIXExporter(clusterUUID, clusterUUID.String(), opt, mockIPFIXRegistry)
 		defer exp.Stop()
 		err = exp.initExportingProcess()

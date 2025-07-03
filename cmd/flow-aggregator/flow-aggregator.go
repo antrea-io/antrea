@@ -30,7 +30,8 @@ import (
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/cipher"
-	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/objectstore"
 	"antrea.io/antrea/pkg/version"
 )
 
@@ -52,12 +53,16 @@ func run(configFile string) error {
 
 	k8sClient, err := createK8sClient()
 	if err != nil {
-		return fmt.Errorf("error when creating K8s client: %v", err)
+		return fmt.Errorf("error when creating K8s client: %w", err)
 	}
 
-	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
+	informerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClient, informerDefaultResync, informers.WithTransform(k8s.NewTrimmer(k8s.TrimPod, k8s.TrimNode)))
 	podInformer := informerFactory.Core().V1().Pods()
-	podStore := podstore.NewPodStore(podInformer.Informer())
+	podStore := objectstore.NewPodStore(podInformer.Informer())
+	nodeInformer := informerFactory.Core().V1().Nodes()
+	nodeStore := objectstore.NewNodeStore(nodeInformer.Informer())
+	serviceInformer := informerFactory.Core().V1().Services()
+	serviceStore := objectstore.NewServiceStore(serviceInformer.Informer())
 
 	klog.InfoS("Retrieving Antrea cluster UUID")
 	clusterUUID, err := aggregator.GetClusterUUID(ctx, k8sClient)
@@ -70,6 +75,8 @@ func run(configFile string) error {
 		k8sClient,
 		clusterUUID,
 		podStore,
+		nodeStore,
+		serviceStore,
 		configFile,
 	)
 
@@ -85,7 +92,7 @@ func run(configFile string) error {
 
 	cipherSuites, err := cipher.GenerateCipherSuitesList(flowAggregator.APIServer.TLSCipherSuites)
 	if err != nil {
-		return fmt.Errorf("error generating Cipher Suite list: %v", err)
+		return fmt.Errorf("error generating Cipher Suite list: %w", err)
 	}
 	apiServer, err := apiserver.New(
 		flowAggregator,
@@ -93,7 +100,7 @@ func run(configFile string) error {
 		cipherSuites,
 		cipher.TLSVersionMap[flowAggregator.APIServer.TLSMinVersion])
 	if err != nil {
-		return fmt.Errorf("error when creating flow aggregator API server: %v", err)
+		return fmt.Errorf("error when creating flow aggregator API server: %w", err)
 	}
 	go apiServer.Run(ctx)
 

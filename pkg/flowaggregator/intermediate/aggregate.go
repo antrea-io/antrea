@@ -432,8 +432,14 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	if sourcePodNamespace := incomingRecord.K8S.SourcePodNamespace; sourcePodNamespace != "" {
 		existingRecord.K8S.SourcePodNamespace = sourcePodNamespace
 	}
+	if sourcePodUID := incomingRecord.K8S.SourcePodUid; sourcePodUID != "" {
+		existingRecord.K8S.SourcePodUid = sourcePodUID
+	}
 	if sourceNodeName := incomingRecord.K8S.SourceNodeName; sourceNodeName != "" {
 		existingRecord.K8S.SourceNodeName = sourceNodeName
+	}
+	if sourceNodeUID := incomingRecord.K8S.SourceNodeUid; sourceNodeUID != "" {
+		existingRecord.K8S.SourceNodeUid = sourceNodeUID
 	}
 	if destinationPodName := incomingRecord.K8S.DestinationPodName; destinationPodName != "" {
 		existingRecord.K8S.DestinationPodName = destinationPodName
@@ -441,8 +447,14 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	if destinationPodNamespace := incomingRecord.K8S.DestinationPodNamespace; destinationPodNamespace != "" {
 		existingRecord.K8S.DestinationPodNamespace = destinationPodNamespace
 	}
+	if destinationPodUID := incomingRecord.K8S.DestinationPodUid; destinationPodUID != "" {
+		existingRecord.K8S.DestinationPodUid = destinationPodUID
+	}
 	if destinationNodeName := incomingRecord.K8S.DestinationNodeName; destinationNodeName != "" {
 		existingRecord.K8S.DestinationNodeName = destinationNodeName
+	}
+	if destinationNodeUID := incomingRecord.K8S.DestinationNodeUid; destinationNodeUID != "" {
+		existingRecord.K8S.DestinationNodeUid = destinationNodeUID
 	}
 	if destinationClusterIP := incomingRecord.K8S.DestinationClusterIp; destinationClusterIP != nil {
 		existingRecord.K8S.DestinationClusterIp = destinationClusterIP
@@ -459,6 +471,9 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	if ingressNetworkPolicyNamespace := incomingRecord.K8S.IngressNetworkPolicyNamespace; ingressNetworkPolicyNamespace != "" {
 		existingRecord.K8S.IngressNetworkPolicyNamespace = ingressNetworkPolicyNamespace
 	}
+	if ingressNetworkPolicyUID := incomingRecord.K8S.IngressNetworkPolicyUid; ingressNetworkPolicyUID != "" {
+		existingRecord.K8S.IngressNetworkPolicyUid = ingressNetworkPolicyUID
+	}
 	if ingressNetworkPolicyRuleAction := incomingRecord.K8S.IngressNetworkPolicyRuleAction; ingressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION {
 		existingRecord.K8S.IngressNetworkPolicyRuleAction = ingressNetworkPolicyRuleAction
 	}
@@ -473,6 +488,9 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	}
 	if egressNetworkPolicyNamespace := incomingRecord.K8S.EgressNetworkPolicyNamespace; egressNetworkPolicyNamespace != "" {
 		existingRecord.K8S.EgressNetworkPolicyNamespace = egressNetworkPolicyNamespace
+	}
+	if egressNetworkPolicyUID := incomingRecord.K8S.EgressNetworkPolicyUid; egressNetworkPolicyUID != "" {
+		existingRecord.K8S.EgressNetworkPolicyUid = egressNetworkPolicyUID
 	}
 	if egressNetworkPolicyRuleAction := incomingRecord.K8S.EgressNetworkPolicyRuleAction; egressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION {
 		existingRecord.K8S.EgressNetworkPolicyRuleAction = egressNetworkPolicyRuleAction

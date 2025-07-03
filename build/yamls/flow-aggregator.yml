@@ -97,6 +97,8 @@ rules:
   - ""
   resources:
   - pods
+  - nodes
+  - services
   verbs:
   - get
   - list
@@ -303,6 +305,14 @@ data:
         # The current default is VersionTLS12.
         minVersion: ""
 
+      # Include the names of K8s objects (Pods, Nodes, ...) as information elements in exported records.
+      # Defaults to true.
+      includeK8sNames: true
+
+      # Include the UIDs of K8s objects (Pods, Nodes, ...) as information elements in exported records.
+      # Defaults to false.
+      includeK8sUIDs: false
+
     # clickHouse contains ClickHouse related configuration options.
     clickHouse:
       # Enable is the switch to enable exporting flow records to ClickHouse.
@@ -486,7 +496,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 11e0b942e088c46584c07ab48d927e98c58a860f049f4d0e118e591e6e31b1e9
+        checksum/config: 90ac254e5326185b3bdb2ae70568457015f7505606d73b3f27d948872479a279
       labels:
         app: flow-aggregator
     spec:

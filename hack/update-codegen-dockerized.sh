@@ -102,7 +102,7 @@ MOCKGEN_TARGETS=(
   "pkg/flowaggregator/intermediate AggregationProcess testing"
   "pkg/flowaggregator/querier FlowAggregatorQuerier testing"
   "pkg/flowaggregator/s3uploader S3UploaderAPI testing"
-  "pkg/util/podstore Interface testing"
+  "pkg/util/objectstore NodeStore,PodStore,ServiceStore testing"
   "third_party/proxy Provider testing"
 )
 

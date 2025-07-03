@@ -38,7 +38,7 @@ import (
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
@@ -135,6 +135,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				DestinationServicePortName:     servicePortName.String(),
 				IngressNetworkPolicyName:       np1.Name,
 				IngressNetworkPolicyNamespace:  np1.Namespace,
+				IngressNetworkPolicyUID:        string(np1.UID),
 				IngressNetworkPolicyType:       utils.PolicyTypeToUint8(np1.Type),
 				IngressNetworkPolicyRuleName:   rule1.Name,
 				IngressNetworkPolicyRuleAction: utils.RuleActionToUint8(string(*rule1.Action)),
@@ -220,7 +221,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 		},
 	}
 
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
@@ -245,7 +246,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 }
 
 // testAddNewConn tests podInfo, Services, network policy mapping.
-func testAddNewConn(mockPodStore *podstoretest.MockInterface, mockProxier *proxytest.MockProxier, npQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier, conn connection.Connection) {
+func testAddNewConn(mockPodStore *objectstoretest.MockPodStore, mockProxier *proxytest.MockProxier, npQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier, conn connection.Connection) {
 	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
 	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 
@@ -304,7 +305,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	// For testing purposes, set the metric
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
@@ -325,7 +326,7 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 
 	testFlows := make([]*connection.Connection, 0)
 	// Create connectionStore
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, &fakeL7Listener{}, testFlowExporterOptions)
 	// Hard-coded conntrack occupancy metrics for test

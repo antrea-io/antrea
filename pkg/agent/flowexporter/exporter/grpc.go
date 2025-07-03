@@ -31,15 +31,17 @@ import (
 
 type grpcExporter struct {
 	nodeName    string
+	nodeUID     string
 	obsDomainID uint32
 	grpcClient  *grpc.ClientConn
 	client      flowpb.FlowExportServiceClient
 	stream      flowpb.FlowExportService_ExportClient
 }
 
-func NewGRPCExporter(nodeName string, obsDomainID uint32) *grpcExporter {
+func NewGRPCExporter(nodeName string, nodeUID string, obsDomainID uint32) *grpcExporter {
 	return &grpcExporter{
 		nodeName:    nodeName,
+		nodeUID:     nodeUID,
 		obsDomainID: obsDomainID,
 	}
 }
@@ -116,20 +118,25 @@ func (e *grpcExporter) createMessage(conn *connection.Connection) *flowpb.Flow {
 			FlowType:                       flowpb.FlowType(conn.FlowType),
 			SourcePodNamespace:             conn.SourcePodNamespace,
 			SourcePodName:                  conn.SourcePodName,
+			SourcePodUid:                   conn.SourcePodUID,
 			DestinationPodNamespace:        conn.DestinationPodNamespace,
 			DestinationPodName:             conn.DestinationPodName,
+			DestinationPodUid:              conn.DestinationPodUID,
 			IngressNetworkPolicyNamespace:  conn.IngressNetworkPolicyNamespace,
 			IngressNetworkPolicyName:       conn.IngressNetworkPolicyName,
+			IngressNetworkPolicyUid:        conn.IngressNetworkPolicyUID,
 			IngressNetworkPolicyType:       flowpb.NetworkPolicyType(conn.IngressNetworkPolicyType),
 			IngressNetworkPolicyRuleName:   conn.IngressNetworkPolicyRuleName,
 			IngressNetworkPolicyRuleAction: flowpb.NetworkPolicyRuleAction(conn.IngressNetworkPolicyRuleAction),
 			EgressNetworkPolicyNamespace:   conn.EgressNetworkPolicyNamespace,
 			EgressNetworkPolicyName:        conn.EgressNetworkPolicyName,
+			EgressNetworkPolicyUid:         conn.EgressNetworkPolicyUID,
 			EgressNetworkPolicyType:        flowpb.NetworkPolicyType(conn.EgressNetworkPolicyType),
 			EgressNetworkPolicyRuleName:    conn.EgressNetworkPolicyRuleName,
 			EgressNetworkPolicyRuleAction:  flowpb.NetworkPolicyRuleAction(conn.EgressNetworkPolicyRuleAction),
 			EgressName:                     conn.EgressName,
 			EgressNodeName:                 conn.EgressNodeName,
+			EgressUid:                      conn.EgressUID,
 		},
 		Stats: &flowpb.Stats{
 			PacketTotalCount: conn.OriginalPackets,
@@ -151,12 +158,14 @@ func (e *grpcExporter) createMessage(conn *connection.Connection) *flowpb.Flow {
 	} else {
 		flow.EndReason = flowpb.FlowEndReason_FLOW_END_REASON_IDLE_TIMEOUT
 	}
-	// Add nodeName for only local pods whose pod names are resolved.
+	// Add nodeName / nodeUID only for local Pods whose Pod names are resolved.
 	if conn.SourcePodName != "" {
 		flow.K8S.SourceNodeName = e.nodeName
+		flow.K8S.SourceNodeUid = e.nodeUID
 	}
 	if conn.DestinationPodName != "" {
 		flow.K8S.DestinationNodeName = e.nodeName
+		flow.K8S.DestinationNodeUid = e.nodeUID
 	}
 	if conn.DestinationServicePortName != "" {
 		flow.K8S.DestinationClusterIp = conn.OriginalDestinationAddress.AsSlice()

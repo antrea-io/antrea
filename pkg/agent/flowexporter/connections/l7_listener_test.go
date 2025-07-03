@@ -33,7 +33,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 )
 
 var (
@@ -77,7 +77,7 @@ func (fl *fakePodL7FlowExporterAttrGetter) IsL7FlowExporterRequested(podNN strin
 	return false
 }
 
-func newFakeL7Listener(socketPath string, podStore *podstoretest.MockInterface) *L7Listener {
+func newFakeL7Listener(socketPath string, podStore *objectstoretest.MockPodStore) *L7Listener {
 	return &L7Listener{
 		l7Events:                    make(map[connection.ConnectionKey]L7ProtocolFields),
 		suricataEventSocketPath:     socketPath,
@@ -244,7 +244,7 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			timeNow, _ := time.Parse(time.RFC3339Nano, tc.input[0].Timestamp)
 			ctrl := gomock.NewController(t)
-			mockPodStore := podstoretest.NewMockInterface(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockPodStore.EXPECT().GetPodByIPAndTime("10.10.0.1", timeNow).AnyTimes().Return(fakeSrcPod, true)
 			mockPodStore.EXPECT().GetPodByIPAndTime("10.10.0.2", timeNow).AnyTimes().Return(fakeDestPod, true)
 			socketFile, err := os.CreateTemp(".", "suricata_test_*.socket")

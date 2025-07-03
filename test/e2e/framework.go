@@ -133,7 +133,7 @@ const (
 	mcjoinImage         = "antrea/mcjoin:v2.9"
 	nginxImage          = "antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
-	ipfixCollectorImage = "antrea/ipfix-collector:v0.15.0"
+	ipfixCollectorImage = "antrea/ipfix-collector:v0.16.0"
 
 	nginxLBService = "nginx-loadbalancer"
 
@@ -240,8 +240,10 @@ type TestOptions struct {
 }
 
 type flowVisibilityIPFIXTestOptions struct {
-	tls        bool
-	clientAuth bool
+	tls             bool
+	clientAuth      bool
+	includeK8sNames *bool
+	includeK8sUIDs  *bool
 }
 
 type flowVisibilityTestOptions struct {
@@ -1224,8 +1226,10 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 
 	flowAggregatorConf.Mode = o.mode
 	flowAggregatorConf.FlowCollector = flowaggregatorconfig.FlowCollectorConfig{
-		Enable:  true,
-		Address: ipfixCollectorAddr,
+		Enable:          true,
+		Address:         ipfixCollectorAddr,
+		IncludeK8sNames: o.ipfixCollector.includeK8sNames,
+		IncludeK8sUIDs:  o.ipfixCollector.includeK8sUIDs,
 	}
 	if o.ipfixCollector.tls {
 		tls := &flowAggregatorConf.FlowCollector.TLS

@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	"antrea.io/antrea/pkg/apis"
 )
 
@@ -71,6 +73,12 @@ func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 	if flowAggregatorConf.FlowCollector.TemplateRefreshTimeout == "" {
 		flowAggregatorConf.FlowCollector.TemplateRefreshTimeout = DefaultTemplateRefreshTimeout
 	}
+	if flowAggregatorConf.FlowCollector.IncludeK8sNames == nil {
+		flowAggregatorConf.FlowCollector.IncludeK8sNames = ptr.To(true)
+	}
+	if flowAggregatorConf.FlowCollector.IncludeK8sUIDs == nil {
+		flowAggregatorConf.FlowCollector.IncludeK8sUIDs = ptr.To(false)
+	}
 	if flowAggregatorConf.ClickHouse.Database == "" {
 		flowAggregatorConf.ClickHouse.Database = DefaultClickHouseDatabase
 	}
@@ -78,15 +86,13 @@ func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 		flowAggregatorConf.ClickHouse.DatabaseURL = DefaultClickHouseDatabaseUrl
 	}
 	if flowAggregatorConf.ClickHouse.Compress == nil {
-		flowAggregatorConf.ClickHouse.Compress = new(bool)
-		*flowAggregatorConf.ClickHouse.Compress = true
+		flowAggregatorConf.ClickHouse.Compress = ptr.To(true)
 	}
 	if flowAggregatorConf.ClickHouse.CommitInterval == "" {
 		flowAggregatorConf.ClickHouse.CommitInterval = DefaultClickHouseCommitInterval
 	}
 	if flowAggregatorConf.S3Uploader.Compress == nil {
-		flowAggregatorConf.S3Uploader.Compress = new(bool)
-		*flowAggregatorConf.S3Uploader.Compress = true
+		flowAggregatorConf.S3Uploader.Compress = ptr.To(true)
 	}
 	if flowAggregatorConf.S3Uploader.MaxRecordsPerFile == 0 {
 		flowAggregatorConf.S3Uploader.MaxRecordsPerFile = DefaultS3MaxRecordsPerFile
@@ -107,14 +113,12 @@ func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 		flowAggregatorConf.FlowLogger.MaxBackups = DefaultLoggerMaxBackups
 	}
 	if flowAggregatorConf.FlowLogger.Compress == nil {
-		flowAggregatorConf.FlowLogger.Compress = new(bool)
-		*flowAggregatorConf.FlowLogger.Compress = true
+		flowAggregatorConf.FlowLogger.Compress = ptr.To(true)
 	}
 	if flowAggregatorConf.FlowLogger.RecordFormat == "" {
 		flowAggregatorConf.FlowLogger.RecordFormat = DefaultLoggerRecordFormat
 	}
 	if flowAggregatorConf.FlowLogger.PrettyPrint == nil {
-		flowAggregatorConf.FlowLogger.PrettyPrint = new(bool)
-		*flowAggregatorConf.FlowLogger.PrettyPrint = true
+		flowAggregatorConf.FlowLogger.PrettyPrint = ptr.To(true)
 	}
 }

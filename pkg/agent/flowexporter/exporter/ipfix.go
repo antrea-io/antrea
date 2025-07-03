@@ -324,7 +324,7 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 		case "sourcePodName":
 			ie.SetStringValue(conn.SourcePodName)
 		case "sourceNodeName":
-			// Add nodeName for only local pods whose pod names are resolved.
+			// Add nodeName only for local Pods whose Pod names are resolved.
 			if conn.SourcePodName != "" {
 				ie.SetStringValue(e.nodeName)
 			} else {
@@ -335,7 +335,7 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 		case "destinationPodName":
 			ie.SetStringValue(conn.DestinationPodName)
 		case "destinationNodeName":
-			// Add nodeName for only local pods whose pod names are resolved.
+			// Add nodeName only for local Pods whose Pod names are resolved.
 			if conn.DestinationPodName != "" {
 				ie.SetStringValue(e.nodeName)
 			} else {

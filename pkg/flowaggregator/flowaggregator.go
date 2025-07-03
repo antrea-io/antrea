@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,7 +41,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
-	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/util/objectstore"
 )
 
 const aggregationWorkerNum = 2
@@ -74,8 +75,11 @@ type flowAggregator struct {
 	registry                    ipfix.IPFIXRegistry
 	flowAggregatorAddress       string
 	includePodLabels            bool
+	includeK8sUIDs              bool
 	k8sClient                   kubernetes.Interface
-	podStore                    podstore.Interface
+	podStore                    objectstore.PodStore
+	nodeStore                   objectstore.NodeStore
+	serviceStore                objectstore.ServiceStore
 	numRecordsExported          atomic.Int64
 	numRecordsDropped           atomic.Int64
 	updateCh                    chan *options.Options
@@ -95,7 +99,9 @@ type flowAggregator struct {
 func NewFlowAggregator(
 	k8sClient kubernetes.Interface,
 	clusterUUID uuid.UUID,
-	podStore podstore.Interface,
+	podStore objectstore.PodStore,
+	nodeStore objectstore.NodeStore,
+	serviceStore objectstore.ServiceStore,
 	configFile string,
 ) (*flowAggregator, error) {
 	if len(configFile) == 0 {
@@ -140,8 +146,11 @@ func NewFlowAggregator(
 		registry:                    registry,
 		flowAggregatorAddress:       opt.Config.FlowAggregatorAddress,
 		includePodLabels:            opt.Config.RecordContents.PodLabels,
+		includeK8sUIDs:              opt.Config.FlowCollector.Enable && (*opt.Config.FlowCollector.IncludeK8sUIDs),
 		k8sClient:                   k8sClient,
 		podStore:                    podStore,
+		nodeStore:                   nodeStore,
+		serviceStore:                serviceStore,
 		updateCh:                    make(chan *options.Options),
 		configFile:                  configFile,
 		configWatcher:               configWatcher,
@@ -374,6 +383,10 @@ func (fa *flowAggregator) proxyRecord(record *flowpb.Flow) error {
 		// This is the only case where K8s metadata could be missing
 		fa.fillK8sMetadata(sourceAddress, destinationAddress, record, startTime)
 	}
+	if fa.includeK8sUIDs {
+		fa.fillServiceUID(record, startTime)
+		fa.fillEgressNodeUID(record, startTime)
+	}
 	fa.fillPodLabels(sourceAddress, destinationAddress, record, startTime)
 	return fa.sendRecord(record, isIPv6)
 }
@@ -520,6 +533,10 @@ func (fa *flowAggregator) sendAggregatedRecord(key intermediate.FlowKey, record 
 	// Even if fa.includePodLabels is false, we still need to add an empty IE to match the template.
 	if !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
 		fa.fillPodLabels(key.SourceAddress, key.DestinationAddress, record.Record, startTime)
+		if fa.includeK8sUIDs {
+			fa.fillServiceUID(record.Record, startTime)
+			fa.fillEgressNodeUID(record.Record, startTime)
+		}
 		fa.aggregationProcess.SetExternalFieldsFilled(record, true)
 	}
 	if err := fa.sendRecord(record.Record, !isRecordIPv4); err != nil {
@@ -531,8 +548,18 @@ func (fa *flowAggregator) sendAggregatedRecord(key intermediate.FlowKey, record 
 	return nil
 }
 
-// fillK8sMetadata fills Pod name, Pod namespace and Node name for inter-Node flows
-// that have incomplete info due to deny network policy.
+func (fa *flowAggregator) getNodeUID(nodeName string, startTime time.Time) string {
+	node, exist := fa.nodeStore.GetNodeByNameAndTime(nodeName, startTime)
+	if !exist {
+		klog.ErrorS(nil, "Cannot find Node information", "name", nodeName, "flowStartTime", startTime)
+		return ""
+	}
+	return string(node.UID)
+}
+
+// fillK8sMetadata fills Pod name, Pod namespace, Pod UID, Node name and Node UID for inter-Node flows.
+// This function is used in Proxy mode, as well as in Aggregate mode when correlation cannot be
+// performed because of network policies.
 func (fa *flowAggregator) fillK8sMetadata(sourceAddress, destinationAddress string, record *flowpb.Flow, startTime time.Time) {
 	// fill source Pod info when sourcePodName is empty
 	if record.K8S.SourcePodName == "" {
@@ -541,6 +568,10 @@ func (fa *flowAggregator) fillK8sMetadata(sourceAddress, destinationAddress stri
 			record.K8S.SourcePodName = pod.Name
 			record.K8S.SourcePodNamespace = pod.Namespace
 			record.K8S.SourceNodeName = pod.Spec.NodeName
+			if fa.includeK8sUIDs {
+				record.K8S.SourcePodUid = string(pod.UID)
+				record.K8S.SourceNodeUid = fa.getNodeUID(pod.Spec.NodeName, startTime)
+			}
 		} else {
 			klog.ErrorS(nil, "Cannot find Pod information", "sourceAddress", sourceAddress, "flowStartTime", startTime)
 		}
@@ -552,6 +583,10 @@ func (fa *flowAggregator) fillK8sMetadata(sourceAddress, destinationAddress stri
 			record.K8S.DestinationPodName = pod.Name
 			record.K8S.DestinationPodNamespace = pod.Namespace
 			record.K8S.DestinationNodeName = pod.Spec.NodeName
+			if fa.includeK8sUIDs {
+				record.K8S.DestinationPodUid = string(pod.UID)
+				record.K8S.DestinationNodeUid = fa.getNodeUID(pod.Spec.NodeName, startTime)
+			}
 		} else {
 			klog.ErrorS(nil, "Cannot find Pod information", "destinationAddress", destinationAddress, "flowStartTime", startTime)
 		}
@@ -590,6 +625,30 @@ func (fa *flowAggregator) fillPodLabels(sourceAddress, destinationAddress string
 	} else {
 		record.K8S.DestinationPodLabels = nil
 	}
+}
+
+func (fa *flowAggregator) fillServiceUID(record *flowpb.Flow, startTime time.Time) {
+	if record.K8S.DestinationServicePortName == "" {
+		return
+	}
+	namespacedName, _, found := strings.Cut(record.K8S.DestinationServicePortName, ":")
+	if !found {
+		klog.ErrorS(nil, "Expected format for ServicePortName", "servicePortName", record.K8S.DestinationServicePortName)
+		return
+	}
+	service, exist := fa.serviceStore.GetServiceByNamespacedNameAndTime(namespacedName, startTime)
+	if !exist {
+		klog.ErrorS(nil, "Cannot find Service information", "name", namespacedName, "flowStartTime", startTime)
+		return
+	}
+	record.K8S.DestinationServiceUid = string(service.UID)
+}
+
+func (fa *flowAggregator) fillEgressNodeUID(record *flowpb.Flow, startTime time.Time) {
+	if record.K8S.EgressNodeName == "" {
+		return
+	}
+	record.K8S.EgressNodeUid = fa.getNodeUID(record.K8S.EgressNodeName, startTime)
 }
 
 func (fa *flowAggregator) GetFlowRecords(flowKey *intermediate.FlowKey) []map[string]interface{} {
@@ -788,6 +847,11 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 	if opt.Config.RecordContents.PodLabels != fa.includePodLabels {
 		fa.includePodLabels = opt.Config.RecordContents.PodLabels
 		klog.InfoS("Updated recordContents.podLabels configuration", "value", fa.includePodLabels)
+	}
+	includeK8sUIDs := opt.Config.FlowCollector.Enable && (*opt.Config.FlowCollector.IncludeK8sUIDs)
+	if includeK8sUIDs != fa.includeK8sUIDs {
+		fa.includeK8sUIDs = includeK8sUIDs
+		klog.InfoS("Updated includeK8sUIDs configuration", "value", includeK8sUIDs)
 	}
 	var unsupportedUpdates []string
 	if opt.Config.APIServer != fa.APIServer {

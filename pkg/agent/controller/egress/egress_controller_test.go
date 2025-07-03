@@ -1687,12 +1687,10 @@ func TestGetEgress(t *testing.T) {
 		podName string
 	}
 	tests := []struct {
-		name               string
-		args               args
-		expectedEgressName string
-		expectedEgressIP   string
-		expectedEgressNode string
-		expectedErr        string
+		name           string
+		args           args
+		expectedEgress *crdv1b1.Egress
+		expectedErr    string
 	}{
 		{
 			name: "local egress applied on a pod",
@@ -1700,9 +1698,7 @@ func TestGetEgress(t *testing.T) {
 				ns:      "ns1",
 				podName: "pod1",
 			},
-			expectedEgressName: "egressA",
-			expectedEgressIP:   fakeLocalEgressIP1,
-			expectedEgressNode: fakeNode,
+			expectedEgress: egress,
 		},
 		{
 			name: "no local egress applied on a pod",
@@ -1715,15 +1711,18 @@ func TestGetEgress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotEgressName, gotEgressIP, gotEgressNode, err := c.GetEgress(tt.args.ns, tt.args.podName)
+			gotEgress, err := c.GetEgress(tt.args.ns, tt.args.podName)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
+				assert.Equal(t, types.EgressConfig{
+					Name:       tt.expectedEgress.Name,
+					UID:        tt.expectedEgress.UID,
+					EgressIP:   tt.expectedEgress.Status.EgressIP,
+					EgressNode: tt.expectedEgress.Status.EgressNode,
+				}, gotEgress)
 			} else {
 				require.EqualError(t, err, tt.expectedErr)
 			}
-			assert.Equal(t, tt.expectedEgressName, gotEgressName)
-			assert.Equal(t, tt.expectedEgressIP, gotEgressIP)
-			assert.Equal(t, tt.expectedEgressNode, gotEgressNode)
 		})
 	}
 }

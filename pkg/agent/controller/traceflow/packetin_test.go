@@ -311,7 +311,11 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, egressNode, nil)
+				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(types.EgressConfig{
+					Name:       egressName,
+					EgressIP:   egressIP,
+					EgressNode: egressNode,
+				}, nil)
 			},
 			expectedTf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -381,7 +385,11 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, egressNode, nil)
+				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(types.EgressConfig{
+					Name:       egressName,
+					EgressIP:   egressIP,
+					EgressNode: egressNode,
+				}, nil)
 			},
 			expectedTf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{

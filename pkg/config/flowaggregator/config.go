@@ -115,6 +115,12 @@ type FlowCollectorConfig struct {
 	MaxIPFIXMsgSize int32 `yaml:"maxIPFIXMsgSize,omitempty"`
 	// TLS / mTLS configuration when exporting to the flowCollector.
 	TLS FlowCollectorTLSConfig `yaml:"tls,omitempty"`
+	// Include the names of K8s objects (Pods, Nodes, ...) as information elements in exported records.
+	// Defaults to true.
+	IncludeK8sNames *bool `yaml:"includeK8sNames,omitempty"`
+	// Include the UIDs of K8s objects (Pods, Nodes, ...) as information elements in exported records.
+	// Defaults to false.
+	IncludeK8sUIDs *bool `yaml:"includeK8sUIDs,omitempty"`
 }
 
 type FlowCollectorTLSConfig struct {

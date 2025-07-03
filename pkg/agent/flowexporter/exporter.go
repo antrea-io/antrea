@@ -42,7 +42,7 @@ import (
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/env"
 	k8sutil "antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/util/objectstore"
 )
 
 // When initializing flowExporter, a slice is allocated with a fixed size to
@@ -74,13 +74,13 @@ type FlowExporter struct {
 	denyPriorityQueue      *priorityqueue.ExpirePriorityQueue
 	expiredConns           []connection.Connection
 	egressQuerier          querier.EgressQuerier
-	podStore               podstore.Interface
+	podStore               objectstore.PodStore
 	l7Listener             *connections.L7Listener
 	nodeName               string
 	obsDomainID            uint32
 }
 
-func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
+func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
 	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
 	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *options.FlowExporterOptions,
 	egressQuerier querier.EgressQuerier, podL7FlowExporterAttrGetter connections.PodL7FlowExporterAttrGetter, l7FlowExporterEnabled bool) (*FlowExporter, error) {
@@ -105,9 +105,17 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 	}
 	obsDomainID := genObservationID(nodeName)
 
+	klog.InfoS("Retrieveing this Node's UID from K8s", "nodeName", nodeName)
+	node, err := k8sClient.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
+	}
+	nodeUID := string(node.UID)
+	klog.InfoS("Retrieved this Node's UID from K8s", "nodeName", nodeName, "nodeUID", nodeUID)
+
 	var exp exporter.Interface
 	if o.FlowCollectorProto == "grpc" {
-		exp = exporter.NewGRPCExporter(nodeName, obsDomainID)
+		exp = exporter.NewGRPCExporter(nodeName, nodeUID, obsDomainID)
 	} else {
 		var collectorProto string
 		if o.FlowCollectorProto == "tls" {
@@ -336,14 +344,15 @@ func (exp *FlowExporter) findFlowType(conn connection.Connection) uint8 {
 }
 
 func (exp *FlowExporter) fillEgressInfo(conn *connection.Connection) {
-	egressName, egressIP, egressNodeName, err := exp.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
+	egress, err := exp.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
 	if err != nil {
 		// Egress is not enabled or no Egress is applied to this Pod
 		return
 	}
-	conn.EgressName = egressName
-	conn.EgressIP = egressIP
-	conn.EgressNodeName = egressNodeName
+	conn.EgressName = egress.Name
+	conn.EgressUID = string(egress.UID)
+	conn.EgressIP = egress.EgressIP
+	conn.EgressNodeName = egress.EgressNode
 	if klog.V(5).Enabled() {
 		klog.InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "EgressNode", conn.EgressNodeName, "SourcePod", klog.KRef(conn.SourcePodNamespace, conn.SourcePodName))
 	}

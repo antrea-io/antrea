@@ -140,6 +140,7 @@ message Kubernetes {
   bytes egress_ip = 31;
   string egress_node_name = 32;
   string egress_node_uid = 33;
+  string egress_uid = 34;
 }
 
 message App {

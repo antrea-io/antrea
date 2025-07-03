@@ -60,18 +60,22 @@ type Connection struct {
 	// Fields specific to Antrea
 	SourcePodNamespace             string
 	SourcePodName                  string
+	SourcePodUID                   string
 	DestinationPodNamespace        string
 	DestinationPodName             string
+	DestinationPodUID              string
 	DestinationServicePortName     string
 	OriginalDestinationAddress     netip.Addr
 	OriginalDestinationPort        uint16
 	IngressNetworkPolicyName       string
 	IngressNetworkPolicyNamespace  string
+	IngressNetworkPolicyUID        string
 	IngressNetworkPolicyType       uint8
 	IngressNetworkPolicyRuleName   string
 	IngressNetworkPolicyRuleAction uint8
 	EgressNetworkPolicyName        string
 	EgressNetworkPolicyNamespace   string
+	EgressNetworkPolicyUID         string
 	EgressNetworkPolicyType        uint8
 	EgressNetworkPolicyRuleName    string
 	EgressNetworkPolicyRuleAction  uint8
@@ -83,6 +87,7 @@ type Connection struct {
 	PrevTCPState                         string
 	FlowType                             uint8
 	EgressName                           string
+	EgressUID                            string
 	EgressIP                             string
 	AppProtocolName                      string
 	HttpVals                             string

@@ -304,11 +304,11 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 				}
 			}
 			if isRemoteEgress == 1 { // an Egress packet, currently on source Node and forwarded to Egress Node.
-				egressName, egressIP, egressNode, err := c.egressQuerier.GetEgress(ns, srcPod)
+				egressConfig, err := c.egressQuerier.GetEgress(ns, srcPod)
 				if err != nil {
 					return nil, nil, nil, err
 				}
-				obEgress := getEgressObservation(false, egressIP, egressName, egressNode)
+				obEgress := getEgressObservation(false, egressConfig.EgressIP, egressConfig.Name, egressConfig.EgressNode)
 				obs = append(obs, *obEgress)
 			}
 			ob.TunnelDstIP = tunnelDstIP
@@ -326,10 +326,13 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			if pktMark != 0 { // Egress packet on Egress Node
 				egressName, egressIP, egressNode := "", "", ""
 				if tunnelDstIP == "" { // Egress Node is Source Node of this Egress packet
-					egressName, egressIP, egressNode, err = c.egressQuerier.GetEgress(ns, srcPod)
+					egressConfig, err := c.egressQuerier.GetEgress(ns, srcPod)
 					if err != nil {
 						return nil, nil, nil, err
 					}
+					egressName = egressConfig.Name
+					egressIP = egressConfig.EgressIP
+					egressNode = egressConfig.EgressNode
 				} else {
 					egressIP, err = c.egressQuerier.GetEgressIPByMark(pktMark)
 					if err != nil {
