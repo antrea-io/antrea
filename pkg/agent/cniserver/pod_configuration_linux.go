@@ -19,6 +19,7 @@ package cniserver
 
 import (
 	"fmt"
+	"net"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/client-go/tools/cache"
@@ -95,9 +96,9 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName, netNS string
 func (pc *podConfigurator) configureInterfaces(
 	podName, podNamespace, containerID, containerNetNS string,
 	containerIFDev string, mtu int, sriovVFDeviceID string,
-	result *ipam.IPAMResult, createOVSPort bool, containerAccess *containerAccessArbitrator) error {
+	result *ipam.IPAMResult, createOVSPort bool, containerAccess *containerAccessArbitrator, mac net.HardwareAddr) error {
 	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
-		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess)
+		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess, mac)
 }
 
 // reconcileMissingPods is never called on Linux, see reconcile logic.

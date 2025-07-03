@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 package testing
 
 import (
+	net "net"
 	reflect "reflect"
 
 	ipam "antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -74,17 +75,17 @@ func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureSriovSecondaryInterfac
 }
 
 // ConfigureVLANSecondaryInterface mocks base method.
-func (m *MockInterfaceConfigurator) ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult) error {
+func (m *MockInterfaceConfigurator) ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult, mac net.HardwareAddr) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfigureVLANSecondaryInterface", podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult)
+	ret := m.ctrl.Call(m, "ConfigureVLANSecondaryInterface", podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult, mac)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ConfigureVLANSecondaryInterface indicates an expected call of ConfigureVLANSecondaryInterface.
-func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult any) *gomock.Call {
+func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult, mac any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).ConfigureVLANSecondaryInterface), podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).ConfigureVLANSecondaryInterface), podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, ipamResult, mac)
 }
 
 // DeleteSriovSecondaryInterface mocks base method.
