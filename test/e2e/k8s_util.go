@@ -432,14 +432,15 @@ func (k *KubernetesUtils) probeAndDecideConnectivity(fromPod, toPod v1.Pod,
 	// Both IPv4 and IPv6 address should be tested.
 	connectivity := Unknown
 	var toIPs []string
-	if toPod.Spec.HostNetwork {
+	if !fromPod.Spec.HostNetwork && toPod.Spec.HostNetwork && fromPod.Spec.NodeName == toPod.Spec.NodeName {
 		// When probing UDP or SCTP from a non-hostNetwork Pod to a hostNetwork Pod within the same Node, the local
 		// Antrea gateway IPs should be used as the destination IP, rather than the Node external IPs. If using the Node
 		// external IPs as destination IPs when probing, the UDP or SCTP reply traffic from hostNetwork Pod will choose
 		// a source IP address based on the routing decision or outgoing interface, which means that the local Antrea
 		// gateway IPs will be chosen as the source IP address. As a result, the probing will get a failure because the
 		// source IP address of reply traffic is unexpected. To accommodate with this case, when the target Pod is a
-		// hostNetwork Pod, the local Antrea gateway IPs are used.
+		// hostNetwork one, the source Pod is a non-hostNetwork one, and they are on the same Node, the local Antrea gateway
+		// IPs are used.
 		nodeInfo := getNodeByName(toPod.Spec.NodeName)
 		if nodeInfo == nil {
 			return connectivity, fmt.Errorf("failed to get Node information by name %s", toPod.Spec.NodeName)
