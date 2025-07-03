@@ -221,7 +221,7 @@ func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) 
 	return mineTrue, allocator, ips, reservedOwner, err
 }
 
-// Look up IPPools by matching PodOwnder.
+// Look up IPPools by matching PodOwner.
 func (c *AntreaIPAMController) getPoolAllocatorsByOwner(podOwner *crdv1b1.PodOwner) ([]*poolallocator.IPPoolAllocator, error) {
 	var allocators []*poolallocator.IPPoolAllocator
 	ipPools, _ := c.ipPoolInformer.Informer().GetIndexer().ByIndex(podIndex,

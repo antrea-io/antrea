@@ -56,7 +56,7 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	containerConfig := buildContainerConfig(hostInterfaceName, containerID, podName, podNamespace,
 		containerNetNS, containerIface, result.IPs, 0)
 	pc.ifaceStore.AddInterface(containerConfig)
-
+	containerIface.PciID = podSriovVFDeviceID
 	if result.IPs != nil {
 		if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
 			klog.ErrorS(err, "Failed to advertise IP address for SR-IOV interface",
@@ -72,7 +72,6 @@ func (pc *podConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interf
 	klog.InfoS("Deleted SR-IOV interface", "Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
 		"interface", interfaceConfig.IFDev)
 	return nil
-
 }
 
 // ConfigureVLANSecondaryInterface configures a VLAN secondary interface on the secondary network
