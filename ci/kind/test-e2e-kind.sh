@@ -31,6 +31,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --no-kube-proxy               Don't deploy kube-proxy.
         --load-balancer-mode          LoadBalancer mode.
         --node-ipam                   Enable Antrea NodeIPAM.
+        --flexible-ipam               Enable Antrea AntreaIPAM.
         --multicast                   Enable Multicast.
         --bgp-policy                  Enable Antrea BGPPolicy.
         --flow-visibility             Only run flow visibility related e2e tests.
@@ -221,7 +222,7 @@ fi
 
 if [[ $cleanup_only == "true" ]];then
   if [[ $flexible_ipam == "true" ]]; then
-    $TESTBED_CMD destroy kind --flexible-ipam 
+    $TESTBED_CMD destroy kind --flexible-ipam
   fi
   $TESTBED_CMD destroy kind
   exit 0
