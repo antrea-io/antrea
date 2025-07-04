@@ -68,6 +68,13 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 
 // DeleteSriovSecondaryInterface deletes a SRIOV secondary interface.
 func (pc *podConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
+	if err := pc.ifConfigurator.recoverVFInterfaceName(interfaceConfig.IFDev, interfaceConfig.NetNS); err != nil {
+		klog.ErrorS(err, "Failed to rename the container interface link to the original VF name",
+			"Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
+			"interface", interfaceConfig.IFDev)
+		return err
+	}
+
 	pc.ifaceStore.DeleteInterface(interfaceConfig)
 	klog.InfoS("Deleted SR-IOV interface", "Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
 		"interface", interfaceConfig.IFDev)
