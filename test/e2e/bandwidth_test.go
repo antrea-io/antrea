@@ -128,7 +128,7 @@ func testBenchmarkBandwidthServiceRemoteAccess(t *testing.T, data *TestData) {
 }
 
 func testPodTrafficShaping(t *testing.T, data *TestData) {
-	// Test is flaky on dual-stack clusters: https://github.com/antrea-io/antrea/issues/1543.
+	// Test is flaky on dual-stack clusters: https://github.com/antrea.io/antrea/v2/issues/1543.
 	// So we disable it except for IPv4 single-stack clusters for now.
 	skipIfIPv6Cluster(t)
 	nodeName := controlPlaneNodeName()

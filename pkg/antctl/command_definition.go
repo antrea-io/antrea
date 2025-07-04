@@ -28,8 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/antctl/output"
-	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/antctl/output"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
 )
 
 type formatterType string

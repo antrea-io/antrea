@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net"
 
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 	// these "controller ports", to avoid unexpected ofport changes. The Antrea datapath assumes
 	// that once a port number has been assigned, it will stay the same throughout the lifetime
 	// of the port, but when using ofport_request it is not guaranteed.
-	// See https://github.com/antrea-io/antrea/issues/6192 for more details.
+	// See https://github.com/antrea.io/antrea/v2/issues/6192 for more details.
 	// We will request these default port values when initializing the agent, unless the ports
 	// already exist.
 	DefaultTunOFPort = ovsconfig.FirstControllerOFPort + iota

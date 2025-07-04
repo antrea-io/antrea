@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
 
 const (
@@ -124,7 +124,7 @@ func (l *labelIdentityMatch) matches(s *selectorItem) bool {
 // constructMapFromLabelString parses label string of format "app=client,env=dev" into a map.
 func constructMapFromLabelString(s string) map[string]string {
 	m := map[string]string{}
-	// Before https://github.com/antrea-io/antrea/issues/5403 is fixed, LabelIdentities created
+	// Before https://github.com/antrea.io/antrea/v2/issues/5403 is fixed, LabelIdentities created
 	// for Pods with an empty label set will include a <none> string. Handling for such LabelIdentities
 	// are needed, as in multi-cluster controller upgrade cases, these LabelIdentities created by
 	// previous controller still need to be processed, but will be cleaned up by the stale controller

@@ -20,7 +20,7 @@ import (
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	mcsscheme "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/scheme"
 
-	antreamcscheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
+	antreamcscheme "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/scheme"
 )
 
 var Scheme = k8sruntime.NewScheme()

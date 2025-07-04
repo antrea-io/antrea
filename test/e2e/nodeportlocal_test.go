@@ -29,9 +29,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
+	npltesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/testing"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
 
 const (

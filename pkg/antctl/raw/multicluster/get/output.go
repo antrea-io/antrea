@@ -17,7 +17,7 @@ package get
 import (
 	"io"
 
-	antctlOutput "antrea.io/antrea/pkg/antctl/output"
+	antctlOutput "antrea.io/antrea/v2/pkg/antctl/output"
 )
 
 func output(resources interface{}, single bool, outputFormat string, output io.Writer,

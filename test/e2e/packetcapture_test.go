@@ -41,10 +41,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 
-	capture "antrea.io/antrea/pkg/agent/packetcapture/capture"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/features"
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
+	capture "antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/features"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
 
 var (

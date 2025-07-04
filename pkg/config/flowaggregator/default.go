@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apis"
 )
 
 const (

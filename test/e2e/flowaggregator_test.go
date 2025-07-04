@@ -34,16 +34,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/strings/slices"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow"
-	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/antctl"
-	"antrea.io/antrea/pkg/antctl/runtime"
-	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/flowaggregator/apis"
-	"antrea.io/antrea/test/e2e/utils"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	antreaagenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/antctl"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/features"
+	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
+	"antrea.io/antrea/v2/test/e2e/utils"
 )
 
 /* Sample output from the collector:

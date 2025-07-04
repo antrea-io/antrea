@@ -19,11 +19,11 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	mccommon "antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/ovs/openflow"
-	k8sproxy "antrea.io/antrea/third_party/proxy"
+	mccommon "antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/ovs/openflow"
+	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 )
 
 // ServiceInfo is the internal struct for caching service information.

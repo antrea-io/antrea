@@ -19,8 +19,8 @@ import (
 
 	"github.com/vishvananda/netlink"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/util"
 )
 
 var (

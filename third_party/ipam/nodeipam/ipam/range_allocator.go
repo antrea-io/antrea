@@ -30,7 +30,7 @@ limitations under the License.
 
 Modifies:
 - Replace k8s.io/kubernetes/pkg/controller/nodeipam/ipam import with
- antrea.io/antrea/third_party/nodeipam/ipam
+ antrea.io/antrea/v2/third_party/nodeipam/ipam
 - Remove recorder from rangeAllocator type, NewCIDRRangeAllocator(), RecordNodeStatusChange() calls
 */
 
@@ -52,9 +52,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	nodeutil "antrea.io/antrea/third_party/ipam/controller_util_node"
-	"antrea.io/antrea/third_party/ipam/nodeipam/ipam/cidrset"
-	utilnode "antrea.io/antrea/third_party/ipam/util_node"
+	nodeutil "antrea.io/antrea/v2/third_party/ipam/controller_util_node"
+	"antrea.io/antrea/v2/third_party/ipam/nodeipam/ipam/cidrset"
+	utilnode "antrea.io/antrea/v2/third_party/ipam/util_node"
 )
 
 // cidrs are reserved, then node resource is patched with them

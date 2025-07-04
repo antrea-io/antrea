@@ -31,11 +31,11 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	fakecrd "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	listers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	annotation "antrea.io/antrea/pkg/ipam"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	fakecrd "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	listers "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	annotation "antrea.io/antrea/v2/pkg/ipam"
 )
 
 type fakeAntreaIPAMController struct {

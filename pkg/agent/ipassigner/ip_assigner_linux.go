@@ -27,13 +27,13 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
-	"antrea.io/antrea/pkg/agent/ipassigner/responder"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/agent/util/arping"
-	"antrea.io/antrea/pkg/agent/util/ndp"
-	"antrea.io/antrea/pkg/agent/util/sysctl"
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
+	"antrea.io/antrea/v2/pkg/agent/ipassigner/responder"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util/arping"
+	"antrea.io/antrea/v2/pkg/agent/util/ndp"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
 
 // VLAN interfaces created by antrea-agent will be named with the prefix.

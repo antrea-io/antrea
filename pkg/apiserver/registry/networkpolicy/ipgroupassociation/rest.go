@@ -25,13 +25,13 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	ga "antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupassociation"
-	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	"antrea.io/antrea/pkg/controller/grouping"
-	"antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	ga "antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/groupassociation"
+	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	"antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/features"
 )
 
 type REST struct {

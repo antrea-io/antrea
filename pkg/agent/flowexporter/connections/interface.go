@@ -15,7 +15,7 @@
 package connections
 
 import (
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 )
 
 // ConnTrackDumper is an interface that is used to dump connections from conntrack module. This supports dumping through

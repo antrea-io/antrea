@@ -35,9 +35,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
-	"antrea.io/antrea/pkg/agent/cniserver"
-	antreae2e "antrea.io/antrea/test/e2e"
-	"antrea.io/antrea/test/e2e-secondary-network/aws"
+	"antrea.io/antrea/v2/pkg/agent/cniserver"
+	antreae2e "antrea.io/antrea/v2/test/e2e"
+	"antrea.io/antrea/v2/test/e2e-secondary-network/aws"
 )
 
 type testPodInfo struct {
