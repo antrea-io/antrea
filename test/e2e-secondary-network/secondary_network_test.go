@@ -15,6 +15,7 @@
 package e2esecondary
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -595,6 +596,12 @@ func TestSRIOVNetwork(t *testing.T) {
 
 	testData := &testData{e2eTestData: e2eTestData, networkType: networkTypeSriov, pods: pods}
 
+	// Get the original VF interface name on the Node.
+	pod1 := pods[0].podName
+	node1 := pods[0].nodeName
+	vfName := GetVFInterfaceName(t, e2eTestData, node1)
+	logs.Infof("The original VF interface name is %s on Node %s", vfName, node1)
+
 	ns := e2eTestData.GetTestNamespace()
 	if err := testData.createPods(t, ns); err != nil {
 		t.Fatalf("Error when create test Pods: %v", err)
@@ -612,4 +619,39 @@ func TestSRIOVNetwork(t *testing.T) {
 	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, true); err != nil {
 		t.Fatalf("Error when checking the Pod annotation: %v", err)
 	}
+	testData.assertVFName(t, e2eTestData, vfName, pod1, node1, ns)
+}
+
+func (data *testData) assertVFName(t *testing.T, e2eTestData *antreae2e.TestData, vfName, podName, nodeName, ns string) {
+	//  Delete a Pod and check the VF device is recovered with the original interface name.
+	err := e2eTestData.DeletePodAndWait(10*time.Second, podName, ns)
+	require.NoError(t, err, "Unable to delete the Pod %s/%s in time", ns, podName)
+	recoveredVFName := GetVFInterfaceName(t, e2eTestData, nodeName)
+	logs.Infof("The recovered VF interface name is %s on Node %s", recoveredVFName, nodeName)
+	assert.Equal(t, vfName, recoveredVFName, "VF name is not recovered correctly on Node %s, the expected VF name is %s, but got %s", nodeName, vfName, recoveredVFName)
+}
+
+func GetVFInterfaceName(t *testing.T, e2eTestData *antreae2e.TestData, nodeName string) string {
+	cmd := []string{"ip", "-d", "link", "show"}
+	stdOut, _, err := e2eTestData.RunCommandFromAntreaPodOnNode(nodeName, cmd)
+	if err != nil {
+		require.NoError(t, err, fmt.Sprintf("Error when checking the VF interface name on the Node %s", nodeName))
+	}
+
+	lines := bytes.Split([]byte(stdOut), []byte("\n"))
+	for i := 1; i < len(lines); i++ {
+		if bytes.Contains(lines[i], []byte("0000:00:04.0")) {
+			// look back to the previous line for interface name
+			ifaceLine := string(lines[i-1])
+			parts := strings.SplitN(ifaceLine, ": ", 2)
+			if len(parts) >= 2 {
+				ifaceName := strings.TrimSpace(parts[1])
+				if i := strings.IndexByte(ifaceName, ':'); i != -1 {
+					ifaceName = ifaceName[:i]
+				}
+				return ifaceName
+			}
+		}
+	}
+	return ""
 }

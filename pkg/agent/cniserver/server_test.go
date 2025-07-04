@@ -77,8 +77,7 @@ var (
 	mockRoute           *routetest.MockInterface
 	mockOFClient        *openflowtest.MockClient
 	ifaceStore          interfacestore.InterfaceStore
-
-	emptyResponse = &cnipb.CniCmdResponse{CniResult: []byte("")}
+	emptyResponse       = &cnipb.CniCmdResponse{CniResult: []byte("")}
 
 	nodeName = "node1"
 	gwMAC    = utilip.MustParseMAC("00:00:11:11:11:11")
@@ -304,7 +303,6 @@ func TestIPAMService(t *testing.T) {
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 		err = ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Del error")
-
 	})
 
 	t.Run("Error on CHECK", func(t *testing.T) {
