@@ -40,6 +40,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/cni"
@@ -120,9 +121,10 @@ type CNIServer struct {
 	isChaining         bool
 	enableBridgingMode bool
 	// Enable AntreaIPAM for secondary networks implemented by other CNIs.
-	enableSecondaryNetworkIPAM bool
-	disableTXChecksumOffload   bool
-	networkConfig              *config.NetworkConfig
+	enableSecondaryNetworkIPAM   bool
+	secondaryNetworkStateChecker agenttypes.SecondaryNetworkStateChecker
+	disableTXChecksumOffload     bool
+	networkConfig                *config.NetworkConfig
 	// podNetworkWait notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	podNetworkWait *wait.Group
 	// flowRestoreCompleteWait will be decremented and Pod reconciliation is completed.
@@ -556,6 +558,21 @@ func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniC
 	}
 	klog.InfoS("Deleted interfaces for container", "container", cniConfig.ContainerId)
 
+	// Ensure all SR-IOV devices in a Pod are detached before removing the primary interface.
+	// If the primary interface is deleted without checking SR-IOV devices, the container's
+	// network namespace will be deleted soon, and then SecondaryNetwork controller will not
+	// be able to restore the SR-IOV devices' names, as it won't find devices in the container
+	// network namespace.
+	// We observed the first CNI del can fail due to un-detached SR-IOV devices, when a Pod has two
+	// or more SR-IOV devices attached. In the future, we may improve the implementation to detach
+	// SR-IOV devices first and avoid the CNI del failure and retry.
+	if s.secondaryNetworkStateChecker != nil {
+		if !s.secondaryNetworkStateChecker.ReadyForCNIDel(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE)) {
+			klog.ErrorS(nil, "The container still has SR-IOV devices attached, retrying cmdDel()")
+			return s.tryAgainLaterResponse(), nil
+		}
+	}
+
 	// Release IP to IPAM driver
 	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
 		klog.ErrorS(err, "Failed to delete IP addresses for container", "container", cniConfig.ContainerId)
@@ -636,23 +653,25 @@ func New(
 	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
 	networkConfig *config.NetworkConfig,
 	podNetworkWait, flowRestoreCompleteWait *wait.Group,
+	secondaryNetworkStateChecker agenttypes.SecondaryNetworkStateChecker,
 ) *CNIServer {
 	return &CNIServer{
-		cniSocket:                  cniSocket,
-		serverVersion:              cni.AntreaCNIVersion,
-		nodeConfig:                 nodeConfig,
-		hostProcPathPrefix:         hostProcPathPrefix,
-		podInformer:                podInformer,
-		kubeClient:                 kubeClient,
-		containerAccess:            newContainerAccessArbitrator(),
-		routeClient:                routeClient,
-		isChaining:                 isChaining,
-		enableBridgingMode:         enableBridgingMode,
-		disableTXChecksumOffload:   disableTXChecksumOffload,
-		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
-		networkConfig:              networkConfig,
-		podNetworkWait:             podNetworkWait,
-		flowRestoreCompleteWait:    flowRestoreCompleteWait.Increment(),
+		cniSocket:                    cniSocket,
+		serverVersion:                cni.AntreaCNIVersion,
+		nodeConfig:                   nodeConfig,
+		hostProcPathPrefix:           hostProcPathPrefix,
+		podInformer:                  podInformer,
+		kubeClient:                   kubeClient,
+		containerAccess:              newContainerAccessArbitrator(),
+		routeClient:                  routeClient,
+		isChaining:                   isChaining,
+		enableBridgingMode:           enableBridgingMode,
+		disableTXChecksumOffload:     disableTXChecksumOffload,
+		enableSecondaryNetworkIPAM:   enableSecondaryNetworkIPAM,
+		networkConfig:                networkConfig,
+		podNetworkWait:               podNetworkWait,
+		flowRestoreCompleteWait:      flowRestoreCompleteWait.Increment(),
+		secondaryNetworkStateChecker: secondaryNetworkStateChecker,
 	}
 }
 
