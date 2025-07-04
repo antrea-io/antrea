@@ -36,12 +36,12 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/infoelements"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
-	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
-	"antrea.io/antrea/pkg/util/tlstest"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/infoelements"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
+	ipfixtesting "antrea.io/antrea/v2/pkg/ipfix/testing"
+	"antrea.io/antrea/v2/pkg/util/tlstest"
 )
 
 const (

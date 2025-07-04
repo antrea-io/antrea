@@ -27,13 +27,13 @@ import (
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"antrea.io/antrea/pkg/agent/config"
-	servicecidrtesting "antrea.io/antrea/pkg/agent/servicecidr/testing"
-	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
-	"antrea.io/antrea/pkg/agent/util/winnet"
-	winnettesting "antrea.io/antrea/pkg/agent/util/winnet/testing"
-	"antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	servicecidrtesting "antrea.io/antrea/v2/pkg/agent/servicecidr/testing"
+	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
+	"antrea.io/antrea/v2/pkg/agent/util/winnet"
+	winnettesting "antrea.io/antrea/v2/pkg/agent/util/winnet/testing"
+	"antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
 
 var (

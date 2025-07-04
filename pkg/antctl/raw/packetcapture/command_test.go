@@ -34,9 +34,9 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 )
 
 const (

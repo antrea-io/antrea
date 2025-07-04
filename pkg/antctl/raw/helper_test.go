@@ -28,11 +28,11 @@ import (
 	fakeclient "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	cert "antrea.io/antrea/pkg/apiserver/certificate"
-	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	cert "antrea.io/antrea/v2/pkg/apiserver/certificate"
+	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 const nodeIP = "8.8.8.8"

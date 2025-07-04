@@ -17,7 +17,7 @@
 package fake
 
 import (
-	v1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	v1beta2 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

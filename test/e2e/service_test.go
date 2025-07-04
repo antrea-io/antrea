@@ -129,7 +129,7 @@ func testClusterIPFromPod(t *testing.T, data *TestData, url, nodeName, podName s
 
 // TestNodePortWindows tests NodePort Service on Windows Node. It is a temporary test to replace upstream Kubernetes one:
 // https://github.com/kubernetes/kubernetes/blob/ea0764452222146c47ec826977f49d7001b0ea8c/test/e2e/windows/service.go#L42
-// Issue: https://github.com/antrea-io/antrea/issues/2289
+// Issue: https://github.com/antrea.io/antrea/v2/issues/2289
 func TestNodePortWindows(t *testing.T) {
 	skipIfNoWindowsNodes(t)
 

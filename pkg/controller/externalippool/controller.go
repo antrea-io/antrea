@@ -35,13 +35,13 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	antreacrds "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	antreainformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	antrealisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	"antrea.io/antrea/pkg/controller/metrics"
-	"antrea.io/antrea/pkg/ipam/ipallocator"
-	iputil "antrea.io/antrea/pkg/util/ip"
+	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	antreainformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
+	antrealisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/controller/metrics"
+	"antrea.io/antrea/v2/pkg/ipam/ipallocator"
+	iputil "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 const (

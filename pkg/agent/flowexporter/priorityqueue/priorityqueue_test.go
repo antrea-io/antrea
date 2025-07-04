@@ -22,7 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 )
 
 func testConnectionKey(x int) flowexporter.ConnectionKey {

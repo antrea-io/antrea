@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
 
 var sftpLabels = map[string]string{"app": "sftp"}

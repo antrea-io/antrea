@@ -29,8 +29,8 @@ import (
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/agent/config"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 )
 
 func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string,

@@ -17,7 +17,7 @@ package fake
 import (
 	"context"
 
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
 
 func (c *FakeNetworkPolicies) UpdateStatus(ctx context.Context, name string, status *v1beta2.NetworkPolicyStatus) error {

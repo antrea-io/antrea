@@ -23,7 +23,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
-	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
 )
 
 type bookmarkEvent struct {

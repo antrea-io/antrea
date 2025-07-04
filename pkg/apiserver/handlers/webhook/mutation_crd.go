@@ -23,7 +23,7 @@ import (
 	admv1 "k8s.io/api/admission/v1"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/controller/networkpolicy"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
 )
 
 func HandleMutationNetworkPolicy(m *networkpolicy.NetworkPolicyMutator) http.HandlerFunc {

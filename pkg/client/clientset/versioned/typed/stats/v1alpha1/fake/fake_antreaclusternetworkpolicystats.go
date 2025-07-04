@@ -19,7 +19,7 @@ package fake
 import (
 	"context"
 
-	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	v1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	watch "k8s.io/apimachinery/pkg/watch"

@@ -32,14 +32,14 @@ import (
 	"k8s.io/utils/exec"
 	exectesting "k8s.io/utils/exec/testing"
 
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	agentqueriertest "antrea.io/antrea/pkg/agent/querier/testing"
-	system "antrea.io/antrea/pkg/apis/system/v1beta1"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
-	"antrea.io/antrea/pkg/querier"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	"antrea.io/antrea/pkg/support"
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	agentqueriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
+	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/v2/pkg/querier"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	"antrea.io/antrea/v2/pkg/support"
 )
 
 type testExec struct {

@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"antrea.io/antrea/pkg/log"
+	"antrea.io/antrea/v2/pkg/log"
 )
 
 var (

@@ -22,7 +22,7 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
 )
 
 func TestController_HandlePacketIn(t *testing.T) {

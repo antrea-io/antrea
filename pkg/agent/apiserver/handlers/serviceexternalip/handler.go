@@ -18,9 +18,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/features"
+	"antrea.io/antrea/v2/pkg/querier"
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an ServiceExternalIPStatusQuerier

@@ -24,9 +24,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"antrea.io/antrea/pkg/agent/util"
-	ps "antrea.io/antrea/pkg/agent/util/powershell"
-	"antrea.io/antrea/pkg/agent/util/winnet"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	ps "antrea.io/antrea/v2/pkg/agent/util/powershell"
+	"antrea.io/antrea/v2/pkg/agent/util/winnet"
 )
 
 func adapterName(name string) string {

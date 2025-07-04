@@ -26,9 +26,9 @@ import (
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcsv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
 
 var (

@@ -32,14 +32,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
-	"antrea.io/antrea/pkg/agent/openflow"
-	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
-	k8sproxy "antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	exptest "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
+	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 )
 
 const (
@@ -60,12 +60,12 @@ Sample output (10000 init connections, 1000 new connections, 1000 deleted connec
 go test -test.v -run=BenchmarkPoll -test.benchmem -bench=. -memprofile memprofile.out -cpuprofile profile.out
 goos: linux
 goarch: amd64
-pkg: antrea.io/antrea/pkg/agent/flowexporter/connections
+pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/connections
 cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
 BenchmarkPoll
 BenchmarkPoll-2   	     116	   9068998 ns/op	  889713 B/op	   54458 allocs/op
 PASS
-ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	3.618s
+ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/connections	3.618s
 */
 func BenchmarkPoll(b *testing.B) {
 	disableLogToStderr()
@@ -88,11 +88,11 @@ Sample output:
 $ go test -run=XXX -bench=BenchmarkConnStore -benchtime=100x -test.benchmem -memprofile memprofile.out
 goos: darwin
 goarch: amd64
-pkg: antrea.io/antrea/pkg/agent/flowexporter/connections
+pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/connections
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 BenchmarkConnStore-12    	     100	 119354325 ns/op	20490802 B/op	  272626 allocs/op
 PASS
-ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	13.111s
+ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/connections	13.111s
 */
 func BenchmarkConnStore(b *testing.B) {
 	disableLogToStderr()

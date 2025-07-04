@@ -24,9 +24,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-	rulestesting "antrea.io/antrea/pkg/agent/nodeportlocal/rules/testing"
+	portcachetesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache/testing"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
+	rulestesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules/testing"
 )
 
 func TestRestoreRules(t *testing.T) {

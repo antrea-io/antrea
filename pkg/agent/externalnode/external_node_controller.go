@@ -29,22 +29,22 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	enlister "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	agentConfig "antrea.io/antrea/pkg/config/agent"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/env"
-	"antrea.io/antrea/pkg/util/externalnode"
-	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	enlister "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
+	agentConfig "antrea.io/antrea/v2/pkg/config/agent"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/util/externalnode"
+	"antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 const (
@@ -557,7 +557,7 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 	hostIFName := interfaceConfig.InterfaceName
 	uplinkIfName := util.GenerateUplinkInterfaceName(portName)
 
-	// This is for issue #5111 (https://github.com/antrea-io/antrea/issues/5111), which may happen if an error occurs
+	// This is for issue #5111 (https://github.com/antrea.io/antrea/v2/issues/5111), which may happen if an error occurs
 	// when moving the configuration back from host internal interface to uplink. This logic is run in the second
 	// try after the error is returned, at this time the host internal interface is already deleted, and the uplink's
 	// name is recovered. So the ips and routes in "adapterConfig" are actually read from the uplink and no need to

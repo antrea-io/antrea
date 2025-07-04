@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 
 const (

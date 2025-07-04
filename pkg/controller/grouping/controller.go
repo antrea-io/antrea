@@ -26,9 +26,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/features"
 )
 
 const (

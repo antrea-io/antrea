@@ -20,7 +20,7 @@ import (
 
 	"github.com/vmware/go-ipfix/pkg/registry"
 
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
 
 const (

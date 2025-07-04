@@ -19,8 +19,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/apis"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	"antrea.io/antrea/v2/pkg/apis"
+	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
 )
 
 func TestNewOptions(t *testing.T) {

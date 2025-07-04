@@ -25,8 +25,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/antctl/transform/version"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/antctl/transform/version"
 )
 
 type Foobar struct {

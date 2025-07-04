@@ -26,7 +26,7 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
 )
 
 // ofTable implements openflow.Table.

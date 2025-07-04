@@ -30,13 +30,13 @@ import (
 	"github.com/vishvananda/netlink"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/agent/util/arping"
-	"antrea.io/antrea/pkg/agent/util/ethtool"
-	"antrea.io/antrea/pkg/agent/util/ndp"
-	netlinkutil "antrea.io/antrea/pkg/agent/util/netlink"
-	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util/arping"
+	"antrea.io/antrea/v2/pkg/agent/util/ethtool"
+	"antrea.io/antrea/v2/pkg/agent/util/ndp"
+	netlinkutil "antrea.io/antrea/v2/pkg/agent/util/netlink"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 
 // NetDeviceType type Enum

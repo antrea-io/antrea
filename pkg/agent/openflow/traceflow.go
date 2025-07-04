@@ -17,7 +17,7 @@ package openflow
 import (
 	"antrea.io/libOpenflow/openflow15"
 
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 type featureTraceflow struct {

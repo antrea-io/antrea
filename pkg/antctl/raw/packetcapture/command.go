@@ -36,11 +36,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/agent/packetcapture/capture"
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
 
 var (

@@ -20,12 +20,12 @@ import (
 	"reflect"
 	"time"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/util"
-	"antrea.io/antrea/pkg/util/k8s"
-	utilsets "antrea.io/antrea/pkg/util/sets"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/util"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	utilsets "antrea.io/antrea/v2/pkg/util/sets"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"

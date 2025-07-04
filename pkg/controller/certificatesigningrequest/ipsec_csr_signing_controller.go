@@ -45,8 +45,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	antreaapis "antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/util/env"
+	antreaapis "antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
 
 const (

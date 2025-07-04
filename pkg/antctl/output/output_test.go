@@ -24,15 +24,15 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	agentapis "antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
-	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
-	"antrea.io/antrea/pkg/antctl/transform/common"
-	"antrea.io/antrea/pkg/antctl/transform/controllerinfo"
-	"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/apis"
+	agentapis "antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/antctl/transform/addressgroup"
+	"antrea.io/antrea/v2/pkg/antctl/transform/appliedtogroup"
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
+	"antrea.io/antrea/v2/pkg/antctl/transform/controllerinfo"
+	"antrea.io/antrea/v2/pkg/antctl/transform/networkpolicy"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/apis"
 )
 
 type Foobar struct {

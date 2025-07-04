@@ -28,9 +28,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
-	"antrea.io/antrea/pkg/agent/util/winnet"
-	winnettesting "antrea.io/antrea/pkg/agent/util/winnet/testing"
+	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
+	"antrea.io/antrea/v2/pkg/agent/util/winnet"
+	winnettesting "antrea.io/antrea/v2/pkg/agent/util/winnet/testing"
 )
 
 func TestGetNSPath(t *testing.T) {

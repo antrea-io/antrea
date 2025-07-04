@@ -30,9 +30,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 )
 
 var (

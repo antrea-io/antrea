@@ -21,8 +21,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/querier"
 )
 
 // HandleFunc returns the function which can handle queries issued by the bgppolicy command.

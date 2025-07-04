@@ -27,7 +27,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/stretchr/testify/assert"
 
-	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
+	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
 )
 
 type mockPluginInfo struct{}

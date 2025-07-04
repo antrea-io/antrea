@@ -1,8 +1,9 @@
-module antrea.io/antrea
+module antrea.io/antrea/v3
 
 go 1.24.0
 
 require (
+	antrea.io/antrea/v2 v2.0.0-00010101000000-000000000000
 	antrea.io/libOpenflow v0.15.0
 	antrea.io/ofnet v0.14.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.6.1
@@ -131,7 +132,6 @@ require (
 	github.com/eapache/channels v1.1.0 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
-	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -256,3 +256,5 @@ require (
 
 // remove this when https://github.com/mdlayher/ndp/pull/32 gets merged
 replace github.com/mdlayher/ndp => github.com/antrea-io/ndp v0.0.0-20241107040829-6f35f2e50f4c
+
+replace antrea.io/antrea/v2 => ./

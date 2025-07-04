@@ -24,7 +24,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	ps "antrea.io/antrea/pkg/agent/util/powershell"
+	ps "antrea.io/antrea/v2/pkg/agent/util/powershell"
 )
 
 type FWRuleDirection string

@@ -27,9 +27,9 @@ import (
 
 	"k8s.io/component-base/featuregate"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/util/tlstest"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/features"
+	"antrea.io/antrea/v2/pkg/util/tlstest"
 )
 
 func skipIfNotBenchmarkTest(tb testing.TB) {
