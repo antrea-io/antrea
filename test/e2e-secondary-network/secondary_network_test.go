@@ -100,7 +100,7 @@ func (data *testData) createPods(t *testing.T, ns string) error {
 	return err
 }
 
-func generateExpectedNetworks(pod *testPodInfo, ipv4Addrs, ipv6Addrs map[string]net.IP, macMap map[string]string) []nadv1.NetworkStatus {
+func generateExpectedNetworks(pod *testPodInfo, ipv4Addrs, ipv6Addrs map[string]net.IP, macMap map[string]string, isSRIOV bool) []nadv1.NetworkStatus {
 	var statuses []nadv1.NetworkStatus
 	for inf, name := range pod.interfaceNetworks {
 		var ips []string
@@ -110,18 +110,29 @@ func generateExpectedNetworks(pod *testPodInfo, ipv4Addrs, ipv6Addrs map[string]
 		if ip, ok := ipv6Addrs[inf]; ok && len(ip) != 0 {
 			ips = append(ips, ip.String())
 		}
-		statuses = append(statuses, nadv1.NetworkStatus{
+		status := nadv1.NetworkStatus{
 			Name:      name,
 			Interface: inf,
 			IPs:       ips,
 			Mac:       macMap[inf],
 			Default:   false,
-		})
+		}
+		if isSRIOV && inf != "eth0" {
+			status.DeviceInfo = &nadv1.DeviceInfo{
+				Type: nadv1.DeviceInfoTypePCI,
+				// The PCI address is defined in the file test/e2e-secondary-network/sriov-secondary-networks.yml.
+				// so we use the value directly instead of checking Pod's interface.
+				Pci: &nadv1.PciDevice{
+					PciAddress: "0000:00:04.0",
+				},
+			}
+		}
+		statuses = append(statuses, status)
 	}
 	return statuses
 }
 
-func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes.Clientset, pods []*testPodInfo, ns string) error {
+func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes.Clientset, pods []*testPodInfo, ns string, isSRIOV bool) error {
 	for _, pod := range pods {
 		assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -155,7 +166,7 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 					secondaryNetworkStatus = append(secondaryNetworkStatus, networkStatus[i])
 				}
 			}
-			expectedSecondaryNetworkStatuses := generateExpectedNetworks(pod, ips, ipv6Addrs, macMap)
+			expectedSecondaryNetworkStatuses := generateExpectedNetworks(pod, ips, ipv6Addrs, macMap, isSRIOV)
 			assert.ElementsMatch(collect, expectedSecondaryNetworkStatuses, secondaryNetworkStatus, "The Pod network-status annotation is not as expected")
 		}, 20*time.Second, time.Second, "Pod %s network status validation timed out", pod.podName)
 	}
@@ -461,7 +472,7 @@ func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo)
 	if err := testData.pingBetweenInterfaces(t); err != nil {
 		t.Fatalf("Error when pinging between interfaces: %v", err)
 	}
-	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns); err != nil {
+	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, false); err != nil {
 		t.Fatalf("Error when checking the Pod annotation: %v", err)
 	}
 	t.Run("testReconcilationAfterAgentRestart", func(t *testing.T) {
@@ -573,7 +584,7 @@ func TestSRIOVNetwork(t *testing.T) {
 	if err := testData.pingBetweenInterfaces(t); err != nil {
 		t.Fatalf("Error when pinging between interfaces: %v", err)
 	}
-	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns); err != nil {
+	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, true); err != nil {
 		t.Fatalf("Error when checking the Pod annotation: %v", err)
 	}
 }
