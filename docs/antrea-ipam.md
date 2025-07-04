@@ -126,9 +126,8 @@ IPPool annotation, or when the `AntreaIPAM` feature is disabled.
 `antrea-controller` and `antrea-agent`, along with setting the `enableBridgingMode`
 parameter to `true` in `antrea-agent`.
 
-> **Version Compatibility Note:**  
-> The `AntreaIPAM` feature gate has been **enabled by default since v2.4**.
-> For versions prior to v2.4, you must explicitly enable this feature gate.
+> The `AntreaIPAM` feature gate has been **enabled by default since Antrea v2.4**.
+> For versions prior to Antrea v2.4, you must explicitly enable this feature gate.
 
 When installing Antrea from YAML, configure the `antrea-config` ConfigMap as follows:
 
