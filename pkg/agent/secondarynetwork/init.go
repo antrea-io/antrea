@@ -84,6 +84,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	c.podController.Run(stopCh)
 }
 
+func (c *Controller) AllowCNIDelete(podName, podNamespace string) bool {
+	return c.podController.AllowCNIDelete(podName, podNamespace)
+}
+
 // CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.
 func createNetworkAttachDefClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (netdefclient.K8sCniCncfIoV1Interface, error) {
 	kubeConfig, err := k8s.CreateRestConfig(config, kubeAPIServerOverride)
