@@ -37,18 +37,18 @@ import (
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/servicecidr"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util/ipset"
-	"antrea.io/antrea/pkg/agent/util/iptables"
-	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
-	"antrea.io/antrea/pkg/agent/util/sysctl"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/util/env"
-	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/servicecidr"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util/ipset"
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
+	utilnetlink "antrea.io/antrea/v2/pkg/agent/util/netlink"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/util/env"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 const (
@@ -623,9 +623,9 @@ func getLocalAntreaFlexibleIPAMPodIPSetName(isIPv6 bool) string {
 // iptablesData buffer, to set the traffic mark to the connection mark for
 // traffic coming out of the gateway. This rule is needed for 2 cases:
 //   - for the reverse path for NodePort Service traffic (see
-//     https://github.com/antrea-io/antrea/issues/678).
+//     https://github.com/antrea.io/antrea/v2/issues/678).
 //   - for Pod-to-external traffic that needs to be SNATed (see
-//     https://github.com/antrea-io/antrea/issues/3946).
+//     https://github.com/antrea.io/antrea/v2/issues/3946).
 func (c *Client) writeEKSMangleRules(iptablesData *bytes.Buffer) {
 	// TODO: the following should be taking into account:
 	//   1) this rule is only needed if AWS_VPC_CNI_NODE_PORT_SUPPORT is set
@@ -656,7 +656,7 @@ func (c *Client) writeEKSMangleRules(iptablesData *bytes.Buffer) {
 // will take care of restoring the mark. We need that rule because the mangle
 // table is traversed before the nat table.
 // See https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html and
-// https://github.com/antrea-io/antrea/issues/3946 for more details.
+// https://github.com/antrea.io/antrea/v2/issues/3946 for more details.
 func (c *Client) writeEKSNATRules(iptablesData *bytes.Buffer) {
 	// TODO: just like for writeEKSMangleRule, these rules should ideally be
 	// installed conditionally, when AWS_VPC_K8S_CNI_EXTERNALSNAT is set to
@@ -951,7 +951,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
 
 	// When Antrea is used to enforce NetworkPolicies in EKS, additional iptables
-	// mangle rules are required. See https://github.com/antrea-io/antrea/issues/678.
+	// mangle rules are required. See https://github.com/antrea.io/antrea/v2/issues/678.
 	// These rules are only needed for IPv4.
 	if c.isCloudEKS && !isIPv6 {
 		c.writeEKSMangleRules(iptablesData)
@@ -1153,7 +1153,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	}
 
 	// When Antrea is used to enforce NetworkPolicies in EKS, additional iptables
-	// nat rules are required. See https://github.com/antrea-io/antrea/issues/3946.
+	// nat rules are required. See https://github.com/antrea.io/antrea/v2/issues/3946.
 	// These rules are only needed for IPv4.
 	if c.isCloudEKS && !isIPv6 {
 		c.writeEKSNATRules(iptablesData)

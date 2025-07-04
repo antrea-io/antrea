@@ -36,13 +36,13 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/metrics"
-	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
+	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	ipfixtest "antrea.io/antrea/v2/pkg/ipfix/testing"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
 
 const (

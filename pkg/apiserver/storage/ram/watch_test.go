@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/utils/clock"
 
-	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
 )
 
 // simpleInternalEvent simply construct watch.Event based on the provided Type and Object

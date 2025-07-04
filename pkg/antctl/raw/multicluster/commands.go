@@ -17,10 +17,10 @@ package multicluster
 import (
 	"github.com/spf13/cobra"
 
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/create"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/delete"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/deploy"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/get"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/create"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/delete"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/deploy"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/get"
 )
 
 var GetCmd = &cobra.Command{

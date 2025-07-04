@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
 )
 
 // commandList organizes commands definitions.

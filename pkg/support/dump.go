@@ -30,11 +30,11 @@ import (
 	"gopkg.in/yaml.v2"
 	"k8s.io/utils/exec"
 
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	clusterinformationv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/util/logdir"
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	clusterinformationv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/util/logdir"
 )
 
 // AgentDumper is the interface for dumping runtime information of the agent. Its

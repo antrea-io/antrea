@@ -20,7 +20,7 @@ import (
 	"net"
 	"sync"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
 
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"

@@ -31,12 +31,12 @@ import (
 	clockutils "k8s.io/utils/clock"
 	"k8s.io/utils/exec"
 
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/support"
-	"antrea.io/antrea/pkg/util/compress"
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/support"
+	"antrea.io/antrea/v2/pkg/util/compress"
 )
 
 const (

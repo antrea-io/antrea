@@ -26,9 +26,9 @@ import (
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/openflow"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 // HandlePacketIn is the packetIn handler registered to openflow by Antrea network

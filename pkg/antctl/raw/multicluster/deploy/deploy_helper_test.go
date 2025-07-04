@@ -41,7 +41,7 @@ import (
 	"k8s.io/client-go/restmapper"
 	coretesting "k8s.io/client-go/testing"
 
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
 
 func TestGenerateManifests(t *testing.T) {
@@ -57,7 +57,7 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "leader",
 			version: "latest",
 			expectedManifests: []string{
-				"https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls/antrea-multicluster-leader.yml",
+				"https://raw.githubusercontent.com/antrea.io/antrea/v2/main/multicluster/build/yamls/antrea-multicluster-leader.yml",
 			},
 		},
 		{
@@ -65,7 +65,7 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "member",
 			version: "latest",
 			expectedManifests: []string{
-				"https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls/antrea-multicluster-member.yml",
+				"https://raw.githubusercontent.com/antrea.io/antrea/v2/main/multicluster/build/yamls/antrea-multicluster-member.yml",
 			},
 		},
 		{
@@ -73,7 +73,7 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "leader",
 			version: "v1.14.0",
 			expectedManifests: []string{
-				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-leader.yml",
+				"https://github.com/antrea.io/antrea/v2/releases/download/v1.14.0/antrea-multicluster-leader.yml",
 			},
 		},
 		{
@@ -81,7 +81,7 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "member",
 			version: "v1.14.0",
 			expectedManifests: []string{
-				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-member.yml",
+				"https://github.com/antrea.io/antrea/v2/releases/download/v1.14.0/antrea-multicluster-member.yml",
 			},
 		},
 		{
@@ -89,7 +89,7 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "leader",
 			version: "1.14.0",
 			expectedManifests: []string{
-				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-leader.yml",
+				"https://github.com/antrea.io/antrea/v2/releases/download/v1.14.0/antrea-multicluster-leader.yml",
 			},
 		},
 		{
@@ -97,7 +97,7 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "member",
 			version: "1.14.0",
 			expectedManifests: []string{
-				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-member.yml",
+				"https://github.com/antrea.io/antrea/v2/releases/download/v1.14.0/antrea-multicluster-member.yml",
 			},
 		},
 		{

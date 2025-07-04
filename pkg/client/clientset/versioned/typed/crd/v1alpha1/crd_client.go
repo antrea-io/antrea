@@ -19,8 +19,8 @@ package v1alpha1
 import (
 	"net/http"
 
-	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	v1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

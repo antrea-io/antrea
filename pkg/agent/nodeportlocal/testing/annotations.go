@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
 )
 
 type ExpectedNPLAnnotations struct {

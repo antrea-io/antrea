@@ -39,17 +39,17 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/klog/v2"
 
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/exporter"
-	exportertesting "antrea.io/antrea/pkg/flowaggregator/exporter/testing"
-	"antrea.io/antrea/pkg/flowaggregator/intermediate"
-	intermediatetesting "antrea.io/antrea/pkg/flowaggregator/intermediate/testing"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	"antrea.io/antrea/pkg/flowaggregator/querier"
-	"antrea.io/antrea/pkg/ipfix"
-	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
+	exportertesting "antrea.io/antrea/v2/pkg/flowaggregator/exporter/testing"
+	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
+	intermediatetesting "antrea.io/antrea/v2/pkg/flowaggregator/intermediate/testing"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
+	"antrea.io/antrea/v2/pkg/ipfix"
+	ipfixtesting "antrea.io/antrea/v2/pkg/ipfix/testing"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 )
 
 const (

@@ -39,13 +39,13 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
-	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-	rulestesting "antrea.io/antrea/pkg/agent/nodeportlocal/rules/testing"
-	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
+	portcachetesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache/testing"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
+	rulestesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules/testing"
+	npltesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/testing"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
 )
 
 const (

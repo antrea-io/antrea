@@ -29,8 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 
-	"antrea.io/antrea/pkg/agent/config"
-	multicasttest "antrea.io/antrea/pkg/agent/multicast/testing"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	multicasttest "antrea.io/antrea/v2/pkg/agent/multicast/testing"
 )
 
 var (

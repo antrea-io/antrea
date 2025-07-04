@@ -20,9 +20,9 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/querier"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/querier"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
 
 // HandleFunc returns the function which can handle queries issued by agentinfo commands.

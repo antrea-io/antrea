@@ -17,7 +17,7 @@
 package v1alpha2
 
 import (
-	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	v1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
