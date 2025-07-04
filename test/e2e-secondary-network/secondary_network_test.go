@@ -45,6 +45,8 @@ type testPodInfo struct {
 	nodeName string
 	// map from interface name to secondary network name.
 	interfaceNetworks map[string]string
+	// map from interface name to secondary MAC address.
+	macAddresses map[string]string
 }
 
 type testData struct {
@@ -74,17 +76,25 @@ const (
 
 // formAnnotationStringOfPod forms the annotation string, used in the generation of each Pod YAML file.
 func (data *testData) formAnnotationStringOfPod(pod *testPodInfo) string {
-	var annotationString = ""
+	var annotationString string
 	for i, n := range pod.interfaceNetworks {
-		podNetworkSpec := fmt.Sprintf("{\"name\": \"%s\", \"namespace\": \"%s\", \"interface\": \"%s\"}",
+		podNetworkSpec := fmt.Sprintf("{\"name\": \"%s\", \"namespace\": \"%s\", \"interface\": \"%s\"",
 			n, attachDefNamespace, i)
+
+		if pod.macAddresses != nil {
+			if mac, ok := pod.macAddresses[i]; ok {
+				podNetworkSpec += fmt.Sprintf(", \"mac\": \"%s\"", mac)
+			}
+		}
+		podNetworkSpec += "}"
+
 		if annotationString == "" {
 			annotationString = "[" + podNetworkSpec
 		} else {
 			annotationString = annotationString + ", " + podNetworkSpec
 		}
 	}
-	annotationString = annotationString + "]"
+	annotationString += "]"
 	return annotationString
 }
 
@@ -230,9 +240,9 @@ func (data *testData) listPodAddresses(targetPod *testPodInfo) (map[string]net.I
 	return ipv4Result, ipv6Result, macResult, nil
 }
 
-// pingBetweenInterfaces parses through all the created Pods and pings the other Pod if the two Pods
-// both have a secondary network interface on the same network.
-func (data *testData) pingBetweenInterfaces(t *testing.T) error {
+// verifySecondaryInterfaces verifies MAC addresses and tests connectivity(ping)
+// between secondary interfaces of all created Pods that are on the same network.
+func (data *testData) verifySecondaryInterfaces(t *testing.T) error {
 	e2eTestData := data.e2eTestData
 	namespace := e2eTestData.GetTestNamespace()
 
@@ -257,25 +267,37 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 		}
 	}
 
-	// Collect all secondary network IPs when they are available.
+	// Collect all secondary network IPs and verify MACs when they are available.
 	for _, testPod := range data.pods {
 		_, err := e2eTestData.PodWaitFor(defaultTimeout, testPod.podName, namespace, func(pod *corev1.Pod) (bool, error) {
 			if pod.Status.Phase != corev1.PodRunning {
 				return false, nil
 			}
 			var podNetworkAttachments []*attachment
-			podIPs, _, _, err := data.listPodAddresses(testPod)
+			podIPs, _, macResult, err := data.listPodAddresses(testPod)
 			if err != nil {
 				return false, err
 			}
 			for iface, net := range testPod.interfaceNetworks {
-				if podIPs[iface] == nil {
+				ip := podIPs[iface]
+				if ip == nil {
 					return false, nil
 				}
+
+				// Verify MAC address
+				if expectedMAC, ok := testPod.macAddresses[iface]; ok {
+					actualMAC, exists := macResult[iface]
+					if !exists {
+						return false, fmt.Errorf("interface %s not found when checking MAC in Pod %s", iface, testPod.podName)
+					}
+					assert.Equal(t, expectedMAC, actualMAC, "MAC address mismatch for interface %s in Pod %s", iface, testPod.podName)
+					logs.Infof("Interface %s in Pod %s has expected MAC address: %s", iface, testPod.podName, actualMAC)
+				}
+
 				podNetworkAttachments = append(podNetworkAttachments, &attachment{
 					network: net,
 					iface:   iface,
-					ip:      podIPs[iface],
+					ip:      ip,
 				})
 			}
 			// we found all the expected secondary network interfaces / attachments
@@ -469,8 +491,8 @@ func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo)
 	if err != nil {
 		t.Fatalf("Error when creating kubernetes client: %v", err)
 	}
-	if err := testData.pingBetweenInterfaces(t); err != nil {
-		t.Fatalf("Error when pinging between interfaces: %v", err)
+	if err := testData.verifySecondaryInterfaces(t); err != nil {
+		t.Fatalf("Error verifying secondary interfaces (configuration and connectivity): %v", err)
 	}
 	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, false); err != nil {
 		t.Fatalf("Error when checking the Pod annotation: %v", err)
@@ -491,16 +513,19 @@ func TestVLANNetwork(t *testing.T) {
 			podName:           "vlan-pod1",
 			nodeName:          node1,
 			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth2": "vlan-net2"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:01", "eth2": "aa:bb:cc:dd:ee:02"},
 		},
 		{
 			podName:           "vlan-pod2",
 			nodeName:          node1,
 			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth2": "vlan-net3"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:03", "eth2": "aa:bb:cc:dd:ee:04"},
 		},
 		{
 			podName:           "vlan-pod3",
 			nodeName:          node2,
 			interfaceNetworks: map[string]string{"eth1": "vlan-net2"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:05"},
 		},
 	}
 	testSecondaryNetwork(t, networkTypeVLAN, pods)
@@ -581,8 +606,8 @@ func TestSRIOVNetwork(t *testing.T) {
 	if err := testData.assignIP(clientset); err != nil {
 		t.Fatalf("Error when assign IP to ec2 instance: %v", err)
 	}
-	if err := testData.pingBetweenInterfaces(t); err != nil {
-		t.Fatalf("Error when pinging between interfaces: %v", err)
+	if err := testData.verifySecondaryInterfaces(t); err != nil {
+		t.Fatalf("Error verifying secondary interfaces (configuration and connectivity): %v", err)
 	}
 	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, true); err != nil {
 		t.Fatalf("Error when checking the Pod annotation: %v", err)
