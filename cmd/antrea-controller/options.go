@@ -27,6 +27,8 @@ import (
 	"antrea.io/antrea/pkg/apis"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/validation"
 	"antrea.io/antrea/pkg/util/yaml"
 )
 
@@ -79,6 +81,17 @@ func (o *Options) complete() error {
 func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
 		return errors.New("no positional arguments are supported")
+	}
+
+	if len(o.config.KubeAPIServerOverride) != 0 {
+		_, port := k8s.ParseKubeAPIServerOverride(o.config.KubeAPIServerOverride)
+		if err := validation.ValidatePortString(port); err != nil {
+			return fmt.Errorf("error in kubeAPIServerOverride '%s': %w", o.config.KubeAPIServerOverride, err)
+		}
+	}
+
+	if err := validation.ValidatePort(o.config.APIPort); err != nil {
+		return fmt.Errorf("apiPort is invalid: %w", err)
 	}
 
 	if o.config.NodeIPAM.EnableNodeIPAM {

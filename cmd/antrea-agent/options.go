@@ -37,6 +37,8 @@ import (
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/flowexport"
 	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/validation"
 	"antrea.io/antrea/pkg/util/yaml"
 )
 
@@ -158,7 +160,9 @@ func (o *Options) validate(args []string) error {
 	if o.config.FQDNCacheMinTTL < 0 {
 		return fmt.Errorf("fqdnCacheMinTTL must be greater than or equal to 0")
 	}
-
+	if err := validation.ValidatePort(o.config.APIPort); err != nil {
+		return fmt.Errorf("apiPort is invalid: %w", err)
+	}
 	if o.config.NodeType == config.ExternalNode.String() {
 		o.nodeType = config.ExternalNode
 		return o.validateExternalNodeOptions()
@@ -395,6 +399,12 @@ func (o *Options) validateMulticlusterConfig(encapMode config.TrafficEncapModeTy
 	if encapMode.SupportsEncap() && encryptionMode == config.TrafficEncryptionModeWireGuard {
 		return fmt.Errorf("Multi-cluster Gateway doesn't support in-cluster WireGuard encryption")
 	}
+
+	if multiclusterEncryptionMode == config.TrafficEncryptionModeWireGuard {
+		if err := validation.ValidatePort(o.config.Multicluster.WireGuard.Port); err != nil {
+			return fmt.Errorf("multicluster.wireGuard.port is invalid: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -534,9 +544,30 @@ func (o *Options) validateK8sNodeOptions() error {
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
 		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
 	}
+
+	if len(o.config.KubeAPIServerOverride) != 0 {
+		_, port := k8s.ParseKubeAPIServerOverride(o.config.KubeAPIServerOverride)
+		if err := validation.ValidatePortString(port); err != nil {
+			return fmt.Errorf("error in kubeAPIServerOverride '%s': %w", o.config.KubeAPIServerOverride, err)
+		}
+	}
+	if err := validation.ValidatePort(o.config.ClusterMembershipPort); err != nil {
+		return fmt.Errorf("clusterPort is invalid: %w", err)
+	}
+	// Zero for tunnelPort means Antrea will use the assigned IANA port for a given tunnel protocol.
+	if o.config.TunnelPort != 0 {
+		if err := validation.ValidatePort(int(o.config.TunnelPort)); err != nil {
+			return fmt.Errorf("tunnelPort is invalid: %w", err)
+		}
+	}
 	ok, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
 	if !ok {
 		return fmt.Errorf("TrafficEncryptionMode %s is unknown", o.config.TrafficEncryptionMode)
+	}
+	if encryptionMode == config.TrafficEncryptionModeWireGuard {
+		if err := validation.ValidatePort(o.config.WireGuard.Port); err != nil {
+			return fmt.Errorf("wireGuard.port is invalid: %w", err)
+		}
 	}
 	ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	if !ok {
@@ -605,9 +636,12 @@ func (o *Options) validateK8sNodeOptions() error {
 
 	if o.config.DNSServerOverride != "" {
 		hostPort := ip.AppendPortIfMissing(o.config.DNSServerOverride, "53")
-		_, _, err := net.SplitHostPort(hostPort)
+		_, port, err := net.SplitHostPort(hostPort)
 		if err != nil {
-			return fmt.Errorf("dnsServerOverride %s is invalid: %v", o.config.DNSServerOverride, err)
+			return fmt.Errorf("dnsServerOverride %s is invalid: %w", o.config.DNSServerOverride, err)
+		}
+		if err := validation.ValidatePortString(port); err != nil {
+			return fmt.Errorf("port in dnsServerOverride %s is invalid: %w", o.config.DNSServerOverride, err)
 		}
 		o.dnsServerOverride = hostPort
 	}

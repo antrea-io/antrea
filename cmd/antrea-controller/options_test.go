@@ -37,6 +37,50 @@ func TestNewOptions(t *testing.T) {
 	assert.EqualValues(t, defaultClientBurst, op.config.ClientConnection.Burst)
 }
 
+func TestOptions(t *testing.T) {
+	tests := []struct {
+		name                  string
+		apiPort               int
+		kubeAPIServerOverride string
+		expectedErr           string
+	}{
+		{
+			name:                  "valid options",
+			apiPort:               10350,
+			kubeAPIServerOverride: "localhost:443",
+			expectedErr:           "",
+		},
+		{
+			name:                  "invalid apiPort",
+			apiPort:               70000,
+			kubeAPIServerOverride: "localhost:443",
+			expectedErr:           "apiPort is invalid: port 70000 is out of range, valid range is 1-65535",
+		},
+		{
+			name:                  "invalid kubeAPIServerOverride",
+			apiPort:               10350,
+			kubeAPIServerOverride: "localhost:70000",
+			expectedErr:           "error in kubeAPIServerOverride 'localhost:70000': port 70000 is out of range, valid range is 1-65535",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := &Options{
+				config: &controllerconfig.ControllerConfig{
+					APIPort:               tt.apiPort,
+					KubeAPIServerOverride: tt.kubeAPIServerOverride},
+			}
+			err := op.validate(nil)
+			if tt.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}
+
 func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 	testCases := []struct {
 		name           string
