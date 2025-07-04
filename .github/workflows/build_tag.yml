@@ -4,20 +4,30 @@ on:
   push:
     tags:
       - v*
+  workflow_dispatch:
+    inputs:
+      antrea-tag:
+        description: The Antrea tag (e.g. v2.3.0) for which images should be built.
+        type: string
+        required: true
 
 jobs:
   get-version:
     runs-on: [ubuntu-latest]
     outputs:
       version: ${{ steps.get-version.outputs.version }}
+      antrea_ref: ${{ steps.get-version.outputs.antrea_ref }}
     steps:
     - name: Extract version from Github ref
       id: get-version
-      env:
-        TAG: ${{ github.ref }}
       run: |
-        version=${TAG:10}
+        version=${{ inputs.antrea-tag }}
+        if [ -z "$version" ]; then
+            tag=${{ github.ref }}
+            version=${tag:10}
+        fi
         echo "version=$version" >> $GITHUB_OUTPUT
+        echo "antrea_ref=refs/tags/$version" >> $GITHUB_OUTPUT
 
   build:
     needs: get-version
@@ -39,6 +49,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
+        ref: ${{ needs.get-version.outputs.antrea_ref }}
         show-progress: false
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -50,13 +61,11 @@ jobs:
       run: |
         ./hack/build-antrea-linux-all.sh --platform ${{ matrix.platform }} --pull
     - name: Login to Docker Hub
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
     - name: Login to Github Container Registry
-      if: ${{ needs.check-env.outputs.push_needed == 'true' }}
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
@@ -100,13 +109,13 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     - name: Login to Docker Hub
-      if: ${{ needs.check-env.outputs.push_needed == 'true' && matrix.registry == 'docker.io' }}
+      if: ${{ matrix.registry == 'docker.io' }}
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
     - name: Login to Github Container Registry
-      if: ${{ needs.check-env.outputs.push_needed == 'true' && matrix.registry == 'ghcr.io' }}
+      if: ${{ matrix.registry == 'ghcr.io' }}
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
@@ -133,6 +142,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.get-version.outputs.antrea_ref }}
           show-progress: false
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -153,6 +163,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
+        ref: ${{ needs.get-version.outputs.antrea_ref }}
         show-progress: false
     - name: Build Antrea Windows Docker image and push to registry
       env:
@@ -170,6 +181,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
+        ref: ${{ needs.get-version.outputs.antrea_ref }}
         show-progress: false
     - name: Build antrea-mc-controller Docker image and push to registry
       env:
@@ -187,6 +199,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
+        ref: ${{ needs.get-version.outputs.antrea_ref }}
         show-progress: false
     - name: Build flow-aggregator Docker image and push to registry
       env:
