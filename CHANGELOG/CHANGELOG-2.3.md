@@ -1,5 +1,22 @@
 # Changelog 2.3
 
+## 2.3.1 - 2025-07-03
+
+### Changed
+
+- Update go-ipfix to v0.14.0. ([#7080](https://github.com/antrea-io/antrea/pull/7080), [@antoninbas])
+- Document SecondaryNetwork support for SR-IOV. ([#7076](https://github.com/antrea-io/antrea/pull/7076), [@tnqn])
+- Periodically sync permanent neighbors to ensure route correctness for Antrea host gateway interface. ([#7238](https://github.com/antrea-io/antrea/pull/7238), [@hongliangl])
+
+### Fixed
+
+- Enhance OVS commands for Antrea Windows to accelerate container recovery after OVS processes restart and improve robustness. ([#7228](https://github.com/antrea-io/antrea/pull/7228), [@XinShuYang])
+- Sync affected groups in the Antrea Controller when a Pod goes into `Terminated` state, to ensure that the required updates are sent immediately to Agents. ([#7217](https://github.com/antrea-io/antrea/pull/7217), [@Dyanngg])
+- Fix race condition when getting metrics via `antctl` for FlowAggregator. ([#7230](https://github.com/antrea-io/antrea/pull/7230), [@antoninbas])
+- Fix rollback when `configureContainerLinkVeth` fails, to ensure subsequent retries can succeed. ([#7210](https://github.com/antrea-io/antrea/pull/7210) [#7213](https://github.com/antrea-io/antrea/pull/7213), [@tnqn])
+- Remove stale local members in the group cache for Multicast, which resolves an issue that the same receiver may fail to receive multicast packets after it rejoins the group. ([#7154](https://github.com/antrea-io/antrea/pull/7154), [@wenyingd])
+- Fix Agent crash when deleting the Secret storing BGP passwords. ([#7042](https://github.com/antrea-io/antrea/pull/7042), [@hongliangl])
+
 ## 2.3.0 - 2025-02-21
 
 ### Added
@@ -43,6 +60,7 @@
 - Fix PacketCapture bpf filter issue to avoid receiving packets when the socket is created but the bpf filter is not applied yet. ([#6821](https://github.com/antrea-io/antrea/pull/6821), [@hangyan])
 
 [@Atish-iaf]: https://github.com/Atish-iaf
+[@Dyanngg]: https://github.com/Dyanngg
 [@XinShuYang]: https://github.com/XinShuYang
 [@antoninbas]: https://github.com/antoninbas
 [@hangyan]: https://github.com/hangyan
