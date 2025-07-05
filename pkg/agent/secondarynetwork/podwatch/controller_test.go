@@ -254,17 +254,6 @@ func TestPodControllerRun(t *testing.T) {
 	cniCache := &podController.cniCache
 	interfaceStore := podController.interfaceStore
 
-	primaryInterface := &interfacestore.InterfaceConfig{
-		InterfaceName: "primary-interface-name",
-		IPs:           []net.IP{net.ParseIP("192.168.1.2")},
-		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
-			ContainerID:  containerID,
-			PodName:      podName,
-			PodNamespace: testNamespace,
-			IFDev:        "eth0",
-		},
-	}
-
 	stopCh := make(chan struct{})
 	informerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
@@ -330,7 +319,6 @@ func TestPodControllerRun(t *testing.T) {
 	require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
 	_, err = client.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
 	require.NoError(t, err, "error when creating test Pod")
-	podController.primaryInterfaceStore.AddInterface(primaryInterface)
 
 	// Wait for ConfigureSriovSecondaryInterface to be called.
 	assert.Eventually(t, func() bool {
