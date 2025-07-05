@@ -589,9 +589,16 @@ func (c *client) InstallNodeFlows(hostname string,
 		// Addresses (IPv4 and IPv6) .
 		if (!isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr)) ||
 			(isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv6, c.nodeConfig.NodeTransportIPv6Addr)) {
-			flows = append(flows, c.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP)...)
+			flows = append(flows, c.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP))
 		} else {
 			flows = append(flows, c.featurePodConnectivity.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, tunnelPeerIP, peerPodCIDR)...)
+			//
+			if c.enableEgress && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+				flows = append(flows, c.featurePodConnectivity.l3FwdFlowFromGWToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP))
+			}
+		}
+		if c.enableDSR && !isIPv6 && c.networkConfig.TrafficEncapMode.SupportsEncap() {
+			flows = append(flows, c.featurePodConnectivity.l3FwdDSRFlowToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP))
 		}
 		if c.enableEgress {
 			flows = append(flows, c.featureEgress.snatSkipNodeFlow(tunnelPeerIP))
@@ -929,7 +936,6 @@ func (c *client) generatePipelines() {
 			c.connectUplinkToBridge,
 			c.enableMulticast,
 			c.proxyAll,
-			c.enableDSR,
 			c.enableTrafficControl,
 			c.enableL7FlowExporter)
 		c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
