@@ -4282,7 +4282,7 @@ data:
       # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
       # "udp" protocols. "tls" is used for securing communication between flow exporter and
       # flow aggregator.
-      flowCollectorAddr: "flow-aggregator/flow-aggregator:4739:tls"
+      flowCollectorAddr: "flow-aggregator/flow-aggregator:14739:grpc"
 
       # Provide flow poll interval as a duration string. This determines how often the
       # flow exporter dumps connections from the conntrack module. Flow poll interval
@@ -5502,7 +5502,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 6fc8215e5c2c09218e5fcab8ce883e550c032b395bb18f9f850ca7b1bb2c910e
+        checksum/config: 9aa91ee18252eb53f869c787913a108193152dfe0b429500356c4626d67a6712
       labels:
         app: antrea
         component: antrea-agent
@@ -5748,7 +5748,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 6fc8215e5c2c09218e5fcab8ce883e550c032b395bb18f9f850ca7b1bb2c910e
+        checksum/config: 9aa91ee18252eb53f869c787913a108193152dfe0b429500356c4626d67a6712
       labels:
         app: antrea
         component: antrea-controller

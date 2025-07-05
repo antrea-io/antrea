@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ package testing
 import (
 	reflect "reflect"
 
-	flowexporter "antrea.io/antrea/pkg/agent/flowexporter"
+	connection "antrea.io/antrea/pkg/agent/flowexporter/connection"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -56,10 +56,10 @@ func (m *MockConnTrackDumper) EXPECT() *MockConnTrackDumperMockRecorder {
 }
 
 // DumpFlows mocks base method.
-func (m *MockConnTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
+func (m *MockConnTrackDumper) DumpFlows(zoneFilter uint16) ([]*connection.Connection, int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DumpFlows", zoneFilter)
-	ret0, _ := ret[0].([]*flowexporter.Connection)
+	ret0, _ := ret[0].([]*connection.Connection)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -125,10 +125,10 @@ func (mr *MockNetFilterConnTrackMockRecorder) Dial() *gomock.Call {
 }
 
 // DumpFlowsInCtZone mocks base method.
-func (m *MockNetFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error) {
+func (m *MockNetFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*connection.Connection, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DumpFlowsInCtZone", zoneFilter)
-	ret0, _ := ret[0].([]*flowexporter.Connection)
+	ret0, _ := ret[0].([]*connection.Connection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

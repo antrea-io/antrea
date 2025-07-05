@@ -26,8 +26,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 )
@@ -63,7 +63,7 @@ func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefi
 }
 
 // DumpFlows opens netlink connection and dumps all the flows in Antrea ZoneID of conntrack table.
-func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
+func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*connection.Connection, int, error) {
 	svcCIDR := ct.serviceCIDRv4
 	if zoneFilter == openflow.CtZoneV6 {
 		svcCIDR = ct.serviceCIDRv6
@@ -91,7 +91,7 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 // NetFilterConnTrack interface helps for testing the code that contains the third party library functions ("github.com/ti-mo/conntrack")
 type NetFilterConnTrack interface {
 	Dial() error
-	DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error)
+	DumpFlowsInCtZone(zoneFilter uint16) ([]*connection.Connection, error)
 }
 
 type netFilterConnTrack struct {
@@ -108,12 +108,12 @@ func (nfct *netFilterConnTrack) Dial() error {
 	return nil
 }
 
-func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error) {
+func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*connection.Connection, error) {
 	conns, err := nfct.netlinkConn.DumpFilter(conntrack.Filter{}, nil)
 	if err != nil {
 		return nil, err
 	}
-	antreaConns := make([]*flowexporter.Connection, len(conns))
+	antreaConns := make([]*connection.Connection, len(conns))
 	for i := range conns {
 		conn := conns[i]
 		antreaConns[i] = NetlinkFlowToAntreaConnection(&conn)
@@ -125,8 +125,8 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 	return antreaConns, nil
 }
 
-func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
-	newConn := flowexporter.Connection{
+func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *connection.Connection {
+	newConn := connection.Connection{
 		ID:         conn.ID,
 		Timeout:    conn.Timeout,
 		StartTime:  conn.Timestamp.Start,
@@ -136,7 +136,7 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 		Labels:     conn.Labels,
 		LabelsMask: conn.LabelsMask,
 		StatusFlag: uint32(conn.Status.Value),
-		FlowKey: flowexporter.Tuple{
+		FlowKey: connection.Tuple{
 			SourceAddress:      conn.TupleOrig.IP.SourceAddress,
 			DestinationAddress: conn.TupleReply.IP.SourceAddress,
 			Protocol:           conn.TupleOrig.Proto.Protocol,

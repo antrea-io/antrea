@@ -30,7 +30,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
 )
@@ -78,7 +79,7 @@ func (fl *fakePodL7FlowExporterAttrGetter) IsL7FlowExporterRequested(podNN strin
 
 func newFakeL7Listener(socketPath string, podStore *podstoretest.MockInterface) *L7Listener {
 	return &L7Listener{
-		l7Events:                    make(map[flowexporter.ConnectionKey]L7ProtocolFields),
+		l7Events:                    make(map[connection.ConnectionKey]L7ProtocolFields),
 		suricataEventSocketPath:     socketPath,
 		podL7FlowExporterAttrGetter: &fakePodL7FlowExporterAttrGetter{},
 		podStore:                    podStore,
@@ -288,8 +289,8 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 			}
 			writer.Flush()
 			assert.EventuallyWithT(t, func(t *assert.CollectT) {
-				protocol, _ := flowexporter.LookupProtocolMap(tc.input[0].Proto)
-				connKey := flowexporter.Tuple{
+				protocol, _ := utils.LookupProtocolMap(tc.input[0].Proto)
+				connKey := connection.Tuple{
 					SourceAddress:      tc.input[0].SrcIP,
 					DestinationAddress: tc.input[0].DestIP,
 					Protocol:           protocol,

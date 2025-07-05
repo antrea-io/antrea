@@ -66,6 +66,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/cniserver SriovNet testing"
   "pkg/agent/cniserver/ipam IPAMDriver testing"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
+  "pkg/agent/flowexporter/exporter Interface testing"
   "pkg/agent/interfacestore InterfaceStore testing"
   "pkg/agent/memberlist Interface testing"
   "pkg/agent/memberlist Memberlist ."
@@ -90,8 +91,9 @@ MOCKGEN_TARGETS=(
   "pkg/antctl AntctlClient ."
   "pkg/controller/networkpolicy EndpointQuerier,PolicyRuleQuerier testing"
   "pkg/controller/querier ControllerQuerier testing"
+  "pkg/flowaggregator/collector Interface testing"
   "pkg/flowaggregator/exporter Interface testing"
-  "pkg/ipfix IPFIXExportingProcess,IPFIXBufferedExporter,IPFIXRegistry,IPFIXCollectingProcess testing"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXBufferedExporter,IPFIXRegistry testing"
   "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder,Group,BucketBuilder,PacketOutBuilder,Meter,MeterBandBuilder testing"
   "pkg/ovs/ovsconfig OVSBridgeClient testing"
   "pkg/ovs/ovsctl OVSCtlClient testing"
@@ -121,8 +123,8 @@ function generate_antrea_client_code {
   # Generate protobuf code for CNI gRPC service with protoc.
   protoc --go_out=. --go-grpc_out=. pkg/apis/cni/v1beta1/cni.proto
 
-  # Generate protobuf code for Flow message.
-  protoc --go_out=. --go-grpc_out=. pkg/apis/flow/v1alpha1/flow.proto
+  # Generate protobuf code for Flow message and FlowExportService.
+  protoc --go_out=. --go-grpc_out=. pkg/apis/flow/v1alpha1/flow.proto pkg/apis/flow/v1alpha1/service.proto
 
   # Generate clientset and apis code with K8s codegen tools.
   $GOPATH/bin/client-gen \

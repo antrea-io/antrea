@@ -17,9 +17,10 @@ package flowaggregator
 type AggregatorTransportProtocol string
 
 const (
-	AggregatorTransportProtocolTCP AggregatorTransportProtocol = "TCP"
-	AggregatorTransportProtocolTLS AggregatorTransportProtocol = "TLS"
-	AggregatorTransportProtocolUDP AggregatorTransportProtocol = "UDP"
+	AggregatorTransportProtocolTCP  AggregatorTransportProtocol = "TCP"
+	AggregatorTransportProtocolTLS  AggregatorTransportProtocol = "TLS"
+	AggregatorTransportProtocolUDP  AggregatorTransportProtocol = "UDP"
+	AggregatorTransportProtocolNone AggregatorTransportProtocol = "None"
 )
 
 type AggregatorMode string

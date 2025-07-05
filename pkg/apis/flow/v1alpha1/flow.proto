@@ -103,40 +103,43 @@ message Kubernetes {
 
   string source_pod_namespace = 2;
   string source_pod_name = 3;
-  bytes source_pod_uid = 4;
+  string source_pod_uid = 4;
   Labels source_pod_labels = 5;
 
   string source_node_name = 6;
+  string source_node_uid = 7;
 
-  string destination_pod_namespace = 7;
-  string destination_pod_name = 8;
-  bytes destination_pod_uid = 9;
-  Labels destination_pod_labels = 10;
+  string destination_pod_namespace = 8;
+  string destination_pod_name = 9;
+  string destination_pod_uid = 10;
+  Labels destination_pod_labels = 11;
 
-  string destination_node_name = 11;
+  string destination_node_name = 12;
+  string destination_node_uid = 13;
 
-  bytes destination_cluster_ip = 12;
-  uint32 destination_service_port = 13;
-  string destination_service_port_name = 14;
-  bytes destination_service_uid = 15;
+  bytes destination_cluster_ip = 14;
+  uint32 destination_service_port = 15;
+  string destination_service_port_name = 16;
+  string destination_service_uid = 17;
 
-  NetworkPolicyType ingress_network_policy_type = 16;
-  string ingress_network_policy_namespace = 17;
-  string ingress_network_policy_name = 18;
-  bytes ingress_network_policy_uid = 19;
-  string ingress_network_policy_rule_name = 20;
-  NetworkPolicyRuleAction ingress_network_policy_rule_action = 21;
+  NetworkPolicyType ingress_network_policy_type = 18;
+  string ingress_network_policy_namespace = 19;
+  string ingress_network_policy_name = 20;
+  string ingress_network_policy_uid = 21;
+  string ingress_network_policy_rule_name = 22;
+  NetworkPolicyRuleAction ingress_network_policy_rule_action = 23;
 
-  NetworkPolicyType egress_network_policy_type = 22;
-  string egress_network_policy_namespace = 23;
-  string egress_network_policy_name = 24;
-  bytes egress_network_policy_uid = 25;
-  string egress_network_policy_rule_name = 26;
-  NetworkPolicyRuleAction egress_network_policy_rule_action = 27;
+  NetworkPolicyType egress_network_policy_type = 24;
+  string egress_network_policy_namespace = 25;
+  string egress_network_policy_name = 26;
+  string egress_network_policy_uid = 27;
+  string egress_network_policy_rule_name = 28;
+  NetworkPolicyRuleAction egress_network_policy_rule_action = 29;
 
-  string egress_name = 28;
-  bytes egress_ip = 29;
-  string egress_node_name = 30;
+  string egress_name = 30;
+  bytes egress_ip = 31;
+  string egress_node_name = 32;
+  string egress_node_uid = 33;
 }
 
 message App {

@@ -28,7 +28,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/testing/protocmp"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -41,6 +40,7 @@ import (
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	collectortesting "antrea.io/antrea/pkg/flowaggregator/collector/testing"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	exportertesting "antrea.io/antrea/pkg/flowaggregator/exporter/testing"
 	"antrea.io/antrea/pkg/flowaggregator/intermediate"
@@ -57,10 +57,6 @@ const (
 	testInactiveTimeout   = 180 * time.Second
 	informerDefaultResync = 12 * time.Hour
 )
-
-func init() {
-	ipfixregistry.LoadRegistry()
-}
 
 func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 	ipv4Key := intermediate.FlowKey{
@@ -641,7 +637,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	mockPodStore.EXPECT().HasSynced().Return(true)
 	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
-	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
+	mockCollector := collectortesting.NewMockInterface(ctrl)
 	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
 
 	// create dummy watcher: we will not add any files or directory to it.
@@ -665,8 +661,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 		// must be large enough to avoid a call to ForAllExpiredFlowRecordsDo
 		activeFlowRecordTimeout: 1 * time.Hour,
 		logTickerDuration:       1 * time.Hour,
-		collectingProcess:       mockCollectingProcess,
-		preprocessor:            &preprocessor{},
+		grpcCollector:           mockCollector,
 		aggregationProcess:      mockAggregationProcess,
 		ipfixExporter:           mockIPFIXExporter,
 		configWatcher:           configWatcher,
@@ -674,8 +669,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 		podStore:                mockPodStore,
 	}
 
-	mockCollectingProcess.EXPECT().Start()
-	mockCollectingProcess.EXPECT().Stop()
+	mockCollector.EXPECT().Run(gomock.Any())
 	mockAggregationProcess.EXPECT().Start()
 	mockAggregationProcess.EXPECT().Stop()
 	mockPodStore.EXPECT().Run(gomock.Any())
@@ -905,7 +899,7 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 
 func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
+	mockCollector := collectortesting.NewMockInterface(ctrl)
 	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
@@ -924,7 +918,7 @@ func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	}
 
 	fa := &flowAggregator{
-		collectingProcess:  mockCollectingProcess,
+		grpcCollector:      mockCollector,
 		aggregationProcess: mockAggregationProcess,
 		clickHouseExporter: mockClickHouseExporter,
 		s3Exporter:         mockS3Exporter,
@@ -934,15 +928,15 @@ func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	fa.numRecordsExported.Store(10)
 	fa.numRecordsDropped.Store(1)
 
-	mockCollectingProcess.EXPECT().GetNumRecordsReceived().Return(int64(1))
+	mockCollector.EXPECT().GetNumRecordsReceived().Return(int64(1))
 	mockAggregationProcess.EXPECT().GetNumFlows().Return(int64(1))
-	mockCollectingProcess.EXPECT().GetNumConnToCollector().Return(int64(1))
+	mockCollector.EXPECT().GetNumConnsToCollector().Return(int64(1))
 
 	got := fa.GetRecordMetrics()
 	assert.Equal(t, want, got)
 }
 
-func TestFlowAggregator_InitCollectingProcess(t *testing.T) {
+func TestFlowAggregator_InitCollectors(t *testing.T) {
 	tests := []struct {
 		name                        string
 		aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
@@ -961,8 +955,14 @@ func TestFlowAggregator_InitCollectingProcess(t *testing.T) {
 			k8sClient:                   fake.NewSimpleClientset(),
 		},
 		{
-			name:      "neither TLS nor TCP protocol",
-			k8sClient: fake.NewSimpleClientset(),
+			name:                        "UDP protocol",
+			aggregatorTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolUDP,
+			k8sClient:                   fake.NewSimpleClientset(),
+		},
+		{
+			name:                        "no IPFIX collector",
+			aggregatorTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolNone,
+			k8sClient:                   fake.NewSimpleClientset(),
 		},
 	}
 
@@ -973,8 +973,16 @@ func TestFlowAggregator_InitCollectingProcess(t *testing.T) {
 				flowAggregatorAddress:       tt.flowAggregatorAddress,
 				k8sClient:                   tt.k8sClient,
 			}
-			err := fa.InitCollectingProcess()
+			err := fa.InitCollectors()
 			require.NoError(t, err)
+			assert.NotNil(t, fa.grpcCollector)
+			if tt.aggregatorTransportProtocol == flowaggregatorconfig.AggregatorTransportProtocolNone {
+				assert.Nil(t, fa.ipfixCollector)
+			} else {
+				assert.NotNil(t, fa.ipfixCollector)
+			}
+			assert.EqualValues(t, 0, fa.getNumRecordsReceived())
+			assert.EqualValues(t, 0, fa.getNumConnsToCollector())
 		})
 	}
 }
@@ -983,12 +991,12 @@ func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
 	fa := &flowAggregator{
 		activeFlowRecordTimeout:     testActiveTimeout,
 		inactiveFlowRecordTimeout:   testInactiveTimeout,
-		aggregatorTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTCP,
+		aggregatorTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolNone,
 		registry:                    ipfix.NewIPFIXRegistry(),
-		preprocessorOutCh:           make(chan *flowpb.Flow),
+		recordCh:                    make(chan *flowpb.Flow),
+		k8sClient:                   fake.NewSimpleClientset(),
 	}
-	require.NoError(t, fa.InitCollectingProcess())
-	require.NoError(t, fa.InitPreprocessor())
+	require.NoError(t, fa.InitCollectors())
 	require.NoError(t, fa.InitAggregationProcess())
 }
 

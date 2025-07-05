@@ -35,6 +35,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --multicast                   Enable Multicast.
         --bgp-policy                  Enable Antrea BGPPolicy.
         --flow-visibility             Only run flow visibility related e2e tests.
+        --flow-visibility-protocol    Protocol to use between FlowExporter (Agent) and FlowAggregatior: either grpc (default) or ipfix.
         --networkpolicy-evaluation    Configure additional NetworkPolicy evaluation level when running e2e tests.
         --extra-network               Create an extra network that worker Nodes will connect to. Cannot be specified with the hybrid mode.
         --extra-vlan                  Create an subnet-based VLAN that worker Nodes will connect to.
@@ -81,6 +82,7 @@ node_ipam=false
 multicast=false
 bgp_policy=false
 flow_visibility=false
+flow_visibility_protocol="grpc"
 np_evaluation=false
 extra_network=false
 extra_vlan=false
@@ -143,6 +145,10 @@ case $key in
     --flow-visibility)
     flow_visibility=true
     shift
+    ;;
+    --flow-visibility-protocol)
+    flow_visibility_protocol="$2"
+    shift 2
     ;;
     --networkpolicy-evaluation)
     np_evaluation=true
@@ -233,6 +239,12 @@ if $use_non_default_images && $coverage; then
     exit 1
 fi
 
+if [[ "$flow_visibility_protocol" != "grpc" && "$flow_visibility_protocol" != "ipfix" ]]; then
+    echoerr "Unsupported value for --flow-visibility-protocol"
+    print_help
+    exit 1
+fi
+
 trap "quit" INT EXIT
 
 manifest_args="$manifest_args --verbose-log"
@@ -256,6 +268,9 @@ if $bgp_policy; then
 fi
 if $flow_visibility; then
     manifest_args="$manifest_args --feature-gates FlowExporter=true,L7FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
+fi
+if [[ "$flow_visibility_protocol" == "ipfix" ]]; then
+    manifest_args="$manifest_args --extra-helm-values flowExporter.flowCollectorAddr=flow-aggregator/flow-aggregator:4739:tls"
 fi
 if $flexible_ipam; then
     manifest_args="$manifest_args --flexible-ipam"

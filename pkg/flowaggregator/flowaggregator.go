@@ -28,13 +28,13 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
-	"github.com/vmware/go-ipfix/pkg/collector"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/collector"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/pkg/flowaggregator/intermediate"
 	"antrea.io/antrea/pkg/flowaggregator/options"
@@ -43,12 +43,7 @@ import (
 	"antrea.io/antrea/pkg/util/podstore"
 )
 
-const (
-	aggregationWorkerNum = 2
-	udpTransport         = "udp"
-	tcpTransport         = "tcp"
-	collectorAddress     = "0.0.0.0:4739"
-)
+const aggregationWorkerNum = 2
 
 // these are used for unit testing
 var (
@@ -71,8 +66,8 @@ type flowAggregator struct {
 	clusterUUID                 uuid.UUID
 	clusterID                   string
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
-	collectingProcess           ipfix.IPFIXCollectingProcess
-	preprocessor                *preprocessor
+	ipfixCollector              collector.Interface
+	grpcCollector               collector.Interface
 	aggregationProcess          intermediate.AggregationProcess
 	activeFlowRecordTimeout     time.Duration
 	inactiveFlowRecordTimeout   time.Duration
@@ -93,7 +88,7 @@ type flowAggregator struct {
 	s3Exporter                  exporter.Interface
 	logExporter                 exporter.Interface
 	logTickerDuration           time.Duration
-	preprocessorOutCh           chan *flowpb.Flow
+	recordCh                    chan *flowpb.Flow
 	exportersMutex              sync.Mutex
 }
 
@@ -154,13 +149,10 @@ func NewFlowAggregator(
 		APIServer:                   opt.Config.APIServer,
 		logTickerDuration:           time.Minute,
 		// We support buffering a small amount of flow records.
-		preprocessorOutCh: make(chan *flowpb.Flow, 128),
+		recordCh: make(chan *flowpb.Flow, 128),
 	}
-	if err := fa.InitCollectingProcess(); err != nil {
-		return nil, fmt.Errorf("error when creating collecting process: %w", err)
-	}
-	if err := fa.InitPreprocessor(); err != nil {
-		return nil, fmt.Errorf("error when creating preprocessor: %w", err)
+	if err := fa.InitCollectors(); err != nil {
+		return nil, fmt.Errorf("error when creating collectors: %w", err)
 	}
 	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		if err := fa.InitAggregationProcess(); err != nil {
@@ -195,72 +187,36 @@ func NewFlowAggregator(
 	return fa, nil
 }
 
-func (fa *flowAggregator) InitCollectingProcess() error {
-	var cpInput collector.CollectorInput
-	switch fa.aggregatorTransportProtocol {
-	case flowaggregatorconfig.AggregatorTransportProtocolTLS:
-		parentCert, privateKey, caCert, err := generateCACertKey()
-		if err != nil {
-			return fmt.Errorf("error when generating CA certificate: %v", err)
-		}
-		serverCert, serverKey, err := generateCertKey(parentCert, privateKey, true, fa.flowAggregatorAddress)
-		if err != nil {
-			return fmt.Errorf("error when creating server certificate: %v", err)
-		}
-
-		clientCert, clientKey, err := generateCertKey(parentCert, privateKey, false, "")
-		if err != nil {
-			return fmt.Errorf("error when creating client certificate: %v", err)
-		}
-		err = syncCAAndClientCert(caCert, clientCert, clientKey, fa.k8sClient)
-		if err != nil {
-			return fmt.Errorf("error when synchronizing client certificate: %v", err)
-		}
-		cpInput = collector.CollectorInput{
-			Address:       collectorAddress,
-			Protocol:      tcpTransport,
-			MaxBufferSize: 65535,
-			TemplateTTL:   0, // use default value from go-ipfix library
-			IsEncrypted:   true,
-			CACert:        caCert,
-			ServerKey:     serverKey,
-			ServerCert:    serverCert,
-		}
-	case flowaggregatorconfig.AggregatorTransportProtocolTCP:
-		cpInput = collector.CollectorInput{
-			Address:       collectorAddress,
-			Protocol:      tcpTransport,
-			MaxBufferSize: 65535,
-			TemplateTTL:   0, // use default value from go-ipfix library
-			IsEncrypted:   false,
-		}
-	default:
-		cpInput = collector.CollectorInput{
-			Address:       collectorAddress,
-			Protocol:      udpTransport,
-			MaxBufferSize: 1024,
-			TemplateTTL:   0, // use default value from go-ipfix library
-			IsEncrypted:   false,
-		}
+func (fa *flowAggregator) InitCollectors() error {
+	caCert, serverKey, serverCert, err := generateCerts(fa.flowAggregatorAddress, fa.k8sClient)
+	if err != nil {
+		return fmt.Errorf("failed to generate certificates: %w", err)
 	}
-	// Tell the collector to accept IEs which are not part of the IPFIX registry (hardcoded in
-	// the go-ipfix library). The preprocessor will take care of removing these elements.
-	cpInput.DecodingMode = collector.DecodingModeLenientKeepUnknown
-	var err error
-	fa.collectingProcess, err = collector.InitCollectingProcess(cpInput)
-	return err
-}
-
-func (fa *flowAggregator) InitPreprocessor() error {
-	var err error
-	fa.preprocessor, err = newPreprocessor(fa.collectingProcess.GetMsgChan(), fa.preprocessorOutCh)
-	return err
+	grpcCollector, err := collector.NewGRPCCollector(fa.recordCh, caCert, serverKey, serverCert)
+	if err != nil {
+		return fmt.Errorf("failed to create gRPC collector: %w", err)
+	}
+	fa.grpcCollector = grpcCollector
+	if fa.aggregatorTransportProtocol != flowaggregatorconfig.AggregatorTransportProtocolNone {
+		ipfixCollector, err := collector.NewIPFIXCollector(
+			fa.recordCh,
+			fa.aggregatorTransportProtocol,
+			caCert,
+			serverKey,
+			serverCert,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create IPFIX collector: %w", err)
+		}
+		fa.ipfixCollector = ipfixCollector
+	}
+	return nil
 }
 
 func (fa *flowAggregator) InitAggregationProcess() error {
 	var err error
 	apInput := intermediate.AggregationInput{
-		RecordChan:            fa.preprocessorOutCh,
+		RecordChan:            fa.recordCh,
 		WorkerNum:             aggregationWorkerNum,
 		ActiveExpiryTimeout:   fa.activeFlowRecordTimeout,
 		InactiveExpiryTimeout: fa.inactiveFlowRecordTimeout,
@@ -270,7 +226,7 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 }
 
 func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
-	var wg, ipfixProcessesWg sync.WaitGroup
+	var wg sync.WaitGroup
 
 	// We first wait for the PodStore to sync to avoid lookup failures when processing records.
 	const podStoreSyncTimeout = 30 * time.Second
@@ -285,25 +241,25 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		klog.InfoS("PodStore synced")
 	}
 
-	ipfixProcessesWg.Add(1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		// Waiting for this function to return on stop makes it easier to set expectations
 		// when testing. Without this, there is no guarantee that
-		// fa.collectingProcess.Start() was called by the time Run() returns.
-		defer ipfixProcessesWg.Done()
-		// blocking function, will return when fa.collectingProcess.Stop() is called
-		fa.collectingProcess.Start()
+		// fa.grpcCollector.Run() was called by the time Run() returns.
+		fa.grpcCollector.Run(stopCh)
 	}()
-	ipfixProcessesWg.Add(1)
-	go func() {
-		defer ipfixProcessesWg.Done()
-		fa.preprocessor.Run(stopCh)
-	}()
-	if fa.aggregationProcess != nil {
-		ipfixProcessesWg.Add(1)
+	if fa.ipfixCollector != nil {
+		wg.Add(1)
 		go func() {
-			// Same comment as above.
-			defer ipfixProcessesWg.Done()
+			defer wg.Done()
+			fa.ipfixCollector.Run(stopCh)
+		}()
+	}
+	if fa.aggregationProcess != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			// blocking function, will return when fa.aggregationProcess.Stop() is called
 			fa.aggregationProcess.Start()
 		}()
@@ -352,16 +308,10 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		fa.configWatcher.Close()
 	}()
 	<-stopCh
-	// Wait for fa.podStore.Run, fa.flowExportLoop and fa.watchConfiguration to return.
-	wg.Wait()
-	// Stop fa.collectingProcess and fa.aggregationProcess, and wait for their Start function to
-	// return. There should be no strict requirement to stop these processes last, but we
-	// preserve existing behavior from older code.
 	if fa.aggregationProcess != nil {
 		fa.aggregationProcess.Stop()
 	}
-	fa.collectingProcess.Stop()
-	ipfixProcessesWg.Wait()
+	wg.Wait()
 }
 
 // flowExportLoop is the main loop for the FlowAggregator. It runs in a single
@@ -434,7 +384,7 @@ func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 	const flushTickerDuration = 1 * time.Second
 	flushTicker := time.NewTicker(flushTickerDuration)
 	defer flushTicker.Stop()
-	recordCh := fa.preprocessorOutCh
+	recordCh := fa.recordCh
 
 	proxyRecord := func(record *flowpb.Flow) {
 		if err := fa.proxyRecord(record); err != nil {
@@ -463,10 +413,10 @@ func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 			}
 		case <-logTicker.C:
 			// Add visibility of processing stats of Flow Aggregator
-			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
+			klog.V(4).InfoS("Total number of records received", "count", fa.getNumRecordsReceived())
 			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported.Load())
 			klog.V(4).InfoS("Total number of records dropped", "count", fa.numRecordsDropped.Load())
-			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
+			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.getNumConnsToCollector())
 		case opt, ok := <-updateCh:
 			if !ok {
 				// set the channel to nil and essentially disable this select case.
@@ -507,10 +457,10 @@ func (fa *flowAggregator) flowExportLoopAggregate(stopCh <-chan struct{}) {
 			}
 		case <-logTicker.C:
 			// Add visibility of processing stats of Flow Aggregator
-			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
+			klog.V(4).InfoS("Total number of records received", "count", fa.getNumRecordsReceived())
 			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported.Load())
 			klog.V(4).InfoS("Total number of flows stored in Flow Aggregator", "count", fa.aggregationProcess.GetNumFlows())
-			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
+			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.getNumConnsToCollector())
 		case opt, ok := <-updateCh:
 			if !ok {
 				// set the channel to nil and essentially disable this select case.
@@ -656,13 +606,29 @@ func (fa *flowAggregator) getNumFlows() int64 {
 	return 0
 }
 
+func (fa *flowAggregator) getNumRecordsReceived() int64 {
+	num := fa.grpcCollector.GetNumRecordsReceived()
+	if fa.ipfixCollector != nil {
+		num += fa.ipfixCollector.GetNumRecordsReceived()
+	}
+	return num
+}
+
+func (fa *flowAggregator) getNumConnsToCollector() int64 {
+	num := fa.grpcCollector.GetNumConnsToCollector()
+	if fa.ipfixCollector != nil {
+		num += fa.ipfixCollector.GetNumConnsToCollector()
+	}
+	return num
+}
+
 func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
 	metrics := querier.Metrics{
 		NumRecordsExported: fa.numRecordsExported.Load(),
-		NumRecordsReceived: fa.collectingProcess.GetNumRecordsReceived(),
+		NumRecordsReceived: fa.getNumRecordsReceived(),
 		NumRecordsDropped:  fa.numRecordsDropped.Load(),
 		NumFlows:           fa.getNumFlows(),
-		NumConnToCollector: fa.collectingProcess.GetNumConnToCollector(),
+		NumConnToCollector: fa.getNumConnsToCollector(),
 	}
 	fa.exportersMutex.Lock()
 	defer fa.exportersMutex.Unlock()

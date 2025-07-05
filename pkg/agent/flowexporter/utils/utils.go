@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package flowexporter
+package utils
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/vmware/go-ipfix/pkg/registry"
-
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 )
 
 const (
@@ -37,12 +37,35 @@ var (
 	}
 )
 
-// NewConnectionKey creates 5-tuple of flow as connection key
-func NewConnectionKey(conn *Connection) ConnectionKey {
-	return conn.FlowKey
-}
+// These constant values are valid for both Protobuf and IPFIX export (same values).
 
-func IsConnectionDying(conn *Connection) bool {
+const (
+	// FlowTypeUnspecified indicates that we are unable to determine the flow type.
+	FlowTypeUnspecified  = uint8(flowpb.FlowType_FLOW_TYPE_UNSPECIFIED)
+	FlowTypeInterNode    = uint8(flowpb.FlowType_FLOW_TYPE_INTER_NODE)
+	FlowTypeIntraNode    = uint8(flowpb.FlowType_FLOW_TYPE_INTRA_NODE)
+	FlowTypeToExternal   = uint8(flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL)
+	FlowTypeFromExternal = uint8(flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL)
+	// FlowTypeUnsupported indicates that this type of flow is not supported and that we should
+	// skip exporting it.
+	FlowTypeUnsupported = uint8(0xff)
+)
+
+const (
+	PolicyTypeUnspecified                = uint8(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_UNSPECIFIED)
+	PolicyTypeK8sNetworkPolicy           = uint8(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S)
+	PolicyTypeAntreaNetworkPolicy        = uint8(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP)
+	PolicyTypeAntreaClusterNetworkPolicy = uint8(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP)
+)
+
+const (
+	NetworkPolicyRuleActionNoAction = uint8(flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
+	NetworkPolicyRuleActionAllow    = uint8(flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_ALLOW)
+	NetworkPolicyRuleActionDrop     = uint8(flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP)
+	NetworkPolicyRuleActionReject   = uint8(flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT)
+)
+
+func IsConnectionDying(conn *connection.Connection) bool {
 	// "TIME_WAIT" state indicates local endpoint has closed the connection.
 	// "CLOSE" state indicates closing RST flag is set and connection is closed.
 	if conn.TCPState == "TIME_WAIT" || conn.TCPState == "CLOSE" {
@@ -61,7 +84,7 @@ func IsConnectionDying(conn *Connection) bool {
 
 // checkConntrackConnActive returns true if there are changes in connection's stats or
 // TCP state, indicating that the connection is active.
-func CheckConntrackConnActive(conn *Connection) bool {
+func CheckConntrackConnActive(conn *connection.Connection) bool {
 	if (conn.OriginalPackets > conn.PrevPackets) ||
 		(conn.ReversePackets > conn.PrevReversePackets) ||
 		(conn.TCPState != conn.PrevTCPState) {
@@ -74,13 +97,13 @@ func CheckConntrackConnActive(conn *Connection) bool {
 func RuleActionToUint8(action string) uint8 {
 	switch action {
 	case "Allow":
-		return registry.NetworkPolicyRuleActionAllow
+		return NetworkPolicyRuleActionAllow
 	case "Drop":
-		return registry.NetworkPolicyRuleActionDrop
+		return NetworkPolicyRuleActionDrop
 	case "Reject":
-		return registry.NetworkPolicyRuleActionReject
+		return NetworkPolicyRuleActionReject
 	default:
-		return registry.NetworkPolicyRuleActionNoAction
+		return NetworkPolicyRuleActionNoAction
 	}
 }
 
@@ -88,13 +111,13 @@ func RuleActionToUint8(action string) uint8 {
 func PolicyTypeToUint8(policyType v1beta2.NetworkPolicyType) uint8 {
 	switch policyType {
 	case v1beta2.K8sNetworkPolicy:
-		return registry.PolicyTypeK8sNetworkPolicy
+		return PolicyTypeK8sNetworkPolicy
 	case v1beta2.AntreaNetworkPolicy:
-		return registry.PolicyTypeAntreaNetworkPolicy
+		return PolicyTypeAntreaNetworkPolicy
 	case v1beta2.AntreaClusterNetworkPolicy:
-		return registry.PolicyTypeAntreaClusterNetworkPolicy
+		return PolicyTypeAntreaClusterNetworkPolicy
 	default:
-		return registry.PolicyTypeK8sNetworkPolicy
+		return PolicyTypeUnspecified
 	}
 }
 

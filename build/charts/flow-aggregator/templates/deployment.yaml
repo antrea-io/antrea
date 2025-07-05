@@ -97,7 +97,15 @@ spec:
                 name: flow-aggregator-aws-credentials
                 key: aws_session_token
         ports:
-          - containerPort: 4739
+          - name: ipfix-udp
+            containerPort: 4739
+            protocol: UDP
+          - name: ipfix-tcp
+            containerPort: 4739
+            protocol: TCP
+          - name: grpc
+            containerPort: 14739
+            protocol: TCP
         volumeMounts:
         - mountPath: /etc/flow-aggregator
           name: flow-aggregator-config

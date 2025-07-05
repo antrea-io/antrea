@@ -219,7 +219,10 @@ data:
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
     inactiveFlowRecordTimeout: 90s
 
-    # Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp.
+    # Provide the transport protocol for the flow aggregator collecting process, which must be one of
+    # "tls", "tcp", "udp" or "none". Note that this only applies to the IPFIX collector. The gRPC
+    # collector will always run (and always use mTLS), regardless of this configuration. When using
+    # "none", the IPFIX collector will be disabled.
     aggregatorTransportProtocol: "tls"
 
     # Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate.
@@ -456,11 +459,15 @@ spec:
   - name: ipfix-udp
     port: 4739
     protocol: UDP
-    targetPort: 4739
+    targetPort: ipfix-udp
   - name: ipfix-tcp
     port: 4739
     protocol: TCP
-    targetPort: 4739
+    targetPort: ipfix-tcp
+  - name: grpc
+    port: 14739
+    protocol: TCP
+    targetPort: grpc
   selector:
     app: flow-aggregator
 ---
@@ -479,7 +486,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 9d0fcde7fa0b302dbbc71cb2b8996bc3937c103ce91297b74a00140a14db58a8
+        checksum/config: 11e0b942e088c46584c07ab48d927e98c58a860f049f4d0e118e591e6e31b1e9
       labels:
         app: flow-aggregator
     spec:
@@ -533,6 +540,14 @@ spec:
         name: flow-aggregator
         ports:
         - containerPort: 4739
+          name: ipfix-udp
+          protocol: UDP
+        - containerPort: 4739
+          name: ipfix-tcp
+          protocol: TCP
+        - containerPort: 14739
+          name: grpc
+          protocol: TCP
         resources:
           requests:
             cpu: 500m

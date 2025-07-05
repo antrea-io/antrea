@@ -21,8 +21,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -43,7 +43,7 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net
 	return connTrackDumper
 }
 
-func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) []*flowexporter.Connection {
+func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) []*connection.Connection {
 
 	filteredConns := conns[:0]
 	gwIPv4, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)

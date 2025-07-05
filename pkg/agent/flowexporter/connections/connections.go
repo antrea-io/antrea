@@ -22,7 +22,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/util/podstore"
@@ -33,7 +34,7 @@ const (
 )
 
 type connectionStore struct {
-	connections            map[flowexporter.ConnectionKey]*flowexporter.Connection
+	connections            map[connection.ConnectionKey]*connection.Connection
 	podStore               podstore.Interface
 	antreaProxier          proxy.Proxier
 	expirePriorityQueue    *priorityqueue.ExpirePriorityQueue
@@ -44,9 +45,9 @@ type connectionStore struct {
 func NewConnectionStore(
 	podStore podstore.Interface,
 	proxier proxy.Proxier,
-	o *flowexporter.FlowExporterOptions) connectionStore {
+	o *options.FlowExporterOptions) connectionStore {
 	return connectionStore{
-		connections:            make(map[flowexporter.ConnectionKey]*flowexporter.Connection),
+		connections:            make(map[connection.ConnectionKey]*connection.Connection),
 		podStore:               podStore,
 		antreaProxier:          proxier,
 		expirePriorityQueue:    priorityqueue.NewExpirePriorityQueue(o.ActiveFlowTimeout, o.IdleFlowTimeout),
@@ -55,7 +56,7 @@ func NewConnectionStore(
 }
 
 // GetConnByKey gets the connection in connection map given the connection key.
-func (cs *connectionStore) GetConnByKey(connKey flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
+func (cs *connectionStore) GetConnByKey(connKey connection.ConnectionKey) (*connection.Connection, bool) {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 	conn, found := cs.connections[connKey]
@@ -63,7 +64,7 @@ func (cs *connectionStore) GetConnByKey(connKey flowexporter.ConnectionKey) (*fl
 }
 
 // ForAllConnectionsDo execute the callback for each connection in connection map.
-func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionMapCallBack) error {
+func (cs *connectionStore) ForAllConnectionsDo(callback connection.ConnectionMapCallBack) error {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 	for k, v := range cs.connections {
@@ -78,7 +79,7 @@ func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 
 // ForAllConnectionsDoWithoutLock execute the callback for each connection in connection
 // map, without grabbing the lock. Caller is expected to grab lock.
-func (cs *connectionStore) ForAllConnectionsDoWithoutLock(callback flowexporter.ConnectionMapCallBack) error {
+func (cs *connectionStore) ForAllConnectionsDoWithoutLock(callback connection.ConnectionMapCallBack) error {
 	for k, v := range cs.connections {
 		err := callback(k, v)
 		if err != nil {
@@ -91,13 +92,13 @@ func (cs *connectionStore) ForAllConnectionsDoWithoutLock(callback flowexporter.
 
 // AddConnToMap adds the connection to connections map given connection key.
 // This is used only for unit tests.
-func (cs *connectionStore) AddConnToMap(connKey *flowexporter.ConnectionKey, conn *flowexporter.Connection) {
+func (cs *connectionStore) AddConnToMap(connKey *connection.ConnectionKey, conn *connection.Connection) {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 	cs.connections[*connKey] = conn
 }
 
-func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {
+func (cs *connectionStore) fillPodInfo(conn *connection.Connection) {
 	if cs.podStore == nil {
 		klog.V(4).Info("Pod store is not available to retrieve local Pods information.")
 		return
@@ -118,7 +119,7 @@ func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {
 	}
 }
 
-func (cs *connectionStore) fillServiceInfo(conn *flowexporter.Connection, serviceStr string) {
+func (cs *connectionStore) fillServiceInfo(conn *connection.Connection, serviceStr string) {
 	// resolve destination Service information
 	if cs.antreaProxier != nil {
 		servicePortName, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
@@ -152,7 +153,7 @@ func (cs *connectionStore) ReleaseConnStoreLock() {
 // item's expire time every time we encounter it in the PQ. The method also
 // updates active connection's stats fields and adds it back to the PQ. Layer 7
 // fields should be set to default to prevent from re-exporting same values.
-func (cs *connectionStore) UpdateConnAndQueue(pqItem *flowexporter.ItemToExpire, currTime time.Time) {
+func (cs *connectionStore) UpdateConnAndQueue(pqItem *priorityqueue.ItemToExpire, currTime time.Time) {
 	conn := pqItem.Conn
 	conn.LastExportTime = currTime
 	conn.AppProtocolName = ""

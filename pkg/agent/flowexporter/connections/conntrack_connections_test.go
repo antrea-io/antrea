@@ -28,8 +28,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
@@ -42,9 +43,9 @@ import (
 )
 
 var (
-	tuple1 = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	tuple2 = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
-	tuple3 = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("10.10.10.10"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 60000, DestinationPort: 100}
+	tuple1 = connection.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	tuple2 = connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	tuple3 = connection.Tuple{SourceAddress: netip.MustParseAddr("10.10.10.10"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 60000, DestinationPort: 100}
 	pod1   = &v1.Pod{
 		Status: v1.PodStatus{
 			PodIPs: []v1.PodIP{
@@ -93,8 +94,8 @@ var (
 
 type fakeL7Listener struct{}
 
-func (fll *fakeL7Listener) ConsumeL7EventMap() map[flowexporter.ConnectionKey]L7ProtocolFields {
-	l7EventsMap := make(map[flowexporter.ConnectionKey]L7ProtocolFields)
+func (fll *fakeL7Listener) ConsumeL7EventMap() map[connection.ConnectionKey]L7ProtocolFields {
+	l7EventsMap := make(map[connection.ConnectionKey]L7ProtocolFields)
 	return l7EventsMap
 }
 
@@ -104,23 +105,23 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 
 	tc := []struct {
 		name         string
-		flowKey      flowexporter.Tuple
-		oldConn      *flowexporter.Connection
-		newConn      flowexporter.Connection
-		expectedConn flowexporter.Connection
+		flowKey      connection.Tuple
+		oldConn      *connection.Connection
+		newConn      connection.Connection
+		expectedConn connection.Connection
 	}{
 		{
 			name:    "addNewConn",
 			flowKey: tuple1,
 			oldConn: nil,
-			newConn: flowexporter.Connection{
+			newConn: connection.Connection{
 				StartTime: refTime,
 				StopTime:  refTime,
 				FlowKey:   tuple1,
 				Labels:    []byte{0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0},
 				Mark:      openflow.ServiceCTMark.GetValue(),
 			},
-			expectedConn: flowexporter.Connection{
+			expectedConn: connection.Connection{
 				StartTime:                      refTime,
 				StopTime:                       refTime,
 				LastExportTime:                 refTime,
@@ -134,15 +135,15 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				DestinationServicePortName:     servicePortName.String(),
 				IngressNetworkPolicyName:       np1.Name,
 				IngressNetworkPolicyNamespace:  np1.Namespace,
-				IngressNetworkPolicyType:       flowexporter.PolicyTypeToUint8(np1.Type),
+				IngressNetworkPolicyType:       utils.PolicyTypeToUint8(np1.Type),
 				IngressNetworkPolicyRuleName:   rule1.Name,
-				IngressNetworkPolicyRuleAction: flowexporter.RuleActionToUint8(string(*rule1.Action)),
+				IngressNetworkPolicyRuleAction: utils.RuleActionToUint8(string(*rule1.Action)),
 			},
 		},
 		{
 			name:    "updateActiveConn",
 			flowKey: tuple2,
-			oldConn: &flowexporter.Connection{
+			oldConn: &connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime.Add(-(time.Second * 30)),
 				LastExportTime:  refTime.Add(-(time.Second * 50)),
@@ -153,7 +154,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:         tuple2,
 				IsPresent:       true,
 			},
-			newConn: flowexporter.Connection{
+			newConn: connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime,
 				OriginalPackets: 0xffff,
@@ -163,7 +164,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:         tuple2,
 				IsPresent:       true,
 			},
-			expectedConn: flowexporter.Connection{
+			expectedConn: connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime,
 				LastExportTime:  refTime.Add(-(time.Second * 50)),
@@ -181,7 +182,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			// in connection store will not be updated.
 			name:    "updateDyingConn",
 			flowKey: tuple3,
-			oldConn: &flowexporter.Connection{
+			oldConn: &connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime.Add(-(time.Second * 30)),
 				LastExportTime:  refTime.Add(-(time.Second * 50)),
@@ -193,7 +194,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				TCPState:        "TIME_WAIT",
 				IsPresent:       true,
 			},
-			newConn: flowexporter.Connection{
+			newConn: connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime,
 				OriginalPackets: 0xffff,
@@ -204,7 +205,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				TCPState:        "TIME_WAIT",
 				IsPresent:       true,
 			},
-			expectedConn: flowexporter.Connection{
+			expectedConn: connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime.Add(-(time.Second * 30)),
 				LastExportTime:  refTime.Add(-(time.Second * 50)),
@@ -234,7 +235,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				testAddNewConn(mockPodStore, mockProxier, npQuerier, c.newConn)
 			}
 			conntrackConnStore.AddOrUpdateConn(&c.newConn)
-			actualConn, exist := conntrackConnStore.GetConnByKey(flowexporter.NewConnectionKey(&c.newConn))
+			actualConn, exist := conntrackConnStore.GetConnByKey(connection.NewConnectionKey(&c.newConn))
 			require.Equal(t, exist, true, "The connection should exist in the connection store")
 			assert.Equal(t, c.expectedConn, *actualConn, "Connections should be equal")
 			assert.Equalf(t, 1, conntrackConnStore.connectionStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
@@ -244,7 +245,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 }
 
 // testAddNewConn tests podInfo, Services, network policy mapping.
-func testAddNewConn(mockPodStore *podstoretest.MockInterface, mockProxier *proxytest.MockProxier, npQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier, conn flowexporter.Connection) {
+func testAddNewConn(mockPodStore *podstoretest.MockInterface, mockProxier *proxytest.MockProxier, npQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier, conn connection.Connection) {
 	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
 	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 
@@ -259,8 +260,8 @@ func testAddNewConn(mockPodStore *podstoretest.MockInterface, mockProxier *proxy
 
 // addConntrackConnToMap adds a conntrack connection to the connection map and
 // increment the metric.
-func addConnToStore(cs *ConntrackConnectionStore, conn *flowexporter.Connection) {
-	connKey := flowexporter.NewConnectionKey(conn)
+func addConnToStore(cs *ConntrackConnectionStore, conn *connection.Connection) {
+	connKey := connection.NewConnectionKey(conn)
 	cs.AddConnToMap(&connKey, conn)
 	cs.expirePriorityQueue.WriteItemToQueue(connKey, conn)
 	metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
@@ -269,12 +270,12 @@ func addConnToStore(cs *ConntrackConnectionStore, conn *flowexporter.Connection)
 func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// Create two flows; one is already in connectionStore and other one is new
-	testFlows := make([]*flowexporter.Connection, 2)
-	testFlowKeys := make([]*flowexporter.ConnectionKey, 2)
+	testFlows := make([]*connection.Connection, 2)
+	testFlowKeys := make([]*connection.ConnectionKey, 2)
 	refTime := time.Now()
 	// Flow-1, which is already in connectionStore
-	tuple1 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
-	testFlows[0] = &flowexporter.Connection{
+	tuple1 := connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	testFlows[0] = &connection.Connection{
 		StartTime:       refTime.Add(-(time.Second * 50)),
 		StopTime:        refTime,
 		OriginalPackets: 0xffff,
@@ -285,8 +286,8 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		IsPresent:       true,
 	}
 	// Flow-2, which is not in connectionStore
-	tuple2 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	testFlows[1] = &flowexporter.Connection{
+	tuple2 := connection.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	testFlows[1] = &connection.Connection{
 		StartTime:       refTime.Add(-(time.Second * 20)),
 		StopTime:        refTime,
 		OriginalPackets: 0xbb,
@@ -297,7 +298,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		IsPresent:       true,
 	}
 	for i, flow := range testFlows {
-		connKey := flowexporter.NewConnectionKey(flow)
+		connKey := connection.NewConnectionKey(flow)
 		testFlowKeys[i] = &connKey
 	}
 	// For testing purposes, set the metric
@@ -322,7 +323,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	testFlows := make([]*flowexporter.Connection, 0)
+	testFlows := make([]*connection.Connection, 0)
 	// Create connectionStore
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)

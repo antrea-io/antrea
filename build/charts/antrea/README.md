@@ -98,7 +98,7 @@ Kubernetes: `>= 1.19.0-0`
 | featureGates | object | `{}` | To explicitly enable or disable a FeatureGate and bypass the Antrea defaults, add an entry to the dictionary with the FeatureGate's name as the key and a boolean as the value. |
 | flowExporter.activeFlowExportTimeout | string | `"5s"` | timeout after which a flow record is sent to the collector for active flows. |
 | flowExporter.enable | bool | `false` | Enable the flow exporter feature. |
-| flowExporter.flowCollectorAddr | string | `"flow-aggregator/flow-aggregator:4739:tls"` | IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>]. If the collector is running in-cluster as a Service, set <HOST> to <Service namespace>/<Service name>. |
+| flowExporter.flowCollectorAddr | string | `"flow-aggregator/flow-aggregator:14739:grpc"` | IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>]. If the collector is running in-cluster as a Service, set <HOST> to <Service namespace>/<Service name>. |
 | flowExporter.flowPollInterval | string | `"5s"` | Determines how often the flow exporter polls for new connections. |
 | flowExporter.idleFlowExportTimeout | string | `"15s"` | timeout after which a flow record is sent to the collector for idle flows. |
 | flowExporter.protocolFilter | list | `nil` | Filter which flows are exported based on protocol. A nil protocolFilter allows all flows. Supported protocols are "tcp", "udp" and "sctp". |

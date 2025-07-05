@@ -221,3 +221,26 @@ func syncCAAndClientCert(caCert, clientCert, clientKey []byte, k8sClient kuberne
 	}
 	return nil
 }
+
+// generateCerts generates new certificates for the Flow Aggregator and the Flow Exporter (client),
+// and syncs the CA ConfigMap and the client cert Secret using the provided K8s client.
+// generateCerts returns the CA certificate, the server private key and the server certificate.
+func generateCerts(flowAggregatorAddress string, k8sClient kubernetes.Interface) ([]byte, []byte, []byte, error) {
+	parentCert, privateKey, caCert, err := generateCACertKey()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error when generating CA certificate: %w", err)
+	}
+	serverCert, serverKey, err := generateCertKey(parentCert, privateKey, true, flowAggregatorAddress)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error when creating server certificate: %w", err)
+	}
+
+	clientCert, clientKey, err := generateCertKey(parentCert, privateKey, false, "")
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error when creating client certificate: %w", err)
+	}
+	if err := syncCAAndClientCert(caCert, clientCert, clientKey, k8sClient); err != nil {
+		return nil, nil, nil, fmt.Errorf("error when synchronizing client certificate: %w", err)
+	}
+	return caCert, serverKey, serverCert, nil
+}
