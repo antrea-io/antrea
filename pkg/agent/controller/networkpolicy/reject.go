@@ -171,7 +171,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		dstMAC = dIface.MAC.String()
 	}
 
-	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface, c.gwPort, c.tunPort)
+	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface, c.gwPort, c.tunPort, ethernetPkt.HWDst.String())
 	mutateFunc := getRejectPacketOutMutateFunc(packetOutType, c.nodeType, isFlexibleIPAMSrc, isFlexibleIPAMDst, ctZone)
 
 	return openflow.SendRejectPacketOut(c.ofClient,
@@ -223,7 +223,13 @@ func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal 
 }
 
 // getRejectOFPorts returns the inPort and outPort of a packetOut based on the rejectType.
-func getRejectOFPorts(rejectType rejectType, sIface, dIface *interfacestore.InterfaceConfig, gwOFPort, tunOFPort uint32) (uint32, uint32) {
+func getRejectOFPorts(rejectType rejectType,
+	sIface *interfacestore.InterfaceConfig,
+	dIface *interfacestore.InterfaceConfig,
+	gwOFPort uint32,
+	tunOFPort uint32,
+	packetinDstMAC string,
+) (uint32, uint32) {
 	inPort := gwOFPort
 	outPort := uint32(0)
 	switch rejectType {
@@ -265,10 +271,32 @@ func getRejectOFPorts(rejectType rejectType, sIface, dIface *interfacestore.Inte
 		}
 		outPort = gwOFPort
 	case rejectServiceRemoteToExternal:
-		inPort = tunOFPort
-		if inPort == 0 {
-			// If tunnel interface is not found, which means we are in noEncap mode, then use
-			// gateway port as inPort.
+		// When rejecting external client access to a Service with a remote Endpoint, there are two scenarios:
+		//
+		// 1. Remote Endpoint is reachable via tunnel:
+		//    - Applies when traffic mode is "encap", or "hybrid" with the remote Node on a different subnet.
+		//    - Packet-in (received from OutputTable):
+		//        - srcMAC: gateway MAC (set in L3ForwardingTable)
+		//        - dstMAC: global virtual MAC (set in L3ForwardingTable)
+		//        - inPort: gateway
+		//        - outPort: tun (set in L2ForwardingCalcTable)
+		//    - Packet-out (reject packet): should simulate the traffic originating from the tunnel.
+		//        - inPort: tun
+		//
+		// 2. Remote Endpoint is reachable via Node route:
+		//    - Applies when traffic mode is "noEncap", or "hybrid" with the remote Node on the same subnet.
+		//    - Packet-in (received from OutputTable):
+		//        - srcMAC: gateway MAC
+		//        - dstMAC: gateway MAC (set in L3ForwardingTable)
+		//        - inPort: gateway
+		//        - outPort: gateway (set in L2ForwardingCalcTable)
+		//    - Packet-out (reject packet): should simulate the traffic originating from the gateway.
+		//		  - inPort: gateway
+		//
+		// Based on the above, the key difference between the two scenarios is the dstMAC in the packet-in:
+		if packetinDstMAC == openflow.GlobalVirtualMAC.String() {
+			inPort = tunOFPort
+		} else {
 			inPort = gwOFPort
 		}
 	}
