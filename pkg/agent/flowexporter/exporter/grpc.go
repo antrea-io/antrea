@@ -67,7 +67,7 @@ func (e *grpcExporter) ConnectToCollector(addr string, tlsConfig *TLSConfig) err
 
 func (e *grpcExporter) Export(conn *connection.Connection) error {
 	// It is not safe to modify the message after calling SendMsg, so we need to allocate a
-	// brand new message evry time.
+	// brand new message every time.
 	// We could investigate using grpc.PreparedMsg to see if it helps reduce the number of
 	// allocations, but that is an experimental API:
 	// https://github.com/grpc/grpc-go/issues/8186

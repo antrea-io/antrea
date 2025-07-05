@@ -187,7 +187,7 @@ func (em elementListMatcher) String() string {
 	return ""
 }
 
-// TestIPFIXExporter_sendDataRecord tests essentially if element names in the switch-case matches globals
+// TestIPFIXExporter_sendDataSet tests essentially if element names in the switch-case matches globals
 // IANAInfoElements and AntreaInfoElements.
 func TestIPFIXExporter_sendDataSet(t *testing.T) {
 	for _, tc := range []struct {

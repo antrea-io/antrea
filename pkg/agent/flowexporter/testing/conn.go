@@ -65,7 +65,7 @@ func GetConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 func GetDenyConnection(isIPv6 bool, protoID uint8) *connection.Connection {
 	var tuple, _ connection.Tuple
 	if !isIPv6 {
-		tuple = connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+		tuple = connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: protoID, SourcePort: 65280, DestinationPort: 255}
 	} else {
 		srcIP := netip.MustParseAddr("2001:0:3238:dfe1:63::fefb")
 		dstIP := netip.MustParseAddr("2001:0:3238:dfe1:63::fefc")

@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -225,8 +225,8 @@ func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
 	// arrives FA first, FA will not be able to capture the deny network policy metadata, and it will keep waiting
 	// for a record from destination Node to finish flow correlation until timeout. Later on we probably should
 	// consider doing a record deduplication between conntrackConnStore and denyConnStore before exporting records.
-	exp.expiredConns, expireTime2 = exp.denyConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
-	exp.expiredConns, expireTime1 = exp.conntrackConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
+	exp.expiredConns, expireTime1 = exp.denyConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
+	exp.expiredConns, expireTime2 = exp.conntrackConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
 	// Select the shorter time out among two connection stores to do the next round of export.
 	nextExpireTime := getMinTime(expireTime1, expireTime2)
 	for i := range exp.expiredConns {
@@ -311,9 +311,7 @@ func (exp *FlowExporter) findFlowType(conn connection.Connection) uint8 {
 	}
 
 	if exp.nodeRouteController == nil {
-		if klog.V(5).Enabled() {
-			klog.InfoS("Can't find flow type without nodeRouteController")
-		}
+		klog.V(5).InfoS("Can't find flow type without nodeRouteController")
 		return utils.FlowTypeUnspecified
 	}
 	srcIsPod, srcIsGw := exp.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.SourceAddress)
@@ -321,15 +319,11 @@ func (exp *FlowExporter) findFlowType(conn connection.Connection) uint8 {
 	if srcIsGw || dstIsGw {
 		// This matches what we do in filterAntreaConns but is more general as we consider
 		// remote gateways as well.
-		if klog.V(5).Enabled() {
-			klog.InfoS("Flows where the source or destination IP is a gateway IP will not be exported")
-		}
+		klog.V(5).InfoS("Flows where the source or destination IP is a gateway IP will not be exported")
 		return utils.FlowTypeUnsupported
 	}
 	if !srcIsPod {
-		if klog.V(5).Enabled() {
-			klog.InfoS("Flows where the source is not a Pod will not be exported")
-		}
+		klog.V(5).InfoS("Flows where the source is not a Pod will not be exported")
 		return utils.FlowTypeUnsupported
 	}
 	if !dstIsPod {
