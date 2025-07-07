@@ -244,10 +244,10 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 func (pc *podConfigurator) configureInterfacesCommon(
 	podName, podNamespace, containerID, containerNetNS string,
 	containerIFDev string, mtu int, sriovVFDeviceID string,
-	result *ipam.IPAMResult, containerAccess *containerAccessArbitrator) error {
+	result *ipam.IPAMResult, containerAccess *containerAccessArbitrator, mac net.HardwareAddr) error {
 	err := pc.ifConfigurator.configureContainerLink(
 		podName, podNamespace, containerID, containerNetNS,
-		containerIFDev, mtu, sriovVFDeviceID, "", &result.Result, containerAccess)
+		containerIFDev, mtu, sriovVFDeviceID, "", &result.Result, containerAccess, mac)
 	if err != nil {
 		return err
 	}

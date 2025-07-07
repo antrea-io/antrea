@@ -390,10 +390,22 @@ func TestPodControllerRun(t *testing.T) {
 }
 
 func TestConfigurePodSecondaryNetwork(t *testing.T) {
-	element1 := netdefv1.NetworkSelectionElement{
+	element1 := &netdefv1.NetworkSelectionElement{
 		Name:             networkName,
 		Namespace:        testNamespace,
 		InterfaceRequest: interfaceName,
+	}
+	element2 := &netdefv1.NetworkSelectionElement{
+		Name:             networkName,
+		Namespace:        testNamespace,
+		InterfaceRequest: interfaceName,
+		MacRequest:       "02:42:ac:11:00:02",
+	}
+	element3 := &netdefv1.NetworkSelectionElement{
+		Name:             networkName,
+		Namespace:        testNamespace,
+		InterfaceRequest: interfaceName,
+		MacRequest:       "invalid-mac",
 	}
 	podOwner := &crdv1beta1.PodOwner{
 		Name:        podName,
@@ -424,6 +436,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 
 	tests := []struct {
 		name                       string
+		element                    *netdefv1.NetworkSelectionElement
 		cniVersion                 string
 		cniType                    string
 		networkType                networkType
@@ -451,6 +464,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					interfaceName,
 					1600,
 					testIPAMResult("148.14.24.100/24", 101),
+					nil,
 				)
 			},
 			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
@@ -474,6 +488,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					interfaceName,
 					1500,
 					testIPAMResult("148.14.24.100/24", 101),
+					nil,
 				)
 			},
 			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
@@ -496,6 +511,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					interfaceName,
 					1500,
 					testIPAMResult("148.14.24.100/24", 101),
+					nil,
 				)
 			},
 			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
@@ -517,6 +533,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					interfaceName,
 					1500,
 					&ipam.IPAMResult{},
+					nil,
 				)
 			},
 			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
@@ -617,6 +634,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					interfaceName,
 					1600,
 					testIPAMResult("148.14.24.100/24", 101),
+					nil,
 				).Return(errors.New("interface creation failure"))
 				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
 			},
@@ -635,15 +653,54 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					interfaceName,
 					1500,
 					&ipam.IPAMResult{},
+					nil,
 				).Return(errors.New("interface creation failure"))
 			},
 			expectedErr: "interface creation failure",
+		},
+		{
+			name:        "static MAC address configured",
+			element:     element2,
+			networkType: vlanNetworkType,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				expectedMAC, _ := net.ParseMAC("02:42:ac:11:00:02")
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 0), nil)
+				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
+					podName,
+					testNamespace,
+					containerID,
+					containerNetNs(containerID),
+					interfaceName,
+					gomock.Any(),
+					testIPAMResult("148.14.24.100/24", 0),
+					expectedMAC,
+				)
+			},
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100"},
+				DNS:  netdefv1.DNS{},
+			}, primaryNetworkStatus},
+		},
+		{
+			name:        "invalid MAC address fails",
+			element:     element3,
+			networkType: vlanNetworkType,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				// Expect no call to interface configurator
+			},
+			expectedErr: "",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			pod, cniInfo := testPod(podName, containerID, podIP, element1)
+			element := tc.element
+			if element == nil {
+				element = element1
+			}
+
+			pod, cniInfo := testPod(podName, containerID, podIP, *element)
 			pc, mockIPAM, interfaceConfigurator := testPodControllerStart(ctrl)
 			_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 			require.NoError(t, err)
@@ -659,7 +716,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(mockIPAM, interfaceConfigurator)
 			}
-			err = pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element1}, cniInfo)
+			err = pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{element}, cniInfo)
 			if tc.expectedErr == "" {
 				assert.NoError(t, err)
 			} else {
@@ -884,6 +941,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			"eth11",
 			defaultMTU,
 			testIPAMResult("148.14.24.101/24", 100),
+			nil,
 		)
 		mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner1, &networkConfig1).Return(testIPAMResult("148.14.24.100/24", 0), nil)
 		mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner2, &networkConfig2).Return(testIPAMResult("148.14.24.101/24", 0), nil)

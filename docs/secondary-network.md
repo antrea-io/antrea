@@ -200,6 +200,24 @@ spec:
    image: antrea/toolbox:latest
 ```
 
+You can also pass the static MAC address for secondary interfaces in annotation.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+ name: sample-pod-secondary-network-vlan
+ annotations:
+   k8s.v1.cni.cncf.io/networks: '[
+     {"name": "vlan100"},
+     {"name": "vlan200", "namespace": "networks", "interface": "eth200", "mac": "6a:08:cb:4b:ff:d3"}
+   ]'
+spec:
+ containers:
+ - name: toolbox
+   image: antrea/toolbox:latest
+```
+
 If the Pod has only a single secondary network interface, you can also set
 the `k8s.v1.cni.cncf.io/networks` annotation to `<network-name>`,
 or `<namespace>/<network-name>` if the NetworkAttachmentDefinition CR is created

@@ -521,6 +521,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		result,
 		isInfraContainer,
 		s.containerAccess,
+		nil,
 	); err != nil {
 		klog.ErrorS(err, "Failed to configure interfaces for container", "container", cniConfig.ContainerId)
 		return s.configInterfaceFailureResponse(err), nil

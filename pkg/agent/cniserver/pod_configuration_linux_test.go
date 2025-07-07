@@ -58,7 +58,7 @@ type fakeInterfaceConfigurator struct {
 	containerVFLink                     interface{}
 }
 
-func (c *fakeInterfaceConfigurator) configureContainerLink(podName string, podNamespace string, containerID string, containerNetNS string, containerIfaceName string, mtu int, brSriovVFDeviceID string, podSriovVFDeviceID string, result *current.Result, containerAccess *containerAccessArbitrator) error {
+func (c *fakeInterfaceConfigurator) configureContainerLink(podName string, podNamespace string, containerID string, containerNetNS string, containerIfaceName string, mtu int, brSriovVFDeviceID string, podSriovVFDeviceID string, result *current.Result, containerAccess *containerAccessArbitrator, mac net.HardwareAddr) error {
 	if c.configureContainerLinkError != nil {
 		return c.configureContainerLinkError
 	}
@@ -633,7 +633,7 @@ func TestConfigureVLANSecondaryInterface(t *testing.T) {
 	mockOVSBridgeClient.EXPECT().CreateAccessPort(
 		containerCfg1.InterfaceName, containerCfg1.InterfaceName,
 		gomock.Any(), uint16(100)).Return(containerCfg1.PortUUID, nil).Times(1)
-	assert.NoError(t, pc.ConfigureVLANSecondaryInterface(podName, testPodNamespace, containerID, containerNS, "eth1", 1500, ipamResult))
+	assert.NoError(t, pc.ConfigureVLANSecondaryInterface(podName, testPodNamespace, containerID, containerNS, "eth1", 1500, ipamResult, nil))
 	assert.Equal(t, 1, ifaceStore.Len())
 	intfConfig, _ := ifaceStore.GetContainerInterface(containerID)
 	assert.Equal(t, containerCfg1, intfConfig)
@@ -644,7 +644,7 @@ func TestConfigureVLANSecondaryInterface(t *testing.T) {
 	mockOVSBridgeClient.EXPECT().CreatePort(
 		containerCfg2.InterfaceName, containerCfg2.InterfaceName,
 		gomock.Any()).Return(containerCfg2.PortUUID, nil).Times(1)
-	assert.NoError(t, pc.ConfigureVLANSecondaryInterface(podName, testPodNamespace, containerID, containerNS, "eth2", 1600, ipamResult))
+	assert.NoError(t, pc.ConfigureVLANSecondaryInterface(podName, testPodNamespace, containerID, containerNS, "eth2", 1600, ipamResult, nil))
 	assert.Equal(t, 2, ifaceStore.Len())
 	intfConfigs := ifaceStore.GetContainerInterfacesByPod(podName, testPodNamespace)
 	assert.Len(t, intfConfigs, 2)
