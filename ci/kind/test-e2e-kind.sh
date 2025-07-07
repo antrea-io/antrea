@@ -339,7 +339,7 @@ function setup_cluster {
   if [[ "$ipfamily" == "v6" ]]; then
     args="$args --ip-family ipv6 --pod-cidr fd00:10:244::/56"
   elif [[ "$ipfamily" == "dual" ]]; then
-      args="$args --ip-family dual"
+    args="$args --ip-family dual"
   elif [[ "$ipfamily" != "v4" ]]; then
     echoerr "invalid value for --ip-family \"$ipfamily\", expected \"v4\" or \"v6\""
     exit 1
@@ -352,6 +352,15 @@ function setup_cluster {
   fi
   if $extra_network && [[ "$mode" != "hybrid" ]]; then
     args="$args --extra-networks \"20.20.30.0/24\""
+  fi
+  if [[ "$mode" == "hybrid" ]]; then
+    if [[ "$ipfamily" == "v4" ]]; then
+      args="$args --subnets \"20.20.20.0/24\""
+    elif [[ "$ipfamily" == "v6" ]]; then
+      args="$args --subnets \"fd00:dead:beef::/64\""
+    elif [[ "$ipfamily" == "dual" ]]; then
+      args="$args --subnets \"20.20.20.0/24,fd00:dead:beef::/64\""
+    fi
   fi
   # Deploy an external agnhost which could be used when testing Pod-to-External traffic.
   args="$args --deploy-external-agnhost $vlan_args"
@@ -471,7 +480,7 @@ fi
 if [[ "$mode" == "" ]] || [[ "$mode" == "hybrid" ]]; then
   echo "======== Test hybrid mode =========="
   if [[ $test_only == "false" ]];then
-    setup_cluster "--subnets \"20.20.20.0/24\" --images \"$COMMON_IMAGES\""
+    setup_cluster "--images \"$COMMON_IMAGES\""
   fi
   run_test hybrid
 fi
