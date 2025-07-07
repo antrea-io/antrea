@@ -28,7 +28,7 @@ POD_CIDR=""
 SERVICE_CIDR=""
 IP_FAMILY="ipv4"
 NUM_WORKERS=2
-SUBNETS=""
+SUBNETS=()
 VLAN_SUBNETS=()
 EXTRA_NETWORKS=""
 ENCAP_MODE=""
@@ -68,8 +68,9 @@ where:
   --num-workers: specify number of worker nodes in kind cluster, default is $NUM_WORKERS.
   --images: specify images loaded to kind cluster, default is $IMAGES.
   --subnets: a subnet creates a separate Docker bridge network (named 'antrea-<idx>') with the assigned subnet. A worker
-    Node will be connected to one of those network. Default is empty: all worker Nodes connected to the default Docker
-    bridge network created by kind.
+    Node will be connected to one of those networks. Default is empty: all worker Nodes connected to the default Docker
+    bridge network created by kind. For example, '--subnets 20.20.20.0/24,fd00:dead:beef::/64', '--subnets 20.20.20.0/24',
+    '--subnets fd00:dead:beef::/64'. This option can be specified multiple times to create multiple networks.
   --vlan-subnets: specify the id and subnets of the VLAN to which all Nodes will be connected, in addition to the primary network.
     The IP expression of the subnet will be used as the gateway IP. For example, '--vlan-subnets 10=172.100.10.1/24,fd00:172:100:10::1/96,' means
     that a VLAN sub-interface will be created on the primary Docker bridge, and it will be assigned the 10.100.100.1/24 and fd00:172:100:10::1/96 addresses
@@ -123,10 +124,14 @@ function configure_networks {
   # Inject allow all iptables to preempt docker bridge isolation rules
   if [[ ! -z $SUBNETS ]]; then
     set +e
-    docker_run_with_host_net iptables -C DOCKER-USER -j ACCEPT > /dev/null 2>&1
-    if [[ $? -ne 0 ]]; then
-      docker_run_with_host_net iptables -I DOCKER-USER -j ACCEPT
-    fi
+    for cmd in iptables ip6tables; do
+      [[ "$IP_FAMILY" == "ipv4" ]] && [[ "$cmd" == "ip6tables" ]] && continue
+      [[ "$IP_FAMILY" == "ipv6" ]] && [[ "$cmd" == "iptables" ]] && continue
+      docker_run_with_host_net "$cmd" -C DOCKER-USER -j ACCEPT > /dev/null 2>&1
+      if [[ $? -ne 0 ]]; then
+        docker_run_with_host_net "$cmd" -I DOCKER-USER -j ACCEPT
+      fi
+    done
     set -e
   fi
 
@@ -152,10 +157,30 @@ function configure_networks {
   # create new bridge network per subnet
   i=0
   networks=()
-  for s in $SUBNETS; do
+  for subnet in $SUBNETS; do
     network=antrea-$i
-    echo "creating network $network with $s"
-    docker network create -d bridge --subnet $s $network >/dev/null 2>&1
+    docker_network_args=("-d" "bridge")
+    # append gateway_mode options based on Docker version
+    if version_ge "$docker_version" "28.0.0"; then
+      if [[ "$IP_FAMILY" != "ipv4" ]]; then
+        docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv6=nat-unprotected")
+      fi
+      if [[ "$IP_FAMILY" != "ipv6" ]]; then
+        docker_network_args+=("-o" "com.docker.network.bridge.gateway_mode_ipv4=nat-unprotected")
+      fi
+    fi
+    # append --ipv6 option for IPv6 only
+    if [[ "$IP_FAMILY" != "ipv4" ]]; then
+      docker_network_args+=("--ipv6")
+    fi
+
+    IFS=',' read -ra subnet_array <<< "$subnet"
+    for subnet in "${subnet_array[@]}"; do
+      docker_network_args+=("--subnet" "$subnet")
+    done
+
+    echo "Creating docker network $network with args: ${docker_network_args[@]}"
+    docker network create "${docker_network_args[@]}" $network >/dev/null 2>&1
     networks+=($network)
     i=$((i+1))
   done
@@ -166,7 +191,8 @@ function configure_networks {
     num_networks=$((num_networks+1))
   fi
 
-  control_plane_ip=$(docker inspect $CLUSTER_NAME-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
+  control_plane_ip4=$(docker inspect $CLUSTER_NAME-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
+  control_plane_ip6=$(docker inspect $CLUSTER_NAME-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6Address}}{{end}}')
 
   i=0
   for node in $nodes; do
@@ -177,20 +203,47 @@ function configure_networks {
     # note that providing an unsupported label does not generate an error
     docker network connect --driver-opt=com.docker.network.endpoint.ifname=$ifname $network $node
     echo "connected worker $node to network $network"
-    node_ip=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
+    node_ip4=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
+    node_ip6=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6Address}}{{end}}')
+    node_ip6_prefix=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6PrefixLen}}{{end}}')
 
     # reset network
     docker exec -t $node ip link set $ifname down
     docker exec -t $node ip link set $ifname name eth0
     docker exec -t $node ip link set eth0 up
-    gateway=$(echo "${node_ip/%?/1}")
-    docker exec -t $node ip route add default via $gateway
-    echo "node $node is ready with ip changed to $node_ip with gw $gateway"
-
+    # set IPv4 address and route for IPv4 only or dual stack
+    if [[ "$IP_FAMILY" != "ipv6" ]]; then
+      gateway4=$(echo "${node_ip4/%?/1}")
+      docker exec -t "$node" ip route add default via "$gateway4"
+      echo "node $node is ready with ip changed to $node_ip4 with gw $gateway4"
+    fi
+    # set IPv6 address and route for IPv6 only or dual stack
+    if [[ "$IP_FAMILY" != "ipv4" ]]; then
+      prefix_len="${node_ip6_prefix:-64}"
+      docker exec -t "$node" ip -6 addr add "$node_ip6/$prefix_len" dev eth0
+      gateway6=$(echo "$node_ip6" | sed -E 's/::[0-9a-fA-F]*$/::1/')
+      docker exec -t "$node" ip -6 route add default via "$gateway6"
+      echo "node $node is ready with ip changed to $node_ip6 with gw $gateway6"
+    fi
+    # remove IPv4 address for IPv6 only
+    if [[ "$IP_FAMILY" == "ipv6" ]]; then
+      docker exec -t "$node" ip addr del "$node_ip4" dev eth0
+      echo "removed IPv4 addr from $node for IPv6 only"
+    fi
+    # generate internal IPs
+    node_ips=""
+    if [[ "$IP_FAMILY" == "dual" ]]; then
+      node_ips="$node_ip4,$node_ip6"
+    elif [[ "$IP_FAMILY" == "ipv4" ]]; then
+      node_ips="$node_ip4"
+    elif [[ "$IP_FAMILY" == "ipv6" ]]; then
+      node_ips="$node_ip6"
+    fi
     # change kubelet config before reset network
-    docker exec -t $node sed -i "s/node-ip=.*/node-ip=$node_ip/g" /var/lib/kubelet/kubeadm-flags.env
+    docker exec -t $node sed -i "s/node-ip=.*/node-ip=$node_ips/g" /var/lib/kubelet/kubeadm-flags.env
     # this is needed to ensure that the worker node can still connect to the apiserver
-    docker exec -t $node bash -c "echo '$control_plane_ip $CLUSTER_NAME-control-plane' >> /etc/hosts"
+    [[ "$IP_FAMILY" != "ipv6" ]] && docker exec -t $node bash -c "echo '$control_plane_ip4 $CLUSTER_NAME-control-plane' >> /etc/hosts"
+    [[ "$IP_FAMILY" != "ipv4" ]] && docker exec -t $node bash -c "echo '$control_plane_ip6 $CLUSTER_NAME-control-plane' >> /etc/hosts"
     docker exec -t $node pkill kubelet
     # it's possible that kube-proxy is not running yet on some Nodes
     docker exec -t $node pkill kube-proxy || true
@@ -201,15 +254,38 @@ function configure_networks {
   done
 
   for node in $nodes; do
-    node_ip=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
-    while true; do
-      tmp_ip=$(kubectl describe node $node | grep InternalIP)
-      if [[ "$tmp_ip" == *"$node_ip"* ]]; then
+    node_ip4=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
+    [[ "$IP_FAMILY" == "ipv6" ]] && node_ip4=""
+    node_ip6=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6Address}}{{end}}')
+
+    echo "Waiting for node $node to be assigned InternalIP..."
+    max_attempts=30
+    attempt=0
+    # verify the internal IPs
+    while (( attempt < max_attempts )); do
+      internal_ips=$(kubectl get node "$node" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
+
+      ok4=true
+      ok6=true
+      [[ -n "$node_ip4" && "$internal_ips" != *"$node_ip4"* ]] && ok4=false
+      [[ -n "$node_ip6" && "$internal_ips" != *"$node_ip6"* ]] && ok6=false
+
+      if $ok4 && $ok6; then
+        echo "Node $node is ready with expected internal IPs: $node_ip4 $node_ip6"
         break
       fi
-      echo "current ip $tmp_ip, wait for new node ip $node_ip"
+
+      echo "Attempt $((++attempt)): got IPs [$internal_ips]"
+      ! $ok4 && echo "Missing IPv4: $node_ip4"
+      ! $ok6 && echo "Missing IPv6: $node_ip6"
+
       sleep 2
     done
+
+    if (( attempt >= max_attempts )); then
+        echo "Timeout waiting for node $node to have expected internal IPs: $node_ip4 $node_ip6"
+        exit 1
+      fi
   done
 
   nodes="$(kind get nodes --name $CLUSTER_NAME)"
@@ -656,7 +732,7 @@ while [[ $# -gt 0 ]]
       ;;
     --subnets)
       add_option "--subnets" "create"
-      SUBNETS="$2"
+      SUBNETS+=("$2")
       shift 2
       ;;
     --extra-networks)
