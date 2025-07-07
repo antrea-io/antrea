@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package exporter
+package flowexporter
 
 import (
 	"container/heap"
@@ -30,16 +30,16 @@ import (
 	"testing"
 	"time"
 
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
-	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/filter"
+	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
-	"antrea.io/antrea/pkg/ipfix"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 )
 
 const (
@@ -91,7 +91,7 @@ func BenchmarkExportConntrackConns(b *testing.B) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	recordsReceived = 0
-	exp, err := setupExporter(true, stopCh)
+	exp, err := setupExporter(b, true, stopCh)
 	if err != nil {
 		b.Fatalf("error when setting up exporter: %v", err)
 	}
@@ -143,7 +143,7 @@ func BenchmarkExportDenyConns(b *testing.B) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	recordsReceived = 0
-	exp, err := setupExporter(false, stopCh)
+	exp, err := setupExporter(b, false, stopCh)
 	if err != nil {
 		b.Fatalf("error when setting up exporter: %v", err)
 	}
@@ -158,14 +158,11 @@ func BenchmarkExportDenyConns(b *testing.B) {
 	b.Logf("\nSummary:\nNumber of deny connections: %d\nNumber of idle deny connections: %d\nTotal connections received: %d\n", testNumOfDenyConns, testNumOfIdleDenyConns, recordsReceived)
 }
 
-func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
-	// Initialize IPFIX registry
-	registry := ipfix.NewIPFIXRegistry()
-	registry.LoadRegistry()
-
-	// Prepare input args for IPFIX exporting process.
-	nodeName := "test-node"
-	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
+func NewFlowExporterForTest(tb testing.TB, o *options.FlowExporterOptions) *FlowExporter {
+	const (
+		nodeName    = "test-node"
+		obsDomainID = 0xabcd
+	)
 
 	v4Enabled := !testWithIPv6
 	v6Enabled := testWithIPv6
@@ -175,26 +172,24 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, l7Listener, o)
 
 	return &FlowExporter{
+		collectorProto:         o.FlowCollectorProto,
 		collectorAddr:          o.FlowCollectorAddr,
+		exporter:               exporter.NewIPFIXExporter(o.FlowCollectorProto, nodeName, obsDomainID, v4Enabled, v6Enabled),
 		conntrackConnStore:     conntrackConnStore,
 		denyConnStore:          denyConnStore,
-		registry:               registry,
 		v4Enabled:              v4Enabled,
 		v6Enabled:              v6Enabled,
-		exporterInput:          expInput,
-		ipfixSet:               ipfixentities.NewSet(false),
 		k8sClient:              nil,
 		nodeRouteController:    nil,
 		isNetworkPolicyOnly:    false,
-		nodeName:               nodeName,
 		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
-		expiredConns:           make([]flowexporter.Connection, 0, maxConnsToExport*2),
+		expiredConns:           make([]connection.Connection, 0, maxConnsToExport*2),
 		l7Listener:             l7Listener,
 	}
 }
 
-func setupExporter(isConntrackConn bool, stopCh <-chan struct{}) (*FlowExporter, error) {
+func setupExporter(tb testing.TB, isConntrackConn bool, stopCh <-chan struct{}) (*FlowExporter, error) {
 	var err error
 	collectorAddr, err := startLocalServer(stopCh)
 	if err != nil {
@@ -202,7 +197,7 @@ func setupExporter(isConntrackConn bool, stopCh <-chan struct{}) (*FlowExporter,
 	}
 
 	// create connection store and generate connections
-	o := &flowexporter.FlowExporterOptions{
+	o := &options.FlowExporterOptions{
 		FlowCollectorAddr:      collectorAddr.String(),
 		FlowCollectorProto:     collectorAddr.Network(),
 		ActiveFlowTimeout:      testActiveFlowTimeout,
@@ -210,7 +205,7 @@ func setupExporter(isConntrackConn bool, stopCh <-chan struct{}) (*FlowExporter,
 		StaleConnectionTimeout: 1,
 		PollInterval:           1,
 	}
-	exp := NewFlowExporterForTest(o)
+	exp := NewFlowExporterForTest(tb, o)
 	if isConntrackConn {
 		addConns(exp.conntrackConnStore, exp.conntrackConnStore.GetPriorityQueue())
 	} else {
@@ -259,9 +254,9 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 			dst = exptest.RandIPv4()
 			svc = exptest.RandIPv4()
 		}
-		flowKey := flowexporter.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(i), DestinationPort: uint16(i)}
+		flowKey := connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(i), DestinationPort: uint16(i)}
 		randomDuration := getRandomNum(255)
-		conn := &flowexporter.Connection{
+		conn := &connection.Connection{
 			StartTime:                  time.Now().Add(-time.Duration(randomDuration) * time.Second),
 			StopTime:                   time.Now(),
 			IsPresent:                  true,
@@ -279,13 +274,13 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 			OriginalDestinationAddress: svc,
 			TCPState:                   "SYN_SENT",
 		}
-		connKey := flowexporter.NewConnectionKey(conn)
+		connKey := connection.NewConnectionKey(conn)
 		// set connection to dying state
 		if i >= randomNum && i < testNumOfDyingConns+randomNum {
 			conn.TCPState = "TIME_WAIT"
 		}
 		connStore.AddConnToMap(&connKey, conn)
-		pqItem := &flowexporter.ItemToExpire{
+		pqItem := &priorityqueue.ItemToExpire{
 			ActiveExpireTime: time.Now().Add(-time.Duration(randomDuration) * time.Second),
 			IdleExpireTime:   time.Now(),
 		}
@@ -305,9 +300,9 @@ func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueu
 			src = exptest.RandIPv4()
 			dst = exptest.RandIPv4()
 		}
-		flowKey := flowexporter.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(i), DestinationPort: uint16(i)}
+		flowKey := connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(i), DestinationPort: uint16(i)}
 		randomDuration := getRandomNum(255)
-		conn := &flowexporter.Connection{
+		conn := &connection.Connection{
 			StartTime:                     time.Now().Add(-time.Duration(randomDuration) * time.Second),
 			StopTime:                      time.Now(),
 			FlowKey:                       flowKey,
@@ -316,13 +311,13 @@ func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueu
 			SourcePodNamespace:            "ns1",
 			SourcePodName:                 "pod1",
 			EgressNetworkPolicyName:       "egress-reject",
-			EgressNetworkPolicyType:       registry.PolicyTypeAntreaNetworkPolicy,
+			EgressNetworkPolicyType:       utils.PolicyTypeAntreaNetworkPolicy,
 			EgressNetworkPolicyNamespace:  "egress-ns",
-			EgressNetworkPolicyRuleAction: registry.NetworkPolicyRuleActionReject,
+			EgressNetworkPolicyRuleAction: utils.NetworkPolicyRuleActionReject,
 		}
-		connKey := flowexporter.NewConnectionKey(conn)
+		connKey := connection.NewConnectionKey(conn)
 		connStore.AddConnToMap(&connKey, conn)
-		pqItem := &flowexporter.ItemToExpire{
+		pqItem := &priorityqueue.ItemToExpire{
 			ActiveExpireTime: time.Now().Add(-time.Duration(randomDuration) * time.Second),
 			IdleExpireTime:   time.Now(),
 		}

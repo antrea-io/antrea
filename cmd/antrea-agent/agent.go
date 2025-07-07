@@ -50,7 +50,7 @@ import (
 	"antrea.io/antrea/pkg/agent/controller/trafficcontrol"
 	"antrea.io/antrea/pkg/agent/externalnode"
 	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
+	flowexporteroptions "antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
 	"antrea.io/antrea/pkg/agent/memberlist"
@@ -696,10 +696,10 @@ func run(o *Options) error {
 		return err
 	}
 
-	var flowExporter *exporter.FlowExporter
+	var flowExporter *flowexporter.FlowExporter
 	if enableFlowExporter {
 		podStore := podstore.NewPodStore(localPodInformer.Get())
-		flowExporterOptions := &flowexporter.FlowExporterOptions{
+		flowExporterOptions := &flowexporteroptions.FlowExporterOptions{
 			FlowCollectorAddr:      o.flowCollectorAddr,
 			FlowCollectorProto:     o.flowCollectorProto,
 			ActiveFlowTimeout:      o.activeFlowTimeout,
@@ -709,7 +709,7 @@ func run(o *Options) error {
 			ConnectUplinkToBridge:  connectUplinkToBridge,
 			ProtocolFilter:         o.config.FlowExporter.ProtocolFilter,
 		}
-		flowExporter, err = exporter.NewFlowExporter(
+		flowExporter, err = flowexporter.NewFlowExporter(
 			podStore,
 			proxier,
 			k8sClient,

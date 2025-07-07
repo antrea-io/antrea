@@ -22,14 +22,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 )
 
-func testConnectionKey(x int) flowexporter.ConnectionKey {
+func testConnectionKey(x int) connection.ConnectionKey {
 	if x < 0 || x > 255 {
 		panic("x must be >= 0 and <= 255")
 	}
-	return flowexporter.Tuple{
+	return connection.Tuple{
 		SourceAddress:      netip.MustParseAddr(fmt.Sprintf("10.0.0.%d", x)),
 		DestinationAddress: netip.MustParseAddr("10.10.0.1"),
 		Protocol:           6,
@@ -50,7 +50,7 @@ func TestExpirePriorityQueue(t *testing.T) {
 	// in the logic to be tested
 	testPriorityQueue := NewExpirePriorityQueue(1*time.Second, 1*time.Second)
 	for key, value := range testFlowsWithExpire {
-		item := &flowexporter.ItemToExpire{
+		item := &ItemToExpire{
 			ActiveExpireTime: value[0],
 			IdleExpireTime:   value[1],
 			Index:            key,
@@ -62,10 +62,10 @@ func TestExpirePriorityQueue(t *testing.T) {
 
 	// Test WriteItemToQueue
 	connKey := testConnectionKey(3)
-	conn := flowexporter.Connection{}
+	conn := connection.Connection{}
 	testPriorityQueue.WriteItemToQueue(connKey, &conn)
 	assert.Equal(t, &conn, testPriorityQueue.KeyToItem[connKey].Conn, "WriteItemToQueue didn't add new conn to map")
-	newConn := flowexporter.Connection{}
+	newConn := connection.Connection{}
 	testPriorityQueue.WriteItemToQueue(connKey, &newConn)
 	assert.Equal(t, &newConn, testPriorityQueue.KeyToItem[connKey].Conn, "WriteItemToQueue didn't overwrite existing conn to map")
 	hasOld, hasNew := false, false
@@ -92,7 +92,7 @@ func TestExpirePriorityQueue(t *testing.T) {
 
 	// Add new flow to the priority queue
 	testFlowsWithExpire[3] = []time.Time{startTime.Add(3 * time.Second), startTime.Add(500 * time.Millisecond)}
-	newFlowItem := &flowexporter.ItemToExpire{
+	newFlowItem := &ItemToExpire{
 		ActiveExpireTime: startTime.Add(3 * time.Second),
 		IdleExpireTime:   startTime.Add(500 * time.Millisecond),
 	}
@@ -112,7 +112,7 @@ func TestExpirePriorityQueue(t *testing.T) {
 	// Test the Pop function
 	for testPriorityQueue.Len() > 0 {
 		queueLen := testPriorityQueue.Len()
-		item := heap.Pop(testPriorityQueue).(*flowexporter.ItemToExpire)
+		item := heap.Pop(testPriorityQueue).(*ItemToExpire)
 		switch queueLen {
 		case 1:
 			assert.Equal(t, testFlowsWithExpire[1][0], item.ActiveExpireTime)
@@ -134,12 +134,12 @@ func TestExpirePriorityQueue(t *testing.T) {
 
 func TestExpirePriorityQueue_GetExpiryFromExpirePriorityQueue(t *testing.T) {
 	startTime := time.Now()
-	item1 := &flowexporter.ItemToExpire{
+	item1 := &ItemToExpire{
 		ActiveExpireTime: startTime.Add(10 * time.Second),
 		IdleExpireTime:   startTime.Add(20 * time.Second),
 		Index:            0,
 	}
-	item2 := &flowexporter.ItemToExpire{
+	item2 := &ItemToExpire{
 		ActiveExpireTime: startTime.Add(-10 * time.Second),
 		IdleExpireTime:   startTime,
 		Index:            0,
@@ -148,7 +148,7 @@ func TestExpirePriorityQueue_GetExpiryFromExpirePriorityQueue(t *testing.T) {
 	for _, tc := range []struct {
 		pqActiveTimeout time.Duration
 		pqIdleTimeout   time.Duration
-		pqItem          *flowexporter.ItemToExpire
+		pqItem          *ItemToExpire
 		expectedResult  time.Duration
 	}{
 		{1 * time.Second, 1 * time.Second, item1, minExpiryTime + 10*time.Second}, // should return expiryDuration
@@ -179,15 +179,15 @@ func TestExpirePriorityQueue_GetExpiryFromExpirePriorityQueue(t *testing.T) {
 
 func TestExpirePriorityQueue_GetTopExpiredItem(t *testing.T) {
 	startTime := time.Now()
-	item := &flowexporter.ItemToExpire{
+	item := &ItemToExpire{
 		ActiveExpireTime: startTime.Add(10 * time.Second),
 		IdleExpireTime:   startTime.Add(20 * time.Second),
 		Index:            0,
 	}
 	for _, tc := range []struct {
 		currTime       time.Time
-		topItem        *flowexporter.ItemToExpire
-		expectedResult *flowexporter.ItemToExpire
+		topItem        *ItemToExpire
+		expectedResult *ItemToExpire
 	}{
 		{startTime, nil, nil},                         // topItem is nil
 		{startTime, item, nil},                        // topItem has not expired

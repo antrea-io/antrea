@@ -12,8 +12,12 @@ spec:
   - name: ipfix-udp
     port: 4739
     protocol: UDP
-    targetPort: 4739
+    targetPort: ipfix-udp
   - name: ipfix-tcp
     port: 4739
     protocol: TCP
-    targetPort: 4739
+    targetPort: ipfix-tcp
+  - name: grpc
+    port: 14739
+    protocol: TCP
+    targetPort: grpc

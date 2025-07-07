@@ -140,7 +140,7 @@ const (
 	// Need a non-default (4739) port when testing the FA in hostNetwork mode.
 	// Otherwise we end up with 2 different hostNetwork Pods listening on the same port, with a
 	// conflict if they are scheduled on the same Node.
-	ipfixCollectorPort                  = "14739"
+	ipfixCollectorPort                  = "44739"
 	exporterFlowPollInterval            = 1 * time.Second
 	exporterActiveFlowExportTimeout     = 2 * time.Second
 	exporterIdleFlowExportTimeout       = 1 * time.Second
