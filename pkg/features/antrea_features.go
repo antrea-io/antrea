@@ -103,6 +103,7 @@ const (
 	NodeIPAM featuregate.Feature = "NodeIPAM"
 
 	// alpha: v1.4
+	// beta: v2.4
 	// Enable AntreaIPAM, which is required by bridging mode Pods and secondary network IPAM.
 	AntreaIPAM featuregate.Feature = "AntreaIPAM"
 
@@ -116,6 +117,7 @@ const (
 	Multicluster featuregate.Feature = "Multicluster"
 
 	// alpha: v1.5
+	// beta: v2.4
 	// Enable Secondary interface feature for Antrea.
 	SecondaryNetwork featuregate.Feature = "SecondaryNetwork"
 
@@ -203,14 +205,14 @@ var (
 		CleanupStaleUDPSvcConntrack: {Default: true, PreRelease: featuregate.Beta},
 		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},
 		PacketCapture:               {Default: false, PreRelease: featuregate.Alpha},
-		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
+		AntreaIPAM:                  {Default: true, PreRelease: featuregate.Beta},
 		FlowExporter:                {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats:          {Default: true, PreRelease: featuregate.Beta},
 		NodePortLocal:               {Default: true, PreRelease: featuregate.GA},
 		NodeIPAM:                    {Default: true, PreRelease: featuregate.Beta},
 		Multicast:                   {Default: true, PreRelease: featuregate.Beta},
 		Multicluster:                {Default: false, PreRelease: featuregate.Alpha},
-		SecondaryNetwork:            {Default: false, PreRelease: featuregate.Alpha},
+		SecondaryNetwork:            {Default: true, PreRelease: featuregate.Beta},
 		ServiceExternalIP:           {Default: true, PreRelease: featuregate.Beta},
 		TrafficControl:              {Default: false, PreRelease: featuregate.Alpha},
 		IPsecCertAuth:               {Default: false, PreRelease: featuregate.Alpha},
