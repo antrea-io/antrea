@@ -72,8 +72,8 @@ var (
 	validNSs = sync.Map{}
 
 	sriovUplinkName    = "uplink"
-	sriovVfIndex       = 5
-	sriovVfRepresentor = fmt.Sprintf("%s-%d", sriovUplinkName, sriovVfIndex)
+	sriovVFIndex       = 5
+	sriovVFRepresentor = fmt.Sprintf("%s-%d", sriovUplinkName, sriovVFIndex)
 )
 
 func newTestIfConfigurator(ovsHardwareOffloadEnabled bool, netlink netlinkutil.Interface, sriovnet SriovNet) *ifConfigurator {
@@ -146,8 +146,8 @@ func TestConfigureContainerLink(t *testing.T) {
 	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
 	fakeNetlink := netlinktest.NewMockInterface(controller)
 
-	sriovVfNetdeviceName := "vfDevice"
-	vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVfNetdeviceName, Flags: net.FlagUp}}
+	sriovVFNetdeviceName := "vfDevice"
+	vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVFNetdeviceName, Flags: net.FlagUp}}
 
 	defer mockGetNS()()
 	defer mockWithNetNSPath()()
@@ -195,7 +195,7 @@ func TestConfigureContainerLink(t *testing.T) {
 			name:                      "br-sriov-success",
 			ovsHardwareOffloadEnabled: true,
 			sriovVFDeviceID:           "br-vf",
-			vfNetdevices:              []string{sriovVfNetdeviceName},
+			vfNetdevices:              []string{sriovVFNetdeviceName},
 		}, {
 			name:                      "br-sriov-pciaddress-issue",
 			ovsHardwareOffloadEnabled: true,
@@ -206,9 +206,9 @@ func TestConfigureContainerLink(t *testing.T) {
 			name:                      "br-sriov-rename-failure",
 			ovsHardwareOffloadEnabled: true,
 			sriovVFDeviceID:           "br-vf",
-			vfNetdevices:              []string{sriovVfNetdeviceName},
+			vfNetdevices:              []string{sriovVFNetdeviceName},
 			renameIntefaceErr:         fmt.Errorf("unable to rename netlink"),
-			expectErr:                 fmt.Errorf("failed to rename %s to %s: unable to rename netlink", sriovVfRepresentor, hostIfaceName),
+			expectErr:                 fmt.Errorf("failed to rename %s to %s: unable to rename netlink", sriovVFRepresentor, hostIfaceName),
 		}, {
 			name:                      "pod-sriov-success",
 			ovsHardwareOffloadEnabled: true,
@@ -227,11 +227,11 @@ func TestConfigureContainerLink(t *testing.T) {
 			defer containerNS.clear()
 			moveVFtoNS := false
 			if tc.sriovVFDeviceID != "" && tc.ovsHardwareOffloadEnabled {
-				fakeSriovNet.EXPECT().GetNetDevicesFromPci(tc.sriovVFDeviceID).Return(tc.vfNetdevices, nil).Times(1)
+				fakeSriovNet.EXPECT().GetNetDevicesFromPCI(tc.sriovVFDeviceID).Return(tc.vfNetdevices, nil).Times(1)
 				if len(tc.vfNetdevices) == 1 {
 					fakeSriovNet.EXPECT().GetUplinkRepresentor(tc.sriovVFDeviceID).Return(sriovUplinkName, nil).Times(1)
-					fakeSriovNet.EXPECT().GetVfIndexByPciAddress(tc.sriovVFDeviceID).Return(sriovVfIndex, nil).Times(1)
-					fakeSriovNet.EXPECT().GetVfRepresentor(sriovUplinkName, sriovVfIndex).Return(sriovVfRepresentor, nil).Times(1)
+					fakeSriovNet.EXPECT().GetVFIndexByPCIAddress(tc.sriovVFDeviceID).Return(sriovVFIndex, nil).Times(1)
+					fakeSriovNet.EXPECT().GetVFRepresentor(sriovUplinkName, sriovVFIndex).Return(sriovVFRepresentor, nil).Times(1)
 					if tc.renameIntefaceErr == nil {
 						hostInterfaceLink := &netlink.Dummy{
 							LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: hostVethMac, Name: hostIfaceName, Flags: net.FlagUp},
@@ -242,12 +242,12 @@ func TestConfigureContainerLink(t *testing.T) {
 				}
 			}
 			if tc.podSriovVFDeviceID != "" {
-				fakeSriovNet.EXPECT().GetVFLinkNames(tc.podSriovVFDeviceID).Return(sriovVfNetdeviceName, nil).Times(1)
-				fakeNetlink.EXPECT().LinkByName(sriovVfNetdeviceName).Return(vfDeviceLink, nil).Times(1)
+				fakeSriovNet.EXPECT().GetVFLinkNames(tc.podSriovVFDeviceID).Return(sriovVFNetdeviceName, nil).Times(1)
+				fakeNetlink.EXPECT().LinkByName(sriovVFNetdeviceName).Return(vfDeviceLink, nil).Times(1)
 				moveVFtoNS = true
 			}
 			if moveVFtoNS {
-				fakeNetlink.EXPECT().LinkByName(sriovVfNetdeviceName).Return(vfDeviceLink, nil).Times(1)
+				fakeNetlink.EXPECT().LinkByName(sriovVFNetdeviceName).Return(vfDeviceLink, nil).Times(1)
 				fakeNetlink.EXPECT().LinkSetNsFd(vfDeviceLink, gomock.Any()).Return(nil).Times(1)
 				containerInterfaceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp}}
 				fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerInterfaceLink, nil).Times(1)
@@ -484,8 +484,8 @@ func TestCheckContainerInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	containerIPs := ipamResult.IPs
 	containerRoutes := ipamResult.Routes
-	sriovVfNetdeviceName := "vfDevice"
-	vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVfNetdeviceName, Flags: net.FlagUp}}
+	sriovVFNetdeviceName := "vfDevice"
+	vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVFNetdeviceName, Flags: net.FlagUp}}
 
 	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
 	fakeNetlink := netlinktest.NewMockInterface(controller)
@@ -523,7 +523,7 @@ func TestCheckContainerInterface(t *testing.T) {
 			containerIface:  &current.Interface{Name: containerIfaceName, Mac: containerMAC},
 			sriovVFDeviceID: "sriovVF",
 			getNetDevice:    true,
-			vfDevices:       []string{sriovVfNetdeviceName},
+			vfDevices:       []string{sriovVFNetdeviceName},
 			containerLink:   vfDeviceLink,
 			expectErrStr:    "VF netdevice still in host network namespace sriovVF [vfDevice]",
 		}, {
@@ -598,7 +598,7 @@ func TestCheckContainerInterface(t *testing.T) {
 				fakeNetlink.EXPECT().LinkByName(tc.containerIface.Name).Return(tc.containerLink, nil).Times(1)
 			}
 			if tc.sriovVFDeviceID != "" && tc.getNetDevice {
-				fakeSriovNet.EXPECT().GetNetDevicesFromPci(tc.sriovVFDeviceID).Return(tc.vfDevices, tc.getDeviceErr).Times(1)
+				fakeSriovNet.EXPECT().GetNetDevicesFromPCI(tc.sriovVFDeviceID).Return(tc.vfDevices, tc.getDeviceErr).Times(1)
 			}
 			_, err := testIfConfigurator.checkContainerInterface(containerNS.Path(), podContainerID, tc.containerIface, containerIPs, containerRoutes, tc.sriovVFDeviceID)
 			if tc.expectErrStr != "" {
@@ -620,8 +620,8 @@ func TestValidateVFRepInterface(t *testing.T) {
 		name            string
 		sriovVFDeviceID string
 		getUplinkRepErr error
-		getVfIndexErr   error
-		getVfRepErr     error
+		getVFIndexErr   error
+		getVFRepErr     error
 		expectedErr     error
 	}{
 		{
@@ -632,12 +632,12 @@ func TestValidateVFRepInterface(t *testing.T) {
 		}, {
 			name:            "get-vfIndex-failure",
 			sriovVFDeviceID: "vf2",
-			getVfIndexErr:   fmt.Errorf("unable to get vf index"),
+			getVFIndexErr:   fmt.Errorf("unable to get vf index"),
 			expectedErr:     fmt.Errorf("failed to vf index for PCI Address vf2"),
 		}, {
 			name:            "get-vf-rep-failure",
 			sriovVFDeviceID: "vf3",
-			getVfRepErr:     fmt.Errorf("unable to get vf rep"),
+			getVFRepErr:     fmt.Errorf("unable to get vf rep"),
 			expectedErr:     fmt.Errorf("unable to get vf rep"),
 		}, {
 			name:            "get-vf-success",
@@ -647,9 +647,9 @@ func TestValidateVFRepInterface(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeSriovNet.EXPECT().GetUplinkRepresentor(tc.sriovVFDeviceID).Return(sriovUplinkName, tc.getUplinkRepErr).Times(1)
 			if tc.getUplinkRepErr == nil {
-				fakeSriovNet.EXPECT().GetVfIndexByPciAddress(tc.sriovVFDeviceID).Return(sriovVfIndex, tc.getVfIndexErr).Times(1)
-				if tc.getVfIndexErr == nil {
-					fakeSriovNet.EXPECT().GetVfRepresentor(sriovUplinkName, sriovVfIndex).Return(sriovVfRepresentor, tc.getVfRepErr).Times(1)
+				fakeSriovNet.EXPECT().GetVFIndexByPCIAddress(tc.sriovVFDeviceID).Return(sriovVFIndex, tc.getVFIndexErr).Times(1)
+				if tc.getVFIndexErr == nil {
+					fakeSriovNet.EXPECT().GetVFRepresentor(sriovUplinkName, sriovVFIndex).Return(sriovVFRepresentor, tc.getVFRepErr).Times(1)
 				}
 			}
 			vfRep, err := testIfConfigurator.validateVFRepInterface(tc.sriovVFDeviceID)
@@ -658,7 +658,7 @@ func TestValidateVFRepInterface(t *testing.T) {
 				assert.Equal(t, tc.expectedErr, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, vfRep, sriovVfRepresentor)
+				assert.Equal(t, vfRep, sriovVFRepresentor)
 			}
 		})
 	}

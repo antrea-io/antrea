@@ -37,7 +37,7 @@ func (ic *ifConfigurator) getVFLinkName(pciAddress string) (string, error) {
 
 type sriovNet struct{}
 
-func (n *sriovNet) GetNetDevicesFromPci(pciAddress string) ([]string, error) {
+func (n *sriovNet) GetNetDevicesFromPCI(pciAddress string) ([]string, error) {
 	return sriovnet.GetNetDevicesFromPci(pciAddress)
 }
 
@@ -45,11 +45,11 @@ func (n *sriovNet) GetUplinkRepresentor(pciAddress string) (string, error) {
 	return sriovnet.GetUplinkRepresentor(pciAddress)
 }
 
-func (n *sriovNet) GetVfIndexByPciAddress(vfPciAddress string) (int, error) {
-	return sriovnet.GetVfIndexByPciAddress(vfPciAddress)
+func (n *sriovNet) GetVFIndexByPCIAddress(vfPCIAddress string) (int, error) {
+	return sriovnet.GetVfIndexByPciAddress(vfPCIAddress)
 }
 
-func (n *sriovNet) GetVfRepresentor(uplink string, vfIndex int) (string, error) {
+func (n *sriovNet) GetVFRepresentor(uplink string, vfIndex int) (string, error) {
 	return sriovnet.GetVfRepresentor(uplink, vfIndex)
 }
 

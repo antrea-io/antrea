@@ -37,9 +37,9 @@ type podInterfaceConfigurator interface {
 }
 
 type SriovNet interface {
-	GetNetDevicesFromPci(pciAddress string) ([]string, error)
+	GetNetDevicesFromPCI(pciAddress string) ([]string, error)
 	GetUplinkRepresentor(pciAddress string) (string, error)
-	GetVfIndexByPciAddress(vfPciAddress string) (int, error)
-	GetVfRepresentor(uplink string, vfIndex int) (string, error)
+	GetVFIndexByPCIAddress(vfPCIAddress string) (int, error)
+	GetVFRepresentor(uplink string, vfIndex int) (string, error)
 	GetVFLinkNames(pciAddr string) (string, error)
 }

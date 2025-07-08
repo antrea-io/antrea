@@ -160,7 +160,7 @@ func (ic *ifConfigurator) configureContainerSriovLinkOnBridge(
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 
 	// 1. get VF netdevice from PCI
-	vfNetdevices, err := ic.sriovnet.GetNetDevicesFromPci(pciAddress)
+	vfNetdevices, err := ic.sriovnet.GetNetDevicesFromPCI(pciAddress)
 	if err != nil {
 		return err
 	}
@@ -175,12 +175,12 @@ func (ic *ifConfigurator) configureContainerSriovLinkOnBridge(
 		return fmt.Errorf("failed to get uplink representor error: %s", err)
 	}
 	// 3. get VF index from PCI
-	vfIndex, err := ic.sriovnet.GetVfIndexByPciAddress(pciAddress)
+	vfIndex, err := ic.sriovnet.GetVFIndexByPCIAddress(pciAddress)
 	if err != nil {
 		return fmt.Errorf("failed to get VF index error: %s", err)
 	}
 	// 4. lookup representor
-	repPortName, err := ic.sriovnet.GetVfRepresentor(uplink, vfIndex)
+	repPortName, err := ic.sriovnet.GetVFRepresentor(uplink, vfIndex)
 	if err != nil {
 		return fmt.Errorf("failed to get VF representor error: %s", err)
 	}
@@ -493,12 +493,12 @@ func (ic *ifConfigurator) validateContainerVFInterface(intf *current.Interface, 
 	if err != nil {
 		return nil, err
 	}
-	netdevices, err := ic.sriovnet.GetNetDevicesFromPci(sriovVFDeviceID)
+	netdevices, err := ic.sriovnet.GetNetDevicesFromPCI(sriovVFDeviceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find netdevice to PCI address %s: %v", sriovVFDeviceID, err)
 	}
 	// The check makes sure that the SR-IOV VF netdevice is not in the host namespace.
-	// GetNetDevicesFromPci is using linux sysfs to find the VF netdevice. The method
+	// GetNetDevicesFromPCI is using linux sysfs to find the VF netdevice. The method
 	// is running in container network namespace, but we are still in the antrea-agent
 	// filesystem. The antrea-agent container is privileged, which allows access to
 	// the host sysfs, therefore the validation is to make sure that the VF netdevice
@@ -538,11 +538,11 @@ func (ic *ifConfigurator) validateVFRepInterface(sriovVFDeviceID string) (string
 	if err != nil {
 		return "", fmt.Errorf("failed to get uplink representor for PCI Address %s", sriovVFDeviceID)
 	}
-	vfIndex, err := ic.sriovnet.GetVfIndexByPciAddress(sriovVFDeviceID)
+	vfIndex, err := ic.sriovnet.GetVFIndexByPCIAddress(sriovVFDeviceID)
 	if err != nil {
 		return "", fmt.Errorf("failed to vf index for PCI Address %s", sriovVFDeviceID)
 	}
-	return ic.sriovnet.GetVfRepresentor(uplink, vfIndex)
+	return ic.sriovnet.GetVFRepresentor(uplink, vfIndex)
 }
 
 func (ic *ifConfigurator) validateContainerPeerInterface(interfaces []*current.Interface, containerVeth *vethPair) (*vethPair, error) {
