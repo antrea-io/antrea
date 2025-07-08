@@ -108,7 +108,7 @@ func (ic *ifConfigurator) configureVFLinkAndIPAM(link netlink.Link, containerID 
 	containerIface.Name = containerIfaceName
 	containerIface.Mac = link.Attrs().HardwareAddr.String()
 	containerIface.Sandbox = netnsPath
-	klog.V(2).InfoS("Configuring IP address for container", "containerID", containerID, "hostIface", hostIface, "containerIface", containerIface)
+	klog.V(2).InfoS("Configuring IP address for VF netdevice", "containerID", containerID, "hostIface", hostIface, "containerIface", containerIface)
 	// result.Interfaces must be set before this.
 	if err := ipamConfigureIface(containerIface.Name, result); err != nil {
 		return fmt.Errorf("failed to configure IP address for container %s: %w", containerID, err)
@@ -377,7 +377,7 @@ func (ic *ifConfigurator) recoverVFInterfaceName(containerIfaceName string, cont
 
 		originalVFName = link.Attrs().Alias
 		if originalVFName == "" {
-			return fmt.Errorf("failed to find original VF device name for %s (alias is not set)", containerIfaceName)
+			return fmt.Errorf("failed to find original VF device name for %s: no alias set", containerIfaceName)
 		}
 
 		// Move VF from container namespace to tempNS

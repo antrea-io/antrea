@@ -353,7 +353,7 @@ func TestRecoverVFInterfaceName(t *testing.T) {
 		{
 			name:      "empty alias",
 			noAlias:   true,
-			expectErr: fmt.Sprintf("failed to find original VF device name for %s (alias is not set)", containerIfaceName),
+			expectErr: fmt.Sprintf("failed to find original VF device name for %s: no alias set", containerIfaceName),
 		},
 		{
 			name:         "set to tempNS failed",
