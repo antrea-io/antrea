@@ -356,6 +356,11 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 		})
 		require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
 
+		// UIDs are only supported when using gRPC between FE and FA.
+		if k8sUIDsInsteadOfNames {
+			skipIfFlowExportProtocolIsNotGRPC(t, data)
+		}
+
 		k8sUtils, err = NewKubernetesUtils(data)
 		require.NoError(t, err, "Error when creating Kubernetes utils client")
 
@@ -417,8 +422,8 @@ func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool, k8sUIDsInste
 		assert.NotContains(t, record, "destinationPodNamespace: ")
 		assert.NotContains(t, record, "sourcePodName: ")
 		assert.NotContains(t, record, "destinationPodName: ")
-		assert.Contains(t, record, fmt.Sprintf("sourcePodUUID: %s", k8sUIDAsHexString(getPodUID(t, data, data.testNamespace, "perftest-a"))), "Record does not have correct sourcePodUID")
-		assert.Contains(t, record, fmt.Sprintf("destinationPodUUID: %s", k8sUIDAsHexString(getPodUID(t, data, data.testNamespace, "perftest-c"))), "Record does not have correct destinationPodUID")
+		assert.Contains(t, record, fmt.Sprintf("sourcePodUUID: %s", k8sUIDAsHexString(getPodUID(t, data, data.testNamespace, "perftest-a"))), "Record does not have correct sourcePodUUID")
+		assert.Contains(t, record, fmt.Sprintf("destinationPodUUID: %s", k8sUIDAsHexString(getPodUID(t, data, data.testNamespace, "perftest-c"))), "Record does not have correct destinationPodUUID")
 		assert.Contains(t, record, "sourceNodeUUID: ", "Record does not have sourceNodeUUID")
 		assert.Contains(t, record, "destinationNodeUUID: ", "Record does not have destinationNodeUUID")
 	} else {
