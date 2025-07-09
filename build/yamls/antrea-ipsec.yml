@@ -2968,12 +2968,30 @@ spec:
           description: Whether the capture has been started.
           name: Started
           type: string
+        - jsonPath: .status.conditions[?(@.type=="PacketCaptureAtSrcComplete")].status
+          description: Whether the capture at the source has completed.
+          name: Src-Complete
+          type: string
+        - jsonPath: .status.conditions[?(@.type=="PacketCaptureAtDstComplete")].status
+          description: Whether the capture at the destination has completed.
+          name: Dst-Complete
+          type: string
         - jsonPath: .status.conditions[?(@.type=="PacketCaptureComplete")].status
-          description: Whether the capture has completed.
+          description: Whether all captures have completed.
           name: Complete
           type: string
+        - jsonPath: .status.conditions[?(@.type=="PacketCaptureAtSrcFileUploaded")].status
+          description: Whether the capture file from the source has been uploaded to the file server.
+          name: Uploaded
+          type: string
+          priority: 10
+        - jsonPath: .status.conditions[?(@.type=="PacketCaptureAtDstFileUploaded")].status
+          description: Whether the capture file from the destination has been uploaded to the file server.
+          name: Uploaded
+          type: string
+          priority: 10
         - jsonPath: .status.conditions[?(@.type=="PacketCaptureFileUploaded")].status
-          description: Whether the capture file has been uploaded to the file server.
+          description: Whether all capture files have been uploaded to the file server.
           name: Uploaded
           type: string
           priority: 10
@@ -2990,6 +3008,12 @@ spec:
               x-kubernetes-validations:
                 - rule: "has(self.source.pod) || has(self.destination.pod)"
                   message: "At least one of source.pod or destination.pod must be specified."
+                - rule: "!(has(self.captureLocation) && self.captureLocation == 'Source') || has(self.source.pod)"
+                  message: "source.pod must be set when captureLocation is 'Source'"
+                - rule: "!(has(self.captureLocation) && self.captureLocation == 'Destination') || has(self.destination.pod)"
+                  message: "destination.pod must be set when captureLocation is 'Destination'"
+                - rule: "!(has(self.captureLocation) && self.captureLocation == 'Both') || (has(self.source.pod) && has(self.destination.pod))"
+                  message: "Both source.pod and destination.pod must be set when captureLocation is 'Both'"
               properties:
                 source:
                   type: object
@@ -3101,6 +3125,10 @@ spec:
                   type: string
                   enum: ["SourceToDestination", "DestinationToSource", "Both"]
                   default: "SourceToDestination"
+                captureLocation:
+                  type: string
+                  enum: ["Source", "Destination", "Both"]
+                  default: "Source"
                 timeout:
                   type: integer
                   minimum: 1
@@ -3135,7 +3163,12 @@ spec:
                 numberCaptured:
                   type: integer
                 filePath:
+                  description: 'DEPRECATED: This field is deprecated, please use filePaths instead.'
                   type: string
+                filePaths:
+                  type: array
+                  items:
+                    type: string
                 conditions:
                   type: array
                   items:

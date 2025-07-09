@@ -97,6 +97,15 @@ var (
 	defaultFS       = afero.NewOsFs()
 )
 
+type captureInstance struct {
+	// complete indicates whether the capture process has completed (regardless of success or failure).
+	complete bool
+	// captureErr is the error observed during the packet capture process.
+	captureErr error
+	// uploadErr is the error observed during the uploading phase.
+	uploadErr error
+}
+
 type packetCaptureState struct {
 	// capturedPacketsNum records how many packets have been captured. Due to the RateLimiter,
 	// this may not be the real-time data.
@@ -106,14 +115,14 @@ type packetCaptureState struct {
 	targetCapturedPacketsNum int32
 	// phase is the phase of the PacketCapture.
 	phase packetCapturePhase
-	// filePath is the final path shown in PacketCapture's status.
-	filePath string
-	// captureErr is the error observed during the capturing phase.
-	captureErr error
-	// uploadErr is the error observed during the uploading phase.
-	uploadErr error
+	// filePaths is the final path shown in PacketCapture's status.
+	filePaths []string
+	// initErr is an error that occurs before any capture goroutine is started.
+	initErr error
 	// cancel is the cancel function for capture context.
 	cancel context.CancelFunc
+	// instances holds the state for each capture location.
+	instances map[crdv1alpha1.CaptureLocation]*captureInstance
 }
 
 func (pcs *packetCaptureState) isCaptureSuccessful() bool {
@@ -266,8 +275,8 @@ func (c *Controller) syncPacketCapture(pcName string) error {
 	}
 
 	// Capture will not occur on this Node if a corresponding Pod interface is not found.
-	device := c.getTargetCaptureDevice(pc)
-	if device == "" {
+	devices := c.getTargetCaptureDevices(pc)
+	if len(devices) == 0 {
 		klog.V(4).InfoS("Skipping unrelated PacketCapture", "name", pcName)
 		return nil
 	}
@@ -280,6 +289,10 @@ func (c *Controller) syncPacketCapture(pcName string) error {
 			state = &packetCaptureState{
 				phase:                    packetCapturePhasePending,
 				targetCapturedPacketsNum: pc.Spec.CaptureConfig.FirstN.Number,
+				instances:                make(map[crdv1alpha1.CaptureLocation]*captureInstance),
+			}
+			for location := range devices {
+				state.instances[location] = &captureInstance{}
 			}
 			c.captures[pcName] = state
 		}
@@ -290,13 +303,13 @@ func (c *Controller) syncPacketCapture(pcName string) error {
 		}
 		// Do not return the error as it's not a transient error.
 		if err := c.validatePacketCapture(&pc.Spec); err != nil {
-			state.captureErr = err
+			state.initErr = err
 			return *state, nil
 		}
 		// Return the error as it's a transient error.
 		if c.numRunningCaptures >= maxConcurrentCaptures {
-			state.captureErr = fmt.Errorf("PacketCapture running count reach limit")
-			return *state, state.captureErr
+			state.initErr = fmt.Errorf("PacketCapture running count reach limit")
+			return *state, state.initErr
 		}
 
 		// The OpenAPI schema for the CRD makes sure Spec.Timeout is not nil.
@@ -304,9 +317,11 @@ func (c *Controller) syncPacketCapture(pcName string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		state.cancel = cancel
 		state.phase = packetCapturePhaseStarted
-		// Start the capture goroutine in a separate goroutine. The goroutine will decrease numRunningCaptures on exit.
-		c.numRunningCaptures += 1
-		go c.startCapture(ctx, pc, state, device)
+		// Start the capture goroutine(s) in separate goroutines. Each will dec numRunningCaptures on exit.
+		c.numRunningCaptures += len(devices)
+		for location, device := range devices {
+			go c.startCapture(ctx, pc, state, device, location)
+		}
 		return *state, nil
 	}()
 
@@ -378,28 +393,56 @@ func getPacketFile(filePath string) (afero.File, error) {
 	return file, nil
 }
 
-// getTargetCaptureDevice is trying to locate the target device for packet capture. If the target
+// getTargetCaptureDevices is trying to locate the target devices for packet capture. If the target
 // Pod does not exist on the current Node, the agent on this Node will not perform the capture.
 // In the PacketCapture spec, at least one of `.Spec.Source.Pod` or `.Spec.Destination.Pod`
 // should be set.
-func (c *Controller) getTargetCaptureDevice(pc *crdv1alpha1.PacketCapture) string {
-	var pod, ns string
-	if pc.Spec.Source.Pod != nil {
-		pod = pc.Spec.Source.Pod.Name
-		ns = pc.Spec.Source.Pod.Namespace
-	} else {
-		pod = pc.Spec.Destination.Pod.Name
-		ns = pc.Spec.Destination.Pod.Namespace
+func (c *Controller) getTargetCaptureDevices(pc *crdv1alpha1.PacketCapture) map[crdv1alpha1.CaptureLocation]string {
+	devices := make(map[crdv1alpha1.CaptureLocation]string)
+
+	// Get capture locations based on spec
+	captureLocations := []crdv1alpha1.CaptureLocation{pc.Spec.CaptureLocation}
+	switch pc.Spec.CaptureLocation {
+	case crdv1alpha1.CaptureLocationBoth:
+		captureLocations = []crdv1alpha1.CaptureLocation{
+			crdv1alpha1.CaptureLocationSource,
+			crdv1alpha1.CaptureLocationDestination,
+		}
+	case "":
+		// Default to source if available, otherwise destination
+		if pc.Spec.Source.Pod != nil {
+			captureLocations = []crdv1alpha1.CaptureLocation{crdv1alpha1.CaptureLocationSource}
+		} else {
+			captureLocations = []crdv1alpha1.CaptureLocation{crdv1alpha1.CaptureLocationDestination}
+		}
 	}
 
-	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
+	// Get devices for each capture location
+	for _, location := range captureLocations {
+		var pod *crdv1alpha1.PodReference
+		if location == crdv1alpha1.CaptureLocationSource && pc.Spec.Source.Pod != nil {
+			pod = pc.Spec.Source.Pod
+		} else if location == crdv1alpha1.CaptureLocationDestination && pc.Spec.Destination.Pod != nil {
+			pod = pc.Spec.Destination.Pod
+		}
+
+		if device := c.getPodDevice(pod); device != "" {
+			devices[location] = device
+		}
+	}
+	return devices
+}
+
+// getPodDevice returns the network device name for the given PodReference using the interfaceStore.
+func (c *Controller) getPodDevice(pod *crdv1alpha1.PodReference) string {
+	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace)
 	if len(podInterfaces) == 0 {
 		return ""
 	}
 	return podInterfaces[0].InterfaceName
 }
 
-func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCapture, state *packetCaptureState, device string) {
+func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCapture, state *packetCaptureState, device string, location crdv1alpha1.CaptureLocation) {
 	klog.InfoS("Starting packet capture on the current Node", "name", pc.Name, "device", device)
 	defer klog.InfoS("Stopped packet capture on the current Node", "name", pc.Name, "device", device)
 	// Resync the PacketCapture on exit of the capture goroutine.
@@ -408,7 +451,8 @@ func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCap
 	var filePath string
 	var captureErr, uploadErr error
 	func() {
-		localFilePath := nameToPath(pc.Name)
+		localFileName := fmt.Sprintf("%s-%s-%s", pc.Name, location, env.GetPodName())
+		localFilePath := nameToPath(localFileName)
 		file, err := getPacketFile(localFilePath)
 		if err != nil {
 			captureErr = err
@@ -429,10 +473,10 @@ func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCap
 			return
 		}
 		// It can't use the same context as performCapture because it might have timed out.
-		if uploadErr = c.uploadPackets(context.TODO(), pc, file); uploadErr != nil {
+		if uploadErr = c.uploadPackets(context.TODO(), pc, file, location); uploadErr != nil {
 			return
 		}
-		filePath = fmt.Sprintf("%s/%s.pcapng", pc.Spec.FileServer.URL, pc.Name)
+		filePath = fmt.Sprintf("%s/%s-%s-%s.pcapng", pc.Spec.FileServer.URL, pc.Name, location, env.GetPodName())
 	}()
 
 	if captureErr != nil {
@@ -444,11 +488,18 @@ func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCap
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	state.phase = packetCapturePhaseComplete
-	state.filePath = filePath
-	state.captureErr = captureErr
-	state.uploadErr = uploadErr
+	if filePath != "" {
+		state.filePaths = append(state.filePaths, filePath)
+	}
+	instance := state.instances[location]
+	instance.captureErr = captureErr
+	instance.uploadErr = uploadErr
+	instance.complete = true
+
 	c.numRunningCaptures -= 1
+	if c.numRunningCaptures == 0 {
+		state.phase = packetCapturePhaseComplete
+	}
 }
 
 // performCapture blocks until either the target number of packets have been captured, the context is canceled, or the
@@ -578,7 +629,7 @@ func (c *Controller) generatePacketsPathForServer(name string) string {
 	return name + ".pcapng"
 }
 
-func (c *Controller) uploadPackets(ctx context.Context, pc *crdv1alpha1.PacketCapture, outputFile afero.File) error {
+func (c *Controller) uploadPackets(ctx context.Context, pc *crdv1alpha1.PacketCapture, outputFile afero.File, location crdv1alpha1.CaptureLocation) error {
 	klog.V(2).InfoS("Uploading captured packets for PacketCapture", "name", pc.Name)
 	uploader, err := c.getUploaderByProtocol(sftpProtocol)
 	if err != nil {
@@ -607,117 +658,207 @@ func (c *Controller) uploadPackets(ctx context.Context, pc *crdv1alpha1.PacketCa
 	if err != nil {
 		return fmt.Errorf("failed to generate SSH client config: %w", err)
 	}
-	return uploader.Upload(pc.Spec.FileServer.URL, c.generatePacketsPathForServer(pc.Name), cfg, outputFile)
+	localFileName := fmt.Sprintf("%s-%s-%s", pc.Name, location, env.GetPodName())
+	return uploader.Upload(pc.Spec.FileServer.URL, c.generatePacketsPathForServer(localFileName), cfg, outputFile)
+}
+
+func getFirstPath(paths []string) string {
+	if len(paths) > 0 {
+		return paths[0]
+	}
+	return ""
 }
 
 func (c *Controller) updateStatus(ctx context.Context, pc *crdv1alpha1.PacketCapture, state packetCaptureState) error {
-	// Make a deepcopy as the object returned from lister must not be updated directly.
-	toUpdate := pc.DeepCopy()
-	var conditions []crdv1alpha1.PacketCaptureCondition
-	t := metav1.Now()
-	desiredStatus := crdv1alpha1.PacketCaptureStatus{
-		NumberCaptured: state.capturedPacketsNum,
-		FilePath:       state.filePath,
-	}
-
-	var conditionStarted, conditionComplete, conditionUploaded crdv1alpha1.PacketCaptureCondition
-	switch state.phase {
-	case packetCapturePhasePending:
-		if state.captureErr != nil {
-			conditionStarted = crdv1alpha1.PacketCaptureCondition{
-				Type:               crdv1alpha1.PacketCaptureStarted,
-				Status:             metav1.ConditionStatus(v1.ConditionFalse),
-				LastTransitionTime: t,
-				Reason:             "NotStarted",
-				Message:            state.captureErr.Error(),
+	if retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Get the latest version of the PacketCapture to avoid working with a stale object.
+		// This is crucial for handling concurrent updates from different agents.
+		latestPC, err := c.crdClient.CrdV1alpha1().PacketCaptures().Get(ctx, pc.Name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
 			}
-		} else {
-			conditionStarted = crdv1alpha1.PacketCaptureCondition{
-				Type:               crdv1alpha1.PacketCaptureStarted,
-				Status:             metav1.ConditionStatus(v1.ConditionFalse),
-				LastTransitionTime: t,
-				Reason:             "Pending",
-			}
+			return err
 		}
-		conditions = append(conditions, conditionStarted)
-	case packetCapturePhaseStarted:
-		conditionStarted = crdv1alpha1.PacketCaptureCondition{
-			Type:               crdv1alpha1.PacketCaptureStarted,
-			Status:             metav1.ConditionStatus(v1.ConditionTrue),
-			LastTransitionTime: t,
-			Reason:             "Started",
-		}
-		conditionComplete = crdv1alpha1.PacketCaptureCondition{
-			Type:               crdv1alpha1.PacketCaptureComplete,
-			Status:             metav1.ConditionStatus(v1.ConditionFalse),
-			LastTransitionTime: t,
-			Reason:             "Progressing",
-		}
-		conditions = append(conditions, conditionStarted, conditionComplete)
-	case packetCapturePhaseComplete:
-		conditionStarted = crdv1alpha1.PacketCaptureCondition{
-			Type:               crdv1alpha1.PacketCaptureStarted,
-			Status:             metav1.ConditionStatus(v1.ConditionTrue),
-			LastTransitionTime: t,
-			Reason:             "Started",
-		}
-		reason := "Succeed"
-		message := ""
-		if state.captureErr != nil {
-			if errors.Is(state.captureErr, context.DeadlineExceeded) {
-				reason = "Timeout"
-			} else {
-				reason = "Failed"
-			}
-			message = state.captureErr.Error()
-		}
-		conditionComplete = crdv1alpha1.PacketCaptureCondition{
-			Type:               crdv1alpha1.PacketCaptureComplete,
-			Status:             metav1.ConditionStatus(v1.ConditionTrue),
-			LastTransitionTime: t,
-			Reason:             reason,
-			Message:            message,
-		}
-		conditions = append(conditions, conditionStarted, conditionComplete)
-		// Set Uploaded condition if applicable.
-		if state.capturedPacketsNum > 0 && pc.Spec.FileServer != nil {
-			if state.uploadErr != nil {
-				conditionUploaded = crdv1alpha1.PacketCaptureCondition{
-					Type:               crdv1alpha1.PacketCaptureFileUploaded,
+		toUpdate := latestPC.DeepCopy()
+		var conditions []crdv1alpha1.PacketCaptureCondition
+		t := metav1.Now()
+		var conditionStarted, conditionComplete, conditionUploaded crdv1alpha1.PacketCaptureCondition
+		switch state.phase {
+		case packetCapturePhasePending:
+			if state.initErr != nil {
+				conditionStarted = crdv1alpha1.PacketCaptureCondition{
+					Type:               crdv1alpha1.PacketCaptureStarted,
 					Status:             metav1.ConditionStatus(v1.ConditionFalse),
 					LastTransitionTime: t,
-					Reason:             "Failed",
-					Message:            state.uploadErr.Error(),
+					Reason:             "NotStarted",
+					Message:            state.initErr.Error(),
 				}
 			} else {
-				conditionUploaded = crdv1alpha1.PacketCaptureCondition{
-					Type:               crdv1alpha1.PacketCaptureFileUploaded,
-					Status:             metav1.ConditionStatus(v1.ConditionTrue),
+				conditionStarted = crdv1alpha1.PacketCaptureCondition{
+					Type:               crdv1alpha1.PacketCaptureStarted,
+					Status:             metav1.ConditionStatus(v1.ConditionFalse),
 					LastTransitionTime: t,
-					Reason:             "Succeed",
+					Reason:             "Pending",
 				}
 			}
-			conditions = append(conditions, conditionUploaded)
+			conditions = append(conditions, conditionStarted)
+		case packetCapturePhaseStarted:
+			conditionStarted = crdv1alpha1.PacketCaptureCondition{
+				Type:               crdv1alpha1.PacketCaptureStarted,
+				Status:             metav1.ConditionStatus(v1.ConditionTrue),
+				LastTransitionTime: t,
+				Reason:             "Started",
+			}
+			conditions = append(conditions, conditionStarted)
+			if instance, exists := state.instances[crdv1alpha1.CaptureLocationSource]; exists {
+				if !instance.complete {
+					conditions = append(conditions, crdv1alpha1.PacketCaptureCondition{
+						Type:               crdv1alpha1.PacketCaptureAtSrcComplete,
+						Status:             metav1.ConditionStatus(v1.ConditionFalse),
+						LastTransitionTime: t,
+						Reason:             "Progressing",
+					})
+				}
+			}
+			if instance, exists := state.instances[crdv1alpha1.CaptureLocationDestination]; exists {
+				if !instance.complete {
+					conditions = append(conditions, crdv1alpha1.PacketCaptureCondition{
+						Type:               crdv1alpha1.PacketCaptureAtDstComplete,
+						Status:             metav1.ConditionStatus(v1.ConditionFalse),
+						LastTransitionTime: t,
+						Reason:             "Progressing",
+					})
+				}
+			}
+			conditionComplete = crdv1alpha1.PacketCaptureCondition{
+				Type:               crdv1alpha1.PacketCaptureComplete,
+				Status:             metav1.ConditionStatus(v1.ConditionFalse),
+				LastTransitionTime: t,
+				Reason:             "Progressing",
+			}
+			conditions = append(conditions, conditionComplete)
+		case packetCapturePhaseComplete:
+			conditionStarted = crdv1alpha1.PacketCaptureCondition{
+				Type:               crdv1alpha1.PacketCaptureStarted,
+				Status:             metav1.ConditionStatus(v1.ConditionTrue),
+				LastTransitionTime: t,
+				Reason:             "Started",
+			}
+			conditions = append(conditions, conditionStarted)
+
+			// Helper Functions
+			createCompletionCondition := func(location crdv1alpha1.CaptureLocation, instance *captureInstance) crdv1alpha1.PacketCaptureCondition {
+				condType := crdv1alpha1.PacketCaptureAtSrcComplete
+				if location == crdv1alpha1.CaptureLocationDestination {
+					condType = crdv1alpha1.PacketCaptureAtDstComplete
+				}
+				reason, message := "Succeed", ""
+				if instance.captureErr != nil {
+					reason = "Failed"
+					if errors.Is(instance.captureErr, context.DeadlineExceeded) {
+						reason = "Timeout"
+					}
+					message = instance.captureErr.Error()
+				}
+				return crdv1alpha1.PacketCaptureCondition{Type: condType, Status: metav1.ConditionTrue, LastTransitionTime: t, Reason: reason, Message: message}
+			}
+			createUploadCondition := func(instance *captureInstance, condType crdv1alpha1.PacketCaptureConditionType) crdv1alpha1.PacketCaptureCondition {
+				status, reason, msg := metav1.ConditionStatus(v1.ConditionTrue), "Succeed", ""
+				if instance.uploadErr != nil {
+					status, reason, msg = metav1.ConditionStatus(v1.ConditionFalse), "Failed", instance.uploadErr.Error()
+				}
+				return crdv1alpha1.PacketCaptureCondition{Type: condType, Status: status, Reason: reason, Message: msg, LastTransitionTime: t}
+			}
+
+			// Add local agent's own completed conditions to the list.
+			if instance, exists := state.instances[crdv1alpha1.CaptureLocationSource]; exists && instance.complete {
+				conditions = append(conditions, createCompletionCondition(crdv1alpha1.CaptureLocationSource, instance))
+				if state.capturedPacketsNum > 0 && pc.Spec.FileServer != nil {
+					conditions = append(conditions, createUploadCondition(instance, crdv1alpha1.PacketCaptureAtSrcFileUploaded))
+				}
+			} else if instance, exists := state.instances[crdv1alpha1.CaptureLocationDestination]; exists && instance.complete {
+				conditions = append(conditions, createCompletionCondition(crdv1alpha1.CaptureLocationDestination, instance))
+				if state.capturedPacketsNum > 0 && pc.Spec.FileServer != nil {
+					conditions = append(conditions, createUploadCondition(instance, crdv1alpha1.PacketCaptureAtDstFileUploaded))
+				}
+			}
+
+			// Merge local updates with server state to get a complete picture.
+			conditions = mergeConditions(toUpdate.Status.Conditions, conditions)
+			finalConditionMap := make(map[crdv1alpha1.PacketCaptureConditionType]crdv1alpha1.PacketCaptureCondition)
+			for _, cond := range conditions {
+				finalConditionMap[cond.Type] = cond
+			}
+
+			srcCond, srcExists := finalConditionMap[crdv1alpha1.PacketCaptureAtSrcComplete]
+			dstCond, dstExists := finalConditionMap[crdv1alpha1.PacketCaptureAtDstComplete]
+			isSrcFinished := srcExists && srcCond.Status == metav1.ConditionTrue
+			isDstFinished := dstExists && dstCond.Status == metav1.ConditionTrue
+
+			if isSrcFinished && isDstFinished {
+				completeReason := "Succeed"
+				completeMessage := "All capture locations have completed successfully."
+				if srcCond.Reason == "Timeout" || dstCond.Reason == "Timeout" {
+					completeReason, completeMessage = "Timeout", "One or more locations timed out."
+				}
+				if srcCond.Reason == "Failed" || dstCond.Reason == "Failed" {
+					completeReason, completeMessage = "Failed", "One or more locations failed to capture."
+				}
+				if state.initErr != nil {
+					completeReason, completeMessage = "Failed", state.initErr.Error()
+				}
+				conditionComplete = crdv1alpha1.PacketCaptureCondition{
+					Type:               crdv1alpha1.PacketCaptureComplete,
+					Status:             metav1.ConditionStatus(v1.ConditionTrue),
+					Reason:             completeReason,
+					Message:            completeMessage,
+					LastTransitionTime: t,
+				}
+				conditions = append(conditions, conditionComplete)
+
+				// Finalize PacketCaptureFileUploaded status (if applicable).
+				if pc.Spec.FileServer != nil {
+					srcUploadCond, srcUploadExists := finalConditionMap[crdv1alpha1.PacketCaptureAtSrcFileUploaded]
+					dstUploadCond, dstUploadExists := finalConditionMap[crdv1alpha1.PacketCaptureAtDstFileUploaded]
+
+					if srcUploadExists && dstUploadExists {
+						uploadStatus, uploadReason, uploadMessage := metav1.ConditionStatus(v1.ConditionTrue), "Succeed", "All required files uploaded successfully."
+						anyUploadFailed := (srcUploadCond.Status == metav1.ConditionFalse) || (dstUploadCond.Status == metav1.ConditionFalse)
+						if anyUploadFailed {
+							uploadStatus, uploadReason, uploadMessage = metav1.ConditionStatus(v1.ConditionFalse), "Failed", "One or more files failed to upload."
+						}
+						conditionUploaded = crdv1alpha1.PacketCaptureCondition{
+							Type:               crdv1alpha1.PacketCaptureFileUploaded,
+							Status:             uploadStatus,
+							Reason:             uploadReason,
+							Message:            uploadMessage,
+							LastTransitionTime: t,
+						}
+						conditions = append(conditions, conditionUploaded)
+					}
+				}
+			}
 		}
-	}
+		// Create a set of file paths to update, combining existing and new paths
+		pathSet := sets.New(toUpdate.Status.FilePaths...)
+		pathSet.Insert(state.filePaths...)
+		allPaths := sets.List(pathSet)
 
-	desiredStatus.Conditions = conditions
+		numberCaptured := max(toUpdate.Status.NumberCaptured, state.capturedPacketsNum)
 
-	if retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		desiredStatus := crdv1alpha1.PacketCaptureStatus{
+			NumberCaptured: numberCaptured,
+			FilePath:       getFirstPath(allPaths),
+			FilePaths:      allPaths,
+			Conditions:     mergeConditions(toUpdate.Status.Conditions, conditions),
+		}
 		if packetCaptureStatusEqual(toUpdate.Status, desiredStatus) {
 			return nil
 		}
-
-		desiredStatus.Conditions = mergeConditions(toUpdate.Status.Conditions, desiredStatus.Conditions)
 		toUpdate.Status = desiredStatus
 		klog.V(2).InfoS("Updating PacketCapture", "name", pc.Name, "status", toUpdate.Status)
 		_, updateErr := c.crdClient.CrdV1alpha1().PacketCaptures().UpdateStatus(ctx, toUpdate, metav1.UpdateOptions{})
-		if updateErr != nil && apierrors.IsConflict(updateErr) {
-			var getErr error
-			if toUpdate, getErr = c.crdClient.CrdV1alpha1().PacketCaptures().Get(ctx, pc.Name, metav1.GetOptions{}); getErr != nil {
-				return getErr
-			}
-		}
 		// Return the error from UPDATE.
 		return updateErr
 	}); retryErr != nil {
