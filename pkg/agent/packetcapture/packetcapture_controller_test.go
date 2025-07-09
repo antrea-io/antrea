@@ -138,7 +138,8 @@ func genTestCR(name string, num int32) *crdv1alpha1.PacketCapture {
 			FileServer: &crdv1alpha1.PacketCaptureFileServer{
 				URL: testFTPUrl,
 			},
-			Timeout: &testCaptureTimeout,
+			Timeout:         &testCaptureTimeout,
+			CaptureLocation: crdv1alpha1.CaptureLocationSource,
 		},
 	}
 	return result
@@ -332,7 +333,6 @@ func TestMultiplePacketCaptures(t *testing.T) {
 		defer pcc.mutex.Unlock()
 		return len(pcc.captures) == 0
 	}, 2*time.Second, 20*time.Millisecond)
-
 }
 
 // TestPacketCaptureControllerRun was used to validate the whole run process is working.
@@ -375,7 +375,8 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 					FileServer: &crdv1alpha1.PacketCaptureFileServer{
 						URL: "sftp://127.0.0.1:22/aaa",
 					},
-					Timeout: &testCaptureTimeout,
+					Timeout:         &testCaptureTimeout,
+					CaptureLocation: crdv1alpha1.CaptureLocationSource,
 				},
 			},
 		},
@@ -406,7 +407,8 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 					Packet: &crdv1alpha1.Packet{
 						Protocol: &icmpProto,
 					},
-					Timeout: &testCaptureTimeout,
+					Timeout:         &testCaptureTimeout,
+					CaptureLocation: crdv1alpha1.CaptureLocationSource,
 				},
 			},
 		},
@@ -439,7 +441,8 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 					FileServer: &crdv1alpha1.PacketCaptureFileServer{
 						URL: "sftp://127.0.0.1:22/aaa",
 					},
-					Timeout: &testCaptureTimeout,
+					Timeout:         &testCaptureTimeout,
+					CaptureLocation: crdv1alpha1.CaptureLocationSource,
 				},
 			},
 		},
@@ -474,7 +477,8 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 					FileServer: &crdv1alpha1.PacketCaptureFileServer{
 						URL: "sftp://127.0.0.1:22/aaa-invalid",
 					},
-					Timeout: &testCaptureTimeout,
+					Timeout:         &testCaptureTimeout,
+					CaptureLocation: crdv1alpha1.CaptureLocationSource,
 				},
 			},
 		},
@@ -499,24 +503,29 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
 				result, err := pcc.crdClient.CrdV1alpha1().PacketCaptures().Get(context.Background(), item.pc.Name, metav1.GetOptions{})
 				require.NoError(c, err)
-				var startedStatus, completeStatus, uploadStatus metav1.ConditionStatus
+
+				conditionMap := make(map[crdv1alpha1.PacketCaptureConditionType]crdv1alpha1.PacketCaptureCondition)
 				for _, cond := range result.Status.Conditions {
-					if cond.Type == crdv1alpha1.PacketCaptureStarted {
-						startedStatus = cond.Status
-					}
-					if cond.Type == crdv1alpha1.PacketCaptureComplete {
-						completeStatus = cond.Status
-					}
-					if cond.Type == crdv1alpha1.PacketCaptureFileUploaded {
-						uploadStatus = cond.Status
-					}
+					conditionMap[cond.Type] = cond
 				}
-				assert.Equal(c, item.expectStartedStatus, startedStatus)
-				assert.Equal(c, item.expectUploadStatus, uploadStatus)
-				assert.Equal(c, item.expectCompleteStatus, completeStatus)
-				assert.Equal(c, item.expectUploadStatus, uploadStatus)
+				assert.Equal(c, item.expectStartedStatus, conditionMap[crdv1alpha1.PacketCaptureStarted].Status)
+				assert.Equal(c, item.expectCompleteStatus, conditionMap[crdv1alpha1.PacketCaptureComplete].Status)
+
 				if item.expectCompleteStatus == metav1.ConditionTrue {
+					assert.Equal(c, metav1.ConditionTrue, conditionMap[crdv1alpha1.PacketCaptureAtSrcComplete].Status)
+					_, dstCompleteExists := conditionMap[crdv1alpha1.PacketCaptureAtDstComplete]
+					assert.False(c, dstCompleteExists, "Destination capture should be skipped in the same-node test scenario")
 					assert.Equal(c, testCaptureNum, result.Status.NumberCaptured)
+					require.Len(c, result.Status.FilePaths, 1, "Expected only one filePath for a same-node 'Both' location capture")
+					assert.Contains(c, result.Status.FilePaths[0], "-"+string(crdv1alpha1.CaptureLocationSource)+"-", "File path should be from the source capture")
+				}
+				if result.Status.NumberCaptured > 0 && item.pc.Spec.FileServer != nil {
+					assert.Equal(c, item.expectUploadStatus, conditionMap[crdv1alpha1.PacketCaptureFileUploaded].Status)
+					if item.expectUploadStatus != "" {
+						assert.Equal(c, item.expectUploadStatus, conditionMap[crdv1alpha1.PacketCaptureAtSrcFileUploaded].Status)
+						_, dstUploadExists := conditionMap[crdv1alpha1.PacketCaptureAtDstFileUploaded]
+						assert.False(c, dstUploadExists, "Destination upload status should not exist in the same-node test scenario")
+					}
 				}
 			}, 2*time.Second, 20*time.Millisecond)
 		})
@@ -649,16 +658,18 @@ func TestUploadPackets(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pc := genTestCR("foo", testCaptureNum)
 			pcc := newFakePacketCaptureController(t, nil, nil)
+			location := crdv1alpha1.CaptureLocationSource
+			expectedFileName := fmt.Sprintf("%s-%s-%s.pcapng", pc.Name, location, "antrea-agent")
 			pcc.sftpUploader = &testUploader{
 				url:      testFTPUrl,
-				fileName: pcc.generatePacketsPathForServer(pc.Name),
+				fileName: expectedFileName,
 				hostKey:  tc.serverHostKey,
 			}
 			pc.Spec.FileServer.HostPublicKey = tc.expectedHostKey
 			f, err := afero.TempFile(fs, "", "upload-test")
 			require.NoError(t, err)
 			defer f.Close()
-			err = pcc.uploadPackets(ctx, pc, f)
+			err = pcc.uploadPackets(ctx, pc, f, location)
 			if tc.expectedErr == "" {
 				assert.NoError(t, err)
 			} else {

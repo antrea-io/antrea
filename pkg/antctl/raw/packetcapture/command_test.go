@@ -154,7 +154,7 @@ func TestPacketCaptureRun(t *testing.T) {
 				createAction := action.(k8stesting.CreateAction)
 				obj := createAction.GetObject().(*v1alpha1.PacketCapture)
 				if tt.expectErr == "" {
-					obj.Status.FilePath = fmt.Sprintf("%s:/tmp/antrea/packages/%s.pcapng", antreaAgentPod.Name, antreaAgentPod.Name)
+					obj.Status.FilePaths = []string{fmt.Sprintf("%s:/tmp/antrea/packages/%s.pcapng", antreaAgentPod.Name, antreaAgentPod.Name)}
 					obj.Status.Conditions = []v1alpha1.PacketCaptureCondition{
 						{
 							Type:   v1alpha1.PacketCaptureComplete,
@@ -253,10 +253,11 @@ func TestNewPacketCapture(t *testing.T) {
 		{
 			name: "pod-2-pod-tcp-syn",
 			option: packetCaptureOptions{
-				source: srcPod,
-				dest:   dstPod,
-				flow:   "tcp,tcp_dst=80,tcp_flags=+syn",
-				number: testNum,
+				source:          srcPod,
+				dest:            dstPod,
+				flow:            "tcp,tcp_dst=80,tcp_flags=+syn",
+				number:          testNum,
+				captureLocation: "Source",
 			},
 			expectPC: &v1alpha1.PacketCapture{
 				Spec: v1alpha1.PacketCaptureSpec{
@@ -288,6 +289,7 @@ func TestNewPacketCapture(t *testing.T) {
 							},
 						},
 					},
+					CaptureLocation: "Source",
 				},
 			},
 		},
@@ -306,6 +308,14 @@ func TestNewPacketCapture(t *testing.T) {
 				dest:   "127.0.0.1",
 			},
 			expectErr: "one of source and destination must be a Pod",
+		},
+		{
+			name: "no-src-pod-given-captLocSrc",
+			option: packetCaptureOptions{
+				dest:            dstPod,
+				captureLocation: "Source",
+			},
+			expectErr: "a source Pod must be specified when capture-location is 'Source'",
 		},
 		{
 			name: "bad-flow",
