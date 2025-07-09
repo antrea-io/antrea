@@ -716,12 +716,14 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(mockIPAM, interfaceConfigurator)
 			}
-			err = pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{element}, cniInfo)
+			netStatus, err := pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{element}, cniInfo)
 			if tc.expectedErr == "" {
 				assert.NoError(t, err)
 			} else {
 				assert.True(t, strings.Contains(err.Error(), tc.expectedErr))
 			}
+			err = pc.updatePodNetworkStatusAnnotation(netStatus, pod)
+			assert.NoError(t, err)
 			if tc.expectedNetworkStatusAnnot != nil {
 				updatedPod, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
 				require.NoError(t, err)
@@ -791,7 +793,8 @@ func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
 			gomock.Any(),
 		),
 	)
-	assert.NoError(t, pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element2, &element1}, cniInfo))
+	_, err = pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{&element2, &element1}, cniInfo)
+	assert.NoError(t, err)
 
 	podKey := podKeyGet(pod.Name, pod.Namespace)
 	deviceCache, ok := pc.vfDeviceIDUsageMap.Load(podKey)

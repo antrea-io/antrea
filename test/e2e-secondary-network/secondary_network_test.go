@@ -120,6 +120,9 @@ func generateExpectedNetworks(pod *testPodInfo, ipv4Addrs, ipv6Addrs map[string]
 		if ip, ok := ipv6Addrs[inf]; ok && len(ip) != 0 {
 			ips = append(ips, ip.String())
 		}
+		if len(ips) == 0 {
+			continue
+		}
 		status := nadv1.NetworkStatus{
 			Name:      name,
 			Interface: inf,
@@ -151,8 +154,16 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 			podItem, err := clientset.CoreV1().Pods(ns).Get(ctx, pod.podName, metav1.GetOptions{})
 			assert.NoError(collect, err, "Failed to get Pod")
 
-			secondaryNetworkList, err := utils.ParsePodNetworkAnnotation(podItem)
-			assert.NoError(collect, err, "Failed to parse network annotation")
+			var secondaryNetworkList []*nadv1.NetworkSelectionElement
+			if len(podItem.Annotations[nadv1.NetworkAttachmentAnnot]) != 0 {
+				secondaryNetworkList, err = utils.ParsePodNetworkAnnotation(podItem)
+				assert.NoError(collect, err, "Failed to parse network annotation")
+			}
+			if secondaryNetworkList == nil {
+				_, ok := podItem.Annotations[nadv1.NetworkStatusAnnot]
+				assert.False(t, ok, "Pod network status annotation should be deleted")
+				return
+			}
 
 			ips, ipv6Addrs, macMap, err := data.listPodAddresses(pod)
 			assert.NoError(collect, err, "Failed to parse Pod network interface information")
@@ -160,11 +171,11 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 			networkStatus, err := utils.GetNetworkStatus(podItem)
 			assert.NoError(collect, err, "Failed to parse network status from Pod annotation")
 			assert.Equal(collect, true, len(networkStatus) == len(ips)-1, "The number of network "+
-				"interface statuses in `k8s.v1.cni.cncf.io/network-status` should match the total number of interfaces "+
-				"IPs in the Pod except the loopback interface", "networkStatus", networkStatus)
+				"interface statuses in `k8s.v1.cni.cncf.io/network-status` %+v should match the total number of interfaces "+
+				"IPs in the Pod except the loopback interface", networkStatus)
 			assert.Equal(collect, true, len(networkStatus) == len(secondaryNetworkList)+1, "The number of network "+
-				"interface statuses in `k8s.v1.cni.cncf.io/network-status` should be consistent with the total number of "+
-				"the network interface defined in `k8s.v1.cni.cncf.io/networks` plus the primary interface", "secondaryNetworkList", secondaryNetworkList)
+				"interface statuses in `k8s.v1.cni.cncf.io/network-status` %+v should be consistent with the total number of "+
+				"the network interface defined in `k8s.v1.cni.cncf.io/networks` %+v plus the primary interface", networkStatus, secondaryNetworkList)
 
 			var secondaryNetworkStatus []nadv1.NetworkStatus
 			for i, network := range networkStatus {
@@ -179,6 +190,33 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 			expectedSecondaryNetworkStatuses := generateExpectedNetworks(pod, ips, ipv6Addrs, macMap, isSRIOV)
 			assert.ElementsMatch(collect, expectedSecondaryNetworkStatuses, secondaryNetworkStatus, "The Pod network-status annotation is not as expected")
 		}, 20*time.Second, time.Second, "Pod %s network status validation timed out", pod.podName)
+	}
+	return nil
+}
+
+func (data *testData) deletePodNetworkAttachmentAnnot(t *testing.T, pods []*testPodInfo, ns string) error {
+	for _, pod := range pods {
+		err := data.e2eTestData.UpdatePod(ns, pod.podName, func(pod *corev1.Pod) {
+			pod.Annotations[nadv1.NetworkAttachmentAnnot] = ""
+		})
+		if err != nil {
+			return err
+		}
+		t.Logf("Delete Pod %s annotation: %+v\n", nadv1.NetworkAttachmentAnnot, pod)
+	}
+	return nil
+}
+
+func (data *testData) updatePodNetworkAttachmentAnnot(t *testing.T, pods []*testPodInfo, ns string) error {
+	for _, pod := range pods {
+		anno := data.formAnnotationStringOfPod(pod)
+		err := data.e2eTestData.UpdatePod(ns, pod.podName, func(pod *corev1.Pod) {
+			pod.Annotations[nadv1.NetworkAttachmentAnnot] = anno
+		})
+		if err != nil {
+			return err
+		}
+		t.Logf("Update Pod annotation: %s, Pod: %+v\n", anno, pod)
 	}
 	return nil
 }
@@ -618,6 +656,23 @@ func TestSRIOVNetwork(t *testing.T) {
 	}
 	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, true); err != nil {
 		t.Fatalf("Error when checking the Pod annotation: %v", err)
+	}
+	// Delete the Pod secondary network annotation
+	if err := testData.deletePodNetworkAttachmentAnnot(t, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when updating the annotation of Pod: %v", err)
+	}
+	// Check the Pod network status annotation
+	if err := testData.assertPodNetworkStatus(t, clientset, pods, e2eTestData.GetTestNamespace(), true); err != nil {
+		t.Fatalf("Error when checking the Pod NetworkStatus annotation: %v", err)
+	}
+
+	// Update the Pod secondary network annotation
+	if err := testData.updatePodNetworkAttachmentAnnot(t, pods, e2eTestData.GetTestNamespace()); err != nil {
+		t.Fatalf("Error when updating the annotation of Pod: %v", err)
+	}
+	// Check the Pod network status annotation
+	if err := testData.assertPodNetworkStatus(t, clientset, pods, e2eTestData.GetTestNamespace(), true); err != nil {
+		t.Fatalf("Error when checking the Pod networkstatus annotation: %v", err)
 	}
 	//  Delete a Pod and check the VF device is recovered with the original interface name.
 	err = e2eTestData.DeletePodAndWait(10*time.Second, pod1, ns)
