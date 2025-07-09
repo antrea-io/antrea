@@ -249,7 +249,8 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 	if netStatus != nil {
 		// Intentionally ignore errors from updating the Pod's network status annotation here.
 		// Failure to update the annotation does not affect the actual network setup for the Pod.
-		// The annotation is mainly used for status reporting and is not critical for Pod networking functionality.
+		// The annotation is mainly used for status reporting and restoring SR-IOV interface
+		// information after agent restarts.
 		_ = pc.updatePodNetworkStatusAnnotation(netStatus, pod)
 	} else {
 		_ = pc.deletePodNetworkStatusAnnotation(pod)
