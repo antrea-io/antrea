@@ -38,7 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
@@ -114,7 +114,7 @@ func BenchmarkConnStore(b *testing.B) {
 func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connectionstest.MockConnTrackDumper) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "pod-ns",

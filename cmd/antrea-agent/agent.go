@@ -86,7 +86,7 @@ import (
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/util/lazy"
-	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/util/objectstore"
 	utilwait "antrea.io/antrea/pkg/util/wait"
 	"antrea.io/antrea/pkg/version"
 )
@@ -702,7 +702,7 @@ func run(o *Options) error {
 
 	var flowExporter *flowexporter.FlowExporter
 	if enableFlowExporter {
-		podStore := podstore.NewPodStore(localPodInformer.Get())
+		podStore := objectstore.NewPodStore(localPodInformer.Get())
 		flowExporterOptions := &flowexporteroptions.FlowExporterOptions{
 			FlowCollectorAddr:      o.flowCollectorAddr,
 			FlowCollectorProto:     o.flowCollectorProto,

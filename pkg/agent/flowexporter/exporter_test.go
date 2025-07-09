@@ -27,6 +27,7 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
 
@@ -39,6 +40,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	flowexportertesting "antrea.io/antrea/pkg/agent/flowexporter/testing"
 	"antrea.io/antrea/pkg/agent/metrics"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
@@ -411,6 +413,7 @@ func TestFlowExporter_fillEgressInfo(t *testing.T) {
 		sourcePodNamespace     string
 		sourcePodName          string
 		expectedEgressName     string
+		expectedEgressUID      string
 		expectedEgressIP       string
 		expectedEgressNodeName string
 		expectedErr            string
@@ -420,16 +423,14 @@ func TestFlowExporter_fillEgressInfo(t *testing.T) {
 			sourcePodNamespace:     "namespaceA",
 			sourcePodName:          "podA",
 			expectedEgressName:     "test-egress",
+			expectedEgressUID:      "test-egress-uid",
 			expectedEgressIP:       "172.18.0.1",
 			expectedEgressNodeName: "test-egress-node",
 		},
 		{
-			name:                   "No Egress Information filled",
-			sourcePodNamespace:     "namespaceA",
-			sourcePodName:          "podC",
-			expectedEgressName:     "",
-			expectedEgressIP:       "",
-			expectedEgressNodeName: "",
+			name:               "No Egress Information filled",
+			sourcePodNamespace: "namespaceA",
+			sourcePodName:      "podC",
 		},
 	}
 
@@ -446,12 +447,18 @@ func TestFlowExporter_fillEgressInfo(t *testing.T) {
 				SourcePodName:      tc.sourcePodName,
 			}
 			if tc.expectedEgressName != "" {
-				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(tc.expectedEgressName, tc.expectedEgressIP, tc.expectedEgressNodeName, nil)
+				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(agenttypes.EgressConfig{
+					Name:       tc.expectedEgressName,
+					UID:        types.UID(tc.expectedEgressUID),
+					EgressIP:   tc.expectedEgressIP,
+					EgressNode: tc.expectedEgressNodeName,
+				}, nil)
 			} else {
-				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return("", "", "", fmt.Errorf("no Egress applied to Pod %s", conn.SourcePodName))
+				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(agenttypes.EgressConfig{}, fmt.Errorf("no Egress applied to Pod %s", conn.SourcePodName))
 			}
 			exp.fillEgressInfo(&conn)
 			assert.Equal(t, tc.expectedEgressName, conn.EgressName)
+			assert.Equal(t, tc.expectedEgressUID, conn.EgressUID)
 			assert.Equal(t, tc.expectedEgressIP, conn.EgressIP)
 			assert.Equal(t, tc.expectedEgressNodeName, conn.EgressNodeName)
 		})

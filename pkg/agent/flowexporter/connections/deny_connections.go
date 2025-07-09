@@ -28,7 +28,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/util/objectstore"
 )
 
 type DenyConnectionStore struct {
@@ -36,7 +36,7 @@ type DenyConnectionStore struct {
 	protocolFilter filter.ProtocolFilter
 }
 
-func NewDenyConnectionStore(podStore podstore.Interface, proxier proxy.Proxier, o *options.FlowExporterOptions, protocolFilter filter.ProtocolFilter) *DenyConnectionStore {
+func NewDenyConnectionStore(podStore objectstore.PodStore, proxier proxy.Proxier, o *options.FlowExporterOptions, protocolFilter filter.ProtocolFilter) *DenyConnectionStore {
 	return &DenyConnectionStore{
 		connectionStore: NewConnectionStore(podStore, proxier, o),
 		protocolFilter:  protocolFilter,

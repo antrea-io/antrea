@@ -221,6 +221,16 @@ func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
 	}
 }
 
+func skipIfFlowExportProtocolIsNotGRPC(t *testing.T, data *TestData) {
+	agentConf, err := data.GetAntreaAgentConf()
+	if err != nil {
+		t.Fatalf("Error getting Antrea Agent config: %v", err)
+	}
+	if !strings.HasSuffix(agentConf.FlowExporter.FlowCollectorAddr, ":grpc") {
+		t.Skip("Skipping test because Flow Exporter does not use gRPC")
+	}
+}
+
 func ensureAntreaRunning(data *TestData) error {
 	if testOptions.deployAntrea {
 		log.Println("Applying Antrea YAML")

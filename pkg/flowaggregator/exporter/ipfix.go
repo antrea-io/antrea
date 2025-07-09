@@ -61,6 +61,8 @@ type IPFIXExporter struct {
 	exportingProcess           ipfix.IPFIXExportingProcess
 	bufferedExporter           ipfix.IPFIXBufferedExporter
 	sendJSONRecord             bool
+	includeK8sNames            bool
+	includeK8sUIDs             bool
 	aggregatorMode             flowaggregatorconfig.AggregatorMode
 	observationDomainID        uint32
 	templateRefreshTimeout     time.Duration
@@ -163,6 +165,8 @@ func newIPFIXExporterWithClock(
 		externalFlowCollectorAddr:  opt.ExternalFlowCollectorAddr,
 		externalFlowCollectorProto: opt.ExternalFlowCollectorProto,
 		sendJSONRecord:             sendJSONRecord,
+		includeK8sNames:            *opt.Config.FlowCollector.IncludeK8sNames,
+		includeK8sUIDs:             *opt.Config.FlowCollector.IncludeK8sUIDs,
 		aggregatorMode:             opt.AggregatorMode,
 		observationDomainID:        observationDomainID,
 		templateRefreshTimeout:     opt.TemplateRefreshTimeout,
@@ -226,6 +230,8 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	e.externalFlowCollectorAddr = opt.ExternalFlowCollectorAddr
 	e.externalFlowCollectorProto = opt.ExternalFlowCollectorProto
 	e.sendJSONRecord = config.RecordFormat == "JSON"
+	e.includeK8sNames = *config.IncludeK8sNames
+	e.includeK8sUIDs = *config.IncludeK8sUIDs
 	if config.ObservationDomainID != nil {
 		e.observationDomainID = *config.ObservationDomainID
 	} else {
@@ -274,6 +280,20 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 		}
 	}
 
+	setUUID := func(uid string) {
+		if uid == "" {
+			next().SetOctetArrayValue(uuid.Nil[:])
+			return
+		}
+		v, err := uuid.Parse(uid)
+		if err != nil {
+			klog.ErrorS(err, "Error when parsing UID string", "uid", uid)
+			next().SetOctetArrayValue(uuid.Nil[:])
+			return
+		}
+		next().SetOctetArrayValue(v[:])
+	}
+
 	// IANA IEs
 	next().SetUnsigned32Value(uint32(flow.StartTs.Seconds))
 	next().SetUnsigned32Value(uint32(flow.EndTs.Seconds))
@@ -293,27 +313,71 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 	next().SetUnsigned64Value(flow.ReverseStats.PacketDeltaCount)
 	next().SetUnsigned64Value(flow.ReverseStats.OctetDeltaCount)
 	// Antrea IEs
-	next().SetStringValue(flow.K8S.SourcePodName)
-	next().SetStringValue(flow.K8S.SourcePodNamespace)
-	next().SetStringValue(flow.K8S.SourceNodeName)
-	next().SetStringValue(flow.K8S.DestinationPodName)
-	next().SetStringValue(flow.K8S.DestinationPodNamespace)
-	next().SetStringValue(flow.K8S.DestinationNodeName)
+	if e.includeK8sNames {
+		next().SetStringValue(flow.K8S.SourcePodName)
+		next().SetStringValue(flow.K8S.SourcePodNamespace)
+	}
+	if e.includeK8sUIDs {
+		setUUID(flow.K8S.SourcePodUid)
+	}
+	if e.includeK8sNames {
+		next().SetStringValue(flow.K8S.SourceNodeName)
+	}
+	if e.includeK8sUIDs {
+		setUUID(flow.K8S.SourceNodeUid)
+	}
+	if e.includeK8sNames {
+		next().SetStringValue(flow.K8S.DestinationPodName)
+		next().SetStringValue(flow.K8S.DestinationPodNamespace)
+	}
+	if e.includeK8sUIDs {
+		setUUID(flow.K8S.DestinationPodUid)
+	}
+	if e.includeK8sNames {
+		next().SetStringValue(flow.K8S.DestinationNodeName)
+	}
+	if e.includeK8sUIDs {
+		setUUID(flow.K8S.DestinationNodeUid)
+	}
 	next().SetUnsigned16Value(uint16(flow.K8S.DestinationServicePort))
-	next().SetStringValue(flow.K8S.DestinationServicePortName)
-	next().SetStringValue(flow.K8S.IngressNetworkPolicyName)
-	next().SetStringValue(flow.K8S.IngressNetworkPolicyNamespace)
+	if e.includeK8sNames {
+		next().SetStringValue(flow.K8S.DestinationServicePortName)
+	}
+	if e.includeK8sUIDs {
+		setUUID(flow.K8S.DestinationServiceUid)
+	}
+	if e.includeK8sNames {
+		next().SetStringValue(flow.K8S.IngressNetworkPolicyName)
+		next().SetStringValue(flow.K8S.IngressNetworkPolicyNamespace)
+	}
+	if e.includeK8sUIDs {
+		setUUID(flow.K8S.IngressNetworkPolicyUid)
+	}
 	next().SetUnsigned8Value(uint8(flow.K8S.IngressNetworkPolicyType))
-	next().SetStringValue(flow.K8S.IngressNetworkPolicyRuleName)
+	if e.includeK8sNames || e.includeK8sUIDs {
+		next().SetStringValue(flow.K8S.IngressNetworkPolicyRuleName)
+	}
 	next().SetUnsigned8Value(uint8(flow.K8S.IngressNetworkPolicyRuleAction))
-	next().SetStringValue(flow.K8S.EgressNetworkPolicyName)
-	next().SetStringValue(flow.K8S.EgressNetworkPolicyNamespace)
+	if e.includeK8sNames {
+		next().SetStringValue(flow.K8S.EgressNetworkPolicyName)
+		next().SetStringValue(flow.K8S.EgressNetworkPolicyNamespace)
+	}
+	if e.includeK8sUIDs {
+		setUUID(flow.K8S.EgressNetworkPolicyUid)
+	}
 	next().SetUnsigned8Value(uint8(flow.K8S.EgressNetworkPolicyType))
-	next().SetStringValue(flow.K8S.EgressNetworkPolicyRuleName)
+	if e.includeK8sNames || e.includeK8sUIDs {
+		next().SetStringValue(flow.K8S.EgressNetworkPolicyRuleName)
+	}
 	next().SetUnsigned8Value(uint8(flow.K8S.EgressNetworkPolicyRuleAction))
 	next().SetStringValue(flow.Transport.GetTCP().GetStateName()) // Use Getter functions in case transport is not TCP
 	next().SetUnsigned8Value(uint8(flow.K8S.FlowType))
-	next().SetStringValue(flow.K8S.EgressName)
+	if e.includeK8sNames {
+		next().SetStringValue(flow.K8S.EgressName)
+	}
+	if e.includeK8sUIDs {
+		setUUID(flow.K8S.EgressUid)
+	}
 	if flow.K8S.EgressIp == nil {
 		next().SetStringValue("")
 	} else {
@@ -321,7 +385,12 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 	}
 	next().SetStringValue(flow.App.ProtocolName)
 	next().SetStringValue(string(flow.App.HttpVals))
-	next().SetStringValue(flow.K8S.EgressNodeName)
+	if e.includeK8sNames {
+		next().SetStringValue(flow.K8S.EgressNodeName)
+	}
+	if e.includeK8sUIDs {
+		setUUID(flow.K8S.EgressNodeUid)
+	}
 	setIPAddress(flow.K8S.DestinationClusterIp)
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		// Add Antrea source stats fields
@@ -592,12 +661,8 @@ func (e *IPFIXExporter) createAndSendTemplate(isRecordIPv6 bool) error {
 
 func (e *IPFIXExporter) prepareElements(isIPv6 bool) ([]ipfixentities.InfoElementWithValue, error) {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
-	ianaInfoElements := infoelements.IANAInfoElementsIPv4
-	antreaInfoElements := infoelements.AntreaInfoElementsIPv4
-	if isIPv6 {
-		ianaInfoElements = infoelements.IANAInfoElementsIPv6
-		antreaInfoElements = infoelements.AntreaInfoElementsIPv6
-	}
+	ianaInfoElements := infoelements.IANAInfoElements(isIPv6)
+	antreaInfoElements := infoelements.AntreaInfoElements(e.includeK8sNames, e.includeK8sUIDs, isIPv6)
 
 	for _, ieName := range ianaInfoElements {
 		ie, err := e.createInfoElement(ieName, ipfixregistry.IANAEnterpriseID)

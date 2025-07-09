@@ -16,14 +16,17 @@ package e2e
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
@@ -32,7 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/strings/slices"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -334,51 +337,75 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
 
-	runTest := func(t *testing.T, tls bool, clientAuth bool) {
+	runTest := func(t *testing.T, tls bool, clientAuth bool, k8sUIDsInsteadOfNames bool) {
 		var err error
+		var includeK8sUIDs, includeK8sNames *bool
+		if k8sUIDsInsteadOfNames {
+			includeK8sUIDs = ptr.To(true)
+			includeK8sNames = ptr.To(false)
+		}
 		data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
 			mode:      flowaggregatorconfig.AggregatorModeProxy,
 			clusterID: customClusterID,
 			ipfixCollector: flowVisibilityIPFIXTestOptions{
-				tls:        tls,
-				clientAuth: clientAuth,
+				tls:             tls,
+				clientAuth:      clientAuth,
+				includeK8sUIDs:  includeK8sUIDs,
+				includeK8sNames: includeK8sNames,
 			},
 		})
 		require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
 
+		// UIDs are only supported when using gRPC between FE and FA.
+		if k8sUIDsInsteadOfNames {
+			skipIfFlowExportProtocolIsNotGRPC(t, data)
+		}
+
 		k8sUtils, err = NewKubernetesUtils(data)
 		require.NoError(t, err, "Error when creating Kubernetes utils client")
 
-		podAIPs, podBIPs, _, _, _, err = createPerftestPods(data)
+		podAIPs, _, podCIPs, _, _, err = createPerftestPods(data)
 		require.NoError(t, err, "Error when creating perftest Pods")
 
 		if v4Enabled {
-			t.Run("IPv4", func(t *testing.T) { testHelperProxyMode(t, data, false) })
+			t.Run("IPv4", func(t *testing.T) { testHelperProxyMode(t, data, false, k8sUIDsInsteadOfNames) })
 		}
 
 		if v6Enabled {
-			t.Run("IPv6", func(t *testing.T) { testHelperProxyMode(t, data, true) })
+			t.Run("IPv6", func(t *testing.T) { testHelperProxyMode(t, data, true, k8sUIDsInsteadOfNames) })
 		}
 	}
 
-	t.Run("plaintext", func(t *testing.T) { runTest(t, false, false) })
-	t.Run("TLS", func(t *testing.T) { runTest(t, true, false) })
-	t.Run("mTLS", func(t *testing.T) { runTest(t, true, true) })
+	t.Run("plaintext", func(t *testing.T) { runTest(t, false, false, false) })
+	t.Run("plaintext-with-K8s-UIDs", func(t *testing.T) { runTest(t, false, false, true) })
+	t.Run("TLS", func(t *testing.T) { runTest(t, true, false, false) })
+	t.Run("mTLS", func(t *testing.T) { runTest(t, true, true, false) })
 }
 
-func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool) {
-	label := "Proxy-IntraNodeFlows"
+func getPodUID(t *testing.T, data *TestData, namespace, name string) string {
+	pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	require.NoError(t, err)
+	return string(pod.UID)
+}
+
+func k8sUIDAsHexString(uid string) string {
+	v := uuid.MustParse(uid)
+	return hex.EncodeToString(v[:])
+}
+
+func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool, k8sUIDsInsteadOfNames bool) {
+	label := "Proxy-InterNodeFlows"
 	addLabelToTestPods(t, data, label, []string{"perftest-a", "perftest-b"})
 
 	var srcIP, dstIP string
 	var cmd []string
 	if !isIPv6 {
 		srcIP = podAIPs.IPv4.String()
-		dstIP = podBIPs.IPv4.String()
+		dstIP = podCIPs.IPv4.String()
 		cmd = []string{"iperf3", "-c", dstIP, "-t", "5"}
 	} else {
 		srcIP = podAIPs.IPv6.String()
-		dstIP = podBIPs.IPv6.String()
+		dstIP = podCIPs.IPv6.String()
 		cmd = []string{"iperf3", "-6", "-c", dstIP, "-t", "5"}
 	}
 	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", cmd)
@@ -390,10 +417,25 @@ func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool) {
 	records := getCollectorOutput(t, srcIP, dstIP, srcPort, false /* isDstService */, true /* lookForFlowEnd */, isIPv6, data, label /* labelFilter */, timeout)
 	require.NotEmpty(t, records)
 	record := records[len(records)-1]
-	assert.Contains(t, record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace")
-	assert.Contains(t, record, fmt.Sprintf("destinationPodNamespace: %s", data.testNamespace), "Record does not have correct destinationPodNamespace")
-	assert.Contains(t, record, fmt.Sprintf("sourcePodName: %s", "perftest-a"), "Record does not have correct sourcePodName")
-	assert.Contains(t, record, fmt.Sprintf("destinationPodName: %s", "perftest-b"), "Record does not have correct destinationPodName")
+	if k8sUIDsInsteadOfNames {
+		assert.NotContains(t, record, "sourcePodNamespace: ")
+		assert.NotContains(t, record, "destinationPodNamespace: ")
+		assert.NotContains(t, record, "sourcePodName: ")
+		assert.NotContains(t, record, "destinationPodName: ")
+		assert.Contains(t, record, fmt.Sprintf("sourcePodUUID: %s", k8sUIDAsHexString(getPodUID(t, data, data.testNamespace, "perftest-a"))), "Record does not have correct sourcePodUUID")
+		assert.Contains(t, record, fmt.Sprintf("destinationPodUUID: %s", k8sUIDAsHexString(getPodUID(t, data, data.testNamespace, "perftest-c"))), "Record does not have correct destinationPodUUID")
+		assert.Contains(t, record, "sourceNodeUUID: ", "Record does not have sourceNodeUUID")
+		assert.Contains(t, record, "destinationNodeUUID: ", "Record does not have destinationNodeUUID")
+	} else {
+		assert.Contains(t, record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace")
+		assert.Contains(t, record, fmt.Sprintf("destinationPodNamespace: %s", data.testNamespace), "Record does not have correct destinationPodNamespace")
+		assert.Contains(t, record, fmt.Sprintf("sourcePodName: %s", "perftest-a"), "Record does not have correct sourcePodName")
+		assert.Contains(t, record, fmt.Sprintf("destinationPodName: %s", "perftest-c"), "Record does not have correct destinationPodName")
+		assert.NotContains(t, record, "sourcePodUUID: ")
+		assert.NotContains(t, record, "destinationPodUUID: ")
+		assert.NotContains(t, record, "sourceNodeUUID: ")
+		assert.NotContains(t, record, "destinationNodeUUID: ")
+	}
 	// Check the clusterId field, which should match the customClusterID set in the flowVisibilityTestOptions
 	assert.Contains(t, record, fmt.Sprintf("clusterId: %s", customClusterID), "Record does not have the correct clusterId")
 	assert.Contains(t, record, "originalObservationDomainId", "Record does not have originalObservationDomainId")

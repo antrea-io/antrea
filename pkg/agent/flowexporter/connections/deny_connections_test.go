@@ -30,7 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
@@ -120,7 +120,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			// Reset the metrics.
 			metrics.TotalDenyConnections.Set(0)
-			mockPodStore := podstoretest.NewMockInterface(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockProxier := proxytest.NewMockProxier(ctrl)
 			protocol, _ := lookupServiceProtocol(tuple.Protocol)
 			serviceStr := fmt.Sprintf("%s:%d/%s", tuple.DestinationAddress.String(), tuple.DestinationPort, protocol)

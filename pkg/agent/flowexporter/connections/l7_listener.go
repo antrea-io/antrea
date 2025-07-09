@@ -33,7 +33,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	k8sutil "antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/util/objectstore"
 )
 
 type PodL7FlowExporterAttrGetter interface {
@@ -79,12 +79,12 @@ type L7Listener struct {
 	l7mut                       sync.Mutex
 	suricataEventSocketPath     string
 	podL7FlowExporterAttrGetter PodL7FlowExporterAttrGetter
-	podStore                    podstore.Interface
+	podStore                    objectstore.PodStore
 }
 
 func NewL7Listener(
 	podL7FlowExporterAttrGetter PodL7FlowExporterAttrGetter,
-	podStore podstore.Interface) *L7Listener {
+	podStore objectstore.PodStore) *L7Listener {
 	return &L7Listener{
 		l7Events:                    make(map[connection.ConnectionKey]L7ProtocolFields),
 		suricataEventSocketPath:     config.L7SuricataSocketPath,

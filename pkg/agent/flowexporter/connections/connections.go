@@ -26,7 +26,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/proxy"
-	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/util/objectstore"
 )
 
 const (
@@ -35,7 +35,7 @@ const (
 
 type connectionStore struct {
 	connections            map[connection.ConnectionKey]*connection.Connection
-	podStore               podstore.Interface
+	podStore               objectstore.PodStore
 	antreaProxier          proxy.Proxier
 	expirePriorityQueue    *priorityqueue.ExpirePriorityQueue
 	staleConnectionTimeout time.Duration
@@ -43,7 +43,7 @@ type connectionStore struct {
 }
 
 func NewConnectionStore(
-	podStore podstore.Interface,
+	podStore objectstore.PodStore,
 	proxier proxy.Proxier,
 	o *options.FlowExporterOptions) connectionStore {
 	return connectionStore{
@@ -112,10 +112,12 @@ func (cs *connectionStore) fillPodInfo(conn *connection.Connection) {
 	if srcFound {
 		conn.SourcePodName = srcPod.Name
 		conn.SourcePodNamespace = srcPod.Namespace
+		conn.SourcePodUID = string(srcPod.UID)
 	}
 	if dstFound {
 		conn.DestinationPodName = dstPod.Name
 		conn.DestinationPodNamespace = dstPod.Namespace
+		conn.DestinationPodUID = string(dstPod.UID)
 	}
 }
 

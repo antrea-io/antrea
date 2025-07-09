@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
@@ -49,7 +50,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
 	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 )
 
 const (
@@ -122,7 +123,7 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			mockPodStore := podstoretest.NewMockInterface(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 			mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
@@ -241,7 +242,7 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			mockPodStore := podstoretest.NewMockInterface(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 
@@ -455,8 +456,9 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 		opt := &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
-					Enable:  true,
-					Address: "10.10.10.10:155",
+					Enable:         true,
+					Address:        "10.10.10.10:155",
+					IncludeK8sUIDs: ptr.To(true),
 				},
 			},
 		}
@@ -634,7 +636,7 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 
 func TestFlowAggregator_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	mockPodStore.EXPECT().HasSynced().Return(true)
 	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
 	mockCollector := collectortesting.NewMockInterface(ctrl)
@@ -715,7 +717,8 @@ func TestFlowAggregator_Run(t *testing.T) {
 	})
 	enableIPFIXOptions := makeOptions(&flowaggregatorconfig.FlowAggregatorConfig{
 		FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
-			Enable: true,
+			Enable:         true,
+			IncludeK8sUIDs: ptr.To(false),
 		},
 	})
 	enableClickHouseOptions := makeOptions(&flowaggregatorconfig.FlowAggregatorConfig{
@@ -884,7 +887,7 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			client := fake.NewSimpleClientset()
-			mockPodStore := podstoretest.NewMockInterface(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockPodStore.EXPECT().GetPodByIPAndTime(tt.ip, gomock.Any()).Return(tt.pod, tt.pod != nil)
 			fa := &flowAggregator{
 				k8sClient:        client,
@@ -1037,7 +1040,7 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 
 	sourceAdress := "192.168.1.2"
 	destinationAddress := "192.168.1.3"
@@ -1110,7 +1113,9 @@ func TestNewFlowAggregator(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			client := fake.NewSimpleClientset()
-			mockPodStore := podstoretest.NewMockInterface(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
+			mockNodeStore := objectstoretest.NewMockNodeStore(ctrl)
+			mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
 			clusterUUID := uuid.New()
 			clusterID := tc.config.ClusterID
 			if clusterID == "" {
@@ -1123,7 +1128,7 @@ func TestNewFlowAggregator(t *testing.T) {
 			require.NoError(t, err)
 			_, err = f.Write(b)
 			require.NoError(t, err)
-			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, fileName)
+			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, mockNodeStore, mockServiceStore, fileName)
 			require.NoError(t, err)
 			assert.Equal(t, clusterUUID, fa.clusterUUID)
 			assert.Equal(t, clusterID, fa.clusterID)

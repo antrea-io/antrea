@@ -32,7 +32,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/util/objectstore"
 )
 
 var serviceProtocolMap = map[uint8]corev1.Protocol{
@@ -61,7 +61,7 @@ func NewConntrackConnectionStore(
 	v4Enabled bool,
 	v6Enabled bool,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
-	podStore podstore.Interface,
+	podStore objectstore.PodStore,
 	proxier proxy.Proxier,
 	l7EventMapGetterFunc L7EventMapGetter,
 	o *options.FlowExporterOptions,
@@ -213,6 +213,7 @@ func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *connection.Co
 			} else {
 				conn.IngressNetworkPolicyName = policy.Name
 				conn.IngressNetworkPolicyNamespace = policy.Namespace
+				conn.IngressNetworkPolicyUID = string(policy.UID)
 				conn.IngressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
 				conn.IngressNetworkPolicyRuleName = rule.Name
 				conn.IngressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
@@ -228,6 +229,7 @@ func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *connection.Co
 			} else {
 				conn.EgressNetworkPolicyName = policy.Name
 				conn.EgressNetworkPolicyNamespace = policy.Namespace
+				conn.EgressNetworkPolicyUID = string(policy.UID)
 				conn.EgressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
 				conn.EgressNetworkPolicyRuleName = rule.Name
 				conn.EgressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow

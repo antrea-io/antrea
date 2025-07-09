@@ -26,7 +26,7 @@ import (
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 
 	"antrea.io/antrea/pkg/agent/metrics"
 )
@@ -82,7 +82,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		testFlowKeys[i] = &connKey
 	}
 	// Create connectionStore
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	connStore := NewConnectionStore(mockPodStore, nil, testFlowExporterOptions)
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
@@ -107,7 +107,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// test on deny connection store
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	denyConnStore := NewDenyConnectionStore(mockPodStore, nil, testFlowExporterOptions, filter.NewProtocolFilter(nil))
 	tuple := connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	conn := &connection.Connection{

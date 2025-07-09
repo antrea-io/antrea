@@ -103,6 +103,10 @@ flowCollector:
     # -- Minimum TLS version from: VersionTLS12, VersionTLS13.
     # @default -- VersionTLS12
     minVersion: ""
+  # -- Include the names of K8s objects (Pods, Nodes, ...) as information elements in exported records.
+  includeK8sNames: true
+  # -- Include the UIDs of K8s objects (Pods, Nodes, ...) as information elements in exported records.
+  includeK8sUIDs: false
 
 # clickHouse contains ClickHouse related configuration options.
 clickHouse:

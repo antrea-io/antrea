@@ -37,7 +37,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 )
 
 const (
@@ -125,7 +125,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 
 	// Create connectionStore, FlowRecords and associated mocks
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
-	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
 	o := &options.FlowExporterOptions{
