@@ -127,8 +127,9 @@ func TestPacketCapture(t *testing.T) {
 
 // getLocalPcapFilepath returns the path of the local pcap file present inside the Pod, for the
 // Antrea Agent which ran the packet capture.
-func getLocalPcapFilepath(pcName string) string {
-	return path.Join("/tmp", "antrea", "packetcapture", "packets", pcName+".pcapng")
+func getLocalPcapFilepath(pcName, location, antreaAgent string) string {
+	fileName := fmt.Sprintf("%s-%s-%s.pcapng", pcName, location, antreaAgent)
+	return path.Join("/tmp", "antrea", "packetcapture", "packets", fileName)
 }
 
 type packetCaptureOption func(pc *crdv1alpha1.PacketCapture)
@@ -168,6 +169,12 @@ func packetCaptureDestinationPod(namespace, name string) packetCaptureOption {
 			Namespace: namespace,
 			Name:      name,
 		}
+	}
+}
+
+func packetCaptureCaptureLocation(location crdv1alpha1.CaptureLocation) packetCaptureOption {
+	return func(pc *crdv1alpha1.PacketCapture) {
+		pc.Spec.CaptureLocation = location
 	}
 }
 
@@ -220,17 +227,6 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 		{Name: udpServerPodName},
 	})
 
-	// This is the name of the Antrea Pod which performs the capture. The capture is performed
-	// on the Node where the source Pod (clientPodName) is running, which is node1.
-	antreaPodName, err := data.getAntreaPodOnNode(node1)
-	require.NoError(t, err)
-
-	getPcapURL := func(name string) string {
-		p, err := url.JoinPath(sftpURL, name+".pcapng")
-		require.NoError(t, err)
-		return p
-	}
-
 	testcases := []pcTestCase{
 		{
 			name:      "ipv4-icmp-timeout",
@@ -250,7 +246,6 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 10,
-				FilePath:       getPcapURL("ipv4-icmp-timeout"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -258,10 +253,21 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Reason: "Started",
 					},
 					{
-						Type:    crdv1alpha1.PacketCaptureComplete,
+						Type:    crdv1alpha1.PacketCaptureAtSrcComplete,
 						Status:  metav1.ConditionStatus(v1.ConditionTrue),
 						Reason:  "Timeout",
 						Message: "context deadline exceeded",
+					},
+					{
+						Type:    crdv1alpha1.PacketCaptureComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Timeout",
+						Message: "one or more locations timed out",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
 					},
 					{
 						Type:   crdv1alpha1.PacketCaptureFileUploaded,
@@ -321,7 +327,6 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
-				FilePath:       getPcapURL("ipv4-tcp"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -329,7 +334,17 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Reason: "Started",
 					},
 					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
 						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcFileUploaded,
 						Status: metav1.ConditionStatus(v1.ConditionTrue),
 						Reason: "Succeed",
 					},
@@ -342,8 +357,9 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 			},
 		},
 		{
-			name:      "ipv4-udp",
-			ipVersion: 4,
+			name:           "ipv4-udp",
+			ipVersion:      4,
+			numConnections: 4,
 			pc: getPacketCaptureCR(
 				"ipv4-udp",
 				sftpURL,
@@ -357,13 +373,13 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					},
 				},
 				crdv1alpha1.CaptureDirectionSourceToDestination,
+				packetCaptureCaptureLocation(crdv1alpha1.CaptureLocationBoth),
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, udpServerPodName),
 				packetCaptureHostPublicKey(pubKey2),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
-				FilePath:       getPcapURL("ipv4-udp"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -371,7 +387,27 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Reason: "Started",
 					},
 					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
 						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstFileUploaded,
 						Status: metav1.ConditionStatus(v1.ConditionTrue),
 						Reason: "Succeed",
 					},
@@ -394,12 +430,12 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					IPFamily: v1.IPv4Protocol,
 				},
 				crdv1alpha1.CaptureDirectionSourceToDestination,
+				packetCaptureCaptureLocation(crdv1alpha1.CaptureLocationBoth),
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
-				FilePath:       getPcapURL("ipv4-icmp"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -407,7 +443,27 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Reason: "Started",
 					},
 					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
 						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstFileUploaded,
 						Status: metav1.ConditionStatus(v1.ConditionTrue),
 						Reason: "Succeed",
 					},
@@ -437,7 +493,6 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
-				FilePath:       antreaPodName + ":" + getLocalPcapFilepath("invalid-host-public-key"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -445,15 +500,26 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Reason: "Started",
 					},
 					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
 						Type:   crdv1alpha1.PacketCaptureComplete,
 						Status: metav1.ConditionStatus(v1.ConditionTrue),
 						Reason: "Succeed",
 					},
 					{
-						Type:    crdv1alpha1.PacketCaptureFileUploaded,
+						Type:    crdv1alpha1.PacketCaptureAtSrcFileUploaded,
 						Status:  metav1.ConditionStatus(v1.ConditionFalse),
 						Reason:  "Failed",
 						Message: "failed to upload file after 5 attempts",
+					},
+					{
+						Type:    crdv1alpha1.PacketCaptureFileUploaded,
+						Status:  metav1.ConditionStatus(v1.ConditionFalse),
+						Reason:  "Failed",
+						Message: "one or more files failed to upload",
 					},
 				},
 			},
@@ -461,8 +527,9 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 			timeoutSeconds: 30,
 		},
 		{
-			name:      "ipv4-udp-dst-to-src",
-			ipVersion: 4,
+			name:           "ipv4-udp-dst-to-src",
+			ipVersion:      4,
+			numConnections: 4,
 			pc: getPacketCaptureCR(
 				"ipv4-udp-dst-to-src",
 				sftpURL,
@@ -476,13 +543,13 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					},
 				},
 				crdv1alpha1.CaptureDirectionDestinationToSource,
+				packetCaptureCaptureLocation(crdv1alpha1.CaptureLocationBoth),
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, udpServerPodName),
 				packetCaptureHostPublicKey(pubKey2),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
-				FilePath:       getPcapURL("ipv4-udp-dst-to-src"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -490,7 +557,27 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Reason: "Started",
 					},
 					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
 						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstFileUploaded,
 						Status: metav1.ConditionStatus(v1.ConditionTrue),
 						Reason: "Succeed",
 					},
@@ -518,13 +605,13 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 					},
 				},
 				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureCaptureLocation(crdv1alpha1.CaptureLocationDestination),
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
 				packetCaptureHostPublicKey(pubKey1),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
-				FilePath:       getPcapURL("ipv4-tcp-both"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -532,7 +619,17 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Reason: "Started",
 					},
 					{
+						Type:   crdv1alpha1.PacketCaptureAtDstComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
 						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstFileUploaded,
 						Status: metav1.ConditionStatus(v1.ConditionTrue),
 						Reason: "Succeed",
 					},
@@ -565,7 +662,6 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
-				FilePath:       getPcapURL("ipv4-tcp-src-only"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -573,7 +669,17 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Reason: "Started",
 					},
 					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
 						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcFileUploaded,
 						Status: metav1.ConditionStatus(v1.ConditionTrue),
 						Reason: "Succeed",
 					},
@@ -606,7 +712,6 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
-				FilePath:       getPcapURL("ipv4-udp-dst-only-direction-both"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -614,7 +719,17 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 						Reason: "Started",
 					},
 					{
+						Type:   crdv1alpha1.PacketCaptureAtDstComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
 						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstFileUploaded,
 						Status: metav1.ConditionStatus(v1.ConditionTrue),
 						Reason: "Succeed",
 					},
@@ -630,6 +745,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 
 	t.Run("testPacketCaptureBasic", func(t *testing.T) {
 		for _, tc := range testcases {
+			updateExpectedStatus(&tc, data, t, sftpURL)
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
@@ -658,12 +774,6 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 		{Name: tcpServerPodName},
 	})
 
-	getPcapURL := func(name string) string {
-		p, err := url.JoinPath(sftpURL, name+".pcapng")
-		require.NoError(t, err)
-		return p
-	}
-
 	testcases := []pcTestCase{
 		{
 			name:      "ipv4-tcp-syn-both-timeout",
@@ -684,6 +794,7 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 					},
 				},
 				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureCaptureLocation(crdv1alpha1.CaptureLocationBoth),
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
 				packetCaptureTimeout(ptr.To[int32](10)), // setting a high timeout to ensure capture ends due to timeout
@@ -692,7 +803,6 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 2,
-				FilePath:       getPcapURL("ipv4-tcp-syn-both-timeout"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -700,10 +810,32 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 						Reason: "Started",
 					},
 					{
-						Type:    crdv1alpha1.PacketCaptureComplete,
+						Type:    crdv1alpha1.PacketCaptureAtSrcComplete,
 						Status:  metav1.ConditionStatus(v1.ConditionTrue),
 						Reason:  "Timeout",
 						Message: "context deadline exceeded",
+					},
+					{
+						Type:    crdv1alpha1.PacketCaptureAtDstComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Timeout",
+						Message: "context deadline exceeded",
+					},
+					{
+						Type:    crdv1alpha1.PacketCaptureComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Timeout",
+						Message: "one or more locations timed out",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
 					},
 					{
 						Type:   crdv1alpha1.PacketCaptureFileUploaded,
@@ -732,6 +864,7 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 					},
 				},
 				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureCaptureLocation(crdv1alpha1.CaptureLocationBoth),
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
 				packetCaptureHostPublicKey(pubKey1),
@@ -739,7 +872,6 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 1,
-				FilePath:       getPcapURL("ipv4-icmp-echoreply-both"),
 				Conditions: []crdv1alpha1.PacketCaptureCondition{
 					{
 						Type:   crdv1alpha1.PacketCaptureStarted,
@@ -747,7 +879,27 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 						Reason: "Started",
 					},
 					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
 						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtSrcFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureAtDstFileUploaded,
 						Status: metav1.ConditionStatus(v1.ConditionTrue),
 						Reason: "Succeed",
 					},
@@ -763,6 +915,7 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 	}
 	t.Run("testPacketCaptureL4Filters", func(t *testing.T) {
 		for _, tc := range testcases {
+			updateExpectedStatus(&tc, data, t, sftpURL)
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
@@ -855,6 +1008,83 @@ func generateTraffic(t *testing.T, data *TestData, tc pcTestCase, srcPod string,
 	}
 }
 
+// getExpectedCaptureNodes determines which Node(s) are expected to perform a packet
+// capture based on the source/destination Pods and the CaptureLocation specified in
+// the test case. The returned map maps the location ("Source" or "Destination")
+// to the name of the Kubernetes Node where the capture should run.
+func getExpectedCaptureNodes(t *testing.T, data *TestData, tc pcTestCase) map[string]string {
+	nodes := make(map[string]string)
+
+	getNodeName := func(targetPodRef *crdv1alpha1.PodReference) string {
+		targetPod, err := data.clientset.CoreV1().Pods(targetPodRef.Namespace).Get(context.TODO(), targetPodRef.Name, metav1.GetOptions{})
+		require.NoError(t, err, "Failed to get the target Pod for the packet capture")
+		return targetPod.Spec.NodeName
+	}
+
+	var srcNode, dstNode string
+	if tc.pc.Spec.Source.Pod != nil {
+		srcNode = getNodeName(tc.pc.Spec.Source.Pod)
+	}
+	if tc.pc.Spec.Destination.Pod != nil {
+		dstNode = getNodeName(tc.pc.Spec.Destination.Pod)
+	}
+
+	location := tc.pc.Spec.CaptureLocation
+	if location == "" {
+		if tc.pc.Spec.Source.Pod != nil {
+			location = crdv1alpha1.CaptureLocationSource
+		} else {
+			location = crdv1alpha1.CaptureLocationDestination
+		}
+	}
+
+	if location == crdv1alpha1.CaptureLocationSource || location == crdv1alpha1.CaptureLocationBoth {
+		if srcNode != "" {
+			nodes["Source"] = srcNode
+		}
+	}
+	if location == crdv1alpha1.CaptureLocationDestination || location == crdv1alpha1.CaptureLocationBoth {
+		if dstNode != "" {
+			nodes["Destination"] = dstNode
+		}
+	}
+	return nodes
+}
+
+// updateExpectedStatus generates the expected file paths based *only* on the CaptureLocation
+// specified in the test case's PacketCapture spec. It modifies the provided status object in place.
+func updateExpectedStatus(tc *pcTestCase, data *TestData, t *testing.T, sftpURL string) {
+	if tc.invalidDestination {
+		return
+	}
+	var paths []string
+	// The getExpectedCaptureNodes function is the single source of truth for interpreting
+	// the CaptureLocation field. It correctly returns the node(s) where a capture
+	// file is expected to be generated.
+	expectedNodes := getExpectedCaptureNodes(t, data, *tc)
+
+	if len(expectedNodes) > 0 {
+		for location, nodeName := range expectedNodes {
+			antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+			require.NoError(t, err)
+			var p string
+			if tc.name == "invalid-host-public-key" {
+				// For failed uploads, the path is local to the Antrea Agent Pod.
+				p = antreaPodName + ":" + getLocalPcapFilepath(tc.pc.Name, location, antreaPodName)
+			} else {
+				fileName := fmt.Sprintf("%s-%s-%s.pcapng", tc.pc.Name, location, antreaPodName)
+				p, err = url.JoinPath(sftpURL, fileName)
+				require.NoError(t, err)
+			}
+			paths = append(paths, p)
+		}
+	}
+
+	sort.Strings(paths)
+	tc.expectedStatus.FilePaths = paths
+	tc.expectedStatus.FilePath = paths[0]
+}
+
 func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	switch tc.ipVersion {
 	case 4:
@@ -920,38 +1150,31 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		return
 	}
 
-	// Determine the target Pod where the packet capture will run. This mirrors the
-	// behavior of the PacketCapture controller, which defaults to the source Pod if
-	// available, to decide on which Node the capture agent should run.
-	var targetPodRef *crdv1alpha1.PodReference
-	if tc.pc.Spec.Source.Pod == nil {
-		targetPodRef = tc.pc.Spec.Destination.Pod
-	} else {
-		targetPodRef = tc.pc.Spec.Source.Pod
-	}
-	targetPod, err := data.clientset.CoreV1().Pods(targetPodRef.Namespace).Get(context.TODO(), targetPodRef.Name, metav1.GetOptions{})
-	require.NoError(t, err, "Failed to get the target Pod for the packet capture")
-	captureNodeName := targetPod.Spec.NodeName
+	expectedNodes := getExpectedCaptureNodes(t, data, tc)
+	require.NotEmpty(t, expectedNodes, "Could not determine any node for packet capture")
 
-	// verify packets.
-	antreaPodName, err := data.getAntreaPodOnNode(captureNodeName)
-	require.NoError(t, err)
-	tmpDir := t.TempDir()
-	dstFileName := filepath.Join(tmpDir, tc.pc.Name+".pcapng")
-	packetFile := getLocalPcapFilepath(tc.pc.Name)
-	require.NoError(t, data.copyPodFile(antreaPodName, "antrea-agent", "kube-system", packetFile, tmpDir))
-	defer os.Remove(dstFileName)
-	file, err := os.Open(dstFileName)
-	require.NoError(t, err)
-	defer file.Close()
-	var srcIP, dstIP net.IP
-	if srcPodIPs != nil {
-		srcIP = *srcPodIPs.IPv4
+	for location, captureNodeName := range expectedNodes {
+		// verify packets.
+		antreaPodName, err := data.getAntreaPodOnNode(captureNodeName)
+		require.NoError(t, err)
+		tmpDir := t.TempDir()
+		fileName := fmt.Sprintf("%s-%s-%s.pcapng", tc.pc.Name, location, antreaPodName)
+		dstFileName := filepath.Join(tmpDir, fileName)
+		packetFile := getLocalPcapFilepath(tc.pc.Name, location, antreaPodName)
+		require.NoError(t, data.copyPodFile(antreaPodName, "antrea-agent", "kube-system", packetFile, tmpDir))
+		defer os.Remove(dstFileName)
+		file, err := os.Open(dstFileName)
+		require.NoError(t, err)
+		defer file.Close()
+		var srcIP, dstIP net.IP
+		if srcPodIPs != nil {
+			srcIP = *srcPodIPs.IPv4
+		}
+		if dstPodIPs != nil {
+			dstIP = *dstPodIPs.IPv4
+		}
+		require.NoError(t, verifyPacketFile(t, tc.pc, file, tc.expectedStatus.NumberCaptured, srcIP, dstIP))
 	}
-	if dstPodIPs != nil {
-		dstIP = *dstPodIPs.IPv4
-	}
-	require.NoError(t, verifyPacketFile(t, tc.pc, file, tc.expectedStatus.NumberCaptured, srcIP, dstIP))
 }
 
 func (data *TestData) waitForPacketCapture(t *testing.T, name string, specTimeout int, fn func(*crdv1alpha1.PacketCapture) bool) (*crdv1alpha1.PacketCapture, error) {

@@ -488,6 +488,14 @@ const (
 	CaptureDirectionBoth                CaptureDirection = "Both"
 )
 
+type CaptureLocation string
+
+const (
+	CaptureLocationSource      CaptureLocation = "Source"
+	CaptureLocationDestination CaptureLocation = "Destination"
+	CaptureLocationBoth        CaptureLocation = "Both"
+)
+
 type PacketCaptureSpec struct {
 	// Timeout is the timeout for this capture session. If not specified, defaults to 60s.
 	Timeout       *int32        `json:"timeout,omitempty"`
@@ -499,6 +507,9 @@ type PacketCaptureSpec struct {
 	// Direction specifies which packets to capture (source -> destination, destination -> source or both).
 	// If not specified, defaults to SourceToDestination.
 	Direction CaptureDirection `json:"direction,omitempty"`
+	// CaptureLocation specifies where the packet capture should be performed: 'Source', 'Destination', or 'Both'.
+	// Selecting 'Both' may result in two separate capture files. If not specified, defaults to 'Source'.
+	CaptureLocation CaptureLocation `json:"captureLocation,omitempty"`
 	// Packet defines what kind of traffic we want to capture between the source and destination. If not specified,
 	// all kinds of traffic will count.
 	Packet *Packet `json:"packet,omitempty"`
@@ -512,10 +523,13 @@ type PacketCaptureStatus struct {
 	// NumberCaptured records how many packets have been captured. If it reaches the target number, the capture
 	// can be considered as finished.
 	NumberCaptured int32 `json:"numberCaptured"`
-	// FilePath specifies the location where captured packets are stored. It can either be a URL to download the pcap file (if "Spec.FileServer" is specified)
+	// +kubebuilder:validation:Deprecated=true
+	// FilePath(s) specifies the location where captured packets are stored. It can either be a URL to download the pcap file (if "Spec.FileServer" is specified)
 	// or a local file path on the antrea-agent Pod where the packet was captured, formatted as : <antrea-agent-pod-name>:<path>.
 	// When using a local file path, the file will be automatically removed after the PacketCapture resource is deleted.
-	FilePath string `json:"filePath"`
+	// Deprecated: this field is deprecated and will be removed in a future version. Use FilePaths instead.
+	FilePath  string   `json:"filePath,omitempty"`
+	FilePaths []string `json:"filePaths,omitempty"`
 	// Condition represents the latest available observations of the PacketCapture's current state.
 	Conditions []PacketCaptureCondition `json:"conditions"`
 }
@@ -525,10 +539,18 @@ type PacketCaptureConditionType string
 const (
 	// PacketCaptureStarted means this request has been started.
 	PacketCaptureStarted PacketCaptureConditionType = "PacketCaptureStarted"
+	// PacketCaptureAtSrcComplete indicates that the packet capture at the source has completed.
+	PacketCaptureAtSrcComplete PacketCaptureConditionType = "PacketCaptureAtSrcComplete"
+	// PacketCaptureAtDstComplete indicates that the packet capture at the destination has completed.
+	PacketCaptureAtDstComplete PacketCaptureConditionType = "PacketCaptureAtDstComplete"
 	// PacketCaptureComplete means enough packets have been captured and saved in an antrea-agent Pod locally already, but results haven't been
 	// uploaded yet (if a file server has been configured).
 	PacketCaptureComplete PacketCaptureConditionType = "PacketCaptureComplete"
-	// PacketCaptureFileUploaded means the captured packets file has been uploaded to the target file server.
+	// PacketCaptureAtSrcFileUploaded means the captured packet file at the source has been uploaded to the file server.
+	PacketCaptureAtSrcFileUploaded PacketCaptureConditionType = "PacketCaptureAtSrcFileUploaded"
+	// PacketCaptureAtDstFileUploaded means the captured packet file at the destination has been uploaded to the file server.
+	PacketCaptureAtDstFileUploaded PacketCaptureConditionType = "PacketCaptureAtDstFileUploaded"
+	// PacketCaptureFileUploaded means the captured packet file(s) have been uploaded to the target file server.
 	PacketCaptureFileUploaded PacketCaptureConditionType = "PacketCaptureFileUploaded"
 )
 
