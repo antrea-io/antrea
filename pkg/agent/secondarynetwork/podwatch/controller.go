@@ -238,8 +238,8 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 	}
 
 	var netStatus []netdefv1.NetworkStatus
-	var err error
 	if len(networkList) > 0 {
+		var err error
 		netStatus, err = pc.configurePodSecondaryNetwork(pod, networkList, podCNIInfo)
 		if err != nil {
 			return err
@@ -247,6 +247,9 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 	}
 
 	if netStatus != nil {
+		// Intentionally ignore errors from updating the Pod's network status annotation here.
+		// Failure to update the annotation does not affect the actual network setup for the Pod.
+		// The annotation is mainly used for status reporting and is not critical for Pod networking functionality.
 		_ = pc.updatePodNetworkStatusAnnotation(netStatus, pod)
 	} else {
 		_ = pc.deletePodNetworkStatusAnnotation(pod)
@@ -276,7 +279,7 @@ func (pc *PodController) deletePodNetworkStatusAnnotation(pod *corev1.Pod) error
 }
 
 var (
-	netdefutilsSetNetworkStatus = netdefutils.SetNetworkStatus
+	setNetworkStatus = netdefutils.SetNetworkStatus
 )
 
 // updatePodNetworkStatusAnnotation update the Pod's network status annotation
@@ -303,7 +306,7 @@ func (pc *PodController) updatePodNetworkStatusAnnotation(netStatus []netdefv1.N
 	}
 
 	// Update the Pod's network status annotation
-	if err := netdefutilsSetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
+	if err := setNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
 		klog.ErrorS(err, "Pod network status annotation update failed", "Pod", klog.KObj(pod))
 		return err
 	}
