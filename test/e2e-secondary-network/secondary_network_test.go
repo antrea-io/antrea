@@ -595,6 +595,13 @@ func TestSRIOVNetwork(t *testing.T) {
 
 	testData := &testData{e2eTestData: e2eTestData, networkType: networkTypeSriov, pods: pods}
 
+	// Get the original VF interface name on the Node.
+	pod1 := pods[0].podName
+	node1 := pods[0].nodeName
+	vfName := GetVFInterfaceName(t, e2eTestData, node1)
+	require.NotEmpty(t, vfName, "VF interface name should not be empty")
+	logs.Infof("The original VF interface name is %s on Node %s", vfName, node1)
+
 	ns := e2eTestData.GetTestNamespace()
 	if err := testData.createPods(t, ns); err != nil {
 		t.Fatalf("Error when create test Pods: %v", err)
@@ -612,4 +619,37 @@ func TestSRIOVNetwork(t *testing.T) {
 	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, true); err != nil {
 		t.Fatalf("Error when checking the Pod annotation: %v", err)
 	}
+	//  Delete a Pod and check the VF device is recovered with the original interface name.
+	err = e2eTestData.DeletePodAndWait(10*time.Second, pod1, ns)
+	require.NoError(t, err, "Unable to delete the Pod %s/%s in time", ns, pod1)
+	testData.assertVFName(t, e2eTestData, vfName, node1)
+}
+
+func (data *testData) assertVFName(t *testing.T, e2eTestData *antreae2e.TestData, vfName, nodeName string) {
+	recoveredVFName := GetVFInterfaceName(t, e2eTestData, nodeName)
+	logs.Infof("The recovered VF interface name is %s on Node %s", recoveredVFName, nodeName)
+	assert.Equal(t, vfName, recoveredVFName, "VF name is not recovered correctly on Node %s, the expected VF name is %s, but got %s", nodeName, vfName, recoveredVFName)
+}
+
+func GetVFInterfaceName(t *testing.T, e2eTestData *antreae2e.TestData, nodeName string) string {
+	cmd := []string{"ip", "-d", "link", "show"}
+	stdOut, _, err := e2eTestData.RunCommandFromAntreaPodOnNode(nodeName, cmd)
+	if err != nil {
+		require.NoError(t, err, fmt.Sprintf("Error when checking the VF interface name on the Node %s", nodeName))
+	}
+	var prevLine string
+	for line := range strings.Lines(string(stdOut)) {
+		if strings.Contains(line, "0000:00:04.0") {
+			parts := strings.SplitN(prevLine, ": ", 2)
+			if len(parts) >= 2 {
+				ifaceName := strings.TrimSpace(parts[1])
+				if i := strings.IndexByte(ifaceName, ':'); i != -1 {
+					ifaceName = ifaceName[:i]
+				}
+				return ifaceName
+			}
+		}
+		prevLine = line
+	}
+	return ""
 }

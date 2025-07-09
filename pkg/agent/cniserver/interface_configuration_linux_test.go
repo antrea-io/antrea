@@ -142,16 +142,7 @@ func getFakeNS(nspath string) (ns.NetNS, error) {
 }
 
 func TestConfigureContainerLink(t *testing.T) {
-	controller := gomock.NewController(t)
-	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
-	fakeNetlink := netlinktest.NewMockInterface(controller)
-
 	sriovVFNetdeviceName := "vfDevice"
-	vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVFNetdeviceName, Flags: net.FlagUp}}
-
-	defer mockGetNS()()
-	defer mockWithNetNSPath()()
-
 	for _, tc := range []struct {
 		name                      string
 		ovsHardwareOffloadEnabled bool
@@ -159,11 +150,14 @@ func TestConfigureContainerLink(t *testing.T) {
 		vfNetdevices              []string
 		podSriovVFDeviceID        string
 		renameIntefaceErr         error
+		linkSetNameErr            error
+		linkSetAliasErr           error
+		linkSetNSErr              error
 		setupVethErr              error
 		delLinkErr                error
 		ipamConfigureIfaceErr     error
 		ethtoolEthTXHWCsumOffErr  error
-		expectErr                 error
+		expectErr                 string
 		deletedLink               string
 	}{
 		{
@@ -173,24 +167,24 @@ func TestConfigureContainerLink(t *testing.T) {
 			name:                      "container-vethpair-failure",
 			ovsHardwareOffloadEnabled: false,
 			setupVethErr:              fmt.Errorf("unable to setup veth pair for container"),
-			expectErr:                 fmt.Errorf("failed to create veth devices for container %s: unable to setup veth pair for container", podContainerID),
+			expectErr:                 fmt.Sprintf("failed to create veth devices for container %s: unable to setup veth pair for container", podContainerID),
 		}, {
 			name:                      "container-ipam-failure",
 			ovsHardwareOffloadEnabled: false,
 			ipamConfigureIfaceErr:     fmt.Errorf("unable to configure container IPAM"),
-			expectErr:                 fmt.Errorf("failed to configure IP address for container %s: unable to configure container IPAM", podContainerID),
 			deletedLink:               containerIfaceName,
+			expectErr:                 fmt.Sprintf("failed to configure IP address for container %s: unable to configure container IPAM", podContainerID),
 		}, {
 			name:                      "container-hwoffload-failure",
 			ovsHardwareOffloadEnabled: true,
 			ethtoolEthTXHWCsumOffErr:  fmt.Errorf("unable to disable offloading"),
-			expectErr:                 fmt.Errorf("error when disabling TX checksum offload on container veth: unable to disable offloading"),
 			deletedLink:               containerIfaceName,
+			expectErr:                 "error when disabling TX checksum offload on container veth: unable to disable offloading",
 		}, {
 			name:                      "br-sriov-offloading-disable",
 			ovsHardwareOffloadEnabled: false,
 			sriovVFDeviceID:           "br-vf",
-			expectErr:                 fmt.Errorf("OVS is configured with hardware offload disabled, but SR-IOV VF was requested; please set hardware offload to true via antrea yaml"),
+			expectErr:                 "OVS is configured with hardware offload disabled, but SR-IOV VF was requested; please set hardware offload to true via antrea yaml",
 		}, {
 			name:                      "br-sriov-success",
 			ovsHardwareOffloadEnabled: true,
@@ -201,31 +195,71 @@ func TestConfigureContainerLink(t *testing.T) {
 			ovsHardwareOffloadEnabled: true,
 			sriovVFDeviceID:           "br-vf",
 			vfNetdevices:              []string{},
-			expectErr:                 fmt.Errorf("failed to get one netdevice interface per br-vf"),
+			expectErr:                 "failed to get one netdevice interface per br-vf",
 		}, {
-			name:                      "br-sriov-rename-failure",
+			name:                      "br-sriov-rename-host-failure",
 			ovsHardwareOffloadEnabled: true,
 			sriovVFDeviceID:           "br-vf",
 			vfNetdevices:              []string{sriovVFNetdeviceName},
 			renameIntefaceErr:         fmt.Errorf("unable to rename netlink"),
-			expectErr:                 fmt.Errorf("failed to rename %s to %s: unable to rename netlink", sriovVFRepresentor, hostIfaceName),
-		}, {
-			name:                      "pod-sriov-success",
+			expectErr:                 fmt.Sprintf("failed to rename %s to %s: unable to rename netlink", sriovVFRepresentor, hostIfaceName),
+		},
+		{
+			name:                      "br-sriov-rename-ipam-failure",
 			ovsHardwareOffloadEnabled: true,
-			podSriovVFDeviceID:        "sriovPodVF",
+			ipamConfigureIfaceErr:     fmt.Errorf("unable to configure container IPAM"),
+			sriovVFDeviceID:           "br-vf",
+			vfNetdevices:              []string{sriovVFNetdeviceName},
+			expectErr:                 fmt.Sprintf("failed to configure IP address for container %s: unable to configure container IPAM", podContainerID),
+		},
+		{
+			name:               "pod-sriov-rename-on-pod-setns-failure",
+			podSriovVFDeviceID: "sriovPodVF",
+			linkSetNSErr:       fmt.Errorf("unable to set NS"),
+			expectErr:          fmt.Sprintf("failed to move %s to tempNS: unable to set NS", sriovVFNetdeviceName),
+		}, {
+			name:               "pod-sriov-rename-on-pod-setlinkname-failure",
+			podSriovVFDeviceID: "sriovPodVF",
+			linkSetNameErr:     fmt.Errorf("unable to rename netlink"),
+			expectErr:          fmt.Sprintf("failed to rename VF device %s to %s: unable to rename netlink", sriovVFNetdeviceName, containerIfaceName),
+		}, {
+			name:               "pod-sriov-rename-on-pod-setalias-failure",
+			podSriovVFDeviceID: "sriovPodVF",
+			linkSetAliasErr:    fmt.Errorf("unable to set alias"),
+			expectErr:          fmt.Sprintf("failed to set alias as %s for VF netdevice %s: unable to set alias", sriovVFNetdeviceName, sriovVFNetdeviceName),
+		}, {
+			name:                  "pod-sriov-rename-on-pod-ipam-failure",
+			podSriovVFDeviceID:    "sriovPodVF",
+			ipamConfigureIfaceErr: fmt.Errorf("unable to configure container IPAM"),
+			expectErr:             fmt.Sprintf("failed to configure IP address for container %s: unable to configure container IPAM", podContainerID),
+		}, {
+			name:               "pod-sriov-success",
+			podSriovVFDeviceID: "sriovPodVF",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var deletedLink string
+			controller := gomock.NewController(t)
+			fakeSriovNet := cniservertest.NewMockSriovNet(controller)
+			fakeNetlink := netlinktest.NewMockInterface(controller)
+
+			vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVFNetdeviceName, Flags: net.FlagUp}}
+			tempNS := createNS(t, false)
+			defer tempNS.clear()
+
+			defer mockGetNS()()
+			defer mockWithNetNSPath()()
+			defer mockTempNetNS(tempNS)()
+			defer mockRenameInterface(tc.renameIntefaceErr)()
 			defer mockSetupVethWithName(tc.setupVethErr, 1, 2)()
 			defer mockDelLinkByName(tc.delLinkErr, &deletedLink)()
-			defer mockRenameInterface(tc.renameIntefaceErr)()
 			defer mockIPAMConfigureIface(tc.ipamConfigureIfaceErr)()
 			defer mockEthtoolTXHWCsumOff(tc.ethtoolEthTXHWCsumOffErr)()
 			testIfConfigurator := newTestIfConfigurator(tc.ovsHardwareOffloadEnabled, fakeNetlink, fakeSriovNet)
 			containerNS := createNS(t, false)
 			defer containerNS.clear()
 			moveVFtoNS := false
+			moveOffloadVFtoNS := false
 			if tc.sriovVFDeviceID != "" && tc.ovsHardwareOffloadEnabled {
 				fakeSriovNet.EXPECT().GetNetDevicesFromPCI(tc.sriovVFDeviceID).Return(tc.vfNetdevices, nil).Times(1)
 				if len(tc.vfNetdevices) == 1 {
@@ -237,7 +271,7 @@ func TestConfigureContainerLink(t *testing.T) {
 							LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: hostVethMac, Name: hostIfaceName, Flags: net.FlagUp},
 						}
 						fakeNetlink.EXPECT().LinkByName(hostIfaceName).Return(hostInterfaceLink, nil).Times(1)
-						moveVFtoNS = true
+						moveOffloadVFtoNS = true
 					}
 				}
 			}
@@ -248,6 +282,37 @@ func TestConfigureContainerLink(t *testing.T) {
 			}
 			if moveVFtoNS {
 				fakeNetlink.EXPECT().LinkByName(sriovVFNetdeviceName).Return(vfDeviceLink, nil).Times(1)
+				fakeNetlink.EXPECT().LinkSetNsFd(vfDeviceLink, gomock.Any()).Return(tc.linkSetNSErr).Times(1)
+				if tc.linkSetNSErr == nil {
+					fakeNetlink.EXPECT().LinkByName(sriovVFNetdeviceName).Return(vfDeviceLink, nil).Times(1)
+					fakeNetlink.EXPECT().LinkSetName(vfDeviceLink, containerIfaceName).Return(tc.linkSetNameErr).Times(1)
+					containerInterfaceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp, Alias: sriovVFNetdeviceName}}
+					if tc.linkSetNameErr == nil {
+						fakeNetlink.EXPECT().LinkSetAlias(vfDeviceLink, sriovVFNetdeviceName).Return(tc.linkSetAliasErr).Times(1)
+						if tc.linkSetAliasErr == nil {
+							fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerInterfaceLink, nil).Times(1)
+							fakeNetlink.EXPECT().LinkSetNsFd(containerInterfaceLink, gomock.Any()).Return(nil).Times(1)
+							fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerInterfaceLink, nil).Times(1)
+							fakeNetlink.EXPECT().LinkSetMTU(containerInterfaceLink, gomock.Any()).Return(nil).Times(1)
+							fakeNetlink.EXPECT().LinkSetUp(containerInterfaceLink).Return(nil).Times(1)
+						} else {
+							fakeNetlink.EXPECT().LinkSetName(vfDeviceLink, sriovVFNetdeviceName).Return(nil).Times(1)
+						}
+					}
+					if tc.ipamConfigureIfaceErr != nil {
+						fakeNetlink.EXPECT().LinkSetNsFd(containerInterfaceLink, gomock.Any()).Return(nil).Times(1)
+						fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerInterfaceLink, nil).Times(1)
+						fakeNetlink.EXPECT().LinkSetAlias(containerInterfaceLink, "").Return(nil).Times(1)
+						fakeNetlink.EXPECT().LinkSetName(containerInterfaceLink, sriovVFNetdeviceName).Return(nil).Times(1)
+						fakeNetlink.EXPECT().LinkSetNsFd(containerInterfaceLink, gomock.Any()).Return(nil).Times(1)
+					}
+					if tc.renameIntefaceErr != nil || tc.linkSetNameErr != nil || tc.linkSetAliasErr != nil {
+						fakeNetlink.EXPECT().LinkSetNsFd(vfDeviceLink, gomock.Any()).Return(nil).Times(1)
+					}
+				}
+			}
+			if moveOffloadVFtoNS {
+				fakeNetlink.EXPECT().LinkByName(sriovVFNetdeviceName).Return(vfDeviceLink, nil).Times(1)
 				fakeNetlink.EXPECT().LinkSetNsFd(vfDeviceLink, gomock.Any()).Return(nil).Times(1)
 				containerInterfaceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp}}
 				fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerInterfaceLink, nil).Times(1)
@@ -255,13 +320,105 @@ func TestConfigureContainerLink(t *testing.T) {
 				fakeNetlink.EXPECT().LinkSetUp(containerInterfaceLink).Return(nil).Times(1)
 			}
 			err := testIfConfigurator.configureContainerLink(podName, testPodNamespace, podContainerID, containerNS.Path(), containerIfaceName, mtu, tc.sriovVFDeviceID, tc.podSriovVFDeviceID, ipamResult, nil, nil)
-			if tc.expectErr != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tc.expectErr, err)
+			if tc.expectErr != "" {
+				assert.ErrorContains(t, err, tc.expectErr)
 			} else {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, tc.deletedLink, deletedLink)
+		})
+	}
+}
+
+func TestRecoverVFInterfaceName(t *testing.T) {
+	sriovVFNetdeviceName := "vfDevice"
+	for _, tc := range []struct {
+		name              string
+		renameIntefaceErr error
+		noAlias           bool
+		linkSetAliasErr   error
+		linkSetNSErr      error
+		linkSetNameErr    error
+		linkByNameErr     error
+		expectErr         string
+	}{
+		{
+			name: "success",
+		},
+		{
+			name:          "get link error",
+			linkByNameErr: fmt.Errorf("unknown"),
+			expectErr:     fmt.Sprintf("failed to find container interface %s: unknown", containerIfaceName),
+		},
+		{
+			name:      "empty alias",
+			noAlias:   true,
+			expectErr: fmt.Sprintf("failed to find original VF device name for %s: no alias set", containerIfaceName),
+		},
+		{
+			name:         "set to tempNS failed",
+			linkSetNSErr: fmt.Errorf("fail to set tempNS"),
+			expectErr:    fmt.Sprintf("failed to move VF device %s to tempNS: fail to set tempNS", containerIfaceName),
+		},
+		{
+			name:           "rename interface failed",
+			linkSetNameErr: fmt.Errorf("fail to set link name"),
+			expectErr:      fmt.Sprintf("failed to rename device %s to %s: fail to set link name", containerIfaceName, sriovVFNetdeviceName),
+		},
+		{
+			name:            "unset alias failed",
+			linkSetAliasErr: fmt.Errorf("set alias error"),
+			expectErr:       fmt.Sprintf("failed to unset alias of %q: set alias error", sriovVFNetdeviceName),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			fakeSriovNet := cniservertest.NewMockSriovNet(controller)
+			fakeNetlink := netlinktest.NewMockInterface(controller)
+			containerDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp, Alias: sriovVFNetdeviceName}}
+			if tc.noAlias {
+				containerDeviceLink = &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp}}
+			}
+			tempNS := createNS(t, false)
+			defer tempNS.clear()
+
+			defer mockGetNS()()
+			defer mockWithNetNSPath()()
+			defer mockTempNetNS(tempNS)()
+			defer mockRenameInterface(tc.renameIntefaceErr)()
+			containerNS := createNS(t, false)
+			defer containerNS.clear()
+
+			fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerDeviceLink, tc.linkByNameErr).Times(1)
+			if !tc.noAlias && tc.linkByNameErr == nil {
+				fakeNetlink.EXPECT().LinkSetNsFd(containerDeviceLink, gomock.Any()).Return(tc.linkSetNSErr).Times(1)
+				if tc.linkSetNSErr == nil {
+					fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(containerDeviceLink, nil).Times(1)
+					fakeNetlink.EXPECT().LinkSetName(containerDeviceLink, sriovVFNetdeviceName).Return(tc.linkSetNameErr).Times(1)
+					// renamedContainerDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVFNetdeviceName, Flags: net.FlagUp, Alias: sriovVFNetdeviceName}}
+					if tc.linkSetNameErr == nil {
+						fakeNetlink.EXPECT().LinkSetAlias(containerDeviceLink, "").Return(tc.linkSetAliasErr).Times(1)
+						if tc.linkSetAliasErr == nil {
+							fakeNetlink.EXPECT().LinkSetNsFd(containerDeviceLink, gomock.Any()).Return(nil).Times(1)
+						} else {
+							fakeNetlink.EXPECT().LinkSetName(containerDeviceLink, containerIfaceName).Return(nil).Times(1)
+						}
+					}
+				}
+				if tc.linkSetNSErr == nil && (tc.renameIntefaceErr != nil || tc.linkSetAliasErr != nil || tc.linkSetNameErr != nil) {
+					fakeNetlink.EXPECT().LinkSetNsFd(containerDeviceLink, gomock.Any()).Return(nil).Times(1)
+				}
+			}
+
+			testIfConfigurator := newTestIfConfigurator(false, fakeNetlink, fakeSriovNet)
+			err := testIfConfigurator.recoverVFInterfaceName(containerIfaceName, containerNS.Path())
+
+			if tc.expectErr != "" {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tc.expectErr)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
@@ -932,6 +1089,16 @@ func mockGetNS() func() {
 	nsGetNS = getFakeNS
 	return func() {
 		nsGetNS = originalGetNS
+	}
+}
+
+func mockTempNetNS(fakeNs ns.NetNS) func() {
+	originalTempNetNS := tempNetNS
+	tempNetNS = func() (ns.NetNS, error) {
+		return fakeNs, nil
+	}
+	return func() {
+		tempNetNS = originalTempNetNS
 	}
 }
 

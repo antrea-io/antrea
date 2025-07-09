@@ -112,6 +112,11 @@ func findContainerIPConfig(ips []*current.IPConfig) (*current.IPConfig, error) {
 	return nil, fmt.Errorf("failed to find a valid IP address")
 }
 
+// SR-IOV is not supported on Windows.
+func (ic *ifConfigurator) recoverVFInterfaceName(containerNetNS string, containerIfaceName string) error {
+	return errors.New("SR-IOV is unsupported on Windows")
+}
+
 // configureContainerLink creates a HNSEndpoint for the container using the IPAM result, and then attach it on the container interface.
 func (ic *ifConfigurator) configureContainerLink(
 	podName string,
