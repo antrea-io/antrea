@@ -154,7 +154,7 @@ func TestPacketCaptureRun(t *testing.T) {
 				createAction := action.(k8stesting.CreateAction)
 				obj := createAction.GetObject().(*v1alpha1.PacketCapture)
 				if tt.expectErr == "" {
-					obj.Status.FilePath = fmt.Sprintf("%s:/tmp/antrea/packages/%s.pcapng", antreaAgentPod.Name, antreaAgentPod.Name)
+					obj.Status.FilePaths = []string{fmt.Sprintf("%s:/tmp/antrea/packages/%s.pcapng", antreaAgentPod.Name, antreaAgentPod.Name)}
 					obj.Status.Conditions = []v1alpha1.PacketCaptureCondition{
 						{
 							Type:   v1alpha1.PacketCaptureComplete,
@@ -243,6 +243,107 @@ func TestTokenizeTCPFlags(t *testing.T) {
 	}
 }
 
+func TestGetCaptureFailureError(t *testing.T) {
+	tcs := []struct {
+		name      string
+		status    v1alpha1.PacketCaptureStatus
+		expectErr string
+	}{
+		{
+			name: "success-case",
+			status: v1alpha1.PacketCaptureStatus{
+				Conditions: []v1alpha1.PacketCaptureCondition{
+					{
+						Type:   v1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+			expectErr: "",
+		},
+		{
+			name: "source-capture-failed",
+			status: v1alpha1.PacketCaptureStatus{
+				Conditions: []v1alpha1.PacketCaptureCondition{
+					{
+						Type:    v1alpha1.PacketCaptureAtSrcComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Failed",
+						Message: "error at source Agent",
+					},
+				},
+			},
+			expectErr: "packet capture did not succeed: Source: error at source Agent",
+		},
+		{
+			name: "destination-capture-timed-out",
+			status: v1alpha1.PacketCaptureStatus{
+				Conditions: []v1alpha1.PacketCaptureCondition{
+					{
+						Type:    v1alpha1.PacketCaptureAtDstComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Timeout",
+						Message: "context deadline exceeded",
+					},
+				},
+			},
+			expectErr: "packet capture did not succeed: Destination: context deadline exceeded",
+		},
+		{
+			name: "overall-capture-failed",
+			status: v1alpha1.PacketCaptureStatus{
+				Conditions: []v1alpha1.PacketCaptureCondition{
+					{
+						Type:    v1alpha1.PacketCaptureComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Failed",
+						Message: "an error occurred",
+					},
+				},
+			},
+			expectErr: "packet capture did not succeed: Overall: an error occurred",
+		},
+		{
+			name: "multiple-failures",
+			status: v1alpha1.PacketCaptureStatus{
+				Conditions: []v1alpha1.PacketCaptureCondition{
+					{
+						Type:    v1alpha1.PacketCaptureAtSrcComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Failed",
+						Message: "source error",
+					},
+					{
+						Type:    v1alpha1.PacketCaptureAtDstComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Timeout",
+						Message: "context deadline exceeded",
+					},
+					{
+						Type:    v1alpha1.PacketCaptureComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Failed",
+						Message: "one or more locations failed to capture",
+					},
+				},
+			},
+			expectErr: "packet capture did not succeed: Source: source error; Destination: context deadline exceeded; Overall: one or more locations failed to capture",
+		},
+	}
+
+	for _, tt := range tcs {
+		t.Run(tt.name, func(t *testing.T) {
+			err := getCaptureFailureError(&tt.status)
+			if tt.expectErr != "" {
+				require.ErrorContains(t, err, tt.expectErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestNewPacketCapture(t *testing.T) {
 	tcs := []struct {
 		name      string
@@ -253,10 +354,11 @@ func TestNewPacketCapture(t *testing.T) {
 		{
 			name: "pod-2-pod-tcp-syn",
 			option: packetCaptureOptions{
-				source: srcPod,
-				dest:   dstPod,
-				flow:   "tcp,tcp_dst=80,tcp_flags=+syn",
-				number: testNum,
+				source:          srcPod,
+				dest:            dstPod,
+				flow:            "tcp,tcp_dst=80,tcp_flags=+syn",
+				number:          testNum,
+				captureLocation: "Source",
 			},
 			expectPC: &v1alpha1.PacketCapture{
 				Spec: v1alpha1.PacketCaptureSpec{
@@ -288,6 +390,7 @@ func TestNewPacketCapture(t *testing.T) {
 							},
 						},
 					},
+					CaptureLocation: "Source",
 				},
 			},
 		},
@@ -306,6 +409,32 @@ func TestNewPacketCapture(t *testing.T) {
 				dest:   "127.0.0.1",
 			},
 			expectErr: "one of source and destination must be a Pod",
+		},
+		{
+			name: "bad-capLoc",
+			option: packetCaptureOptions{
+				source:          srcPod,
+				dest:            dstPod,
+				flow:            "tcp,tcp_dst=80",
+				captureLocation: "Src",
+			},
+			expectErr: "invalid capture location: \"Src\", must be one of Source, Destination, or Both",
+		},
+		{
+			name: "no-src-pod-given-captLocSrc",
+			option: packetCaptureOptions{
+				dest:            dstPod,
+				captureLocation: "Source",
+			},
+			expectErr: "a source Pod must be specified when capture-location is 'Source'",
+		},
+		{
+			name: "no-src-and-dst-pods-given-captLocBoth",
+			option: packetCaptureOptions{
+				dest:            dstPod,
+				captureLocation: "Both",
+			},
+			expectErr: "both a source Pod and a destination Pod must be specified when capture-location is 'Both'",
 		},
 		{
 			name: "bad-flow",
