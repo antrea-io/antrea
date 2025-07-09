@@ -28,11 +28,7 @@ import (
 	"k8s.io/utils/clock"
 )
 
-const (
-	NamespacedNameIndex = "namespacedName"
-
-	delayTime = time.Minute * 5
-)
+const delayTime = time.Minute * 5
 
 // uidGetter is the interface required for objects to be added to / deleted from the indexer
 type uidGetter interface {

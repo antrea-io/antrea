@@ -26,6 +26,8 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 func TestServiceStore(t *testing.T) {
@@ -50,7 +52,7 @@ func TestServiceStore(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		svc, ok := serviceStore.GetServiceByNamespacedNameAndTime(namespacedName(svc1.Namespace, svc1.Name), refTime.Add(-time.Minute))
+		svc, ok := serviceStore.GetServiceByNamespacedNameAndTime(k8s.NamespacedName(svc1.Namespace, svc1.Name), refTime.Add(-time.Minute))
 		if assert.True(t, ok) {
 			assert.Equal(t, svc1.UID, svc.UID)
 		}
@@ -64,11 +66,11 @@ func TestServiceStore(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		svc, ok := serviceStore.GetServiceByNamespacedNameAndTime(namespacedName(svc1.Namespace, svc1.Name), refTime.Add(time.Minute))
+		svc, ok := serviceStore.GetServiceByNamespacedNameAndTime(k8s.NamespacedName(svc1.Namespace, svc1.Name), refTime.Add(time.Minute))
 		if assert.True(t, ok) {
 			assert.Equal(t, svc1New.UID, svc.UID)
 		}
-		svc, ok = serviceStore.GetServiceByNamespacedNameAndTime(namespacedName(svc1.Namespace, svc1.Name), refTime.Add(-time.Minute))
+		svc, ok = serviceStore.GetServiceByNamespacedNameAndTime(k8s.NamespacedName(svc1.Namespace, svc1.Name), refTime.Add(-time.Minute))
 		if assert.True(t, ok) {
 			assert.Equal(t, svc1.UID, svc.UID)
 		}

@@ -20,6 +20,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
+
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const serviceNameIndex = "serviceName"
@@ -49,10 +51,6 @@ func NewServiceStore(serviceInformer cache.SharedIndexInformer) *serviceStore {
 	}
 }
 
-func namespacedName(namespace, name string) string {
-	return namespace + "/" + name
-}
-
 // GetServiceByNamespacedNameAndTime provides a Service-specific method for getting Services by name and time
 func (s *serviceStore) GetServiceByNamespacedNameAndTime(namespacedName string, startTime time.Time) (*corev1.Service, bool) {
 	return s.GetObjectByIndexAndTime(serviceNameIndex, namespacedName, startTime)
@@ -63,5 +61,5 @@ func serviceNameIndexFunc(obj interface{}) ([]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("obj is not Service: %+v", obj)
 	}
-	return []string{namespacedName(service.Namespace, service.Name)}, nil
+	return []string{k8s.NamespacedName(service.Namespace, service.Name)}, nil
 }
