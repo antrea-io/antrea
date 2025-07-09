@@ -488,6 +488,14 @@ const (
 	CaptureDirectionBoth                CaptureDirection = "Both"
 )
 
+type CaptureLocation string
+
+const (
+	CaptureLocationSource      CaptureLocation = "Source"
+	CaptureLocationDestination CaptureLocation = "Destination"
+	CaptureLocationBoth        CaptureLocation = "Both"
+)
+
 type PacketCaptureSpec struct {
 	// Timeout is the timeout for this capture session. If not specified, defaults to 60s.
 	Timeout       *int32        `json:"timeout,omitempty"`
@@ -499,6 +507,9 @@ type PacketCaptureSpec struct {
 	// Direction specifies which packets to capture (source -> destination, destination -> source or both).
 	// If not specified, defaults to SourceToDestination.
 	Direction CaptureDirection `json:"direction,omitempty"`
+	// CaptureLocation specifies where the packet capture should be performed: 'Source', 'Destination', or 'Both'.
+	// Selecting 'Both' may result in two separate capture files. If not specified, defaults to 'Source'.
+	CaptureLocation CaptureLocation `json:"captureLocation,omitempty"`
 	// Packet defines what kind of traffic we want to capture between the source and destination. If not specified,
 	// all kinds of traffic will count.
 	Packet *Packet `json:"packet,omitempty"`
@@ -515,7 +526,7 @@ type PacketCaptureStatus struct {
 	// FilePath specifies the location where captured packets are stored. It can either be a URL to download the pcap file (if "Spec.FileServer" is specified)
 	// or a local file path on the antrea-agent Pod where the packet was captured, formatted as : <antrea-agent-pod-name>:<path>.
 	// When using a local file path, the file will be automatically removed after the PacketCapture resource is deleted.
-	FilePath string `json:"filePath"`
+	FilePath []string `json:"filePath"`
 	// Condition represents the latest available observations of the PacketCapture's current state.
 	Conditions []PacketCaptureCondition `json:"conditions"`
 }

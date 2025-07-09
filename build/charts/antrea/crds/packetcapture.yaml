@@ -180,6 +180,10 @@ spec:
                   type: string
                   enum: ["SourceToDestination", "DestinationToSource", "Both"]
                   default: "SourceToDestination"
+                captureLocation:
+                  type: string
+                  enum: ["Source", "Destination", "Both"]
+                  default: "Source"
                 timeout:
                   type: integer
                   minimum: 1
@@ -214,7 +218,9 @@ spec:
                 numberCaptured:
                   type: integer
                 filePath:
-                  type: string
+                  type: array
+                  items:
+                    type: string
                 conditions:
                   type: array
                   items:
