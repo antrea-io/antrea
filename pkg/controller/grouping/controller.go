@@ -124,6 +124,7 @@ type GroupEntityController struct {
 func NewGroupEntityController(groupEntityIndex *GroupEntityIndex,
 	podInformer coreinformers.PodInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
+	nodeInformer coreinformers.NodeInformer,
 	externalEntityInformer crdv1a2informers.ExternalEntityInformer) *GroupEntityController {
 	c := &GroupEntityController{
 		groupEntityIndex:           groupEntityIndex,
@@ -155,6 +156,15 @@ func NewGroupEntityController(groupEntityIndex *GroupEntityIndex,
 			AddFunc:    c.addNamespace,
 			UpdateFunc: c.updateNamespace,
 			DeleteFunc: c.deleteNamespace,
+		},
+		resyncPeriod,
+	)
+	// Add handlers for Node events.
+	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: c.addNode,
+			//UpdateFunc: c.updateNode, TODO
+			//DeleteFunc: c.deleteNode, TODO
 		},
 		resyncPeriod,
 	)
@@ -277,6 +287,13 @@ func (c *GroupEntityController) deleteNamespace(old interface{}) {
 	}
 	klog.V(2).Infof("Processing Namespace %s DELETE event, labels: %v", namespace.Name, namespace.Labels)
 	c.groupEntityIndex.DeleteNamespace(namespace)
+}
+
+func (c *GroupEntityController) addNode(obj interface{}) {
+	node := obj.(*v1.Node)
+	klog.V(2).Infof("Processing Node %s ADD event, labels: %v", node.Name, node.Labels)
+	c.groupEntityIndex.AddNode(node)
+	c.nodeAddEvents.Increment()
 }
 
 func (c *GroupEntityController) addExternalEntity(obj interface{}) {

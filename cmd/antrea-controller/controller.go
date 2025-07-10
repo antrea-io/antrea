@@ -178,7 +178,7 @@ func run(o *Options) error {
 	egressGroupStore := egressstore.NewEgressGroupStore()
 	groupStore := store.NewGroupStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
-	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, eeInformer)
+	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, nodeInformer, eeInformer)
 	labelIdentityIndex := labelidentity.NewLabelIdentityIndex()
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
