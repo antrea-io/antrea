@@ -27,6 +27,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -364,10 +366,31 @@ func (r *NodeReconciler) getGatawayNodeIP(node *corev1.Node) (string, string, er
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.serviceCIDR == "" {
+		ctx := context.TODO()
 		var err error
-		r.serviceCIDR, err = ServiceCIDRDiscoverFn(context.TODO(), r.Client, r.namespace)
+		var versionMatched bool
+		k8sConfig := mgr.GetConfig()
+		discoveryClient, err := discovery.NewDiscoveryClientForConfig(k8sConfig)
 		if err != nil {
 			return err
+		}
+		if versionMatched, err = common.IsK8sVersionGreaterThanOrEqualTo(discoveryClient, "v1.31.0"); versionMatched {
+			client, err := kubernetes.NewForConfig(k8sConfig)
+			if err != nil {
+				return err
+			}
+			cidr, err := common.GetServiceCIDR(ctx, client)
+			if err != nil {
+				return err
+			}
+			r.serviceCIDR = cidr
+		} else {
+			klog.InfoS("Failed to get the K8s version, falling back to legacy Service CIDR detection",
+				"err", err)
+			r.serviceCIDR, err = ServiceCIDRDiscoverFn(context.TODO(), r.Client, r.namespace)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return ctrl.NewControllerManagedBy(mgr).
