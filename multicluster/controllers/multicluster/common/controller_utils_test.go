@@ -18,11 +18,19 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -31,7 +39,7 @@ import (
 
 func TestDiscoverServiceCIDRByInvalidServiceCreation(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(TestScheme).Build()
-	_, err := DiscoverServiceCIDRByInvalidServiceCreation(context.Background(), fakeClient, "default")
+	_, err := discoverServiceCIDRByInvalidServiceCreation(context.Background(), fakeClient, "default")
 	if err != nil {
 		assert.Contains(t, err.Error(), "expected a specific error but none was returned")
 	}
@@ -219,4 +227,132 @@ func TestGetClusterID(t *testing.T) {
 			}
 		})
 	}
+}
+
+type mockDiscovery struct {
+	discovery.DiscoveryInterface
+	serverVersion *version.Info
+	err           error
+}
+
+func (m *mockDiscovery) ServerVersion() (*version.Info, error) {
+	return m.serverVersion, m.err
+}
+
+func TestIsK8sVersionGreaterThanOrEqualTo(t *testing.T) {
+	tests := []struct {
+		name         string
+		gitVersion   string
+		discoveryErr error
+		expected     bool
+		expectedErr  string
+	}{
+		{
+			name:       "EqualVersion",
+			gitVersion: "v1.33.0",
+			expected:   true,
+		},
+		{
+			name:       "GreaterVersion",
+			gitVersion: "v1.33.1",
+			expected:   true,
+		},
+		{
+			name:       "LowerVersion",
+			gitVersion: "v1.32.0",
+			expected:   false,
+		},
+		{
+			name:        "InvalidGitVersion",
+			gitVersion:  "not-a-version",
+			expected:    false,
+			expectedErr: "could not parse \"not-a-version\" as version",
+		},
+		{
+			name:         "Error when getting version",
+			discoveryErr: fmt.Errorf("unable to get K8s version"),
+			expected:     false,
+			expectedErr:  "unable to get K8s version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeDiscovery := &mockDiscovery{
+				serverVersion: &version.Info{GitVersion: tt.gitVersion},
+				err:           tt.discoveryErr,
+			}
+			got, err := isK8sVersionGreaterThanOrEqualTo(fakeDiscovery, "v1.33.0")
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, got)
+			}
+		})
+	}
+}
+
+func TestGetClusterServiceCIDR(t *testing.T) {
+	ctx := context.TODO()
+	tests := []struct {
+		name         string
+		cidr         *networkingv1.ServiceCIDR
+		expectedErr  string
+		expectedCIDR string
+	}{
+		{
+			name: "success",
+			cidr: &networkingv1.ServiceCIDR{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kubernetes",
+				},
+				Spec: networkingv1.ServiceCIDRSpec{
+					CIDRs: []string{"10.96.0.0/12", "fd00::/64"},
+				},
+			},
+			expectedCIDR: "10.96.0.0/12",
+		},
+		{
+			name: "IPv4 CIDR not found",
+			cidr: &networkingv1.ServiceCIDR{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kubernetes",
+				},
+				Spec: networkingv1.ServiceCIDRSpec{
+					CIDRs: []string{},
+				},
+			},
+			expectedErr: "IPv4 Service CIDR not found",
+		},
+		{
+			name: "success with dual-stack",
+			cidr: &networkingv1.ServiceCIDR{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kubernetes",
+				},
+				Spec: networkingv1.ServiceCIDRSpec{
+					CIDRs: []string{"10.96.0.0/12", "fd00::/64"},
+				},
+			},
+			expectedCIDR: "10.96.0.0/12",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := k8sfake.NewSimpleClientset()
+			fakeClient.Fake.PrependReactor("get", "servicecidrs", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+				return true, tt.cidr, nil
+			})
+			result, err := getClusterServiceCIDR(ctx, fakeClient)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedCIDR, result)
+			}
+		})
+	}
+
 }

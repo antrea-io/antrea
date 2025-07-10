@@ -93,7 +93,7 @@ func TestRunMember(t *testing.T) {
 			setupManagerAndCertControllerFunc = func(isLeader bool, o *Options) (ctrl.Manager, error) {
 				return mockMemberManager, nil
 			}
-			member.ServiceCIDRDiscoverFn = func(ctx context.Context, k8sClient client.Client, namespace string) (string, error) {
+			member.ServiceCIDRDiscoverFn = func(ctx context.Context, mgr ctrl.Manager, k8sClient client.Client, namespace string) (string, error) {
 				return "10.101.0.0/16", nil
 			}
 			ctrl.SetupSignalHandler = mockSetupSignalHandler

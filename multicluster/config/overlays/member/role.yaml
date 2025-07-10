@@ -232,3 +232,10 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - servicecidrs
+  verbs:
+  - get
+  - list

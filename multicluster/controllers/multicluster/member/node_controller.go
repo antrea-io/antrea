@@ -44,7 +44,7 @@ import (
 )
 
 var (
-	ServiceCIDRDiscoverFn = common.DiscoverServiceCIDRByInvalidServiceCreation
+	ServiceCIDRDiscoverFn = common.DiscoverClusterServiceCIDR
 
 	statusReadyPredicateFunc = func(e event.UpdateEvent) bool {
 		if e.ObjectOld == nil || e.ObjectNew == nil {
@@ -365,7 +365,7 @@ func (r *NodeReconciler) getGatawayNodeIP(node *corev1.Node) (string, string, er
 func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.serviceCIDR == "" {
 		var err error
-		r.serviceCIDR, err = ServiceCIDRDiscoverFn(context.TODO(), r.Client, r.namespace)
+		r.serviceCIDR, err = ServiceCIDRDiscoverFn(context.Background(), mgr, r.Client, r.namespace)
 		if err != nil {
 			return err
 		}
