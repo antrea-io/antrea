@@ -52,9 +52,11 @@ func initializeAntreaNodeNetworkPolicy(t *testing.T, data *TestData, toHostNetwo
 		}
 	}
 	nodes = make(map[string]string)
-	nodes["x"] = nodeName(0)
-	nodes["y"] = nodeName(1)
-	nodes["z"] = nodeName(0)
+
+	// In hybrid mode tests, this guarantees all Nodes are worker Nodes on the same subnet.
+	nodes["x"] = nodeName(1)
+	nodes["y"] = nodeName(2)
+	nodes["z"] = nodeName(1)
 	hostNetworks := make(map[string]bool)
 	hostNetworks["x"] = true
 	if toHostNetworkPod {
