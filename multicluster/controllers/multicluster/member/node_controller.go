@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,6 +43,8 @@ import (
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
+	"antrea.io/antrea/pkg/agent/servicecidr"
+	"antrea.io/antrea/pkg/signals"
 )
 
 var (
@@ -74,15 +78,17 @@ type (
 	// NodeReconciler is for member cluster only.
 	NodeReconciler struct {
 		client.Client
-		Scheme             *runtime.Scheme
-		namespace          string
-		precedence         mcv1alpha1.Precedence
-		gatewayCandidates  map[string]bool
-		activeGatewayMutex sync.Mutex
-		commonAreaGetter   commonarea.RemoteCommonAreaGetter
-		activeGateway      string
-		serviceCIDR        string
-		initialized        bool
+		Scheme               *runtime.Scheme
+		namespace            string
+		precedence           mcv1alpha1.Precedence
+		gatewayCandidates    map[string]bool
+		activeGatewayMutex   sync.Mutex
+		commonAreaGetter     commonarea.RemoteCommonAreaGetter
+		activeGateway        string
+		serviceCIDR          string
+		serviceCIDRInterface servicecidr.Interface
+		serviceCIDRUpdateCh  chan struct{}
+		initialized          bool
 	}
 )
 
@@ -97,20 +103,37 @@ func NewNodeReconciler(
 	namespace string,
 	serviceCIDR string,
 	precedence mcv1alpha1.Precedence,
+	serviceCIDRInterface servicecidr.Interface,
 	commonAreaGetter commonarea.RemoteCommonAreaGetter) *NodeReconciler {
 	if string(precedence) == "" {
 		precedence = mcv1alpha1.PrecedenceInternal
 	}
+
 	reconciler := &NodeReconciler{
-		Client:            client,
-		Scheme:            scheme,
-		namespace:         namespace,
-		serviceCIDR:       serviceCIDR,
-		precedence:        precedence,
-		gatewayCandidates: make(map[string]bool),
-		commonAreaGetter:  commonAreaGetter,
+		Client:               client,
+		Scheme:               scheme,
+		namespace:            namespace,
+		serviceCIDR:          serviceCIDR,
+		precedence:           precedence,
+		gatewayCandidates:    make(map[string]bool),
+		commonAreaGetter:     commonAreaGetter,
+		serviceCIDRUpdateCh:  make(chan struct{}, 1),
+		serviceCIDRInterface: serviceCIDRInterface,
+	}
+	if serviceCIDR == "" {
+		reconciler.serviceCIDRInterface.AddEventHandler(reconciler.onServiceCIDRUpdate)
 	}
 	return reconciler
+}
+
+// onServiceCIDRUpdate will be called when ServiceCIDRs change.
+// It ensures updateServiceCIDRs will be executed once after this call.
+func (r *NodeReconciler) onServiceCIDRUpdate(_ []*net.IPNet) {
+	select {
+	case r.serviceCIDRUpdateCh <- struct{}{}:
+	default:
+		// The previous event is not processed yet, discard the new event.
+	}
 }
 
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
@@ -363,13 +386,8 @@ func (r *NodeReconciler) getGatawayNodeIP(node *corev1.Node) (string, string, er
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if r.serviceCIDR == "" {
-		var err error
-		r.serviceCIDR, err = ServiceCIDRDiscoverFn(context.TODO(), r.Client, r.namespace)
-		if err != nil {
-			return err
-		}
-	}
+	stopCh := signals.RegisterSignalHandlers()
+	go r.updateServiceCIDR(stopCh)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Node{}).
 		Named("node").
@@ -423,4 +441,31 @@ func isReadyNode(node *corev1.Node) bool {
 		}
 	}
 	return nodeIsReady
+}
+
+func (r *NodeReconciler) updateServiceCIDR(stopCh <-chan struct{}) {
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	<-timer.C // Consume the first tick.
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-r.serviceCIDRUpdateCh:
+			klog.V(2).InfoS("Received service CIDR update")
+		case <-timer.C:
+			klog.V(2).InfoS("Service CIDR update timer expired")
+		}
+		serviceCIDRs, err := r.serviceCIDRInterface.GetServiceCIDRs()
+		if err != nil {
+			klog.ErrorS(err, "Failed to get Service CIDRs")
+			// No need to retry in this case as the Service CIDRs won't be available until it receives a service CIDRs update.
+			continue
+		}
+		for _, cidr := range serviceCIDRs {
+			if cidr.IP.To4() != nil {
+				r.serviceCIDR = cidr.String()
+			}
+		}
+	}
 }

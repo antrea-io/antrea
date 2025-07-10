@@ -17,18 +17,24 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/informers"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"antrea.io/antrea/multicluster/controllers/multicluster/member"
+	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/k8s"
 )
+
+const informerDefaultResync = 12 * time.Hour
 
 func newMemberCommand() *cobra.Command {
 	var memberCmd = &cobra.Command{
@@ -51,7 +57,7 @@ func newMemberCommand() *cobra.Command {
 }
 
 func runMember(o *Options) error {
-	mgr, err := setupManagerAndCertControllerFunc(false, o)
+	mgr, client, err := setupManagerAndCertControllerFunc(false, o)
 	if err != nil {
 		return err
 	}
@@ -123,12 +129,17 @@ func runMember(o *Options) error {
 		return fmt.Errorf("error creating Gateway controller: %v", err)
 	}
 
+	informerFactory := informers.NewSharedInformerFactoryWithOptions(client, informerDefaultResync, informers.WithTransform(k8s.NewTrimmer(k8s.TrimNode)))
+	serviceInformer := informerFactory.Core().V1().Services()
+	serviceCIDRProvider := servicecidr.NewServiceCIDRDiscoverer(serviceInformer)
+
 	nodeReconciler := member.NewNodeReconciler(
 		mgrClient,
 		mgrScheme,
 		podNamespace,
 		opts.ServiceCIDR,
 		opts.GatewayIPPrecedence,
+		serviceCIDRProvider,
 		commonAreaGetter)
 	if err = nodeReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating Node controller: %v", err)

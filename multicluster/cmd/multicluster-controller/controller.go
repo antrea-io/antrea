@@ -135,7 +135,7 @@ func getWebhookLabel(isLeader bool, controllerNs string) *metav1.LabelSelector {
 	}
 }
 
-func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, error) {
+func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, clientset.Interface, error) {
 	ctrl.SetLogger(klog.NewKlogr())
 
 	podNamespace := env.GetPodNamespace()
@@ -153,16 +153,16 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	k8sConfig.Burst = common.ResourceExchangeBurst
 	client, aggregatorClient, apiExtensionClient, err := createClients(k8sConfig)
 	if err != nil {
-		return nil, fmt.Errorf("error creating K8s clients: %v", err)
+		return nil, nil, fmt.Errorf("error creating K8s clients: %v", err)
 	}
 
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, caConfig)
 	if err != nil {
-		return nil, fmt.Errorf("error applying server cert: %v", err)
+		return nil, nil, fmt.Errorf("error applying server cert: %v", err)
 	}
 	if err := caCertController.RunOnce(context.TODO()); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	options := o.options
@@ -205,7 +205,7 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	// will use EndpointSlice API by default to keep consistent with AntreaProxy.
 	endpointSliceAPIAvailable, err := k8sutil.EndpointSliceAPIAvailable(client)
 	if err != nil {
-		return nil, fmt.Errorf("error checking if EndpointSlice v1 API is available")
+		return nil, nil, fmt.Errorf("error checking if EndpointSlice v1 API is available")
 	}
 	if !endpointSliceAPIAvailable {
 		klog.InfoS("The EndpointSlice v1 API is not available, falling back to the Endpoints API")
@@ -218,24 +218,24 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	// ClusterClaim API before using ClusterClaim API.
 	clusterClaimCRDAvailable, err := clusterClaimCRDAvailable(client)
 	if err != nil {
-		return nil, fmt.Errorf("error checking if ClusterClaim API is available")
+		return nil, nil, fmt.Errorf("error checking if ClusterClaim API is available")
 	}
 	o.ClusterCalimCRDAvailable = clusterClaimCRDAvailable
 
 	mgr, err := ctrl.NewManager(k8sConfig, options)
 	if err != nil {
-		return nil, fmt.Errorf("error creating manager: %v", err)
+		return nil, nil, fmt.Errorf("error creating manager: %v", err)
 	}
 
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		return nil, fmt.Errorf("error setting up health check: %v", err)
+		return nil, nil, fmt.Errorf("error setting up health check: %v", err)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		return nil, fmt.Errorf("error setting up ready check: %v", err)
+		return nil, nil, fmt.Errorf("error setting up ready check: %v", err)
 	}
-	return mgr, nil
+	return mgr, client, nil
 }
 
 func clusterClaimCRDAvailable(k8sClient clientset.Interface) (bool, error) {

@@ -54,7 +54,7 @@ func runLeader(o *Options) error {
 	podNamespace := env.GetPodNamespace()
 	stopCh := signals.RegisterSignalHandlers()
 
-	mgr, err := setupManagerAndCertControllerFunc(true, o)
+	mgr, _, err := setupManagerAndCertControllerFunc(true, o)
 	if err != nil {
 		return err
 	}

@@ -236,7 +236,7 @@ func TestNodeReconciler(t *testing.T) {
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			commonAreaGetter := mcReconciler
-			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", tt.precedence, commonAreaGetter)
+			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", tt.precedence, nil, commonAreaGetter)
 			r.activeGateway = tt.activeGateway
 			if _, err := r.Reconcile(common.TestCtx, tt.req); err != nil {
 				t.Errorf("Node Reconciler should handle Node events successfully but got error = %v", err)
@@ -318,7 +318,7 @@ func TestInitialize(t *testing.T) {
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			commonAreaGetter := mcReconciler
-			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", mcv1alpha1.PrecedencePublic, commonAreaGetter)
+			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", mcv1alpha1.PrecedencePublic, nil, commonAreaGetter)
 			if err := r.initialize(); err != nil {
 				t.Errorf("Expected initialize() successfully but got err: %v", err)
 			} else {
@@ -377,14 +377,14 @@ func TestClusterSetMapFunc(t *testing.T) {
 	ctx := context.Background()
 
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet, node1).Build()
-	r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.200.1.1/16", "", nil)
+	r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.200.1.1/16", "", nil, nil)
 	requests := r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, expectedReqs, requests)
 
 	requests = r.clusterSetMapFunc(ctx, deletedClusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 
-	r = NewNodeReconciler(fakeClient, common.TestScheme, "mismatch_ns", "10.200.1.1/16", "", nil)
+	r = NewNodeReconciler(fakeClient, common.TestScheme, "mismatch_ns", "10.200.1.1/16", "", nil, nil)
 	requests = r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 }

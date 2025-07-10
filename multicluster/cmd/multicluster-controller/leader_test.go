@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/api/meta"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -79,8 +80,8 @@ func TestRunLeader(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			mockLeaderManager := mocks.NewMockManager(mockCtrl)
 			initMockManager(mockLeaderManager)
-			setupManagerAndCertControllerFunc = func(isLeader bool, o *Options) (ctrl.Manager, error) {
-				return mockLeaderManager, nil
+			setupManagerAndCertControllerFunc = func(isLeader bool, o *Options) (ctrl.Manager, clientset.Interface, error) {
+				return mockLeaderManager, nil, nil
 			}
 			ctrl.SetupSignalHandler = mockSetupSignalHandler
 
