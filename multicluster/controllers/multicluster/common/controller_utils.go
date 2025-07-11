@@ -17,11 +17,15 @@ package common
 import (
 	"context"
 	"fmt"
+	"net"
 	"regexp"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -76,6 +80,43 @@ func parseServiceCIDRFromError(msg string) (string, error) {
 	}
 
 	return match[1], nil
+}
+
+func IsK8sVersionGreaterThanOrEqualTo(discoveryClient discovery.DiscoveryInterface, expectedVersion string) (bool, error) {
+	versionInfo, err := discoveryClient.ServerVersion()
+	if err != nil {
+		return false, err
+	}
+	vers, err := version.ParseGeneric(versionInfo.GitVersion)
+	if err != nil {
+		return false, err
+	}
+	return vers.AtLeast(version.MustParseGeneric(expectedVersion)), nil
+}
+
+func GetServiceCIDR(ctx context.Context, client kubernetes.Interface) (string, error) {
+	serviceCIDRs, err := client.NetworkingV1beta1().ServiceCIDRs().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to list ServiceCIDRs: %w", err)
+	}
+
+	if len(serviceCIDRs.Items) > 0 {
+		// We always use the first item for now.
+		for _, cidr := range serviceCIDRs.Items[0].Spec.CIDRs {
+			if isIPv4CIDR(cidr) {
+				return cidr, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("IPv4 Service CIDR not found")
+}
+
+func isIPv4CIDR(cidr string) bool {
+	ip, _, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false // Invalid CIDR
+	}
+	return ip.To4() != nil
 }
 
 func NewClusterInfoResourceExportName(clusterID string) string {
