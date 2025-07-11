@@ -40,7 +40,7 @@ result=0
 diff $METRICS_DOC $METRICS_TMP_DOC || result=$?
 if [ $result -ne 0 ]; then
     echo "Error: Prometheus metrics document should be updated"
-    echo "You can update it by building the Antrea Docker image locally (with 'make'), running ./hack/make-metrics-doc.sh and committing the changes"
+    echo "You can update it by building the Antrea Docker image locally (with 'make'), running ./hack/make-metrics-doc.sh ./docs/prometheus-integration.md and committing the changes"
     exit 1
 fi
 
