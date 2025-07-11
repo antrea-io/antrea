@@ -193,3 +193,21 @@ testing:
 logVerbosity: 0
 # -- Namespace in which Antrea was installed.
 antreaNamespace: "kube-system"
+
+# Autoscaling contains HorizontalPodAutoscaler related configuration options. The HPA should be
+# enabled only if flow-aggregator is running in "Proxy" mode.
+autoscaling:
+  # -- Enable installs the HPA for flow-aggregator. This must be disabled when running in "Aggregate" mode.
+  enable: false
+  # -- MinReplicas is the minimum number of replicas for autoscaling. This value must be less than or equal
+  # to autoscaling.maxReplicas
+  minReplicas: 1
+  # -- MaxReplicas is the maximum number of replicas for autoscaling. This value must be greater than or equal
+  # to autoscaling.minReplicas
+  maxReplicas: 10
+  cpu:
+    # -- AverageUtilization is the target average CPU utilization.
+    averageUtilization: 70
+
+# -- Replicas is the number of flow-aggregator replicas. This must be 1 for "Aggregate" mode.
+replicas: 1

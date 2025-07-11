@@ -502,8 +502,7 @@ spec:
     spec:
       containers:
       - args:
-        - --config
-        - /etc/flow-aggregator/flow-aggregator.conf
+        - --config=/etc/flow-aggregator/flow-aggregator.conf
         - --logtostderr=false
         - --log_dir=/var/log/antrea/flow-aggregator
         - --alsologtostderr
