@@ -148,7 +148,7 @@ func testNetworkExt(name, cniVersion, cniType string, networkType networkType, r
 	}
 }
 
-func containerNetNs(container string) string {
+func containerNetNS(container string) string {
 	return fmt.Sprintf("/var/run/netns/%s", container)
 }
 
@@ -187,7 +187,7 @@ func testPod(name string, container string, podIP string, networks ...netdefv1.N
 	}
 	cniInfo := &podCNIInfo{
 		containerID: container,
-		netNS:       containerNetNs(container),
+		netNS:       containerNetNS(container),
 	}
 	return pod, cniInfo
 }
@@ -298,7 +298,7 @@ func TestPodControllerRun(t *testing.T) {
 		podName,
 		testNamespace,
 		containerID,
-		containerNetNs(containerID),
+		containerNetNS(containerID),
 		interfaceName,
 		defaultMTU,
 		sriovDeviceID11,
@@ -332,7 +332,7 @@ func TestPodControllerRun(t *testing.T) {
 		podName,
 		testNamespace,
 		containerID,
-		containerNetNs(containerID),
+		containerNetNS(containerID),
 		interfaceName,
 		defaultMTU,
 		// We haven't updated the vfDeviceIDUsageMap, so a different device will be allocated.
@@ -460,7 +460,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					podName,
 					testNamespace,
 					containerID,
-					containerNetNs(containerID),
+					containerNetNS(containerID),
 					interfaceName,
 					1600,
 					testIPAMResult("148.14.24.100/24", 101),
@@ -484,7 +484,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					podName,
 					testNamespace,
 					containerID,
-					containerNetNs(containerID),
+					containerNetNS(containerID),
 					interfaceName,
 					1500,
 					testIPAMResult("148.14.24.100/24", 101),
@@ -507,7 +507,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					podName,
 					testNamespace,
 					containerID,
-					containerNetNs(containerID),
+					containerNetNS(containerID),
 					interfaceName,
 					1500,
 					testIPAMResult("148.14.24.100/24", 101),
@@ -529,7 +529,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					podName,
 					testNamespace,
 					containerID,
-					containerNetNs(containerID),
+					containerNetNS(containerID),
 					interfaceName,
 					1500,
 					&ipam.IPAMResult{},
@@ -551,7 +551,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					podName,
 					testNamespace,
 					containerID,
-					containerNetNs(containerID),
+					containerNetNS(containerID),
 					interfaceName,
 					1500,
 					sriovDeviceID11,
@@ -630,7 +630,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					podName,
 					testNamespace,
 					containerID,
-					containerNetNs(containerID),
+					containerNetNS(containerID),
 					interfaceName,
 					1600,
 					testIPAMResult("148.14.24.100/24", 101),
@@ -649,7 +649,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					podName,
 					testNamespace,
 					containerID,
-					containerNetNs(containerID),
+					containerNetNS(containerID),
 					interfaceName,
 					1500,
 					&ipam.IPAMResult{},
@@ -669,7 +669,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 					podName,
 					testNamespace,
 					containerID,
-					containerNetNs(containerID),
+					containerNetNS(containerID),
 					interfaceName,
 					gomock.Any(),
 					testIPAMResult("148.14.24.100/24", 0),
@@ -776,7 +776,7 @@ func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
 			podName,
 			testNamespace,
 			containerID,
-			containerNetNs(containerID),
+			containerNetNS(containerID),
 			element2.InterfaceRequest,
 			1500,
 			sriovDeviceID21,
@@ -786,7 +786,7 @@ func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
 			podName,
 			testNamespace,
 			containerID,
-			containerNetNs(containerID),
+			containerNetNS(containerID),
 			element1.InterfaceRequest,
 			1500,
 			sriovDeviceID11,
@@ -874,7 +874,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		network1 := testNetwork("net1", sriovNetworkType)
 		testVLAN := 100
 		network2 := testNetworkExt("net2", "", "", vlanNetworkType, "", "", defaultMTU, testVLAN, false)
-		netNS := containerNetNs(containerID)
+		netNS := containerNetNS(containerID)
 
 		podOwner1 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: containerID, IFName: "eth10"}
@@ -893,9 +893,9 @@ func TestPodControllerAddPod(t *testing.T) {
 		stalePodOwner2 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: staleContainerID, IFName: "eth2"}
 		staleConfig1 := interfacestore.NewContainerInterface("interface1", staleContainerID,
-			pod.Name, pod.Namespace, "eth1", containerNetNs(staleContainerID), nil, nil, 0)
+			pod.Name, pod.Namespace, "eth1", containerNetNS(staleContainerID), nil, nil, 0)
 		staleConfig2 := interfacestore.NewContainerInterface("interface2", staleContainerID,
-			pod.Name, pod.Namespace, "eth2", containerNetNs(staleContainerID), nil, nil, 0)
+			pod.Name, pod.Namespace, "eth2", containerNetNS(staleContainerID), nil, nil, 0)
 		staleConfig1.OVSPortConfig = &interfacestore.OVSPortConfig{}
 
 		networkConfig1 := cnitypes.NetworkConfig{
@@ -1023,7 +1023,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			podName,
 			testNamespace,
 			containerID,
-			containerNetNs(containerID),
+			containerNetNS(containerID),
 			interfaceName,
 			defaultMTU,
 			sriovDeviceID11,
@@ -1062,7 +1062,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			podName,
 			testNamespace,
 			containerID,
-			containerNetNs(containerID),
+			containerNetNS(containerID),
 			"eth1",
 			defaultMTU,
 			gomock.Any(),
@@ -1072,7 +1072,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			podName,
 			testNamespace,
 			containerID,
-			containerNetNs(containerID),
+			containerNetNS(containerID),
 			"eth2",
 			defaultMTU,
 			gomock.Any(),
@@ -1213,7 +1213,7 @@ func convertExternalIDMap(in map[string]interface{}) map[string]string {
 	return out
 }
 
-func createTestInterfaces() (map[string]string, []ovsconfig.OVSPortData, []*interfacestore.InterfaceConfig) {
+func createTestInterfaces() ([]ovsconfig.OVSPortData, []*interfacestore.InterfaceConfig) {
 	uuid1 := uuid.New().String()
 	uuid2 := uuid.New().String()
 	uuid3 := uuid.New().String()
@@ -1227,7 +1227,7 @@ func createTestInterfaces() (map[string]string, []ovsconfig.OVSPortData, []*inte
 	p2NetMAC, _ := net.ParseMAC(p2MAC)
 	p2NetIP := net.ParseIP(p2IP)
 
-	// Create InterfaceConfig objects directly
+	// Create InterfaceConfig objects directly.
 	containerConfig1 := interfacestore.NewContainerInterface("p1", uuid1, "Pod1", "nsA", "eth0", "netns1", p1NetMAC, []net.IP{p1NetIP}, 100)
 	containerConfig1.OVSPortConfig = &interfacestore.OVSPortConfig{
 		OFPort: 11,
@@ -1240,6 +1240,8 @@ func createTestInterfaces() (map[string]string, []ovsconfig.OVSPortData, []*inte
 	containerConfig3.OVSPortConfig = &interfacestore.OVSPortConfig{
 		OFPort: -1,
 	}
+	// SR-IOV interface.
+	containerConfig4 := interfacestore.NewContainerInterface("p4", uuid4, "Pod4", "nsA", "eth1", "netns4", p2NetMAC, []net.IP{p2NetIP}, 0)
 
 	ovsPort1 := ovsconfig.OVSPortData{
 		UUID: uuid1, Name: "p1", OFPort: 11,
@@ -1263,56 +1265,61 @@ func createTestInterfaces() (map[string]string, []ovsconfig.OVSPortData, []*inte
 		ExternalIDs: map[string]string{
 			"unknownKey": "unknownValue"}}
 
-	return map[string]string{"uuid1": uuid1, "uuid2": uuid2, "uuid3": uuid3, "uuid4": uuid4}, []ovsconfig.OVSPortData{ovsPort1, ovsPort2, ovsPort3, ovsPort4}, []*interfacestore.InterfaceConfig{containerConfig1, containerConfig2, containerConfig3}
+	return []ovsconfig.OVSPortData{ovsPort1, ovsPort2, ovsPort3, ovsPort4}, []*interfacestore.InterfaceConfig{containerConfig1, containerConfig2, containerConfig3, containerConfig4}
 }
 
 func TestInitializeOVSSecondaryInterfaceStore(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	pc, _, _, mockOVSBridgeClient := testPodController(ctrl)
-	uuids, ovsPorts, _ := createTestInterfaces()
+	ovsPorts, _ := createTestInterfaces()
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts, nil)
 
 	err := pc.initializeOVSSecondaryInterfaceStore()
 	require.NoError(t, err, "OVS ports list successfully")
 
-	// Validate stored interfaces
+	// Validate stored interfaces.
 	require.Equal(t, 3, pc.interfaceStore.Len(), "Only valid interfaces should be stored")
 
-	_, found1 := pc.interfaceStore.GetContainerInterface(uuids["uuid1"])
-	assert.True(t, found1, "Interface 1 should be stored")
+	_, found := pc.interfaceStore.GetContainerInterface(ovsPorts[0].UUID)
+	assert.True(t, found, "Interface 1 should be stored")
 
-	_, found2 := pc.interfaceStore.GetContainerInterface(uuids["uuid2"])
-	assert.True(t, found2, "Interface 2 should be stored")
+	_, found = pc.interfaceStore.GetContainerInterface(ovsPorts[1].UUID)
+	assert.True(t, found, "Interface 2 should be stored")
 
-	_, found3 := pc.interfaceStore.GetContainerInterface(uuids["uuid3"])
-	assert.True(t, found3, "Interface 3 should be stored")
+	_, found = pc.interfaceStore.GetContainerInterface(ovsPorts[2].UUID)
+	assert.True(t, found, "Interface 3 should be stored")
 
-	_, found4 := pc.interfaceStore.GetContainerInterface(uuids["uuid4"])
-	assert.False(t, found4, "Unknown interface type should not be stored")
+	_, found = pc.interfaceStore.GetContainerInterface(ovsPorts[3].UUID)
+	assert.False(t, found, "Unknown interface type should not be stored")
 }
 
 func TestReconcileSecondaryInterfaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	pc, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)
-	_, _, containerConfigs := createTestInterfaces()
+	_, containerConfigs := createTestInterfaces()
 
-	// Add interfaces to primary store
+	// Add the interfaces to primary store.
 	pc.primaryInterfaceStore.AddInterface(containerConfigs[0])
-	pc.primaryInterfaceStore.AddInterface(containerConfigs[1])
+	pc.primaryInterfaceStore.AddInterface(containerConfigs[2])
 
-	// Add interfaces to controller secondaryInterfaceStore
+	// Add interfaces to controller secondaryInterfaceStore.
 	pc.interfaceStore.AddInterface(containerConfigs[0])
+	// Interface (container ID) is not added to the primary interface store.
 	pc.interfaceStore.AddInterface(containerConfigs[1])
-	// Case when OFPort == -1
+	// Case when OFPort == -1.
 	pc.interfaceStore.AddInterface(containerConfigs[2])
+	// SR-IOV interface without a primary interface.
+	pc.interfaceStore.AddInterface(containerConfigs[3])
 
-	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(gomock.Any()).Return(nil).Times(1)
-	mockIPAM.EXPECT().SecondaryNetworkRelease(gomock.Any()).Return(nil).Times(1)
+	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfigs[1]).Return(nil).Times(1)
+	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfigs[2]).Return(nil).Times(1)
+	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfigs[3]).Return(nil).Times(1)
+	mockIPAM.EXPECT().SecondaryNetworkRelease(gomock.Any()).Return(nil).Times(3)
 
-	err := pc.reconcileSecondaryInterfaces()
-	require.NoError(t, err)
+	pc.initializeCNICache()
+	pc.reconcileSecondaryInterfaces()
 
-	// Check CNI Cache
+	// Check CNI Cache.
 	podCount := 0
 	pc.cniCache.Range(func(key, value interface{}) bool {
 		podCount++
@@ -1330,11 +1337,11 @@ func TestReconcileSecondaryInterfaces(t *testing.T) {
 		assert.Equal(t, config.NetNS, podCNIInfo.netNS)
 	}
 	checkPodCNIInfo(t, containerConfigs[0])
-	checkPodCNIInfo(t, containerConfigs[1])
+	checkPodCNIInfo(t, containerConfigs[2])
 
-	// Ensure stale interfaces are removed
-	_, foundPod3 := pc.cniCache.Load("nsA/Pod3")
-	assert.False(t, foundPod3, "Stale interface should have been removed")
+	// Pod2 is not added to the primary store.
+	_, found := pc.cniCache.Load("nsA/Pod2")
+	assert.False(t, found, "Pod should not be added to CNI cache")
 }
 
 func TestInitializeSRIOVSecondaryInterfaceStore(t *testing.T) {
@@ -1394,7 +1401,7 @@ func TestInitializeSRIOVSecondaryInterfaceStore(t *testing.T) {
 	informerFactory.WaitForCacheSync(stopCh)
 
 	primaryStore := pc.primaryInterfaceStore
-	_, _, containerConfigs := createTestInterfaces()
+	_, containerConfigs := createTestInterfaces()
 	primaryStore.AddInterface(containerConfigs[0])
 	primaryStore.AddInterface(containerConfigs[1])
 	primaryStore.AddInterface(containerConfigs[2])
