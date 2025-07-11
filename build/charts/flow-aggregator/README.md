@@ -24,6 +24,10 @@ Kubernetes: `>= 1.19.0-0`
 | apiServer.apiPort | int | `10348` | The port for the Flow Aggregator APIServer to serve on. |
 | apiServer.tlsCipherSuites | string | `""` | Comma-separated list of cipher suites that will be used by the Flow Aggregator APIservers. If empty, the default Go Cipher Suites will be used. |
 | apiServer.tlsMinVersion | string | `""` | TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13. |
+| autoscaling.cpu.averageUtilization | int | `70` | AverageUtilization is the target average CPU utilization. |
+| autoscaling.enable | bool | `false` | Enable installs the HPA for flow-aggregator. This must be disabled when running in "Aggregate" mode. |
+| autoscaling.maxReplicas | int | `10` | MaxReplicas is the maximum number of replicas for autoscaling. This value must be greater than or equal to autoscaling.minReplicas |
+| autoscaling.minReplicas | int | `1` | MinReplicas is the minimum number of replicas for autoscaling. This value must be less than or equal to autoscaling.maxReplicas |
 | clickHouse.commitInterval | string | `"8s"` | CommitInterval is the periodical interval between batch commit of flow records to DB. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | clickHouse.compress | bool | `true` | Compress enables lz4 compression when committing flow records. |
 | clickHouse.connectionSecret | object | `{"password":"clickhouse_operator_password","username":"clickhouse_operator"}` | Credentials to connect to ClickHouse. They will be stored in a Secret. |
@@ -67,6 +71,7 @@ Kubernetes: `>= 1.19.0-0`
 | mode | string | `"Aggregate"` | Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy". In Aggregate mode, flow records received from source and destination are aggregated and sent as one flow record. In Proxy mode, flow records are enhanced with some additional information, then sent directly without buffering or aggregation. |
 | priorityClassName | string | `"system-cluster-critical"` | Prority class to use for the flow-aggregator Pod. |
 | recordContents.podLabels | bool | `false` | Determine whether source and destination Pod labels will be included in the flow records. |
+| replicas | int | `1` | Replicas is the number of flow-aggregator replicas. This must be 1 for "Aggregate" mode. |
 | s3Uploader.awsCredentials | object | `{"aws_access_key_id":"changeme","aws_secret_access_key":"changeme","aws_session_token":""}` | Credentials to authenticate to AWS. They will be stored in a Secret and injected into the Pod as environment variables. |
 | s3Uploader.bucketName | string | `""` | BucketName is the name of the S3 bucket to which flow records will be uploaded. It is required. |
 | s3Uploader.bucketPrefix | string | `""` | BucketPrefix is the prefix ("folder") under which flow records will be uploaded. |
