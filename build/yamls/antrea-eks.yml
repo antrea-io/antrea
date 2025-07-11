@@ -2986,24 +2986,16 @@ spec:
             spec:
               type: object
               required:
-                - source
                 - captureConfig
-                - destination
-              anyOf:
-                - properties:
-                    source:
-                      required: [pod]
-                - properties:
-                    destination:
-                      required: [pod]
+              x-kubernetes-validations:
+                - rule: "has(self.source.pod) || has(self.destination.pod)"
+                  message: "At least one of source.pod or destination.pod must be specified."
               properties:
                 source:
                   type: object
-                  oneOf:
-                    - required:
-                      - pod
-                    - required:
-                      - ip
+                  x-kubernetes-validations:
+                    - rule: "!(has(self.pod) && has(self.ip))"
+                      message: "At most one of 'pod' or 'ip' may be set"
                   properties:
                     pod:
                       type: object
@@ -3020,11 +3012,9 @@ spec:
                       format: ipv4
                 destination:
                   type: object
-                  oneOf:
-                    - required:
-                      - pod
-                    - required:
-                      - ip
+                  x-kubernetes-validations:
+                    - rule: "!(has(self.pod) && has(self.ip))"
+                      message: "At most one of 'pod' or 'ip' may be set"
                   properties:
                     pod:
                       type: object
@@ -3111,6 +3101,10 @@ spec:
                   type: string
                   enum: ["SourceToDestination", "DestinationToSource", "Both"]
                   default: "SourceToDestination"
+                captureLocation:
+                  type: string
+                  enum: ["Source", "Destination", "Both"]
+                  default: "Source"
                 timeout:
                   type: integer
                   minimum: 1
@@ -3145,7 +3139,9 @@ spec:
                 numberCaptured:
                   type: integer
                 filePath:
-                  type: string
+                  type: array
+                  items:
+                    type: string
                 conditions:
                   type: array
                   items:

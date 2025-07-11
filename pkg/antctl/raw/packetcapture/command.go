@@ -52,13 +52,14 @@ var (
 )
 
 type packetCaptureOptions struct {
-	source    string
-	dest      string
-	nowait    bool
-	timeout   time.Duration
-	number    int32
-	flow      string
-	outputDir string
+	source     string
+	dest       string
+	nowait     bool
+	timeout    time.Duration
+	number     int32
+	flow       string
+	captureLoc string
+	outputDir  string
 }
 
 var options = &packetCaptureOptions{}
@@ -67,6 +68,8 @@ var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Po
   $ antctl packetcapture -S pod1 -D pod2
   Start capturing packets from pod1 in Namespace ns1 to a destination IP
   $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
+  Start capturing packets from pod1 to pod2, captures at both src and dst pods
+  $ antctl packetcapture -S pod1 -D pod2 -c Both
   Start capturing TCP FIN packets from pod1 to pod2, with destination port 80
   $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
   Start capturing TCP SYNs that are not ACKs from pod1 to pod2, with destination port 80
@@ -95,6 +98,7 @@ func init() {
 	Command.Flags().StringVarP(&options.dest, "destination", "D", "", "destination of the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().Int32VarP(&options.number, "number", "n", 1, "target number of packets to capture, the capture will stop when it is reached")
 	Command.Flags().StringVarP(&options.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst, icmp_type, icmp_code")
+	Command.Flags().StringVarP(&options.captureLoc, "captureLoc", "c", "", "specify where the packet capture should be performed: Source, Destination, or Both")
 	Command.Flags().BoolVarP(&options.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 	Command.Flags().StringVarP(&options.outputDir, "output-dir", "o", ".", "save the packets file to the target directory")
 }
@@ -213,14 +217,15 @@ func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Confi
 	} else if err != nil {
 		return fmt.Errorf("error when checking PacketCapture status: %w", err)
 	}
-
-	splits := strings.Split(latestPC.Status.FilePath, ":")
-	fileName := path.Base(splits[1])
 	copier := getCopier(restConfig, k8sClient)
-	if err := copier.CopyFromPod(ctx, defaultFS, env.GetAntreaNamespace(), splits[0], "antrea-agent", splits[1], options.outputDir); err != nil {
-		return fmt.Errorf("error when copying pcapng file from container: %w", err)
+	for _, filePath := range latestPC.Status.FilePath {
+		splits := strings.Split(filePath, ":")
+		fileName := path.Base(splits[1])
+		if err := copier.CopyFromPod(ctx, defaultFS, env.GetAntreaNamespace(), splits[0], "antrea-agent", splits[1], options.outputDir); err != nil {
+			return fmt.Errorf("error when copying pcapng file from container: %w", err)
+		}
+		fmt.Fprintf(out, "Captured packets file: %s\n", path.Join(options.outputDir, fileName))
 	}
-	fmt.Fprintf(out, "Captured packets file: %s\n", path.Join(options.outputDir, fileName))
 	return nil
 }
 
@@ -410,6 +415,27 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 	return &pkt, nil
 }
 
+func parseCaptureLocation(captLocStr string) (v1alpha1.CaptureLocation, error) {
+	switch v1alpha1.CaptureLocation(captLocStr) {
+	case v1alpha1.CaptureLocationSource, v1alpha1.CaptureLocationDestination, v1alpha1.CaptureLocationBoth:
+		return v1alpha1.CaptureLocation(captLocStr), nil
+	default:
+		return "", fmt.Errorf("invalid capture location: %q, must be one of Source, Destination, or Both", captLocStr)
+	}
+}
+
+func determineCaptureLocation(options *packetCaptureOptions) (v1alpha1.CaptureLocation, error) {
+	captLocStr := options.captureLoc
+	if captLocStr == "" {
+		if options.source != "" {
+			captLocStr = "Source"
+		} else {
+			captLocStr = "Destination"
+		}
+	}
+	return parseCaptureLocation(captLocStr)
+}
+
 func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, error) {
 	var src v1alpha1.Source
 	if options.source != "" {
@@ -435,6 +461,11 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 		return nil, fmt.Errorf("failed to parse flow: %w", err)
 	}
 
+	captureLocation, err := determineCaptureLocation(options)
+	if err != nil {
+		return nil, err
+	}
+
 	name := getPCName(options)
 	timeout := int32(options.timeout.Seconds())
 	pc := &v1alpha1.PacketCapture{
@@ -442,10 +473,11 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 			Name: name,
 		},
 		Spec: v1alpha1.PacketCaptureSpec{
-			Source:      src,
-			Destination: dst,
-			Timeout:     &timeout,
-			Packet:      pkt,
+			Source:          src,
+			Destination:     dst,
+			Timeout:         &timeout,
+			CaptureLocation: captureLocation,
+			Packet:          pkt,
 			CaptureConfig: v1alpha1.CaptureConfig{
 				FirstN: &v1alpha1.PacketCaptureFirstNConfig{
 					Number: options.number,
