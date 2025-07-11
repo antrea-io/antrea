@@ -401,9 +401,17 @@ for exporting the cluster's network information to other member clusters
 through the leader cluster, including the cluster's Gateway IP and Service
 CIDR. Multi-cluster Controller will try to discover the cluster's Service CIDR
 automatically, but you can also manually specify the `serviceCIDR` option in
-ConfigMap `antrea-mc-controller-config`. In other member clusters, a
-ClusterInfoImport CR will be created for the cluster which includes the
-exported network information. For example, in cluster `test-cluster-west`, you
+ConfigMap `antrea-mc-controller-config`.
+
+Note: If a member cluster is running a K8s version earlier than v1.33.0, the
+Multi-cluster Controller will attempt to automatically discover the cluster’s
+Service CIDR when the `serviceCIDR` field in the `antrea-mc-controller-config`
+ConfigMap is not set. For clusters with Kubernetes v1.33.0 or later, the `serviceCIDR`
+field is currently required and must be explicitly specified, until support for
+Service CIDR auto-discovery with newer Kubernetes versions is added.
+
+In other member clusters, a ClusterInfoImport CR will be created for the cluster
+which includes the exported network information. For example, in cluster `test-cluster-west`,
 you can see a ClusterInfoImport CR with name `test-cluster-east-clusterinfo`
 is created for cluster `test-cluster-east`:
 
