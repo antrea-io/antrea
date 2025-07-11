@@ -73,6 +73,10 @@ function format_metrics() {
         echo "### Antrea Metrics"
         for metric in $metrics_types; do
                 metric_pfx=$($SED_CMD 's/_/ /g' <<< "$metric" | awk '{print $1}')
+                if [ "$metric_pfx" == 'go' ]; then
+                        # Ignoring Go metrics
+                        continue
+                fi
                 if [ "$metric_pfx" == 'antrea' ]; then
                         # For Antrea metrics, add Agent, Controller to title
                         metric_pfx=$($SED_CMD 's/_/ /g' <<< "$metric" | awk '{print $1" "$2}')
@@ -94,6 +98,10 @@ function format_metrics() {
                 metric_help=$(grep " $metric " <<< "$metrics_help" | $SED_CMD "s/.*$metric //")
                 echo "- **$metric:** $metric_help"
         done
+        echo
+        echo "#### Go Metrics"
+        echo
+        echo "Please check Go metrics from [this site](https://pkg.go.dev/runtime/metrics)"
 }
 
 function print_usage {
