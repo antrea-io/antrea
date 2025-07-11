@@ -110,6 +110,35 @@ jobs:
         workflow: .github/workflows/conformance.yml
         inputs: ${{ format('{{ "antrea-version":"{0}", "antrea-image-distro":"ubuntu", "test-suite":"conformance", "runner":"{1}", "antrea-image-platform":"{2}" }}', github.sha, matrix.runner, matrix.platform) }}
 
+  # The build job above defines a matrix (provides support for different platforms). When the build
+  # job is skipped, the matrix is not expanded, and status is only reported for the "build" job, and
+  # not for the 3 platform-specific jobs. On the other hand, when the build job is executed, status
+  # is only reported for the 3 platform-specific jobs and not for the parent "build" job.
+  # See https://github.com/orgs/community/discussions/9141
+  # Because we require a successful build before merging a PR, and we want to account for both of
+  # these cases, we introduce a separate "build-status" job below. It will always report a status,
+  # which we can use as the required status check for PRs.
+  build-status:
+    needs: build
+    if: ${{ always() && needs.build.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Success
+      if: ${{ needs.build.result == 'success' }}
+      run: |
+        echo "Build was a success"
+        exit 0
+    - name: Cancelled
+      if: ${{ needs.build.result == 'cancelled' }}
+      run: |
+        echo "Build was cancelled"
+        exit 1
+    - name: Failure
+      if: ${{ needs.build.result == 'failure' }}
+      run: |
+        echo "Build was a failure"
+        exit 1
+
   push-manifest:
     needs: [check-env, build]
     if: ${{ needs.check-env.outputs.push_needed == 'true' }}
