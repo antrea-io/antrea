@@ -38,10 +38,11 @@ func TestBGPPolicyQuery(t *testing.T) {
 			name:           "bgpPolicyState exists",
 			expectedStatus: http.StatusOK,
 			expectedResponse: apis.BGPPolicyResponse{
-				BGPPolicyName: "policy-1",
-				RouterID:      "192.168.1.2",
-				LocalASN:      65000,
-				ListenPort:    179,
+				BGPPolicyName:           "policy-1",
+				RouterID:                "192.168.1.2",
+				LocalASN:                64512,
+				ListenPort:              179,
+				ConfederationIdentifier: 65000,
 			},
 		},
 		{
@@ -55,7 +56,7 @@ func TestBGPPolicyQuery(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			q := queriertest.NewMockAgentBGPPolicyInfoQuerier(ctrl)
 			q.EXPECT().GetBGPPolicyInfo().Return(tt.expectedResponse.BGPPolicyName, tt.expectedResponse.RouterID,
-				tt.expectedResponse.LocalASN, tt.expectedResponse.ListenPort)
+				tt.expectedResponse.LocalASN, tt.expectedResponse.ListenPort, tt.expectedResponse.ConfederationIdentifier)
 			handler := HandleFunc(q)
 
 			req, err := http.NewRequest(http.MethodGet, "", nil)
