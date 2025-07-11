@@ -136,7 +136,15 @@ func getPCName(options *packetCaptureOptions) string {
 	replace := func(s string) string {
 		return strings.ReplaceAll(s, "/", "-")
 	}
-	prefix := fmt.Sprintf("%s-%s", replace(options.source), replace(options.dest))
+	var parts []string
+	if options.source != "" {
+		parts = append(parts, replace(options.source))
+	}
+	if options.dest != "" {
+		parts = append(parts, replace(options.dest))
+	}
+
+	prefix := strings.Join(parts, "-")
 	if options.nowait {
 		return prefix
 	}
@@ -411,12 +419,19 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 }
 
 func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, error) {
+	if options.source == "" && options.dest == "" {
+		return nil, errors.New("must specify at least one of --source or --destination")
+	}
+
 	var src v1alpha1.Source
 	if options.source != "" {
 		src.Pod, src.IP = parseEndpoint(options.source)
 		if src.Pod == nil && src.IP == nil {
 			return nil, fmt.Errorf("source should be in the format of Namespace/Pod, Pod, or IPv4")
 		}
+	} else {
+		src.Pod = nil
+		src.IP = nil
 	}
 
 	var dst v1alpha1.Destination
@@ -425,6 +440,9 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 		if dst.Pod == nil && dst.IP == nil {
 			return nil, fmt.Errorf("destination should be in the format of Namespace/Pod, Pod, or IPv4")
 		}
+	} else {
+		dst.Pod = nil
+		dst.IP = nil
 	}
 
 	if src.Pod == nil && dst.Pod == nil {
