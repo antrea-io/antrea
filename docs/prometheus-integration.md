@@ -278,6 +278,11 @@ failed data encryption key(DEK) generation operations.
 number of cache misses while accessing key decryption key(KEK).
 - **apiserver_tls_handshake_errors_total:** Number of requests dropped with
 'TLS handshake error from' error
+- **apiserver_validation_declarative_validation_mismatch_total:** Number of
+times declarative validation results differed from handwritten validation
+results for core types.
+- **apiserver_validation_declarative_validation_panic_total:** Number of
+times declarative validation has panicked during validation.
 - **apiserver_watch_events_sizes:** Watch event size distribution in bytes
 - **apiserver_watch_events_total:** Number of events sent in watch clients
 - **apiserver_webhooks_x509_insecure_sha1_total:** Counts the number of
