@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,47 +27,47 @@ type FakeControlplaneV1beta2 struct {
 }
 
 func (c *FakeControlplaneV1beta2) AddressGroups() v1beta2.AddressGroupInterface {
-	return &FakeAddressGroups{c}
+	return newFakeAddressGroups(c)
 }
 
 func (c *FakeControlplaneV1beta2) AppliedToGroups() v1beta2.AppliedToGroupInterface {
-	return &FakeAppliedToGroups{c}
+	return newFakeAppliedToGroups(c)
 }
 
 func (c *FakeControlplaneV1beta2) ClusterGroupMembers() v1beta2.ClusterGroupMembersInterface {
-	return &FakeClusterGroupMembers{c}
+	return newFakeClusterGroupMembers(c)
 }
 
 func (c *FakeControlplaneV1beta2) EgressGroups() v1beta2.EgressGroupInterface {
-	return &FakeEgressGroups{c}
+	return newFakeEgressGroups(c)
 }
 
 func (c *FakeControlplaneV1beta2) GroupAssociations(namespace string) v1beta2.GroupAssociationInterface {
-	return &FakeGroupAssociations{c, namespace}
+	return newFakeGroupAssociations(c, namespace)
 }
 
 func (c *FakeControlplaneV1beta2) GroupMembers(namespace string) v1beta2.GroupMembersInterface {
-	return &FakeGroupMembers{c, namespace}
+	return newFakeGroupMembers(c, namespace)
 }
 
 func (c *FakeControlplaneV1beta2) IPGroupAssociations() v1beta2.IPGroupAssociationInterface {
-	return &FakeIPGroupAssociations{c}
+	return newFakeIPGroupAssociations(c)
 }
 
 func (c *FakeControlplaneV1beta2) NetworkPolicies() v1beta2.NetworkPolicyInterface {
-	return &FakeNetworkPolicies{c}
+	return newFakeNetworkPolicies(c)
 }
 
 func (c *FakeControlplaneV1beta2) NetworkPolicyEvaluations() v1beta2.NetworkPolicyEvaluationInterface {
-	return &FakeNetworkPolicyEvaluations{c}
+	return newFakeNetworkPolicyEvaluations(c)
 }
 
 func (c *FakeControlplaneV1beta2) NodeStatsSummaries() v1beta2.NodeStatsSummaryInterface {
-	return &FakeNodeStatsSummaries{c}
+	return newFakeNodeStatsSummaries(c)
 }
 
 func (c *FakeControlplaneV1beta2) SupportBundleCollections() v1beta2.SupportBundleCollectionInterface {
-	return &FakeSupportBundleCollections{c}
+	return newFakeSupportBundleCollections(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

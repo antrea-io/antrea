@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,31 +17,26 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeGroupMembers implements GroupMembersInterface
-type FakeGroupMembers struct {
+// fakeGroupMembers implements GroupMembersInterface
+type fakeGroupMembers struct {
+	*gentype.FakeClient[*v1beta2.GroupMembers]
 	Fake *FakeControlplaneV1beta2
-	ns   string
 }
 
-var groupmembersResource = v1beta2.SchemeGroupVersion.WithResource("groupmembers")
-
-var groupmembersKind = v1beta2.SchemeGroupVersion.WithKind("GroupMembers")
-
-// Get takes name of the groupMembers, and returns the corresponding groupMembers object, and an error if there is any.
-func (c *FakeGroupMembers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.GroupMembers, err error) {
-	emptyResult := &v1beta2.GroupMembers{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(groupmembersResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeGroupMembers(fake *FakeControlplaneV1beta2, namespace string) controlplanev1beta2.GroupMembersInterface {
+	return &fakeGroupMembers{
+		gentype.NewFakeClient[*v1beta2.GroupMembers](
+			fake.Fake,
+			namespace,
+			v1beta2.SchemeGroupVersion.WithResource("groupmembers"),
+			v1beta2.SchemeGroupVersion.WithKind("GroupMembers"),
+			func() *v1beta2.GroupMembers { return &v1beta2.GroupMembers{} },
+		),
+		fake,
 	}
-	return obj.(*v1beta2.GroupMembers), err
 }

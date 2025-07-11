@@ -17,8 +17,11 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
+	"fmt"
 	"slices"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -29,16 +32,32 @@ import (
 func (r *ResourceExport) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
+		WithDefaulter(&ResourceExportCustomDefaulter{}).
 		Complete()
 }
 
 //+kubebuilder:webhook:path=/mutate-multicluster-crd-antrea-io-v1alpha1-resourceexport,mutating=true,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=create;update,versions=v1alpha1,name=mresourceexport.kb.io,admissionReviewVersions={v1,v1beta1}
 
-var _ webhook.Defaulter = &ResourceExport{}
+type ResourceExportCustomDefaulter struct{}
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
-func (r *ResourceExport) Default() {
-	klog.InfoS("default", "name", r.Name)
+var _ webhook.CustomDefaulter = &ResourceExportCustomDefaulter{}
+
+// Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind ResourceExport.
+func (d *ResourceExportCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
+	r, ok := obj.(*ResourceExport)
+
+	if !ok {
+		return fmt.Errorf("expected a ResourceExport object but got %T", obj)
+	}
+
+	klog.InfoS("Defaulting ResourceExport", "name", r.Name)
+
+	// Set default values
+	d.applyDefaults(r)
+	return nil
+}
+
+func (d *ResourceExportCustomDefaulter) applyDefaults(r *ResourceExport) {
 	if r.Spec.ClusterNetworkPolicy == nil {
 		// Only mutate ResourceExport created for ClusterNetworkPolicy resources
 		return

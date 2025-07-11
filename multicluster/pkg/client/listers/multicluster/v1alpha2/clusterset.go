@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1alpha2
 
 import (
-	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ClusterSetLister helps list ClusterSets.
@@ -28,7 +28,7 @@ import (
 type ClusterSetLister interface {
 	// List lists all ClusterSets in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha2.ClusterSet, err error)
+	List(selector labels.Selector) (ret []*multiclusterv1alpha2.ClusterSet, err error)
 	// ClusterSets returns an object that can list and get ClusterSets.
 	ClusterSets(namespace string) ClusterSetNamespaceLister
 	ClusterSetListerExpansion
@@ -36,17 +36,17 @@ type ClusterSetLister interface {
 
 // clusterSetLister implements the ClusterSetLister interface.
 type clusterSetLister struct {
-	listers.ResourceIndexer[*v1alpha2.ClusterSet]
+	listers.ResourceIndexer[*multiclusterv1alpha2.ClusterSet]
 }
 
 // NewClusterSetLister returns a new ClusterSetLister.
 func NewClusterSetLister(indexer cache.Indexer) ClusterSetLister {
-	return &clusterSetLister{listers.New[*v1alpha2.ClusterSet](indexer, v1alpha2.Resource("clusterset"))}
+	return &clusterSetLister{listers.New[*multiclusterv1alpha2.ClusterSet](indexer, multiclusterv1alpha2.Resource("clusterset"))}
 }
 
 // ClusterSets returns an object that can list and get ClusterSets.
 func (s *clusterSetLister) ClusterSets(namespace string) ClusterSetNamespaceLister {
-	return clusterSetNamespaceLister{listers.NewNamespaced[*v1alpha2.ClusterSet](s.ResourceIndexer, namespace)}
+	return clusterSetNamespaceLister{listers.NewNamespaced[*multiclusterv1alpha2.ClusterSet](s.ResourceIndexer, namespace)}
 }
 
 // ClusterSetNamespaceLister helps list and get ClusterSets.
@@ -54,15 +54,15 @@ func (s *clusterSetLister) ClusterSets(namespace string) ClusterSetNamespaceList
 type ClusterSetNamespaceLister interface {
 	// List lists all ClusterSets in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha2.ClusterSet, err error)
+	List(selector labels.Selector) (ret []*multiclusterv1alpha2.ClusterSet, err error)
 	// Get retrieves the ClusterSet from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha2.ClusterSet, error)
+	Get(name string) (*multiclusterv1alpha2.ClusterSet, error)
 	ClusterSetNamespaceListerExpansion
 }
 
 // clusterSetNamespaceLister implements the ClusterSetNamespaceLister
 // interface.
 type clusterSetNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha2.ClusterSet]
+	listers.ResourceIndexer[*multiclusterv1alpha2.ClusterSet]
 }

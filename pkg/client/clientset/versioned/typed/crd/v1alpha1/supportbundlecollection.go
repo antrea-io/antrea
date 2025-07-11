@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,33 +35,34 @@ type SupportBundleCollectionsGetter interface {
 
 // SupportBundleCollectionInterface has methods to work with SupportBundleCollection resources.
 type SupportBundleCollectionInterface interface {
-	Create(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.CreateOptions) (*v1alpha1.SupportBundleCollection, error)
-	Update(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.UpdateOptions) (*v1alpha1.SupportBundleCollection, error)
+	Create(ctx context.Context, supportBundleCollection *crdv1alpha1.SupportBundleCollection, opts v1.CreateOptions) (*crdv1alpha1.SupportBundleCollection, error)
+	Update(ctx context.Context, supportBundleCollection *crdv1alpha1.SupportBundleCollection, opts v1.UpdateOptions) (*crdv1alpha1.SupportBundleCollection, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.UpdateOptions) (*v1alpha1.SupportBundleCollection, error)
+	UpdateStatus(ctx context.Context, supportBundleCollection *crdv1alpha1.SupportBundleCollection, opts v1.UpdateOptions) (*crdv1alpha1.SupportBundleCollection, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.SupportBundleCollection, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.SupportBundleCollectionList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1alpha1.SupportBundleCollection, error)
+	List(ctx context.Context, opts v1.ListOptions) (*crdv1alpha1.SupportBundleCollectionList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.SupportBundleCollection, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *crdv1alpha1.SupportBundleCollection, err error)
 	SupportBundleCollectionExpansion
 }
 
 // supportBundleCollections implements SupportBundleCollectionInterface
 type supportBundleCollections struct {
-	*gentype.ClientWithList[*v1alpha1.SupportBundleCollection, *v1alpha1.SupportBundleCollectionList]
+	*gentype.ClientWithList[*crdv1alpha1.SupportBundleCollection, *crdv1alpha1.SupportBundleCollectionList]
 }
 
 // newSupportBundleCollections returns a SupportBundleCollections
 func newSupportBundleCollections(c *CrdV1alpha1Client) *supportBundleCollections {
 	return &supportBundleCollections{
-		gentype.NewClientWithList[*v1alpha1.SupportBundleCollection, *v1alpha1.SupportBundleCollectionList](
+		gentype.NewClientWithList[*crdv1alpha1.SupportBundleCollection, *crdv1alpha1.SupportBundleCollectionList](
 			"supportbundlecollections",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha1.SupportBundleCollection { return &v1alpha1.SupportBundleCollection{} },
-			func() *v1alpha1.SupportBundleCollectionList { return &v1alpha1.SupportBundleCollectionList{} }),
+			func() *crdv1alpha1.SupportBundleCollection { return &crdv1alpha1.SupportBundleCollection{} },
+			func() *crdv1alpha1.SupportBundleCollectionList { return &crdv1alpha1.SupportBundleCollectionList{} },
+		),
 	}
 }
