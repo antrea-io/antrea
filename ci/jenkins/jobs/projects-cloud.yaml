@@ -1665,7 +1665,7 @@
       - '{name}-{test_name}-for-pull-request':
           disabled: false
           test_name: sriov-secondary-network-e2e
-          node: antrea-cloud-test
+          node: antrea-cloud
           description: 'Test SR-IOV secondary network in AWS for antrea.'
           branches:
           - ${{sha1}}
