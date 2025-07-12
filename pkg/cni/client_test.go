@@ -29,7 +29,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+<<<<<<< HEAD
 	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
+=======
+	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
+>>>>>>> origin/main
 )
 
 type testClient struct {

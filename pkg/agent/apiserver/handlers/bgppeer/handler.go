@@ -27,9 +27,15 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/controller/bgp"
 	"antrea.io/antrea/v2/pkg/querier"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/controller/bgp"
+	"antrea.io/antrea/pkg/querier"
+>>>>>>> origin/main
 )
 
 // HandleFunc returns the function which can handle queries issued by the bgppeers command.

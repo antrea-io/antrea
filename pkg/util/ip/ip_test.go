@@ -21,7 +21,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+>>>>>>> origin/main
 )
 
 func newCIDR(cidrStr string) *net.IPNet {

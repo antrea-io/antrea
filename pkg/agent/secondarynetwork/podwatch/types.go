@@ -15,7 +15,11 @@
 package podwatch
 
 import (
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/types"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver/types"
+>>>>>>> origin/main
 )
 
 type networkType string

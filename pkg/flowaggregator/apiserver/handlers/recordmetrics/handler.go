@@ -20,8 +20,13 @@ import (
 
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
 	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
+=======
+	"antrea.io/antrea/pkg/flowaggregator/apis"
+	"antrea.io/antrea/pkg/flowaggregator/querier"
+>>>>>>> origin/main
 )
 
 // HandleFunc returns the function which can handle the /recordmetrics API request.

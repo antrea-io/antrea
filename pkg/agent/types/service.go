@@ -17,7 +17,11 @@ package types
 import (
 	"net"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/ovs/openflow"
+=======
+	"antrea.io/antrea/pkg/ovs/openflow"
+>>>>>>> origin/main
 )
 
 // ServiceConfig contains the configuration needed to install flows for a given Service entrypoint.

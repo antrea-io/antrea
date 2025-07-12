@@ -17,7 +17,11 @@ package e2e
 import (
 	"testing"
 
+<<<<<<< HEAD
 	annotation "antrea.io/antrea/v2/pkg/ipam"
+=======
+	annotation "antrea.io/antrea/pkg/ipam"
+>>>>>>> origin/main
 )
 
 func TestAntreaIPAMService(t *testing.T) {

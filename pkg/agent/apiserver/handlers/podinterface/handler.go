@@ -19,9 +19,15 @@ import (
 	"net"
 	"net/http"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/querier"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/querier"
+>>>>>>> origin/main
 )
 
 func generateResponse(i *interfacestore.InterfaceConfig) apis.PodInterfaceResponse {

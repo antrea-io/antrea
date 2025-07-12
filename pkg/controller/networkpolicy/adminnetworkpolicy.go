@@ -21,9 +21,15 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	antreacrd "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	antreacrd "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
+>>>>>>> origin/main
 )
 
 var (

@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
@@ -45,6 +46,20 @@ import (
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 type fakeController struct {

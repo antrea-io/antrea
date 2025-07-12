@@ -24,8 +24,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/querier"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/querier"
+>>>>>>> origin/main
 )
 
 func generateResponse(node *v1.Node, aliveNodes sets.Set[string]) apis.MemberlistResponse {

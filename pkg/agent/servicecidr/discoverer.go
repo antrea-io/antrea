@@ -31,7 +31,11 @@ import (
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/strings/slices"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
+=======
+	"antrea.io/antrea/pkg/agent/util"
+>>>>>>> origin/main
 )
 
 const (

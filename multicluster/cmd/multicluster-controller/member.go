@@ -24,10 +24,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/member"
 	"antrea.io/antrea/v2/pkg/log"
 	"antrea.io/antrea/v2/pkg/signals"
 	"antrea.io/antrea/v2/pkg/util/env"
+=======
+	"antrea.io/antrea/multicluster/controllers/multicluster/member"
+	"antrea.io/antrea/pkg/log"
+	"antrea.io/antrea/pkg/signals"
+	"antrea.io/antrea/pkg/util/env"
+>>>>>>> origin/main
 )
 
 func newMemberCommand() *cobra.Command {

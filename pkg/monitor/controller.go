@@ -30,12 +30,21 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	externalnodeinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	externalnodelisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
 	controllerquerier "antrea.io/antrea/v2/pkg/controller/querier"
+=======
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	externalnodeinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	externalnodelisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	controllerquerier "antrea.io/antrea/pkg/controller/querier"
+>>>>>>> origin/main
 )
 
 const (

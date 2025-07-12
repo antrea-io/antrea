@@ -22,7 +22,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/check"
+=======
+	"antrea.io/antrea/pkg/antctl/raw/check"
+>>>>>>> origin/main
 )
 
 func overrideTestsRegistry(t *testing.T, registry map[string]Test) {

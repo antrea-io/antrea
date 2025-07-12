@@ -29,7 +29,11 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+>>>>>>> origin/main
 )
 
 type fakeWireGuardClient struct {

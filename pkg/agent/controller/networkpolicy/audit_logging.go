@@ -29,12 +29,21 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/logdir"
+=======
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/logdir"
+>>>>>>> origin/main
 )
 
 const (

@@ -27,7 +27,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+<<<<<<< HEAD
 	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+=======
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+>>>>>>> origin/main
 )
 
 func TestREST(t *testing.T) {

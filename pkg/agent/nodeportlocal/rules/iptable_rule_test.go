@@ -22,8 +22,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
 	iptablestest "antrea.io/antrea/v2/pkg/agent/util/iptables/testing"
+=======
+	"antrea.io/antrea/pkg/agent/util/iptables"
+	iptablestest "antrea.io/antrea/pkg/agent/util/iptables/testing"
+>>>>>>> origin/main
 )
 
 func TestAddAndDeleteRule(t *testing.T) {

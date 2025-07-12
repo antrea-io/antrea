@@ -22,9 +22,15 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/clustergroupmember"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 type REST struct {

@@ -23,10 +23,17 @@ import (
 
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/route"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/agent/util/winnet"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+=======
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/winnet"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+>>>>>>> origin/main
 )
 
 // Use antrea-nat netnatstaticmapping rules as NPL implementation

@@ -23,7 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
+=======
+	"antrea.io/antrea/pkg/agent/util"
+>>>>>>> origin/main
 )
 
 func randName() string {

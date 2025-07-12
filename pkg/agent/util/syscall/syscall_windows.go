@@ -24,7 +24,11 @@ import (
 
 	"golang.org/x/sys/windows"
 
+<<<<<<< HEAD
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
+=======
+	utilip "antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 const (

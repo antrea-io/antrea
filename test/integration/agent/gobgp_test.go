@@ -26,9 +26,15 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	"antrea.io/antrea/v2/pkg/agent/bgp/gobgp"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+=======
+	"antrea.io/antrea/pkg/agent/bgp"
+	"antrea.io/antrea/pkg/agent/bgp/gobgp"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+>>>>>>> origin/main
 )
 
 func TestGoBGPLifecycle(t *testing.T) {

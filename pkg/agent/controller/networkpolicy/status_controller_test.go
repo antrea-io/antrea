@@ -25,9 +25,15 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/util/channel"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/channel"
+>>>>>>> origin/main
 )
 
 const (

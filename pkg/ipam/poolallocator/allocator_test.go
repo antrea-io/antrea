@@ -25,9 +25,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	informers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	fakepoolclient "antrea.io/antrea/v2/pkg/ipam/poolallocator/testing"
+=======
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	informers "antrea.io/antrea/pkg/client/informers/externalversions"
+	fakepoolclient "antrea.io/antrea/pkg/ipam/poolallocator/testing"
+>>>>>>> origin/main
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"

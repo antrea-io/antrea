@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/servicecidr"
@@ -36,6 +37,17 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util/winnet"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	iputil "antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/servicecidr"
+	"antrea.io/antrea/pkg/agent/util"
+	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
+	"antrea.io/antrea/pkg/agent/util/winfirewall"
+	"antrea.io/antrea/pkg/agent/util/winnet"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	iputil "antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 const (

@@ -22,7 +22,11 @@ import (
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+=======
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+>>>>>>> origin/main
 )
 
 // preprocessor is in charge of converting data records in IPFIX messages received from the IPFIX

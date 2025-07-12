@@ -23,8 +23,13 @@ import (
 	"path/filepath"
 	"strings"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
 	"antrea.io/antrea/v2/pkg/util/logdir"
+=======
+	"antrea.io/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/pkg/util/logdir"
+>>>>>>> origin/main
 )
 
 func (d *agentDumper) DumpLog(basedir string) error {

@@ -19,8 +19,13 @@ import (
 
 	apitypes "k8s.io/apimachinery/pkg/types"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+>>>>>>> origin/main
 )
 
 type IGMPNPRuleInfo struct {

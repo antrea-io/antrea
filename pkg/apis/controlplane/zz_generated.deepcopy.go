@@ -20,8 +20,13 @@
 package controlplane
 
 import (
+<<<<<<< HEAD
 	v1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	v1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+=======
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+>>>>>>> origin/main
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
 )

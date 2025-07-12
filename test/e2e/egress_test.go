@@ -34,11 +34,19 @@ import (
 	"k8s.io/client-go/util/retry"
 	utilnet "k8s.io/utils/net"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 const waitEgressRealizedTimeout = 3 * time.Second

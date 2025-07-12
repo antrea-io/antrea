@@ -17,11 +17,19 @@
 package fake
 
 import (
+<<<<<<< HEAD
 	clientset "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned"
 	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
 	fakemulticlusterv1alpha1 "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1/fake"
 	multiclusterv1alpha2 "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2"
 	fakemulticlusterv1alpha2 "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2/fake"
+=======
+	clientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
+	fakemulticlusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1/fake"
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2"
+	fakemulticlusterv1alpha2 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2/fake"
+>>>>>>> origin/main
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

@@ -20,7 +20,11 @@ import (
 	"strconv"
 	"strings"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
+=======
+	"antrea.io/antrea/pkg/agent/util"
+>>>>>>> origin/main
 )
 
 var getAllNodeAddresses = util.GetAllNodeAddresses

@@ -22,8 +22,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+<<<<<<< HEAD
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/features"
+=======
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/pkg/features"
+>>>>>>> origin/main
 )
 
 func TestMulticlusterOptions(t *testing.T) {

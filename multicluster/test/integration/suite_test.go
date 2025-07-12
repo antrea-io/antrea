@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	mcsscheme "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/scheme"
 
+<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/leader"
@@ -42,6 +43,15 @@ import (
 	antreamcscheme "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/scheme"
 	antreascheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/v2/pkg/signals"
+=======
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
+	"antrea.io/antrea/multicluster/controllers/multicluster/member"
+	antreamcscheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
+	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/pkg/signals"
+>>>>>>> origin/main
 	//+kubebuilder:scaffold:imports
 )
 

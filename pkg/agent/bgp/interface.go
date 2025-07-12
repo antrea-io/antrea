@@ -17,7 +17,11 @@ package bgp
 import (
 	"context"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+=======
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+>>>>>>> origin/main
 )
 
 // Interface defines the methods for managing a BGP (Border Gateway Protocol) process.

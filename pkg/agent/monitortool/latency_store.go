@@ -26,8 +26,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 // LatencyStore is a store for latency information of connections between Nodes.

@@ -32,7 +32,11 @@ import (
 	certutil "k8s.io/client-go/util/cert"
 	clocktesting "k8s.io/utils/clock/testing"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/env"
+=======
+	"antrea.io/antrea/pkg/util/env"
+>>>>>>> origin/main
 )
 
 const (

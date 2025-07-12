@@ -24,10 +24,17 @@ import (
 	"github.com/stretchr/testify/require"
 	mock "go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+>>>>>>> origin/main
 )
 
 func mockSetInterfaceMTU(t *testing.T, returnErr error) {

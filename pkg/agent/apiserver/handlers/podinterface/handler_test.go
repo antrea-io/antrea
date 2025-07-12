@@ -24,10 +24,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
 	queriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	queriertest "antrea.io/antrea/pkg/agent/querier/testing"
+>>>>>>> origin/main
 )
 
 // There are 3 pod-interfaces:

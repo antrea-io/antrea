@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	aggregator "antrea.io/antrea/v2/pkg/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver"
 	"antrea.io/antrea/v2/pkg/log"
@@ -32,6 +33,15 @@ import (
 	"antrea.io/antrea/v2/pkg/util/cipher"
 	"antrea.io/antrea/v2/pkg/util/podstore"
 	"antrea.io/antrea/v2/pkg/version"
+=======
+	aggregator "antrea.io/antrea/pkg/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/apiserver"
+	"antrea.io/antrea/pkg/log"
+	"antrea.io/antrea/pkg/signals"
+	"antrea.io/antrea/pkg/util/cipher"
+	"antrea.io/antrea/pkg/util/podstore"
+	"antrea.io/antrea/pkg/version"
+>>>>>>> origin/main
 )
 
 const informerDefaultResync = 12 * time.Hour

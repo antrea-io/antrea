@@ -24,10 +24,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
+=======
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/pkg/antctl/raw"
+	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
+	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
+>>>>>>> origin/main
 )
 
 type joinConfigOptions struct {

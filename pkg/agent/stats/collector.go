@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/multicast"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
@@ -32,6 +33,17 @@ import (
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	"antrea.io/antrea/pkg/agent/client"
+	"antrea.io/antrea/pkg/agent/multicast"
+	"antrea.io/antrea/pkg/agent/openflow"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 const (

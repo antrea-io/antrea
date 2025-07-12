@@ -23,7 +23,11 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
+=======
+	k8sproxy "antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 func checkExpectedEndpoints(expected sets.Set[string], actual []k8sproxy.Endpoint) error {

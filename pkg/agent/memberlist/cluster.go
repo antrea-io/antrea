@@ -36,11 +36,19 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/consistenthash"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlister "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	"antrea.io/antrea/pkg/agent/consistenthash"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlister "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 const (

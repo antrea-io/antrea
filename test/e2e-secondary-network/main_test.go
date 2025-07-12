@@ -22,7 +22,11 @@ import (
 	"os"
 	"testing"
 
+<<<<<<< HEAD
 	antreae2e "antrea.io/antrea/v2/test/e2e"
+=======
+	antreae2e "antrea.io/antrea/test/e2e"
+>>>>>>> origin/main
 )
 
 func TestMain(m *testing.M) {

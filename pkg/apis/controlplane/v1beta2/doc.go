@@ -15,7 +15,11 @@
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
 // +k8s:protobuf-gen=package
+<<<<<<< HEAD
 // +k8s:conversion-gen=antrea.io/antrea/apis/pkg/apis/controlplane
+=======
+// +k8s:conversion-gen=antrea.io/antrea/pkg/apis/controlplane
+>>>>>>> origin/main
 // +groupName=controlplane.antrea.io
 
 // Package v1beta2 is the v1beta2 version of the Antrea NetworkPolicy API messages.

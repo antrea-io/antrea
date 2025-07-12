@@ -24,9 +24,15 @@ import (
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/ipassigner"
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+=======
+	"antrea.io/antrea/pkg/agent/ipassigner"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+>>>>>>> origin/main
 )
 
 const dummyDeviceName = "antrea-dummy0"

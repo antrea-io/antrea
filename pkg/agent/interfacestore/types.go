@@ -18,8 +18,13 @@ import (
 	"net"
 	"strconv"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+=======
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+>>>>>>> origin/main
 )
 
 const (

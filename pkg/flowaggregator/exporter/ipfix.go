@@ -33,12 +33,21 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+<<<<<<< HEAD
 	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	"antrea.io/antrea/v2/pkg/ipfix"
 	"antrea.io/antrea/v2/pkg/util/env"
+=======
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/infoelements"
+	"antrea.io/antrea/pkg/flowaggregator/options"
+	"antrea.io/antrea/pkg/ipfix"
+	"antrea.io/antrea/pkg/util/env"
+>>>>>>> origin/main
 )
 
 var (

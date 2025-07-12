@@ -18,8 +18,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/querier"
+=======
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/querier"
+>>>>>>> origin/main
 )
 
 const (

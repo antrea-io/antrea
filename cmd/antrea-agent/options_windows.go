@@ -24,9 +24,15 @@ import (
 	"k8s.io/component-base/featuregate"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+>>>>>>> origin/main
 )
 
 const (

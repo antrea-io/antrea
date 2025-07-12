@@ -28,7 +28,11 @@ import (
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
+=======
+	netlinktest "antrea.io/antrea/pkg/agent/util/netlink/testing"
+>>>>>>> origin/main
 )
 
 type mockLink struct {

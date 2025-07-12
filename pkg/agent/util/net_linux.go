@@ -33,9 +33,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	utilnetlink "antrea.io/antrea/v2/pkg/agent/util/netlink"
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+=======
+	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+>>>>>>> origin/main
 )
 
 var (
@@ -290,7 +296,11 @@ func RenameInterface(from, to string) error {
 	if pollErr != nil {
 		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
 	}
+<<<<<<< HEAD
 	// Fix for the issue https://github.com/antrea.io/antrea/v2/issues/6301.
+=======
+	// Fix for the issue https://github.com/antrea-io/antrea/issues/6301.
+>>>>>>> origin/main
 	// In some new Linux versions which support AltName, if the only valid altname of the interface is the same as the
 	// interface name, it would be left empty when the name is occupied by the interface name; after we rename the
 	// interface name to another value, the altname of the interface would be set to the original interface name by the

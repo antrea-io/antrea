@@ -17,10 +17,17 @@
 package crd
 
 import (
+<<<<<<< HEAD
 	v1alpha1 "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	v1alpha2 "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
 	v1beta1 "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	internalinterfaces "antrea.io/antrea/v2/pkg/client/informers/externalversions/internalinterfaces"
+=======
+	v1alpha1 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	v1alpha2 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	v1beta1 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
+	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
+>>>>>>> origin/main
 )
 
 // Interface provides access to each of this group's versions.

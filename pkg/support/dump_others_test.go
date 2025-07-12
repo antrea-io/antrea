@@ -22,7 +22,11 @@ import (
 	"path/filepath"
 	"testing"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/logdir"
+=======
+	"antrea.io/antrea/pkg/util/logdir"
+>>>>>>> origin/main
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"

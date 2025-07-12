@@ -26,7 +26,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/time/rate"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+=======
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+>>>>>>> origin/main
 )
 
 type fakeConn struct{}

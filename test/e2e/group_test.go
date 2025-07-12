@@ -20,7 +20,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+<<<<<<< HEAD
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+=======
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+>>>>>>> origin/main
 )
 
 func testInvalidGroupIPBlockWithPodSelector(t *testing.T) {

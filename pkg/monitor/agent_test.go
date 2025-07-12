@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	cgtesting "k8s.io/client-go/testing"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
@@ -36,6 +37,17 @@ import (
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/querier"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
+>>>>>>> origin/main
 )
 
 const ovsVersion = "2.10.0"

@@ -21,7 +21,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
+=======
+	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
+>>>>>>> origin/main
 )
 
 func TestGetFlowRecord(t *testing.T) {

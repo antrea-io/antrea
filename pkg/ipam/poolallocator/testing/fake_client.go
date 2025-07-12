@@ -24,8 +24,13 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	k8stesting "k8s.io/client-go/testing"
 
+<<<<<<< HEAD
 	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+=======
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+>>>>>>> origin/main
 )
 
 // Simple client is not sufficient for pool allocator testing,

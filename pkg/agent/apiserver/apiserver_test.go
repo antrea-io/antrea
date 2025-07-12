@@ -31,11 +31,19 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/options"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 	"antrea.io/antrea/v2/pkg/version"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
+	"antrea.io/antrea/pkg/version"
+>>>>>>> origin/main
 )
 
 type fakeAgentAPIServer struct {

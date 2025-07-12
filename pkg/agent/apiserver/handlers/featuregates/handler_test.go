@@ -24,8 +24,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/component-base/featuregate"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/features"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/features"
+>>>>>>> origin/main
 )
 
 func TestGetStatus(t *testing.T) {

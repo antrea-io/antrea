@@ -31,10 +31,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+=======
+	"antrea.io/antrea/multicluster/apis/multicluster/constants"
+	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+>>>>>>> origin/main
 )
 
 var (

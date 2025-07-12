@@ -46,7 +46,11 @@ import (
 	"k8s.io/utils/clock"
 	testingclock "k8s.io/utils/clock/testing"
 
+<<<<<<< HEAD
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+=======
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+>>>>>>> origin/main
 )
 
 const fakeNodeName = "fake-node-1"

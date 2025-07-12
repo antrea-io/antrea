@@ -21,4 +21,7 @@ bin
 vendor
 
 ci/jenkins/jobs/defaults.yml
+<<<<<<< HEAD
 antrea-controller
+=======
+>>>>>>> origin/main

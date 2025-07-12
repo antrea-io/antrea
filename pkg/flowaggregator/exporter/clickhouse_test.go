@@ -23,9 +23,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/clickhouseclient"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+=======
+	"antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
+	"antrea.io/antrea/pkg/flowaggregator/options"
+>>>>>>> origin/main
 )
 
 func TestClickHouse_UpdateOptions(t *testing.T) {

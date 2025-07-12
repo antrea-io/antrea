@@ -18,8 +18,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+>>>>>>> origin/main
 )
 
 type SupportBundleCollection struct {

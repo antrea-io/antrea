@@ -30,6 +30,7 @@ import (
 	"go.uber.org/mock/gomock"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
 	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
@@ -43,6 +44,21 @@ import (
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"
+	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
+	types "antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	"antrea.io/antrea/pkg/agent/util"
+	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/util/channel"
+>>>>>>> origin/main
 )
 
 func TestValidatePrevResult(t *testing.T) {

@@ -31,10 +31,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	queriermock "antrea.io/antrea/v2/pkg/controller/networkpolicy/testing"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	queriermock "antrea.io/antrea/pkg/controller/networkpolicy/testing"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
+>>>>>>> origin/main
 )
 
 // pods represent kubernetes pods for testing proper query results

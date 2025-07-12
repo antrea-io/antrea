@@ -19,10 +19,17 @@ import (
 
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/agent/util/winnet"
 	"antrea.io/antrea/v2/pkg/signals"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/winnet"
+	"antrea.io/antrea/pkg/signals"
+>>>>>>> origin/main
 )
 
 var winnetUtil winnet.Interface = &winnet.Handle{}

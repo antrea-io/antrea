@@ -22,7 +22,11 @@ package v1alpha1
 import (
 	unsafe "unsafe"
 
+<<<<<<< HEAD
 	stats "antrea.io/antrea/apis/pkg/apis/stats"
+=======
+	stats "antrea.io/antrea/pkg/apis/stats"
+>>>>>>> origin/main
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )

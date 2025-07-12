@@ -39,6 +39,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	ifaceStoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
@@ -52,6 +53,21 @@ import (
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	ovsopenflow "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/channel"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	ifaceStoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	multicasttest "antrea.io/antrea/pkg/agent/multicast/testing"
+	"antrea.io/antrea/pkg/agent/openflow"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/types"
+	typestest "antrea.io/antrea/pkg/agent/types/testing"
+	agentutil "antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	ovsopenflow "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/util/channel"
+>>>>>>> origin/main
 )
 
 var (

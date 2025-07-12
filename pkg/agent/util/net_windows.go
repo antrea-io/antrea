@@ -31,8 +31,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
 	"antrea.io/antrea/v2/pkg/agent/util/winnet"
+=======
+	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
+	"antrea.io/antrea/pkg/agent/util/winnet"
+>>>>>>> origin/main
 )
 
 const (

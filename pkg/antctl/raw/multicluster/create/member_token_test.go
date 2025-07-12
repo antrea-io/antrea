@@ -24,8 +24,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
+=======
+	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
+	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
+>>>>>>> origin/main
 )
 
 func TestCreateAccessToken(t *testing.T) {

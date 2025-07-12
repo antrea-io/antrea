@@ -26,7 +26,11 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+<<<<<<< HEAD
 	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+=======
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+>>>>>>> origin/main
 )
 
 var (

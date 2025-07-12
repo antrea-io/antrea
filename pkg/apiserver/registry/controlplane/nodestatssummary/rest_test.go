@@ -21,8 +21,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+>>>>>>> origin/main
 )
 
 func TestREST(t *testing.T) {

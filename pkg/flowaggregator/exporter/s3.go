@@ -18,9 +18,15 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	"antrea.io/antrea/v2/pkg/flowaggregator/s3uploader"
+=======
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/pkg/flowaggregator/options"
+	"antrea.io/antrea/pkg/flowaggregator/s3uploader"
+>>>>>>> origin/main
 )
 
 type S3Exporter struct {

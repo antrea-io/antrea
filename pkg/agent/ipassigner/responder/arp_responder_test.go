@@ -25,7 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/nettest"
+=======
+	"antrea.io/antrea/pkg/agent/util/nettest"
+>>>>>>> origin/main
 )
 
 func newFakeARPClient(iface *net.Interface, conn *nettest.PacketConn) (*arp.Client, error) {

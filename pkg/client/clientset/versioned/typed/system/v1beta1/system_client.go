@@ -19,8 +19,13 @@ package v1beta1
 import (
 	"net/http"
 
+<<<<<<< HEAD
 	v1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
+=======
+	v1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+>>>>>>> origin/main
 	rest "k8s.io/client-go/rest"
 )
 

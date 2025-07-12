@@ -19,7 +19,11 @@ package fake
 import (
 	"context"
 
+<<<<<<< HEAD
 	v1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+=======
+	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+>>>>>>> origin/main
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	types "k8s.io/apimachinery/pkg/types"

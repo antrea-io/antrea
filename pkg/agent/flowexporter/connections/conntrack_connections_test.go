@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
@@ -39,6 +40,19 @@ import (
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
+=======
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow"
+	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
+	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 var (

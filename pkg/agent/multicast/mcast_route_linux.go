@@ -26,7 +26,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/runtime"
+=======
+	"antrea.io/antrea/pkg/util/runtime"
+>>>>>>> origin/main
 )
 
 const (

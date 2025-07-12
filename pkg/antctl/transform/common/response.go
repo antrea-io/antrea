@@ -17,7 +17,11 @@ package common
 import (
 	"net"
 
+<<<<<<< HEAD
 	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+=======
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+>>>>>>> origin/main
 )
 
 type GroupMember struct {

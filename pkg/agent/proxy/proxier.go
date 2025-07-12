@@ -40,6 +40,7 @@ import (
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/strings/slices"
 
+<<<<<<< HEAD
 	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/nodeip"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
@@ -54,6 +55,22 @@ import (
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 	"antrea.io/antrea/v2/third_party/proxy/config"
 	"antrea.io/antrea/v2/third_party/proxy/healthcheck"
+=======
+	agentconfig "antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/nodeip"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/proxy/metrics"
+	"antrea.io/antrea/pkg/agent/proxy/types"
+	"antrea.io/antrea/pkg/agent/route"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
+	antreaconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/pkg/features"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	k8sutil "antrea.io/antrea/pkg/util/k8s"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/third_party/proxy/config"
+	"antrea.io/antrea/third_party/proxy/healthcheck"
+>>>>>>> origin/main
 )
 
 const (

@@ -25,9 +25,15 @@ import (
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
 	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+=======
+	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+>>>>>>> origin/main
 )
 
 var (

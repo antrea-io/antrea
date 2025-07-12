@@ -22,6 +22,7 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	bgpcontroller "antrea.io/antrea/v2/pkg/agent/controller/bgp"
@@ -31,6 +32,17 @@ import (
 	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/version"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/bgp"
+	bgpcontroller "antrea.io/antrea/pkg/agent/controller/bgp"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/multicast"
+	"antrea.io/antrea/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/version"
+>>>>>>> origin/main
 )
 
 type NetworkPolicyInfoQuerier interface {

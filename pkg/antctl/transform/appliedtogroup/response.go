@@ -22,10 +22,17 @@ import (
 	"k8s.io/kubectl/pkg/cmd/get"
 	"k8s.io/kubectl/pkg/scheme"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/transform"
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/util/printers"
+=======
+	"antrea.io/antrea/pkg/antctl/transform"
+	"antrea.io/antrea/pkg/antctl/transform/common"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/printers"
+>>>>>>> origin/main
 )
 
 type Response struct {

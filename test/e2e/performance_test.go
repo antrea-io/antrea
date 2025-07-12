@@ -29,7 +29,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/openflow"
+=======
+	"antrea.io/antrea/pkg/agent/openflow"
+>>>>>>> origin/main
 )
 
 const (

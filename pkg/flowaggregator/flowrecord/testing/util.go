@@ -17,7 +17,11 @@ package testing
 import (
 	"time"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
+=======
+	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
+>>>>>>> origin/main
 )
 
 // used for unit testing

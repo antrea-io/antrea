@@ -30,11 +30,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+<<<<<<< HEAD
 	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/util/externalnode"
 	. "antrea.io/antrea/v2/test/e2e/utils"
+=======
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/externalnode"
+	. "antrea.io/antrea/test/e2e/utils"
+>>>>>>> origin/main
 )
 
 const (

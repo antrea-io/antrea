@@ -31,6 +31,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	cpinstall "antrea.io/antrea/apis/pkg/apis/controlplane/install"
@@ -72,6 +73,49 @@ import (
 	controllerbundlecollection "antrea.io/antrea/v2/pkg/controller/supportbundlecollection"
 	"antrea.io/antrea/v2/pkg/controller/traceflow"
 	"antrea.io/antrea/v2/pkg/features"
+=======
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	cpinstall "antrea.io/antrea/pkg/apis/controlplane/install"
+	apistats "antrea.io/antrea/pkg/apis/stats"
+	statsinstall "antrea.io/antrea/pkg/apis/stats/install"
+	systeminstall "antrea.io/antrea/pkg/apis/system/install"
+	system "antrea.io/antrea/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/pkg/apiserver/certificate"
+	"antrea.io/antrea/pkg/apiserver/handlers/endpoint"
+	"antrea.io/antrea/pkg/apiserver/handlers/featuregates"
+	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
+	"antrea.io/antrea/pkg/apiserver/handlers/webhook"
+	"antrea.io/antrea/pkg/apiserver/registry/controlplane/egressgroup"
+	"antrea.io/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
+	"antrea.io/antrea/pkg/apiserver/registry/controlplane/supportbundlecollection"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupassociation"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupmember"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/ipgroupassociation"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/networkpolicyevaluation"
+	"antrea.io/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
+	"antrea.io/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
+	"antrea.io/antrea/pkg/apiserver/registry/stats/multicastgroup"
+	"antrea.io/antrea/pkg/apiserver/registry/stats/networkpolicystats"
+	"antrea.io/antrea/pkg/apiserver/registry/stats/nodelatencystats"
+	"antrea.io/antrea/pkg/apiserver/registry/system/controllerinfo"
+	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/pkg/controller/egress"
+	"antrea.io/antrea/pkg/controller/externalippool"
+	"antrea.io/antrea/pkg/controller/ipam"
+	controllernetworkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
+	"antrea.io/antrea/pkg/controller/querier"
+	"antrea.io/antrea/pkg/controller/stats"
+	controllerbundlecollection "antrea.io/antrea/pkg/controller/supportbundlecollection"
+	"antrea.io/antrea/pkg/controller/traceflow"
+	"antrea.io/antrea/pkg/features"
+>>>>>>> origin/main
 )
 
 var (
@@ -280,7 +324,11 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	// After Antrea upgrades from an old version to a new version that
 	// deprecates a registered APIService, the APIService should be deleted,
 	// otherwise K8s will fail to delete an existing Namespace.
+<<<<<<< HEAD
 	// Also check: https://github.com/antrea.io/antrea/v2/issues/494
+=======
+	// Also check: https://github.com/antrea-io/antrea/issues/494
+>>>>>>> origin/main
 	deprecatedAPIServices := []string{}
 	for _, as := range deprecatedAPIServices {
 		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})

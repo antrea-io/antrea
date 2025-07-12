@@ -30,10 +30,17 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	ipassignertest "antrea.io/antrea/v2/pkg/agent/ipassigner/testing"
 	"antrea.io/antrea/v2/pkg/agent/memberlist"
 	"antrea.io/antrea/v2/pkg/agent/types"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
+	"antrea.io/antrea/pkg/agent/memberlist"
+	"antrea.io/antrea/pkg/agent/types"
+>>>>>>> origin/main
 )
 
 const (

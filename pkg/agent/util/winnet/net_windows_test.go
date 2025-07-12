@@ -28,10 +28,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/windows"
 
+<<<<<<< HEAD
 	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
 	antreasyscalltest "antrea.io/antrea/v2/pkg/agent/util/syscall/testing"
 	"antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/ip"
+=======
+	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
+	antreasyscalltest "antrea.io/antrea/pkg/agent/util/syscall/testing"
+	"antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 var (

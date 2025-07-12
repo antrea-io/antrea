@@ -19,7 +19,11 @@ package fake
 import (
 	"context"
 
+<<<<<<< HEAD
 	v1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
+=======
+	v1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+>>>>>>> origin/main
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	testing "k8s.io/client-go/testing"
 )

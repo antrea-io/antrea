@@ -21,8 +21,13 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/printers"
+=======
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/util/printers"
+>>>>>>> origin/main
 )
 
 // AntreaAgentInfoResponse is the struct for the response of agentinfo command.

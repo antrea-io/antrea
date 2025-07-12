@@ -19,8 +19,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/util/runtime"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/util/runtime"
+>>>>>>> origin/main
 )
 
 func podConnectivityInitFlows(

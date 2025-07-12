@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/route"
 	"antrea.io/antrea/v2/pkg/agent/util"
@@ -43,6 +44,16 @@ import (
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/ipset"
+	"antrea.io/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	utilip "antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 func ExecOutputTrim(cmd string) (string, error) {

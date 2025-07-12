@@ -35,9 +35,15 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+=======
+	"antrea.io/antrea/pkg/antctl/raw"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+>>>>>>> origin/main
 )
 
 const defaultTimeout time.Duration = time.Second * 10

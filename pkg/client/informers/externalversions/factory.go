@@ -21,9 +21,15 @@ import (
 	sync "sync"
 	time "time"
 
+<<<<<<< HEAD
 	versioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crd "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd"
 	internalinterfaces "antrea.io/antrea/v2/pkg/client/informers/externalversions/internalinterfaces"
+=======
+	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
+	crd "antrea.io/antrea/pkg/client/informers/externalversions/crd"
+	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
+>>>>>>> origin/main
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

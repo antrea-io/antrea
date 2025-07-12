@@ -29,7 +29,11 @@ limitations under the License.
 // limitations under the License.
 
 Modifies:
+<<<<<<< HEAD
 - Replace import from "k8s.io/kubernetes/pkg/api/v1/service" to  "antrea.io/antrea/v2/pkg/agent/proxy/upstream/util"
+=======
+- Replace import from "k8s.io/kubernetes/pkg/api/v1/service" to  "antrea.io/antrea/pkg/agent/proxy/upstream/util"
+>>>>>>> origin/main
 - Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and related invokes
 - Remove check for feature gate ServiceInternalTrafficPolicy
 
@@ -53,8 +57,13 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/features"
 	utilproxy "antrea.io/antrea/v2/third_party/proxy/util"
+=======
+	"antrea.io/antrea/pkg/features"
+	utilproxy "antrea.io/antrea/third_party/proxy/util"
+>>>>>>> origin/main
 )
 
 // BaseServiceInfo contains base information that defines a service.

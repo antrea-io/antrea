@@ -25,8 +25,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 func TestGetNodeAddrs(t *testing.T) {

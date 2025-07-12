@@ -27,10 +27,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	utilsets "antrea.io/antrea/v2/pkg/util/sets"
+=======
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/k8s"
+	utilsets "antrea.io/antrea/pkg/util/sets"
+>>>>>>> origin/main
 )
 
 const (

@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
@@ -36,6 +37,16 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/third_party/proxy"
+=======
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 var (

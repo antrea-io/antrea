@@ -21,10 +21,17 @@ import (
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+>>>>>>> origin/main
 )
 
 type rejectType int

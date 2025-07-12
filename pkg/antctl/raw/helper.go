@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
@@ -41,6 +42,16 @@ import (
 	"antrea.io/antrea/v2/pkg/util/compress"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/pkg/util/compress"
+	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 func GetNodeAddrs(node *corev1.Node) (*ip.DualStackIPs, error) {

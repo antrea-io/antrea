@@ -15,7 +15,11 @@
 package querier
 
 import (
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
+=======
+	"antrea.io/antrea/pkg/flowaggregator/intermediate"
+>>>>>>> origin/main
 )
 
 type Metrics struct {

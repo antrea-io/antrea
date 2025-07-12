@@ -17,7 +17,11 @@
 package fake
 
 import (
+<<<<<<< HEAD
 	v1alpha1 "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
+=======
+	v1alpha1 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
+>>>>>>> origin/main
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

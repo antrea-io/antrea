@@ -24,7 +24,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	admv1 "k8s.io/api/admission/v1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
+=======
+	"antrea.io/antrea/pkg/controller/networkpolicy"
+>>>>>>> origin/main
 )
 
 var (

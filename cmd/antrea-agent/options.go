@@ -28,6 +28,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/cni"
@@ -38,6 +39,18 @@ import (
 	"antrea.io/antrea/v2/pkg/util/flowexport"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/yaml"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/cni"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/flowexport"
+	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/yaml"
+>>>>>>> origin/main
 )
 
 const (

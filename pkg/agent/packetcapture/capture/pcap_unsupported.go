@@ -24,7 +24,11 @@ import (
 
 	"github.com/gopacket/gopacket"
 
+<<<<<<< HEAD
 	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+=======
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+>>>>>>> origin/main
 )
 
 type pcapCapture struct {

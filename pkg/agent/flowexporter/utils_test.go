@@ -19,7 +19,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+>>>>>>> origin/main
 )
 
 func TestIsConnectionDying(t *testing.T) {

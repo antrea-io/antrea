@@ -59,6 +59,7 @@ import (
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	crdclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	"antrea.io/antrea/v2/pkg/clusteridentity"
@@ -67,6 +68,16 @@ import (
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/test/e2e/providers"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/clusteridentity"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/test/e2e/providers"
+>>>>>>> origin/main
 )
 
 var AntreaConfigMap *corev1.ConfigMap

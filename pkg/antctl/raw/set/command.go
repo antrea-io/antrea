@@ -17,7 +17,11 @@ package set
 import (
 	"github.com/spf13/cobra"
 
+<<<<<<< HEAD
 	flowaggregator "antrea.io/antrea/v2/pkg/antctl/raw/set/flowaggregator"
+=======
+	flowaggregator "antrea.io/antrea/pkg/antctl/raw/set/flowaggregator"
+>>>>>>> origin/main
 )
 
 var SetCmd = &cobra.Command{

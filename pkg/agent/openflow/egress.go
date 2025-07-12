@@ -20,9 +20,15 @@ import (
 
 	"antrea.io/libOpenflow/openflow15"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+>>>>>>> origin/main
 )
 
 type featureEgress struct {

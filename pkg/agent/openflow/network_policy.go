@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/v2/pkg/agent/types"
@@ -33,6 +34,15 @@ import (
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	thirdpartynp "antrea.io/antrea/v2/third_party/networkpolicy"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	thirdpartynp "antrea.io/antrea/third_party/networkpolicy"
+>>>>>>> origin/main
 )
 
 var (

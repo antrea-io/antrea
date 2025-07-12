@@ -23,8 +23,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionResponse {

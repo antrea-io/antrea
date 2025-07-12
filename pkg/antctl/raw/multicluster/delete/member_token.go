@@ -21,7 +21,11 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
+=======
+	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
+>>>>>>> origin/main
 )
 
 type deleteTokenOptions struct {

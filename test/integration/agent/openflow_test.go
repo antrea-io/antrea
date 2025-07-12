@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/component-base/metrics/legacyregistry"
 
+<<<<<<< HEAD
 	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
@@ -49,6 +50,26 @@ import (
 	antrearuntime "antrea.io/antrea/v2/pkg/util/runtime"
 	ofTestUtils "antrea.io/antrea/v2/test/integration/ovs"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
+=======
+	agentconfig "antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/metrics"
+	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
+	ofClient "antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	k8stypes "antrea.io/antrea/pkg/agent/proxy/types"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	utilip "antrea.io/antrea/pkg/util/ip"
+	antrearuntime "antrea.io/antrea/pkg/util/runtime"
+	ofTestUtils "antrea.io/antrea/test/integration/ovs"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 var (

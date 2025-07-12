@@ -19,7 +19,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+>>>>>>> origin/main
 )
 
 func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []string {

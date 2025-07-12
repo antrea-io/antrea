@@ -14,7 +14,11 @@
 
 package apis
 
+<<<<<<< HEAD
 import "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+=======
+import "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+>>>>>>> origin/main
 
 // EndpointQueryResponse is the reply struct for anctl endpoint queries
 type EndpointQueryResponse struct {

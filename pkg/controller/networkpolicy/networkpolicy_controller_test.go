@@ -45,6 +45,7 @@ import (
 	fakepolicyversioned "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/fake"
 	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
 
+<<<<<<< HEAD
 	fakemcsversioned "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/fake"
 	mcsinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
@@ -58,6 +59,21 @@ import (
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/externalnode"
+=======
+	fakemcsversioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
+	mcsinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/controller/grouping"
+	"antrea.io/antrea/pkg/controller/labelidentity"
+	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/externalnode"
+>>>>>>> origin/main
 )
 
 var alwaysReady = func() bool { return true }

@@ -27,9 +27,15 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/featuregate"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/util/runtime"
+=======
+	"antrea.io/antrea/pkg/apiserver/apis"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/runtime"
+>>>>>>> origin/main
 )
 
 var (

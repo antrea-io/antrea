@@ -45,6 +45,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
 	"antrea.io/antrea/v2/pkg/agent/util"
@@ -55,6 +56,18 @@ import (
 	"antrea.io/antrea/v2/pkg/util/auth"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/sftp"
+=======
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/packetcapture/capture"
+	"antrea.io/antrea/pkg/agent/util"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	"antrea.io/antrea/pkg/util/auth"
+	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/sftp"
+>>>>>>> origin/main
 )
 
 type storageProtocolType string

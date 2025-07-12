@@ -33,7 +33,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/env"
+=======
+	"antrea.io/antrea/pkg/util/env"
+>>>>>>> origin/main
 )
 
 const (

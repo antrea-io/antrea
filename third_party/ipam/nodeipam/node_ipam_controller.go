@@ -30,7 +30,11 @@ limitations under the License.
 
 Modifies:
 - Replace k8s.io/kubernetes/pkg/controller/nodeipam/ipam import with
+<<<<<<< HEAD
  antrea.io/antrea/v2/third_party/nodeipam/ipam
+=======
+ antrea.io/antrea/third_party/nodeipam/ipam
+>>>>>>> origin/main
 - Comment out startLegacyIPAM() call as legacy IPAM support is redundant
 - Remove cloud argument from NewNodeIpamController()
 - Remove cloud member from Controler struct
@@ -51,7 +55,11 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/third_party/ipam/nodeipam/ipam"
+=======
+	"antrea.io/antrea/third_party/ipam/nodeipam/ipam"
+>>>>>>> origin/main
 )
 
 // Controller is the controller that manages node ipam state.

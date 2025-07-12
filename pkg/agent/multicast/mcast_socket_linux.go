@@ -25,7 +25,11 @@ import (
 
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	multicastsyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
+=======
+	multicastsyscall "antrea.io/antrea/pkg/agent/util/syscall"
+>>>>>>> origin/main
 )
 
 const (

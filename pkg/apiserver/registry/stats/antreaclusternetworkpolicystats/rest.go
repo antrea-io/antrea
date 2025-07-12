@@ -27,8 +27,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+<<<<<<< HEAD
 	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
+=======
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/features"
+>>>>>>> origin/main
 )
 
 var (

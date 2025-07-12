@@ -20,8 +20,13 @@ import (
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+>>>>>>> origin/main
 )
 
 // The ClusterGroupMembersExpansion interface allows manually adding extra methods to the ClusterGroupMembersInterface.

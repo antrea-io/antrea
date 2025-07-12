@@ -35,16 +35,26 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/restmapper"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
+=======
+	"antrea.io/antrea/pkg/antctl/raw"
+	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
+>>>>>>> origin/main
 )
 
 const (
 	leaderRole = "leader"
 	memberRole = "member"
 
+<<<<<<< HEAD
 	latestVersionURL = "https://raw.githubusercontent.com/antrea.io/antrea/v2/main/multicluster/build/yamls"
 	downloadURL      = "https://github.com/antrea.io/antrea/v2/releases/download"
+=======
+	latestVersionURL = "https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls"
+	downloadURL      = "https://github.com/antrea-io/antrea/releases/download"
+>>>>>>> origin/main
 	leaderYAML       = "antrea-multicluster-leader.yml"
 	memberYAML       = "antrea-multicluster-member.yml"
 )

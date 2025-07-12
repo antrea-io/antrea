@@ -20,10 +20,17 @@ import (
 	"context"
 	time "time"
 
+<<<<<<< HEAD
 	multiclusterv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	versioned "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/internalinterfaces"
 	v1alpha2 "antrea.io/antrea/v2/multicluster/pkg/client/listers/multicluster/v1alpha2"
+=======
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	versioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
+	internalinterfaces "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/internalinterfaces"
+	v1alpha2 "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha2"
+>>>>>>> origin/main
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"

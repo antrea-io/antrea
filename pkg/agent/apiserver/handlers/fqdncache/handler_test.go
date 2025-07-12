@@ -28,10 +28,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/querier"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/querier"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
+>>>>>>> origin/main
 )
 
 func TestFqdnCacheQuery(t *testing.T) {

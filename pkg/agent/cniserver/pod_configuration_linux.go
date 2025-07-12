@@ -24,9 +24,15 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
+>>>>>>> origin/main
 )
 
 // connectInterfaceToOVS connects an existing interface to the OVS bridge.

@@ -24,8 +24,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+=======
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+>>>>>>> origin/main
 )
 
 func TestListTransform(t *testing.T) {

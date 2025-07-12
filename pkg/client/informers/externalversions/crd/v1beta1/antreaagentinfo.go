@@ -20,10 +20,17 @@ import (
 	"context"
 	time "time"
 
+<<<<<<< HEAD
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	versioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/v2/pkg/client/informers/externalversions/internalinterfaces"
 	v1beta1 "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+=======
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
+	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
+	v1beta1 "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
+>>>>>>> origin/main
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"

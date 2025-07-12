@@ -22,7 +22,11 @@ import (
 
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
+=======
+	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
+>>>>>>> origin/main
 )
 
 func addRuleForPort(podPortRules rules.PodPortRules, port int, podIP string, podPort int, protocol string) (ProtocolSocketData, error) {

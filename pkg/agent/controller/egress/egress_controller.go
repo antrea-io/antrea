@@ -41,6 +41,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/ipassigner"
@@ -59,6 +60,26 @@ import (
 	"antrea.io/antrea/v2/pkg/controller/metrics"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	"antrea.io/antrea/pkg/agent/client"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/ipassigner"
+	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
+	"antrea.io/antrea/pkg/agent/memberlist"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/servicecidr"
+	"antrea.io/antrea/pkg/agent/types"
+	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/pkg/controller/metrics"
+	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 const (

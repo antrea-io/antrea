@@ -23,12 +23,21 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
 	opstest "antrea.io/antrea/v2/pkg/agent/openflow/operations/testing"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	openflowtest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
 	"antrea.io/antrea/v2/third_party/proxy"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
+	opstest "antrea.io/antrea/pkg/agent/openflow/operations/testing"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	openflowtest "antrea.io/antrea/pkg/ovs/openflow/testing"
+	"antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 func pipelineDefaultFlows(egressTrafficShapingEnabled, externalNodeEnabled, isEncap, isIPv4 bool) []string {

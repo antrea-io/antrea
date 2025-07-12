@@ -21,10 +21,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
 	"antrea.io/antrea/v2/pkg/controller/types"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/apiserver/storage/ram"
+	"antrea.io/antrea/pkg/controller/types"
+>>>>>>> origin/main
 )
 
 // supportBundleCollectionEvent implements storage.InternalEvent.

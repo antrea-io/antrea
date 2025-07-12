@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
@@ -36,6 +37,17 @@ import (
 	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/querier"
+	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
+>>>>>>> origin/main
 )
 
 var (

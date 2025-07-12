@@ -22,7 +22,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
+=======
+	"antrea.io/antrea/pkg/agent/util"
+>>>>>>> origin/main
 )
 
 func createTestInterface(t *testing.T, name string) string {

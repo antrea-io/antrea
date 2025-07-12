@@ -28,9 +28,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 	flowrecordtesting "antrea.io/antrea/v2/pkg/flowaggregator/flowrecord/testing"
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
+=======
+	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
+	flowrecordtesting "antrea.io/antrea/pkg/flowaggregator/flowrecord/testing"
+	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
+>>>>>>> origin/main
 )
 
 var fakeClusterUUID = uuid.New().String()

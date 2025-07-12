@@ -21,7 +21,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+<<<<<<< HEAD
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+=======
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+>>>>>>> origin/main
 )
 
 const (

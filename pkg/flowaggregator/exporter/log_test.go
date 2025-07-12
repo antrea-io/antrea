@@ -23,10 +23,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
+=======
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
+	"antrea.io/antrea/pkg/flowaggregator/options"
+	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
+>>>>>>> origin/main
 )
 
 func TestLog_UpdateOptions(t *testing.T) {

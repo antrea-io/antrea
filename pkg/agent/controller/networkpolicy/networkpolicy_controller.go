@@ -35,6 +35,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/controller/networkpolicy/l7engine"
@@ -49,6 +50,22 @@ import (
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	utilwait "antrea.io/antrea/v2/pkg/util/wait"
+=======
+	"antrea.io/antrea/pkg/agent/client"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
+	"antrea.io/antrea/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/controlplane/install"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/channel"
+	utilwait "antrea.io/antrea/pkg/util/wait"
+>>>>>>> origin/main
 )
 
 const (

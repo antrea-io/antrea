@@ -33,8 +33,13 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/util/env"
+=======
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/util/env"
+>>>>>>> origin/main
 )
 
 // CACertController is responsible for taking the CA certificate from the

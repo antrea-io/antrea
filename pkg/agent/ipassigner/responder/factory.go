@@ -20,7 +20,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
+=======
+	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
+>>>>>>> origin/main
 )
 
 var (

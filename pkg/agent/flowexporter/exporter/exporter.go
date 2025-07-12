@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
@@ -44,6 +45,23 @@ import (
 	"antrea.io/antrea/v2/pkg/util/env"
 	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
 	"antrea.io/antrea/v2/pkg/util/podstore"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/ipfix"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/env"
+	k8sutil "antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/podstore"
+>>>>>>> origin/main
 )
 
 // When initializing flowExporter, a slice is allocated with a fixed size to

@@ -21,8 +21,13 @@ import (
 	k8sversion "k8s.io/apimachinery/pkg/version"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	clusterinfov1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	antreaversion "antrea.io/antrea/v2/pkg/version"
+=======
+	clusterinfov1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	antreaversion "antrea.io/antrea/pkg/version"
+>>>>>>> origin/main
 )
 
 type Response struct {

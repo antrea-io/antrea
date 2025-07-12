@@ -33,8 +33,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/test/mocks"
+=======
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/multicluster/test/mocks"
+>>>>>>> origin/main
 )
 
 func initMockManager(mockManager *mocks.MockManager) {

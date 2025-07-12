@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
@@ -42,6 +43,15 @@ import (
 	"antrea.io/antrea/v2/pkg/features"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 	"antrea.io/antrea/v2/test/e2e/utils/portforwarder"
+=======
+	"antrea.io/antrea/pkg/apis"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/features"
+	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
+	"antrea.io/antrea/test/e2e/utils/portforwarder"
+>>>>>>> origin/main
 )
 
 // getAccessToken retrieves the local access token of an antrea component API server.

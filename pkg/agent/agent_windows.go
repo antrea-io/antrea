@@ -25,6 +25,7 @@ import (
 	"github.com/Microsoft/hcsshim"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/externalnode"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
@@ -35,6 +36,18 @@ import (
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/externalnode"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/util"
+	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
+	"antrea.io/antrea/pkg/agent/util/winnet"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	utilip "antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 var (
@@ -403,7 +416,11 @@ func (i *Initializer) getTunnelPortLocalIP() net.IP {
 // The routes will be restored on the OVS bridge interface after the IP
 // configuration is moved to the OVS bridge.
 func (i *Initializer) saveHostRoutes() error {
+<<<<<<< HEAD
 	// IPv6 is not supported on Windows currently. Please refer to https://github.com/antrea.io/antrea/v2/issues/5162
+=======
+	// IPv6 is not supported on Windows currently. Please refer to https://github.com/antrea-io/antrea/issues/5162
+>>>>>>> origin/main
 	// for more information.
 	family := antreasyscall.AF_INET
 	filter := &winnet.Route{

@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
 	antreaclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
@@ -43,6 +44,15 @@ import (
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	systemclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/compress"
+=======
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	antreaclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	systemclientset "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
+	"antrea.io/antrea/pkg/util/compress"
+>>>>>>> origin/main
 )
 
 var (

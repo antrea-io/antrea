@@ -24,7 +24,11 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/set"
 
+<<<<<<< HEAD
 	utilnetlink "antrea.io/antrea/v2/pkg/agent/util/netlink"
+=======
+	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
+>>>>>>> origin/main
 )
 
 const (

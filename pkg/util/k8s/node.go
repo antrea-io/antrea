@@ -23,8 +23,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 // GetNodeAddrsWithType gets the available IP addresses of a Node. It will consider address types

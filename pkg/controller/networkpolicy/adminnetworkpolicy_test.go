@@ -23,9 +23,15 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/features"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/features"
+>>>>>>> origin/main
 )
 
 func TestProcessAdminNetworkPolicy(t *testing.T) {

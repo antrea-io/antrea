@@ -29,10 +29,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
 	"antrea.io/antrea/v2/pkg/util/podstore"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	k8sutil "antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/podstore"
+>>>>>>> origin/main
 )
 
 type PodL7FlowExporterAttrGetter interface {

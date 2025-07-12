@@ -25,6 +25,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
@@ -32,6 +33,15 @@ import (
 	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
+=======
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow"
+	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
+	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {

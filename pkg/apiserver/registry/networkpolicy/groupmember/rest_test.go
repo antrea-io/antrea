@@ -24,7 +24,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/endpoints/request"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+>>>>>>> origin/main
 )
 
 type fakeQuerier struct {

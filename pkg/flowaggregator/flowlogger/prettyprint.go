@@ -17,7 +17,11 @@ package flowlogger
 import (
 	"github.com/vmware/go-ipfix/pkg/registry"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 func PrettyPrintRuleAction(action uint8) string {

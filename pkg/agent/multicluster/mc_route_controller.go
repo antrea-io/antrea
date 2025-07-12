@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcclientset "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned"
 	mcinformersv1alpha1 "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
@@ -41,6 +42,17 @@ import (
 	antrearoute "antrea.io/antrea/v2/pkg/agent/route"
 	"antrea.io/antrea/v2/pkg/agent/wireguard"
 	"antrea.io/antrea/v2/pkg/config/agent"
+=======
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
+	mcinformersv1alpha1 "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
+	mclisters "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
+	antrearoute "antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/wireguard"
+	"antrea.io/antrea/pkg/config/agent"
+>>>>>>> origin/main
 )
 
 const (

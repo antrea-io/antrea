@@ -25,6 +25,7 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
@@ -35,6 +36,18 @@ import (
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/third_party/proxy"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 const maxRetryForOFSwitch = 5

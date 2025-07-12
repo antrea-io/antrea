@@ -37,6 +37,7 @@ import (
 	"k8s.io/klog/v2"
 	clockutils "k8s.io/utils/clock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/controller/noderoute"
@@ -57,6 +58,28 @@ import (
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	utilwait "antrea.io/antrea/v2/pkg/util/wait"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/controller/trafficcontrol"
+	"antrea.io/antrea/pkg/agent/externalnode"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/wireguard"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/util/env"
+	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/k8s"
+	utilwait "antrea.io/antrea/pkg/util/wait"
+>>>>>>> origin/main
 )
 
 const (
@@ -799,7 +822,11 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 	// some complexity as the code currently assumes that we have a single
 	// default tunnel port. So for now, we just reject configurations that
 	// request a GRE tunnel when the Node network supports IPv6.
+<<<<<<< HEAD
 	// See https://github.com/antrea.io/antrea/v2/issues/3150
+=======
+	// See https://github.com/antrea-io/antrea/issues/3150
+>>>>>>> origin/main
 	if i.networkConfig.TrafficEncapMode.SupportsEncap() &&
 		i.networkConfig.TunnelType == ovsconfig.GRETunnel &&
 		i.nodeConfig.NodeIPv6Addr != nil {

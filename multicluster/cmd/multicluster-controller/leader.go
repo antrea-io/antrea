@@ -23,11 +23,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+<<<<<<< HEAD
 	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/leader"
 	"antrea.io/antrea/v2/pkg/log"
 	"antrea.io/antrea/v2/pkg/signals"
 	"antrea.io/antrea/v2/pkg/util/env"
+=======
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
+	"antrea.io/antrea/pkg/log"
+	"antrea.io/antrea/pkg/signals"
+	"antrea.io/antrea/pkg/util/env"
+>>>>>>> origin/main
 )
 
 func newLeaderCommand() *cobra.Command {

@@ -21,7 +21,11 @@ import (
 	"path"
 	"strings"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/test/e2e/providers/exec"
+=======
+	"antrea.io/antrea/test/e2e/providers/exec"
+>>>>>>> origin/main
 )
 
 var kindKubeconfigPath = flag.String("kind.kubeconfig", path.Join(homedir, ".kube", "config"), "Path of the kubeconfig of the cluster")

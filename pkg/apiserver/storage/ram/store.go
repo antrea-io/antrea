@@ -29,7 +29,11 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+<<<<<<< HEAD
 	antreastorage "antrea.io/antrea/v2/pkg/apiserver/storage"
+=======
+	antreastorage "antrea.io/antrea/pkg/apiserver/storage"
+>>>>>>> origin/main
 )
 
 const (

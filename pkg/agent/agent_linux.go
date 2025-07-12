@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/util"
@@ -33,6 +34,15 @@ import (
 	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/ethtool"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	utilip "antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 var (

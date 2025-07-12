@@ -38,8 +38,13 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	antreaagenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/controller/externalippool"
+=======
+	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/controller/externalippool"
+>>>>>>> origin/main
 )
 
 const (

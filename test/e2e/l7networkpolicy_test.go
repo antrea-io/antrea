@@ -35,10 +35,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/features"
 	. "antrea.io/antrea/v2/test/e2e/utils"
+=======
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/pkg/features"
+	. "antrea.io/antrea/test/e2e/utils"
+>>>>>>> origin/main
 )
 
 func TestL7NetworkPolicy(t *testing.T) {
@@ -430,7 +437,11 @@ func testL7NetworkPolicyLogging(t *testing.T, data *TestData) {
 	require.NoError(t, err, "Error occurred when trying to get the antrea-agent Pod running on Node %s", l7LoggingNode)
 
 	// Find filename of L7 log file.
+<<<<<<< HEAD
 	// Filename is determined by generated Suricata config https://github.com/antrea.io/antrea/v2/blob/main/pkg/agent/controller/networkpolicy/l7engine/reconciler.go.
+=======
+	// Filename is determined by generated Suricata config https://github.com/antrea-io/antrea/blob/main/pkg/agent/controller/networkpolicy/l7engine/reconciler.go.
+>>>>>>> origin/main
 	stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", []string{"find", "/var/log/antrea/networkpolicy/l7engine/", "-regex", `.*\/eve\-.*\.json`})
 	require.NoError(t, err)
 	l7LogFiles := strings.Fields(stdout)

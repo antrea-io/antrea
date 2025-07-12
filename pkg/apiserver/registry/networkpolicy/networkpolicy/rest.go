@@ -25,11 +25,19 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	"antrea.io/antrea/v2/pkg/controller/types"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/pkg/controller/types"
+>>>>>>> origin/main
 )
 
 // REST implements rest.Storage for NetworkPolicies.

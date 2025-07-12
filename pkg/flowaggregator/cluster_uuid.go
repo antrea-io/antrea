@@ -23,7 +23,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/clusteridentity"
+=======
+	"antrea.io/antrea/pkg/clusteridentity"
+>>>>>>> origin/main
 )
 
 // GetClusterUUID retrieves the cluster UUID (if available, with a timeout of 10s).

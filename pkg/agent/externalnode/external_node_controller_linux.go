@@ -19,8 +19,13 @@ import (
 
 	"github.com/vishvananda/netlink"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/util"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/util"
+>>>>>>> origin/main
 )
 
 var (

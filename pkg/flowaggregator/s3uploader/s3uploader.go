@@ -30,9 +30,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
 	config "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
+=======
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+	config "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
+>>>>>>> origin/main
 )
 
 const (

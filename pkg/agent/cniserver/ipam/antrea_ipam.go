@@ -27,9 +27,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/types"
 	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/ipam/poolallocator"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver/types"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/ipam/poolallocator"
+>>>>>>> origin/main
 )
 
 const (

@@ -32,11 +32,19 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
+=======
+	"antrea.io/antrea/pkg/agent/client"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+>>>>>>> origin/main
 )
 
 // #nosec G404: random number generator not used for security purposes.

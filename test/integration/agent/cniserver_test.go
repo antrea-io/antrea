@@ -47,6 +47,7 @@ import (
 	k8sFake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
@@ -62,6 +63,23 @@ import (
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/wait"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver"
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"
+	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/metrics"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	"antrea.io/antrea/pkg/agent/util"
+	cnimsg "antrea.io/antrea/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/wait"
+>>>>>>> origin/main
 )
 
 const (

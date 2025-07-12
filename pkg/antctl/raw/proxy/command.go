@@ -26,8 +26,13 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/proxy"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
+=======
+	"antrea.io/antrea/pkg/antctl/raw"
+	"antrea.io/antrea/pkg/antctl/runtime"
+>>>>>>> origin/main
 )
 
 const (

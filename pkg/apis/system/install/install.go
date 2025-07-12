@@ -18,7 +18,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/system/v1beta1"
+=======
+	"antrea.io/antrea/pkg/apis/system/v1beta1"
+>>>>>>> origin/main
 )
 
 // Install registers the API group and adds types to a scheme

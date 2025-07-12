@@ -21,7 +21,11 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+<<<<<<< HEAD
 	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+=======
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+>>>>>>> origin/main
 )
 
 func TestListTransform(t *testing.T) {

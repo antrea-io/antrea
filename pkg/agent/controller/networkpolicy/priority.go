@@ -21,7 +21,11 @@ import (
 
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/types"
+=======
+	"antrea.io/antrea/pkg/agent/types"
+>>>>>>> origin/main
 )
 
 const (

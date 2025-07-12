@@ -23,15 +23,24 @@ import (
 	"path/filepath"
 	"testing"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/logdir"
+=======
+	"antrea.io/antrea/pkg/util/logdir"
+>>>>>>> origin/main
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
+>>>>>>> origin/main
 )
 
 func TestDumpLog(t *testing.T) {

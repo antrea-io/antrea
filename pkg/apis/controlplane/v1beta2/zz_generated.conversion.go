@@ -23,9 +23,15 @@ import (
 	url "net/url"
 	unsafe "unsafe"
 
+<<<<<<< HEAD
 	controlplane "antrea.io/antrea/apis/pkg/apis/controlplane"
 	v1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	v1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+=======
+	controlplane "antrea.io/antrea/pkg/apis/controlplane"
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+>>>>>>> origin/main
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"

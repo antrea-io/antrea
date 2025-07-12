@@ -25,7 +25,11 @@ import (
 	sautil "k8s.io/apiserver/pkg/authentication/serviceaccount"
 	certutil "k8s.io/client-go/util/cert"
 
+<<<<<<< HEAD
 	antreaapis "antrea.io/antrea/apis/pkg/apis"
+=======
+	antreaapis "antrea.io/antrea/pkg/apis"
+>>>>>>> origin/main
 )
 
 const (

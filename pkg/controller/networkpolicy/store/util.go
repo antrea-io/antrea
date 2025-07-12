@@ -17,8 +17,13 @@ package store
 import (
 	"reflect"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/controller/types"
+=======
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/controller/types"
+>>>>>>> origin/main
 )
 
 // keyAndSpanSelectFunc returns whether the provided selectors matches the key and/or the nodeNames.

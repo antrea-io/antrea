@@ -21,7 +21,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+>>>>>>> origin/main
 )
 
 // statsCollector is the interface required by the handler.

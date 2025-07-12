@@ -20,9 +20,15 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
+=======
+	"antrea.io/antrea/pkg/agent/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 // GroupCounter generates and manages global unique group ID.

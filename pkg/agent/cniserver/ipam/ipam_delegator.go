@@ -25,8 +25,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam/hostlocal"
 	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver/ipam/hostlocal"
+	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
+>>>>>>> origin/main
 )
 
 const (

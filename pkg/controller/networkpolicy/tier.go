@@ -28,7 +28,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+=======
+	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+>>>>>>> origin/main
 )
 
 var (

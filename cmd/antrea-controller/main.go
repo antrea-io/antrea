@@ -23,8 +23,13 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/log"
 	"antrea.io/antrea/v2/pkg/version"
+=======
+	"antrea.io/antrea/pkg/log"
+	"antrea.io/antrea/pkg/version"
+>>>>>>> origin/main
 )
 
 func main() {

@@ -1,4 +1,12 @@
+<<<<<<< HEAD
+<<<<<<<< HEAD:pkg/client/clientset/versioned/typed/system/v1beta1/fake/fake_system_client.go
 // Copyright 2021 Antrea Authors
+========
+// Copyright 2023 Antrea Authors
+>>>>>>>> origin/main:multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2/fake/fake_multicluster_client.go
+=======
+// Copyright 2021 Antrea Authors
+>>>>>>> origin/main
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,22 +25,57 @@
 package fake
 
 import (
+<<<<<<< HEAD
+<<<<<<<< HEAD:pkg/client/clientset/versioned/typed/system/v1beta1/fake/fake_system_client.go
 	v1beta1 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/system/v1beta1"
+========
+	v1alpha2 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2"
+>>>>>>>> origin/main:multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2/fake/fake_multicluster_client.go
+=======
+	v1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
+>>>>>>> origin/main
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
 
+<<<<<<< HEAD
+<<<<<<<< HEAD:pkg/client/clientset/versioned/typed/system/v1beta1/fake/fake_system_client.go
+=======
+>>>>>>> origin/main
 type FakeSystemV1beta1 struct {
 	*testing.Fake
 }
 
 func (c *FakeSystemV1beta1) SupportBundles() v1beta1.SupportBundleInterface {
 	return &FakeSupportBundles{c}
+<<<<<<< HEAD
+========
+type FakeMulticlusterV1alpha2 struct {
+	*testing.Fake
+}
+
+func (c *FakeMulticlusterV1alpha2) ClusterClaims(namespace string) v1alpha2.ClusterClaimInterface {
+	return &FakeClusterClaims{c, namespace}
+}
+
+func (c *FakeMulticlusterV1alpha2) ClusterSets(namespace string) v1alpha2.ClusterSetInterface {
+	return &FakeClusterSets{c, namespace}
+>>>>>>>> origin/main:multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2/fake/fake_multicluster_client.go
+=======
+>>>>>>> origin/main
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
+<<<<<<< HEAD
+<<<<<<<< HEAD:pkg/client/clientset/versioned/typed/system/v1beta1/fake/fake_system_client.go
 func (c *FakeSystemV1beta1) RESTClient() rest.Interface {
+========
+func (c *FakeMulticlusterV1alpha2) RESTClient() rest.Interface {
+>>>>>>>> origin/main:multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2/fake/fake_multicluster_client.go
+=======
+func (c *FakeSystemV1beta1) RESTClient() rest.Interface {
+>>>>>>> origin/main
 	var ret *rest.RESTClient
 	return ret
 }

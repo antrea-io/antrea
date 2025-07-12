@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
@@ -43,6 +44,20 @@ import (
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/runtime"
 	"antrea.io/antrea/v2/third_party/proxy"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	opstest "antrea.io/antrea/pkg/agent/openflow/operations/testing"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/runtime"
+	"antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 const bridgeName = "dummy-br"

@@ -22,8 +22,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+=======
+	"antrea.io/antrea/pkg/antctl/transform/common"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+>>>>>>> origin/main
 )
 
 // Response includes all data fields of clusterinfo.AntreaControllerInfo, but

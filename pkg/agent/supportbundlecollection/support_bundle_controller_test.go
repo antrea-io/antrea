@@ -31,6 +31,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/exec"
 
+<<<<<<< HEAD
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	cpv1b2 "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
@@ -41,6 +42,18 @@ import (
 	"antrea.io/antrea/v2/pkg/support"
 	"antrea.io/antrea/v2/pkg/util/sftp"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
+=======
+	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/support"
+	"antrea.io/antrea/pkg/util/sftp"
+	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
+>>>>>>> origin/main
 )
 
 type fakeController struct {

@@ -31,8 +31,13 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	policyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned"
 
+<<<<<<< HEAD
 	mcclientset "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned"
 	crdclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+=======
+	mcclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
+	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+>>>>>>> origin/main
 )
 
 const (

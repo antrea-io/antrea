@@ -28,8 +28,13 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
+<<<<<<< HEAD
 	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
+=======
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/features"
+>>>>>>> origin/main
 )
 
 type fakeStatsProvider struct {

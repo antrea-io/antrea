@@ -23,7 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/ipset"
+=======
+	"antrea.io/antrea/pkg/agent/util/ipset"
+>>>>>>> origin/main
 )
 
 var (

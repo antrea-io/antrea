@@ -38,6 +38,7 @@ import (
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	bgptest "antrea.io/antrea/v2/pkg/agent/bgp/testing"
 	"antrea.io/antrea/v2/pkg/agent/config"
@@ -47,6 +48,17 @@ import (
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/agent/bgp"
+	bgptest "antrea.io/antrea/pkg/agent/bgp/testing"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 const (

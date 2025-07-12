@@ -27,8 +27,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
 	"antrea.io/antrea/apis/pkg/apis"
+=======
+	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/apis"
+>>>>>>> origin/main
 )
 
 // requestOption describes options to issue requests.

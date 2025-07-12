@@ -38,6 +38,7 @@ import (
 	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	mccommon "antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
 	nodeipmock "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
@@ -51,6 +52,21 @@ import (
 	"antrea.io/antrea/v2/pkg/features"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
+=======
+	mccommon "antrea.io/antrea/multicluster/controllers/multicluster/common"
+	agentconfig "antrea.io/antrea/pkg/agent/config"
+	nodeipmock "antrea.io/antrea/pkg/agent/nodeip/testing"
+	"antrea.io/antrea/pkg/agent/openflow"
+	ofmock "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/proxy/metrics"
+	"antrea.io/antrea/pkg/agent/proxy/types"
+	"antrea.io/antrea/pkg/agent/route"
+	routemock "antrea.io/antrea/pkg/agent/route/testing"
+	antreatypes "antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/features"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
+>>>>>>> origin/main
 )
 
 var (

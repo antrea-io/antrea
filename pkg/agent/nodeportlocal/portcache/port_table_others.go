@@ -23,7 +23,11 @@ import (
 
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
+=======
+	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
+>>>>>>> origin/main
 )
 
 func openSocketsForPort(localPortOpener LocalPortOpener, port int, protocol string) (ProtocolSocketData, error) {

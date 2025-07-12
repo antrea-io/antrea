@@ -18,8 +18,13 @@
 package networkpolicy
 
 import (
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/route"
 	"antrea.io/antrea/v2/pkg/agent/types"
+=======
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
+>>>>>>> origin/main
 )
 
 type nodeReconciler struct{}

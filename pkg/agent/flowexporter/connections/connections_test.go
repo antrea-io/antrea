@@ -22,12 +22,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 
 	"antrea.io/antrea/v2/pkg/agent/metrics"
+=======
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
+	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+
+	"antrea.io/antrea/pkg/agent/metrics"
+>>>>>>> origin/main
 )
 
 const (

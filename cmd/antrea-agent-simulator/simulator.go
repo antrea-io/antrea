@@ -29,11 +29,19 @@ import (
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/signals"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	"antrea.io/antrea/v2/pkg/version"
+=======
+	"antrea.io/antrea/pkg/agent/client"
+	"antrea.io/antrea/pkg/signals"
+	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/version"
+>>>>>>> origin/main
 )
 
 func run() error {

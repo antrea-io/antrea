@@ -26,8 +26,13 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
+=======
+	"antrea.io/antrea/pkg/antctl/transform/common"
+	"antrea.io/antrea/pkg/apiserver/apis"
+>>>>>>> origin/main
 )
 
 const (

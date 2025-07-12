@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
@@ -43,6 +44,15 @@ import (
 	annotation "antrea.io/antrea/v2/pkg/ipam"
 	"antrea.io/antrea/v2/pkg/ipam/poolallocator"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
+	annotation "antrea.io/antrea/pkg/ipam"
+	"antrea.io/antrea/pkg/ipam/poolallocator"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 const (

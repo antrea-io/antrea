@@ -29,8 +29,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+<<<<<<< HEAD
 	s3uploadertesting "antrea.io/antrea/v2/pkg/flowaggregator/s3uploader/testing"
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
+=======
+	s3uploadertesting "antrea.io/antrea/pkg/flowaggregator/s3uploader/testing"
+	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
+>>>>>>> origin/main
 )
 
 var (

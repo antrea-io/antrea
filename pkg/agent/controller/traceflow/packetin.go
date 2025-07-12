@@ -30,9 +30,15 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+=======
+	"antrea.io/antrea/pkg/agent/openflow"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+>>>>>>> origin/main
 )
 
 var errSkipTraceflowUpdate = errors.New("skip Traceflow update")

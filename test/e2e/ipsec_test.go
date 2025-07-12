@@ -23,9 +23,15 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/features"
+=======
+	"antrea.io/antrea/pkg/agent/util"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/pkg/features"
+>>>>>>> origin/main
 )
 
 // TestIPSec is the top-level test which contains all subtests for
@@ -141,7 +147,11 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData, certAuth bool) {
 	defer deletePods()
 	t.Logf("Executing ping tests across Nodes: '%s' <-> '%s'", podInfos[0].NodeName, podInfos[1].NodeName)
 	// PMTU is wrong when using GRE+IPsec with some Linux kernel versions, do not set DF to work around.
+<<<<<<< HEAD
 	// See https://github.com/antrea.io/antrea/v2/issues/5922 for more details.
+=======
+	// See https://github.com/antrea-io/antrea/issues/5922 for more details.
+>>>>>>> origin/main
 	data.runPingMesh(t, podInfos[:2], toolboxContainerName, false)
 
 	// Check that there is at least one 'up' Security Association on the Node

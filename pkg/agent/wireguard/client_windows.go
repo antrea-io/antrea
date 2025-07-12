@@ -20,7 +20,11 @@ package wireguard
 import (
 	"fmt"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+>>>>>>> origin/main
 )
 
 func New(nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (Interface, error) {

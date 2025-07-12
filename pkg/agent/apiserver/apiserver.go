@@ -33,6 +33,7 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	apiserverversion "k8s.io/apiserver/pkg/util/version"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/addressgroup"
 	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/appliedtogroup"
@@ -58,6 +59,33 @@ import (
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	"antrea.io/antrea/v2/pkg/querier"
 	antreaversion "antrea.io/antrea/v2/pkg/version"
+=======
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/addressgroup"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgppeer"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgppolicy"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgproute"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/fqdncache"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/networkpolicy"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstracing"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
+	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	systeminstall "antrea.io/antrea/pkg/apis/system/install"
+	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/pkg/apiserver"
+	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
+	"antrea.io/antrea/pkg/apiserver/openapi"
+	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/querier"
+	antreaversion "antrea.io/antrea/pkg/version"
+>>>>>>> origin/main
 )
 
 const CertPairName = "antrea-agent-api"

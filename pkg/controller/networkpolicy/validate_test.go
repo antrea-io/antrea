@@ -26,8 +26,13 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
+<<<<<<< HEAD
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/features"
+=======
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/features"
+>>>>>>> origin/main
 )
 
 var (

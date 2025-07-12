@@ -28,6 +28,7 @@ import (
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	servicecidrtest "antrea.io/antrea/v2/pkg/agent/servicecidr/testing"
@@ -40,6 +41,20 @@ import (
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
+	servicecidrtest "antrea.io/antrea/pkg/agent/servicecidr/testing"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util/ipset"
+	ipsettest "antrea.io/antrea/pkg/agent/util/ipset/testing"
+	"antrea.io/antrea/pkg/agent/util/iptables"
+	iptablestest "antrea.io/antrea/pkg/agent/util/iptables/testing"
+	netlinktest "antrea.io/antrea/pkg/agent/util/netlink/testing"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 var (

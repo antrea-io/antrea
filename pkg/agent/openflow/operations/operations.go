@@ -20,8 +20,13 @@ import (
 
 	"antrea.io/libOpenflow/openflow15"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+=======
+	"antrea.io/antrea/pkg/agent/metrics"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+>>>>>>> origin/main
 )
 
 type ofAction int32

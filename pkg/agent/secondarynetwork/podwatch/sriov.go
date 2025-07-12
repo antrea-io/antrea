@@ -31,7 +31,11 @@ import (
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	podresourcesv1alpha1 "k8s.io/kubelet/pkg/apis/podresources/v1alpha1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+=======
+	"antrea.io/antrea/pkg/agent/interfacestore"
+>>>>>>> origin/main
 )
 
 const (

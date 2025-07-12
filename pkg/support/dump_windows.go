@@ -22,8 +22,13 @@ import (
 	"path"
 	"path/filepath"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/util/logdir"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/util/logdir"
+>>>>>>> origin/main
 )
 
 const (

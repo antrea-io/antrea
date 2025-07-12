@@ -18,7 +18,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+>>>>>>> origin/main
 )
 
 // SpanMeta describes the span information of an object.

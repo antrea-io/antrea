@@ -23,7 +23,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+=======
+	"antrea.io/antrea/multicluster/apis/multicluster/constants"
+>>>>>>> origin/main
 )
 
 func (r *ResourceExport) SetupWebhookWithManager(mgr ctrl.Manager) error {

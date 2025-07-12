@@ -23,8 +23,13 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/util/runtime"
+=======
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/util/runtime"
+>>>>>>> origin/main
 )
 
 const (

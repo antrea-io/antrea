@@ -20,8 +20,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl"
 	"antrea.io/antrea/v2/pkg/log"
+=======
+	"antrea.io/antrea/pkg/antctl"
+	"antrea.io/antrea/pkg/log"
+>>>>>>> origin/main
 )
 
 var commandName = path.Base(os.Args[0])

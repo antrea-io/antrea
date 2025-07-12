@@ -1,9 +1,16 @@
+<<<<<<< HEAD
 module antrea.io/antrea/v2
+=======
+module antrea.io/antrea
+>>>>>>> origin/main
 
 go 1.24.0
 
 require (
+<<<<<<< HEAD
 	antrea.io/antrea/apis v0.0.0-00010101000000-000000000000
+=======
+>>>>>>> origin/main
 	antrea.io/libOpenflow v0.15.0
 	antrea.io/ofnet v0.14.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.6.1
@@ -65,7 +72,11 @@ require (
 	golang.org/x/time v0.12.0
 	golang.org/x/tools v0.34.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5
+<<<<<<< HEAD
 	google.golang.org/grpc v1.73.0
+=======
+	google.golang.org/grpc v1.72.0
+>>>>>>> origin/main
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
@@ -132,6 +143,10 @@ require (
 	github.com/eapache/channels v1.1.0 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
+<<<<<<< HEAD
+=======
+	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
+>>>>>>> origin/main
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -223,25 +238,43 @@ require (
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.54.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.55.0 // indirect
+<<<<<<< HEAD
 	go.opentelemetry.io/otel v1.35.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.28.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.27.0 // indirect
 	go.opentelemetry.io/otel/metric v1.35.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
+=======
+	go.opentelemetry.io/otel v1.34.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.28.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.27.0 // indirect
+	go.opentelemetry.io/otel/metric v1.34.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.34.0 // indirect
+	go.opentelemetry.io/otel/trace v1.34.0 // indirect
+>>>>>>> origin/main
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.starlark.net v0.0.0-20230525235612-a134d8f9ddca // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
+<<<<<<< HEAD
 	golang.org/x/oauth2 v0.28.0 // indirect
+=======
+	golang.org/x/oauth2 v0.26.0 // indirect
+>>>>>>> origin/main
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20210427022245-097af6e1351b // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
+<<<<<<< HEAD
 	google.golang.org/genproto/googleapis/api v0.0.0-20250324211829-b45e905df463 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
+=======
+	google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250218202821-56aae31c358a // indirect
+>>>>>>> origin/main
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
@@ -256,9 +289,12 @@ require (
 
 // remove this when https://github.com/mdlayher/ndp/pull/32 gets merged
 replace github.com/mdlayher/ndp => github.com/antrea-io/ndp v0.0.0-20241107040829-6f35f2e50f4c
+<<<<<<< HEAD
 
 replace antrea.io/antrea/v2 => ./
 
 replace antrea.io/antrea/apis => ./apis
 
 replace antrea.io/antrea/client => ./client
+=======
+>>>>>>> origin/main

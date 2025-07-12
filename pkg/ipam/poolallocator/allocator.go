@@ -20,11 +20,19 @@ import (
 	"net"
 	"reflect"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	crdclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	informers "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/ipam/ipallocator"
 	iputil "antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	informers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/pkg/ipam/ipallocator"
+	iputil "antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"

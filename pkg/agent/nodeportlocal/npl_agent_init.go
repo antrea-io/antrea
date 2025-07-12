@@ -21,8 +21,13 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
+<<<<<<< HEAD
 	nplk8s "antrea.io/antrea/v2/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
+=======
+	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
+>>>>>>> origin/main
 )
 
 // InitializeNPLAgent initializes the NodePortLocal agent.

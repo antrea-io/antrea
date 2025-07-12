@@ -21,9 +21,15 @@ import (
 	"net/url"
 	"strings"
 
+<<<<<<< HEAD
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
 	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/querier"
+=======
+	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/querier"
+>>>>>>> origin/main
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier

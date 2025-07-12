@@ -29,9 +29,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	"antrea.io/antrea/v2/pkg/controller/types"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/pkg/controller/types"
+>>>>>>> origin/main
 )
 
 func TestREST(t *testing.T) {

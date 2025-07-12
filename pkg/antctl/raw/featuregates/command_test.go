@@ -33,10 +33,17 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
 
+<<<<<<< HEAD
 	v1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
+=======
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+>>>>>>> origin/main
 )
 
 var (

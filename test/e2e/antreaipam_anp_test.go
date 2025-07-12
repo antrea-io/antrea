@@ -21,9 +21,15 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+<<<<<<< HEAD
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	annotation "antrea.io/antrea/v2/pkg/ipam"
 	e2eutils "antrea.io/antrea/v2/test/e2e/utils"
+=======
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	annotation "antrea.io/antrea/pkg/ipam"
+	e2eutils "antrea.io/antrea/test/e2e/utils"
+>>>>>>> origin/main
 )
 
 // initializeAntreaIPAM must be called after Namespace in antreaIPAMNamespaces created

@@ -24,10 +24,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+<<<<<<< HEAD
 	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 	"antrea.io/antrea/v2/pkg/antctl/transform/resourceimport"
+=======
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/pkg/antctl/raw"
+	"antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
+	"antrea.io/antrea/pkg/antctl/transform/resourceimport"
+>>>>>>> origin/main
 )
 
 type resourceImportOptions struct {

@@ -30,12 +30,21 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
+>>>>>>> origin/main
 )
 
 var (

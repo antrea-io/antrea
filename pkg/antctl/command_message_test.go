@@ -22,7 +22,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/errors"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+>>>>>>> origin/main
 )
 
 func TestGenerateMessage(t *testing.T) {

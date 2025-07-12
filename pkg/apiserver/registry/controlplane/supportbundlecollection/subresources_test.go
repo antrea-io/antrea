@@ -25,7 +25,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+>>>>>>> origin/main
 )
 
 func TestCreate(t *testing.T) {

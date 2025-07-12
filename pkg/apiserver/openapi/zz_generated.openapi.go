@@ -29,6 +29,7 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
+<<<<<<< HEAD
 		"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.AddressGroup":                      schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref),
 		"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.AddressGroupList":                  schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref),
 		"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.AddressGroupPatch":                 schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref),
@@ -170,6 +171,149 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TargetIPLatencyStats":                    schema_pkg_apis_stats_v1alpha1_TargetIPLatencyStats(ref),
 		"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats":                            schema_pkg_apis_stats_v1alpha1_TrafficStats(ref),
 		"antrea.io/antrea/apis/pkg/apis/system/v1beta1.SupportBundle":                           schema_pkg_apis_system_v1beta1_SupportBundle(ref),
+=======
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroup":                      schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroupList":                  schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroupPatch":                 schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup":                    schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupList":                schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupPatch":               schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BasicAuthentication":               schema_pkg_apis_controlplane_v1beta2_BasicAuthentication(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleFileServer":                  schema_pkg_apis_controlplane_v1beta2_BundleFileServer(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleServerAuthConfiguration":     schema_pkg_apis_controlplane_v1beta2_BundleServerAuthConfiguration(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ClusterGroupMembers":               schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroup":                       schema_pkg_apis_controlplane_v1beta2_EgressGroup(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroupList":                   schema_pkg_apis_controlplane_v1beta2_EgressGroupList(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroupPatch":                  schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity":                            schema_pkg_apis_controlplane_v1beta2_Entity(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupAssociation":                  schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember":                       schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMembers":                      schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference":                    schema_pkg_apis_controlplane_v1beta2_GroupReference(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol":                      schema_pkg_apis_controlplane_v1beta2_HTTPProtocol(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock":                           schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPGroupAssociation":                schema_pkg_apis_controlplane_v1beta2_IPGroupAssociation(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet":                             schema_pkg_apis_controlplane_v1beta2_IPNet(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.L7Protocol":                        schema_pkg_apis_controlplane_v1beta2_L7Protocol(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo":                schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                         schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy":                     schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluation":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest":    schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationRequest(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse":   schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationResponse(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyList":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyNodeStatus(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference":            schema_pkg_apis_controlplane_v1beta2_NetworkPolicyReference(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats":                schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStatus":               schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference":                     schema_pkg_apis_controlplane_v1beta2_NodeReference(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeStatsSummary":                  schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PaginationGetOptions":              schema_pkg_apis_controlplane_v1beta2_PaginationGetOptions(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference":                      schema_pkg_apis_controlplane_v1beta2_PodReference(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.RuleRef":                           schema_pkg_apis_controlplane_v1beta2_RuleRef(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.Service":                           schema_pkg_apis_controlplane_v1beta2_Service(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference":                  schema_pkg_apis_controlplane_v1beta2_ServiceReference(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollection":           schema_pkg_apis_controlplane_v1beta2_SupportBundleCollection(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionList":       schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionList(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus": schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionNodeStatus(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionStatus":     schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionStatus(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.TLSProtocol":                       schema_pkg_apis_controlplane_v1beta2_TLSProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.AgentCondition":                             schema_pkg_apis_crd_v1beta1_AgentCondition(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo":                            schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfoList":                        schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo":                       schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfoList":                   schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo":                                  schema_pkg_apis_crd_v1beta1_AppliedTo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth":                                  schema_pkg_apis_crd_v1beta1_Bandwidth(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup":                               schema_pkg_apis_crd_v1beta1_ClusterGroup(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroupList":                           schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy":                       schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicyList":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                        schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Destination":                                schema_pkg_apis_crd_v1beta1_Destination(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Egress":                                     schema_pkg_apis_crd_v1beta1_Egress(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressCondition":                            schema_pkg_apis_crd_v1beta1_EgressCondition(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressList":                                 schema_pkg_apis_crd_v1beta1_EgressList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec":                                 schema_pkg_apis_crd_v1beta1_EgressSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus":                               schema_pkg_apis_crd_v1beta1_EgressStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool":                             schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolList":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus":                       schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Group":                                      schema_pkg_apis_crd_v1beta1_Group(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition":                             schema_pkg_apis_crd_v1beta1_GroupCondition(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupList":                                  schema_pkg_apis_crd_v1beta1_GroupList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec":                                  schema_pkg_apis_crd_v1beta1_GroupSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus":                                schema_pkg_apis_crd_v1beta1_GroupStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol":                               schema_pkg_apis_crd_v1beta1_HTTPProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader":                      schema_pkg_apis_crd_v1beta1_ICMPEchoRequestHeader(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol":                               schema_pkg_apis_crd_v1beta1_ICMPProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol":                               schema_pkg_apis_crd_v1beta1_IGMPProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressOwner":                             schema_pkg_apis_crd_v1beta1_IPAddressOwner(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressState":                             schema_pkg_apis_crd_v1beta1_IPAddressState(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock":                                    schema_pkg_apis_crd_v1beta1_IPBlock(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader":                                   schema_pkg_apis_crd_v1beta1_IPHeader(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPool":                                     schema_pkg_apis_crd_v1beta1_IPPool(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolList":                                 schema_pkg_apis_crd_v1beta1_IPPoolList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolSpec":                                 schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolStatus":                               schema_pkg_apis_crd_v1beta1_IPPoolStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage":                                schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange":                                    schema_pkg_apis_crd_v1beta1_IPRange(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header":                                 schema_pkg_apis_crd_v1beta1_IPv6Header(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol":                                 schema_pkg_apis_crd_v1beta1_L7Protocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName":                             schema_pkg_apis_crd_v1beta1_NamespacedName(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy":                              schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition":                     schema_pkg_apis_crd_v1beta1_NetworkPolicyCondition(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo":                schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyList":                          schema_pkg_apis_crd_v1beta1_NetworkPolicyList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer":                          schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPort":                          schema_pkg_apis_crd_v1beta1_NetworkPolicyPort(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol":                      schema_pkg_apis_crd_v1beta1_NetworkPolicyProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec":                          schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus":                        schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NodeResult":                                 schema_pkg_apis_crd_v1beta1_NodeResult(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo":                                    schema_pkg_apis_crd_v1beta1_OVSInfo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Observation":                                schema_pkg_apis_crd_v1beta1_Observation(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Packet":                                     schema_pkg_apis_crd_v1beta1_Packet(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces":                             schema_pkg_apis_crd_v1beta1_PeerNamespaces(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService":                                schema_pkg_apis_crd_v1beta1_PeerService(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.PodOwner":                                   schema_pkg_apis_crd_v1beta1_PodOwner(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Rule":                                       schema_pkg_apis_crd_v1beta1_Rule(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Source":                                     schema_pkg_apis_crd_v1beta1_Source(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.StatefulSetOwner":                           schema_pkg_apis_crd_v1beta1_StatefulSetOwner(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo":                                 schema_pkg_apis_crd_v1beta1_SubnetInfo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader":                                  schema_pkg_apis_crd_v1beta1_TCPHeader(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol":                                schema_pkg_apis_crd_v1beta1_TLSProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier":                                       schema_pkg_apis_crd_v1beta1_Tier(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierList":                                   schema_pkg_apis_crd_v1beta1_TierList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec":                                   schema_pkg_apis_crd_v1beta1_TierSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Traceflow":                                  schema_pkg_apis_crd_v1beta1_Traceflow(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowList":                              schema_pkg_apis_crd_v1beta1_TraceflowList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowSpec":                              schema_pkg_apis_crd_v1beta1_TraceflowSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowStatus":                            schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TransportHeader":                            schema_pkg_apis_crd_v1beta1_TransportHeader(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.UDPHeader":                                  schema_pkg_apis_crd_v1beta1_UDPHeader(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats":         schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStatsList":     schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats":                schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStatsList":            schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroup":                          schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroupList":                      schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats":                      schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStatsList":                  schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStats":                        schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStatsList":                    schema_pkg_apis_stats_v1alpha1_NodeLatencyStatsList(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats":                    schema_pkg_apis_stats_v1alpha1_PeerNodeLatencyStats(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference":                            schema_pkg_apis_stats_v1alpha1_PodReference(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats":                        schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.TargetIPLatencyStats":                    schema_pkg_apis_stats_v1alpha1_TargetIPLatencyStats(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats":                            schema_pkg_apis_stats_v1alpha1_TrafficStats(ref),
+		"antrea.io/antrea/pkg/apis/system/v1beta1.SupportBundle":                           schema_pkg_apis_system_v1beta1_SupportBundle(ref),
+>>>>>>> origin/main
 		"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource":                              schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
 		"k8s.io/api/core/v1.Affinity":                                                      schema_k8sio_api_core_v1_Affinity(ref),
 		"k8s.io/api/core/v1.AppArmorProfile":                                               schema_k8sio_api_core_v1_AppArmorProfile(ref),
@@ -490,7 +634,11 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -500,7 +648,11 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -538,7 +690,11 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.AddressGroup"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroup"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -549,7 +705,11 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.AddressGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -587,7 +747,11 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -600,7 +764,11 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -610,7 +778,11 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref common.Reference
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -649,7 +821,11 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref common.ReferenceCal
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -659,7 +835,11 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -697,7 +877,11 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.AppliedToGroup"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -708,7 +892,11 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.AppliedToGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -746,7 +934,11 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -759,7 +951,11 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -769,7 +965,11 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -846,14 +1046,22 @@ func schema_pkg_apis_controlplane_v1beta2_BundleServerAuthConfiguration(ref comm
 					},
 					"basicAuthentication": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.BasicAuthentication"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.BasicAuthentication"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.BasicAuthentication"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BasicAuthentication"},
+>>>>>>> origin/main
 	}
 }
 
@@ -891,7 +1099,11 @@ func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -904,7 +1116,11 @@ func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.IPNet"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -936,7 +1152,11 @@ func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.Referen
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.IPNet", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -974,7 +1194,11 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroup(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -984,7 +1208,11 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroup(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1022,7 +1250,11 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupList(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.EgressGroup"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroup"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1033,7 +1265,11 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupList(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.EgressGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1063,7 +1299,11 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1076,7 +1316,11 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1087,7 +1331,11 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1100,14 +1348,22 @@ func schema_pkg_apis_controlplane_v1beta2_Entity(ref common.ReferenceCallback) c
 				Properties: map[string]spec.Schema{
 					"pod": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.PodReference"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.PodReference"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1173,7 +1429,11 @@ func schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupReference"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1184,7 +1444,11 @@ func schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1198,13 +1462,21 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 					"pod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Pod maintains the reference to the Pod.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.PodReference"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
+>>>>>>> origin/main
 						},
 					},
 					"externalEntity": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ExternalEntity maintains the reference to the ExternalEntity.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.ExternalEntityReference"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference"),
+>>>>>>> origin/main
 						},
 					},
 					"ips": {
@@ -1229,7 +1501,11 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NamedPort"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1238,20 +1514,32 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 					"node": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Node maintains the reference to the Node.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NodeReference"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference"),
+>>>>>>> origin/main
 						},
 					},
 					"service": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Service is the reference to the Service. It can only be used in an AppliedTo Group and only a NodePort type Service can be referred by this field.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.ServiceReference"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NamedPort", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NodeReference", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.PodReference", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.ServiceReference"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1289,7 +1577,11 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1302,7 +1594,11 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.IPNet"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1334,7 +1630,11 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupMember", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.IPNet", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1416,7 +1716,11 @@ func schema_pkg_apis_controlplane_v1beta2_IPBlock(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "CIDR is an IPNet represents the IP Block.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.IPNet"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+>>>>>>> origin/main
 						},
 					},
 					"except": {
@@ -1427,7 +1731,11 @@ func schema_pkg_apis_controlplane_v1beta2_IPBlock(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.IPNet"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1438,7 +1746,11 @@ func schema_pkg_apis_controlplane_v1beta2_IPBlock(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.IPNet"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1476,7 +1788,11 @@ func schema_pkg_apis_controlplane_v1beta2_IPGroupAssociation(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupReference"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1487,7 +1803,11 @@ func schema_pkg_apis_controlplane_v1beta2_IPGroupAssociation(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.GroupReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1525,19 +1845,31 @@ func schema_pkg_apis_controlplane_v1beta2_L7Protocol(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"http": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.HTTPProtocol"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol"),
+>>>>>>> origin/main
 						},
 					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.TLSProtocol"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.TLSProtocol"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.HTTPProtocol", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.TLSProtocol"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.TLSProtocol"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1563,7 +1895,11 @@ func schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.PodReference"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1573,7 +1909,11 @@ func schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.PodReference"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1646,7 +1986,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref common.ReferenceCall
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyRule"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1684,14 +2028,22 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref common.ReferenceCall
 					"sourceRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyRule", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1725,19 +2077,31 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref common.Ref
 					},
 					"request": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest"),
+>>>>>>> origin/main
 						},
 					},
 					"response": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1751,20 +2115,32 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationRequest(ref com
 					"source": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.Entity"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity"),
+>>>>>>> origin/main
 						},
 					},
 					"destination": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.Entity"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.Entity"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1779,7 +2155,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationResponse(ref co
 						SchemaProps: spec.SchemaProps{
 							Description: "The reference of the effective NetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+>>>>>>> origin/main
 						},
 					},
 					"ruleIndex": {
@@ -1792,14 +2172,22 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationResponse(ref co
 						SchemaProps: spec.SchemaProps{
 							Description: "The content of the effective rule.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.RuleRef"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.RuleRef"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.RuleRef"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.RuleRef"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1837,7 +2225,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicy"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1848,7 +2240,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref common.Reference
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -1925,7 +2321,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.IPBlock"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1954,7 +2354,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.ServiceReference"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -1979,7 +2383,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.Reference
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.IPBlock", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.ServiceReference"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"},
+>>>>>>> origin/main
 	}
 }
 
@@ -2041,14 +2449,22 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 						SchemaProps: spec.SchemaProps{
 							Description: "From represents sources which should be able to access the GroupMembers selected by the policy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer"),
+>>>>>>> origin/main
 						},
 					},
 					"to": {
 						SchemaProps: spec.SchemaProps{
 							Description: "To represents destinations which should be able to be accessed by the GroupMembers selected by the policy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer"),
+>>>>>>> origin/main
 						},
 					},
 					"services": {
@@ -2059,7 +2475,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.Service"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.Service"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2117,7 +2537,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.L7Protocol"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.L7Protocol"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2135,7 +2559,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.L7Protocol", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.Service"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.L7Protocol", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.Service"},
+>>>>>>> origin/main
 	}
 }
 
@@ -2150,14 +2578,22 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Description: "The reference of the NetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+>>>>>>> origin/main
 						},
 					},
 					"trafficStats": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The stats of the NetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+>>>>>>> origin/main
 						},
 					},
 					"ruleTrafficStats": {
@@ -2168,7 +2604,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2178,7 +2618,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.RuleTrafficStats", "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
+>>>>>>> origin/main
 	}
 }
 
@@ -2217,7 +2661,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2227,7 +2675,11 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref common.Referen
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -2286,7 +2738,11 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2300,7 +2756,11 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2314,7 +2774,11 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2328,7 +2792,11 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.MulticastGroupInfo"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2338,7 +2806,11 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.MulticastGroupInfo", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.NetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -2583,20 +3055,32 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollection(ref common.Ref
 					"fileServer": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.BundleFileServer"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleFileServer"),
+>>>>>>> origin/main
 						},
 					},
 					"authentication": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.BundleServerAuthConfiguration"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleServerAuthConfiguration"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.BundleFileServer", "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.BundleServerAuthConfiguration", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleFileServer", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleServerAuthConfiguration", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+>>>>>>> origin/main
 	}
 }
 
@@ -2634,7 +3118,11 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionList(ref common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.SupportBundleCollection"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollection"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2645,7 +3133,11 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionList(ref common
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.SupportBundleCollection", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollection", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -2731,7 +3223,11 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionStatus(ref comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2741,7 +3237,11 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionStatus(ref comm
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -2882,14 +3382,22 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 						SchemaProps: spec.SchemaProps{
 							Description: "OVS Information",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.OVSInfo"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo"),
+>>>>>>> origin/main
 						},
 					},
 					"networkPolicyControllerInfo": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Antrea Agent NetworkPolicy information",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo"),
+>>>>>>> origin/main
 						},
 					},
 					"localPodNum": {
@@ -2907,7 +3415,11 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AgentCondition"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AgentCondition"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2938,7 +3450,11 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AgentCondition", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.OVSInfo", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AgentCondition", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", "antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -2975,7 +3491,11 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AntreaAgentInfo"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -2986,7 +3506,11 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AntreaAgentInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3048,7 +3572,11 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "Antrea Controller NetworkPolicy information",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo"),
+>>>>>>> origin/main
 						},
 					},
 					"connectedAgentNum": {
@@ -3066,7 +3594,11 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ControllerCondition"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3083,7 +3615,11 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ControllerCondition", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3120,7 +3656,11 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AntreaControllerInfo"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3131,7 +3671,11 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AntreaControllerInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3170,13 +3714,21 @@ func schema_pkg_apis_crd_v1beta1_AppliedTo(ref common.ReferenceCallback) common.
 					"serviceAccount": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select all Pods with the ServiceAccount matched by this field, as workloads in AppliedTo fields. Cannot be set with any other selector.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NamespacedName"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+>>>>>>> origin/main
 						},
 					},
 					"service": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select a certain Service which matches the NamespacedName. A Service can only be set in either policy level AppliedTo field in a policy that only has ingress rules or rule level AppliedTo field in an ingress rule. Only a NodePort Service can be referred by this field. Cannot be set with any other selector.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NamespacedName"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+>>>>>>> origin/main
 						},
 					},
 					"nodeSelector": {
@@ -3189,7 +3741,11 @@ func schema_pkg_apis_crd_v1beta1_AppliedTo(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NamespacedName", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3253,14 +3809,22 @@ func schema_pkg_apis_crd_v1beta1_ClusterGroup(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Desired state of the group.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupSpec"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec"),
+>>>>>>> origin/main
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the group.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupStatus"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -3268,7 +3832,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterGroup(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupSpec", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3305,7 +3873,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ClusterGroup"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3315,7 +3887,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ClusterGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3350,14 +3926,22 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of ClusterNetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec"),
+>>>>>>> origin/main
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the NetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyStatus"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -3365,7 +3949,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3402,7 +3990,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ClusterNetworkPolicy"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3413,7 +4005,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ClusterNetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3447,7 +4043,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AppliedTo"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3461,7 +4061,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Rule"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3475,7 +4079,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Rule"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3486,7 +4094,11 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Rule"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3614,14 +4226,22 @@ func schema_pkg_apis_crd_v1beta1_Egress(ref common.ReferenceCallback) common.Ope
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of Egress.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.EgressSpec"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec"),
+>>>>>>> origin/main
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "EgressStatus represents the current status of an Egress.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.EgressStatus"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -3629,7 +4249,11 @@ func schema_pkg_apis_crd_v1beta1_Egress(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.EgressSpec", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.EgressStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3709,7 +4333,11 @@ func schema_pkg_apis_crd_v1beta1_EgressList(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Egress"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Egress"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3720,7 +4348,11 @@ func schema_pkg_apis_crd_v1beta1_EgressList(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Egress", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Egress", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3735,7 +4367,11 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "AppliedTo selects Pods to which the Egress will be applied.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AppliedTo"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+>>>>>>> origin/main
 						},
 					},
 					"egressIP": {
@@ -3785,7 +4421,11 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 					"bandwidth": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Bandwidth specifies the rate limit of north-south egress traffic of this Egress.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Bandwidth"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -3793,7 +4433,11 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Bandwidth"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3827,7 +4471,11 @@ func schema_pkg_apis_crd_v1beta1_EgressStatus(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.EgressCondition"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.EgressCondition"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3838,7 +4486,11 @@ func schema_pkg_apis_crd_v1beta1_EgressStatus(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.EgressCondition"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressCondition"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3874,14 +4526,22 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref common.ReferenceCallback) co
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the ExternalIPPool.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ExternalIPPoolSpec"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec"),
+>>>>>>> origin/main
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The current status of the ExternalIPPool.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ExternalIPPoolStatus"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -3889,7 +4549,11 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ExternalIPPoolSpec", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ExternalIPPoolStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3926,7 +4590,11 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ExternalIPPool"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3937,7 +4605,11 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ExternalIPPool", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3955,7 +4627,11 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPRange"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -3964,7 +4640,11 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 					"subnetInfo": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The Subnet info of this IP pool. If set, all IP ranges in the IP pool should share the same subnet attributes. Currently, it's only used when an IP is allocated from the pool for Egress, and is ignored otherwise.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.SubnetInfo"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo"),
+>>>>>>> origin/main
 						},
 					},
 					"nodeSelector": {
@@ -3979,7 +4659,11 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPRange", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.SubnetInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange", "antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+>>>>>>> origin/main
 	}
 }
 
@@ -3992,14 +4676,22 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref common.ReferenceCallba
 					"usage": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPoolUsage"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPoolUsage"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4035,14 +4727,22 @@ func schema_pkg_apis_crd_v1beta1_Group(ref common.ReferenceCallback) common.Open
 						SchemaProps: spec.SchemaProps{
 							Description: "Desired state of the group.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupSpec"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec"),
+>>>>>>> origin/main
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the group.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupStatus"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -4050,7 +4750,11 @@ func schema_pkg_apis_crd_v1beta1_Group(ref common.ReferenceCallback) common.Open
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupSpec", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4121,7 +4825,11 @@ func schema_pkg_apis_crd_v1beta1_GroupList(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Group"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Group"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -4131,7 +4839,11 @@ func schema_pkg_apis_crd_v1beta1_GroupList(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Group", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Group", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4161,7 +4873,11 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPBlock"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -4170,7 +4886,11 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 					"serviceReference": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select backend Pods of the referred Service. Cannot be set with any other selector or ipBlock.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NamespacedName"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+>>>>>>> origin/main
 						},
 					},
 					"externalEntitySelector": {
@@ -4198,7 +4918,11 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPBlock", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NamespacedName", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock", "antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4216,7 +4940,11 @@ func schema_pkg_apis_crd_v1beta1_GroupStatus(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupCondition"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -4226,7 +4954,11 @@ func schema_pkg_apis_crd_v1beta1_GroupStatus(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.GroupCondition"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4349,19 +5081,31 @@ func schema_pkg_apis_crd_v1beta1_IPAddressOwner(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"pod": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.PodOwner"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.PodOwner"),
+>>>>>>> origin/main
 						},
 					},
 					"statefulSet": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.StatefulSetOwner"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.StatefulSetOwner"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.PodOwner", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.StatefulSetOwner"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.PodOwner", "antrea.io/antrea/pkg/apis/crd/v1beta1.StatefulSetOwner"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4391,7 +5135,11 @@ func schema_pkg_apis_crd_v1beta1_IPAddressState(ref common.ReferenceCallback) co
 						SchemaProps: spec.SchemaProps{
 							Description: "Owner this IP Address is allocated to",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPAddressOwner"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressOwner"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -4399,7 +5147,11 @@ func schema_pkg_apis_crd_v1beta1_IPAddressState(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPAddressOwner"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressOwner"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4506,14 +5258,22 @@ func schema_pkg_apis_crd_v1beta1_IPPool(ref common.ReferenceCallback) common.Ope
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the IPPool.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPoolSpec"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolSpec"),
+>>>>>>> origin/main
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the pool.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPoolStatus"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolStatus"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -4521,7 +5281,11 @@ func schema_pkg_apis_crd_v1beta1_IPPool(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPoolSpec", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPoolStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4558,7 +5322,11 @@ func schema_pkg_apis_crd_v1beta1_IPPoolList(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPool"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPool"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -4569,7 +5337,11 @@ func schema_pkg_apis_crd_v1beta1_IPPoolList(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPool", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPool", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4587,7 +5359,11 @@ func schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPRange"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -4597,7 +5373,11 @@ func schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "The Subnet info of this IP pool. All the IP ranges in the IP pool should share the same subnet attributes.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.SubnetInfo"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -4605,7 +5385,11 @@ func schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPRange", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.SubnetInfo"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange", "antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4622,7 +5406,11 @@ func schema_pkg_apis_crd_v1beta1_IPPoolStatus(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPAddressState"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressState"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -4631,14 +5419,22 @@ func schema_pkg_apis_crd_v1beta1_IPPoolStatus(ref common.ReferenceCallback) comm
 					"usage": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPoolUsage"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPAddressState", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPPoolUsage"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressState", "antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4740,19 +5536,31 @@ func schema_pkg_apis_crd_v1beta1_L7Protocol(ref common.ReferenceCallback) common
 				Properties: map[string]spec.Schema{
 					"http": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.HTTPProtocol"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol"),
+>>>>>>> origin/main
 						},
 					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TLSProtocol"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.HTTPProtocol", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TLSProtocol"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4812,14 +5620,22 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref common.ReferenceCallback) com
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of NetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicySpec"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec"),
+>>>>>>> origin/main
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the NetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyStatus"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -4827,7 +5643,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicySpec", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4946,7 +5766,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyList(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicy"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -4957,7 +5781,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyList(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -4971,7 +5799,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 					"ipBlock": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IPBlock describes the IPAddresses/IPBlocks that is matched in to/from. IPBlock cannot be set as part of the AppliedTo field. Cannot be set with any other selector.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPBlock"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock"),
+>>>>>>> origin/main
 						},
 					},
 					"podSelector": {
@@ -4989,7 +5821,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 					"namespaces": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select Pod/ExternalEntity from Namespaces matched by specific criteria. Current supported criteria is match: Self, which selects from the same Namespace of the appliedTo workloads. Cannot be set with any other selector except PodSelector or ExternalEntitySelector. This field can only be set when NetworkPolicyPeer is created for ClusterNetworkPolicy ingress/egress rules. Cannot be set with NamespaceSelector.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.PeerNamespaces"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces"),
+>>>>>>> origin/main
 						},
 					},
 					"externalEntitySelector": {
@@ -5015,7 +5851,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 					"serviceAccount": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select all Pods with the ServiceAccount matched by this field, as workloads in To/From fields. Cannot be set with any other selector.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NamespacedName"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+>>>>>>> origin/main
 						},
 					},
 					"nodeSelector": {
@@ -5035,7 +5875,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPBlock", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NamespacedName", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.PeerNamespaces", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock", "antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName", "antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+>>>>>>> origin/main
 	}
 }
 
@@ -5098,19 +5942,31 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyProtocol(ref common.ReferenceCallb
 				Properties: map[string]spec.Schema{
 					"icmp": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ICMPProtocol"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol"),
+>>>>>>> origin/main
 						},
 					},
 					"igmp": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IGMPProtocol"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ICMPProtocol", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IGMPProtocol"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol"},
+>>>>>>> origin/main
 	}
 }
 
@@ -5144,7 +6000,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AppliedTo"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5158,7 +6018,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Rule"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5172,7 +6036,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Rule"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5183,7 +6051,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Rule"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"},
+>>>>>>> origin/main
 	}
 }
 
@@ -5234,7 +6106,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyCondition"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5245,7 +6121,11 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyCondition"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition"},
+>>>>>>> origin/main
 	}
 }
 
@@ -5284,7 +6164,11 @@ func schema_pkg_apis_crd_v1beta1_NodeResult(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Observation"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Observation"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5294,7 +6178,11 @@ func schema_pkg_apis_crd_v1beta1_NodeResult(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Observation"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Observation"},
+>>>>>>> origin/main
 	}
 }
 
@@ -5483,25 +6371,41 @@ func schema_pkg_apis_crd_v1beta1_Packet(ref common.ReferenceCallback) common.Ope
 					},
 					"ipHeader": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPHeader"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader"),
+>>>>>>> origin/main
 						},
 					},
 					"ipv6Header": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPv6Header"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header"),
+>>>>>>> origin/main
 						},
 					},
 					"transportHeader": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TransportHeader"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TransportHeader"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPHeader", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.IPv6Header", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TransportHeader"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader", "antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header", "antrea.io/antrea/pkg/apis/crd/v1beta1.TransportHeader"},
+>>>>>>> origin/main
 	}
 }
 
@@ -5635,7 +6539,11 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyPort"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPort"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5649,7 +6557,11 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyProtocol"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5663,7 +6575,11 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.L7Protocol"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5677,7 +6593,11 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyPeer"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5691,7 +6611,11 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyPeer"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5705,7 +6629,11 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.PeerService"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5741,7 +6669,11 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AppliedTo"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -5752,7 +6684,11 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.L7Protocol", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyPeer", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyPort", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NetworkPolicyProtocol", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.PeerService"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPort", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService"},
+>>>>>>> origin/main
 	}
 }
 
@@ -5947,7 +6883,11 @@ func schema_pkg_apis_crd_v1beta1_Tier(ref common.ReferenceCallback) common.OpenA
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of Tier.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TierSpec"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec"),
+>>>>>>> origin/main
 						},
 					},
 				},
@@ -5955,7 +6895,11 @@ func schema_pkg_apis_crd_v1beta1_Tier(ref common.ReferenceCallback) common.OpenA
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TierSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -5992,7 +6936,11 @@ func schema_pkg_apis_crd_v1beta1_TierList(ref common.ReferenceCallback) common.O
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Tier"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Tier"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6003,7 +6951,11 @@ func schema_pkg_apis_crd_v1beta1_TierList(ref common.ReferenceCallback) common.O
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Tier", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6065,20 +7017,32 @@ func schema_pkg_apis_crd_v1beta1_Traceflow(ref common.ReferenceCallback) common.
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TraceflowSpec"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowSpec"),
+>>>>>>> origin/main
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TraceflowStatus"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowStatus"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TraceflowSpec", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TraceflowStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6115,7 +7079,11 @@ func schema_pkg_apis_crd_v1beta1_TraceflowList(ref common.ReferenceCallback) com
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Traceflow"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Traceflow"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6126,7 +7094,11 @@ func schema_pkg_apis_crd_v1beta1_TraceflowList(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Traceflow", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Traceflow", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6140,19 +7112,31 @@ func schema_pkg_apis_crd_v1beta1_TraceflowSpec(ref common.ReferenceCallback) com
 					"source": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Source"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Source"),
+>>>>>>> origin/main
 						},
 					},
 					"destination": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Destination"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Destination"),
+>>>>>>> origin/main
 						},
 					},
 					"packet": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Packet"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Packet"),
+>>>>>>> origin/main
 						},
 					},
 					"liveTraffic": {
@@ -6180,7 +7164,11 @@ func schema_pkg_apis_crd_v1beta1_TraceflowSpec(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Destination", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Packet", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Source"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Destination", "antrea.io/antrea/pkg/apis/crd/v1beta1.Packet", "antrea.io/antrea/pkg/apis/crd/v1beta1.Source"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6226,7 +7214,11 @@ func schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NodeResult"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NodeResult"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6235,14 +7227,22 @@ func schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref common.ReferenceCallback) c
 					"capturedPacket": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CapturedPacket is the captured packet in live-traffic Traceflow.",
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Packet"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Packet"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.NodeResult", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.Packet", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NodeResult", "antrea.io/antrea/pkg/apis/crd/v1beta1.Packet", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6255,24 +7255,40 @@ func schema_pkg_apis_crd_v1beta1_TransportHeader(ref common.ReferenceCallback) c
 				Properties: map[string]spec.Schema{
 					"icmp": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader"),
+>>>>>>> origin/main
 						},
 					},
 					"udp": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.UDPHeader"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.UDPHeader"),
+>>>>>>> origin/main
 						},
 					},
 					"tcp": {
 						SchemaProps: spec.SchemaProps{
+<<<<<<< HEAD
 							Ref: ref("antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TCPHeader"),
+=======
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.TCPHeader", "antrea.io/antrea/apis/pkg/apis/crd/v1beta1.UDPHeader"},
+=======
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader", "antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader", "antrea.io/antrea/pkg/apis/crd/v1beta1.UDPHeader"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6334,7 +7350,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref common.R
 						SchemaProps: spec.SchemaProps{
 							Description: "The traffic stats of the Antrea ClusterNetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+>>>>>>> origin/main
 						},
 					},
 					"ruleTrafficStats": {
@@ -6345,7 +7365,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref common.R
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6355,7 +7379,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref common.R
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.RuleTrafficStats", "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6394,7 +7422,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6405,7 +7437,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref comm
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6440,7 +7476,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Description: "The traffic stats of the Antrea NetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+>>>>>>> origin/main
 						},
 					},
 					"ruleTrafficStats": {
@@ -6451,7 +7491,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6461,7 +7505,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.RuleTrafficStats", "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6500,7 +7548,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref common.Refe
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6511,7 +7563,11 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref common.Refe
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6557,7 +7613,11 @@ func schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.PodReference"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6568,7 +7628,11 @@ func schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.PodReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6607,7 +7671,11 @@ func schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.MulticastGroup"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroup"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6618,7 +7686,11 @@ func schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.MulticastGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6653,14 +7725,22 @@ func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref common.ReferenceCallb
 						SchemaProps: spec.SchemaProps{
 							Description: "The traffic stats of the K8s NetworkPolicy.",
 							Default:     map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:         ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats"),
+=======
+							Ref:         ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6699,7 +7779,11 @@ func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.NetworkPolicyStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6710,7 +7794,11 @@ func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.NetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6749,7 +7837,11 @@ func schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6759,7 +7851,11 @@ func schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6798,7 +7894,11 @@ func schema_pkg_apis_stats_v1alpha1_NodeLatencyStatsList(ref common.ReferenceCal
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.NodeLatencyStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6809,7 +7909,11 @@ func schema_pkg_apis_stats_v1alpha1_NodeLatencyStatsList(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.NodeLatencyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6835,7 +7939,11 @@ func schema_pkg_apis_stats_v1alpha1_PeerNodeLatencyStats(ref common.ReferenceCal
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
+<<<<<<< HEAD
 										Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TargetIPLatencyStats"),
+=======
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TargetIPLatencyStats"),
+>>>>>>> origin/main
 									},
 								},
 							},
@@ -6845,7 +7953,11 @@ func schema_pkg_apis_stats_v1alpha1_PeerNodeLatencyStats(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TargetIPLatencyStats"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.TargetIPLatencyStats"},
+>>>>>>> origin/main
 	}
 }
 
@@ -6892,14 +8004,22 @@ func schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref common.ReferenceCallbac
 					"trafficStats": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
+<<<<<<< HEAD
 							Ref:     ref("antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats"),
+=======
+							Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+>>>>>>> origin/main
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
+<<<<<<< HEAD
 			"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1.TrafficStats"},
+=======
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
+>>>>>>> origin/main
 	}
 }
 

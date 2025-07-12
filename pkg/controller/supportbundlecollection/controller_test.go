@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
@@ -46,6 +47,18 @@ import (
 	"antrea.io/antrea/v2/pkg/util/auth"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	bundlecollectionstore "antrea.io/antrea/pkg/controller/supportbundlecollection/store"
+	"antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/auth"
+	"antrea.io/antrea/pkg/util/k8s"
+	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
+>>>>>>> origin/main
 )
 
 const (

@@ -24,9 +24,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
+=======
+	"antrea.io/antrea/pkg/apis"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	controllerconfig "antrea.io/antrea/pkg/config/controller"
+>>>>>>> origin/main
 )
 
 const (

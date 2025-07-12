@@ -38,12 +38,21 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
+<<<<<<< HEAD
 	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
 	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
 	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	annotations "antrea.io/antrea/v2/pkg/ipam"
 	fakepoolclient "antrea.io/antrea/v2/pkg/ipam/poolallocator/testing"
+=======
+	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
+	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	annotations "antrea.io/antrea/pkg/ipam"
+	fakepoolclient "antrea.io/antrea/pkg/ipam/poolallocator/testing"
+>>>>>>> origin/main
 )
 
 var (

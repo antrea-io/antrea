@@ -28,7 +28,11 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	npltypes "antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
+=======
+	npltypes "antrea.io/antrea/pkg/agent/nodeportlocal/types"
+>>>>>>> origin/main
 )
 
 const NPLEnabledAnnotationIndex = "nplEnabledAnnotation"

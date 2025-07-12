@@ -21,7 +21,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 func TestAdvertiserMarshalMessage(t *testing.T) {

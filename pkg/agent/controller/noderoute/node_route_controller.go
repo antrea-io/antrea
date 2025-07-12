@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/controller/ipseccertificate"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
@@ -47,6 +48,21 @@ import (
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	utilwait "antrea.io/antrea/v2/pkg/util/wait"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/controller/ipseccertificate"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/wireguard"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/k8s"
+	utilwait "antrea.io/antrea/pkg/util/wait"
+>>>>>>> origin/main
 )
 
 const (

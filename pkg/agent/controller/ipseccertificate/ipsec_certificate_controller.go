@@ -39,8 +39,13 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+<<<<<<< HEAD
 	antreaapis "antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+=======
+	antreaapis "antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+>>>>>>> origin/main
 )
 
 const (

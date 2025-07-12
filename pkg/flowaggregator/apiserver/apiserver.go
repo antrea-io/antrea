@@ -29,6 +29,7 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	apiserverversion "k8s.io/apiserver/pkg/util/version"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	systeminstall "antrea.io/antrea/apis/pkg/apis/system/install"
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/loglevel"
@@ -36,6 +37,15 @@ import (
 	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver/handlers/recordmetrics"
 	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
 	antreaversion "antrea.io/antrea/v2/pkg/version"
+=======
+	"antrea.io/antrea/pkg/apis"
+	systeminstall "antrea.io/antrea/pkg/apis/system/install"
+	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
+	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/flowrecords"
+	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
+	"antrea.io/antrea/pkg/flowaggregator/querier"
+	antreaversion "antrea.io/antrea/pkg/version"
+>>>>>>> origin/main
 )
 
 const (

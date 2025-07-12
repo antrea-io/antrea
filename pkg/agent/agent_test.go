@@ -36,6 +36,7 @@ import (
 	clockutils "k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
@@ -49,6 +50,21 @@ import (
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/runtime"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/types"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/runtime"
+>>>>>>> origin/main
 )
 
 func newAgentInitializer(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore) *Initializer {

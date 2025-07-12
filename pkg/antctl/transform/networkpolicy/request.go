@@ -20,7 +20,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 
+<<<<<<< HEAD
 	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+=======
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+>>>>>>> origin/main
 )
 
 // parsePeer parses Namespace/Pod name, empty string is returned if the argument is not of a

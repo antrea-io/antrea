@@ -19,7 +19,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/component-base/featuregate"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/runtime"
+=======
+	"antrea.io/antrea/pkg/util/runtime"
+>>>>>>> origin/main
 )
 
 // When editing this file, make sure you edit the documentation as well to keep

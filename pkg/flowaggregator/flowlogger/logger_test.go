@@ -25,7 +25,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+<<<<<<< HEAD
 	flowrecordtesting "antrea.io/antrea/v2/pkg/flowaggregator/flowrecord/testing"
+=======
+	flowrecordtesting "antrea.io/antrea/pkg/flowaggregator/flowrecord/testing"
+>>>>>>> origin/main
 )
 
 // a thread-safe wrapper around bytes.Buffer

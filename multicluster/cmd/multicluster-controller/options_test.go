@@ -21,8 +21,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster"
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+=======
+	"antrea.io/antrea/multicluster"
+	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+>>>>>>> origin/main
 )
 
 func TestComplete(t *testing.T) {

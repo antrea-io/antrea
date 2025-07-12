@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
 	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
@@ -47,6 +48,22 @@ import (
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"
+	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
+	"antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	"antrea.io/antrea/pkg/agent/util"
+	winnettest "antrea.io/antrea/pkg/agent/util/winnet/testing"
+	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/util/channel"
+	utilip "antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 var (

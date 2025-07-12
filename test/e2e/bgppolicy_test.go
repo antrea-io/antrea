@@ -32,10 +32,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/types"
 	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/test/e2e/providers/exec"
+=======
+	"antrea.io/antrea/pkg/agent/types"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/test/e2e/providers/exec"
+>>>>>>> origin/main
 )
 
 const (

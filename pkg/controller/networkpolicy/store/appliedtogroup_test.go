@@ -25,9 +25,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/controller/types"
+=======
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/controller/types"
+>>>>>>> origin/main
 )
 
 func newAppliedToGroupPodMember(name, namespace string) *controlplane.GroupMember {

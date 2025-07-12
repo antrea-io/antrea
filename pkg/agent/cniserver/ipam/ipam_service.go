@@ -21,8 +21,13 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	current "github.com/containernetworking/cni/pkg/types/100"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/types"
 	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
+=======
+	"antrea.io/antrea/pkg/agent/cniserver/types"
+	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
+>>>>>>> origin/main
 )
 
 // Ordered list of IPAM drivers.

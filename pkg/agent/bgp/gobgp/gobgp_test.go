@@ -23,8 +23,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+=======
+	"antrea.io/antrea/pkg/agent/bgp"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+>>>>>>> origin/main
 )
 
 func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {

@@ -34,7 +34,11 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	clock "k8s.io/utils/clock/testing"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 var (
@@ -489,7 +493,11 @@ func Test_noHostNetworkPod(t *testing.T) {
 Sample output:
 goos: darwin
 goarch: amd64
+<<<<<<< HEAD
 pkg: antrea.io/antrea/v2/pkg/util/podstore
+=======
+pkg: antrea.io/antrea/pkg/util/podstore
+>>>>>>> origin/main
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 BenchmarkGetPodByIPAndTime
 BenchmarkGetPodByIPAndTime/input_size_100

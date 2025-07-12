@@ -18,7 +18,11 @@ import (
 	"encoding/json"
 	"io"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
+=======
+	"antrea.io/antrea/pkg/agent/apis"
+>>>>>>> origin/main
 )
 
 func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {

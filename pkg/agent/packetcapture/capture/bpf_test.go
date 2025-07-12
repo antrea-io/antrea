@@ -23,7 +23,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
+<<<<<<< HEAD
 	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+=======
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+>>>>>>> origin/main
 )
 
 var (

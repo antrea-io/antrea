@@ -27,7 +27,11 @@ import (
 	"golang.org/x/sys/unix"
 	"k8s.io/utils/set"
 
+<<<<<<< HEAD
 	netlinktesting "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
+=======
+	netlinktesting "antrea.io/antrea/pkg/agent/util/netlink/testing"
+>>>>>>> origin/main
 )
 
 type linkEventHandler struct {

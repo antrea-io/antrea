@@ -20,8 +20,13 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	cniversion "github.com/containernetworking/cni/pkg/version"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/cni"
 	"antrea.io/antrea/v2/pkg/version"
+=======
+	"antrea.io/antrea/pkg/cni"
+	"antrea.io/antrea/pkg/version"
+>>>>>>> origin/main
 )
 
 func main() {

@@ -31,7 +31,11 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
+<<<<<<< HEAD
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
+=======
+	utilip "antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 const (

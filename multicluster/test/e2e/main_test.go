@@ -28,7 +28,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+<<<<<<< HEAD
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+=======
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+>>>>>>> origin/main
 )
 
 const (

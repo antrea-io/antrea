@@ -36,6 +36,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/util/workqueue"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/ipassigner"
 	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
@@ -55,6 +56,27 @@ import (
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+=======
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/ipassigner"
+	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
+	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
+	"antrea.io/antrea/pkg/agent/memberlist"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	servicecidrtest "antrea.io/antrea/pkg/agent/servicecidr/testing"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/k8s"
+>>>>>>> origin/main
 )
 
 const (

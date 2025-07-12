@@ -15,8 +15,13 @@
 package rule
 
 import (
+<<<<<<< HEAD
 	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/util/ip"
+=======
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/ip"
+>>>>>>> origin/main
 )
 
 type service struct {

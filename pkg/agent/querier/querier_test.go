@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
@@ -30,6 +31,15 @@ import (
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+=======
+	"antrea.io/antrea/pkg/agent/config"
+	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
+>>>>>>> origin/main
 )
 
 const (

@@ -30,12 +30,21 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
+<<<<<<< HEAD
 	antreaagenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	antreacrds "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/controller/externalippool"
+=======
+	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
+	antreacrds "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/controller/externalippool"
+>>>>>>> origin/main
 )
 
 type loadBalancerController struct {

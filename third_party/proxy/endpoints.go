@@ -45,7 +45,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+<<<<<<< HEAD
 	utilproxy "antrea.io/antrea/v2/third_party/proxy/util"
+=======
+	utilproxy "antrea.io/antrea/third_party/proxy/util"
+>>>>>>> origin/main
 )
 
 // BaseEndpointInfo contains base information that defines an endpoint.
