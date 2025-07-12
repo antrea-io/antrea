@@ -39,7 +39,7 @@ import (
 	antreaagenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/antctl"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
-	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/flowaggregator/apis"

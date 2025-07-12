@@ -28,7 +28,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/client"
-	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 )
 
 const (

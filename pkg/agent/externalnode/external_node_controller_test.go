@@ -32,7 +32,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	crdv1alpha1informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"

@@ -28,7 +28,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/multicast"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/version"
 )

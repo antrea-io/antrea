@@ -24,7 +24,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/agent/bgp"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 )
 
 func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {

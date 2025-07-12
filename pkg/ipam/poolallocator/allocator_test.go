@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	informers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	fakepoolclient "antrea.io/antrea/v2/pkg/ipam/poolallocator/testing"
 

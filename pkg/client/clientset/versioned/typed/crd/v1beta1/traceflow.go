@@ -19,7 +19,7 @@ package v1beta1
 import (
 	"context"
 
-	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	v1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	scheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"

@@ -23,8 +23,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
 )
 

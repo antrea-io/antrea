@@ -27,7 +27,7 @@ package testing
 import (
 	reflect "reflect"
 
-	controlplane "antrea.io/antrea/v2/pkg/apis/controlplane"
+	controlplane "antrea.io/antrea/apis/pkg/apis/controlplane"
 	types "antrea.io/antrea/v2/pkg/controller/types"
 	gomock "go.uber.org/mock/gomock"
 )

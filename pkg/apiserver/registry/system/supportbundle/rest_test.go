@@ -34,7 +34,7 @@ import (
 
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
 	agentqueriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
-	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	system "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/v2/pkg/querier"

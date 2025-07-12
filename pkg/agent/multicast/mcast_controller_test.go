@@ -48,8 +48,8 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/types"
 	typestest "antrea.io/antrea/v2/pkg/agent/types/testing"
 	agentutil "antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	ovsopenflow "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/channel"
 )

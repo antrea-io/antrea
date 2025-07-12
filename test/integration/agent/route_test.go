@@ -40,7 +40,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/agent/util/ipset"
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
-	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )

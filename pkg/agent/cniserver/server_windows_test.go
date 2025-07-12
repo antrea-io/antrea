@@ -42,7 +42,7 @@ import (
 	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	winnettest "antrea.io/antrea/v2/pkg/agent/util/winnet/testing"
-	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"

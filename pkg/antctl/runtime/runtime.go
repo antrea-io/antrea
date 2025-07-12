@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/util/runtime"
 )
 

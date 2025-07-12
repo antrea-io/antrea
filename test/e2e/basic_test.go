@@ -35,7 +35,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 )
 
 // TestBasic is the top-level test which contains some subtests for

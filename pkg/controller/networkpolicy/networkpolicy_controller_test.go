@@ -47,9 +47,9 @@ import (
 
 	fakemcsversioned "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/fake"
 	mcsinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
-	"antrea.io/antrea/v2/pkg/apis/controlplane"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"

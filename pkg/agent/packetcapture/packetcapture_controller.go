@@ -48,7 +48,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"

@@ -42,7 +42,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"

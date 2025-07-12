@@ -29,8 +29,8 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	apiserverversion "k8s.io/apiserver/pkg/util/version"
 
-	"antrea.io/antrea/v2/pkg/apis"
-	systeminstall "antrea.io/antrea/v2/pkg/apis/system/install"
+	"antrea.io/antrea/apis/pkg/apis"
+	systeminstall "antrea.io/antrea/apis/pkg/apis/system/install"
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/loglevel"
 	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver/handlers/flowrecords"
 	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver/handlers/recordmetrics"

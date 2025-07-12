@@ -24,8 +24,8 @@ import (
 
 	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
-	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
-	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
 

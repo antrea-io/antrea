@@ -32,7 +32,7 @@ import (
 	"k8s.io/utils/exec"
 
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
-	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/support"

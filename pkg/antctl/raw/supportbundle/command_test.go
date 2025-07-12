@@ -36,8 +36,8 @@ import (
 	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
-	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
 	antreaclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"

@@ -29,8 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8stesting "k8s.io/client-go/testing"
 
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"

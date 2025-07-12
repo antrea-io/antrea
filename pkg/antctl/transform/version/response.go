@@ -21,7 +21,7 @@ import (
 	k8sversion "k8s.io/apimachinery/pkg/version"
 	"k8s.io/klog/v2"
 
-	clusterinfov1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	clusterinfov1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	antreaversion "antrea.io/antrea/v2/pkg/version"
 )
 

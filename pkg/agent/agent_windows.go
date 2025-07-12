@@ -31,7 +31,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util"
 	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
 	"antrea.io/antrea/v2/pkg/agent/util/winnet"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"

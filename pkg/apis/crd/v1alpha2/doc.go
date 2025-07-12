@@ -15,4 +15,4 @@
 // +k8s:deepcopy-gen=package
 // +groupName=crd.antrea.io
 
-package v1alpha2 // import "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+package v1alpha2 // import "antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"

@@ -17,7 +17,7 @@ package v1beta2
 import (
 	"context"
 
-	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 )
 
 type SupportBundleCollectionExpansion interface {

@@ -18,8 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
-	"antrea.io/antrea/v2/pkg/apis/controlplane"
-	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 )
 
 // Install registers the API group and adds types to a scheme

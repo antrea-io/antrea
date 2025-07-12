@@ -35,7 +35,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/antctl/raw"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 )
 

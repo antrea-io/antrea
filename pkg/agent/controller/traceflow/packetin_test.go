@@ -33,8 +33,8 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
 

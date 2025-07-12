@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
-	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/querier"
 )
 

@@ -15,7 +15,7 @@
 package ipassigner
 
 import (
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 )
 
 // IPAssigner provides methods to assign or unassign IP.

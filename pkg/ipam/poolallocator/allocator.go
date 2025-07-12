@@ -20,7 +20,7 @@ import (
 	"net"
 	"reflect"
 
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	crdclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	informers "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/ipam/ipallocator"

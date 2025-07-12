@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/apis/pkg/apis"
 	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
 )
 

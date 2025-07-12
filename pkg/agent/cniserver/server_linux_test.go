@@ -39,7 +39,7 @@ import (
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"

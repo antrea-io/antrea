@@ -34,7 +34,7 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/util/env"

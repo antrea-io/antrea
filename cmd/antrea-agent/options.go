@@ -29,7 +29,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
-	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/cni"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/features"

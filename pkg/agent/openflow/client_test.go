@@ -36,7 +36,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
 	opstest "antrea.io/antrea/v2/pkg/agent/openflow/operations/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	ovsoftest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"

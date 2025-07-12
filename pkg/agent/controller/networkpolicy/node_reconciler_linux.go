@@ -33,8 +33,8 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util/ipset"
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
-	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
-	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/ip"
 )
 

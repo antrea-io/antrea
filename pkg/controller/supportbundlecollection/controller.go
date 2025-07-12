@@ -37,8 +37,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/v2/pkg/apis/controlplane"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"

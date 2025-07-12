@@ -19,7 +19,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
 )
 
 // used for unit testing

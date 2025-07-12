@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 
-	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 )
 
 func marshal(object runtime.Object) []byte {

@@ -28,8 +28,8 @@ import (
 	fakeclient "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 
-	"antrea.io/antrea/v2/pkg/apis"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	cert "antrea.io/antrea/v2/pkg/apiserver/certificate"
 	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/v2/pkg/util/k8s"

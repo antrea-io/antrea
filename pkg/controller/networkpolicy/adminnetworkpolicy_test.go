@@ -23,7 +23,7 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
-	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/apis/pkg/apis/controlplane"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/features"
 )

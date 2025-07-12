@@ -35,7 +35,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util/ethtool"
 	"antrea.io/antrea/v2/pkg/agent/util/ndp"
 	netlinkutil "antrea.io/antrea/v2/pkg/agent/util/netlink"
-	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 

@@ -30,7 +30,7 @@ import (
 	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
 	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
-	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/v2/pkg/querier"

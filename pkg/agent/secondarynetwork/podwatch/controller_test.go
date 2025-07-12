@@ -52,7 +52,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	podwatchtesting "antrea.io/antrea/v2/pkg/agent/secondarynetwork/podwatch/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 )

@@ -33,7 +33,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/agent/types"
-	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/test/e2e/providers/exec"
 )

@@ -33,7 +33,7 @@ import (
 	interfacestore "antrea.io/antrea/v2/pkg/agent/interfacestore"
 	multicast "antrea.io/antrea/v2/pkg/agent/multicast"
 	types "antrea.io/antrea/v2/pkg/agent/types"
-	v1beta2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	v1beta2 "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	querier "antrea.io/antrea/v2/pkg/querier"
 	gomock "go.uber.org/mock/gomock"
 	types0 "k8s.io/apimachinery/pkg/types"

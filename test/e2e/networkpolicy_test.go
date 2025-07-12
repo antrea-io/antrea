@@ -32,8 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/v2/pkg/agent/apis"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
 )
 

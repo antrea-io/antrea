@@ -34,8 +34,8 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/config"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
-	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 )
 

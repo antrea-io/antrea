@@ -30,8 +30,8 @@ import (
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 	"antrea.io/antrea/v2/pkg/antctl/transform/controllerinfo"
 	"antrea.io/antrea/v2/pkg/antctl/transform/networkpolicy"
-	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
 )
 

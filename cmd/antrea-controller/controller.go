@@ -41,7 +41,7 @@ import (
 	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
 
 	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
-	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/apiserver"
 	"antrea.io/antrea/v2/pkg/apiserver/certificate"
 	"antrea.io/antrea/v2/pkg/apiserver/openapi"

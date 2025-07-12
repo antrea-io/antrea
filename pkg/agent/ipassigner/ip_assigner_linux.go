@@ -33,7 +33,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util/arping"
 	"antrea.io/antrea/v2/pkg/agent/util/ndp"
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
-	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 )
 
 // VLAN interfaces created by antrea-agent will be named with the prefix.

@@ -30,7 +30,7 @@ import (
 	ipam "antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	types "antrea.io/antrea/v2/pkg/agent/cniserver/types"
 	interfacestore "antrea.io/antrea/v2/pkg/agent/interfacestore"
-	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	v1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	gomock "go.uber.org/mock/gomock"
 )

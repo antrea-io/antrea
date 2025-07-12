@@ -27,7 +27,7 @@ package testing
 import (
 	reflect "reflect"
 
-	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	v1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	gomock "go.uber.org/mock/gomock"
 )
 

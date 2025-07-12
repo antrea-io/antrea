@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/apis/pkg/apis"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
 )

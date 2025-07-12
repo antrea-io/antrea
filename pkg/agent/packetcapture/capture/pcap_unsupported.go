@@ -24,7 +24,7 @@ import (
 
 	"github.com/gopacket/gopacket"
 
-	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
 )
 
 type pcapCapture struct {

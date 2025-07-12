@@ -23,7 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	antreae2e "antrea.io/antrea/v2/test/e2e"
 	"antrea.io/antrea/v2/test/e2e/providers"
 )

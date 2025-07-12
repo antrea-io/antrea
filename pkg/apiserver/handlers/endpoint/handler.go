@@ -18,7 +18,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"

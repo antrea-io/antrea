@@ -20,8 +20,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
-	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 

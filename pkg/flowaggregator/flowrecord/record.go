@@ -20,7 +20,7 @@ import (
 	"net"
 	"time"
 
-	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
 )
 
 type FlowRecord struct {

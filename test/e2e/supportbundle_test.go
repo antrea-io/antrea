@@ -35,9 +35,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 
-	"antrea.io/antrea/v2/pkg/apis"
-	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
-	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis"
+	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	"antrea.io/antrea/v2/pkg/features"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"

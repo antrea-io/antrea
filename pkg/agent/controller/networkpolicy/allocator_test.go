@@ -27,7 +27,7 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 )
 
 var (

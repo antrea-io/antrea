@@ -24,8 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
-	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	system "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/querier"
 )
 

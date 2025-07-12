@@ -20,7 +20,7 @@ import (
 	"context"
 	time "time"
 
-	crdv1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1alpha2 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
 	versioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/v2/pkg/client/informers/externalversions/internalinterfaces"
 	v1alpha2 "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha2"

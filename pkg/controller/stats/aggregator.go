@@ -27,9 +27,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/v2/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
-	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/util/k8s"

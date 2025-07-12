@@ -32,7 +32,7 @@ import (
 	memberlist "antrea.io/antrea/v2/pkg/agent/memberlist"
 	openflow "antrea.io/antrea/v2/pkg/agent/openflow"
 	proxy "antrea.io/antrea/v2/pkg/agent/proxy"
-	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	v1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	ovsctl "antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	querier "antrea.io/antrea/v2/pkg/querier"
 	gomock "go.uber.org/mock/gomock"

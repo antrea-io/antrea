@@ -28,7 +28,7 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcsv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 )
 
 var (

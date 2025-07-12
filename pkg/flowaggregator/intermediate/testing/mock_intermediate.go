@@ -28,7 +28,7 @@ import (
 	reflect "reflect"
 	time "time"
 
-	v1alpha1 "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	v1alpha1 "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
 	intermediate "antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
 	gomock "go.uber.org/mock/gomock"
 )

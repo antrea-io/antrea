@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
-	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
 )
 
 type networkConf struct {

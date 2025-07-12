@@ -26,8 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 
-	"antrea.io/antrea/v2/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	antreaclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	antreafakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"

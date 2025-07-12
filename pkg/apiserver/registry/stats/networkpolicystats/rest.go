@@ -28,7 +28,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
 )
 

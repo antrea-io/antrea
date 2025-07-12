@@ -15,7 +15,7 @@
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
 // +k8s:protobuf-gen=package
-// +k8s:conversion-gen=antrea.io/antrea/v2/pkg/apis/stats
+// +k8s:conversion-gen=antrea.io/antrea/apis/pkg/apis/stats
 // +groupName=stats.antrea.io
 
 // Package v1alpha1 is the v1alpha1 version of the Antrea Stats API.

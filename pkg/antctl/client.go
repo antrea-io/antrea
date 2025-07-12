@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
-	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/apis/pkg/apis"
 )
 
 // requestOption describes options to issue requests.

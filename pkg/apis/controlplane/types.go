@@ -22,8 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
-	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

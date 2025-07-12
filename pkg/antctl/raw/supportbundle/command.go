@@ -47,8 +47,8 @@ import (
 
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
-	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	systemclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/compress"

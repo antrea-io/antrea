@@ -32,8 +32,8 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/client"
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
-	"antrea.io/antrea/v2/pkg/apis/controlplane"
-	cpv1b2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	cpv1b2 "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/support"

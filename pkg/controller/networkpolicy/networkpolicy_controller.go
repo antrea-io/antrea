@@ -46,9 +46,9 @@ import (
 	policyinformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions/apis/v1alpha1"
 	policylisters "sigs.k8s.io/network-policy-api/pkg/client/listers/apis/v1alpha1"
 
-	"antrea.io/antrea/v2/pkg/apis/controlplane"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
-	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crdv1b1informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"

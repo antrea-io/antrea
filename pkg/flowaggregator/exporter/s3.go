@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 
-	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	"antrea.io/antrea/v2/pkg/flowaggregator/s3uploader"
 )
