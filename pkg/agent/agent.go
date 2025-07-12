@@ -37,28 +37,6 @@ import (
 	"k8s.io/klog/v2"
 	clockutils "k8s.io/utils/clock"
 
-<<<<<<< HEAD
-	"antrea.io/antrea/v2/pkg/agent/cniserver"
-	"antrea.io/antrea/v2/pkg/agent/config"
-	"antrea.io/antrea/v2/pkg/agent/controller/noderoute"
-	"antrea.io/antrea/v2/pkg/agent/controller/trafficcontrol"
-	"antrea.io/antrea/v2/pkg/agent/externalnode"
-	"antrea.io/antrea/v2/pkg/agent/interfacestore"
-	"antrea.io/antrea/v2/pkg/agent/openflow"
-	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
-	"antrea.io/antrea/v2/pkg/agent/route"
-	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/v2/pkg/agent/wireguard"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
-	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
-	"antrea.io/antrea/v2/pkg/util/env"
-	utilip "antrea.io/antrea/v2/pkg/util/ip"
-	"antrea.io/antrea/v2/pkg/util/k8s"
-	utilwait "antrea.io/antrea/v2/pkg/util/wait"
-=======
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
@@ -79,7 +57,6 @@ import (
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 	utilwait "antrea.io/antrea/pkg/util/wait"
->>>>>>> origin/main
 )
 
 const (
@@ -139,6 +116,7 @@ type Initializer struct {
 	ofClient                 openflow.Client
 	routeClient              route.Interface
 	wireGuardClient          wireguard.Interface
+	tcManager                *tc.Manager
 	ifaceStore               interfacestore.InterfaceStore
 	ovsBridge                string
 	hostGateway              string // name of gateway port on the OVS bridge
@@ -224,6 +202,11 @@ func NewInitializer(
 // GetNodeConfig returns the NodeConfig.
 func (i *Initializer) GetNodeConfig() *config.NodeConfig {
 	return i.nodeConfig
+}
+
+// GetTCManager returns the TC manager for netfilter bypass.
+func (i *Initializer) GetTCManager() *tc.Manager {
+	return i.tcManager
 }
 
 // GetWireGuardClient returns the Wireguard client.
@@ -492,6 +475,11 @@ func (i *Initializer) Initialize() error {
 		// routeClient.Initialize() should be after i.setupOVSBridge() which
 		// creates the host gateway interface.
 		if err := i.routeClient.Initialize(i.nodeConfig, i.podNetworkWait.Done); err != nil {
+			return err
+		}
+
+		// Initialize TC manager for netfilter bypass in noEncap mode
+		if err := i.initializeTCManager(); err != nil {
 			return err
 		}
 
@@ -822,11 +810,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 	// some complexity as the code currently assumes that we have a single
 	// default tunnel port. So for now, we just reject configurations that
 	// request a GRE tunnel when the Node network supports IPv6.
-<<<<<<< HEAD
-	// See https://github.com/antrea.io/antrea/v2/issues/3150
-=======
 	// See https://github.com/antrea-io/antrea/issues/3150
->>>>>>> origin/main
 	if i.networkConfig.TrafficEncapMode.SupportsEncap() &&
 		i.networkConfig.TunnelType == ovsconfig.GRETunnel &&
 		i.nodeConfig.NodeIPv6Addr != nil {
@@ -1370,4 +1354,58 @@ func (i *Initializer) setOVSDatapath() error {
 		return err
 	}
 	return nil
+}
+
+// initializeTCManager initializes the traffic control manager for bypassing netfilter
+// in noEncap mode to improve Pod-to-Pod performance.
+func (i *Initializer) initializeTCManager() error {
+	// Only enable TC manager in noEncap mode and when bypassHostNetfilter is enabled
+	if !i.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+		klog.InfoS("TC manager not enabled - not in noEncap mode")
+		return nil
+	}
+
+	// Check if bypassHostNetfilter is enabled in the configuration
+	bypassHostNetfilter := i.networkConfig.BypassHostNetfilter
+
+	if !bypassHostNetfilter {
+		klog.InfoS("TC manager not enabled - bypassHostNetfilter is disabled")
+		return nil
+	}
+
+	// Get transport interface name
+	transportInterface := i.nodeConfig.NodeTransportInterfaceName
+	if transportInterface == "" {
+		return fmt.Errorf("transport interface name not configured")
+	}
+
+	// Get gateway interface name
+	gatewayInterface := i.hostGateway
+
+	// Get local Pod CIDR
+	localPodCIDR := i.nodeConfig.PodIPv4CIDR
+	if localPodCIDR == nil {
+		klog.InfoS("TC manager not enabled - no local Pod CIDR configured")
+		return nil
+	}
+
+	// Create and initialize TC manager
+	i.tcManager = tc.NewManager(transportInterface, gatewayInterface, localPodCIDR)
+	
+	if err := i.tcManager.Enable(); err != nil {
+		klog.ErrorS(err, "Failed to enable TC manager")
+		return err
+	}
+
+	klog.InfoS("TC manager initialized successfully", 
+		"transportInterface", transportInterface,
+		"gatewayInterface", gatewayInterface,
+		"localPodCIDR", localPodCIDR.String())
+	
+	return nil
+}
+
+// GetTCManager returns the TC manager instance
+func (i *Initializer) GetTCManager() *tc.Manager {
+	return i.tcManager
 }
