@@ -87,10 +87,6 @@ case $key in
     AWS_SERVICE_USER_ROLE_ARN="$2"
     shift 2
     ;;
-    --aws-service-user)
-    AWS_SERVICE_USER_NAME="$2"
-    shift 2
-    ;;
     --aws-region)
     REGION="$2"
     shift 2
