@@ -379,6 +379,152 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 			},
 		},
 		{
+			name:      "ipv4-source-only",
+			ipVersion: 4,
+			pc: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ipv4-source-only",
+				},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Source: crdv1alpha1.Source{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: data.testNamespace,
+							Name:      clientPodName,
+						},
+					},
+					CaptureConfig: crdv1alpha1.CaptureConfig{
+						FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
+							Number: 5,
+						},
+					},
+					FileServer: &crdv1alpha1.PacketCaptureFileServer{
+						URL: sftpURL,
+					},
+					Packet: &crdv1alpha1.Packet{
+						Protocol: &icmpProto,
+						IPFamily: v1.IPv4Protocol,
+					},
+					Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+					Timeout:   ptr.To[int32](15),
+				},
+			},
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 10,
+				FilePath:       getPcapURL("ipv4-source-only"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:    crdv1alpha1.PacketCaptureComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Timeout",
+						Message: "context deadline exceeded",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+		},
+		{
+			name:      "ipv4-destination-only",
+			ipVersion: 4,
+			pc: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ipv4-destination-only",
+				},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Destination: crdv1alpha1.Destination{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: data.testNamespace,
+							Name:      udpServerPodName,
+						},
+					},
+					CaptureConfig: crdv1alpha1.CaptureConfig{
+						FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
+							Number: 5,
+						},
+					},
+					FileServer: &crdv1alpha1.PacketCaptureFileServer{
+						URL: sftpURL,
+					},
+					Packet: &crdv1alpha1.Packet{
+						Protocol: &icmpProto,
+						IPFamily: v1.IPv4Protocol,
+					},
+					Direction: crdv1alpha1.CaptureDirectionDestinationToSource,
+					Timeout:   ptr.To[int32](15),
+				},
+			},
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 10,
+				FilePath:       getPcapURL("ipv4-destination-only"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:    crdv1alpha1.PacketCaptureComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Timeout",
+						Message: "context deadline exceeded",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+		},
+		{
+			name:      "ipv4-neither-source-nor-destination",
+			ipVersion: 4,
+			pc: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ipv4-neither-source-nor-destination",
+				},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					CaptureConfig: crdv1alpha1.CaptureConfig{
+						FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
+							Number: 5,
+						},
+					},
+					FileServer: &crdv1alpha1.PacketCaptureFileServer{
+						URL: sftpURL,
+					},
+					Packet: &crdv1alpha1.Packet{
+						Protocol: &icmpProto,
+						IPFamily: v1.IPv4Protocol,
+					},
+					Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+					Timeout:   ptr.To[int32](15),
+				},
+			},
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:    crdv1alpha1.PacketCaptureComplete,
+						Status:  metav1.ConditionStatus(v1.ConditionTrue),
+						Reason:  "Failed",
+						Message: "at least one of source.pod or destination.pod must be specified",
+					},
+				},
+			},
+		},
+		{
 			name:      "ipv4-icmp",
 			ipVersion: 4,
 			pc: getPacketCaptureCR(

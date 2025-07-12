@@ -428,7 +428,7 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 	}
 
 	if src.Pod == nil && dst.Pod == nil {
-		return nil, errors.New("one of source and destination must be a Pod")
+		return nil, errors.New("at least one of source and destination must be a Pod")
 	}
 	pkt, err := parseFlow(options)
 	if err != nil {

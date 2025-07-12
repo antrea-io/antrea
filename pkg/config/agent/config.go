@@ -64,6 +64,10 @@ type AgentConfig struct {
 	// Fully randomize source port mapping in SNAT rules used for egress traffic from Pods to
 	// the external network. Default is false.
 	SNATFullyRandomPorts bool `yaml:"snatFullyRandomPorts"`
+	// BypassHostNetfilter enables bypassing the host netfilter stack for Pod-to-Pod traffic
+	// in noEncap mode to improve performance. This option is only effective when trafficEncapMode
+	// is set to noEncap. Default is false.
+	BypassHostNetfilter bool `yaml:"bypassHostNetfilter"`
 	// Tunnel protocols used for encapsulating traffic across Nodes. Supported values:
 	// - geneve (default)
 	// - vxlan

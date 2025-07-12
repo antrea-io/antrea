@@ -317,6 +317,11 @@ func (c *Controller) syncPacketCapture(pcName string) error {
 }
 
 func (c *Controller) validatePacketCapture(spec *crdv1alpha1.PacketCaptureSpec) error {
+	// Validate that at least one of source.pod or destination.pod is specified
+	if spec.Source.Pod == nil && spec.Destination.Pod == nil {
+		return fmt.Errorf("at least one of source.pod or destination.pod must be specified")
+	}
+
 	if spec.Packet != nil {
 		protocol := spec.Packet.Protocol
 		if protocol != nil {
