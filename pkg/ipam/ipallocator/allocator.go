@@ -244,12 +244,20 @@ func (a *SingleIPAllocator) Used() int {
 func (a *SingleIPAllocator) Free() int {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
-	return a.max - a.count - len(a.reservedIPs)
+	free := a.max - a.count - len(a.reservedIPs)
+	if free < 0 {
+		return 0
+	}
+	return free
 }
 
 // Total returns the number total of IPs within the pool.
 func (a *SingleIPAllocator) Total() int {
-	return a.max - len(a.reservedIPs)
+	total := a.max - len(a.reservedIPs)
+	if total < 0 {
+		return 0
+	}
+	return total
 }
 
 // Has returns whether the provided IP is in the range or not.
