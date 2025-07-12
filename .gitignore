@@ -21,3 +21,4 @@ bin
 vendor
 
 ci/jenkins/jobs/defaults.yml
+antrea-controller
