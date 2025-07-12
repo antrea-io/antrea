@@ -225,4 +225,4 @@ func TestTCRule_String(t *testing.T) {
 	assert.Equal(t, "dst_ip 10.0.0.1", rule.Match)
 	assert.Contains(t, rule.Action, "pedit ex munge eth dst set")
 	assert.Contains(t, rule.Action, "pipe mirred egress redirect dev")
-} 
+}
