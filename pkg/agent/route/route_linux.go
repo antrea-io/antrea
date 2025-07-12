@@ -152,6 +152,8 @@ type Client struct {
 	clusterNodeIP6s sync.Map
 	// egressRoutes caches ip routes about Egresses.
 	egressRoutes sync.Map
+	// ipRules caches ip rules.
+	ipRules sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
@@ -319,6 +321,9 @@ func (c *Client) syncIPInfra() {
 	if err := c.syncNeighbor(); err != nil {
 		klog.ErrorS(err, "Failed to sync neighbor")
 	}
+	if err := c.syncIPRule(); err != nil {
+		klog.ErrorS(err, "Failed to sync ip rule")
+	}
 
 	klog.V(3).Info("Successfully synced iptables, ipset, route and neighbor")
 }
@@ -467,6 +472,54 @@ func (c *Client) syncNeighbor() error {
 			return restoreNeighbor(v.(*netlink.Neigh))
 		})
 	}
+
+	return nil
+}
+
+type ipRuleKey struct {
+	family int
+	mark   uint32
+	mask   uint32
+	table  int
+}
+
+// syncIPRule ensures that the necessary ip rules used by Antrea exist.
+func (c *Client) syncIPRule() error {
+	ruleList, err := c.netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	ruleKeys := sets.New[ipRuleKey]()
+	for i := range ruleList {
+		rule := ruleList[i]
+		// Only process rules with both mark and mask, as Antrea currently adds only such rules.
+		if rule.Mark != 0 && rule.Mask != nil {
+			ruleKeys.Insert(ipRuleKey{
+				family: rule.Family,
+				mark:   rule.Mark,
+				mask:   *rule.Mask,
+				table:  rule.Table,
+			})
+		}
+	}
+	restoreRule := func(rule *netlink.Rule) bool {
+		if ruleKeys.Has(ipRuleKey{
+			family: rule.Family,
+			mark:   rule.Mark,
+			mask:   *rule.Mask,
+			table:  rule.Table,
+		}) {
+			return true
+		}
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			klog.ErrorS(err, "failed to sync ip rule", "RUle", rule)
+			return false
+		}
+		return true
+	}
+	c.ipRules.Range(func(_, v interface{}) bool {
+		return restoreRule(v.(*netlink.Rule))
+	})
 
 	return nil
 }
