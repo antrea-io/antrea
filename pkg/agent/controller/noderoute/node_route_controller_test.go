@@ -43,20 +43,6 @@ import (
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 	utilwait "antrea.io/antrea/v2/pkg/util/wait"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	routetest "antrea.io/antrea/pkg/agent/route/testing"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util"
-	wgtest "antrea.io/antrea/pkg/agent/wireguard/testing"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
-	utilip "antrea.io/antrea/pkg/util/ip"
-	utilwait "antrea.io/antrea/pkg/util/wait"
->>>>>>> origin/main
 )
 
 var (
