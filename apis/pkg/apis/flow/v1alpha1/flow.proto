@@ -1,0 +1,195 @@
+// Copyright 2025 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package antrea_io.antrea.pkg.apis.flow.v1alpha1;
+
+option go_package = "pkg/apis/flow/v1alpha1";
+
+enum FlowEndReason {
+  FLOW_END_REASON_UNSPECIFIED = 0;
+  FLOW_END_REASON_IDLE_TIMEOUT = 1;
+  FLOW_END_REASON_ACTIVE_TIMEOUT = 2;
+  FLOW_END_REASON_END_OF_FLOW = 3;
+  FLOW_END_REASON_FORCED_END = 4;
+  FLOW_END_REASON_LACK_OF_RESOURCES = 5;
+}
+
+message IPFIX {
+  google.protobuf.Timestamp export_time = 1;
+  uint32 sequence_number = 2;
+  uint32 observation_domain_id = 3;
+  string exporter_ip = 4;
+}
+
+enum IPVersion {
+  IP_VERSION_UNSPECIFIED = 0;
+  IP_VERSION_4 = 4;
+  IP_VERSION_6 = 6;
+}
+
+message IP {
+  IPVersion version = 1;
+  bytes source = 2;
+  bytes destination = 3;
+}
+
+message TCP {
+  // Intentionally using "state_name" for the field name. In the future, we may
+  // switch to a "state" field of type enum.
+  string state_name = 1;
+}
+
+message Transport {
+  uint32 protocol_number = 1;
+  uint32 source_port = 2;
+  uint32 destination_port = 3;
+  oneof protocol {
+    TCP TCP = 4;
+  }
+}
+
+message Stats {
+  uint64 packet_total_count = 1;
+  uint64 packet_delta_count = 2;
+  uint64 octet_total_count = 3;
+  uint64 octet_delta_count = 4;
+}
+
+enum FlowType {
+  FLOW_TYPE_UNSPECIFIED = 0;
+  FLOW_TYPE_INTRA_NODE = 1;
+  FLOW_TYPE_INTER_NODE = 2;
+  FLOW_TYPE_TO_EXTERNAL = 3;
+  FLOW_TYPE_FROM_EXTERNAL = 4;
+}
+
+enum NetworkPolicyType {
+  NETWORK_POLICY_TYPE_UNSPECIFIED = 0;
+  NETWORK_POLICY_TYPE_K8S = 1;
+  NETWORK_POLICY_TYPE_ANP = 2;
+  NETWORK_POLICY_TYPE_ACNP = 3;
+}
+
+enum NetworkPolicyRuleAction {
+  NETWORK_POLICY_RULE_ACTION_NO_ACTION = 0;
+  NETWORK_POLICY_RULE_ACTION_ALLOW = 1;
+  NETWORK_POLICY_RULE_ACTION_DROP = 2;
+  NETWORK_POLICY_RULE_ACTION_REJECT = 3;
+}
+
+message Labels {
+  // By wrapping the map in a Protobuf message, we can distinguish between
+  // "missing" labels and "empty" labels.
+  map<string,string> labels = 1;
+}
+
+message Kubernetes {
+  FlowType flow_type = 1;
+
+  string source_pod_namespace = 2;
+  string source_pod_name = 3;
+  bytes source_pod_uid = 4;
+  Labels source_pod_labels = 5;
+
+  string source_node_name = 6;
+
+  string destination_pod_namespace = 7;
+  string destination_pod_name = 8;
+  bytes destination_pod_uid = 9;
+  Labels destination_pod_labels = 10;
+
+  string destination_node_name = 11;
+
+  bytes destination_cluster_ip = 12;
+  uint32 destination_service_port = 13;
+  string destination_service_port_name = 14;
+  bytes destination_service_uid = 15;
+
+  NetworkPolicyType ingress_network_policy_type = 16;
+  string ingress_network_policy_namespace = 17;
+  string ingress_network_policy_name = 18;
+  bytes ingress_network_policy_uid = 19;
+  string ingress_network_policy_rule_name = 20;
+  NetworkPolicyRuleAction ingress_network_policy_rule_action = 21;
+
+  NetworkPolicyType egress_network_policy_type = 22;
+  string egress_network_policy_namespace = 23;
+  string egress_network_policy_name = 24;
+  bytes egress_network_policy_uid = 25;
+  string egress_network_policy_rule_name = 26;
+  NetworkPolicyRuleAction egress_network_policy_rule_action = 27;
+
+  string egress_name = 28;
+  bytes egress_ip = 29;
+  string egress_node_name = 30;
+}
+
+message App {
+  string protocol_name = 1;
+  bytes http_vals = 2;
+}
+
+enum FlowDirection {
+  FLOW_DIRECTION_INGRESS = 0;
+  FLOW_DIRECTION_EGRESS = 1;
+
+  FLOW_DIRECTION_UNKNOWN = 255;
+}
+
+message Aggregation {
+  google.protobuf.Timestamp end_ts_from_source = 1;
+  google.protobuf.Timestamp end_ts_from_destination = 2;
+
+  Stats stats_from_source = 3;
+  Stats reverse_stats_from_source = 4;
+  Stats stats_from_destination = 5;
+  Stats reverse_stats_from_destination = 6;
+
+  uint64 throughput_from_source = 7;
+  uint64 reverse_throughput_from_source = 8;
+  uint64 throughput_from_destination = 9;
+  uint64 reverse_throughput_from_destination = 10;
+  uint64 throughput = 11;
+  uint64 reverse_throughput = 12;
+}
+
+message Flow {
+  string id = 1;
+
+  IPFIX ipfix = 2;
+
+  google.protobuf.Timestamp start_ts = 3;
+  google.protobuf.Timestamp end_ts = 4;
+
+  FlowEndReason end_reason = 5;
+
+  IP ip = 6;
+
+  Transport transport = 7;
+
+  Kubernetes k8s = 8;
+
+  Stats stats = 9;
+  Stats reverse_stats = 10;
+
+  App app = 11;
+
+  FlowDirection flow_direction = 12;
+
+  Aggregation aggregation = 13;
+}
