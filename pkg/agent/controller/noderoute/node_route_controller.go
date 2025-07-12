@@ -39,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/tc"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/wireguard"
@@ -98,6 +99,7 @@ type Controller struct {
 	// processed by workers.
 	// See https://github.com/kubernetes/apiserver/blob/v0.30.1/pkg/admission/plugin/policy/internal/generic/controller.go
 	hasProcessedInitialList synctrack.AsyncTracker[string]
+	tcManager            tc.Manager
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -114,6 +116,7 @@ func NewNodeRouteController(
 	wireguardClient wireguard.Interface,
 	ipsecCertificateManager ipseccertificate.Manager,
 	flowRestoreCompleteWait *utilwait.Group,
+	tcManager tc.Manager,
 ) *Controller {
 	controller := &Controller{
 		ovsBridgeClient:  ovsBridgeClient,
@@ -137,6 +140,7 @@ func NewNodeRouteController(
 		wireGuardClient:         wireguardClient,
 		ipsecCertificateManager: ipsecCertificateManager,
 		flowRestoreCompleteWait: flowRestoreCompleteWait.Increment(),
+		tcManager:               tcManager,
 	}
 	if nodeConfig.PodIPv4CIDR != nil {
 		prefix, _ := cidrToPrefix(nodeConfig.PodIPv4CIDR)
@@ -533,6 +537,19 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 			return fmt.Errorf("delete WireGuard peer %s failed: %v", nodeName, err)
 		}
 	}
+
+	// Remove TC rules for remote Node if TC manager is enabled and in noEncap mode
+	if c.tcManager != nil && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap {
+		peerNodeIP := nodeRouteInfo.nodeIPs.IPv4
+		if peerNodeIP == nil {
+			peerNodeIP = nodeRouteInfo.nodeIPs.IPv6
+		}
+		if err := c.tcManager.RemoveRemoteNode(peerNodeIP); err != nil {
+			klog.ErrorS(err, "Failed to remove TC rules for remote Node", "node", nodeName, "nodeIP", peerNodeIP)
+			// Don't return error here as the main Node route deletion was successful
+		}
+	}
+
 	return nil
 }
 
@@ -675,6 +692,18 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		nodeMAC:            peerNodeMAC,
 		wireGuardPublicKey: peerWireGuardPublicKey,
 	})
+
+	// Add TC rules for remote Node if TC manager is enabled and in noEncap mode
+	if c.tcManager != nil && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap {
+		peerNodeIP := peerNodeIPs.IPv4
+		if peerNodeIP == nil {
+			peerNodeIP = peerNodeIPs.IPv6
+		}
+		if err := c.tcManager.AddRemoteNode(peerNodeIP, peerNodeMAC, peerPodCIDRs); err != nil {
+			klog.ErrorS(err, "Failed to add TC rules for remote Node", "node", nodeName, "nodeIP", peerNodeIP)
+			// Don't return error here as the main Node route setup was successful
+		}
+	}
 
 	return err
 }
