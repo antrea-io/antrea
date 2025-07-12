@@ -229,6 +229,8 @@ type NetworkConfig struct {
 
 	EnableMulticlusterGW       bool
 	MulticlusterEncryptionMode TrafficEncryptionModeType
+	// BypassHostNetfilter enables bypassing the host netfilter stack for Pod-to-Pod traffic in noEncap mode using tc rules.
+	BypassHostNetfilter       bool
 }
 
 // IsIPv4Enabled returns true if the cluster network supports IPv4. Legal cases are:

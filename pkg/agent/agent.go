@@ -116,6 +116,7 @@ type Initializer struct {
 	ofClient                 openflow.Client
 	routeClient              route.Interface
 	wireGuardClient          wireguard.Interface
+	tcManager                *tc.Manager
 	ifaceStore               interfacestore.InterfaceStore
 	ovsBridge                string
 	hostGateway              string // name of gateway port on the OVS bridge
@@ -201,6 +202,11 @@ func NewInitializer(
 // GetNodeConfig returns the NodeConfig.
 func (i *Initializer) GetNodeConfig() *config.NodeConfig {
 	return i.nodeConfig
+}
+
+// GetTCManager returns the TC manager for netfilter bypass.
+func (i *Initializer) GetTCManager() *tc.Manager {
+	return i.tcManager
 }
 
 // GetWireGuardClient returns the Wireguard client.
@@ -469,6 +475,11 @@ func (i *Initializer) Initialize() error {
 		// routeClient.Initialize() should be after i.setupOVSBridge() which
 		// creates the host gateway interface.
 		if err := i.routeClient.Initialize(i.nodeConfig, i.podNetworkWait.Done); err != nil {
+			return err
+		}
+
+		// Initialize TC manager for netfilter bypass in noEncap mode
+		if err := i.initializeTCManager(); err != nil {
 			return err
 		}
 
@@ -1343,4 +1354,58 @@ func (i *Initializer) setOVSDatapath() error {
 		return err
 	}
 	return nil
+}
+
+// initializeTCManager initializes the traffic control manager for bypassing netfilter
+// in noEncap mode to improve Pod-to-Pod performance.
+func (i *Initializer) initializeTCManager() error {
+	// Only enable TC manager in noEncap mode and when bypassHostNetfilter is enabled
+	if !i.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+		klog.InfoS("TC manager not enabled - not in noEncap mode")
+		return nil
+	}
+
+	// Check if bypassHostNetfilter is enabled in the configuration
+	bypassHostNetfilter := i.networkConfig.BypassHostNetfilter
+
+	if !bypassHostNetfilter {
+		klog.InfoS("TC manager not enabled - bypassHostNetfilter is disabled")
+		return nil
+	}
+
+	// Get transport interface name
+	transportInterface := i.nodeConfig.NodeTransportInterfaceName
+	if transportInterface == "" {
+		return fmt.Errorf("transport interface name not configured")
+	}
+
+	// Get gateway interface name
+	gatewayInterface := i.hostGateway
+
+	// Get local Pod CIDR
+	localPodCIDR := i.nodeConfig.PodIPv4CIDR
+	if localPodCIDR == nil {
+		klog.InfoS("TC manager not enabled - no local Pod CIDR configured")
+		return nil
+	}
+
+	// Create and initialize TC manager
+	i.tcManager = tc.NewManager(transportInterface, gatewayInterface, localPodCIDR)
+	
+	if err := i.tcManager.Enable(); err != nil {
+		klog.ErrorS(err, "Failed to enable TC manager")
+		return err
+	}
+
+	klog.InfoS("TC manager initialized successfully", 
+		"transportInterface", transportInterface,
+		"gatewayInterface", gatewayInterface,
+		"localPodCIDR", localPodCIDR.String())
+	
+	return nil
+}
+
+// GetTCManager returns the TC manager instance
+func (i *Initializer) GetTCManager() *tc.Manager {
+	return i.tcManager
 }
