@@ -198,7 +198,8 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 		"namespace": "%s",
 		"name": "agnhost-local"
 	},
-	"localEndpoints": 1
+	"localEndpoints": 1,
+	"serviceProxyHealthy": true
 }`
 	healthExpected := fmt.Sprintf(healthOutputTmpl, data.testNamespace)
 

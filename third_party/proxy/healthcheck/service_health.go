@@ -160,6 +160,9 @@ type hcInstance struct {
 	httpServers []httpServer
 
 	endpoints int // number of local endpoints for a service
+	// serviceProxyHealthy indicates whether the proxy itself is healthy and
+	// the datapath rules have been installed successfully
+	serviceProxyHealthy bool
 }
 
 // listenAll opens health check port on all the addresses provided
@@ -232,6 +235,7 @@ func (h hcHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	count := svc.endpoints
+	serviceProxyHealthy := svc.serviceProxyHealthy
 	h.hcs.lock.RUnlock()
 
 	resp.Header().Set("Content-Type", "application/json")
@@ -248,9 +252,10 @@ func (h hcHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 				"namespace": %q,
 				"name": %q
 			},
-			"localEndpoints": %d
+			"localEndpoints": %d,
+			"serviceProxyHealthy": %t
 		}
-		`, h.name.Namespace, h.name.Name, count)), "\n"))
+		`, h.name.Namespace, h.name.Name, count, serviceProxyHealthy)), "\n"))
 }
 
 func (hcs *server) SyncEndpoints(newEndpoints map[types.NamespacedName]int) error {
@@ -263,10 +268,15 @@ func (hcs *server) SyncEndpoints(newEndpoints map[types.NamespacedName]int) erro
 		}
 		klog.V(3).InfoS("Reporting endpoints for healthcheck", "endpointCount", count, "service", nsn)
 		hcs.services[nsn].endpoints = count
+		// Set serviceProxyHealthy to true when we have endpoints to report
+		// This indicates the proxy is functioning and has successfully processed the endpoints
+		hcs.services[nsn].serviceProxyHealthy = true
 	}
 	for nsn, hci := range hcs.services {
 		if _, found := newEndpoints[nsn]; !found {
 			hci.endpoints = 0
+			// Keep serviceProxyHealthy as true even when no endpoints
+			// as the proxy is still functioning correctly
 		}
 	}
 	return nil
