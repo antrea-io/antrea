@@ -971,19 +971,33 @@ spec:
                                     type: string
                                     pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                   type: object
-                            namespaces:
+                            externalEntitySelector:
                               type: object
-                              maxProperties: 1
-                              minProperties: 1
                               properties:
-                                match:
-                                  type: string
-                                  enum:
-                                    - Self
-                                sameLabels:
+                                matchExpressions:
                                   type: array
                                   items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                matchLabels:
+                                  additionalProperties:
                                     type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                  type: object
                             ipBlock:
                               type: object
                               properties:
@@ -995,18 +1009,6 @@ spec:
                                   items:
                                     type: string
                                     format: cidr
-                            group:
-                              type: string
-                            serviceAccount:
-                              type: object
-                              properties:
-                                name:
-                                  type: string
-                                namespace:
-                                  type: string
-                              required:
-                                - name
-                                - namespace
                             nodeSelector:
                               type: object
                               properties:
@@ -1034,6 +1036,8 @@ spec:
                                     type: string
                                     pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                   type: object
+                            group:
+                              type: string
                             scope:
                               type: string
                               enum: [ 'Cluster', 'ClusterSet' ]
@@ -1258,19 +1262,33 @@ spec:
                                     type: string
                                     pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                   type: object
-                            namespaces:
+                            externalEntitySelector:
                               type: object
-                              maxProperties: 1
-                              minProperties: 1
                               properties:
-                                match:
-                                  type: string
-                                  enum:
-                                    - Self
-                                sameLabels:
+                                matchExpressions:
                                   type: array
                                   items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                matchLabels:
+                                  additionalProperties:
                                     type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                  type: object
                             ipBlock:
                               type: object
                               properties:
@@ -1282,20 +1300,8 @@ spec:
                                   items:
                                     type: string
                                     format: cidr
-                            group:
-                              type: string
                             fqdn:
                               type: string
-                            serviceAccount:
-                              type: object
-                              properties:
-                                name:
-                                  type: string
-                                namespace:
-                                  type: string
-                              required:
-                                - name
-                                - namespace
                             nodeSelector:
                               type: object
                               properties:
@@ -1323,13 +1329,14 @@ spec:
                                     type: string
                                     pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                   type: object
+                            group:
+                              type: string
                       toServices:
                         type: array
                         items:
                           type: object
                           required:
                             - name
-                            - namespace
                           properties:
                             name:
                               type: string
@@ -2327,6 +2334,33 @@ spec:
                                     type: string
                                     pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                   type: object
+                            namespaceSelector:
+                              type: object
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                matchLabels:
+                                  additionalProperties:
+                                    type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                  type: object
                             group:
                               type: string
                       # Ensure that Action field allows only ALLOW, DROP, REJECT and PASS values
@@ -2579,8 +2613,45 @@ spec:
                                     type: string
                                     pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                   type: object
+                            namespaceSelector:
+                              type: object
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                matchLabels:
+                                  additionalProperties:
+                                    type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                  type: object
                             group:
                               type: string
+                            serviceAccount:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                namespace:
+                                  type: string
+                              required:
+                                - name
+                                - namespace
                       # Ensure that Action field allows only ALLOW, DROP, REJECT and PASS values
                       action:
                         type: string
@@ -2798,6 +2869,7 @@ spec:
                               type: string
                             scope:
                               type: string
+                              enum: [ 'Cluster', 'ClusterSet' ]
                       name:
                         type: string
                       enableLogging:
@@ -2959,9 +3031,7 @@ spec:
             spec:
               type: object
               required:
-                - source
                 - captureConfig
-                - destination
               anyOf:
                 - properties:
                     source:

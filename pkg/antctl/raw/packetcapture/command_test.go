@@ -107,7 +107,7 @@ func TestPacketCaptureRun(t *testing.T) {
 				flow:   "icmp",
 				number: testNum,
 			},
-			expectErr: "error when constructing a PacketCapture CR: one of source and destination must be a Pod",
+			expectErr: "error when constructing a PacketCapture CR: at least one of source and destination must be a Pod",
 		},
 		{
 			name: "invalid timeout settings",
@@ -279,7 +279,7 @@ func TestNewPacketCapture(t *testing.T) {
 				source: "127.0.0.1",
 				dest:   "127.0.0.1",
 			},
-			expectErr: "one of source and destination must be a Pod",
+			expectErr: "at least one of source and destination must be a Pod",
 		},
 		{
 			name: "bad-flow",

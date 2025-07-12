@@ -2986,9 +2986,7 @@ spec:
             spec:
               type: object
               required:
-                - source
                 - captureConfig
-                - destination
               anyOf:
                 - properties:
                     source:
