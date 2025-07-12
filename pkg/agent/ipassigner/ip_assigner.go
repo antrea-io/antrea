@@ -11,17 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipassigner
-
 import (
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 // IPAssigner provides methods to assign or unassign IP.
 type IPAssigner interface {
 	// AssignIP ensures the provided IP is assigned to the system.

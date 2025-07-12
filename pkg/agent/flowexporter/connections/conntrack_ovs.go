@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"encoding/hex"
 	"fmt"
@@ -21,24 +19,18 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 )
-
 // Following map is for converting protocol name (string) to protocol identifier
 var (
 	// Mapping is defined at https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/netfilter/nf_conntrack_common.h#L42
@@ -62,10 +54,8 @@ var (
 		"OFFLOAD":       uint32(1 << 14),
 	}
 )
-
 // connTrackOvsCtl implements ConnTrackDumper. This supports OVS userspace datapath scenarios.
 var _ ConnTrackDumper = new(connTrackOvsCtl)
-
 type connTrackOvsCtl struct {
 	nodeConfig           *config.NodeConfig
 	serviceCIDRv4        netip.Prefix
@@ -74,7 +64,6 @@ type connTrackOvsCtl struct {
 	isAntreaProxyEnabled bool
 	protocolFilter       filter.ProtocolFilter
 }
-
 func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) *connTrackOvsCtl {
 	return &connTrackOvsCtl{
 		nodeConfig,
@@ -85,7 +74,6 @@ func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Pr
 		protocolFilter,
 	}
 }
-
 // DumpFlows uses "ovs-appctl dpctl/dump-conntrack" to dump conntrack flows in the Antrea ZoneID.
 func (ct *connTrackOvsCtl) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
 	svcCIDR := ct.serviceCIDRv4
@@ -96,20 +84,16 @@ func (ct *connTrackOvsCtl) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 	if err != nil {
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
-
 	filteredConns := filterAntreaConns(conns, ct.nodeConfig, svcCIDR, zoneFilter, ct.isAntreaProxyEnabled, ct.protocolFilter)
 	klog.V(2).Infof("FlowExporter considered flows: %d", len(filteredConns))
-
 	return filteredConns, totalConns, nil
 }
-
 func (ct *connTrackOvsCtl) ovsAppctlDumpConnections(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
 	// Dump conntrack using ovs-appctl dpctl/dump-conntrack
 	cmdOutput, execErr := ct.ovsctlClient.RunAppctlCmd("dpctl/dump-conntrack", false, "-m", "-s")
 	if execErr != nil {
 		return nil, 0, fmt.Errorf("error when executing dump-conntrack command: %v", execErr)
 	}
-
 	// Parse the output to get the flow strings and convert them to Antrea connections.
 	antreaConns := make([]*flowexporter.Connection, 0)
 	outputFlow := strings.Split(string(cmdOutput), "\n")
@@ -123,11 +107,9 @@ func (ct *connTrackOvsCtl) ovsAppctlDumpConnections(zoneFilter uint16) ([]*flowe
 			antreaConns = append(antreaConns, conn)
 		}
 	}
-
 	klog.V(2).Infof("FlowExporter considered flows in conntrack: %d", len(antreaConns))
 	return antreaConns, len(outputFlow), nil
 }
-
 // flowStringToAntreaConnection parses the flow string and converts to Antrea connection.
 // Example of flow string:
 // "tcp,orig=(src=127.0.0.1,dst=127.0.0.1,sport=45218,dport=2379,packets=320108,bytes=24615344),reply=(src=127.0.0.1,dst=127.0.0.1,sport=2379,dport=45218,packets=239595,bytes=24347883),start=2020-07-24T05:07:03.998,id=3750535678,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86399,labels=0x200000001,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)"
@@ -292,16 +274,12 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 	if !inZone {
 		return nil, nil
 	}
-
 	// Add current time as stop time.
 	conn.StopTime = time.Now()
 	conn.IsPresent = true
-
 	klog.V(5).Infof("Converted flow string: %v into connection: %+v", flow, conn)
-
 	return &conn, nil
 }
-
 func hasAnyProto(text string) bool {
 	for proto := range flowexporter.Protocols {
 		if strings.Contains(strings.ToLower(text), proto) {
@@ -310,7 +288,6 @@ func hasAnyProto(text string) bool {
 	}
 	return false
 }
-
 func (ct *connTrackOvsCtl) GetMaxConnections() (int, error) {
 	cmdOutput, execErr := ct.ovsctlClient.RunAppctlCmd("dpctl/ct-get-maxconns", false)
 	if execErr != nil {
@@ -322,7 +299,6 @@ func (ct *connTrackOvsCtl) GetMaxConnections() (int, error) {
 	}
 	return maxConns, nil
 }
-
 func statusStringToStateFlag(status string) uint32 {
 	statusFlag := uint32(0)
 	statusSlice := strings.Split(status, "|")

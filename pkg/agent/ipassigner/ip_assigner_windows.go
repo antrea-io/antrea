@@ -11,19 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipassigner
-
 import (
 	"errors"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
-=======
-	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
 )
-
 func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface) (IPAssigner, error) {
 	return nil, errors.New("IPAssigner is not implemented on Windows")
 }

@@ -11,50 +11,42 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"encoding/binary"
 	"fmt"
 	"net/netip"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/metrics"
-	"antrea.io/antrea/pkg/agent/openflow"
-	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 var (
 	tuple1 = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
 	tuple2 = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
@@ -104,18 +96,14 @@ var (
 		PolicyRef: &np1,
 	}
 )
-
 type fakeL7Listener struct{}
-
 func (fll *fakeL7Listener) ConsumeL7EventMap() map[flowexporter.ConnectionKey]L7ProtocolFields {
 	l7EventsMap := make(map[flowexporter.ConnectionKey]L7ProtocolFields)
 	return l7EventsMap
 }
-
 func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	refTime := time.Now()
-
 	tc := []struct {
 		name         string
 		flowKey      flowexporter.Tuple
@@ -232,13 +220,11 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			},
 		},
 	}
-
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
-
 	for _, c := range tc {
 		t.Run(c.name, func(t *testing.T) {
 			// Add the existing connection to the connection store.
@@ -256,21 +242,17 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 		})
 	}
 }
-
 // testAddNewConn tests podInfo, Services, network policy mapping.
 func testAddNewConn(mockPodStore *podstoretest.MockInterface, mockProxier *proxytest.MockProxier, npQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier, conn flowexporter.Connection) {
 	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
 	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
-
 	protocol, _ := lookupServiceProtocol(conn.FlowKey.Protocol)
 	serviceStr := fmt.Sprintf("%s:%d/%s", conn.OriginalDestinationAddress.String(), conn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
-
 	ingressOfID := binary.LittleEndian.Uint32(conn.Labels[:4])
 	npQuerier.EXPECT().GetNetworkPolicyByRuleFlowID(ingressOfID).Return(&np1)
 	npQuerier.EXPECT().GetRuleByFlowID(ingressOfID).Return(&rule1)
 }
-
 // addConntrackConnToMap adds a conntrack connection to the connection map and
 // increment the metric.
 func addConnToStore(cs *ConntrackConnectionStore, conn *flowexporter.Connection) {
@@ -279,7 +261,6 @@ func addConnToStore(cs *ConntrackConnectionStore, conn *flowexporter.Connection)
 	cs.expirePriorityQueue.WriteItemToQueue(connKey, conn)
 	metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 }
-
 func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// Create two flows; one is already in connectionStore and other one is new
@@ -332,10 +313,8 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		checkAntreaConnectionMetrics(t, len(connStore.connections))
 	}
 }
-
 func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
 	testFlows := make([]*flowexporter.Connection, 0)
 	// Create connectionStore
 	mockPodStore := podstoretest.NewMockInterface(ctrl)

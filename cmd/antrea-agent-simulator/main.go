@@ -11,34 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // The simulator binary is responsible to run simulated nodes for antrea agent.
 // It watches NetworkPolicies, AddressGroups and AppliedToGroups from antrea
 // controller and prints the events of these resources to log.
 package main
-
 import (
 	"os"
-
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/log"
 	"antrea.io/antrea/v2/pkg/version"
-=======
-	"antrea.io/antrea/pkg/log"
-	"antrea.io/antrea/pkg/version"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/log"
+	"antrea.io/antrea/v2/pkg/version"
 )
-
 func main() {
 	command := newSimulatorCommand()
 	if err := command.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
-
 func newSimulatorCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:  "antrea-agent-simulator",
@@ -46,16 +37,13 @@ func newSimulatorCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			log.InitLogs(cmd.Flags())
 			defer log.FlushLogs()
-
 			if err := run(); err != nil {
 				klog.Fatalf("Error running agent: %v", err)
 			}
 		},
 		Version: version.GetFullVersionWithRuntimeInfo(),
 	}
-
 	flags := cmd.Flags()
 	log.AddFlags(flags)
-
 	return cmd
 }

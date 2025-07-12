@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package l7engine
-
 import (
 	"bytes"
 	"context"
@@ -25,52 +23,39 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"github.com/spf13/afero"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
-	v1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	v1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/util/logdir"
 	utilsync "antrea.io/antrea/v2/pkg/util/sync"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow"
-	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/util/logdir"
-	utilsync "antrea.io/antrea/pkg/util/sync"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	v1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/util/logdir"
+	utilsync "antrea.io/antrea/v2/pkg/util/sync"
 )
-
 const (
 	defaultSuricataConfigPath = "/etc/suricata/suricata.yaml"
 	antreaSuricataConfigPath  = "/etc/suricata/antrea.yaml"
 	antreaSuricataLogSubdir   = "networkpolicy/l7engine"
-
 	tenantConfigsDir = "/etc/suricata"
 	tenantRulesDir   = "/etc/suricata/rules"
-
 	suricataCommandSocket = "/var/run/suricata/suricata-command.socket"
-
 	protocolHTTP = "http"
 	protocolTLS  = "tls"
-
 	scCmdOK = "OK"
 )
-
 type scCmdRet struct {
 	Message string `json:"message"`
 	Return  string `json:"return"`
 }
-
 var (
 	// Declared as a variable for testing.
 	defaultFS = afero.NewOsFs()
-
 	// Create the config file /etc/suricata/antrea.yaml for Antrea which will be included in the default Suricata config file
 	// /etc/suricata/suricata.yaml. Two event logs in the config serve alert gilogging and http event logging purposes respectively.
 	suricataAntreaConfigData = fmt.Sprintf(`%%YAML 1.1
@@ -131,44 +116,35 @@ multi-detect:
   selector: vlan
 `, config.L7SuricataSocketPath, config.L7RedirectTargetPortName, config.L7RedirectReturnPortName)
 )
-
 type threadSafeSet[T comparable] struct {
 	sync.RWMutex
 	cached sets.Set[T]
 }
-
 func (g *threadSafeSet[T]) has(key T) bool {
 	g.RLock()
 	defer g.RUnlock()
 	return g.cached.Has(key)
 }
-
 func (g *threadSafeSet[T]) insert(key T) {
 	g.Lock()
 	defer g.Unlock()
 	g.cached.Insert(key)
 }
-
 func (g *threadSafeSet[T]) delete(key T) {
 	g.Lock()
 	defer g.Unlock()
 	g.cached.Delete(key)
 }
-
 type Reconciler struct {
 	// Declared as member variables for testing.
 	startSuricataFn func()
 	suricataScFn    func(scCmd string) (*scCmdRet, error)
-
 	suricataTenantCache        *threadSafeSet[uint32]
 	suricataTenantHandlerCache *threadSafeSet[uint32]
-
 	ofClient openflow.Client
-
 	startSuricataOnce     utilsync.OnceWithNoError
 	initializeL7FlowsOnce utilsync.OnceWithNoError
 }
-
 func NewReconciler(ofClient openflow.Client) *Reconciler {
 	return &Reconciler{
 		suricataScFn:    suricataSc,
@@ -182,17 +158,14 @@ func NewReconciler(ofClient openflow.Client) *Reconciler {
 		ofClient: ofClient,
 	}
 }
-
 func generateTenantRulesData(policyName string, protoKeywords map[string]sets.Set[string]) *bytes.Buffer {
 	rulesData := bytes.NewBuffer(nil)
 	sid := 1
-
 	// Generate default reject rule.
 	allKeywords := fmt.Sprintf(`msg: "Reject by %s"; flow: to_server, established; sid: %d;`, policyName, sid)
 	rule := fmt.Sprintf("reject ip any any -> any any (%s)\n", allKeywords)
 	rulesData.WriteString(rule)
 	sid++
-
 	// Generate rules.
 	for proto, keywordsSet := range protoKeywords {
 		for keywords := range keywordsSet {
@@ -208,18 +181,14 @@ func generateTenantRulesData(policyName string, protoKeywords map[string]sets.Se
 			sid++
 		}
 	}
-
 	return rulesData
 }
-
 func generateTenantRulesPath(vlanID uint32) string {
 	return fmt.Sprintf("%s/antrea-l7-networkpolicy-%d.rules", tenantRulesDir, vlanID)
 }
-
 func generateTenantConfigPath(vlanID uint32) string {
 	return fmt.Sprintf("%s/antrea-tenant-%d.yaml", tenantConfigsDir, vlanID)
 }
-
 func writeConfigFile(path string, data *bytes.Buffer) error {
 	f, err := defaultFS.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 	if err != nil {
@@ -231,7 +200,6 @@ func writeConfigFile(path string, data *bytes.Buffer) error {
 	}
 	return nil
 }
-
 // By default, Suricata performs pattern-matching for provided content. To support exact match, prefix match, and suffix
 // match, we use wildcards to indicate whether an exact match is expected.
 // - A string starting with * means suffix match. For example, "*.foo.com" matches "www.foo.com".
@@ -251,7 +219,6 @@ func convertContent(content string) string {
 	}
 	return fmt.Sprintf(`content:"%s";%s%s`, content, startsWith, endsWith)
 }
-
 func convertProtocolHTTP(http *v1beta.HTTPProtocol) string {
 	var keywords []string
 	if http.Path != "" {
@@ -265,7 +232,6 @@ func convertProtocolHTTP(http *v1beta.HTTPProtocol) string {
 	}
 	return strings.Join(keywords, " ")
 }
-
 func convertProtocolTLS(tls *v1beta.TLSProtocol) string {
 	var keywords []string
 	if tls.SNI != "" {
@@ -273,31 +239,26 @@ func convertProtocolTLS(tls *v1beta.TLSProtocol) string {
 	}
 	return strings.Join(keywords, " ")
 }
-
 func (r *Reconciler) StartSuricataOnce() error {
 	return r.startSuricataOnce.Do(r.startSuricata)
 }
-
 func (r *Reconciler) initializeL7Flows() error {
 	if err := r.ofClient.InstallL7NetworkPolicyFlows(); err != nil {
 		return fmt.Errorf("failed to install L7 NetworkPolicy flows: %w", err)
 	}
 	return nil
 }
-
 func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta.L7Protocol) error {
 	start := time.Now()
 	defer func() {
 		klog.V(5).Infof("AddRule took %v", time.Since(start))
 	}()
-
 	if err := r.StartSuricataOnce(); err != nil {
 		return err
 	}
 	if err := r.initializeL7FlowsOnce.Do(r.initializeL7Flows); err != nil {
 		return err
 	}
-
 	// Generate the keyword part used in Suricata rules.
 	protoKeywords := make(map[string]sets.Set[string])
 	for _, protocol := range l7Protocols {
@@ -316,7 +277,6 @@ func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protoco
 			protoKeywords[protocolTLS].Insert(tlsKeywords)
 		}
 	}
-
 	klog.InfoS("Reconciling L7 rule", "RuleID", ruleID, "PolicyName", policyName)
 	// Write the Suricata rules to file.
 	rulesPath := generateTenantRulesPath(vlanID)
@@ -324,41 +284,34 @@ func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protoco
 	if err := writeConfigFile(rulesPath, rulesData); err != nil {
 		return fmt.Errorf("failed to write Suricata rules data to file %s for L7 rule %s of %s, err: %w", rulesPath, ruleID, policyName, err)
 	}
-
 	// Add a Suricata tenant.
 	if err := r.addBindingSuricataTenant(vlanID, rulesPath); err != nil {
 		return fmt.Errorf("failed to add Suricata tenant for L7 rule %s of %s: %w", ruleID, policyName, err)
 	}
 	return nil
 }
-
 func (r *Reconciler) DeleteRule(ruleID string, vlanID uint32) error {
 	start := time.Now()
 	defer func() {
 		klog.V(5).Infof("DeleteRule took %v", time.Since(start))
 	}()
-
 	// Delete the Suricata tenant.
 	if err := r.deleteBindingSuricataTenant(vlanID); err != nil {
 		return fmt.Errorf("failed to delete Suricata tenant %d for L7 rule %s: %w", vlanID, ruleID, err)
 	}
-
 	// Delete the Suricata rules file.
 	rulesPath := generateTenantRulesPath(vlanID)
 	if err := defaultFS.Remove(rulesPath); err != nil {
 		klog.ErrorS(err, "Failed to delete rules file", "FilePath", rulesPath, "RuleID", ruleID)
 	}
-
 	return nil
 }
-
 func (r *Reconciler) addBindingSuricataTenant(vlanID uint32, rulesPath string) error {
 	tenantConfigPath := generateTenantConfigPath(vlanID)
 	exists, err := afero.Exists(defaultFS, tenantConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to stat config file %s", tenantConfigPath)
 	}
-
 	// If the tenant config file exists, it means that this tenant has been added, just reload the tenant to load the
 	// updated rules.
 	if exists {
@@ -372,11 +325,9 @@ func (r *Reconciler) addBindingSuricataTenant(vlanID uint32, rulesPath string) e
 		klog.V(4).InfoS("Reloaded Suricata tenant successfully", "TenantID", vlanID, "TenantConfigPath", tenantConfigPath, "ResponseMsg", resp.Message)
 		return nil
 	}
-
 	success := false
 	// If the tenant config file doesn't exist, create a config file for the tenant.
 	tenantConfigData := bytes.NewBuffer([]byte(fmt.Sprintf(`%%YAML 1.1
-
 ---
 default-rule-path: %s
 rule-files:
@@ -391,7 +342,6 @@ rule-files:
 			defaultFS.Remove(tenantConfigPath)
 		}
 	}()
-
 	// Register the tenant with the config file. Note that, to be simple, use the VLAN id as the tenant ID.
 	if !r.suricataTenantCache.has(vlanID) {
 		resp, err := r.registerSuricataTenant(vlanID, tenantConfigPath)
@@ -404,7 +354,6 @@ rule-files:
 		klog.V(4).InfoS("Registered Suricata tenant successfully", "TenantID", vlanID, "TenantConfigPath", tenantConfigPath, "ResponseMsg", resp.Message)
 		r.suricataTenantCache.insert(vlanID)
 	}
-
 	// Register the tenant handler by mapping the tenant to the allocated VLAN ID.
 	if !r.suricataTenantHandlerCache.has(vlanID) {
 		resp, err := r.registerSuricataTenantHandler(vlanID, vlanID)
@@ -417,12 +366,9 @@ rule-files:
 		klog.V(4).InfoS("Registered Suricata tenant handler successfully", "TenantID", vlanID, "VLANID", vlanID, "ResponseMsg", resp.Message)
 		r.suricataTenantHandlerCache.insert(vlanID)
 	}
-
 	success = true
-
 	return nil
 }
-
 func (r *Reconciler) deleteBindingSuricataTenant(vlanID uint32) error {
 	// Unregister the tenant handler.
 	if r.suricataTenantHandlerCache.has(vlanID) {
@@ -436,7 +382,6 @@ func (r *Reconciler) deleteBindingSuricataTenant(vlanID uint32) error {
 		klog.V(4).InfoS("Unregistered Suricata tenant handler successfully", "TenantID", vlanID, "VLANID", vlanID, "ResponseMsg", resp.Message)
 		r.suricataTenantHandlerCache.delete(vlanID)
 	}
-
 	// Unregister the tenant.
 	if r.suricataTenantCache.has(vlanID) {
 		resp, err := r.unregisterSuricataTenant(vlanID)
@@ -449,7 +394,6 @@ func (r *Reconciler) deleteBindingSuricataTenant(vlanID uint32) error {
 		klog.V(4).InfoS("Unregistered Suricata tenant successfully", "TenantID", vlanID, "ResponseMsg", resp.Message)
 		r.suricataTenantCache.delete(vlanID)
 	}
-
 	// Delete the tenant config file.
 	configPath := generateTenantConfigPath(vlanID)
 	if err := defaultFS.Remove(configPath); err != nil {
@@ -459,32 +403,26 @@ func (r *Reconciler) deleteBindingSuricataTenant(vlanID uint32) error {
 	}
 	return nil
 }
-
 func (r *Reconciler) reloadSuricataTenant(tenantID uint32, tenantConfigPath string) (*scCmdRet, error) {
 	scCmd := fmt.Sprintf("reload-tenant %d %s", tenantID, tenantConfigPath)
 	return r.suricataScFn(scCmd)
 }
-
 func (r *Reconciler) registerSuricataTenant(tenantID uint32, tenantConfigPath string) (*scCmdRet, error) {
 	scCmd := fmt.Sprintf("register-tenant %d %s", tenantID, tenantConfigPath)
 	return r.suricataScFn(scCmd)
 }
-
 func (r *Reconciler) unregisterSuricataTenant(tenantID uint32) (*scCmdRet, error) {
 	scCmd := fmt.Sprintf("unregister-tenant %d", tenantID)
 	return r.suricataScFn(scCmd)
 }
-
 func (r *Reconciler) registerSuricataTenantHandler(tenantID, vlanID uint32) (*scCmdRet, error) {
 	scCmd := fmt.Sprintf("register-tenant-handler %d vlan %d", tenantID, vlanID)
 	return r.suricataScFn(scCmd)
 }
-
 func (r *Reconciler) unregisterSuricataTenantHandler(tenantID, vlanID uint32) (*scCmdRet, error) {
 	scCmd := fmt.Sprintf("unregister-tenant-handler %d vlan %d", tenantID, vlanID)
 	return r.suricataScFn(scCmd)
 }
-
 func (r *Reconciler) startSuricata() error {
 	f, err := defaultFS.Create(antreaSuricataConfigPath)
 	if err != nil {
@@ -494,7 +432,6 @@ func (r *Reconciler) startSuricata() error {
 	if _, err = f.WriteString(suricataAntreaConfigData); err != nil {
 		return fmt.Errorf("failed to write Suricata config file %s: %w", antreaSuricataConfigPath, err)
 	}
-
 	// Open the default Suricata config file /etc/suricata/suricata.yaml.
 	f, err = defaultFS.OpenFile(defaultSuricataConfigPath, os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
@@ -505,9 +442,7 @@ func (r *Reconciler) startSuricata() error {
 	if _, err = fmt.Fprintf(f, "include: %s\n", antreaSuricataConfigPath); err != nil {
 		return fmt.Errorf("failed to update default Suricata config file %s: %w", defaultSuricataConfigPath, err)
 	}
-
 	r.startSuricataFn()
-
 	// Wait Suricata command socket file to be ready.
 	err = wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
 		if _, err = defaultFS.Stat(suricataCommandSocket); err != nil {
@@ -521,7 +456,6 @@ func (r *Reconciler) startSuricata() error {
 	klog.InfoS("Started Suricata instance successfully")
 	return nil
 }
-
 func startSuricata() {
 	// Ensure that rules directory exists.
 	if err := os.MkdirAll(tenantRulesDir, 0755); err != nil {
@@ -538,7 +472,6 @@ func startSuricata() {
 		klog.ErrorS(err, "Failed to start Suricata instance")
 	}
 }
-
 func suricataSc(scCmd string) (*scCmdRet, error) {
 	cmd := exec.Command("suricatasc", "-c", scCmd)
 	retBytes, err := cmd.CombinedOutput()

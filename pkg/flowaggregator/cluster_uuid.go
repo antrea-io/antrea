@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowaggregator
-
 import (
 	"context"
 	"fmt"
 	"time"
-
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/clusteridentity"
-=======
-	"antrea.io/antrea/pkg/clusteridentity"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/clusteridentity"
 )
-
 // GetClusterUUID retrieves the cluster UUID (if available, with a timeout of 10s).
 // Otherwise, it returns an empty cluster UUID and error. The cluster UUID should
 // be available if Antrea is deployed to the cluster ahead of the flow aggregator,
@@ -39,10 +31,8 @@ func GetClusterUUID(ctx context.Context, k8sClient kubernetes.Interface) (uuid.U
 	const retryInterval = time.Second
 	const timeout = 10 * time.Second
 	const defaultAntreaNamespace = "kube-system"
-
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-
 	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
 		defaultAntreaNamespace,
 		clusteridentity.DefaultClusterIdentityConfigMapName,

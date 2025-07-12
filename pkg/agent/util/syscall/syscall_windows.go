@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package syscall
-
 import (
 	"net"
 	"net/netip"
@@ -21,49 +19,36 @@ import (
 	"strconv"
 	"syscall"
 	"unsafe"
-
 	"golang.org/x/sys/windows"
-
-<<<<<<< HEAD
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
-=======
-	utilip "antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
-
 const (
 	AF_UNSPEC uint16 = uint16(windows.AF_UNSPEC)
 	AF_INET   uint16 = uint16(windows.AF_INET)
 	AF_INET6  uint16 = uint16(windows.AF_INET6)
 )
-
 // The following definitions are copied from Nldef header in Win32 API reference documentation.
 // RouterDiscoveryBehavior defines the router discovery behavior.
 type RouterDiscoveryBehavior int32
-
 const (
 	RouterDiscoveryDisabled  RouterDiscoveryBehavior = 0
 	RouterDiscoveryEnabled   RouterDiscoveryBehavior = 1
 	RouterDiscoveryDHCP      RouterDiscoveryBehavior = 2
 	RouterDiscoveryUnchanged RouterDiscoveryBehavior = -1
 )
-
 // LinkLocalAddressBehavior defines the link local address behavior.
 type LinkLocalAddressBehavior int32
-
 const (
 	LinkLocalAlwaysOff LinkLocalAddressBehavior = 0
 	LinkLocalDelayed   LinkLocalAddressBehavior = 1
 	LinkLocalAlwaysOn  LinkLocalAddressBehavior = 2
 	LinkLocalUnchanged LinkLocalAddressBehavior = -1
 )
-
 const ScopeLevelCount = 16
-
 // NlInterfaceOffloadRodFlags specifies a set of flags that indicate the offload
 // capabilities for an IP interface.
 type NlInterfaceOffloadRodFlags uint8
-
 const (
 	NlChecksumSupported         NlInterfaceOffloadRodFlags = 0x01
 	nlOptionsSupported          NlInterfaceOffloadRodFlags = 0x02
@@ -74,7 +59,6 @@ const (
 	TlLargeSendOffloadSupported NlInterfaceOffloadRodFlags = 0x40
 	TlGiantSendOffloadSupported NlInterfaceOffloadRodFlags = 0x80
 )
-
 type MibIPInterfaceRow struct {
 	Family                               uint16
 	Luid                                 uint64
@@ -112,12 +96,10 @@ type MibIPInterfaceRow struct {
 	ReceiveOffload                       NlInterfaceOffloadRodFlags
 	DisableDefaultRoutes                 bool
 }
-
 type RawSockAddrInet struct {
 	Family uint16
 	data   [26]byte
 }
-
 func (a *RawSockAddrInet) IP() net.IP {
 	if a == nil {
 		return nil
@@ -132,11 +114,9 @@ func (a *RawSockAddrInet) IP() net.IP {
 	}
 	return net.IPv6unspecified
 }
-
 func (a *RawSockAddrInet) String() string {
 	return a.IP().String()
 }
-
 func NewRawSockAddrInetFromIP(ip net.IP) *RawSockAddrInet {
 	sockAddrInet := new(RawSockAddrInet)
 	if ip.To4() != nil {
@@ -163,13 +143,11 @@ func NewRawSockAddrInetFromIP(ip net.IP) *RawSockAddrInet {
 	addr6.Scope_id = scopeId
 	return sockAddrInet
 }
-
 type AddressPrefix struct {
 	Prefix       RawSockAddrInet
 	prefixLength uint8
 	_            [2]byte // Add two bytes to keep alignment.
 }
-
 func (p *AddressPrefix) IPNet() *net.IPNet {
 	if p == nil {
 		return nil
@@ -189,7 +167,6 @@ func (p *AddressPrefix) IPNet() *net.IPNet {
 	}
 	return nil
 }
-
 func (p *AddressPrefix) EqualsTo(ipNet *net.IPNet) bool {
 	if ipNet == nil && p == nil {
 		return true
@@ -201,11 +178,9 @@ func (p *AddressPrefix) EqualsTo(ipNet *net.IPNet) bool {
 	}
 	return utilip.IPNetEqual(p.IPNet(), ipNet)
 }
-
 func (p *AddressPrefix) String() string {
 	return p.IPNet().String()
 }
-
 func NewAddressPrefixFromIPNet(ipnet *net.IPNet) *AddressPrefix {
 	if ipnet == nil {
 		return nil
@@ -217,10 +192,8 @@ func NewAddressPrefixFromIPNet(ipnet *net.IPNet) *AddressPrefix {
 		prefixLength: uint8(prefixLength),
 	}
 }
-
 // NlRouteProtocol defines the routing mechanism that an IP route was added with.
 type NlRouteProtocol uint32
-
 const (
 	RouteProtocolOther   NlRouteProtocol = 1
 	RouteProtocolLocal   NlRouteProtocol = 2
@@ -241,7 +214,6 @@ const (
 	RouteProtocolDvmrp   NlRouteProtocol = 17
 	RouteProtocolRpl     NlRouteProtocol = 18
 	RouteProtocolDhcp    NlRouteProtocol = 19
-
 	//
 	// Windows-specific definitions.
 	//
@@ -249,10 +221,8 @@ const (
 	NT_STATIC         NlRouteProtocol = 10006
 	NT_STATIC_NON_DOD NlRouteProtocol = 10007
 )
-
 // NlRouteOrigin defines the origin of the IP route.
 type NlRouteOrigin uint32
-
 const (
 	NlroManual              NlRouteOrigin = 0
 	NlroWellKnown           NlRouteOrigin = 1
@@ -260,36 +230,29 @@ const (
 	NlroRouterAdvertisement NlRouteOrigin = 3
 	Nlro6to4                NlRouteOrigin = 4
 )
-
 type MibIPForwardRow struct {
 	Luid              uint64
 	Index             uint32
 	DestinationPrefix AddressPrefix
 	NextHop           RawSockAddrInet
-
 	SitePrefixLength  uint8
 	ValidLifetime     uint32
 	PreferredLifetime uint32
 	Metric            uint32
 	Protocol          NlRouteProtocol
-
 	Loopback             bool
 	AutoconfigureAddress bool
 	Publish              bool
 	Immortal             bool
-
 	Age    uint32
 	Origin NlRouteOrigin
 }
-
 type MibIPForwardTable struct {
 	NumEntries uint32
 	Table      [1]MibIPForwardRow
 }
-
 var (
 	modiphlpapi = syscall.NewLazyDLL("iphlpapi.dll")
-
 	procGetIPInterfaceEntry  = modiphlpapi.NewProc("GetIpInterfaceEntry")
 	procSetIPInterfaceEntry  = modiphlpapi.NewProc("SetIpInterfaceEntry")
 	procCreateIPForwardEntry = modiphlpapi.NewProc("CreateIpForwardEntry2")
@@ -297,19 +260,13 @@ var (
 	procGetIPForwardTable    = modiphlpapi.NewProc("GetIpForwardTable2")
 	procFreeMibTable         = modiphlpapi.NewProc("FreeMibTable")
 )
-
 type NetIOInterface interface {
 	GetIPInterfaceEntry(ipInterfaceRow *MibIPInterfaceRow) (errcode error)
-
 	SetIPInterfaceEntry(ipInterfaceRow *MibIPInterfaceRow) (errcode error)
-
 	CreateIPForwardEntry(ipForwardEntry *MibIPForwardRow) (errcode error)
-
 	DeleteIPForwardEntry(ipForwardEntry *MibIPForwardRow) (errcode error)
-
 	ListIPForwardRows(family uint16) ([]MibIPForwardRow, error)
 }
-
 type netIO struct {
 	syscallN func(trap uintptr, args ...uintptr) (r1, r2 uintptr, err syscall.Errno)
 	// It needs be declared as a variable and replaced during unit tests because the real getIPForwardTable function
@@ -317,14 +274,12 @@ type netIO struct {
 	// fake syscallN is not valid.
 	getIPForwardTable func(family uint16, ipForwardTable **MibIPForwardTable) (errcode error)
 }
-
 func NewNetIO() NetIOInterface {
 	return &netIO{
 		syscallN:          syscall.SyscallN,
 		getIPForwardTable: getIPForwardTable,
 	}
 }
-
 func (n *netIO) GetIPInterfaceEntry(ipInterfaceRow *MibIPInterfaceRow) (errcode error) {
 	r0, _, _ := n.syscallN(procGetIPInterfaceEntry.Addr(), uintptr(unsafe.Pointer(ipInterfaceRow)))
 	if r0 != 0 {
@@ -332,7 +287,6 @@ func (n *netIO) GetIPInterfaceEntry(ipInterfaceRow *MibIPInterfaceRow) (errcode 
 	}
 	return
 }
-
 func (n *netIO) SetIPInterfaceEntry(ipInterfaceRow *MibIPInterfaceRow) (errcode error) {
 	r0, _, _ := n.syscallN(procSetIPInterfaceEntry.Addr(), uintptr(unsafe.Pointer(ipInterfaceRow)))
 	if r0 != 0 {
@@ -340,7 +294,6 @@ func (n *netIO) SetIPInterfaceEntry(ipInterfaceRow *MibIPInterfaceRow) (errcode 
 	}
 	return
 }
-
 func (n *netIO) CreateIPForwardEntry(ipForwardEntry *MibIPForwardRow) (errcode error) {
 	r0, _, _ := n.syscallN(procCreateIPForwardEntry.Addr(), uintptr(unsafe.Pointer(ipForwardEntry)))
 	if r0 != 0 {
@@ -348,7 +301,6 @@ func (n *netIO) CreateIPForwardEntry(ipForwardEntry *MibIPForwardRow) (errcode e
 	}
 	return
 }
-
 func (n *netIO) DeleteIPForwardEntry(ipForwardEntry *MibIPForwardRow) (errcode error) {
 	r0, _, _ := n.syscallN(procDeleteIPForwardEntry.Addr(), uintptr(unsafe.Pointer(ipForwardEntry)))
 	if r0 != 0 {
@@ -356,11 +308,9 @@ func (n *netIO) DeleteIPForwardEntry(ipForwardEntry *MibIPForwardRow) (errcode e
 	}
 	return
 }
-
 func (n *netIO) freeMibTable(table unsafe.Pointer) {
 	n.syscallN(procFreeMibTable.Addr(), uintptr(table))
 }
-
 func getIPForwardTable(family uint16, ipForwardTable **MibIPForwardTable) (errcode error) {
 	r0, _, _ := syscall.SyscallN(procGetIPForwardTable.Addr(), uintptr(family), uintptr(unsafe.Pointer(ipForwardTable)))
 	if r0 != 0 {
@@ -368,7 +318,6 @@ func getIPForwardTable(family uint16, ipForwardTable **MibIPForwardTable) (errco
 	}
 	return
 }
-
 func (n *netIO) ListIPForwardRows(family uint16) ([]MibIPForwardRow, error) {
 	var table *MibIPForwardTable
 	err := n.getIPForwardTable(family, &table)
@@ -376,14 +325,12 @@ func (n *netIO) ListIPForwardRows(family uint16) ([]MibIPForwardRow, error) {
 		return nil, os.NewSyscallError("iphlpapi.GetIpForwardTable", err)
 	}
 	defer n.freeMibTable(unsafe.Pointer(table))
-
 	// Copy the rows from the table into a new slice as the table's memory will be freed.
 	// Since MibIPForwardRow contains only value data (no references), the operation performs a deep copy.
 	rows := make([]MibIPForwardRow, 0, table.NumEntries)
 	rows = append(rows, unsafe.Slice(&table.Table[0], table.NumEntries)...)
 	return rows, nil
 }
-
 func NewIPForwardRow() *MibIPForwardRow {
 	return &MibIPForwardRow{
 		SitePrefixLength:     255,

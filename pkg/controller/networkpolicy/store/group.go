@@ -11,35 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"fmt"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/apiserver/storage/ram"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	ServiceIndex      = "service"
 	ChildGroupIndex   = "childGroup"
 	IPBlockGroupIndex = "hasIPBlocks"
 	HasIPBlocks       = "true"
 )
-
 // GroupKeyFunc knows how to get the key of a Group.
 func GroupKeyFunc(obj interface{}) (string, error) {
 	group, ok := obj.(*antreatypes.Group)
@@ -48,7 +39,6 @@ func GroupKeyFunc(obj interface{}) (string, error) {
 	}
 	return k8s.NamespacedName(group.SourceReference.Namespace, group.SourceReference.Name), nil
 }
-
 // NewGroupStore creates a store of Group.
 func NewGroupStore() storage.Interface {
 	indexers := cache.Indexers{

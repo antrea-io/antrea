@@ -11,36 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cni
-
 import (
 	"context"
 	"fmt"
 	"os"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-
-<<<<<<< HEAD
-	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
-=======
-	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
->>>>>>> origin/main
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
 )
-
 type Action int
-
 const (
 	ActionAdd Action = iota
 	ActionCheck
 	ActionDel
 )
-
 // AntreaCNIVersion is the full semantic version (https://semver.org/) of our CNI Protobuf / gRPC
 // service.
 //
@@ -85,10 +75,8 @@ const (
 // server. This is harder to do on the client side (need to fallback to a previous version when
 // getting an UNIMPLEMENTED error).
 const AntreaCNIVersion = "1.0.0-beta.1"
-
 // To allow for testing with a fake client.
 var withClient = rpcClient
-
 func rpcClient(f func(client cnipb.CniClient) error) error {
 	// When using a custom dialer, it makes more sense to use the deprecated grpc.Dial function
 	// instead of grpc.NewClient, as grpc.Dial will default to the "dns" resolver (instead of
@@ -108,7 +96,6 @@ func rpcClient(f func(client cnipb.CniClient) error) error {
 	defer conn.Close()
 	return f(cnipb.NewCniClient(conn))
 }
-
 // Request requests the antrea-agent to execute the specified action with the provided arguments via RPC.
 // If successful, it outputs the result to stdout and returns nil. Otherwise types.Error is returned.
 func (a Action) Request(arg *skel.CmdArgs) error {
@@ -125,10 +112,8 @@ func (a Action) Request(arg *skel.CmdArgs) error {
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-
 		var resp *cnipb.CniCmdResponse
 		var err error
-
 		switch a {
 		case ActionAdd:
 			resp, err = client.CmdAdd(ctx, &cmdRequest)
@@ -137,7 +122,6 @@ func (a Action) Request(arg *skel.CmdArgs) error {
 		case ActionDel:
 			resp, err = client.CmdDel(ctx, &cmdRequest)
 		}
-
 		// Handle gRPC errors.
 		if status.Code(err) == codes.Unimplemented {
 			return &types.Error{
@@ -157,7 +141,6 @@ func (a Action) Request(arg *skel.CmdArgs) error {
 				Msg:  err.Error(),
 			}
 		}
-
 		// Handle errors during CNI execution.
 		if resp.Error != nil {
 			return &types.Error{

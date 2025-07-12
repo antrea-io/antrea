@@ -11,16 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // Package main under directory cmd parses and validates user input,
 // instantiates and initializes objects imported from pkg, and runs
 // the process.
-
 package main
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -32,19 +28,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/test/mocks"
-=======
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/test/mocks"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/test/mocks"
 )
-
 func initMockManager(mockManager *mocks.MockManager) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
-
 	mockManager.EXPECT().GetWebhookServer().Return(&webhook.DefaultServer{}).AnyTimes()
 	mockManager.EXPECT().GetWebhookServer().Return(&webhook.DefaultServer{}).AnyTimes()
 	mockManager.EXPECT().GetClient().Return(fakeClient).AnyTimes()
@@ -63,7 +53,6 @@ func initMockManager(mockManager *mocks.MockManager) {
 	mockManager.EXPECT().GetRESTMapper().Return(&meta.DefaultRESTMapper{}).AnyTimes()
 	mockManager.EXPECT().GetFieldIndexer().Return(&informertest.FakeInformers{}).AnyTimes()
 }
-
 func TestRunLeader(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -78,7 +67,6 @@ func TestRunLeader(t *testing.T) {
 			options: &Options{EnableStretchedNetworkPolicy: true},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
@@ -88,7 +76,6 @@ func TestRunLeader(t *testing.T) {
 				return mockLeaderManager, nil
 			}
 			ctrl.SetupSignalHandler = mockSetupSignalHandler
-
 			err := runLeader(tc.options)
 			assert.NoError(t, err, "got error when running runLeader")
 		})

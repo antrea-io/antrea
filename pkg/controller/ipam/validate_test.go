@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipam
-
 import (
 	"encoding/json"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 var testIPPool = &crdv1beta1.IPPool{
 	ObjectMeta: metav1.ObjectMeta{
 		Name: "test-ip-pool",
@@ -47,18 +39,15 @@ var testIPPool = &crdv1beta1.IPPool{
 	},
 	Status: crdv1beta1.IPPoolStatus{},
 }
-
 func marshal(object runtime.Object) []byte {
 	raw, _ := json.Marshal(object)
 	return raw
 }
-
 func copyAndMutateIPPool(in *crdv1beta1.IPPool, mutateFunc func(*crdv1beta1.IPPool)) *crdv1beta1.IPPool {
 	out := in.DeepCopy()
 	mutateFunc(out)
 	return out
 }
-
 func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 	tests := []struct {
 		name             string

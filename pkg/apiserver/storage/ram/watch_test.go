@@ -11,57 +11,43 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ram
-
 import (
 	"context"
 	"reflect"
 	"testing"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/utils/clock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
-=======
-	"antrea.io/antrea/pkg/apiserver/storage"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
 )
-
 // simpleInternalEvent simply construct watch.Event based on the provided Type and Object
 type simpleInternalEvent struct {
 	Type            watch.EventType
 	Object          runtime.Object
 	ResourceVersion uint64
 }
-
 func (e *simpleInternalEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	return &watch.Event{
 		Type:   e.Type,
 		Object: e.Object,
 	}
 }
-
 func (e *simpleInternalEvent) GetResourceVersion() uint64 {
 	return e.ResourceVersion
 }
-
 // emptyInternalEvent always get nil when converting to watch.Event,
 // represents the case that the watcher is not interested in an object.
 type emptyInternalEvent struct{}
-
 func (e *emptyInternalEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	return nil
 }
-
 func (e *emptyInternalEvent) GetResourceVersion() uint64 {
 	return 0
 }
-
 func TestEvents(t *testing.T) {
 	testCases := []struct {
 		initEvents  []storage.InternalEvent
@@ -148,11 +134,9 @@ func TestEvents(t *testing.T) {
 			},
 		},
 	}
-
 	for i, testCase := range testCases {
 		w := newStoreWatcher(10, &storage.Selectors{}, func() {}, func() runtime.Object { return new(v1.Pod) })
 		go w.process(context.Background(), testCase.initEvents, 0)
-
 		for _, event := range testCase.addedEvents {
 			w.nonBlockingAdd(event)
 		}
@@ -171,7 +155,6 @@ func TestEvents(t *testing.T) {
 		w.Stop()
 	}
 }
-
 func TestAddTimeout(t *testing.T) {
 	w := newStoreWatcher(1, &storage.Selectors{}, func() {}, func() runtime.Object { return new(v1.Pod) })
 	events := []storage.InternalEvent{

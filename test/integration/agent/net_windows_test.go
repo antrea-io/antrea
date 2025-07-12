@@ -11,34 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package agent
-
 import (
 	"fmt"
 	"net"
 	"strings"
 	"testing"
-
 	"github.com/Microsoft/hcsshim"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
 	ps "antrea.io/antrea/v2/pkg/agent/util/powershell"
 	"antrea.io/antrea/v2/pkg/agent/util/winnet"
-=======
-	"antrea.io/antrea/pkg/agent/util"
-	ps "antrea.io/antrea/pkg/agent/util/powershell"
-	"antrea.io/antrea/pkg/agent/util/winnet"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util"
+	ps "antrea.io/antrea/v2/pkg/agent/util/powershell"
+	"antrea.io/antrea/v2/pkg/agent/util/winnet"
 )
-
 func adapterName(name string) string {
 	return fmt.Sprintf("%s (%s)", winnet.ContainerVNICPrefix, name)
 }
-
 // windowsHyperVEnabled checks if the Hyper-V is enabled on the host.
 // Hyper-V feature contains multiple components/sub-features. According to the
 // test, OVS requires "Microsoft-Hyper-V" feature to be enabled.
@@ -50,7 +41,6 @@ func windowsHyperVEnabled() (bool, error) {
 	}
 	return strings.HasPrefix(result, "Enabled"), nil
 }
-
 func skipIfHyperVDisabled(t *testing.T) {
 	t.Logf("Checking if Hyper-V feature is enabled")
 	enabled, err := windowsHyperVEnabled()
@@ -59,14 +49,12 @@ func skipIfHyperVDisabled(t *testing.T) {
 		t.Skipf("Skipping test as it requires the Hyper-V feature to be enabled")
 	}
 }
-
 func skipIfMissingAdapter(t *testing.T, adapterName string) {
 	t.Logf("Checking if adapter '%s' exists", adapterName)
 	if _, err := net.InterfaceByName(adapterName); err != nil {
 		t.Skipf("Skipping test because we cannot verify that adapter '%s' exists", adapterName)
 	}
 }
-
 func skipIfOVSExtensionNotInstalled(t *testing.T) {
 	t.Logf("Checking if the Open vSwitch Extension is installed")
 	cmd := `Get-VMSystemSwitchExtension -Name "Open vSwitch Extension"`
@@ -74,7 +62,6 @@ func skipIfOVSExtensionNotInstalled(t *testing.T) {
 		t.Skipf("Skipping test because we cannot verify that the Open vSwitch Extension is installed")
 	}
 }
-
 func createTestInterface(t *testing.T, name string) string {
 	skipIfHyperVDisabled(t)
 	t.Logf("Creating test vSwitch and adapter '%s'", name)
@@ -83,24 +70,20 @@ func createTestInterface(t *testing.T, name string) string {
 	require.NoError(t, err)
 	return adapterName(name)
 }
-
 func setTestInterfaceUp(t *testing.T, name string) int {
 	_, ifaceIdx, err := util.SetLinkUp(adapterName(name))
 	require.NoError(t, err)
 	return ifaceIdx
 }
-
 func deleteTestInterface(t *testing.T, name string) {
 	t.Logf("Deleting test vSwitch '%s'", name)
 	cmd := fmt.Sprintf(`Remove-VMSwitch "%s" -ComputerName localhost -Force`, name)
 	_, err := ps.RunCommand(cmd)
 	assert.NoError(t, err)
 }
-
 func getTestInterfaceAddresses(t *testing.T, name string) []*net.IPNet {
 	return getAdapterAddresses(t, adapterName(name))
 }
-
 func getAdapterAddresses(t *testing.T, name string) []*net.IPNet {
 	iface, err := net.InterfaceByName(name)
 	require.NoError(t, err)
@@ -114,7 +97,6 @@ func getAdapterAddresses(t *testing.T, name string) []*net.IPNet {
 	}
 	return result
 }
-
 // getAdapterIPv4Address returns the "first" IPv4 address assigned to the provided adapter.
 func getAdapterIPv4Address(t *testing.T, name string) *net.IPNet {
 	addrs := getAdapterAddresses(t, name)
@@ -125,14 +107,12 @@ func getAdapterIPv4Address(t *testing.T, name string) *net.IPNet {
 	}
 	return nil
 }
-
 func addTestInterfaceAddress(t *testing.T, name string, addr *net.IPNet) {
 	ipStr := strings.Split(addr.String(), "/")
 	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s`, adapterName(name), ipStr[0], ipStr[1])
 	_, err := ps.RunCommand(cmd)
 	require.NoError(t, err)
 }
-
 func TestCreateHNSNetwork(t *testing.T) {
 	skipIfHyperVDisabled(t)
 	skipIfOVSExtensionNotInstalled(t)
@@ -142,11 +122,9 @@ func TestCreateHNSNetwork(t *testing.T) {
 	_, err := hcsshim.GetHNSNetworkByName(testNet)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), fmt.Sprintf("Network %s not found", testNet))
-
 	t.Logf("Retrieving IPv4 address for adapter '%s'", adapterName)
 	nodeIP := getAdapterIPv4Address(t, adapterName)
 	require.NotNil(t, err, "Could not find an IPv4 address for adapter '%s'", adapterName)
-
 	addr, subnet, _ := net.ParseCIDR("172.16.1.1/24")
 	adapter, err := net.InterfaceByName(adapterName)
 	require.Nil(t, err)
@@ -158,14 +136,12 @@ func TestCreateHNSNetwork(t *testing.T) {
 		_, err := hnsNet.Delete()
 		assert.NoError(t, err)
 	}()
-
 	assert.Equal(t, hnsNet.Name, testNet)
 	assert.Equal(t, hnsNet.Type, util.HNSNetworkType)
 	assert.Len(t, hnsNet.Subnets, 1)
 	assert.Equal(t, hnsNet.Subnets[0].AddressPrefix, subnet.String())
 	assert.Equal(t, hnsNet.Subnets[0].GatewayAddress, addr.String())
 	assert.Equal(t, hnsNet.ManagementIP, nodeIP.String())
-
 	t.Logf("Enabling the Open vSwitch Extension for HNSNetwork '%s'", testNet)
 	err = util.EnableHNSNetworkExtension(hnsNet.Id, winnet.OVSExtensionID)
 	require.Nil(t, err, "No error expected when enabling the Open vSwitch Extension for the HNSNetwork")

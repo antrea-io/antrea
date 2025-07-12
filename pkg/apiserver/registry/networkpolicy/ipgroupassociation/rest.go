@@ -11,53 +11,43 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipgroupassociation
-
 import (
 	"context"
 	"net"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 	coreinformers "k8s.io/client-go/informers/core/v1"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	ga "antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/groupassociation"
 	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/controller/grouping"
 	"antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	ga "antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupassociation"
-	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	"antrea.io/antrea/pkg/controller/grouping"
-	"antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	ga "antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/groupassociation"
+	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	"antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 type REST struct {
 	podInformer  coreinformers.PodInformer
 	eeInformer   crdv1a2informers.ExternalEntityInformer
 	ipbQuerier   ipBlockGroupAssociationQuerier
 	groupQuerier ga.GroupAssociationQuerier
 }
-
 var (
 	_ rest.Storage              = &REST{}
 	_ rest.Scoper               = &REST{}
 	_ rest.Getter               = &REST{}
 	_ rest.SingularNameProvider = &REST{}
 )
-
 // NewREST returns a REST object that will work against API services.
 func NewREST(podQuerier coreinformers.PodInformer,
 	eeQuerier crdv1a2informers.ExternalEntityInformer,
@@ -65,18 +55,14 @@ func NewREST(podQuerier coreinformers.PodInformer,
 	groupQuerier ga.GroupAssociationQuerier) *REST {
 	return &REST{podQuerier, eeQuerier, ipbQuerier, groupQuerier}
 }
-
 type ipBlockGroupAssociationQuerier interface {
 	GetAssociatedIPBlockGroups(ip net.IP) []types.Group
 }
-
 func (r *REST) New() runtime.Object {
 	return &controlplane.IPGroupAssociation{}
 }
-
 func (r *REST) Destroy() {
 }
-
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	parsedIP := net.ParseIP(name)
 	if parsedIP == nil {
@@ -119,7 +105,6 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	members := &controlplane.IPGroupAssociation{AssociatedGroups: groupList}
 	return members, nil
 }
-
 func (r *REST) getAssociatedPod(ip string) *v1.Pod {
 	pods, _ := r.podInformer.Informer().GetIndexer().ByIndex(grouping.PodIPsIndex, ip)
 	if len(pods) > 0 {
@@ -128,7 +113,6 @@ func (r *REST) getAssociatedPod(ip string) *v1.Pod {
 	}
 	return nil
 }
-
 func (r *REST) getAssociatedExternalEntities(ip string) []*v1alpha2.ExternalEntity {
 	if !features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		return nil
@@ -144,11 +128,9 @@ func (r *REST) getAssociatedExternalEntities(ip string) []*v1alpha2.ExternalEnti
 	}
 	return ees
 }
-
 func (r *REST) NamespaceScoped() bool {
 	return false
 }
-
 func (r *REST) GetSingularName() string {
 	return "ipgroupassociation"
 }

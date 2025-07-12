@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -26,21 +23,15 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 func TestWatchEgressGroupEvent(t *testing.T) {
 	egTypeInvalid := types.EgressGroup{}
-
 	egressName := "egress"
 	egressUID := k8stypes.UID("uid")
 	pod1 := &controlplane.PodReference{Name: "pod1", Namespace: "namespace1"}
@@ -52,14 +43,12 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 			"node-local": controlplane.NewGroupMemberSet(&controlplane.GroupMember{Pod: pod1}),
 		},
 	}
-
 	eg2 := &types.EgressGroup{
 		SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 		UID:               egressUID,
 		Name:              egressName,
 		GroupMemberByNode: map[string]controlplane.GroupMemberSet{},
 	}
-
 	pod2 := &controlplane.PodReference{Name: "pod2", Namespace: "namespace2"}
 	eg3 := &types.EgressGroup{
 		SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node-local")},
@@ -69,7 +58,6 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 			"node-local": controlplane.NewGroupMemberSet(&controlplane.GroupMember{Pod: pod2}),
 		},
 	}
-
 	tests := []struct {
 		name           string
 		fieldSelector  fields.Selector

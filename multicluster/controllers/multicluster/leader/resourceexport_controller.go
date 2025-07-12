@@ -1,28 +1,22 @@
 /*
 Copyright 2021 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package leader
-
 import (
 	"context"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -36,18 +30,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
-
 type (
 	// ResourceExportReconciler reconciles a ResourceExport object in the leader cluster.
 	ResourceExportReconciler struct {
@@ -55,14 +44,11 @@ type (
 		Scheme *runtime.Scheme
 	}
 )
-
 type resReason int
-
 const (
 	succeed resReason = iota
 	failed
 )
-
 func NewResourceExportReconciler(
 	client client.Client,
 	scheme *runtime.Scheme) *ResourceExportReconciler {
@@ -72,11 +58,9 @@ func NewResourceExportReconciler(
 	}
 	return reconciler
 }
-
 // +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/finalizers,verbs=update
-
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // Reconcile will process all kinds of ResourceExport. Service and Endpoint kinds of ResourceExport
@@ -87,7 +71,6 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.Client.Get(ctx, req.NamespacedName, &resExport); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
 	switch resExport.Spec.Kind {
 	case constants.ServiceKind:
 		klog.V(2).InfoS("Reconciling Service type of ResourceExport", "resourceexport", req.NamespacedName)
@@ -101,7 +84,6 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		klog.InfoS("It's not expected kind, skip reconciling ResourceExport", "resourceexport", req.NamespacedName)
 		return ctrl.Result{}, nil
 	}
-
 	// We are using Finalizers to implement asynchronous pre-delete hooks.
 	// When a ResourceExport is deleted, it will have non-zero DeletionTimestamp
 	// but controller can still get the deleted ResourceExport object, so it can
@@ -117,12 +99,10 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		return ctrl.Result{}, nil
 	}
-
 	createResImport, existingResImport, err := r.getExistingResImport(ctx, resExport)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	var changed bool
 	resImport := &mcsv1alpha1.ResourceImport{}
 	switch resExport.Spec.Kind {
@@ -137,9 +117,7 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.updateResourceExportStatus(&resExport, failed)
 		return ctrl.Result{}, err
 	}
-
 	resImportName := GetResourceImportName(&resExport)
-
 	if createResImport {
 		if err = r.Client.Create(ctx, resImport, &client.CreateOptions{}); err != nil {
 			klog.ErrorS(err, "Failed to create ResourceImport", "resourceimport", resImportName.String())
@@ -154,21 +132,17 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		r.updateResourceExportStatus(&resExport, succeed)
 	}
-
 	// There might be some changes from ResourceExport triggered reconciling but actually no need to update
 	// ResourceImport, we still need to update the ResourceExport status to reflect event have been handled
 	// successfully.
 	if len(resExport.Status.Conditions) == 0 {
 		r.updateResourceExportStatus(&resExport, succeed)
 	}
-
 	return ctrl.Result{}, nil
 }
-
 func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 	resImport *mcsv1alpha1.ResourceImport, resExport *mcsv1alpha1.ResourceExport) error {
 	resImpName := GetResourceImportName(resExport)
-
 	var err error
 	if err = r.Client.Update(ctx, resImport, &client.UpdateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to update ResourceImport", "resourceimport", resImpName.String())
@@ -180,7 +154,6 @@ func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 		klog.ErrorS(err, "Failed to get latest ResourceImport", "resourceimport", resImpName.String())
 		return err
 	}
-
 	newStatus := mcsv1alpha1.ResourceImportClusterStatus{
 		ClusterID: resExport.Labels[constants.SourceClusterID],
 		Conditions: []mcsv1alpha1.ResourceImportCondition{{
@@ -207,7 +180,6 @@ func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 	}
 	return nil
 }
-
 // handleDeleteEvent will either delete the corrsponding ResourceImport if no more ResourceExport exists
 // or regenerate ResourceImport's Subsets from latest ResourceExports without Endpoints from
 // the deleted ResourceExport.
@@ -219,7 +191,6 @@ func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExp
 	}
 	resImportName := GetResourceImportName(resExport)
 	klog.V(2).InfoS("Deleting ResourceImport created by ResourceExport", "resourceimport", resImportName.String(), "resourceexport", resExport.Name)
-
 	undeleteItems := RemoveDeletedResourceExports(reList.Items)
 	if len(undeleteItems) == 0 {
 		err = r.cleanUpResourceImport(ctx, resImportName, resExport)
@@ -234,7 +205,6 @@ func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExp
 	}
 	return r.updateEndpointResourceImport(ctx, resExport, resImportName)
 }
-
 func (r *ResourceExportReconciler) cleanUpResourceImport(ctx context.Context,
 	resImp types.NamespacedName, re interface{}) error {
 	klog.InfoS("Cleaning up ResourceImport", "resourceimport", resImp.String())
@@ -245,7 +215,6 @@ func (r *ResourceExportReconciler) cleanUpResourceImport(ctx context.Context,
 	err := r.Client.Delete(ctx, resImport, &client.DeleteOptions{})
 	return client.IgnoreNotFound(err)
 }
-
 func (r *ResourceExportReconciler) updateEndpointResourceImport(ctx context.Context,
 	existRe *mcsv1alpha1.ResourceExport, resImpName types.NamespacedName) error {
 	resImport := &mcsv1alpha1.ResourceImport{}
@@ -265,7 +234,6 @@ func (r *ResourceExportReconciler) updateEndpointResourceImport(ctx context.Cont
 	}
 	return nil
 }
-
 func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
 	resExport mcsv1alpha1.ResourceExport) (bool, *mcsv1alpha1.ResourceImport, error) {
 	importedResNamespace := resExport.Labels[constants.SourceNamespace]
@@ -273,7 +241,6 @@ func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
 	var createResImport bool
 	existResImport := &mcsv1alpha1.ResourceImport{}
 	resImportName := GetResourceImportName(&resExport)
-
 	err := r.Client.Get(ctx, resImportName, existResImport)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -295,7 +262,6 @@ func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
 	}
 	return createResImport, existResImport, nil
 }
-
 // refreshServiceResourceImport returns a new Service kind of ResourceImport or
 // updates existing one to reflect any change from member cluster's ResourceExport.
 func (r *ResourceExportReconciler) refreshServiceResourceImport(
@@ -335,7 +301,6 @@ func (r *ResourceExportReconciler) refreshServiceResourceImport(
 	}
 	return newResImport, false, nil
 }
-
 // refreshEndpointsResourceImport returns a new Endpoints kind of ResourceImport or
 // updates existing one to reflect any change from member cluster's ResourceExport
 func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
@@ -346,7 +311,6 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 	newResImport.Spec.Name = resExport.Spec.Name
 	newResImport.Spec.Namespace = resExport.Spec.Namespace
 	newResImport.Spec.Kind = constants.EndpointsKind
-
 	// check corresponding Service type of ResourceExport, if there is any failure,
 	// skip adding Endpoints of this ResourceExport and update Endpoint type of
 	// ResourceExport's status.
@@ -371,7 +335,6 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 			return newResImport, false, err
 		}
 	}
-
 	if createResImport {
 		newResImport.Spec.Endpoints = &mcsv1alpha1.EndpointsImport{
 			Subsets: resExport.Spec.Endpoints.Subsets,
@@ -394,7 +357,6 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 	}
 	return newResImport, true, nil
 }
-
 func (r *ResourceExportReconciler) refreshACNPResourceImport(
 	resExport *mcsv1alpha1.ResourceExport,
 	resImport *mcsv1alpha1.ResourceImport,
@@ -420,7 +382,6 @@ func (r *ResourceExportReconciler) refreshACNPResourceImport(
 	}
 	return newResImport, false, nil
 }
-
 func (r *ResourceExportReconciler) getNotDeletedResourceExports(resExport *mcsv1alpha1.ResourceExport) ([]mcsv1alpha1.ResourceExport, error) {
 	reList := &mcsv1alpha1.ResourceExportList{}
 	err := r.Client.List(context.TODO(), reList, &client.ListOptions{
@@ -431,7 +392,6 @@ func (r *ResourceExportReconciler) getNotDeletedResourceExports(resExport *mcsv1
 	}
 	return RemoveDeletedResourceExports(reList.Items), nil
 }
-
 func (r *ResourceExportReconciler) updateResourceExportStatus(resExport *mcsv1alpha1.ResourceExport, res resReason) {
 	var newConditions []mcsv1alpha1.ResourceExportCondition
 	switch res {
@@ -456,7 +416,6 @@ func (r *ResourceExportReconciler) updateResourceExportStatus(resExport *mcsv1al
 			},
 		}
 	}
-
 	resExport.Status = mcsv1alpha1.ResourceExportStatus{
 		Conditions: newConditions,
 	}
@@ -465,7 +424,6 @@ func (r *ResourceExportReconciler) updateResourceExportStatus(resExport *mcsv1al
 		klog.ErrorS(err, "Failed to update ResourceExport status", "resourceexport", klog.KObj(resExport))
 	}
 }
-
 // deleteResourceExport removes ResourceExport finalizer string and updates it, so Kubernetes can complete deletion.
 func (r *ResourceExportReconciler) deleteResourceExport(resExport *mcsv1alpha1.ResourceExport) (ctrl.Result, error) {
 	finalizers := slices.DeleteFunc(slices.Clone(resExport.Finalizers), func(s string) bool {
@@ -477,7 +435,6 @@ func (r *ResourceExportReconciler) deleteResourceExport(resExport *mcsv1alpha1.R
 	}
 	return ctrl.Result{}, nil
 }
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *ResourceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Ignore status update event via GenerationChangedPredicate
@@ -500,7 +457,6 @@ func (r *ResourceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Complete(r)
 }
-
 func getLabelSelector(resExport *mcsv1alpha1.ResourceExport) labels.Selector {
 	labelSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
@@ -512,7 +468,6 @@ func getLabelSelector(resExport *mcsv1alpha1.ResourceExport) labels.Selector {
 	selector, _ := metav1.LabelSelectorAsSelector(&labelSelector)
 	return selector
 }
-
 func SvcPortsConverter(svcPort []corev1.ServicePort) []mcs.ServicePort {
 	var mcsSP []mcs.ServicePort
 	for _, v := range svcPort {
@@ -524,7 +479,6 @@ func SvcPortsConverter(svcPort []corev1.ServicePort) []mcs.ServicePort {
 	}
 	return mcsSP
 }
-
 func GetResourceImportName(resExport *mcsv1alpha1.ResourceExport) types.NamespacedName {
 	if resExport.Spec.Namespace != "" {
 		return types.NamespacedName{
@@ -537,7 +491,6 @@ func GetResourceImportName(resExport *mcsv1alpha1.ResourceExport) types.Namespac
 		Name:      resExport.Spec.Name + "-" + strings.ToLower(resExport.Spec.Kind),
 	}
 }
-
 // We use finalizers as ResourceExport pre-delete hooks, which means when
 // we list the ResourceExports, it will also return deleted items.
 // RemoveDeletedResourceExports remove any ResourceExports with non-zero DeletionTimestamp

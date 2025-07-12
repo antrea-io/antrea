@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package bgp
-
 import (
 	"context"
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -37,49 +34,41 @@ import (
 	"k8s.io/client-go/tools/cache"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	bgptest "antrea.io/antrea/v2/pkg/agent/bgp/testing"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/agent/bgp"
-	bgptest "antrea.io/antrea/pkg/agent/bgp/testing"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/bgp"
+	bgptest "antrea.io/antrea/v2/pkg/agent/bgp/testing"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
-
 const (
 	namespaceDefault    = "default"
 	namespaceKubeSystem = "kube-system"
 )
-
 var (
 	podIPv4CIDR      = ip.MustParseCIDR("10.10.0.0/24")
 	podIPv4CIDRRoute = bgp.Route{Prefix: podIPv4CIDR.String()}
 	podIPv6CIDR      = ip.MustParseCIDR("fec0:10:10::/64")
 	podIPv6CIDRRoute = bgp.Route{Prefix: podIPv6CIDR.String()}
 	nodeIPv4Addr     = ip.MustParseCIDR("192.168.77.100/24")
-
 	testNodeConfig = &config.NodeConfig{
 		PodIPv4CIDR:  podIPv4CIDR,
 		PodIPv6CIDR:  podIPv6CIDR,
 		NodeIPv4Addr: nodeIPv4Addr,
 		Name:         localNodeName,
 	}
-
 	peer1ASN          = int32(65531)
 	peer1AuthPassword = "bgp-peer1" // #nosec G101
 	ipv4Peer1Addr     = "192.168.77.251"
@@ -98,7 +87,6 @@ var (
 		ASN:          peer1ASN,
 		SessionState: bgp.SessionActive,
 	}
-
 	peer2ASN          = int32(65532)
 	peer2AuthPassword = "bgp-peer2" // #nosec G101
 	ipv4Peer2Addr     = "192.168.77.252"
@@ -117,12 +105,10 @@ var (
 		ASN:          peer2ASN,
 		SessionState: bgp.SessionActive,
 	}
-
 	updatedIPv4Peer2       = generateBGPPeer(ipv4Peer2Addr, peer2ASN, 179, 60)
 	updatedIPv6Peer2       = generateBGPPeer(ipv6Peer2Addr, peer2ASN, 179, 60)
 	updatedIPv4Peer2Config = generateBGPPeerConfig(&updatedIPv4Peer2, peer2AuthPassword)
 	updatedIPv6Peer2Config = generateBGPPeerConfig(&updatedIPv6Peer2, peer2AuthPassword)
-
 	peer3ASN          = int32(65533)
 	peer3AuthPassword = "bgp-peer3" // #nosec G101
 	ipv4Peer3Addr     = "192.168.77.253"
@@ -131,38 +117,31 @@ var (
 	ipv6Peer3         = generateBGPPeer(ipv6Peer3Addr, peer3ASN, 179, 120)
 	ipv4Peer3Config   = generateBGPPeerConfig(&ipv4Peer3, peer3AuthPassword)
 	ipv6Peer3Config   = generateBGPPeerConfig(&ipv6Peer3, peer3AuthPassword)
-
 	nodeLabels1      = map[string]string{"node": "control-plane"}
 	nodeLabels2      = map[string]string{"os": "linux"}
 	nodeLabels3      = map[string]string{"node": "control-plane", "os": "linux"}
 	nodeAnnotations1 = map[string]string{types.NodeBGPRouterIDAnnotationKey: "192.168.77.100"}
 	nodeAnnotations2 = map[string]string{types.NodeBGPRouterIDAnnotationKey: "10.10.0.100"}
-
 	localNodeName = "local"
 	node          = generateNode(localNodeName, nodeLabels1, nodeAnnotations1)
-
 	ipv4EgressIP1      = "192.168.77.200"
 	ipv4EgressIP1Route = bgp.Route{Prefix: ipStrToPrefix(ipv4EgressIP1)}
 	ipv6EgressIP1      = "fec0::192:168:77:200"
 	ipv6EgressIP1Route = bgp.Route{Prefix: ipStrToPrefix(ipv6EgressIP1)}
 	ipv4EgressIP2      = "192.168.77.201"
 	ipv6EgressIP2      = "fec0::192:168:77:2001"
-
 	ipv4Egress1 = generateEgress("eg1-4", ipv4EgressIP1, localNodeName)
 	ipv6Egress1 = generateEgress("eg1-6", ipv6EgressIP1, localNodeName)
 	ipv4Egress2 = generateEgress("eg2-4", ipv4EgressIP2, "test-remote-node")
 	ipv6Egress2 = generateEgress("eg2-6", ipv6EgressIP2, "test-remote-node")
-
 	bgpPolicyName1 = "policy-1"
 	bgpPolicyName2 = "policy-2"
 	bgpPolicyName3 = "policy-3"
 	bgpPolicyName4 = "policy-4"
-
 	creationTimestamp      = metav1.Now()
 	creationTimestampAdd1s = metav1.NewTime(creationTimestamp.Add(time.Second))
 	creationTimestampAdd2s = metav1.NewTime(creationTimestamp.Add(2 * time.Second))
 	creationTimestampAdd3s = metav1.NewTime(creationTimestamp.Add(3 * time.Second))
-
 	clusterIPv4s     = []string{"10.96.10.10", "10.96.10.11"}
 	externalIPv4s    = []string{"192.168.77.100", "192.168.77.101"}
 	loadBalancerIPv4 = "192.168.77.150"
@@ -171,14 +150,12 @@ var (
 	externalIPv6s    = []string{"fec0::192:168:77:100", "fec0::192:168:77:101"}
 	loadBalancerIPv6 = "fec0::192:168:77:150"
 	endpointIPv6     = "fec0::10:10:0:10"
-
 	ipv4ClusterIPName1   = "clusterip-4"
 	ipv4ClusterIPName2   = "clusterip-4-local"
 	ipv6ClusterIPName1   = "clusterip-6"
 	ipv6ClusterIPName2   = "clusterip-6-local"
 	ipv4LoadBalancerName = "loadbalancer-4"
 	ipv6LoadBalancerName = "loadbalancer-6"
-
 	clusterIPv4Route1     = bgp.Route{Prefix: ipStrToPrefix(clusterIPv4s[0])}
 	clusterIPv6Route1     = bgp.Route{Prefix: ipStrToPrefix(clusterIPv6s[0])}
 	clusterIPv4Route2     = bgp.Route{Prefix: ipStrToPrefix(clusterIPv4s[1])}
@@ -189,7 +166,6 @@ var (
 	externalIPv6Route2    = bgp.Route{Prefix: ipStrToPrefix(externalIPv6s[1])}
 	loadBalancerIPv4Route = bgp.Route{Prefix: ipStrToPrefix(loadBalancerIPv4)}
 	loadBalancerIPv6Route = bgp.Route{Prefix: ipStrToPrefix(loadBalancerIPv6)}
-
 	allRoutes = map[bgp.Route]RouteMetadata{
 		clusterIPv4Route1:     {Type: ServiceClusterIP, K8sObjRef: getServiceName(ipv4ClusterIPName1)},
 		clusterIPv6Route1:     {Type: ServiceClusterIP, K8sObjRef: getServiceName(ipv6ClusterIPName1)},
@@ -206,23 +182,19 @@ var (
 		podIPv4CIDRRoute:      {Type: NodeIPAMPodCIDR},
 		podIPv6CIDRRoute:      {Type: NodeIPAMPodCIDR},
 	}
-
 	endpointSliceSuffix = rand.String(5)
 	ipv4ClusterIP1      = generateService(ipv4ClusterIPName1, corev1.ServiceTypeClusterIP, clusterIPv4s[0], externalIPv4s[0], "", false, false)
 	ipv4ClusterIP1Eps   = generateEndpointSlice(ipv4ClusterIPName1, endpointSliceSuffix, false, false, endpointIPv4)
 	ipv4ClusterIP2      = generateService(ipv4ClusterIPName2, corev1.ServiceTypeClusterIP, clusterIPv4s[0], externalIPv4s[0], "", true, true)
 	ipv4ClusterIP2Eps   = generateEndpointSlice(ipv4ClusterIPName2, endpointSliceSuffix, false, false, endpointIPv4)
-
 	ipv6ClusterIP1    = generateService(ipv6ClusterIPName1, corev1.ServiceTypeClusterIP, clusterIPv6s[0], externalIPv6s[0], "", false, false)
 	ipv6ClusterIP1Eps = generateEndpointSlice(ipv6ClusterIPName1, endpointSliceSuffix, false, false, endpointIPv6)
 	ipv6ClusterIP2    = generateService(ipv6ClusterIPName2, corev1.ServiceTypeClusterIP, clusterIPv6s[0], externalIPv6s[0], "", true, true)
 	ipv6ClusterIP2Eps = generateEndpointSlice(ipv6ClusterIPName2, endpointSliceSuffix, false, false, endpointIPv6)
-
 	ipv4LoadBalancer    = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, clusterIPv4s[1], externalIPv4s[1], loadBalancerIPv4, false, false)
 	ipv4LoadBalancerEps = generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, false, false, endpointIPv4)
 	ipv6LoadBalancer    = generateService(ipv6LoadBalancerName, corev1.ServiceTypeLoadBalancer, clusterIPv6s[1], externalIPv6s[1], loadBalancerIPv6, false, false)
 	ipv6LoadBalancerEps = generateEndpointSlice(ipv6LoadBalancerName, endpointSliceSuffix, false, false, endpointIPv6)
-
 	bgpPeerPasswords = map[string]string{
 		generateBGPPeerKey(ipv4Peer1Addr, peer1ASN): peer1AuthPassword,
 		generateBGPPeerKey(ipv6Peer1Addr, peer1ASN): peer1AuthPassword,
@@ -232,7 +204,6 @@ var (
 		generateBGPPeerKey(ipv6Peer3Addr, peer3ASN): peer3AuthPassword,
 	}
 )
-
 type fakeController struct {
 	*Controller
 	mockController     *gomock.Controller
@@ -242,30 +213,24 @@ type fakeController struct {
 	client             *fake.Clientset
 	informerFactory    informers.SharedInformerFactory
 }
-
 func (c *fakeController) startInformers(stopCh chan struct{}) {
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
 	c.crdInformerFactory.Start(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
 }
-
 func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runtime.Object, ipv4Enabled, ipv6Enabled bool) *fakeController {
 	ctrl := gomock.NewController(t)
 	mockBGPServer := bgptest.NewMockInterface(ctrl)
-
 	client := fake.NewSimpleClientset(objects...)
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
-
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
-
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	serviceInformer := informerFactory.Core().V1().Services()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 	bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
-
 	bgpController, _ := NewBGPPolicyController(nodeInformer,
 		serviceInformer,
 		egressInformer,
@@ -282,7 +247,6 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 	bgpController.newBGPServerFn = func(_ *bgp.GlobalConfig) bgp.Interface {
 		return mockBGPServer
 	}
-
 	return &fakeController{
 		Controller:         bgpController,
 		mockController:     ctrl,
@@ -293,7 +257,6 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 		informerFactory:    informerFactory,
 	}
 }
-
 func TestBGPPolicyAdd(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -591,19 +554,16 @@ func TestBGPPolicyAdd(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, tt.objects, append(tt.crdObjects, tt.policiesToAdd...), tt.ipv4Enabled, tt.ipv6Enabled)
-
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			ctx := context.Background()
 			c.startInformers(stopCh)
-
 			// Fake the BGPPolicy state and the passwords of BGP peers.
 			c.bgpPolicyState = tt.existingState
 			if c.bgpPolicyState != nil {
 				c.bgpPolicyState.bgpServer = c.mockBGPServer
 			}
 			c.bgpPeerPasswords = bgpPeerPasswords
-
 			// Wait for the dummy event triggered by BGPPolicy add events.
 			waitAndGetDummyEvent(t, c)
 			if tt.expectedCalls != nil {
@@ -620,7 +580,6 @@ func TestBGPPolicyAdd(t *testing.T) {
 		})
 	}
 }
-
 func TestBGPPolicyUpdate(t *testing.T) {
 	effectivePolicy := generateBGPPolicy(bgpPolicyName1,
 		creationTimestamp,
@@ -822,7 +781,6 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{ipv4EgressIP1Route})
 				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv6Route2})
 				mockBGPServer.AdvertiseRoutes(gomock.Any(), []bgp.Route{ipv6EgressIP1Route})
-
 				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route2})
 				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
 				mockBGPServer.WithdrawRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
@@ -1168,33 +1126,26 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			expectedState: deepCopyBGPPolicyState(effectivePolicyState),
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, objects, crdObjects, true, true)
-
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			ctx := context.Background()
 			c.startInformers(stopCh)
-
 			// Wait for the dummy event triggered by BGPPolicy add events, and mark it done directly
 			// since we fake the expected state.
 			waitAndGetDummyEvent(t, c)
 			doneDummyEvent(t, c)
-
 			// Fake the BGPPolicy state the passwords of BGP peers.
 			c.bgpPolicyState = deepCopyBGPPolicyState(effectivePolicyState)
 			c.bgpPolicyState.bgpServer = c.mockBGPServer
 			c.bgpPeerPasswords = bgpPeerPasswords
-
 			tt.policyToUpdate.Generation += 1
 			_, err := c.crdClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), tt.policyToUpdate, metav1.UpdateOptions{})
 			require.NoError(t, err)
-
 			// Wait for the dummy event triggered by BGPPolicy update events.
 			waitAndGetDummyEvent(t, c)
-
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
 			}
@@ -1209,7 +1160,6 @@ func TestBGPPolicyUpdate(t *testing.T) {
 		})
 	}
 }
-
 func TestBGPPolicyDelete(t *testing.T) {
 	policy1 := generateBGPPolicy(bgpPolicyName1,
 		creationTimestamp,
@@ -1356,27 +1306,21 @@ func TestBGPPolicyDelete(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, objects, tt.crdObjects, true, true)
-
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			ctx := context.Background()
 			c.startInformers(stopCh)
-
 			// Wait for the dummy event triggered by BGPPolicy add events, and mark it done.
 			waitAndGetDummyEvent(t, c)
 			doneDummyEvent(t, c)
-
 			// Fake the BGPPolicy state and the passwords of BGP peers.
 			c.bgpPolicyState = tt.existingState
 			c.bgpPolicyState.bgpServer = c.mockBGPServer
 			c.bgpPeerPasswords = bgpPeerPasswords
-
 			err := c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), tt.policyToDelete, metav1.DeleteOptions{})
 			require.NoError(t, err)
-
 			// Wait for the dummy event triggered by BGPPolicy delete events.
 			waitAndGetDummyEvent(t, c)
-
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
 			}
@@ -1387,7 +1331,6 @@ func TestBGPPolicyDelete(t *testing.T) {
 		})
 	}
 }
-
 func TestNodeUpdate(t *testing.T) {
 	policy1 := generateBGPPolicy(bgpPolicyName1,
 		creationTimestamp,
@@ -1604,34 +1547,26 @@ func TestNodeUpdate(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, nil, crdObjects, tt.ipv4Enabled, tt.ipv6Enabled)
-
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			ctx := context.Background()
 			c.startInformers(stopCh)
-
 			// Fake the passwords of BGP peers.
 			c.bgpPeerPasswords = bgpPeerPasswords
-
 			// Initializing BGPPolicy objects will not trigger a dummy event because the local Node object has not been
 			// initialized and synced yet. The dummy event will be trigger by adding the local Node object.
 			_, err := c.client.CoreV1().Nodes().Create(context.TODO(), tt.node, metav1.CreateOptions{})
 			require.NoError(t, err)
-
 			// Wait for the dummy event triggered by Node add event.
 			waitAndGetDummyEvent(t, c)
 			doneDummyEvent(t, c)
-
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
 			c.bgpPolicyState.bgpServer = c.mockBGPServer
-
 			_, err = c.client.CoreV1().Nodes().Update(context.TODO(), tt.updatedNode, metav1.UpdateOptions{})
 			require.NoError(t, err)
-
 			// Wait for the dummy event triggered by Node update events.
 			waitAndGetDummyEvent(t, c)
-
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
 			}
@@ -1648,7 +1583,6 @@ func TestNodeUpdate(t *testing.T) {
 		})
 	}
 }
-
 func TestServiceLifecycle(t *testing.T) {
 	policy := generateBGPPolicy(bgpPolicyName1,
 		creationTimestamp,
@@ -1664,15 +1598,12 @@ func TestServiceLifecycle(t *testing.T) {
 		nil)
 	c := newFakeController(t, []runtime.Object{node}, []runtime.Object{policy}, true, false)
 	mockBGPServer := c.mockBGPServer
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	ctx := context.Background()
 	c.startInformers(stopCh)
-
 	// Fake the passwords of BGP peers.
 	c.bgpPeerPasswords = bgpPeerPasswords
-
 	// Wait for the dummy event triggered by BGPPolicy add events.
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().Start(gomock.Any())
@@ -1680,29 +1611,24 @@ func TestServiceLifecycle(t *testing.T) {
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
-
 	// Create a Service configured with both `internalTrafficPolicy` and `externalTrafficPolicy` set to `Local`.
 	loadBalancer := generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.100", "192.168.77.150", true, true)
 	_, err := c.client.CoreV1().Services(namespaceDefault).Create(context.TODO(), loadBalancer, metav1.CreateOptions{})
 	require.NoError(t, err)
-
 	// Add an EndpointSlice without Endpoint IP for the Service. This could be happened at the moment after a Service is
 	// just created.
 	endpointSlice := generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, true, false, "")
 	_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Create(context.TODO(), endpointSlice, metav1.CreateOptions{})
 	require.NoError(t, err)
-
 	// Since both `internalTrafficPolicy` and `externalTrafficPolicy` are `Local` and no local Endpoint, no Service IP
 	// will be advertised.
 	waitAndGetDummyEvent(t, c)
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Update the EndpointSlice with a local Endpoint IP.
 	endpointSlice = generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, true, false, "10.10.0.2")
 	_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Update(context.TODO(), endpointSlice, metav1.UpdateOptions{})
 	require.NoError(t, err)
-
 	// Since there is a local Endpoint IP and both `internalTrafficPolicy` and `externalTrafficPolicy` are `Local`, the
 	// ClusterIP, externalIP, and LoadBalancerIP will be advertised.
 	waitAndGetDummyEvent(t, c)
@@ -1711,13 +1637,11 @@ func TestServiceLifecycle(t *testing.T) {
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.150/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Update externalIP and LoadBalancerIP of the Service. Additionally, update both `externalTrafficPolicy` and
 	// `internalTrafficPolicy` to `Cluster`.
 	updatedLoadBalancer := generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", false, false)
 	_, err = c.client.CoreV1().Services(namespaceDefault).Update(context.TODO(), updatedLoadBalancer, metav1.UpdateOptions{})
 	require.NoError(t, err)
-
 	// The stale externalIP and LoadBalancerIP will be withdrawn. The new externalIP and LoadBalancerIP will be advertised.
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.151/32"}})
@@ -1726,17 +1650,14 @@ func TestServiceLifecycle(t *testing.T) {
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.150/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Update `externalTrafficPolicy` of the Service from `Cluster` to `Local`.
 	updatedLoadBalancer = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", false, true)
 	_, err = c.client.CoreV1().Services(namespaceDefault).Update(context.TODO(), updatedLoadBalancer, metav1.UpdateOptions{})
 	require.NoError(t, err)
-
 	// Update the EndpointSlice with a remote Endpoint.
 	endpointSlice = generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, false, false, "10.10.0.3")
 	_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Update(context.TODO(), endpointSlice, metav1.UpdateOptions{})
 	require.NoError(t, err)
-
 	// Since there is no local Endpoint and `externalTrafficPolicy` is `Local`, the externalIP and LoadBalancerIP will be
 	// withdrawn.
 	waitAndGetDummyEvent(t, c)
@@ -1744,34 +1665,28 @@ func TestServiceLifecycle(t *testing.T) {
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.151/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Update `internalTrafficPolicy` of the Service from `Cluster` to `Local`.
 	updatedLoadBalancer = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", true, true)
 	_, err = c.client.CoreV1().Services(namespaceDefault).Update(context.TODO(), updatedLoadBalancer, metav1.UpdateOptions{})
 	require.NoError(t, err)
-
 	// Since there is no local Endpoint and `internalTrafficPolicy` is `Local`, the ClusterIP will be withdrawn.
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "10.96.10.10/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Update `externalTrafficPolicy` of the Service from `Local` to `Cluster`.
 	updatedLoadBalancer = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", true, false)
 	_, err = c.client.CoreV1().Services(namespaceDefault).Update(context.TODO(), updatedLoadBalancer, metav1.UpdateOptions{})
 	require.NoError(t, err)
-
 	// Since `externalTrafficPolicy` is `Cluster`, the ClusterIP will be advertised even if there is no local Endpoint.
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.101/32"}})
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.151/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Delete the Service.
 	err = c.client.CoreV1().Services(namespaceDefault).Delete(context.TODO(), updatedLoadBalancer.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
-
 	// Since the Service is deleted, all corresponding Service IPs will be withdrawn.
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.101/32"}})
@@ -1779,7 +1694,6 @@ func TestServiceLifecycle(t *testing.T) {
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
 }
-
 func TestEgressLifecycle(t *testing.T) {
 	policy := generateBGPPolicy(bgpPolicyName1,
 		creationTimestamp,
@@ -1795,15 +1709,12 @@ func TestEgressLifecycle(t *testing.T) {
 		nil)
 	c := newFakeController(t, []runtime.Object{node}, []runtime.Object{policy}, true, false)
 	mockBGPServer := c.mockBGPServer
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	ctx := context.Background()
 	c.startInformers(stopCh)
-
 	// Fake the passwords of BGP peers.
 	c.bgpPeerPasswords = bgpPeerPasswords
-
 	// Wait for the dummy event triggered by BGPPolicy add events,.
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().Start(gomock.Any())
@@ -1811,58 +1722,47 @@ func TestEgressLifecycle(t *testing.T) {
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
-
 	// Create an Egress.
 	egress := generateEgress("eg1-4", "192.168.77.200", localNodeName)
 	_, err := c.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
 	require.NoError(t, err)
-
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.200/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Update the Egress.
 	updatedEgress := generateEgress("eg1-4", "192.168.77.201", localNodeName)
 	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
 	require.NoError(t, err)
-
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.200/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", "remote")
 	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
 	require.NoError(t, err)
-
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", localNodeName)
 	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
 	require.NoError(t, err)
-
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
-
 	// Delete the Egress.
 	err = c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), updatedEgress.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
-
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
 }
-
 func TestBGPPasswordUpdate(t *testing.T) {
 	policy := generateBGPPolicy(bgpPolicyName1,
 		creationTimestamp,
@@ -1877,7 +1777,6 @@ func TestBGPPasswordUpdate(t *testing.T) {
 		[]v1alpha1.BGPPeer{ipv4Peer1, ipv4Peer2, ipv4Peer3},
 		nil)
 	c := newFakeController(t, []runtime.Object{node}, []runtime.Object{policy}, true, false)
-
 	c.secretInformer = coreinformers.NewFilteredSecretInformer(c.client,
 		namespaceKubeSystem,
 		resyncPeriod,
@@ -1891,24 +1790,20 @@ func TestBGPPasswordUpdate(t *testing.T) {
 		DeleteFunc: c.deleteSecret,
 	})
 	mockBGPServer := c.mockBGPServer
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	ctx := context.Background()
 	c.startInformers(stopCh)
 	go c.secretInformer.Run(stopCh)
-
 	// Create the Secret.
 	secret := generateSecret(bgpPeerPasswords)
 	_, err := c.client.CoreV1().Secrets(namespaceKubeSystem).Create(context.TODO(), secret, metav1.CreateOptions{})
 	require.NoError(t, err)
-
 	require.Eventually(t, func() bool {
 		c.bgpPeerPasswordsMutex.RLock()
 		defer c.bgpPeerPasswordsMutex.RUnlock()
 		return reflect.DeepEqual(c.bgpPeerPasswords, bgpPeerPasswords)
 	}, 5*time.Second, 10*time.Millisecond)
-
 	// Wait for the dummy event triggered by BGPPolicy add events.
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().Start(gomock.Any())
@@ -1919,7 +1814,6 @@ func TestBGPPasswordUpdate(t *testing.T) {
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
-
 	// Update the Secret.
 	updatedBGPPeerPasswords := map[string]string{
 		generateBGPPeerKey(ipv4Peer1Addr, peer1ASN): "updated-" + peer1AuthPassword,
@@ -1934,7 +1828,6 @@ func TestBGPPasswordUpdate(t *testing.T) {
 		defer c.bgpPeerPasswordsMutex.RUnlock()
 		return reflect.DeepEqual(c.bgpPeerPasswords, updatedBGPPeerPasswords)
 	}, 5*time.Second, 10*time.Millisecond)
-
 	// Wait for the dummy event triggered by Secret update event, and mark it done.
 	waitAndGetDummyEvent(t, c)
 	expectedIPv4Peer1Config := ipv4Peer1Config
@@ -1946,7 +1839,6 @@ func TestBGPPasswordUpdate(t *testing.T) {
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
-
 	// Delete the Secret.
 	err = c.client.CoreV1().Secrets(namespaceKubeSystem).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
@@ -1965,7 +1857,6 @@ func TestBGPPasswordUpdate(t *testing.T) {
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
 }
-
 func TestSyncBGPPolicyFailures(t *testing.T) {
 	policy1 := generateBGPPolicy(bgpPolicyName1,
 		creationTimestamp,
@@ -2028,28 +1919,22 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		policy3,
 		policy4,
 	}
-
 	c := newFakeController(t, objects, crdObjects, true, false)
 	mockBGPServer := c.mockBGPServer
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	ctx := context.Background()
 	c.startInformers(stopCh)
-
 	// Wait for the dummy event triggered by BGPPolicy ADD events.
 	waitAndGetDummyEvent(t, c)
-
 	// Fake the passwords of BGP peers.
 	c.bgpPeerPasswords = bgpPeerPasswords
-
 	mockBGPServer.EXPECT().Start(gomock.Any())
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer2Config)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	// Done with the dummy event.
 	doneDummyEvent(t, c)
-
 	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName1,
 		179,
 		65000,
@@ -2058,12 +1943,9 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		[]bgp.PeerConfig{ipv4Peer2Config},
 		nil),
 		c.bgpPolicyState)
-
 	// Delete the effective BGPPolicy policy1, and BGPPolicy policy2 will be the effective one.
 	require.NoError(t, c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), policy1.Name, metav1.DeleteOptions{}))
-
 	waitAndGetDummyEvent(t, c)
-
 	// The local ASN of BGPPolicy policy2 is different from BGPPolicy policy1, and the current BGP server should be stopped.
 	// Mock that failing in stopping the current BGP server.
 	mockBGPServer.EXPECT().Stop(gomock.Any()).Return(fmt.Errorf("failed reason"))
@@ -2074,13 +1956,11 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 		[]bgp.Route{loadBalancerIPv4Route},
 		[]bgp.PeerConfig{ipv4Peer2Config}, nil), c.bgpPolicyState)
-
 	// Mock the retry. Stop the current BGP server successfully, but fail in starting a new BGP server.
 	mockBGPServer.EXPECT().Stop(gomock.Any())
 	mockBGPServer.EXPECT().Start(gomock.Any()).Return(fmt.Errorf("failed reason"))
 	require.EqualError(t, c.syncBGPPolicy(ctx), "failed to start BGP server: failed reason")
 	checkBGPPolicyState(t, nil, c.bgpPolicyState)
-
 	// Mock the retry. Start BGP server successfully, but fail in adding BGP peer.
 	mockBGPServer.EXPECT().Start(gomock.Any())
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config).Return(fmt.Errorf("failed to add BGP peer"))
@@ -2093,7 +1973,6 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		[]bgp.PeerConfig{},
 		nil),
 		c.bgpPolicyState)
-
 	// Mock the retry. Add the BGP peer successfully, but fail in advertising routes.
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute}).Return(fmt.Errorf("failed to advertise routes"))
@@ -2108,16 +1987,13 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		[]bgp.PeerConfig{ipv4Peer1Config},
 		nil),
 		c.bgpPolicyState)
-
 	// Delete the effective BGPPolicy policy2, and BGPPolicy policy3 will be the effective one. The BGP server doesn't need to
 	// be updated. The peers and routes will be reconciled according to the existing BGPPolicy state.
 	require.NoError(t, c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), policy2.Name, metav1.DeleteOptions{}))
-
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer2Config)
 	mockBGPServer.EXPECT().RemovePeer(gomock.Any(), ipv4Peer1Config)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
-
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
 	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName3,
@@ -2128,16 +2004,13 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		[]bgp.PeerConfig{ipv4Peer2Config},
 		nil),
 		c.bgpPolicyState)
-
 	// Delete the effective BGPPolicy policy3, and BGPPolicy policy4 will be the effective one. The BGP server doesn't need to
 	// be updated. The peers and routes will be reconciled according to the existing BGPPolicy state.
 	require.NoError(t, c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), policy3.Name, metav1.DeleteOptions{}))
-
 	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), updatedIPv4Peer2Config)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
-
 	require.NoError(t, c.syncBGPPolicy(ctx))
 	doneDummyEvent(t, c)
 	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName4,
@@ -2149,7 +2022,6 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		nil),
 		c.bgpPolicyState)
 }
-
 func generateBGPPolicyState(bgpPolicyName string,
 	listenPort int32,
 	localASN int32,
@@ -2177,7 +2049,6 @@ func generateBGPPolicyState(bgpPolicyName string,
 	}
 	return state
 }
-
 func deepCopyBGPPolicyState(in *bgpPolicyState) *bgpPolicyState {
 	peerConfigMap := make(map[string]bgp.PeerConfig)
 	for _, peerConfig := range in.peerConfigs {
@@ -2195,7 +2066,6 @@ func deepCopyBGPPolicyState(in *bgpPolicyState) *bgpPolicyState {
 			memberASNs: in.confederationConfig.memberASNs.Clone(),
 		}
 	}
-
 	return &bgpPolicyState{
 		bgpPolicyName:       in.bgpPolicyName,
 		listenPort:          in.listenPort,
@@ -2206,7 +2076,6 @@ func deepCopyBGPPolicyState(in *bgpPolicyState) *bgpPolicyState {
 		peerConfigs:         peerConfigMap,
 	}
 }
-
 func checkBGPPolicyState(t *testing.T, expected, got *bgpPolicyState) {
 	require.Equal(t, expected != nil, got != nil)
 	if expected != nil {
@@ -2219,7 +2088,6 @@ func checkBGPPolicyState(t *testing.T, expected, got *bgpPolicyState) {
 		assert.Equal(t, expected.confederationConfig, got.confederationConfig)
 	}
 }
-
 func generateBGPPolicy(name string,
 	creationTimestamp metav1.Time,
 	nodeSelector map[string]string,
@@ -2246,7 +2114,6 @@ func generateBGPPolicy(name string,
 	if advertiseEgressIP {
 		advertisement.Egress = &v1alpha1.EgressAdvertisement{}
 	}
-
 	if advertisePodCIDR {
 		advertisement.Pod = &v1alpha1.PodAdvertisement{}
 	}
@@ -2267,7 +2134,6 @@ func generateBGPPolicy(name string,
 	}
 	return bgpPolicy
 }
-
 func generateService(name string,
 	svcType corev1.ServiceType,
 	clusterIP string,
@@ -2287,7 +2153,6 @@ func generateService(name string,
 	if externalIP != "" {
 		externalIPs = append(externalIPs, externalIP)
 	}
-
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -2314,7 +2179,6 @@ func generateService(name string,
 	}
 	return svc
 }
-
 func generateEgress(name string, ip string, nodeName string) *crdv1b1.Egress {
 	return &crdv1b1.Egress{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2330,7 +2194,6 @@ func generateEgress(name string, ip string, nodeName string) *crdv1b1.Egress {
 		},
 	}
 }
-
 func generateNode(name string, labels, annotations map[string]string) *corev1.Node {
 	return &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2341,7 +2204,6 @@ func generateNode(name string, labels, annotations map[string]string) *corev1.No
 		},
 	}
 }
-
 func generateEndpointSlice(svcName string,
 	suffix string,
 	isLocal bool,
@@ -2386,7 +2248,6 @@ func generateEndpointSlice(svcName string,
 	}
 	return endpointSlice
 }
-
 func generateBGPPeer(ip string, asn, port, gracefulRestartTimeSeconds int32) v1alpha1.BGPPeer {
 	return v1alpha1.BGPPeer{
 		Address:                    ip,
@@ -2396,14 +2257,12 @@ func generateBGPPeer(ip string, asn, port, gracefulRestartTimeSeconds int32) v1a
 		GracefulRestartTimeSeconds: &gracefulRestartTimeSeconds,
 	}
 }
-
 func generateBGPPeerConfig(peerConfig *v1alpha1.BGPPeer, password string) bgp.PeerConfig {
 	return bgp.PeerConfig{
 		BGPPeer:  peerConfig,
 		Password: password,
 	}
 }
-
 func generateSecret(rawData map[string]string) *corev1.Secret {
 	data := make(map[string][]byte)
 	for k, v := range rawData {
@@ -2419,7 +2278,6 @@ func generateSecret(rawData map[string]string) *corev1.Secret {
 		Data: data,
 	}
 }
-
 func ipStrToPrefix(ipStr string) string {
 	if utilnet.IsIPv4String(ipStr) {
 		return ipStr + ipv4Suffix
@@ -2428,7 +2286,6 @@ func ipStrToPrefix(ipStr string) string {
 	}
 	return ""
 }
-
 func waitAndGetDummyEvent(t *testing.T, c *fakeController) {
 	require.Eventually(t, func() bool {
 		return c.queue.Len() == 1
@@ -2441,7 +2298,6 @@ func doneDummyEvent(t *testing.T, c *fakeController) {
 func getServiceName(name string) string {
 	return namespaceDefault + "/" + name
 }
-
 func TestGetBGPPolicyInfo(t *testing.T) {
 	testCases := []struct {
 		name                  string
@@ -2474,10 +2330,8 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, nil, nil, true, false)
-
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
-
 			actualBgpPolicyName, actualRouterID, actualASN, actualListenPort := c.GetBGPPolicyInfo()
 			assert.Equal(t, tt.expectedBgpPolicyName, actualBgpPolicyName)
 			assert.Equal(t, tt.expectedRouterID, actualRouterID)
@@ -2486,7 +2340,6 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 		})
 	}
 }
-
 func TestGetBGPPeerStatus(t *testing.T) {
 	ctx := context.Background()
 	testCases := []struct {
@@ -2513,17 +2366,14 @@ func TestGetBGPPeerStatus(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, nil, nil, true, true)
-
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
 			if c.bgpPolicyState != nil {
 				c.bgpPolicyState.bgpServer = c.mockBGPServer
 			}
-
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
 			}
-
 			actualBgpPeerStatus, err := c.GetBGPPeerStatus(ctx)
 			if tt.expectedErr != nil {
 				assert.ErrorIs(t, err, tt.expectedErr)
@@ -2534,7 +2384,6 @@ func TestGetBGPPeerStatus(t *testing.T) {
 		})
 	}
 }
-
 func TestGetBGPRoutes(t *testing.T) {
 	effectivePolicyState := generateBGPPolicyState(bgpPolicyName1,
 		179,
@@ -2572,10 +2421,8 @@ func TestGetBGPRoutes(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, nil, nil, true, true)
-
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
-
 			actualBgpRoutes, err := c.GetBGPRoutes(ctx)
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)

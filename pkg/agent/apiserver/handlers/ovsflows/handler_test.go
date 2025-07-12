@@ -11,19 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ovsflows
-
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
@@ -31,27 +26,24 @@ import (
 	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
 	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/v2/pkg/querier"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
-	"antrea.io/antrea/pkg/querier"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/v2/pkg/querier"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 var (
 	testFlowKeys       = []string{"flowKey1", "flowKey2"}
 	testDumpFlows      = []string{"flow1", "flow2"}
@@ -59,7 +51,6 @@ var (
 	testDumpGroups     = []string{"group1", "group2"}
 	testResponses      = []apis.OVSFlowResponse{{Flow: "flow1"}, {Flow: "flow2"}}
 	testGroupResponses = []apis.OVSFlowResponse{{Flow: "group1"}, {Flow: "group2"}}
-
 	testNetworkPolicy = &cpv1beta.NetworkPolicy{
 		SourceRef: &cpv1beta.NetworkPolicyReference{
 			Type:      cpv1beta.K8sNetworkPolicy,
@@ -73,7 +64,6 @@ var (
 		},
 	}
 )
-
 type testCase struct {
 	testName           string
 	name               string
@@ -84,7 +74,6 @@ type testCase struct {
 	expectedStatus     int
 	resps              []apis.OVSFlowResponse
 }
-
 func TestBadRequests(t *testing.T) {
 	badRequests := map[string]string{
 		"Pod only":                  "?pod=pod1",
@@ -101,7 +90,6 @@ func TestBadRequests(t *testing.T) {
 		"Too big group ID":          "?groups=123,4294967296",
 		"Negative group ID":         "?groups=-1",
 	}
-
 	handler := HandleFunc(nil)
 	for k, r := range badRequests {
 		req, err := http.NewRequest(http.MethodGet, r, nil)
@@ -111,7 +99,6 @@ func TestBadRequests(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, recorder.Code, k)
 	}
 }
-
 func TestPodFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testInterface := &interfacestore.InterfaceConfig{InterfaceName: "interface0"}
@@ -136,7 +123,6 @@ func TestPodFlows(t *testing.T) {
 		i := interfacestoretest.NewMockInterfaceStore(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetInterfaceStore().Return(i).Times(1)
-
 		if tc.expectedStatus != http.StatusNotFound {
 			ofc := oftest.NewMockClient(ctrl)
 			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
@@ -150,11 +136,9 @@ func TestPodFlows(t *testing.T) {
 		} else {
 			i.EXPECT().GetContainerInterfacesByPod(tc.name, tc.namespace).Return(nil).Times(1)
 		}
-
 		runHTTPTest(t, &tc, q)
 	}
 }
-
 func TestServiceFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testcases := []testCase{
@@ -179,7 +163,6 @@ func TestServiceFlows(t *testing.T) {
 		p := proxytest.NewMockProxier(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetProxier().Return(p).Times(2)
-
 		if tc.expectedStatus != http.StatusNotFound {
 			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
 			p.EXPECT().GetServiceFlowKeys(tc.name, tc.namespace).Return(testFlowKeys, testGroupIDs, true).Times(1)
@@ -193,11 +176,9 @@ func TestServiceFlows(t *testing.T) {
 		} else {
 			p.EXPECT().GetServiceFlowKeys(tc.name, tc.namespace).Return(nil, nil, false).Times(1)
 		}
-
 		runHTTPTest(t, &tc, q)
 	}
 }
-
 func TestNetworkPolicyFlowsSuccess(t *testing.T) {
 	testcases := []testCase{
 		{
@@ -275,7 +256,6 @@ func TestNetworkPolicyFlowsSuccess(t *testing.T) {
 		})
 	}
 }
-
 func TestNetworkPolicyFlowsBadRequest(t *testing.T) {
 	testcases := []testCase{
 		{
@@ -302,7 +282,6 @@ func TestNetworkPolicyFlowsBadRequest(t *testing.T) {
 		})
 	}
 }
-
 func TestNetworkPolicyFlowsPolicyAmbiguousQuery(t *testing.T) {
 	tc := &testCase{
 		testName:       "Ambiguous query",
@@ -324,7 +303,6 @@ func TestNetworkPolicyFlowsPolicyAmbiguousQuery(t *testing.T) {
 	npq.EXPECT().GetNetworkPolicies(npFilter).Return([]cpv1beta.NetworkPolicy{*testNetworkPolicy, *testANNP}).Times(1)
 	runHTTPTest(t, tc, q)
 }
-
 func TestNetworkPolicyFlowsPolicyNotFound(t *testing.T) {
 	tc := &testCase{
 		testName:       "Non-existing NetworkPolicy",
@@ -346,7 +324,6 @@ func TestNetworkPolicyFlowsPolicyNotFound(t *testing.T) {
 	npq.EXPECT().GetNetworkPolicies(npFilter).Return(nil).Times(1)
 	runHTTPTest(t, tc, q)
 }
-
 func TestTableFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	getFlowTableName = mockGetFlowTableName
@@ -370,12 +347,10 @@ func TestTableFlows(t *testing.T) {
 			q := aqtest.NewMockAgentQuerier(ctrl)
 			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(1)
 			ovsctl.EXPECT().DumpTableFlows(gomock.Any()).Return(testDumpFlows, nil).Times(1)
-
 			runHTTPTest(t, &tc, q)
 		})
 	}
 }
-
 func TestTableNamesOnly(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	getFlowTableList = mockGetTableList
@@ -388,28 +363,24 @@ func TestTableNamesOnly(t *testing.T) {
 	q := aqtest.NewMockAgentQuerier(ctrl)
 	runHTTPTest(t, &tc, q)
 }
-
 func mockGetFlowTableName(id uint8) string {
 	if id == 80 {
 		return "IngressRule"
 	}
 	return ""
 }
-
 func mockGetFlowTableID(tableName string) uint8 {
 	if tableName == "IngressRule" {
 		return 80
 	}
 	return binding.TableIDAll
 }
-
 func mockGetTableList() []binding.Table {
 	return []binding.Table{
 		binding.NewOFTable(0, "table0", 0, 0, 0),
 		binding.NewOFTable(0, "table1", 0, 0, 0),
 	}
 }
-
 func TestGroups(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testcases := []struct {
@@ -476,16 +447,13 @@ func TestGroups(t *testing.T) {
 		})
 	}
 }
-
 func runHTTPTest(t *testing.T, tc *testCase, aq agentquerier.AgentQuerier) {
 	handler := HandleFunc(aq)
 	req, err := http.NewRequest(http.MethodGet, tc.query, nil)
 	assert.Nil(t, err)
-
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)
 	assert.Equal(t, tc.expectedStatus, recorder.Code, tc.testName)
-
 	if tc.expectedStatus == http.StatusOK {
 		var received []apis.OVSFlowResponse
 		err = json.Unmarshal(recorder.Body.Bytes(), &received)

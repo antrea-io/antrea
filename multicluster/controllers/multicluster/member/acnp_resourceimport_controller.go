@@ -10,14 +10,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package member
-
 import (
 	"context"
 	"errors"
 	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,20 +23,14 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-<<<<<<< HEAD
 	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 const acnpImportFailed string = "ACNPImportFailed"
-
 var (
 	resourceImportAPIVersion     = "multicluster.crd.antrea.io/v1alpha1"
 	resourceImportKind           = "ResourceImport"
@@ -47,7 +38,6 @@ var (
 	// TODO(yang): add run-time pod suffix
 	acnpEventReportingInstance = "antrea-mc-controller"
 )
-
 func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
 	if resImp.Spec.ClusterNetworkPolicy == nil {
 		klog.V(2).InfoS("Skip reconciling ResourceImport for ClusterNetworkPolicy since it has no valid spec", "resourceimport", klog.KObj(resImp))
@@ -59,7 +49,6 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 	}
 	klog.InfoS("Updating ACNP corresponding to ResourceImport",
 		"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
-
 	acnp := &v1beta1.ClusterNetworkPolicy{}
 	err := r.localClusterClient.Get(ctx, acnpName, acnp)
 	acnpNotFound := apierrors.IsNotFound(err)
@@ -115,12 +104,10 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 	}
 	return ctrl.Result{}, nil
 }
-
 func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
 	acnpName := common.ToMCResourceName(resImp.Spec.Name)
 	klog.InfoS("Deleting ACNP corresponding to ResourceImport",
 		"acnp", acnpName, "resourceimport", klog.KObj(resImp))
-
 	acnp := &v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: acnpName,
@@ -134,7 +121,6 @@ func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx
 	r.installedResImports.Delete(*resImp)
 	return ctrl.Result{}, nil
 }
-
 func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1beta1.ClusterNetworkPolicy {
 	return &v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -146,7 +132,6 @@ func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1be
 		Spec: *resImp.Spec.ClusterNetworkPolicy,
 	}
 }
-
 func (r *ResourceImportReconciler) reportStatusEvent(errMsg string, ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) error {
 	t := metav1.Now()
 	statusEvent := &corev1.Event{

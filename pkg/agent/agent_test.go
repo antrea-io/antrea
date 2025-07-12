@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package agent
-
 import (
 	"context"
 	"fmt"
@@ -21,7 +19,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -35,13 +32,11 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	clockutils "k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
@@ -50,27 +45,23 @@ import (
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/runtime"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/types"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
-	"antrea.io/antrea/pkg/util/env"
-	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/v2/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
-
 func newAgentInitializer(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore) *Initializer {
 	return &Initializer{ovsBridgeClient: ovsBridgeClient, ifaceStore: ifaceStore, hostGateway: "antrea-gw0"}
 }
-
 func convertExternalIDMap(in map[string]interface{}) map[string]string {
 	out := make(map[string]string, len(in))
 	for k, v := range in {
@@ -78,21 +69,16 @@ func convertExternalIDMap(in map[string]interface{}) map[string]string {
 	}
 	return out
 }
-
 func TestInitInterfaceStore(t *testing.T) {
 	controller := mock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
-
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
-
 	store := interfacestore.NewInterfaceStore()
 	initializer := newAgentInitializer(mockOVSBridgeClient, store)
 	uplinkNetConfig := config.AdapterNetConfig{Name: "eth-antrea-test-1"}
 	initializer.nodeConfig = &config.NodeConfig{UplinkNetConfig: &uplinkNetConfig}
-
 	err := initializer.initInterfaceStore()
 	assert.Error(t, err, "failed to handle OVS return error")
-
 	uuid1 := uuid.New().String()
 	uuid2 := uuid.New().String()
 	p1MAC := "11:22:33:44:55:66"
@@ -103,7 +89,6 @@ func TestInitInterfaceStore(t *testing.T) {
 	p1NetIP := net.ParseIP(p1IP)
 	p2NetMAC, _ := net.ParseMAC(p2MAC)
 	p2NetIP := net.ParseIP(p2IP)
-
 	ovsPort1 := ovsconfig.OVSPortData{UUID: uuid1, Name: "p1", IFName: "p1", OFPort: 11,
 		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
 			interfacestore.NewContainerInterface("p1", uuid1, "pod1", "ns1", "eth0", "netns1", p1NetMAC, []net.IP{p1NetIP}, 0)))}
@@ -113,13 +98,11 @@ func TestInitInterfaceStore(t *testing.T) {
 		)),
 	}
 	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
-
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
 	initializer.initInterfaceStore()
 	if store.Len() != 0 {
 		t.Errorf("Failed to load OVS port in store")
 	}
-
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, nil)
 	initializer.initInterfaceStore()
 	if store.Len() != 2 {
@@ -137,14 +120,11 @@ func TestInitInterfaceStore(t *testing.T) {
 		t.Errorf("Failed to load OVS port into local store")
 	}
 }
-
 func TestPersistRoundNum(t *testing.T) {
 	const maxRetries = 3
 	const roundNum uint64 = 5555
-
 	controller := mock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
-
 	transactionError := ovsconfig.NewTransactionError(fmt.Errorf("Failed to get external IDs"), true)
 	firstCall := mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(nil, transactionError)
 	externalIDs := make(map[string]string)
@@ -152,17 +132,14 @@ func TestPersistRoundNum(t *testing.T) {
 	newExternalIDs := make(map[string]interface{})
 	newExternalIDs[roundNumKey] = fmt.Sprint(roundNum)
 	mockOVSBridgeClient.EXPECT().SetExternalIDs(mock.Eq(newExternalIDs)).Times(1)
-
 	// The first call to saveRoundNum will fail. Because we set the retry interval to 0,
 	// persistRoundNum should retry immediately and the second call will succeed (as per the
 	// expectations above).
 	persistRoundNum(roundNum, mockOVSBridgeClient, 0, maxRetries)
 }
-
 func TestGetRoundInfo(t *testing.T) {
 	controller := mock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
-
 	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("Failed to get external IDs"), true))
 	roundInfo := getRoundInfo(mockOVSBridgeClient)
 	assert.Equal(t, uint64(initialRoundNum), roundInfo.RoundNum, "Unexpected round number")
@@ -171,7 +148,6 @@ func TestGetRoundInfo(t *testing.T) {
 	roundInfo = getRoundInfo(mockOVSBridgeClient)
 	assert.Equal(t, uint64(initialRoundNum), roundInfo.RoundNum, "Unexpected round number")
 }
-
 func TestInitK8sNodeLocalConfig(t *testing.T) {
 	nodeName := "node1"
 	ovsBridge := "br-int"
@@ -414,7 +390,6 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			if tt.getNodeReaction != nil {
 				client.PrependReactor("get", "nodes", tt.getNodeReaction)
 			}
-
 			ifaceStore := interfacestore.NewInterfaceStore()
 			expectedNodeConfig := config.NodeConfig{
 				Name:                       nodeName,
@@ -428,7 +403,6 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 				NodeTransportInterfaceMTU:  tt.expectedNodeLocalIfaceMTU,
 				UplinkNetConfig:            new(config.AdapterNetConfig),
 			}
-
 			initializer := &Initializer{
 				client:     client,
 				ifaceStore: ifaceStore,
@@ -452,11 +426,9 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 				expectedNodeConfig.NodeTransportIPv6Addr = tt.transportInterface.ipV6Net
 				mockGetIPNetDeviceByCIDRs(t, tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)
 			}
-
 			t.Setenv(env.NodeNameEnvKey, nodeName)
 			mockGetIPNetDeviceFromIP(t, nodeIPNet, ipDevice)
 			mockGetNodeTimeout(t, 100*time.Millisecond)
-
 			err := initializer.initK8sNodeLocalConfig(nodeName)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -470,7 +442,6 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 		})
 	}
 }
-
 func mockGetIPNetDeviceFromIP(t *testing.T, ipNet *net.IPNet, ipDevice *net.Interface) {
 	prevGetIPNetDeviceFromIP := getIPNetDeviceFromIP
 	getIPNetDeviceFromIP = func(localIP *ip.DualStackIPs, ignoredHostInterfaces sets.Set[string]) (*net.IPNet, *net.IPNet, *net.Interface, error) {
@@ -478,13 +449,11 @@ func mockGetIPNetDeviceFromIP(t *testing.T, ipNet *net.IPNet, ipDevice *net.Inte
 	}
 	t.Cleanup(func() { getIPNetDeviceFromIP = prevGetIPNetDeviceFromIP })
 }
-
 func mockGetNodeTimeout(t *testing.T, timeout time.Duration) {
 	prevTimeout := getNodeTimeout
 	getNodeTimeout = timeout
 	t.Cleanup(func() { getNodeTimeout = prevTimeout })
 }
-
 func mockGetTransportIPNetDeviceByName(t *testing.T, ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) {
 	prevGetIPNetDeviceByName := getTransportIPNetDeviceByNameFn
 	getTransportIPNetDeviceByNameFn = func(ifName, brName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
@@ -492,7 +461,6 @@ func mockGetTransportIPNetDeviceByName(t *testing.T, ipV4Net, ipV6Net *net.IPNet
 	}
 	t.Cleanup(func() { getTransportIPNetDeviceByNameFn = prevGetIPNetDeviceByName })
 }
-
 func mockGetIPNetDeviceByCIDRs(t *testing.T, ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) {
 	prevGetIPNetDeviceByCIDRs := getIPNetDeviceByCIDRs
 	getIPNetDeviceByCIDRs = func(cidr []string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
@@ -500,7 +468,6 @@ func mockGetIPNetDeviceByCIDRs(t *testing.T, ipV4Net, ipV6Net *net.IPNet, ipDevi
 	}
 	t.Cleanup(func() { getIPNetDeviceByCIDRs = prevGetIPNetDeviceByCIDRs })
 }
-
 func TestSetupDefaultTunnelInterface(t *testing.T) {
 	_, nodeIPNet, _ := net.ParseCIDR("192.168.10.10/24")
 	var tunnelPortLocalIP net.IP
@@ -642,16 +609,13 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 		})
 	}
 }
-
 func TestSetupGatewayInterface(t *testing.T) {
 	fakeMAC, _ := net.ParseMAC("12:34:56:78:76:54")
 	mockSetLinkUp(t, fakeMAC, 10, nil)
 	mockConfigureLinkAddress(t, nil)
 	mockSetInterfaceMTU(t, nil)
 	mockSetInterfaceARPAnnounce(t, nil)
-
 	controller := mock.NewController(t)
-
 	podCIDRStr := "172.16.10.0/24"
 	_, podCIDR, _ := net.ParseCIDR(podCIDRStr)
 	nodeConfig := &config.NodeConfig{
@@ -666,7 +630,6 @@ func TestSetupGatewayInterface(t *testing.T) {
 		TunnelCsum:       false,
 		InterfaceMTU:     1450,
 	}
-
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	client := fake.NewSimpleClientset()
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -691,7 +654,6 @@ func TestSetupGatewayInterface(t *testing.T) {
 	err := initializer.setupGatewayInterface()
 	assert.NoError(t, err)
 }
-
 func mockSetLinkUp(t *testing.T, returnedMAC net.HardwareAddr, returnIndex int, returnErr error) {
 	originalSetLinkUp := setLinkUp
 	setLinkUp = func(name string) (net.HardwareAddr, int, error) {
@@ -699,7 +661,6 @@ func mockSetLinkUp(t *testing.T, returnedMAC net.HardwareAddr, returnIndex int, 
 	}
 	t.Cleanup(func() { setLinkUp = originalSetLinkUp })
 }
-
 func mockConfigureLinkAddress(t *testing.T, returnedErr error) {
 	originalConfigureLinkAddresses := configureLinkAddresses
 	configureLinkAddresses = func(idx int, ipNets []*net.IPNet) error {
@@ -707,7 +668,6 @@ func mockConfigureLinkAddress(t *testing.T, returnedErr error) {
 	}
 	t.Cleanup(func() { configureLinkAddresses = originalConfigureLinkAddresses })
 }
-
 func mockSetInterfaceARPAnnounce(t *testing.T, returnedErr error) {
 	originalSetInterfaceARPAnnounce := setInterfaceARPAnnounce
 	setInterfaceARPAnnounce = func(ifaceName string, value int) error {
@@ -715,7 +675,6 @@ func mockSetInterfaceARPAnnounce(t *testing.T, returnedErr error) {
 	}
 	t.Cleanup(func() { setInterfaceARPAnnounce = originalSetInterfaceARPAnnounce })
 }
-
 func TestRestorePortConfigs(t *testing.T) {
 	tests := []struct {
 		name                string
@@ -781,7 +740,6 @@ func TestRestorePortConfigs(t *testing.T) {
 		})
 	}
 }
-
 func TestSetOVSDatapath(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -819,14 +777,12 @@ func TestSetOVSDatapath(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := mock.NewController(t)
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 			initializer := newAgentInitializer(mockOVSBridgeClient, nil)
 			tt.expectedCalls(mockOVSBridgeClient)
-
 			err := initializer.setOVSDatapath()
 			if tt.expectedErr != "" {
 				assert.ErrorContains(t, err, tt.expectedErr)
@@ -836,7 +792,6 @@ func TestSetOVSDatapath(t *testing.T) {
 		})
 	}
 }
-
 func TestReadIPSecPSK(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -852,7 +807,6 @@ func TestReadIPSecPSK(t *testing.T) {
 			isIPsecPSK: true,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			initializer := &Initializer{
@@ -863,7 +817,6 @@ func TestReadIPSecPSK(t *testing.T) {
 			if tt.isIPsecPSK {
 				t.Setenv(ipsecPSKEnvKey, "key")
 			}
-
 			err := initializer.readIPSecPSK()
 			if tt.expectedErr != "" {
 				assert.ErrorContains(t, err, tt.expectedErr)
@@ -873,7 +826,6 @@ func TestReadIPSecPSK(t *testing.T) {
 		})
 	}
 }
-
 func TestWaitForIPSecMonitorDaemon(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -889,7 +841,6 @@ func TestWaitForIPSecMonitorDaemon(t *testing.T) {
 			isIPsecMonitorRunning: true,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			initializer := &Initializer{}
@@ -916,7 +867,6 @@ func TestWaitForIPSecMonitorDaemon(t *testing.T) {
 					fakeClock.Step(10 * time.Second)
 				}()
 			}
-
 			err := initializer.waitForIPsecMonitorDaemon()
 			if tt.expectedErr != "" {
 				assert.ErrorContains(t, err, tt.expectedErr)
@@ -926,7 +876,6 @@ func TestWaitForIPSecMonitorDaemon(t *testing.T) {
 		})
 	}
 }
-
 func TestInitVMLocalConfig(t *testing.T) {
 	ipDevice := &net.Interface{
 		Name: "fakeUplinkInterface",
@@ -941,7 +890,6 @@ func TestInitVMLocalConfig(t *testing.T) {
 			},
 		},
 	}
-
 	tests := []struct {
 		name        string
 		nodeName    string
@@ -960,7 +908,6 @@ func TestInitVMLocalConfig(t *testing.T) {
 			expectedErr: "context canceled",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			stopCh := make(chan struct{})
@@ -983,7 +930,6 @@ func TestInitVMLocalConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestValidateSupportedDPFeatures(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -1026,7 +972,6 @@ func TestValidateSupportedDPFeatures(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := mock.NewController(t)

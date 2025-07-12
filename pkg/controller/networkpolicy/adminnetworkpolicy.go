@@ -11,44 +11,34 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	antreacrd "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	antreacrd "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	antreacrd "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	antreacrd "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 )
-
 var (
 	adminNetworkPolicyTierPriority = int32(251)
 	banpTierPriority               = int32(254)
 	banpPriority                   = float64(1)
-
 	anpActionToAntreaActionMap = map[v1alpha1.AdminNetworkPolicyRuleAction]antreacrd.RuleAction{
 		v1alpha1.AdminNetworkPolicyRuleActionAllow: antreacrd.RuleActionAllow,
 		v1alpha1.AdminNetworkPolicyRuleActionDeny:  antreacrd.RuleActionDrop,
 		v1alpha1.AdminNetworkPolicyRuleActionPass:  antreacrd.RuleActionPass,
 	}
-
 	banpActionToAntreaActionMap = map[v1alpha1.BaselineAdminNetworkPolicyRuleAction]antreacrd.RuleAction{
 		v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow: antreacrd.RuleActionAllow,
 		v1alpha1.BaselineAdminNetworkPolicyRuleActionDeny:  antreacrd.RuleActionDrop,
 	}
 )
-
 func getAdminNPReference(anp *v1alpha1.AdminNetworkPolicy) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
 		Type: controlplane.AdminNetworkPolicy,
@@ -56,7 +46,6 @@ func getAdminNPReference(anp *v1alpha1.AdminNetworkPolicy) *controlplane.Network
 		UID:  anp.UID,
 	}
 }
-
 func getBANPReference(banp *v1alpha1.BaselineAdminNetworkPolicy) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
 		Type: controlplane.BaselineAdminNetworkPolicy,
@@ -64,7 +53,6 @@ func getBANPReference(banp *v1alpha1.BaselineAdminNetworkPolicy) *controlplane.N
 		UID:  banp.UID,
 	}
 }
-
 // addAdminNP receives AdminNetworkPolicy ADD events and enqueues a reference of
 // the AdminNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) addAdminNP(obj interface{}) {
@@ -73,7 +61,6 @@ func (n *NetworkPolicyController) addAdminNP(obj interface{}) {
 	klog.InfoS("Processing AdminNetworkPolicy ADD event", "anp", anp.Name)
 	n.enqueueInternalNetworkPolicy(getAdminNPReference(anp))
 }
-
 // updateAdminNP receives AdminNetworkPolicy UPDATE events and enqueues a
 // reference of the AdminNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) updateAdminNP(_, cur interface{}) {
@@ -82,7 +69,6 @@ func (n *NetworkPolicyController) updateAdminNP(_, cur interface{}) {
 	klog.InfoS("Processing AdminNetworkPolicy UPDATE event", "anp", curANP.Name)
 	n.enqueueInternalNetworkPolicy(getAdminNPReference(curANP))
 }
-
 // deleteAdminNP receives AdminNetworkPolicy DELETE events and enqueues a
 // reference of the AdminNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) deleteAdminNP(old interface{}) {
@@ -103,7 +89,6 @@ func (n *NetworkPolicyController) deleteAdminNP(old interface{}) {
 	klog.InfoS("Processing AdminNetworkPolicy DELETE event", "anp", anp.Name)
 	n.enqueueInternalNetworkPolicy(getAdminNPReference(anp))
 }
-
 // addBANP receives BaselineAdminNetworkPolicy ADD events and enqueues a reference of
 // the BaselineAdminNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) addBANP(obj interface{}) {
@@ -112,7 +97,6 @@ func (n *NetworkPolicyController) addBANP(obj interface{}) {
 	klog.InfoS("Processing BaselineAdminNetworkPolicy ADD event", "banp", banp.Name)
 	n.enqueueInternalNetworkPolicy(getBANPReference(banp))
 }
-
 // updateBANP receives BaselineAdminNetworkPolicy UPDATE events and enqueues a
 // reference of the BaselineAdminNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) updateBANP(_, cur interface{}) {
@@ -121,7 +105,6 @@ func (n *NetworkPolicyController) updateBANP(_, cur interface{}) {
 	klog.InfoS("Processing BaselineAdminNetworkPolicy UPDATE event", "banp", curBANP.Name)
 	n.enqueueInternalNetworkPolicy(getBANPReference(curBANP))
 }
-
 // deleteBANP receives BaselineAdminNetworkPolicy DELETE events and enqueues a
 // reference of the BaselineAdminNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) deleteBANP(old interface{}) {
@@ -142,7 +125,6 @@ func (n *NetworkPolicyController) deleteBANP(old interface{}) {
 	klog.InfoS("Processing BaselineAdminNetworkPolicy DELETE event", "banp", banp.Name)
 	n.enqueueInternalNetworkPolicy(getBANPReference(banp))
 }
-
 // anpHasNamespaceLabelRule returns whether an AdminNetworkPolicy has rules defined by
 // advanced Namespace selection (sameLabels and notSameLabels)
 func anpHasNamespaceLabelRule(anp *v1alpha1.AdminNetworkPolicy) bool {
@@ -162,7 +144,6 @@ func anpHasNamespaceLabelRule(anp *v1alpha1.AdminNetworkPolicy) bool {
 	}
 	return false
 }
-
 // banpHasNamespaceLabelRule returns whether a BaselineAdminNetworkPolicy has rules defined by
 // advanced Namespace selection (sameLabels and notSameLabels)
 func banpHasNamespaceLabelRule(banp *v1alpha1.BaselineAdminNetworkPolicy) bool {
@@ -182,7 +163,6 @@ func banpHasNamespaceLabelRule(banp *v1alpha1.BaselineAdminNetworkPolicy) bool {
 	}
 	return false
 }
-
 // toAntreaServicesForPolicyCRD processes ports field for ANPs/BANPs and returns the translated
 // Antrea Services.
 func toAntreaServicesForPolicyCRD(npPorts []v1alpha1.AdminNetworkPolicyPort) []controlplane.Service {
@@ -210,7 +190,6 @@ func toAntreaServicesForPolicyCRD(npPorts []v1alpha1.AdminNetworkPolicyPort) []c
 	}
 	return antreaServices
 }
-
 // splitPolicyPeersByScope splits the ANP/BANP peers in the rule by whether the peer is cluster scoped
 // or per-namespace scoped. Per-namespace peers are those whose defined by sameLabels and
 // notSameLabels.
@@ -227,7 +206,6 @@ func splitPolicyPeerByScope(peers []v1alpha1.AdminNetworkPolicyPeer) ([]v1alpha1
 	}
 	return clusterPeers, perNSLabelPeers
 }
-
 // toAntreaPeerForPolicyCRD processes AdminNetworkPolicyPeers and yield Antrea NetworkPolicyPeers.
 func (n *NetworkPolicyController) toAntreaPeerForPolicyCRD(peers []v1alpha1.AdminNetworkPolicyPeer) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
 	var addressGroups []*antreatypes.AddressGroup
@@ -244,7 +222,6 @@ func (n *NetworkPolicyController) toAntreaPeerForPolicyCRD(peers []v1alpha1.Admi
 		AddressGroups: getAddressGroupNames(addressGroups),
 	}, addressGroups
 }
-
 // processClusterSubject processes AdminNetworkPolicySubject and yield Antrea AppliedToGroups.
 func (n *NetworkPolicyController) processClusterSubject(subject v1alpha1.AdminNetworkPolicySubject) []*antreatypes.AppliedToGroup {
 	var appliedToGroups []*antreatypes.AppliedToGroup
@@ -259,23 +236,19 @@ func (n *NetworkPolicyController) processClusterSubject(subject v1alpha1.AdminNe
 	}
 	return appliedToGroups
 }
-
 func anpActionToCRDAction(action v1alpha1.AdminNetworkPolicyRuleAction) *antreacrd.RuleAction {
 	antreaAction := anpActionToAntreaActionMap[action]
 	return &antreaAction
 }
-
 func banpActionToCRDAction(action v1alpha1.BaselineAdminNetworkPolicyRuleAction) *antreacrd.RuleAction {
 	antreaAction := banpActionToAntreaActionMap[action]
 	return &antreaAction
 }
-
 func (n *NetworkPolicyController) processAdminNetworkPolicy(anp *v1alpha1.AdminNetworkPolicy) (*antreatypes.NetworkPolicy, map[string]*antreatypes.AppliedToGroup, map[string]*antreatypes.AddressGroup) {
 	appliedToPerRule := anpHasNamespaceLabelRule(anp)
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	var rules []controlplane.NetworkPolicyRule
-
 	for idx, anpIngressRule := range anp.Spec.Ingress {
 		var services []controlplane.Service
 		if anpIngressRule.Ports != nil {
@@ -339,13 +312,11 @@ func (n *NetworkPolicyController) processAdminNetworkPolicy(anp *v1alpha1.AdminN
 	}
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }
-
 func (n *NetworkPolicyController) processBaselineAdminNetworkPolicy(banp *v1alpha1.BaselineAdminNetworkPolicy) (*antreatypes.NetworkPolicy, map[string]*antreatypes.AppliedToGroup, map[string]*antreatypes.AddressGroup) {
 	appliedToPerRule := banpHasNamespaceLabelRule(banp)
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	var rules []controlplane.NetworkPolicyRule
-
 	for idx, banpIngressRule := range banp.Spec.Ingress {
 		var services []controlplane.Service
 		if banpIngressRule.Ports != nil {

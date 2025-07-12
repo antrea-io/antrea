@@ -11,53 +11,38 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipam
-
 import (
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"testing"
-
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
-=======
-	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
->>>>>>> origin/main
+	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
 )
-
 type mockPluginInfo struct{}
-
 func (m *mockPluginInfo) Encode(io.Writer) error {
 	return nil
 }
-
 func (m *mockPluginInfo) SupportedVersions() []string {
 	return []string{}
 }
-
 type mockExec struct{}
-
 func (m *mockExec) ExecPlugin(ctx context.Context, pluginPath string, stdinData []byte, environ []string) ([]byte, error) {
 	return []byte{}, nil
 }
-
 func (m *mockExec) FindInPath(plugin string, paths []string) (string, error) {
 	return "", nil
 }
-
 func (m *mockExec) Decode(jsonBytes []byte) (version.PluginInfo, error) {
 	return &mockPluginInfo{}, nil
 }
-
 var (
 	fakeExecWithResultReturnErr = func(ctx context.Context, pluginPath string, netconf []byte, args invoke.CNIArgs, exec invoke.Exec) (types.Result, error) {
 		return &current.Result{
@@ -65,7 +50,6 @@ var (
 		}, fmt.Errorf("error")
 	}
 )
-
 func TestAdd(t *testing.T) {
 	defaultExec = &mockExec{}
 	defer func() {
@@ -96,7 +80,6 @@ func TestAdd(t *testing.T) {
 			expectedRes:        fmt.Errorf("error"),
 		},
 	}
-
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			execPluginWithResultFunc = testCase.execWithResultFunc
@@ -111,7 +94,6 @@ func TestAdd(t *testing.T) {
 		})
 	}
 }
-
 func TestDel(t *testing.T) {
 	defaultExec = &mockExec{}
 	defer func() {
@@ -131,7 +113,6 @@ func TestDel(t *testing.T) {
 			expectedRes: nil,
 		},
 	}
-
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			execPluginWithResultFunc = fakeExecWithResult
@@ -146,7 +127,6 @@ func TestDel(t *testing.T) {
 		})
 	}
 }
-
 func TestCheck(t *testing.T) {
 	defaultExec = &mockExec{}
 	defer func() {
@@ -166,7 +146,6 @@ func TestCheck(t *testing.T) {
 			expectedRes: nil,
 		},
 	}
-
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			execPluginWithResultFunc = fakeExecWithResult
@@ -181,7 +160,6 @@ func TestCheck(t *testing.T) {
 		})
 	}
 }
-
 func TestDelegateWithResult(t *testing.T) {
 	defaultExec = &mockExec{}
 	defer func() {
@@ -200,7 +178,6 @@ func TestDelegateWithResult(t *testing.T) {
 			expectedRes: nil,
 		},
 	}
-
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			execPluginWithResultFunc = fakeExecWithResult
@@ -212,7 +189,6 @@ func TestDelegateWithResult(t *testing.T) {
 		})
 	}
 }
-
 func TestDelegateNoResult(t *testing.T) {
 	defaultExec = &mockExec{}
 	defer func() {
@@ -231,7 +207,6 @@ func TestDelegateNoResult(t *testing.T) {
 			expectedRes: nil,
 		},
 	}
-
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			execPluginNoResultFunc = fakeExecNoResult

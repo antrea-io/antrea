@@ -1,6 +1,5 @@
 //go:build !windows
 // +build !windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,27 +13,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cniserver
-
 import (
 	"fmt"
-
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
 )
-
 // connectInterfaceToOVS connects an existing interface to the OVS bridge.
 func (pc *podConfigurator) connectInterfaceToOVS(
 	podName, podNamespace, containerID, netNS string,
@@ -48,7 +39,6 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 		netNS, containerIface, ips, vlanID)
 	return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, netNS, containerConfig)
 }
-
 func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName, netNS string, containerConfig *interfacestore.InterfaceConfig) error {
 	// create OVS Port and add attach container configuration into external_ids
 	containerID := containerConfig.ContainerID
@@ -64,7 +54,6 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName, netNS string
 			_ = pc.ovsBridgeClient.DeletePort(portUUID)
 		}
 	}()
-
 	var ofPort int32
 	// Not needed for a secondary network interface.
 	if !pc.isSecondaryNetwork {
@@ -78,11 +67,9 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName, netNS string
 			return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
 		}
 	}
-
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}
 	// Add containerConfig into local cache
 	pc.ifaceStore.AddInterface(containerConfig)
-
 	// Not needed for a secondary network interface.
 	if !pc.isSecondaryNetwork {
 		// Notify the Pod update event to required components.
@@ -97,7 +84,6 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName, netNS string
 	}
 	return nil
 }
-
 func (pc *podConfigurator) configureInterfaces(
 	podName, podNamespace, containerID, containerNetNS string,
 	containerIFDev string, mtu int, sriovVFDeviceID string,
@@ -105,20 +91,15 @@ func (pc *podConfigurator) configureInterfaces(
 	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
 		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess)
 }
-
 // reconcileMissingPods is never called on Linux, see reconcile logic.
 func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) {
 }
-
 // isInterfaceInvalid returns true if the OVS interface's ofport is "-1" which means the host interface is disconnected.
 func (pc *podConfigurator) isInterfaceInvalid(ifaceConfig *interfacestore.InterfaceConfig) bool {
 	return ifaceConfig.OFPort == -1
 }
-
 func (pc *podConfigurator) initPortStatusMonitor(_ cache.SharedIndexInformer) {
-
 }
-
 func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }

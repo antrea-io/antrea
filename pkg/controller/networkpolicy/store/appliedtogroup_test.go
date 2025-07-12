@@ -11,39 +11,29 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"context"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 func newAppliedToGroupPodMember(name, namespace string) *controlplane.GroupMember {
 	return &controlplane.GroupMember{Pod: &controlplane.PodReference{Name: name, Namespace: namespace}}
 }
-
 func newAppliedToGroupMemberExternalEntity(name, namespace string) *controlplane.GroupMember {
 	return &controlplane.GroupMember{ExternalEntity: &controlplane.ExternalEntityReference{Name: name, Namespace: namespace}}
 }
-
 func TestWatchAppliedToGroupEvent(t *testing.T) {
 	pod1 := newAppliedToGroupPodMember("pod1", "default")
 	pod2 := newAppliedToGroupPodMember("pod2", "default")
@@ -53,7 +43,6 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 	ee2 := newAppliedToGroupMemberExternalEntity("ee2", "default")
 	ee3 := newAppliedToGroupMemberExternalEntity("ee3", "default")
 	ee4 := newAppliedToGroupMemberExternalEntity("ee4", "default")
-
 	testCases := map[string]struct {
 		fieldSelector fields.Selector
 		// The operations that will be executed on the store.

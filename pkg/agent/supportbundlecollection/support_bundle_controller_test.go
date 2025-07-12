@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundlecollection
-
 import (
 	"fmt"
 	"io"
 	"slices"
 	"testing"
-
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,11 +27,9 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/exec"
-
-<<<<<<< HEAD
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	cpv1b2 "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	cpv1b2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
@@ -42,33 +37,27 @@ import (
 	"antrea.io/antrea/v2/pkg/support"
 	"antrea.io/antrea/v2/pkg/util/sftp"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
-=======
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	"antrea.io/antrea/pkg/apis/controlplane"
-	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/client/clientset/versioned"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/support"
-	"antrea.io/antrea/pkg/util/sftp"
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
->>>>>>> origin/main
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	cpv1b2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/support"
+	"antrea.io/antrea/v2/pkg/util/sftp"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
-
 type fakeController struct {
 	*SupportBundleController
 	mockController *gomock.Controller
 }
-
 type antreaClientGetter struct {
 	clientset versioned.Interface
 }
-
 func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 	return g.clientset, nil
 }
-
 func newFakeController(t *testing.T) (*fakeController, *fakeversioned.Clientset) {
 	controller := gomock.NewController(t)
 	clientset := &fakeversioned.Clientset{}
@@ -79,7 +68,6 @@ func newFakeController(t *testing.T) (*fakeController, *fakeversioned.Clientset)
 		mockController:          controller,
 	}, clientset
 }
-
 func TestSupportBundleCollectionAdd(t *testing.T) {
 	uploadErr := fmt.Errorf("upload failed")
 	generateHostKey := func(t *testing.T) ssh.PublicKey {
@@ -89,7 +77,6 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 	}
 	hostKey1 := generateHostKey(t)
 	hostKey2 := generateHostKey(t)
-
 	testcases := []struct {
 		name                    string
 		supportBundleCollection *cpv1b2.SupportBundleCollection
@@ -217,7 +204,6 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 			expectedSyncErr: "failed to generate support bundle: failed to generate SSH client config: invalid host public key",
 		},
 	}
-
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
 			newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) support.AgentDumper {
@@ -231,7 +217,6 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 			var bundleStatus *cpv1b2.SupportBundleCollectionStatus
 			clientset.AddReactor("update", "supportbundlecollections/status", k8stesting.ReactionFunc(func(action k8stesting.Action) (bool, runtime.Object, error) {
 				bundleStatus = action.(k8stesting.UpdateAction).GetObject().(*cpv1b2.SupportBundleCollectionStatus)
-
 				return false, bundleStatus, nil
 			}))
 			controller.addSupportBundleCollection(tt.supportBundleCollection)
@@ -246,7 +231,6 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 		})
 	}
 }
-
 func TestSupportBundleCollectionDelete(t *testing.T) {
 	controller, _ := newFakeController(t)
 	deletedBundle := generateSupportbundleCollection("deletedBundle", "sftp://10.220.175.92/root/supportbundle", nil)
@@ -254,12 +238,10 @@ func TestSupportBundleCollectionDelete(t *testing.T) {
 	controller.deleteSupportBundleCollection(deletedBundle)
 	assert.NoError(t, controller.syncSupportBundleCollection("deletedBundle"))
 }
-
 type testUploader struct {
 	err     error
 	hostKey ssh.PublicKey
 }
-
 func (uploader *testUploader) Upload(address string, path string, config *ssh.ClientConfig, tarGzFile io.Reader) error {
 	klog.InfoS("Called test uploader", "err", uploader.err)
 	if uploader.err != nil {
@@ -278,13 +260,11 @@ func (uploader *testUploader) Upload(address string, path string, config *ssh.Cl
 	}
 	return nil
 }
-
 func generateSupportbundleCollection(name string, url string, hostPublicKey []byte) *cpv1b2.SupportBundleCollection {
 	return &cpv1b2.SupportBundleCollection{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-
 		FileServer: cpv1b2.BundleFileServer{
 			URL:           url,
 			HostPublicKey: hostPublicKey,
@@ -297,7 +277,6 @@ func generateSupportbundleCollection(name string, url string, hostPublicKey []by
 		},
 	}
 }
-
 type mockAgentDumper struct {
 	dumpLogErr                    error
 	dumpFlowsErr                  error
@@ -310,43 +289,33 @@ type mockAgentDumper struct {
 	dumpOVSPortsErr               error
 	dumpMemberlistErr             error
 }
-
 func (d *mockAgentDumper) DumpLog(basedir string) error {
 	return d.dumpLogErr
 }
-
 func (d *mockAgentDumper) DumpFlows(basedir string) error {
 	return d.dumpFlowsErr
 }
-
 func (d *mockAgentDumper) DumpGroups(basedir string) error {
 	return d.dumpGroupsErr
 }
-
 func (d *mockAgentDumper) DumpHostNetworkInfo(basedir string) error {
 	return d.dumpHostNetworkInfoErr
 }
-
 func (d *mockAgentDumper) DumpAgentInfo(basedir string) error {
 	return d.dumpAgentInfoErr
 }
-
 func (d *mockAgentDumper) DumpNetworkPolicyResources(basedir string) error {
 	return d.dumpNetworkPolicyResourcesErr
 }
-
 func (d *mockAgentDumper) DumpHeapPprof(basedir string) error {
 	return d.dumpHeapPprofErr
 }
-
 func (d *mockAgentDumper) DumpGoroutinePprof(basedir string) error {
 	return d.dumpGoroutinePprofErr
 }
-
 func (d *mockAgentDumper) DumpOVSPorts(basedir string) error {
 	return d.dumpOVSPortsErr
 }
-
 func (d *mockAgentDumper) DumpMemberlist(basedir string) error {
 	return d.dumpMemberlistErr
 }

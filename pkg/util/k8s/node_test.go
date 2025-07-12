@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package k8s
-
 import (
 	"fmt"
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
-
 func TestGetNodeAddrs(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -190,7 +182,6 @@ func TestGetNodeAddrs(t *testing.T) {
 		})
 	}
 }
-
 func TestGetNodeAddrsWithType(t *testing.T) {
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -252,7 +243,6 @@ func TestGetNodeAddrsWithType(t *testing.T) {
 			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("192.168.10.10"), IPv6: net.ParseIP("abcd::1")},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			addr, err := GetNodeAddrsWithType(node, tt.types)
@@ -265,7 +255,6 @@ func TestGetNodeAddrsWithType(t *testing.T) {
 		})
 	}
 }
-
 func TestGetNodeGatewayAddrs(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -314,7 +303,6 @@ func TestGetNodeGatewayAddrs(t *testing.T) {
 		})
 	}
 }
-
 func TestGetNodeAddrsFromAnnotations(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -374,7 +362,6 @@ func TestGetNodeAddrsFromAnnotations(t *testing.T) {
 		})
 	}
 }
-
 func TestGetNodeAllAddrs(t *testing.T) {
 	tests := []struct {
 		name          string

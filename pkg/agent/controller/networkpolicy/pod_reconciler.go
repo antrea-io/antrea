@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"encoding/binary"
 	"fmt"
@@ -21,73 +19,57 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	proxytypes "antrea.io/antrea/v2/pkg/agent/proxy/types"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	proxytypes "antrea.io/antrea/v2/pkg/agent/proxy/types"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 var (
 	baselineTierPriority int32 = 253
 	banpTierPriority     int32 = 254
 )
-
 type ruleType int
-
 const (
 	unicast   ruleType = 0
 	igmp      ruleType = 1
 	multicast ruleType = 2
-
 	igmpServicesKey = "igmp-services-key"
 )
-
 // Reconciler is an interface that knows how to reconcile the desired state of
 // CompletedRule with the actual state of Openflow entries.
 type Reconciler interface {
 	// Reconcile reconciles the desired state of the provided CompletedRule
 	// with the actual state of Openflow entries.
 	Reconcile(rule *CompletedRule) error
-
 	// BatchReconcile reconciles the desired state of the provided CompletedRules
 	// with the actual state of Openflow entries in batch. It should only be invoked
 	// if all rules are newly added without last realized status.
 	BatchReconcile(rules []*CompletedRule) error
-
 	// Forget cleanups the actual state of Openflow entries of the specified ruleID.
 	Forget(ruleID string) error
-
 	// GetRuleByFlowID returns the rule from the async rule cache in idAllocator cache.
 	GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, bool, error)
-
 	// RunIDAllocatorWorker runs the worker that deletes the rules from the cache
 	// in idAllocator.
 	RunIDAllocatorWorker(stopCh <-chan struct{})
 }
-
 // servicesKey is used to identify Services based on their numbered ports.
 type servicesKey string
-
 // normalizeServices calculates the servicesKey of the provided services based
 // on their numbered ports.
 // It constructs the string with strings.Builder instead of using the spew
@@ -108,7 +90,6 @@ func normalizeServices(services []v1beta2.Service) servicesKey {
 	}
 	return servicesKey(b.String())
 }
-
 // podPolicyLastRealized is the struct cached by podReconciler. It's used to track the
 // actual state of rules we have enforced, so that we can know how to reconcile
 // a rule when it's updated/removed.
@@ -185,7 +166,6 @@ type podPolicyLastRealized struct {
 	// groupAddresses track the latest realized set of multicast groups for the multicast traffic
 	groupAddresses sets.Set[string]
 }
-
 func newPodPolicyLastRealized(rule *CompletedRule) *podPolicyLastRealized {
 	return &podPolicyLastRealized{
 		ofIDs:           map[servicesKey]uint32{},
@@ -197,14 +177,12 @@ func newPodPolicyLastRealized(rule *CompletedRule) *podPolicyLastRealized {
 		groupAddresses:  nil,
 	}
 }
-
 // tablePriorityAssigner groups the priorityAssigner and mutex for a single OVS table
 // that is reserved for installing Antrea policy rules.
 type tablePriorityAssigner struct {
 	assigner *priorityAssigner
 	mutex    sync.RWMutex
 }
-
 // podReconciler implements Reconciler.
 // Note that although its Reconcile and Forget methods are thread-safe, it's
 // assumed each rule can only be processed by a single client at any given
@@ -212,37 +190,29 @@ type tablePriorityAssigner struct {
 type podReconciler struct {
 	// ofClient is the Openflow interface.
 	ofClient openflow.Client
-
 	// ifaceStore provides container interface OFPort and IP information.
 	ifaceStore interfacestore.InterfaceStore
-
 	// lastRealizeds caches the last realized rules.
 	// It's a mapping from ruleID to *podPolicyLastRealized.
 	lastRealizeds sync.Map
-
 	// idAllocator provides interfaces to allocateForRule and release uint32 id.
 	idAllocator *idAllocator
-
 	// priorityAssigners provides interfaces to manage OF priorities for each OVS table.
 	priorityAssigners map[uint8]*tablePriorityAssigner
 	// ipv4Enabled tells if IPv4 is supported on this Node or not.
 	ipv4Enabled bool
 	// ipv6Enabled tells is IPv6 is supported on this Node or not.
 	ipv6Enabled bool
-
 	// fqdnController manages dns cache of FQDN rules. It provides interfaces for the
 	// podReconciler to register FQDN policy rules and query the IP addresses corresponded
 	// to a FQDN.
 	fqdnController *fqdnController
-
 	// groupCounters is a list of GroupCounter for v4 and v6 env. podReconciler uses these
 	// GroupCounters to get the groupIDs of a specific Service.
 	groupCounters []proxytypes.GroupCounter
-
 	// multicastEnabled indicates whether multicast is enabled
 	multicastEnabled bool
 }
-
 // newPodReconciler returns a new *podReconciler.
 func newPodReconciler(ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
@@ -296,20 +266,17 @@ func newPodReconciler(ofClient openflow.Client,
 	}
 	return reconciler
 }
-
 // RunIDAllocatorWorker runs the worker that deletes the rules from the cache in
 // idAllocator.
 func (r *podReconciler) RunIDAllocatorWorker(stopCh <-chan struct{}) {
 	r.idAllocator.runWorker(stopCh)
 }
-
 // Reconcile checks whether the provided rule has been enforced or not, and
 // invoke the add or update method accordingly.
 func (r *podReconciler) Reconcile(rule *CompletedRule) error {
 	klog.InfoS("Reconciling Pod NetworkPolicy rule", "rule", rule.ID, "policy", rule.SourceRef.ToString())
 	var err error
 	var ofPriority *uint16
-
 	value, exists := r.lastRealizeds.Load(rule.ID)
 	ruleTable := r.getOFRuleTable(rule)
 	priorityAssigner := r.priorityAssigners[ruleTable]
@@ -337,7 +304,6 @@ func (r *podReconciler) Reconcile(rule *CompletedRule) error {
 	}
 	return ofRuleInstallErr
 }
-
 func (r *podReconciler) getRuleType(rule *CompletedRule) ruleType {
 	if !r.multicastEnabled {
 		return unicast
@@ -347,7 +313,6 @@ func (r *podReconciler) getRuleType(rule *CompletedRule) ruleType {
 			return igmp
 		}
 	}
-
 	for idx := range rule.To.IPBlocks {
 		ipBlock := &rule.To.IPBlocks[idx]
 		ipAddr := ip.IPNetToNetIPNet(&ipBlock.CIDR)
@@ -357,7 +322,6 @@ func (r *podReconciler) getRuleType(rule *CompletedRule) ruleType {
 	}
 	return unicast
 }
-
 // getOFRuleTable retrieves the OpenFlow table to install the CompletedRule.
 // The decision is made based on whether the rule is created for an ACNP/ANNP, and
 // the Tier of that NetworkPolicy.
@@ -397,7 +361,6 @@ func (r *podReconciler) getOFRuleTable(rule *CompletedRule) uint8 {
 	}
 	return tableID
 }
-
 // getOFPriority retrieves the OFPriority for the input CompletedRule to be installed,
 // and re-arranges installed priorities on OVS if necessary.
 func (r *podReconciler) getOFPriority(rule *CompletedRule, tableID uint8, pa *tablePriorityAssigner) (*uint16, bool, error) {
@@ -439,7 +402,6 @@ func (r *podReconciler) getOFPriority(rule *CompletedRule, tableID uint8, pa *ta
 	klog.V(2).InfoS("Assigning OFPriority to rule", "rule", rule.ID, "priority", ofPriority)
 	return &ofPriority, registered, nil
 }
-
 // BatchReconcile reconciles the desired state of the provided CompletedRules
 // with the actual state of Openflow entries in batch. It should only be invoked
 // if all rules are newly added without last realized status.
@@ -480,7 +442,6 @@ func (r *podReconciler) BatchReconcile(rules []*CompletedRule) error {
 	}
 	return ofRuleInstallErr
 }
-
 // registerOFPriorities constructs a Priority type for each CompletedRule in the input list,
 // and registers those Priorities with appropriate tablePriorityAssigner based on Tier.
 func (r *podReconciler) registerOFPriorities(rules []*CompletedRule) error {
@@ -505,7 +466,6 @@ func (r *podReconciler) registerOFPriorities(rules []*CompletedRule) error {
 	}
 	return nil
 }
-
 // add converts CompletedRule to PolicyRule(s) and invokes installOFRule to install them.
 func (r *podReconciler) add(rule *CompletedRule, ofPriority *uint16, table uint8) error {
 	klog.V(2).InfoS("Adding new rule", "rule", rule)
@@ -528,13 +488,11 @@ func (r *podReconciler) add(rule *CompletedRule, ofPriority *uint16, table uint8
 	}
 	return nil
 }
-
 func (r *podReconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint16, table uint8) (
 	map[servicesKey]*types.PolicyRule, *podPolicyLastRealized) {
 	lastRealized := newPodPolicyLastRealized(rule)
 	// TODO: Handle the case that the following processing fails or partially succeeds.
 	r.lastRealizeds.Store(rule.ID, lastRealized)
-
 	ofRuleByServicesMap := map[servicesKey]*types.PolicyRule{}
 	isIGMP := r.isIGMPRule(rule)
 	if isIGMP && rule.Direction == v1beta2.DirectionIn {
@@ -628,7 +586,6 @@ func (r *podReconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *ui
 				LogLabel:      rule.LogLabel,
 			}
 		}
-
 		// If there are no "ToAddresses", the above process doesn't create any PolicyRule.
 		// We must ensure there is at least one PolicyRule, otherwise the Pods won't be
 		// isolated, so we create a PolicyRule with the original services if it doesn't exist.
@@ -682,14 +639,11 @@ func (r *podReconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *ui
 	}
 	return ofRuleByServicesMap, lastRealized
 }
-
 // batchAdd converts CompletedRules to PolicyRules and invokes BatchInstallPolicyRuleFlows to install them.
 func (r *podReconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) error {
 	lastRealizeds := make([]*podPolicyLastRealized, len(rules))
 	ofIDUpdateMaps := make([]map[servicesKey]uint32, len(rules))
-
 	var allOFRules []*types.PolicyRule
-
 	for idx, rule := range rules {
 		ruleTable := r.getOFRuleTable(rule)
 		ofRuleByServicesMap, lastRealized := r.computeOFRulesForAdd(rule, ofPriorities[idx], ruleTable)
@@ -720,7 +674,6 @@ func (r *podReconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16)
 	}
 	return nil
 }
-
 // update calculates the difference of Addresses between oldRule and newRule,
 // and invokes Openflow client's methods to reconcile them.
 func (r *podReconciler) update(lastRealized *podPolicyLastRealized, newRule *CompletedRule, ofPriority *uint16, table uint8) error {
@@ -781,7 +734,6 @@ func (r *podReconciler) update(lastRealized *podPolicyLastRealized, newRule *Com
 		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled, isRuleAppliedToService)
 		addedFrom := ipsToOFAddresses(newRule.FromAddresses.IPDifference(lastRealized.FromAddresses))
 		deletedFrom := ipsToOFAddresses(lastRealized.FromAddresses.IPDifference(newRule.FromAddresses))
-
 		membersByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {
 			newOFPorts := r.getOFPorts(members)
@@ -854,7 +806,6 @@ func (r *podReconciler) update(lastRealized *podPolicyLastRealized, newRule *Com
 		from := ipsToOFAddresses(newIPs)
 		addedFrom := ipsToOFAddresses(newIPs.Difference(lastRealized.podIPs))
 		deletedFrom := ipsToOFAddresses(lastRealized.podIPs.Difference(newIPs))
-
 		memberByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.ToAddresses)
 		// Same as the process in `add`, we must ensure the group for the original services is present
 		// in memberByServicesMap, so that this group won't be removed and its "From" will be updated.
@@ -954,7 +905,6 @@ func (r *podReconciler) update(lastRealized *podPolicyLastRealized, newRule *Com
 	lastRealized.CompletedRule = newRule
 	return nil
 }
-
 func (r *podReconciler) installOFRule(ofRule *types.PolicyRule) error {
 	klog.V(2).InfoS("Installing ofRule", "id", ofRule.FlowID, "direction", ofRule.Direction, "from", len(ofRule.From), "to", len(ofRule.To), "service", len(ofRule.Service))
 	if err := r.ofClient.InstallPolicyRuleFlows(ofRule); err != nil {
@@ -963,7 +913,6 @@ func (r *podReconciler) installOFRule(ofRule *types.PolicyRule) error {
 	}
 	return nil
 }
-
 func (r *podReconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedTo []types.Address, deletedFrom []types.Address, deletedTo []types.Address, priority *uint16, enableLogging, isMCNPRule bool) error {
 	klog.V(2).InfoS("Updating ofRule", "id", ofID, "addedFrom", len(addedFrom), "addedTo", len(addedTo), "deletedFrom", len(deletedFrom), "deletedTo", len(deletedTo))
 	// TODO: This might be unnecessarily complex and hard for error handling, consider revising the Openflow interfaces.
@@ -989,7 +938,6 @@ func (r *podReconciler) updateOFRule(ofID uint32, addedFrom []types.Address, add
 	}
 	return nil
 }
-
 func (r *podReconciler) uninstallOFRule(ofID uint32, table uint8) error {
 	klog.V(2).InfoS("Uninstalling ofRule", "id", ofID)
 	stalePriorities, err := r.ofClient.UninstallPolicyRuleFlows(ofID)
@@ -1012,18 +960,15 @@ func (r *podReconciler) uninstallOFRule(ofID uint32, table uint8) error {
 	r.idAllocator.forgetRule(ofID)
 	return nil
 }
-
 // Forget invokes UninstallPolicyRuleFlows to uninstall Openflow entries
 // associated with the provided ruleID if it was enforced before.
 func (r *podReconciler) Forget(ruleID string) error {
 	klog.InfoS("Forgetting rule", "rule", ruleID)
-
 	value, exists := r.lastRealizeds.Load(ruleID)
 	if !exists {
 		// No-op if the rule was not realized before.
 		return nil
 	}
-
 	lastRealized := value.(*podPolicyLastRealized)
 	table := r.getOFRuleTable(lastRealized.CompletedRule)
 	priorityAssigner, exists := r.priorityAssigners[table]
@@ -1044,18 +989,14 @@ func (r *podReconciler) Forget(ruleID string) error {
 	r.lastRealizeds.Delete(ruleID)
 	return nil
 }
-
 func (r *podReconciler) isIGMPRule(rule *CompletedRule) bool {
 	isIGMP := len(rule.Services) > 0 && (rule.Services[0].Protocol != nil) &&
 		(*rule.Services[0].Protocol == v1beta2.ProtocolIGMP)
-
 	return isIGMP
 }
-
 func (r *podReconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, bool, error) {
 	return r.idAllocator.getRuleFromAsyncCache(ruleFlowID)
 }
-
 func (r *podReconciler) getOFPorts(members v1beta2.GroupMemberSet) sets.Set[int32] {
 	ofPorts := sets.New[int32]()
 	for _, m := range members {
@@ -1080,7 +1021,6 @@ func (r *podReconciler) getOFPorts(members v1beta2.GroupMemberSet) sets.Set[int3
 	}
 	return ofPorts
 }
-
 func (r *podReconciler) getIPs(members v1beta2.GroupMemberSet) sets.Set[string] {
 	ips := sets.New[string]()
 	for _, m := range members {
@@ -1109,7 +1049,6 @@ func (r *podReconciler) getIPs(members v1beta2.GroupMemberSet) sets.Set[string] 
 	}
 	return ips
 }
-
 func (r *podReconciler) getSvcGroupIDs(members v1beta2.GroupMemberSet) sets.Set[int64] {
 	var svcRefs []v1beta2.ServiceReference
 	for _, m := range members {
@@ -1122,13 +1061,11 @@ func (r *podReconciler) getSvcGroupIDs(members v1beta2.GroupMemberSet) sets.Set[
 	}
 	return r.svcRefsToGroupIDs(svcRefs)
 }
-
 // groupMembersByServices groups the provided groupMembers based on their services resolving result.
 // A map of servicesHash to the grouped members and a map of servicesHash to the services resolving result will be returned.
 func groupMembersByServices(services []v1beta2.Service, memberSet v1beta2.GroupMemberSet) (map[servicesKey]v1beta2.GroupMemberSet, map[servicesKey][]v1beta2.Service) {
 	membersByServicesMap := map[servicesKey]v1beta2.GroupMemberSet{}
 	servicesMap := map[servicesKey][]v1beta2.Service{}
-
 	// If there is no named port in services, all members are in same group.
 	namedPortServiceExist := false
 	for _, svc := range services {
@@ -1162,7 +1099,6 @@ func groupMembersByServices(services []v1beta2.Service, memberSet v1beta2.GroupM
 	}
 	return membersByServicesMap, servicesMap
 }
-
 func ofPortsToOFAddresses(ofPorts sets.Set[int32]) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0, len(ofPorts))
@@ -1171,7 +1107,6 @@ func ofPortsToOFAddresses(ofPorts sets.Set[int32]) []types.Address {
 	}
 	return addresses
 }
-
 func (r *podReconciler) svcRefsToGroupIDs(svcRefs []v1beta2.ServiceReference) sets.Set[int64] {
 	groupIDs := sets.New[int64]()
 	for _, svcRef := range svcRefs {
@@ -1183,7 +1118,6 @@ func (r *podReconciler) svcRefsToGroupIDs(svcRefs []v1beta2.ServiceReference) se
 	}
 	return groupIDs
 }
-
 func svcGroupIDsToOFAddresses(groupIDs sets.Set[int64]) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0, len(groupIDs))
@@ -1192,7 +1126,6 @@ func svcGroupIDsToOFAddresses(groupIDs sets.Set[int64]) []types.Address {
 	}
 	return addresses
 }
-
 func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0, len(groupMemberSet))
@@ -1203,7 +1136,6 @@ func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet) []types.Ad
 	}
 	return addresses
 }
-
 func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled, ctMatch bool) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0)
@@ -1237,10 +1169,8 @@ func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled,
 			}
 		}
 	}
-
 	return addresses
 }
-
 func labelIDToOFAddresses(labelIDs []uint32) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0, len(labelIDs))
@@ -1249,14 +1179,12 @@ func labelIDToOFAddresses(labelIDs []uint32) []types.Address {
 	}
 	return addresses
 }
-
 func isIPNetSupportedByAF(ipnet *net.IPNet, ipv4Enabled, ipv6Enabled bool) bool {
 	if (ipnet.IP.To4() != nil && ipv4Enabled) || (ipnet.IP.To4() == nil && ipv6Enabled) {
 		return true
 	}
 	return false
 }
-
 func ipsToOFAddresses(ips sets.Set[string]) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	from := make([]types.Address, 0, len(ips))
@@ -1265,7 +1193,6 @@ func ipsToOFAddresses(ips sets.Set[string]) []types.Address {
 	}
 	return from
 }
-
 func filterUnresolvablePort(in []v1beta2.Service) []v1beta2.Service {
 	// Empty or nil slice means allowing all ports in Kubernetes.
 	// nil must be returned to meet ofClient's expectation for this behavior.
@@ -1288,7 +1215,6 @@ func filterUnresolvablePort(in []v1beta2.Service) []v1beta2.Service {
 	}
 	return out
 }
-
 // resolveService resolves the port name of the provided service to a port number for the provided groupMember.
 // This function should eventually supersede resolveServiceForPod.
 func resolveService(service *v1beta2.Service, member *v1beta2.GroupMember) *v1beta2.Service {
@@ -1317,7 +1243,6 @@ func resolveService(service *v1beta2.Service, member *v1beta2.GroupMember) *v1be
 	// The group members that cannot resolve it will be grouped together.
 	return service
 }
-
 func isRuleAppliedToService(memberSet v1beta2.GroupMemberSet) bool {
 	for _, member := range memberSet.Items() {
 		if member.Service != nil {

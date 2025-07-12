@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"encoding/json"
@@ -24,39 +22,31 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 // TestBasic is the top-level test which contains some subtests for
 // basic test cases so they can share setup, teardown.
 func TestBasic(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	t.Run("testPodAssignIP", func(t *testing.T) { testPodAssignIP(t, data, data.testNamespace, "", "") })
 	t.Run("testDeletePod", func(t *testing.T) { testDeletePod(t, data, data.testNamespace) })
 	t.Run("testAntreaGracefulExit", func(t *testing.T) { testAntreaGracefulExit(t, data) })
@@ -67,19 +57,16 @@ func TestBasic(t *testing.T) {
 	t.Run("testLogRotate", func(t *testing.T) { testLogRotate(t, data) })
 	t.Run("testConfigForwardCompatibility", func(t *testing.T) { testConfigForwardCompatibility(t, data) })
 }
-
 // testPodAssignIP verifies that Antrea allocates IP addresses properly to new Pods. It does this by
 // deploying a toolbox Pod, then waiting for the K8s apiserver to report the new IP address for that
 // Pod, and finally verifying that the IP address is in the Pod Network CIDR for the cluster.
 func testPodAssignIP(t *testing.T, data *TestData, namespace string, podV4NetworkCIDR, podV6NetworkCIDR string) {
 	podName := randName("test-pod-")
-
 	t.Logf("Creating a toolbox test Pod")
 	if err := data.createToolboxPodOnNode(podName, namespace, "", false); err != nil {
 		t.Fatalf("Error when creating toolbox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, namespace, podName)
-
 	t.Logf("Checking Pod networking")
 	if podIPs, err := data.podWaitForIPs(defaultTimeout, podName, namespace); err != nil {
 		t.Errorf("Error when waiting for Pod IP: %v", err)
@@ -98,12 +85,10 @@ func testPodAssignIP(t *testing.T, data *TestData, namespace string, podV4Networ
 		}
 	}
 }
-
 // checkPodIP verifies that the given IP is a valid address, and checks it is in the provided Pod Network CIDR.
 func checkPodIP(t *testing.T, podNetworkCIDR string, podIP *net.IP) {
 	t.Logf("Pod IP is '%s'", podIP.String())
 	isValid, err := validatePodIP(podNetworkCIDR, *podIP)
-
 	if err != nil {
 		t.Errorf("Error when trying to validate Pod IP: %v", err)
 	} else if !isValid {
@@ -112,7 +97,6 @@ func checkPodIP(t *testing.T, podNetworkCIDR string, podIP *net.IP) {
 		t.Logf("Pod IP is valid!")
 	}
 }
-
 func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName string, namespace string, isWindowsNode bool) {
 	var antreaPodName string
 	var err error
@@ -120,7 +104,6 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
-
 	var stdout string
 	if isWindowsNode {
 		antctlCmd := fmt.Sprintf("C:/k/antrea/bin/antctl.exe get podinterface %s -n %s -o json", podName, namespace)
@@ -134,7 +117,6 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	if err != nil {
 		t.Fatalf("Error when running antctl: %v", err)
 	}
-
 	var podInterfaces []apis.PodInterfaceResponse
 	if err := json.Unmarshal([]byte(stdout), &podInterfaces); err != nil {
 		t.Fatalf("Error when querying the pod interface: %v", err)
@@ -145,7 +127,6 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	ifName := podInterfaces[0].InterfaceName
 	podIPs := podInterfaces[0].IPs
 	t.Logf("Host interface name for Pod is '%s'", ifName)
-
 	var doesInterfaceExist, doesOVSPortExist func() bool
 	var doesIPAllocationExist func(podIP string) bool
 	if isWindowsNode {
@@ -206,7 +187,6 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 			return err == nil && ipAddressState != nil && ipAddressState.Phase == crdv1beta1.IPAddressPhaseAllocated
 		}
 	}
-
 	t.Logf("Checking that the veth interface and the OVS port exist")
 	if !doesInterfaceExist() {
 		t.Errorf("Interface '%s' does not exist on Node '%s'", ifName, nodeName)
@@ -219,12 +199,10 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 			t.Errorf("IP allocation '%s' does not exist on Node '%s'", podIP, nodeName)
 		}
 	}
-
 	t.Logf("Deleting Pod '%s'", podName)
 	if err := data.DeletePodAndWait(defaultTimeout, podName, namespace); err != nil {
 		t.Fatalf("Error when deleting Pod: %v", err)
 	}
-
 	t.Logf("Checking that the veth interface and the OVS port no longer exist")
 	if doesInterfaceExist() {
 		t.Errorf("Interface '%s' still exists on Node '%s' after Pod deletion", ifName, nodeName)
@@ -238,21 +216,17 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		}
 	}
 }
-
 // testDeletePod creates a Pod, then deletes it, and checks that the veth interface (in the Node
 // network namespace) and the OVS port for the container get removed.
 func testDeletePod(t *testing.T, data *TestData, namespace string) {
 	isWindows := false
 	nodeIdx := 0
-
 	if len(clusterInfo.windowsNodes) > 0 {
 		isWindows = true
 		nodeIdx = clusterInfo.windowsNodes[0]
 	}
-
 	nodeName := nodeName(nodeIdx)
 	podName := randName("test-pod-")
-
 	t.Logf("Creating an agnhost test Pod on '%s'", nodeName)
 	if err := data.createAgnhostPodOnNode(podName, namespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating agnhost test Pod: %v", err)
@@ -260,10 +234,8 @@ func testDeletePod(t *testing.T, data *TestData, namespace string) {
 	if err := data.podWaitForRunning(defaultTimeout, podName, namespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
 	}
-
 	data.testDeletePod(t, podName, nodeName, namespace, isWindows)
 }
-
 // testAntreaGracefulExit verifies that Antrea Pods can terminate gracefully.
 func testAntreaGracefulExit(t *testing.T, data *TestData) {
 	var gracePeriodSeconds int64 = 60
@@ -278,7 +250,6 @@ func testAntreaGracefulExit(t *testing.T, data *TestData) {
 	// than the grace period), which means that all containers "honor" the SIGTERM signal.
 	// TODO: ideally we would be able to also check the exit code but it may not be possible.
 }
-
 // testIPAMRestart checks that when the Antrea agent is restarted the information about which IP
 // address is already allocated is not lost. It does that by creating a first Pod and retrieving
 // its IP address, restarting the Antrea agent, then creating a second Pod and retrieving its IP
@@ -296,7 +267,6 @@ func testIPAMRestart(t *testing.T, data *TestData, namespace string) {
 			deletePodWrapper(t, data, namespace, pod)
 		}
 	}()
-
 	createPodAndGetIP := func(podName string) (*PodIPs, error) {
 		t.Logf("Creating a toolbox test Pod '%s' and waiting for IP", podName)
 		if err := data.createToolboxPodOnNode(podName, namespace, nodeName, false); err != nil {
@@ -310,45 +280,37 @@ func testIPAMRestart(t *testing.T, data *TestData, namespace string) {
 		}
 		return podIP, nil
 	}
-
 	if podIP1, err = createPodAndGetIP(podName1); err != nil {
 		t.Fatalf("Failed to retrieve IP for Pod '%s': %v", podName1, err)
 	}
 	t.Logf("Pod '%s' has IP address %v", podName1, podIP1)
-
 	t.Logf("Restarting antrea-agent on Node '%s'", nodeName)
 	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
 	}
-
 	t.Logf("Checking that all Antrea DaemonSet Pods are running")
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		t.Fatalf("Error when waiting for Antrea Pods: %v", err)
 	}
-
 	if podIP2, err = createPodAndGetIP(podName2); err != nil {
 		t.Fatalf("Failed to retrieve IP for Pod '%s': %v", podName2, err)
 	}
 	t.Logf("Pod '%s' has IP addresses %v", podName2, podIP2)
-
 	if podIP1.hasSameIP(podIP2) {
 		t.Errorf("Pods '%s' and '%s' were assigned the same IP %v", podName1, podName2, podIP1)
 	}
 }
-
 // TestReconcileGatewayRoutesOnStartup checks that when the Antrea agent is restarted, the set of
 // gateway routes is updated correctly, i.e. stale routes (for Nodes which are no longer in the
 // cluster) are removed and missing routes are added.
 func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		t.Logf("Running IPv4 test")
 		testReconcileGatewayRoutesOnStartup(t, data, false)
@@ -358,29 +320,24 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		testReconcileGatewayRoutesOnStartup(t, data, true)
 	}
 }
-
 func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bool) {
 	encapMode, err := data.GetEncapMode()
 	if err != nil {
 		t.Fatalf(" failed to get encap mode, err %v", err)
 	}
-
 	nodeName := nodeName(0)
 	podName := getAntreaPodName(t, data, nodeName)
 	antreaGWName, err := data.GetGatewayInterfaceName(antreaNamespace)
 	if err != nil {
 		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
 	}
-
 	expectedRtNumMin, expectedRtNumMax := clusterInfo.numNodes-1, clusterInfo.numNodes-1
 	switch encapMode {
 	case config.TrafficEncapModeNoEncap:
 		expectedRtNumMin, expectedRtNumMax = 0, 0
-
 	case config.TrafficEncapModeHybrid:
 		expectedRtNumMin = 1
 	}
-
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
 	var routes []Route
 	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (found bool, err error) {
@@ -389,7 +346,6 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		if err != nil {
 			return false, err
 		}
-
 		if len(routes) < expectedRtNumMin {
 			// Not enough routes, keep trying
 			return false, nil
@@ -407,7 +363,6 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	} else {
 		t.Logf("Found all expected gateway routes")
 	}
-
 	var routeToDelete *Route
 	if encapMode.SupportsEncap() {
 		routeToDelete = &routes[0]
@@ -421,7 +376,6 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		_, routeToAdd.routeCIDR, _ = net.ParseCIDR("fa80::/112")
 		routeToAdd.routeGW = net.ParseIP("fa80::1")
 	}
-
 	// We run the ip command from the antrea-agent container for delete / add since they need to
 	// be run as root and the antrea-agent container is privileged. If we used RunCommandOnNode,
 	// we may need to use "sudo" for some providers (e.g. vagrant).
@@ -438,7 +392,6 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		}
 		return nil
 	}
-
 	addGatewayRoute := func(route *Route) error {
 		var cmd []string
 		if !isIPv6 {
@@ -452,7 +405,6 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		}
 		return nil
 	}
-
 	if routeToDelete != nil {
 		t.Logf("Deleting one actual gateway route and adding a dummy one")
 		if err := deleteGatewayRoute(routeToDelete); err != nil {
@@ -468,17 +420,14 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		// dummy route will no longer exist).
 		_ = deleteGatewayRoute(routeToAdd)
 	}()
-
 	t.Logf("Restarting antrea-agent on Node '%s'", nodeName)
 	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
 	}
-
 	t.Logf("Checking that all Antrea DaemonSet Pods are running")
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		t.Fatalf("Error when waiting for Antrea Pods: %v", err)
 	}
-
 	// We expect the agent to delete the extra route we added and add back the route we deleted
 	t.Logf("Waiting for gateway routes to converge")
 	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, false, func(ctx context.Context) (bool, error) {
@@ -520,11 +469,9 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		t.Logf("Gateway routes successfully converged")
 	}
 }
-
 func TestCleanStaleClusterIPRoutes(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -532,10 +479,8 @@ func TestCleanStaleClusterIPRoutes(t *testing.T) {
 	defer teardownTest(t, data)
 	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
-
 	// Create a backend Pod for test Service: if a Service has no backend Pod, no ClusterIP route will be installed.
 	createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-clean-stale-route-pod", nodeName(0), data.testNamespace, false)
-
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		t.Logf("Running IPv4 test")
 		testCleanStaleClusterIPRoutes(t, data, false)
@@ -545,7 +490,6 @@ func TestCleanStaleClusterIPRoutes(t *testing.T) {
 		testCleanStaleClusterIPRoutes(t, data, true)
 	}
 }
-
 func testCleanStaleClusterIPRoutes(t *testing.T, data *TestData, isIPv6 bool) {
 	ipProtocol := corev1.IPv4Protocol
 	if isIPv6 {
@@ -559,12 +503,10 @@ func testCleanStaleClusterIPRoutes(t *testing.T, data *TestData, isIPv6 bool) {
 	require.NoError(t, err)
 	require.NotEqual(t, "", svc.Spec.ClusterIP, "ClusterIP should not be empty")
 	time.Sleep(time.Second)
-
 	nodeName := nodeName(0)
 	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
 		t.Logf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
 	}
-
 	antreaGWName, err := data.GetGatewayInterfaceName(antreaNamespace)
 	if err != nil {
 		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
@@ -584,7 +526,6 @@ func testCleanStaleClusterIPRoutes(t *testing.T, data *TestData, isIPv6 bool) {
 	}); err != nil {
 		t.Errorf("Failed to get enough Service gateway routes after timeout")
 	}
-
 	clusterIP := net.ParseIP(svc.Spec.ClusterIP)
 	routeCounter := 0
 	for _, rt := range routes {
@@ -594,7 +535,6 @@ func testCleanStaleClusterIPRoutes(t *testing.T, data *TestData, isIPv6 bool) {
 	}
 	require.Equal(t, 1, routeCounter, "There should be only one route whose destination CIDR can container the ClusterIP %v", clusterIP.String())
 }
-
 func getRoundNumber(data *TestData, podName string) (uint64, error) {
 	type transaction struct {
 		Op      string   `json:"op"`
@@ -602,7 +542,6 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 		Where   []string `json:"where"`
 		Columns []string `json:"columns"`
 	}
-
 	query := []interface{}{
 		"Open_vSwitch",
 		transaction{
@@ -612,7 +551,6 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 			Columns: []string{"external_ids"},
 		},
 	}
-
 	b, err := json.Marshal(query)
 	if err != nil {
 		return 0, fmt.Errorf("error when marshalling OVSDB query: %v", err)
@@ -622,7 +560,6 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("cannot retrieve round number: stderr: <%v>, err: <%v>", stderr, err)
 	}
-
 	result := []struct {
 		Rows []struct {
 			ExternalIds []interface{} `json:"external_ids"`
@@ -644,10 +581,8 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 			return roundNum, nil
 		}
 	}
-
 	return 0, fmt.Errorf("did not find roundNum in OVSDB result")
 }
-
 func getAntreaPodName(t *testing.T, data *TestData, nodeName string) string {
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
@@ -656,12 +591,10 @@ func getAntreaPodName(t *testing.T, data *TestData, nodeName string) string {
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
 	return antreaPodName
 }
-
 type Route struct {
 	routeCIDR *net.IPNet
 	routeGW   net.IP
 }
-
 func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName string, isIPv6 bool) ([]Route, []Route, *Route, error) {
 	var cmd []string
 	virtualIP := config.VirtualServiceIPv4
@@ -678,7 +611,6 @@ func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName strin
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
 	}
-
 	var nodeRoutes, serviceRoutes []Route
 	var llRoute *Route
 	re := regexp.MustCompile(`([^\s]+) via ([^\s]+)`)
@@ -712,7 +644,6 @@ func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName strin
 	}
 	return nodeRoutes, serviceRoutes, llRoute, nil
 }
-
 // testDeletePreviousRoundFlowsOnStartup checks that when the Antrea agent is restarted, flows from
 // the previous "round" which are no longer needed (e.g. in case of changes to the cluster / to
 // Network Policies) are removed correctly.
@@ -720,7 +651,6 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 	skipIfRunCoverage(t, "Stopping Agent does not work with Coverage")
 	nodeName := nodeName(0)
 	podName := getAntreaPodName(t, data, nodeName)
-
 	roundNumber := func(podName string) uint64 {
 		roundNum, err := getRoundNumber(data, podName)
 		if err != nil {
@@ -728,18 +658,14 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 		}
 		return roundNum
 	}
-
 	// get current round number
 	roundNum1 := roundNumber(podName)
 	t.Logf("Current round number is %d", roundNum1)
-
 	t.Logf("Restarting agent and waiting for new round number")
 	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
 	}
-
 	podName = getAntreaPodName(t, data, nodeName) // pod name has changed
-
 	waitForNextRoundNum := func(roundNum uint64) uint64 {
 		var nextRoundNum uint64
 		if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, false, func(ctx context.Context) (bool, error) {
@@ -754,14 +680,10 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 		t.Logf("New round number is %d", nextRoundNum)
 		return nextRoundNum
 	}
-
 	roundNum2 := waitForNextRoundNum(roundNum1)
-
 	// at this time, we now that stale flows have been cleaned-up and that the new round number
 	// has been persisted and will not change again until the next restart
-
 	cookieID, cookieMask := cookie.CookieMaskForRound(roundNum2)
-
 	// add dummy flow with current round number
 	addFlow := func() {
 		cmd := []string{
@@ -775,7 +697,6 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 	}
 	t.Logf("Adding dummy flow")
 	addFlow()
-
 	// stopAgent stops the docker container, which should be re-created immediately by kubectl
 	stopAgent := func() {
 		cmd := []string{"kill", "1"}
@@ -793,10 +714,8 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 			t.Logf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
 		}
 	}()
-
 	// validate new round number
 	waitForNextRoundNum(roundNum2)
-
 	// check that the dummy flow has been removed
 	// checkFlow returns true if the flow is present
 	checkFlow := func() bool {
@@ -811,7 +730,6 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 		flows := strings.Split(stdout, "\n")[1:]
 		return len(flows) > 1
 	}
-
 	smallTimeout := 5 * time.Second
 	t.Logf("Checking that dummy flow is deleted within %v", smallTimeout)
 	// In theory there should be no need to poll here because the agent only persists the new
@@ -819,12 +737,10 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 	// this assumption in an e2e test.
 	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, smallTimeout, true, func(ctx context.Context) (bool, error) {
 		return !checkFlow(), nil
-
 	}); err != nil {
 		t.Errorf("Flow was still present after timeout")
 	}
 }
-
 // testGratuitousARP verifies that we receive 3 GARP packets after a Pod is up.
 // There might be ARP packets other than GARP sent if there is any unintentional
 // traffic. So we just check the number of ARP packets is greater than 3.
@@ -832,33 +748,27 @@ func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 	skipIfNotIPv4Cluster(t)
 	podName := randName("test-pod-")
 	nodeName := workerNodeName(1)
-
 	t.Logf("Creating Pod '%s' on '%s'", podName, nodeName)
 	if err := data.createToolboxPodOnNode(podName, namespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}
 	defer deletePodWrapper(t, data, namespace, podName)
-
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
-
 	podIP, err := data.podWaitForIPs(defaultTimeout, podName, namespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
 	}
-
 	// Sending GARP is an asynchronous operation. The last GARP is supposed to
 	// be sent 100ms after processing CNI ADD request.
 	time.Sleep(100 * time.Millisecond)
-
 	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=ARPSpoofGuard,arp,arp_spa=%s", podIP.IPv4.String())}
 	stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 	if err != nil {
 		t.Fatalf("Error when querying openflow: %v", err)
 	}
-
 	re := regexp.MustCompile(`n_packets=([0-9]+)`)
 	matches := re.FindStringSubmatch(stdout)
 	if len(matches) == 0 {
@@ -870,7 +780,6 @@ func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 	}
 	t.Logf("Got %d ARP packets after Pod was up", arpPackets)
 }
-
 // testClusterIdentity verifies that the antrea-cluster-identity ConfigMap is
 // populated correctly by the Antrea Controller.
 func testClusterIdentity(t *testing.T, data *TestData) {
@@ -880,7 +789,6 @@ func testClusterIdentity(t *testing.T, data *TestData) {
 	assert.NotEqual(t, uuid.Nil, clusterUUID)
 	t.Logf("Cluster UUID: %v", clusterUUID)
 }
-
 func testLogRotate(t *testing.T, data *TestData) {
 	nodeName := nodeName(0)
 	podName := getAntreaPodName(t, data, nodeName)
@@ -891,7 +799,6 @@ func testLogRotate(t *testing.T, data *TestData) {
 	}
 	t.Logf("Successfully ran logrotate command in Pod '%s': stdout: %s, stderr: %s", podName, stdout, stderr)
 }
-
 // testConfigForwardCompatibility verifies that antrea-controller and antrea-agent can run with unknown fields in the config.
 func testConfigForwardCompatibility(t *testing.T, data *TestData) {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
@@ -906,10 +813,8 @@ func testConfigForwardCompatibility(t *testing.T, data *TestData) {
 		_, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), updatedConfigMap, metav1.UpdateOptions{})
 		assert.NoError(t, err)
 	})
-
 	err = data.RestartAntreaAgentPods(defaultTimeout)
 	assert.NoError(t, err)
-
 	_, err = data.restartAntreaControllerPod(defaultTimeout)
 	assert.NoError(t, err)
 }

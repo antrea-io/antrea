@@ -11,16 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"fmt"
 	"time"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
@@ -29,34 +24,28 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/podstore"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	"antrea.io/antrea/pkg/agent/metrics"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/proxy"
-	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/podstore"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/proxy"
+	"antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/podstore"
 )
-
 type DenyConnectionStore struct {
 	connectionStore
 	protocolFilter filter.ProtocolFilter
 }
-
 func NewDenyConnectionStore(podStore podstore.Interface, proxier proxy.Proxier, o *flowexporter.FlowExporterOptions, protocolFilter filter.ProtocolFilter) *DenyConnectionStore {
 	return &DenyConnectionStore{
 		connectionStore: NewConnectionStore(podStore, proxier, o),
 		protocolFilter:  protocolFilter,
 	}
 }
-
 func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
 	pollTicker := time.NewTicker(periodicDeleteInterval)
 	defer pollTicker.Stop()
-
 	for {
 		select {
 		case <-stopCh:
@@ -80,14 +69,12 @@ func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 // AddOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
 // or adds a new connection with the resolved K8s metadata.
 func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, timeSeen time.Time, bytes uint64) {
 	connKey := flowexporter.NewConnectionKey(conn)
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
-
 	if _, exist := ds.connections[connKey]; exist {
 		if conn.ReadyToDelete {
 			return
@@ -108,7 +95,6 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 		if !ds.protocolFilter.Allow(conn.FlowKey.Protocol) {
 			return
 		}
-
 		conn.StartTime = timeSeen
 		conn.StopTime = timeSeen
 		conn.LastExportTime = timeSeen
@@ -133,7 +119,6 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 		klog.V(4).InfoS("New deny connection added", "connection", conn)
 	}
 }
-
 func (ds *DenyConnectionStore) GetExpiredConns(expiredConns []flowexporter.Connection, currTime time.Time, maxSize int) ([]flowexporter.Connection, time.Duration) {
 	ds.AcquireConnStoreLock()
 	defer ds.ReleaseConnStoreLock()
@@ -157,7 +142,6 @@ func (ds *DenyConnectionStore) GetExpiredConns(expiredConns []flowexporter.Conne
 	}
 	return expiredConns, ds.connectionStore.expirePriorityQueue.GetExpiryFromExpirePriorityQueue()
 }
-
 // deleteConnWithoutLock deletes the connection from the connection map given
 // the connection key without grabbing the lock. Caller is expected to grab lock.
 func (ds *DenyConnectionStore) deleteConnWithoutLock(connKey flowexporter.ConnectionKey) error {
@@ -169,7 +153,6 @@ func (ds *DenyConnectionStore) deleteConnWithoutLock(connKey flowexporter.Connec
 	metrics.TotalDenyConnections.Dec()
 	return nil
 }
-
 func (ds *DenyConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
 	return ds.connectionStore.expirePriorityQueue
 }

@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,23 +13,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 func TestMulticlusterOptions(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -106,7 +97,6 @@ func TestMulticlusterOptions(t *testing.T) {
 			if !tt.mcConfig.EnableGateway {
 				assert.False(t, o.config.Multicluster.EnableGateway)
 			}
-
 			err := o.validate(nil)
 			if tt.expectedErr == "" {
 				assert.NoError(t, err)

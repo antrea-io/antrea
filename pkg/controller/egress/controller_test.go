@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package egress
-
 import (
 	"context"
 	"encoding/json"
@@ -21,7 +19,6 @@ import (
 	"net"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -36,10 +33,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
@@ -47,19 +42,16 @@ import (
 	"antrea.io/antrea/v2/pkg/controller/externalippool"
 	"antrea.io/antrea/v2/pkg/controller/grouping"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/client/clientset/versioned"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/controller/egress/store"
-	"antrea.io/antrea/pkg/controller/externalippool"
-	"antrea.io/antrea/pkg/controller/grouping"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/controller/egress/store"
+	"antrea.io/antrea/v2/pkg/controller/externalippool"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 var (
 	node1 = "node1"
 	node2 = "node2"
@@ -79,7 +71,6 @@ var (
 	eipFoo1 = newExternalIPPool("pool1", "1.1.1.0/24", "", "")
 	eipFoo2 = newExternalIPPool("pool2", "", "2.2.2.10", "2.2.2.20")
 )
-
 func newEgress(name, egressIP, externalIPPool string, podSelector, namespaceSelector *metav1.LabelSelector, bandwidth *v1beta1.Bandwidth) *v1beta1.Egress {
 	egress := &v1beta1.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
@@ -95,7 +86,6 @@ func newEgress(name, egressIP, externalIPPool string, podSelector, namespaceSele
 	}
 	return egress
 }
-
 func newExternalIPPool(name, cidr, start, end string) *v1beta1.ExternalIPPool {
 	pool := &v1beta1.ExternalIPPool{
 		ObjectMeta: metav1.ObjectMeta{
@@ -110,7 +100,6 @@ func newExternalIPPool(name, cidr, start, end string) *v1beta1.ExternalIPPool {
 	}
 	return pool
 }
-
 func newNamespace(name string, labels map[string]string) *v1.Namespace {
 	return &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -119,7 +108,6 @@ func newNamespace(name string, labels map[string]string) *v1.Namespace {
 		},
 	}
 }
-
 func newPod(namespace, name string, labels map[string]string, nodeName string, ip string, hostNetwork bool) *v1.Pod {
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -138,7 +126,6 @@ func newPod(namespace, name string, labels map[string]string, nodeName string, i
 	}
 	return pod
 }
-
 type egressController struct {
 	*EgressController
 	client              kubernetes.Interface
@@ -148,7 +135,6 @@ type egressController struct {
 	groupingController  *grouping.GroupEntityController
 	externalIPAllocator *externalippool.ExternalIPPoolController
 }
-
 // objects is an initial set of K8s objects that is exposed through the client.
 func newController(objects, crdObjects []runtime.Object) *egressController {
 	client := fake.NewSimpleClientset(objects...)
@@ -213,13 +199,11 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 		externalIPAllocator,
 	}
 }
-
 func TestAddEgress(t *testing.T) {
 	podSucceeded := newPod("default", "succeeded-pod", map[string]string{"app": "foo"}, node1, "1.1.5.1", false)
 	podSucceeded.Status.Phase = v1.PodSucceeded
 	podFailed := newPod("default", "failed-pod", map[string]string{"app": "foo"}, node1, "1.1.5.2", false)
 	podFailed.Status.Phase = v1.PodFailed
-
 	tests := []struct {
 		name                 string
 		inputEgress          *v1beta1.Egress
@@ -377,9 +361,7 @@ func TestAddEgress(t *testing.T) {
 			go controller.groupingInterface.Run(stopCh)
 			go controller.groupingController.Run(stopCh)
 			go controller.Run(stopCh)
-
 			controller.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), tt.inputEgress, metav1.CreateOptions{})
-
 			for nodeName, expectedEgressGroup := range tt.expectedEgressGroups {
 				watcher, err := controller.egressGroupStore.Watch(context.TODO(), "", nil, fields.ParseSelectorOrDie(fmt.Sprintf("nodeName=%s", nodeName)))
 				require.NoError(t, err)
@@ -397,7 +379,6 @@ func TestAddEgress(t *testing.T) {
 						}
 					}
 				}()
-
 				if expectedEgressGroup == nil {
 					assert.Nil(t, gotEgressGroup)
 				} else {
@@ -406,7 +387,6 @@ func TestAddEgress(t *testing.T) {
 					assert.ElementsMatch(t, expectedEgressGroup.GroupMembers, gotEgressGroup.GroupMembers)
 				}
 			}
-
 			gotEgress, err := controller.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), tt.inputEgress.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedEgressIP, gotEgress.Spec.EgressIP)
@@ -416,7 +396,6 @@ func TestAddEgress(t *testing.T) {
 		})
 	}
 }
-
 func TestUpdateEgress(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -430,7 +409,6 @@ func TestUpdateEgress(t *testing.T) {
 	go controller.groupingInterface.Run(stopCh)
 	go controller.groupingController.Run(stopCh)
 	go controller.Run(stopCh)
-
 	egress := &v1beta1.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 		Spec: v1beta1.EgressSpec{
@@ -444,10 +422,8 @@ func TestUpdateEgress(t *testing.T) {
 		},
 	}
 	controller.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
-
 	watcher, err := controller.egressGroupStore.Watch(context.TODO(), "", nil, fields.ParseSelectorOrDie(fmt.Sprintf("nodeName=%s", node1)))
 	assert.NoError(t, err)
-
 	getEvent := func() *watch.Event {
 		for {
 			select {
@@ -462,7 +438,6 @@ func TestUpdateEgress(t *testing.T) {
 			}
 		}
 	}
-
 	getEgressIP := func() string {
 		var err error
 		egress, err = controller.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
@@ -471,7 +446,6 @@ func TestUpdateEgress(t *testing.T) {
 		}
 		return egress.Spec.EgressIP
 	}
-
 	assert.Equal(t, &watch.Event{
 		Type: watch.Added,
 		Object: &controlplane.EgressGroup{
@@ -483,7 +457,6 @@ func TestUpdateEgress(t *testing.T) {
 	}, getEvent())
 	assert.Equal(t, "1.1.1.1", getEgressIP())
 	checkExternalIPPoolUsed(t, controller, eipFoo1.Name, 1)
-
 	// Add a Pod matching the Egress's selector and running on this Node.
 	controller.client.CoreV1().Pods(podFoo1InOtherNamespace.Namespace).Create(context.TODO(), podFoo1InOtherNamespace, metav1.CreateOptions{})
 	assert.Equal(t, &watch.Event{
@@ -495,7 +468,6 @@ func TestUpdateEgress(t *testing.T) {
 			},
 		},
 	}, getEvent())
-
 	// Delete the above Pod.
 	controller.client.CoreV1().Pods(podFoo1InOtherNamespace.Namespace).Delete(context.TODO(), podFoo1InOtherNamespace.Name, metav1.DeleteOptions{})
 	assert.Equal(t, &watch.Event{
@@ -507,7 +479,6 @@ func TestUpdateEgress(t *testing.T) {
 			},
 		},
 	}, getEvent())
-
 	// Updating the Egress's spec to make it match no Pods on this Node and use a new ExternalIPPool.
 	egress.Spec.AppliedTo = v1beta1.AppliedTo{
 		PodSelector: &metav1.LabelSelector{
@@ -526,7 +497,6 @@ func TestUpdateEgress(t *testing.T) {
 	assert.Equal(t, "2.2.2.10", getEgressIP())
 	checkExternalIPPoolUsed(t, controller, eipFoo1.Name, 0)
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 1)
-
 	// Delete the IPPool in use. The EgressIP should be released.
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eipFoo2.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
@@ -537,7 +507,6 @@ func TestUpdateEgress(t *testing.T) {
 		ip := getEgressIP()
 		return ip == ""
 	}, time.Second, 50*time.Millisecond, "EgressIP was not deleted after the ExternalIPPool was deleted")
-
 	// Recreate the ExternalIPPool. An EgressIP should be allocated.
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eipFoo2, metav1.CreateOptions{})
 	assert.Eventually(t, func() bool {
@@ -545,7 +514,6 @@ func TestUpdateEgress(t *testing.T) {
 		return exists
 	}, time.Second, 50*time.Millisecond, "IP was not allocated after the ExternalIPPool was created")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 1)
-
 	// Delete the Egress. The EgressIP should be released.
 	controller.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
@@ -554,7 +522,6 @@ func TestUpdateEgress(t *testing.T) {
 	}, time.Second, 50*time.Millisecond, "IP allocation was not deleted after the Egress was deleted")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 0)
 }
-
 // TestRecreateExternalIPPoolWithNewRange tests the case where an ExternalIPPool is deleted, then
 // immediately recreated with a different IP range. Specifically we test the scenario where
 // syncEgress / syncEgressIP are called only once because the DELETE and CREATE events are merged in
@@ -564,7 +531,6 @@ func TestUpdateEgress(t *testing.T) {
 func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-
 	eipFoo1 := newExternalIPPool("pool1", "1.1.1.0/24", "", "")
 	egress := &v1beta1.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
@@ -578,7 +544,6 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 			ExternalIPPool: eipFoo1.Name,
 		},
 	}
-
 	controller := newController(nil, []runtime.Object{eipFoo1, egress})
 	controller.informerFactory.Start(stopCh)
 	controller.crdInformerFactory.Start(stopCh)
@@ -587,12 +552,10 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	go controller.externalIPAllocator.Run(stopCh)
 	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
 	controller.restoreIPAllocations([]*v1beta1.Egress{egress})
-
 	require.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
 	getEgressIP, egress, err := controller.syncEgressIP(egress)
 	require.NoError(t, err)
 	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
-
 	// Delete and recreate the ExternalIPPool immediately with a different IP range. We do not
 	// call syncEgressIP in-between, so the Egress controller doesn't have a chance to process
 	// both changes independently.
@@ -600,18 +563,15 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		assert.False(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
 	}, 1*time.Second, 10*time.Millisecond)
-
 	eipFoo1 = newExternalIPPool("pool1", "1.1.2.0/24", "", "")
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eipFoo1, metav1.CreateOptions{})
 	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		assert.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
 	}, 1*time.Second, 10*time.Millisecond)
-
 	getEgressIP, _, err = controller.syncEgressIP(egress)
 	require.NoError(t, err)
 	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
 }
-
 func TestSyncEgressIP(t *testing.T) {
 	tests := []struct {
 		name                       string
@@ -826,7 +786,6 @@ func TestSyncEgressIP(t *testing.T) {
 		})
 	}
 }
-
 func checkExternalIPPoolUsed(t *testing.T, controller *egressController, poolName string, used int) {
 	exists := controller.externalIPAllocator.IPPoolExists(poolName)
 	require.True(t, exists)
@@ -840,7 +799,6 @@ func checkExternalIPPoolUsed(t *testing.T, controller *egressController, poolNam
 		})
 	assert.NoError(t, err)
 }
-
 func TestUpdateEgressAllocatedCondition(t *testing.T) {
 	tests := []struct {
 		name           string

@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package main
-
 import (
 	"context"
 	"fmt"
 	"time"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,34 +36,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-	antreacrdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-	antreacrdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	antreacrdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	antreacrdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/certificate"
 	"antrea.io/antrea/v2/pkg/util/env"
 	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	antreacrdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	antreacrdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/certificate"
-	"antrea.io/antrea/pkg/util/env"
-	k8sutil "antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	antreacrdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	antreacrdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/certificate"
+	"antrea.io/antrea/v2/pkg/util/env"
+	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
 	// +kubebuilder:scaffold:imports
 )
-
 var (
 	// The unit test code will change the function to set up a mock manager.
 	setupManagerAndCertControllerFunc = setupManagerAndCertController
 )
-
 const (
 	selfSignedCertDir = "/var/run/antrea/multicluster-controller-self-signed"
 	certDir           = "/var/run/antrea/multicluster-controller-tls"
@@ -75,7 +66,6 @@ const (
 	leaderRole        = "leader"
 	memberRole        = "member"
 )
-
 var (
 	// mcDefaultServedLabels contains the labels added on the Webhooks which are needed by both leader and member controllers.
 	mcDefaultServedLabels = map[string]string{
@@ -83,7 +73,6 @@ var (
 		"served-by": "antrea-mc-controller",
 	}
 )
-
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(scheme))
@@ -93,7 +82,6 @@ func init() {
 	utilruntime.Must(antreacrdv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
-
 // createClients creates kube clients from the given config.
 func createClients(kubeConfig *rest.Config) (
 	clientset.Interface, aggregatorclientset.Interface, apiextensionclientset.Interface, error) {
@@ -101,7 +89,6 @@ func createClients(kubeConfig *rest.Config) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	aggregatorClient, err := aggregatorclientset.NewForConfig(kubeConfig)
 	if err != nil {
 		return nil, nil, nil, err
@@ -113,7 +100,6 @@ func createClients(kubeConfig *rest.Config) (
 	}
 	return client, aggregatorClient, apiExtensionClient, nil
 }
-
 func getCaConfig(isLeader bool, controllerNs string) *certificate.CAConfig {
 	return &certificate.CAConfig{
 		CAConfigMapName: configMapName,
@@ -128,7 +114,6 @@ func getCaConfig(isLeader bool, controllerNs string) *certificate.CAConfig {
 		MinValidDuration:          time.Hour * 24 * 90, // Rotate the certificate 90 days in advance.
 	}
 }
-
 func getWebhookLabel(isLeader bool, controllerNs string) *metav1.LabelSelector {
 	labels := mcDefaultServedLabels
 	if isLeader {
@@ -145,19 +130,15 @@ func getWebhookLabel(isLeader bool, controllerNs string) *metav1.LabelSelector {
 		MatchLabels: labels,
 	}
 }
-
 func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, error) {
 	ctrl.SetLogger(klog.NewKlogr())
-
 	podNamespace := env.GetPodNamespace()
-
 	var caConfig *certificate.CAConfig
 	if isLeader {
 		caConfig = getCaConfig(isLeader, podNamespace)
 	} else {
 		caConfig = getCaConfig(isLeader, "")
 	}
-
 	// build up cert controller to manage certificate for MC Controller
 	k8sConfig := ctrl.GetConfigOrDie()
 	k8sConfig.QPS = common.ResourceExchangeQPS
@@ -166,7 +147,6 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	if err != nil {
 		return nil, fmt.Errorf("error creating K8s clients: %v", err)
 	}
-
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, caConfig)
 	if err != nil {
@@ -175,7 +155,6 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	if err := caCertController.RunOnce(context.TODO()); err != nil {
 		return nil, err
 	}
-
 	options := o.options
 	if o.SelfSignedCert {
 		options.Metrics.CertDir = selfSignedCertDir
@@ -189,7 +168,6 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 		Host:    o.WebhookConfig.Host,
 		CertDir: o.WebhookConfig.CertDir,
 	})
-
 	cacheOptions := &options.Cache
 	if isLeader {
 		// For the leader, restrict the cache to the controller's Namespace.
@@ -211,7 +189,6 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 			},
 		}
 	}
-
 	// EndpointSlice is enabled in AntreaProxy by default since v1.11, so Antrea MC
 	// will use EndpointSlice API by default to keep consistent with AntreaProxy.
 	endpointSliceAPIAvailable, err := k8sutil.EndpointSliceAPIAvailable(client)
@@ -224,7 +201,6 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	} else {
 		o.EnableEndpointSlice = true
 	}
-
 	// ClusterClaim CRD is removed since v1.13. Check the existence of
 	// ClusterClaim API before using ClusterClaim API.
 	clusterClaimCRDAvailable, err := clusterClaimCRDAvailable(client)
@@ -232,14 +208,11 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 		return nil, fmt.Errorf("error checking if ClusterClaim API is available")
 	}
 	o.ClusterCalimCRDAvailable = clusterClaimCRDAvailable
-
 	mgr, err := ctrl.NewManager(k8sConfig, options)
 	if err != nil {
 		return nil, fmt.Errorf("error creating manager: %v", err)
 	}
-
 	//+kubebuilder:scaffold:builder
-
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return nil, fmt.Errorf("error setting up health check: %v", err)
 	}
@@ -248,7 +221,6 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	}
 	return mgr, nil
 }
-
 func clusterClaimCRDAvailable(k8sClient clientset.Interface) (bool, error) {
 	groupVersion := mcv1alpha2.SchemeGroupVersion.String()
 	resources, err := k8sClient.Discovery().ServerResourcesForGroupVersion(groupVersion)

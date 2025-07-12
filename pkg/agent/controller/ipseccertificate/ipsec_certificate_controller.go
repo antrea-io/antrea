@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipseccertificate
-
 import (
 	"context"
 	"crypto"
@@ -27,7 +25,6 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"time"
-
 	certificatesv1 "k8s.io/api/certificates/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -38,68 +35,51 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-
-<<<<<<< HEAD
 	antreaapis "antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	antreaapis "antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	antreaapis "antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 const (
 	controllerName = "AntreaAgentIPsecCertificateController"
 	workerItemKey  = "key"
 	minRetryDelay  = 5 * time.Second
 	maxRetryDelay  = 60 * time.Second
-
 	// the mount path for CA certificate in antrea-ipsec container.
 	// StrongSwan will never reads CA certificates from folders other than `/etc/ipsec.d/cacerts`.
 	// Though StrongSwan will automatically load CA certificates from the folder, we set the ca_path in other_configs
 	// to the correct path for better consistency.
 	caCertificatePath = "/etc/ipsec.d/cacerts/ca.crt"
-
 	ovsConfigCACertificateKey = "ca_cert"
 	ovsConfigPrivateKeyKey    = "private_key"
 	ovsConfigCertificateKey   = "certificate"
-
 	// certificateWaitTimeout controls the amount of time we wait for certificate approval in
 	// one iteration.
 	certificateWaitTimeout = 15 * time.Minute
 )
-
 var defaultCertificatesPath = "/var/run/openvswitch"
-
 // Controller is responsible for requesting certificates by CertificateSigningRequest and configure them to OVS
 type Controller struct {
 	kubeClient      clientset.Interface
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	nodeName        string
 	queue           workqueue.TypedRateLimitingInterface[string]
-
 	rotateCertificate  func() (*certificateKeyPair, error)
 	certificateKeyPair *certificateKeyPair
-
 	clock clock.WithTicker
-
 	// caPath and is initialized with NewIPSecCertificateController and should not
 	// be changed once Controller starts.
 	caPath string
 	// certificateFolderPath is the folder to store private keys and issued certificates.
 	// defaults to defaultCertificatesPath.
 	certificateFolderPath string
-
 	syncedOnce uint32
 }
-
 // Manager is an interface to track the status of the IPsec certificate controller.
 type Manager interface {
 	HasSynced() bool
 }
-
 var _ Manager = (*Controller)(nil)
-
 func NewIPSecCertificateController(
 	kubeClient clientset.Interface,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
@@ -107,7 +87,6 @@ func NewIPSecCertificateController(
 ) *Controller {
 	return newIPSecCertificateControllerWithCustomClock(kubeClient, ovsBridgeClient, nodeName, clock.RealClock{})
 }
-
 func newIPSecCertificateControllerWithCustomClock(kubeClient clientset.Interface,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	nodeName string, clock clock.WithTicker) *Controller {
@@ -129,14 +108,12 @@ func newIPSecCertificateControllerWithCustomClock(kubeClient clientset.Interface
 	controller.rotateCertificate = controller.newCertificateKeyPair
 	return controller
 }
-
 // worker is a long-running function that will continually call the processNextWorkItem function in
 // order to read and process a message on the workqueue.
 func (c *Controller) worker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 func (c *Controller) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
@@ -151,7 +128,6 @@ func (c *Controller) processNextWorkItem() bool {
 	}
 	return true
 }
-
 type certificateKeyPair struct {
 	caCertificate    []*x509.Certificate
 	certificate      []*x509.Certificate
@@ -160,7 +136,6 @@ type certificateKeyPair struct {
 	privateKeyPath   string
 	rotationDeadline time.Time
 }
-
 func (pair *certificateKeyPair) validate(clock clock.Clock) error {
 	if pair == nil {
 		return fmt.Errorf("certificate and key pair is nil")
@@ -204,7 +179,6 @@ func (pair *certificateKeyPair) validate(clock clock.Clock) error {
 	}
 	return nil
 }
-
 // cleanup deletes the files of certificate and private key.
 func (pair *certificateKeyPair) cleanup() {
 	if pair.certificatePath != "" {
@@ -220,13 +194,11 @@ func (pair *certificateKeyPair) cleanup() {
 		}
 	}
 }
-
 // jitteryDuration returns a duration in [totalDuration * 0.7, totalDuration * 0.9].
 func jitteryDuration(totalDuration time.Duration) time.Duration {
 	// wait.Jitter returns a duration in [totalDuration, totalDuration * 1.2].
 	return wait.Jitter(time.Duration(totalDuration), 0.2) - time.Duration(float64(totalDuration)*0.3)
 }
-
 // nextRotationDeadline returns a value for the threshold at which the
 // current certificate should be rotated, 80%+/-10% of the expiration of the
 // certificate. The deadline will not change once calculated.
@@ -243,7 +215,6 @@ func (pair *certificateKeyPair) nextRotationDeadline() time.Time {
 	pair.rotationDeadline = deadline
 	return deadline
 }
-
 func loadCertAndKeyFromFiles(caPath, certPath, keyPath string) (*certificateKeyPair, error) {
 	ca, err := loadRootCA(caPath)
 	if err != nil {
@@ -266,14 +237,12 @@ func loadCertAndKeyFromFiles(caPath, certPath, keyPath string) (*certificateKeyP
 	}
 	return pair, nil
 }
-
 func (c *Controller) syncConfigurations() error {
 	startTime := c.clock.Now()
 	defer func() {
 		d := time.Since(startTime)
 		klog.V(2).InfoS("Finished syncing IPsec certificate configurations", "duration", d)
 	}()
-
 	var deadline time.Time
 	// Validate the existing certificate and key pair.
 	if err := c.certificateKeyPair.validate(c.clock); err != nil {
@@ -313,14 +282,12 @@ func (c *Controller) syncConfigurations() error {
 	atomic.StoreUint32(&c.syncedOnce, 1)
 	return nil
 }
-
 // HasSynced implements the Manager interface.
 func (c *Controller) HasSynced() bool {
 	// returns true if the controller has configured certificate successfully
 	// at least once.
 	return atomic.LoadUint32(&c.syncedOnce) == 1
 }
-
 func loadRootCA(caPath string) ([]*x509.Certificate, error) {
 	pemBlock, err := os.ReadFile(caPath)
 	if err != nil {
@@ -332,7 +299,6 @@ func loadRootCA(caPath string) ([]*x509.Certificate, error) {
 	}
 	return certs, nil
 }
-
 func newRSAPrivateKey() (crypto.Signer, []byte, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -344,7 +310,6 @@ func newRSAPrivateKey() (crypto.Signer, []byte, error) {
 	}
 	return key, bs, nil
 }
-
 func loadPrivateKey(privateKeyPath string) (crypto.Signer, error) {
 	var keyPEMBytes []byte
 	_, err := os.Stat(privateKeyPath)
@@ -369,7 +334,6 @@ func loadPrivateKey(privateKeyPath string) (crypto.Signer, error) {
 	}
 	return nil, nil
 }
-
 func loadCertificate(certPath string) ([]*x509.Certificate, error) {
 	var certPEMBytes []byte
 	_, err := os.Stat(certPath)
@@ -393,7 +357,6 @@ func loadCertificate(certPath string) ([]*x509.Certificate, error) {
 	}
 	return nil, nil
 }
-
 func (c *Controller) syncOVSConfigurations(certPath, keyPath, caPath string) error {
 	ovsConfig := map[string]interface{}{
 		ovsConfigCertificateKey:   certPath,
@@ -403,7 +366,6 @@ func (c *Controller) syncOVSConfigurations(certPath, keyPath, caPath string) err
 	klog.InfoS("Updating OVS configurations for IPsec certificates")
 	return c.ovsBridgeClient.UpdateOVSOtherConfig(ovsConfig)
 }
-
 func newCSR(csrNamePrefix, commonName string, privateKey crypto.Signer) (*certificatesv1.CertificateSigningRequest, error) {
 	subject := &pkix.Name{
 		CommonName:   commonName,
@@ -424,19 +386,15 @@ func newCSR(csrNamePrefix, commonName string, privateKey crypto.Signer) (*certif
 		},
 	}, nil
 }
-
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.InfoS("Starting " + controllerName)
 	defer klog.InfoS("Shutting down " + controllerName)
-
 	// Load the previous configured certificate path from OVS database.
 	config, ovsErr := c.ovsBridgeClient.GetOVSOtherConfig()
 	if ovsErr != nil {
 		klog.ErrorS(ovsErr, "Failed to get OVS bridge other configs")
 	}
-
 	certificatePath := config[ovsConfigCertificateKey]
 	privateKeyPath := config[ovsConfigPrivateKeyKey]
 	if certificatePath != "" && privateKeyPath != "" {
@@ -448,12 +406,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 			c.certificateKeyPair = pair
 		}
 	}
-
 	c.queue.Add(workerItemKey)
 	go wait.Until(c.worker, time.Second, stopCh)
 	<-stopCh
 }
-
 func (c *Controller) newCertificateKeyPair() (*certificateKeyPair, error) {
 	key, rawKey, err := newRSAPrivateKey()
 	if err != nil {
@@ -489,6 +445,5 @@ func (c *Controller) newCertificateKeyPair() (*certificateKeyPair, error) {
 		return nil, err
 	}
 	klog.InfoS("Created new certificate and key for IPSec", "cert", certPath, "key", keyPath)
-
 	return loadCertAndKeyFromFiles(c.caPath, certPath, keyPath)
 }

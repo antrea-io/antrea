@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package interfacestore
-
 import (
 	"net"
 	"reflect"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 var (
 	podMAC, _     = net.ParseMAC("11:22:33:44:55:66")
 	podIP         = net.ParseIP("1.2.3.4")
@@ -41,7 +33,6 @@ var (
 	nodeName      = "n1"
 	peerNodeName  = "n2"
 )
-
 func TestNewInterfaceStore(t *testing.T) {
 	t.Run("testContainerInterface", testContainerInterface)
 	t.Run("testSecondaryInterface", testSecondaryInterface)
@@ -50,7 +41,6 @@ func TestNewInterfaceStore(t *testing.T) {
 	t.Run("testUplinkInterface", testUplinkInterface)
 	t.Run("testExternalEntityInterface", testEntityInterface)
 }
-
 func testContainerInterface(t *testing.T) {
 	store := NewInterfaceStore()
 	containerInterface := NewContainerInterface("ns0p0c0", "c0", "p0", "ns0", "eth0", "netns0",
@@ -85,7 +75,6 @@ func testContainerInterface(t *testing.T) {
 	assert.Equal(t, 1, len(ifaceNames))
 	assert.Equal(t, containerInterfaceKey, ifaceNames[0])
 	assert.Equal(t, 1, store.GetContainerInterfaceNum())
-
 	store.DeleteInterface(containerInterface)
 	assert.Equal(t, 0, store.GetContainerInterfaceNum())
 	_, exists = store.GetContainerInterface(containerInterface.ContainerID)
@@ -94,14 +83,12 @@ func testContainerInterface(t *testing.T) {
 	assert.False(t, exists)
 	_, exists = store.GetInterfaceByIP(containerInterface.IPs[1].String())
 	assert.False(t, exists)
-
 	containerInterface.IPs = nil
 	store.AddInterface(containerInterface)
 	assert.Equal(t, 1, store.GetContainerInterfaceNum())
 	_, exists = store.GetInterfaceByIP(podIP.String())
 	assert.False(t, exists)
 }
-
 func testSecondaryInterface(t *testing.T) {
 	store := NewInterfaceStore()
 	// Seondary interface without an IP.
@@ -111,7 +98,6 @@ func testSecondaryInterface(t *testing.T) {
 		podMAC, []net.IP{podIP}, 0)
 	store.Initialize([]*InterfaceConfig{containerInterface1, containerInterface2})
 	assert.Equal(t, 2, store.Len())
-
 	for _, containerInterface := range []*InterfaceConfig{containerInterface1, containerInterface2} {
 		interfaceKey := util.GenerateContainerInterfaceKey(containerInterface.ContainerID, containerInterface.IFDev)
 		storedIface, exists := store.GetInterface(interfaceKey)
@@ -133,7 +119,6 @@ func testSecondaryInterface(t *testing.T) {
 		ifaceNames := store.GetInterfaceKeysByType(ContainerInterface)
 		assert.Equal(t, 2, len(ifaceNames))
 		assert.Equal(t, 2, store.GetContainerInterfaceNum())
-
 		store.DeleteInterface(containerInterface)
 		assert.Equal(t, 1, store.GetContainerInterfaceNum())
 		if containerInterface.IPs != nil {
@@ -144,7 +129,6 @@ func testSecondaryInterface(t *testing.T) {
 		assert.Equal(t, 2, store.GetContainerInterfaceNum())
 	}
 }
-
 func testGatewayInterface(t *testing.T) {
 	gatewayInterface := NewGatewayInterface("antrea-gw0", util.GenerateRandomMAC())
 	gatewayInterface.IPs = []net.IP{gwIP}
@@ -154,7 +138,6 @@ func testGatewayInterface(t *testing.T) {
 	}
 	testGeneralInterface(t, gatewayInterface, GatewayInterface)
 }
-
 func testTunnelInterface(t *testing.T) {
 	store := NewInterfaceStore()
 	tunnelInterface := NewTunnelInterface("antrea-tun0", ovsconfig.GeneveTunnel, 6081, hostIP, false, &OVSPortConfig{
@@ -180,7 +163,6 @@ func testTunnelInterface(t *testing.T) {
 		assert.True(t, exists)
 		assert.True(t, reflect.DeepEqual(storedIface, tunIface))
 	}
-
 	ipsecTunnelKey := util.GenerateNodeTunnelInterfaceKey(ipsecTunnelInterface.NodeName)
 	storedIface, exists := store.GetInterface(ipsecTunnelKey)
 	assert.True(t, exists)
@@ -195,7 +177,6 @@ func testTunnelInterface(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(storedIface, ipsecTunnelInterface))
 	_, exists = store.GetNodeTunnelInterface(peerNodeName)
 	assert.False(t, exists)
-
 	ifaceNames := store.GetInterfaceKeysByType(TunnelInterface)
 	assert.Equal(t, 1, len(ifaceNames))
 	ipsecIfaceNames := store.GetInterfaceKeysByType(IPSecTunnelInterface)
@@ -210,7 +191,6 @@ func testTunnelInterface(t *testing.T) {
 	_, exists = store.GetInterfaceByName(ipsecTunnelInterface.InterfaceName)
 	assert.True(t, exists)
 }
-
 func testUplinkInterface(t *testing.T) {
 	uplinkInterface := NewUplinkInterface("ens224")
 	uplinkInterface.IPs = []net.IP{hostIP}
@@ -220,7 +200,6 @@ func testUplinkInterface(t *testing.T) {
 	}
 	testGeneralInterface(t, uplinkInterface, UplinkInterface)
 }
-
 func testEntityInterface(t *testing.T) {
 	store := NewInterfaceStore()
 	portConfig := &OVSPortConfig{OFPort: 18, PortUUID: "123456789"}
@@ -259,7 +238,6 @@ func testEntityInterface(t *testing.T) {
 	store.AddInterface(entityInterface)
 	assert.Equal(t, 1, len(store.GetInterfaceKeysByType(ExternalEntityInterface)))
 }
-
 func testGeneralInterface(t *testing.T, ifaceConfig *InterfaceConfig, ifaceType InterfaceType) {
 	store := NewInterfaceStore()
 	store.Initialize([]*InterfaceConfig{ifaceConfig})
@@ -288,7 +266,6 @@ func testGeneralInterface(t *testing.T, ifaceConfig *InterfaceConfig, ifaceType 
 	assert.Equal(t, 1, len(ifaces))
 	assert.Equal(t, ifaceConfig, ifaces[0])
 }
-
 func newExternalEntityInterface(name string, entityIPs []net.IP, entityName string, entityNamespace string, ovsPortConfig, uplinkPortConfig *OVSPortConfig) *InterfaceConfig {
 	return &InterfaceConfig{
 		Type:          ExternalEntityInterface,
@@ -302,7 +279,6 @@ func newExternalEntityInterface(name string, entityIPs []net.IP, entityName stri
 		},
 	}
 }
-
 func TestUpdateStore(t *testing.T) {
 	store := NewInterfaceStore()
 	mac, _ := net.ParseMAC("aa:aa:aa:aa:aa:aa")

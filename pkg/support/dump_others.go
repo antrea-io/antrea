@@ -11,37 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 //go:build !windows
 // +build !windows
-
 package support
-
 import (
 	"fmt"
 	"path"
 	"path/filepath"
 	"strings"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
 	"antrea.io/antrea/v2/pkg/util/logdir"
-=======
-	"antrea.io/antrea/pkg/agent/util/iptables"
-	"antrea.io/antrea/pkg/util/logdir"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
+	"antrea.io/antrea/v2/pkg/util/logdir"
 )
-
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
 	timeFilter := timestampFilter(d.since)
-
 	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent", timeFilter); err != nil {
 		return err
 	}
 	return directoryCopy(d.fs, path.Join(basedir, "logs", "ovs"), logDir, "ovs", timeFilter)
 }
-
 func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpIPTables(basedir); err != nil {
 		return err
@@ -51,7 +41,6 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	}
 	return nil
 }
-
 func (d *agentDumper) dumpIPTables(basedir string) error {
 	c, err := iptables.New(d.v4Enabled, d.v6Enabled)
 	if err != nil {
@@ -63,7 +52,6 @@ func (d *agentDumper) dumpIPTables(basedir string) error {
 	}
 	return writeFile(d.fs, filepath.Join(basedir, "iptables"), "iptables", data)
 }
-
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
 	dump := func(name string) error {
 		output, err := d.executor.Command("ip", name).CombinedOutput()
@@ -79,7 +67,6 @@ func (d *agentDumper) dumpIPToolInfo(basedir string) error {
 	}
 	return nil
 }
-
 func (d *agentDumper) DumpMemberlist(basedir string) error {
 	output, err := d.executor.Command("antctl", "-oyaml", "get", "memberlist").CombinedOutput()
 	if err != nil && !strings.Contains(string(output), "memberlist is not enabled") {

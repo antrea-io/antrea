@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"fmt"
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
-
 // TestWireGuard checks that Pod traffic across two Nodes over the WireGuard tunnel by creating
 // multiple Pods across distinct Nodes and having them ping each other. It will also verify that
 // the handshake was established when the wg command line is available.
@@ -39,7 +31,6 @@ func TestWireGuard(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaIPAMTest(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -66,17 +57,14 @@ func TestWireGuard(t *testing.T) {
 			t.Errorf("Failed to disable WireGuard tunnel: %v", err)
 		}
 	}()
-
 	t.Run("testPodConnectivity", func(t *testing.T) { testPodConnectivity(t, data) })
 	t.Run("testServiceConnectivity", func(t *testing.T) { testServiceConnectivity(t, data) })
 }
-
 func testPodConnectivity(t *testing.T, data *TestData) {
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, "differentnodes")
 	defer deletePods()
 	numPods := 2
 	data.runPingMesh(t, podInfos[:numPods], toolboxContainerName, true)
-
 	// Make sure that route to Pod on peer Node and route to peer gateway is targeting the WireGuard device.
 	srcPod, err := data.getAntreaPodOnNode(nodeName(0))
 	require.NoError(t, err)
@@ -104,7 +92,6 @@ func testPodConnectivity(t *testing.T, data *TestData) {
 			break
 		}
 	}
-
 	tests := []struct {
 		name               string
 		dstIP              string
@@ -134,7 +121,6 @@ func testPodConnectivity(t *testing.T, data *TestData) {
 		})
 	}
 }
-
 // testServiceConnectivity verifies host-to-service can be transferred through the encrypted tunnel correctly.
 func testServiceConnectivity(t *testing.T, data *TestData) {
 	clientPodName := "hostnetwork-pod"
@@ -145,15 +131,12 @@ func testServiceConnectivity(t *testing.T, data *TestData) {
 	serverPodNode := nodeName(1)
 	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, data.testNamespace, serverPodNode, corev1.ServiceTypeNodePort)
 	defer cleanup()
-
 	// Create the a hostNetwork Pod on a Node different from the service's backend Pod, so the service traffic will be transferred across the tunnel.
 	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, ToolboxImage).OnNode(clientPodNode).InHostNetwork().Create(data))
 	defer data.DeletePodAndWait(defaultTimeout, clientPodName, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
-
 	err := data.runNetcatCommandFromTestPod(clientPodName, data.testNamespace, svc.Spec.ClusterIP, 80)
 	require.NoError(t, err, "Pod %s should be able to connect the service's ClusterIP %s, but was not able to connect", clientPodName, net.JoinHostPort(svc.Spec.ClusterIP, fmt.Sprint(80)))
-
 	err = data.runNetcatCommandFromTestPod(clientPodName, data.testNamespace, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
 	require.NoError(t, err, "Pod %s should be able to connect the service's NodePort %s:%d, but was not able to connect", clientPodName, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
 }

@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"context"
 	"fmt"
 	"net"
 	"testing"
 	"time"
-
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,16 +25,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 )
-
 func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string,
 	clockToInject clock.WithTicker, fqdnCacheMinTTL uint32) (*fqdnController, *openflowtest.MockClient) {
 	mockOFClient := openflowtest.NewMockClient(controller)
@@ -64,7 +56,6 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 	require.NoError(t, err)
 	return f, mockOFClient
 }
-
 func TestAddFQDNRule(t *testing.T) {
 	selectorItem1 := fqdnSelectorItem{
 		matchName: "test.antrea.io",
@@ -208,13 +199,11 @@ func TestAddFQDNRule(t *testing.T) {
 		})
 	}
 }
-
 type fqdnRuleAddArgs struct {
 	ruleID         string
 	fqdns          []string
 	podOFAddresses sets.Set[int32]
 }
-
 func TestDeleteFQDNRule(t *testing.T) {
 	selectorItem1 := fqdnSelectorItem{
 		matchName: "test.antrea.io",
@@ -354,7 +343,6 @@ func TestDeleteFQDNRule(t *testing.T) {
 		})
 	}
 }
-
 func TestLookupIPFallback(t *testing.T) {
 	controller := gomock.NewController(t)
 	dnsServer := "" // force a fallback to local resolver
@@ -366,7 +354,6 @@ func TestLookupIPFallback(t *testing.T) {
 	err := f.lookupIP(ctx, "www.google.com")
 	require.NoError(t, err, "Error when resolving name")
 }
-
 func TestString(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -388,7 +375,6 @@ func TestString(t *testing.T) {
 			expectedOutput: "matchName:test.antrea.io",
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			gotOutput := tc.selectorItem.String()
@@ -396,7 +382,6 @@ func TestString(t *testing.T) {
 		})
 	}
 }
-
 func TestGetIPsForFQDNSelectors(t *testing.T) {
 	selectorItem := fqdnSelectorItem{
 		matchName: "test.antrea.io",
@@ -431,7 +416,6 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 			expectedMatchedIPs: nil,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
@@ -447,7 +431,6 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 		})
 	}
 }
-
 func TestSyncDirtyRules(t *testing.T) {
 	testFQDN := "test.antrea.io"
 	selectorItem := fqdnSelectorItem{
@@ -573,7 +556,6 @@ func TestSyncDirtyRules(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			go f.runRuleSyncTracker(stopCh)
-
 			for i, fqdn := range tc.fqdnsToSync {
 				f.syncDirtyRules(fqdn, tc.waitChs[i], tc.addressUpdates[i])
 			}
@@ -593,7 +575,6 @@ func TestSyncDirtyRules(t *testing.T) {
 		})
 	}
 }
-
 func TestOnDNSResponse(t *testing.T) {
 	testFQDN := "fqdn-test-pod.lfx.test"
 	selectorItem1 := fqdnSelectorItem{
@@ -603,7 +584,6 @@ func TestOnDNSResponse(t *testing.T) {
 		matchName: "random-domain.com",
 	}
 	currentTime := time.Now()
-
 	tests := []struct {
 		name                  string
 		existingDNSCache      map[string]dnsMeta
@@ -711,7 +691,6 @@ func TestOnDNSResponse(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeClock := newFakeClock(currentTime)
@@ -722,18 +701,13 @@ func TestOnDNSResponse(t *testing.T) {
 				f.selectorItemToRuleIDs = tc.mockSelectorToRuleIDs
 			}
 			require.Zero(t, fakeClock.TimersAdded())
-
 			f.onDNSResponse(testFQDN, tc.dnsResponseIPs, nil)
-
 			cachedDnsMetaData := f.dnsEntryCache[testFQDN]
-
 			assert.Equal(t, tc.expectedIPs, cachedDnsMetaData.responseIPs, "FQDN cache doesn't match expected entries")
-
 			if tc.expectedRequeryAfter != nil {
 				// Wait for the DelayingQueue to create the timer which signals that the
 				// DNS request for the FQDN item is ready to be sent.
 				require.Eventually(t, func() bool { return fakeClock.TimersAdded() > 0 }, 1*time.Second, 10*time.Millisecond)
-
 				fakeClock.Step(*tc.expectedRequeryAfter)
 				// needed to avoid blocking on Get() in case of failure
 				require.Eventually(t, func() bool { return f.dnsQueryQueue.Len() > 0 }, 1*time.Second, 10*time.Millisecond)
@@ -747,7 +721,6 @@ func TestOnDNSResponse(t *testing.T) {
 		})
 	}
 }
-
 // TestParseDNSResponseOnFQDNCacheMinTTL tests the behavior of the parseDNSResponse function when
 // handling DNS responses with varying TTL values, and checks if the TTL used for caching respects
 // the minimum TTL (fqdnCacheMinTTL) for a given Fully Qualified Domain Name (FQDN).
@@ -815,7 +788,6 @@ func TestParseDNSResponseOnFQDNCacheMinTTL(t *testing.T) {
 			responseTTL:     5,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeClock := newFakeClock(currentTime)

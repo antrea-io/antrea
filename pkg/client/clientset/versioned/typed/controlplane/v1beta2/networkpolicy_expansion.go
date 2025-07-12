@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package v1beta2
-
 import (
 	"context"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 // The NetworkPolicyExpansion interface allows manually adding extra methods to the NetworkPolicyInterface.
 type NetworkPolicyExpansion interface {
 	UpdateStatus(ctx context.Context, name string, status *v1beta2.NetworkPolicyStatus) error
 }
-
 func (c *networkPolicies) UpdateStatus(ctx context.Context, name string, status *v1beta2.NetworkPolicyStatus) error {
 	return c.GetClient().Post().Name(name).Resource("networkpolicies").SubResource("status").Body(status).Do(ctx).Error()
 }

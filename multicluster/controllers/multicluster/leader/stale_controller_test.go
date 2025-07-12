@@ -1,26 +1,20 @@
 /*
 Copyright 2023 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package leader
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,20 +22,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
 )
-
 func TestReconcile(t *testing.T) {
 	resExport1 := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -94,7 +83,6 @@ func TestReconcile(t *testing.T) {
 		},
 		ClusterID: "cluster-2",
 	}
-
 	tests := []struct {
 		name                          string
 		memberAnnounceName            string
@@ -150,7 +138,6 @@ func TestReconcile(t *testing.T) {
 		})
 	}
 }
-
 func TestStaleController_CleanUpMemberClusterAnnounces(t *testing.T) {
 	tests := []struct {
 		name                              string
@@ -239,12 +226,10 @@ func TestStaleController_CleanUpMemberClusterAnnounces(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.memberClusterAnnounceList).WithLists(tt.clusterSet).Build()
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme)
 			c.cleanUpExpiredMemberClusterAnnounces(ctx)
-
 			memberClusterAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
 			if err := fakeClient.List(context.TODO(), memberClusterAnnounceList, &client.ListOptions{}); err != nil {
 				t.Errorf("Should list MemberClusterAnnounce successfully but got err = %v", err)
 			}
-
 			assert.Equal(t, tt.exceptMemberClusterAnnounceNumber, len(memberClusterAnnounceList.Items))
 		})
 	}

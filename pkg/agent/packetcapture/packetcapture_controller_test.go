@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package packetcapture
-
 import (
 	"context"
 	"fmt"
@@ -22,7 +20,6 @@ import (
 	"slices"
 	"testing"
 	"time"
-
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	"github.com/spf13/afero"
@@ -40,31 +37,25 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/util"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/util/k8s"
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
-
 var (
 	pod1IPv4 = "192.168.10.10"
 	pod2IPv4 = "192.168.11.10"
 	pod3IPv4 = "192.168.12.10"
-
 	ipv6                     = "2001:db8::68"
 	pod1MAC, _               = net.ParseMAC("aa:bb:cc:dd:ee:0f")
 	pod2MAC, _               = net.ParseMAC("aa:bb:cc:dd:ee:00")
@@ -72,11 +63,9 @@ var (
 	ofPortPod2               = uint32(2)
 	testCaptureTimeout       = int32(1)
 	testCaptureNum     int32 = 15
-
 	icmpProto    = intstr.FromString("ICMP")
 	invalidProto = intstr.FromString("INVALID")
 	testFTPUrl   = "sftp://127.0.0.1:22/path"
-
 	pod1 = v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pod-1",
@@ -108,7 +97,6 @@ var (
 			},
 		},
 	}
-
 	secret1 = v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fileServerAuthSecretName,
@@ -120,7 +108,6 @@ var (
 		},
 	}
 )
-
 func genTestCR(name string, num int32) *crdv1alpha1.PacketCapture {
 	result := &crdv1alpha1.PacketCapture{
 		ObjectMeta: metav1.ObjectMeta{Name: name, UID: types.UID(fmt.Sprintf("uid-%s", name))},
@@ -153,13 +140,11 @@ func genTestCR(name string, num int32) *crdv1alpha1.PacketCapture {
 	}
 	return result
 }
-
 type testUploader struct {
 	url      string
 	fileName string
 	hostKey  ssh.PublicKey
 }
-
 func (uploader *testUploader) Upload(url string, fileName string, config *ssh.ClientConfig, outputFile io.Reader) error {
 	if url != uploader.url {
 		return fmt.Errorf("expected url: %s for uploader, got: %s", uploader.url, url)
@@ -177,7 +162,6 @@ func (uploader *testUploader) Upload(url string, fileName string, config *ssh.Cl
 	}
 	return nil
 }
-
 func craftTestPacket() gopacket.Packet {
 	buffer := gopacket.NewSerializeBuffer()
 	options := gopacket.SerializeOptions{}
@@ -199,10 +183,8 @@ func craftTestPacket() gopacket.Packet {
 	)
 	return gopacket.NewPacket(buffer.Bytes(), layers.LayerTypeEthernet, gopacket.NoCopy)
 }
-
 type testCapture struct {
 }
-
 func (p *testCapture) Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet, direction crdv1alpha1.CaptureDirection) (chan gopacket.Packet, error) {
 	ch := make(chan gopacket.Packet, testCaptureNum)
 	for i := 0; i < 15; i++ {
@@ -210,7 +192,6 @@ func (p *testCapture) Capture(ctx context.Context, device string, snapLen int, s
 	}
 	return ch, nil
 }
-
 type fakePacketCaptureController struct {
 	*Controller
 	kubeClient         kubernetes.Interface
@@ -219,7 +200,6 @@ type fakePacketCaptureController struct {
 	crdInformerFactory crdinformers.SharedInformerFactory
 	informerFactory    informers.SharedInformerFactory
 }
-
 func newFakePacketCaptureController(t *testing.T, runtimeObjects []runtime.Object, initObjects []runtime.Object) *fakePacketCaptureController {
 	controller := gomock.NewController(t)
 	objs := append(runtimeObjects, &pod1, &pod2, &pod3, &secret1)
@@ -228,11 +208,9 @@ func newFakePacketCaptureController(t *testing.T, runtimeObjects []runtime.Objec
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	packetCaptureInformer := crdInformerFactory.Crd().V1alpha1().PacketCaptures()
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
-
 	ifaceStore := interfacestore.NewInterfaceStore()
 	addPodInterface(ifaceStore, pod1.Namespace, pod1.Name, []string{pod1IPv4, ipv6}, pod1MAC.String(), int32(ofPortPod1))
 	addPodInterface(ifaceStore, pod2.Namespace, pod2.Name, []string{pod2IPv4}, pod2MAC.String(), int32(ofPortPod2))
-
 	// NewPacketCaptureController dont work on windows
 	pcController, err := NewPacketCaptureController(kubeClient, crdClient, packetCaptureInformer, ifaceStore)
 	if err != nil {
@@ -251,14 +229,12 @@ func newFakePacketCaptureController(t *testing.T, runtimeObjects []runtime.Objec
 			DeleteFunc: pcController.deletePacketCapture,
 		}, resyncPeriod)
 	}
-
 	pcController.sftpUploader = &testUploader{}
 	pcController.captureInterface = &testCapture{}
 	pcController.queue = workqueue.NewTypedRateLimitingQueueWithConfig(
 		workqueue.NewTypedItemExponentialFailureRateLimiter[string](time.Millisecond*50, time.Millisecond*200),
 		workqueue.TypedRateLimitingQueueConfig[string]{Name: "packetcapture"},
 	)
-
 	t.Setenv("POD_NAME", "antrea-agent")
 	t.Setenv("POD_NAMESPACE", "kube-system")
 	return &fakePacketCaptureController{
@@ -270,7 +246,6 @@ func newFakePacketCaptureController(t *testing.T, runtimeObjects []runtime.Objec
 		informerFactory:    informerFactory,
 	}
 }
-
 func addPodInterface(ifaceStore interfacestore.InterfaceStore, podNamespace, podName string, podIPs []string, podMac string, ofPort int32) {
 	containerName := k8s.NamespacedName(podNamespace, podName)
 	var ifIPs []net.IP
@@ -286,7 +261,6 @@ func addPodInterface(ifaceStore interfacestore.InterfaceStore, podNamespace, pod
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: ofPort},
 	})
 }
-
 func TestMultiplePacketCaptures(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defer func() {
@@ -332,7 +306,6 @@ func TestMultiplePacketCaptures(t *testing.T) {
 		assert.Equal(c, 0, pcc.numRunningCaptures)
 		assert.Equal(c, 20, len(pcc.captures))
 	}, 5*time.Second, 50*time.Millisecond)
-
 	for i := 0; i < 20; i++ {
 		err := pcc.crdClient.CrdV1alpha1().PacketCaptures().Delete(context.TODO(), nameFunc(i), metav1.DeleteOptions{})
 		require.NoError(t, err)
@@ -342,9 +315,7 @@ func TestMultiplePacketCaptures(t *testing.T) {
 		defer pcc.mutex.Unlock()
 		return len(pcc.captures) == 0
 	}, 2*time.Second, 20*time.Millisecond)
-
 }
-
 // TestPacketCaptureControllerRun was used to validate the whole run process is working.
 func TestPacketCaptureControllerRun(t *testing.T) {
 	pcs := []struct {
@@ -489,7 +460,6 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 			},
 		},
 	}
-
 	objs := []runtime.Object{}
 	for _, pc := range pcs {
 		objs = append(objs, pc.pc)
@@ -532,7 +502,6 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 		})
 	}
 }
-
 func TestMergeConditions(t *testing.T) {
 	tt := []struct {
 		name     string
@@ -540,7 +509,6 @@ func TestMergeConditions(t *testing.T) {
 		old      []crdv1alpha1.PacketCaptureCondition
 		expected []crdv1alpha1.PacketCaptureCondition
 	}{
-
 		{
 			name: "use-old",
 			new: []crdv1alpha1.PacketCaptureCondition{
@@ -603,7 +571,6 @@ func TestMergeConditions(t *testing.T) {
 			},
 		},
 	}
-
 	for _, item := range tt {
 		t.Run(item.name, func(t *testing.T) {
 			result := mergeConditions(item.old, item.new)
@@ -611,10 +578,8 @@ func TestMergeConditions(t *testing.T) {
 		})
 	}
 }
-
 func TestUploadPackets(t *testing.T) {
 	ctx := context.Background()
-
 	generateHostKey := func(t *testing.T) ssh.PublicKey {
 		publicKey, _, err := sftptesting.GenerateEd25519Key()
 		require.NoError(t, err)
@@ -622,9 +587,7 @@ func TestUploadPackets(t *testing.T) {
 	}
 	hostKey1 := generateHostKey(t)
 	hostKey2 := generateHostKey(t)
-
 	fs := afero.NewMemMapFs()
-
 	testCases := []struct {
 		name            string
 		serverHostKey   ssh.PublicKey
@@ -654,7 +617,6 @@ func TestUploadPackets(t *testing.T) {
 			expectedErr:     "invalid host public key",
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			pc := genTestCR("foo", testCaptureNum)

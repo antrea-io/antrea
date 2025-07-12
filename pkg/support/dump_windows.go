@@ -11,37 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 //go:build windows
 // +build windows
-
 package support
-
 import (
 	"fmt"
 	"path"
 	"path/filepath"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/util/logdir"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/util/logdir"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/util/logdir"
 )
-
 const (
 	antreaWindowsOVSLogDir     = `C:\openvswitch\var\log\openvswitch`
 	antreaWindowsKubeletLogDir = `C:\var\log\kubelet`
 )
-
 // Todo: Logs for OVS and kubelet are collected from the fixed path currently, more enhancements are needed to support
 // collecting them from a configurable path in the future.
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
 	timeFilter := timestampFilter(d.since)
-
 	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent", timeFilter); err != nil {
 		return err
 	}
@@ -55,7 +45,6 @@ func (d *agentDumper) DumpLog(basedir string) error {
 	}
 	return nil
 }
-
 func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpNetworkConfig(basedir); err != nil {
 		return err
@@ -67,7 +56,6 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	}
 	return nil
 }
-
 func (d *agentDumper) dumpNetworkConfig(basedir string) error {
 	type netResource struct {
 		name      string
@@ -80,7 +68,6 @@ func (d *agentDumper) dumpNetworkConfig(basedir string) error {
 		}
 		return writeFile(d.fs, filepath.Join(basedir, nr.name), nr.name, output)
 	}
-
 	for _, nr := range []*netResource{
 		{name: "network-adapters", psCommand: "Get-NetAdapter"},
 		{name: "ipconfig", psCommand: "ipconfig /all"},
@@ -92,7 +79,6 @@ func (d *agentDumper) dumpNetworkConfig(basedir string) error {
 	}
 	return nil
 }
-
 func (d *agentDumper) dumpHNSResources(basedir string) error {
 	hnsDumper := func(hnsResource string) error {
 		output, err := d.executor.Command("powershell.exe", fmt.Sprintf("Get-%s", hnsResource)).CombinedOutput()
@@ -101,7 +87,6 @@ func (d *agentDumper) dumpHNSResources(basedir string) error {
 		}
 		return writeFile(d.fs, filepath.Join(basedir, hnsResource), hnsResource, output)
 	}
-
 	for _, res := range []string{"HNSNetwork", "HNSEndpoint"} {
 		if err := hnsDumper(res); err != nil {
 			return err
@@ -109,7 +94,6 @@ func (d *agentDumper) dumpHNSResources(basedir string) error {
 	}
 	return nil
 }
-
 func (d *agentDumper) DumpMemberlist(basedir string) error {
 	// memberlist never runs on Windows.
 	return nil

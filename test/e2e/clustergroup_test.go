@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"fmt"
 	"testing"
 	"time"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 func testInvalidCGIPBlockWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with ipblock and podSelector")
 	cgName := "ipb-pod"
@@ -49,7 +41,6 @@ func testInvalidCGIPBlockWithPodSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidCGIPBlockWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with ipblock and namespaceSelector")
 	cgName := "ipb-ns"
@@ -70,7 +61,6 @@ func testInvalidCGIPBlockWithNSSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidCGServiceRefWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and podSelector")
 	cgName := "svcref-pod-selector"
@@ -93,7 +83,6 @@ func testInvalidCGServiceRefWithPodSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidCGServiceRefWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and namespaceSelector")
 	cgName := "svcref-ns-selector"
@@ -116,7 +105,6 @@ func testInvalidCGServiceRefWithNSSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with ipblock and namespaceSelector")
 	cgName := "ipb-svcref"
@@ -140,9 +128,7 @@ func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 var testChildCGName = "test-child-cg"
-
 func createChildCGForTest(t *testing.T) {
 	cg := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -156,13 +142,11 @@ func createChildCGForTest(t *testing.T) {
 		failOnError(err, t)
 	}
 }
-
 func cleanupChildCGForTest(t *testing.T) {
 	if err := k8sUtils.DeleteCG(testChildCGName); err != nil {
 		failOnError(err, t)
 	}
 }
-
 func testInvalidCGChildGroupWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroups and podSelector")
 	cgName := "child-group-pod-selector"
@@ -181,7 +165,6 @@ func testInvalidCGChildGroupWithPodSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidCGChildGroupWithServiceReference(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroups and ServiceReference")
 	cgName := "child-group-svcref"
@@ -203,7 +186,6 @@ func testInvalidCGChildGroupWithServiceReference(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidCGMaxNestedLevel(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroup which has childGroups itself")
 	cgName1, cgName2 := "cg-nested-1", "cg-nested-2"
@@ -248,7 +230,6 @@ func testInvalidCGMaxNestedLevel(t *testing.T) {
 		failOnError(err, t)
 	}
 }
-
 func getRealizationStatus(cg *crdv1beta1.ClusterGroup) v1.ConditionStatus {
 	conds := cg.Status.Conditions
 	for _, cond := range conds {
@@ -258,7 +239,6 @@ func getRealizationStatus(cg *crdv1beta1.ClusterGroup) v1.ConditionStatus {
 	}
 	return v1.ConditionFalse
 }
-
 func testClusterGroupRealizationStatus(t *testing.T) {
 	invalidErr1 := fmt.Errorf("clustergroup with child groups should only be considered realized when all its child groups are realized")
 	invalidErr2 := fmt.Errorf("clustergroup with selectors or serviceRef should be realized once processed")
@@ -311,21 +291,16 @@ func testClusterGroupRealizationStatus(t *testing.T) {
 	if getRealizationStatus(cgParentReturned) != v1.ConditionTrue {
 		failOnError(invalidErr1, t)
 	}
-
 }
-
 func TestClusterGroup(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	initialize(t, data, nil)
-
 	t.Run("TestGroupClusterGroupValidate", func(t *testing.T) {
 		t.Run("Case=IPBlockWithPodSelectorDenied", func(t *testing.T) { testInvalidCGIPBlockWithPodSelector(t) })
 		t.Run("Case=IPBlockWithNamespaceSelectorDenied", func(t *testing.T) { testInvalidCGIPBlockWithNSSelector(t) })

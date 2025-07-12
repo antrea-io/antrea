@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,27 +13,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package util
-
 import (
 	"fmt"
 	"net"
 	"testing"
-
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
-=======
-	netlinktest "antrea.io/antrea/pkg/agent/util/netlink/testing"
->>>>>>> origin/main
+	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
 )
-
 type mockLink struct {
 	index        int
 	name         string
@@ -42,7 +33,6 @@ type mockLink struct {
 	hardwareAddr net.HardwareAddr
 	altNames     []string
 }
-
 func (l mockLink) Attrs() *netlink.LinkAttrs {
 	return &netlink.LinkAttrs{
 		Index:        l.index,
@@ -52,35 +42,27 @@ func (l mockLink) Attrs() *netlink.LinkAttrs {
 		AltNames:     l.altNames,
 	}
 }
-
 func (l mockLink) Type() string {
 	return "mock"
 }
-
 type mockNetNS struct {
 	file string
 }
-
 func (ns *mockNetNS) Do(toRun func(ns.NetNS) error) error {
 	return toRun(ns)
 }
-
 func (ns *mockNetNS) Set() error {
 	return nil
 }
-
 func (ns *mockNetNS) Path() string {
 	return ns.file
 }
-
 func (ns *mockNetNS) Fd() uintptr {
 	return 0
 }
-
 func (ns *mockNetNS) Close() error {
 	return nil
 }
-
 func TestGetNSPeerDevBridge(t *testing.T) {
 	testNetInterface := generateNetInterface("0")
 	tests := []struct {
@@ -148,7 +130,6 @@ func TestGetNSPeerDevBridge(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -169,7 +150,6 @@ func TestGetNSPeerDevBridge(t *testing.T) {
 		})
 	}
 }
-
 func TestGetNSDevInterface(t *testing.T) {
 	testNetInterface := generateNetInterface("0")
 	tests := []struct {
@@ -192,7 +172,6 @@ func TestGetNSDevInterface(t *testing.T) {
 			wantErrStr:          "failed to get interface",
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockGetNS(&mockNetNS{}, tc.getNSErr)()
@@ -209,7 +188,6 @@ func TestGetNSDevInterface(t *testing.T) {
 		})
 	}
 }
-
 func TestGetNSPath(t *testing.T) {
 	testPath := "test-path"
 	testNetNS := &mockNetNS{file: testPath}
@@ -229,7 +207,6 @@ func TestGetNSPath(t *testing.T) {
 			wantErrStr: "failed to open netns",
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockGetNS(testNetNS, tc.getNSErr)()
@@ -245,7 +222,6 @@ func TestGetNSPath(t *testing.T) {
 		})
 	}
 }
-
 func TestSetLinkUp(t *testing.T) {
 	testLink := mockLink{
 		index:        1,
@@ -296,7 +272,6 @@ func TestSetLinkUp(t *testing.T) {
 			wantIndex: 0,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -309,7 +284,6 @@ func TestSetLinkUp(t *testing.T) {
 		})
 	}
 }
-
 func TestConfigureLinkAddresses(t *testing.T) {
 	testLink := mockLink{name: "test-en0"}
 	testPublicAddr := netlink.Addr{IPNet: &ipv4PublicIPNet}
@@ -393,7 +367,6 @@ func TestConfigureLinkAddresses(t *testing.T) {
 			wantErr: fmt.Errorf("failed to add address 0.0.0.0/32 to interface test-en0: invalid"),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -404,7 +377,6 @@ func TestConfigureLinkAddresses(t *testing.T) {
 		})
 	}
 }
-
 func TestSetAdapterMACAddress(t *testing.T) {
 	testLink := mockLink{name: "test-en0"}
 	tests := []struct {
@@ -435,7 +407,6 @@ func TestSetAdapterMACAddress(t *testing.T) {
 			wantErr: errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -445,7 +416,6 @@ func TestSetAdapterMACAddress(t *testing.T) {
 		})
 	}
 }
-
 func TestHostInterfaceExists(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -474,7 +444,6 @@ func TestHostInterfaceExists(t *testing.T) {
 			wantExists: false,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -484,7 +453,6 @@ func TestHostInterfaceExists(t *testing.T) {
 		})
 	}
 }
-
 func TestGetInterfaceConfig(t *testing.T) {
 	routes := []netlink.Route{{
 		LinkIndex: 0,
@@ -540,7 +508,6 @@ func TestGetInterfaceConfig(t *testing.T) {
 			wantErrStr: "failed to get routes for iface.Index 0",
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -560,7 +527,6 @@ func TestGetInterfaceConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestRenameInterface(t *testing.T) {
 	renameFailErr := fmt.Errorf("failed to rename host interface name test1 to test2")
 	removeAltNameFailErr := fmt.Errorf("failed to remove AltName test1 on interface test2: %w", errTestInvalid)
@@ -637,7 +603,6 @@ func TestRenameInterface(t *testing.T) {
 			wantErr: removeAltNameFailErr,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -647,7 +612,6 @@ func TestRenameInterface(t *testing.T) {
 		})
 	}
 }
-
 func TestRemoveLinkIPs(t *testing.T) {
 	testLink := mockLink{name: "test"}
 	testAddrList := []netlink.Addr{{IPNet: &ipv4PublicIPNet}}
@@ -679,7 +643,6 @@ func TestRemoveLinkIPs(t *testing.T) {
 			wantErr: errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -689,7 +652,6 @@ func TestRemoveLinkIPs(t *testing.T) {
 		})
 	}
 }
-
 func TestRemoveLinkRoutes(t *testing.T) {
 	testLink := mockLink{name: "test"}
 	testRoute := netlink.Route{LinkIndex: 0}
@@ -721,7 +683,6 @@ func TestRemoveLinkRoutes(t *testing.T) {
 			wantErr: errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -731,7 +692,6 @@ func TestRemoveLinkRoutes(t *testing.T) {
 		})
 	}
 }
-
 func TestConfigureLinkRoutes(t *testing.T) {
 	routes := []netlink.Route{{LinkIndex: 0}}
 	testRoutes := createTestRoutes(routes)
@@ -762,7 +722,6 @@ func TestConfigureLinkRoutes(t *testing.T) {
 			wantErr: errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -773,7 +732,6 @@ func TestConfigureLinkRoutes(t *testing.T) {
 		})
 	}
 }
-
 func createTestRoutes(routes []netlink.Route) []interface{} {
 	testRoutes := make([]interface{}, len(routes))
 	for i, v := range routes {
@@ -781,7 +739,6 @@ func createTestRoutes(routes []netlink.Route) []interface{} {
 	}
 	return testRoutes
 }
-
 func mockUtilNetlink(ctrl *gomock.Controller, expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)) func() {
 	originalNetlinkInterface := netlinkUtil
 	testNetlinkInterface := netlinktest.NewMockInterface(ctrl)
@@ -793,7 +750,6 @@ func mockUtilNetlink(ctrl *gomock.Controller, expectedCalls func(mockNetlink *ne
 		netlinkUtil = originalNetlinkInterface
 	}
 }
-
 func mockUtilNetlinkAttrs(testLink netlink.Link) func() {
 	originalNetlinkAttrs := netlinkAttrs
 	netlinkAttrs = func(link netlink.Link) *netlink.LinkAttrs {
@@ -803,7 +759,6 @@ func mockUtilNetlinkAttrs(testLink netlink.Link) func() {
 		netlinkAttrs = originalNetlinkAttrs
 	}
 }
-
 func mockGetNS(testNS ns.NetNS, err error) func() {
 	originalGetNS := getNS
 	getNS = func(nspath string) (ns.NetNS, error) {
@@ -813,7 +768,6 @@ func mockGetNS(testNS ns.NetNS, err error) func() {
 		getNS = originalGetNS
 	}
 }
-
 func mockNetNSDo() func() {
 	originalNetNSDo := netNSDo
 	netNSDo = func(netNS ns.NetNS, f func(ns.NetNS) error) error {
@@ -823,7 +777,6 @@ func mockNetNSDo() func() {
 		netNSDo = originalNetNSDo
 	}
 }
-
 func mockNetNSPath(testNS ns.NetNS) func() {
 	originalNetNSPath := netNSPath
 	netNSPath = func(netNS ns.NetNS) string {
@@ -833,7 +786,6 @@ func mockNetNSPath(testNS ns.NetNS) func() {
 		netNSPath = originalNetNSPath
 	}
 }
-
 func mockNetNSClose(testNS ns.NetNS) func() {
 	originalNetNSClose := netNSClose
 	netNSClose = func(netNS ns.NetNS) error {
@@ -843,7 +795,6 @@ func mockNetNSClose(testNS ns.NetNS) func() {
 		netNSClose = originalNetNSClose
 	}
 }
-
 func mockGetVethPeerIfindex(testLink netlink.Link, ifindex int, err error) func() {
 	originalGetVethPeerIfindex := getVethPeerIfindex
 	getVethPeerIfindex = func(ifName string) (netlink.Link, int, error) {

@@ -11,45 +11,32 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
 	"sync"
-
 	"antrea.io/libOpenflow/openflow15"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 type featureEgress struct {
 	cookieAllocator cookie.Allocator
 	ipProtocols     []binding.Protocol
-
 	cachedFlows *flowCategoryCache
 	cachedMeter sync.Map
-
 	exceptCIDRs map[binding.Protocol][]net.IPNet
 	nodeIPs     map[binding.Protocol]net.IP
 	gatewayMAC  net.HardwareAddr
-
 	category                   cookie.Category
 	enableEgressTrafficShaping bool
 }
-
 func (f *featureEgress) getFeatureName() string {
 	return "Egress"
 }
-
 func newFeatureEgress(cookieAllocator cookie.Allocator,
 	ipProtocols []binding.Protocol,
 	nodeConfig *config.NodeConfig,
@@ -63,7 +50,6 @@ func newFeatureEgress(cookieAllocator cookie.Allocator,
 			exceptCIDRs[binding.ProtocolIP] = append(exceptCIDRs[binding.ProtocolIP], cidr)
 		}
 	}
-
 	nodeIPs := make(map[binding.Protocol]net.IP)
 	for _, ipProtocol := range ipProtocols {
 		switch ipProtocol {
@@ -85,7 +71,6 @@ func newFeatureEgress(cookieAllocator cookie.Allocator,
 		enableEgressTrafficShaping: enableEgressTrafficShaping,
 	}
 }
-
 func (f *featureEgress) initFlows() []*openflow15.FlowMod {
 	// This installs the flows to enable Pods to communicate to the external IP addresses. The flows identify the packets
 	// from local Pods to the external IP address, and mark the packets to be SNAT'd with the configured SNAT IPs.
@@ -95,19 +80,15 @@ func (f *featureEgress) initFlows() []*openflow15.FlowMod {
 	}
 	return GetFlowModMessages(initialFlows, binding.AddMessage)
 }
-
 func (f *featureEgress) replayFlows() []*openflow15.FlowMod {
 	return getCachedFlowMessages(f.cachedFlows)
 }
-
 func (f *featureEgress) initGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureEgress) replayGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureEgress) replayMeters() []binding.OFEntry {
 	var meters []binding.OFEntry
 	f.cachedMeter.Range(func(id, value interface{}) bool {

@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package externalnode
-
 import (
 	"context"
 	"fmt"
@@ -21,21 +19,18 @@ import (
 	"reflect"
 	"strings"
 	"time"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	enlister "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
 	agentConfig "antrea.io/antrea/v2/pkg/config/agent"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
@@ -46,26 +41,23 @@ import (
 	"antrea.io/antrea/v2/pkg/util/externalnode"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	enlister "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	agentConfig "antrea.io/antrea/pkg/config/agent"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/env"
-	"antrea.io/antrea/pkg/util/externalnode"
-	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	enlister "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
+	agentConfig "antrea.io/antrea/v2/pkg/config/agent"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/util/externalnode"
+	"antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	controllerName = "ExternalNodeController"
 	// How long to wait before retrying the processing of an ExternalNode change.
@@ -73,7 +65,6 @@ const (
 	maxRetryDelay = 300 * time.Second
 	// Disable resyncing.
 	resyncPeriod time.Duration = 0
-
 	ovsExternalIDUplinkName      = "uplink-name"
 	ovsExternalIDUplinkPort      = "uplink-port"
 	ovsExternalIDEntityName      = "entity-name"
@@ -81,7 +72,6 @@ const (
 	ovsExternalIDIPs             = "ip-address"
 	ipsSplitter                  = ","
 )
-
 var (
 	keyFunc              = cache.MetaNamespaceKeyFunc
 	splitKeyFunc         = cache.SplitMetaNamespaceKey
@@ -90,7 +80,6 @@ var (
 	getIPNetDeviceFromIP = util.GetIPNetDeviceFromIP
 	hostInterfaceExists  = util.HostInterfaceExists
 )
-
 type ExternalNodeController struct {
 	ovsBridgeClient          ovsconfig.OVSBridgeClient
 	ovsctlClient             ovsctl.OVSCtlClient
@@ -107,7 +96,6 @@ type ExternalNodeController struct {
 	externalNodeNamespace        string
 	policyBypassRules            []agentConfig.PolicyBypassRule
 }
-
 func NewExternalNodeController(ovsBridgeClient ovsconfig.OVSBridgeClient, ofClient openflow.Client, externalNodeInformer cache.SharedIndexInformer,
 	ifaceStore interfacestore.InterfaceStore, externalEntityUpdateNotifier channel.Notifier, externalNodeNamespace string, policyBypassRules []agentConfig.PolicyBypassRule) (*ExternalNodeController, error) {
 	c := &ExternalNodeController{
@@ -140,17 +128,13 @@ func NewExternalNodeController(ovsBridgeClient ovsconfig.OVSBridgeClient, ofClie
 			DeleteFunc: c.enqueueExternalNodeDelete,
 		},
 		resyncPeriod)
-
 	return c, nil
 }
-
 // Run will create a worker (goroutine) which will process the ExternalNode events from the work queue.
 func (c *ExternalNodeController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.InfoS("Starting controller", "name", controllerName)
 	defer klog.InfoS("Shutting down controller", "name", controllerName)
-
 	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 5*time.Second, true, func(ctx context.Context) (done bool, err error) {
 		if err = c.reconcile(); err != nil {
 			klog.ErrorS(err, "ExternalNodeController failed during reconciliation")
@@ -165,20 +149,16 @@ func (c *ExternalNodeController) Run(stopCh <-chan struct{}) {
 		klog.Error("Failed to wait for syncing ExternalNodes cache")
 		return
 	}
-
 	c.queue.Add(k8s.NamespacedName(c.externalNodeNamespace, c.nodeName))
 	go wait.Until(c.worker, time.Second, stopCh)
-
 	<-stopCh
 }
-
 func (c *ExternalNodeController) enqueueExternalNodeAdd(obj interface{}) {
 	en := obj.(*v1alpha1.ExternalNode)
 	key, _ := keyFunc(en)
 	c.queue.Add(key)
 	klog.InfoS("Enqueued ExternalNode ADD event", "ExternalNode", klog.KObj(en))
 }
-
 func (c *ExternalNodeController) enqueueExternalNodeUpdate(oldObj interface{}, newObj interface{}) {
 	oldEN := oldObj.(*v1alpha1.ExternalNode)
 	newEN := newObj.(*v1alpha1.ExternalNode)
@@ -190,14 +170,12 @@ func (c *ExternalNodeController) enqueueExternalNodeUpdate(oldObj interface{}, n
 	c.queue.Add(key)
 	klog.InfoS("Enqueued ExternalNode UPDATE event", "ExternalNode", klog.KObj(newEN))
 }
-
 func (c *ExternalNodeController) enqueueExternalNodeDelete(obj interface{}) {
 	en := obj.(*v1alpha1.ExternalNode)
 	key, _ := keyFunc(en)
 	c.queue.Add(key)
 	klog.InfoS("Enqueued ExternalNode DELETE event", "ExternalNode", klog.KObj(en))
 }
-
 func (c *ExternalNodeController) reconcile() error {
 	klog.InfoS("Reconciling for controller", "name", controllerName)
 	if err := c.reconcileHostUplinkFlows(); err != nil {
@@ -209,7 +187,6 @@ func (c *ExternalNodeController) reconcile() error {
 	klog.InfoS("Reconciled for controller", "name", controllerName)
 	return nil
 }
-
 func (c *ExternalNodeController) reconcileHostUplinkFlows() error {
 	hostIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.ExternalEntityInterface)
 	for _, hostIface := range hostIfaces {
@@ -220,7 +197,6 @@ func (c *ExternalNodeController) reconcileHostUplinkFlows() error {
 	}
 	return nil
 }
-
 func (c *ExternalNodeController) reconcilePolicyBypassFlows() error {
 	for _, rule := range c.policyBypassRules {
 		klog.V(2).InfoS("Installing policy bypass flows", "protocol", rule.Protocol, "CIDR", rule.CIDR, "port", rule.Port, "direction", rule.Direction)
@@ -233,21 +209,18 @@ func (c *ExternalNodeController) reconcilePolicyBypassFlows() error {
 	klog.InfoS("Installed policy bypass flows", "RuleCount", len(c.policyBypassRules))
 	return nil
 }
-
 // worker is a long-running function that will continuously call the processNextWorkItem function in
 // order to read and process a message on the work queue.
 func (c *ExternalNodeController) worker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 func (c *ExternalNodeController) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(key)
-
 	if err := c.syncExternalNode(key); err == nil {
 		// If no error occurs, then forget this item so it does not get queued again until
 		// another change happens.
@@ -259,7 +232,6 @@ func (c *ExternalNodeController) processNextWorkItem() bool {
 	}
 	return true
 }
-
 func (c *ExternalNodeController) syncExternalNode(key string) error {
 	_, name, err := splitKeyFunc(key)
 	if err != nil {
@@ -270,14 +242,12 @@ func (c *ExternalNodeController) syncExternalNode(key string) error {
 	if errors.IsNotFound(err) {
 		return c.deleteExternalNode()
 	}
-
 	if c.syncedExternalNode == nil {
 		return c.addExternalNode(en)
 	} else {
 		return c.updateExternalNode(c.syncedExternalNode, en)
 	}
 }
-
 func (c *ExternalNodeController) addExternalNode(en *v1alpha1.ExternalNode) error {
 	klog.InfoS("Adding ExternalNode", "ExternalNode", klog.KObj(en))
 	eeName, err := externalnode.GenExternalEntityName(en)
@@ -299,7 +269,6 @@ func (c *ExternalNodeController) addExternalNode(en *v1alpha1.ExternalNode) erro
 	})
 	return nil
 }
-
 func (c *ExternalNodeController) addInterface(ifName string, eeNamespace string, eeName string, ips []string) error {
 	hostIface, ifaceExists := c.ifaceStore.GetInterfaceByName(ifName)
 	if !ifaceExists {
@@ -325,7 +294,6 @@ func (c *ExternalNodeController) addInterface(ifName string, eeNamespace string,
 		klog.InfoS("Skipping updating OVS port data as both entity name and ip are not changed", "ifName", ifName)
 		return nil
 	}
-
 	iface, err := c.updateOVSPortsData(hostIface, portData, eeName, ips)
 	if err != nil {
 		return err
@@ -333,7 +301,6 @@ func (c *ExternalNodeController) addInterface(ifName string, eeNamespace string,
 	c.ifaceStore.AddInterface(iface)
 	return nil
 }
-
 func (c *ExternalNodeController) updateExternalNode(preEN *v1alpha1.ExternalNode, curEN *v1alpha1.ExternalNode) error {
 	klog.InfoS("Updating ExternalNode", "ExternalNode", klog.KObj(curEN))
 	if reflect.DeepEqual(preEN.Spec.Interfaces[0], curEN.Spec.Interfaces[0]) {
@@ -382,7 +349,6 @@ func (c *ExternalNodeController) updateExternalNode(preEN *v1alpha1.ExternalNode
 	})
 	return nil
 }
-
 func (c *ExternalNodeController) deleteExternalNode() error {
 	if err := c.deleteInterfaces(); err != nil {
 		return err
@@ -392,7 +358,6 @@ func (c *ExternalNodeController) deleteExternalNode() error {
 	// and terminate the process if required.
 	return c.removeExternalNodeConfig()
 }
-
 func (c *ExternalNodeController) deleteInterfaces() error {
 	hostIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.ExternalEntityInterface)
 	for _, hostIface := range hostIfaces {
@@ -402,7 +367,6 @@ func (c *ExternalNodeController) deleteInterfaces() error {
 	}
 	return nil
 }
-
 func (c *ExternalNodeController) deleteInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
 	klog.InfoS("Deleting interface", "ifName", interfaceConfig.InterfaceName)
 	if err := c.removeOVSPortsAndFlows(interfaceConfig); err != nil {
@@ -411,7 +375,6 @@ func (c *ExternalNodeController) deleteInterface(interfaceConfig *interfacestore
 	c.ifaceStore.DeleteInterface(interfaceConfig)
 	return nil
 }
-
 func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, eeNamespace, eeName string, ips []string) (*interfacestore.InterfaceConfig, error) {
 	iface, addrs, routes, err := getInterfaceConfig(hostIFName)
 	if err != nil {
@@ -436,7 +399,6 @@ func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, 
 			}
 		}
 	}()
-
 	// Create uplink port in OVS.
 	uplinkExternalIDs := map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
@@ -457,7 +419,6 @@ func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, 
 		return nil, ovsErr
 	}
 	klog.InfoS("Added uplink port in OVS", "port", uplinkOFPort, "uplinkName", uplinkName)
-
 	// Create host port in OVS.
 	attachInfo := GetOVSAttachInfo(uplinkName, uplinkUUID, eeName, eeNamespace, ips)
 	hostIfUUID, ovsErr := c.ovsBridgeClient.CreateInternalPort(hostIFName, 0, adapterConfig.MAC.String(), attachInfo)
@@ -509,7 +470,6 @@ func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, 
 	}
 	return hostIFConfig, nil
 }
-
 func GetOVSAttachInfo(uplinkName, uplinkUUID, entityName, entityNamespace string, ips []string) map[string]interface{} {
 	attachInfo := map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
@@ -529,10 +489,8 @@ func GetOVSAttachInfo(uplinkName, uplinkUUID, entityName, entityNamespace string
 	if len(ips) != 0 {
 		attachInfo[ovsExternalIDIPs] = strings.Join(ips, ipsSplitter)
 	}
-
 	return attachInfo
 }
-
 func (c *ExternalNodeController) updateOVSPortsData(interfaceConfig *interfacestore.InterfaceConfig, portData *ovsconfig.OVSPortData, eeName string, ips []string) (*interfacestore.InterfaceConfig, error) {
 	attachInfo := map[string]interface{}{
 		ovsExternalIDUplinkName:               portData.ExternalIDs[ovsExternalIDUplinkName],
@@ -569,18 +527,13 @@ func (c *ExternalNodeController) updateOVSPortsData(interfaceConfig *interfacest
 	}
 	return iface, nil
 }
-
 func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfacestore.InterfaceConfig) error {
 	portUUID := interfaceConfig.PortUUID
 	portName := interfaceConfig.InterfaceName
 	hostIFName := interfaceConfig.InterfaceName
 	uplinkIfName := util.GenerateUplinkInterfaceName(portName)
-
-<<<<<<< HEAD
 	// This is for issue #5111 (https://github.com/antrea.io/antrea/v2/issues/5111), which may happen if an error occurs
-=======
 	// This is for issue #5111 (https://github.com/antrea-io/antrea/issues/5111), which may happen if an error occurs
->>>>>>> origin/main
 	// when moving the configuration back from host internal interface to uplink. This logic is run in the second
 	// try after the error is returned, at this time the host internal interface is already deleted, and the uplink's
 	// name is recovered. So the ips and routes in "adapterConfig" are actually read from the uplink and no need to
@@ -589,7 +542,6 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 		klog.InfoS("The interface with uplink name did not exist on the host, skipping its recovery", "uplinkIfName", uplinkIfName)
 		return nil
 	}
-
 	if err := c.ofClient.UninstallVMUplinkFlows(portName); err != nil {
 		return fmt.Errorf("failed to uninstall uplink and host port openflow entries, portName %s, err %v", portName, err)
 	}
@@ -623,7 +575,6 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 			klog.ErrorS(err, "Failed to delete host interface from OVS datapath", "interface", hostIFName)
 		}
 	}()
-
 	// Wait until the host interface created by OVS is removed.
 	if err = wait.PollUntilContextTimeout(context.TODO(), 50*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
 		return !hostInterfaceExists(hostIFName), nil
@@ -642,7 +593,6 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 	klog.InfoS("Moved back configuration to the host interface", "hostInterface", hostIFName)
 	return nil
 }
-
 func getHostInterfaceName(iface v1alpha1.NetworkInterface) (string, []string, error) {
 	ifName := ""
 	ips := sets.New[string]()
@@ -672,7 +622,6 @@ func getHostInterfaceName(iface v1alpha1.NetworkInterface) (string, []string, er
 	}
 	return ifName, sets.List(ips), nil
 }
-
 func ParseHostInterfaceConfig(ovsBridgeClient ovsconfig.OVSBridgeClient, portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) (*interfacestore.InterfaceConfig, error) {
 	interfaceConfig := &interfacestore.InterfaceConfig{
 		InterfaceName: portData.Name,
@@ -705,7 +654,6 @@ func ParseHostInterfaceConfig(ovsBridgeClient ovsconfig.OVSBridgeClient, portDat
 	interfaceConfig.EntityInterfaceConfig = hostUplinkConfig
 	return interfaceConfig, nil
 }
-
 func parseProtocol(protocol string) binding.Protocol {
 	var proto binding.Protocol
 	switch protocol {

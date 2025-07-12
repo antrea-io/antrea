@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 func TestToAntreaServicesForCRD(t *testing.T) {
 	igmpQuery := int32(17)
 	igmpReport := int32(18)
@@ -211,7 +203,6 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 		assert.Equal(t, table.expNamedPortExists, namedPortExist)
 	}
 }
-
 func TestToAntreaL7ProtocolsForCRD(t *testing.T) {
 	tables := []struct {
 		l7Protocol []crdv1beta1.L7Protocol
@@ -239,7 +230,6 @@ func TestToAntreaL7ProtocolsForCRD(t *testing.T) {
 		assert.Equal(t, table.expValue, gotValue)
 	}
 }
-
 func TestToAntreaIPBlockForCRD(t *testing.T) {
 	expIPNet := controlplane.IPNet{
 		IP:           ipStrToIPAddress("10.0.0.0"),
@@ -286,7 +276,6 @@ func TestToAntreaIPBlockForCRD(t *testing.T) {
 		}
 	}
 }
-
 func TestToAntreaPeerForCRD(t *testing.T) {
 	testCNPObj := &crdv1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -507,7 +496,6 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		})
 	}
 }
-
 func TestCreateAppliedToGroupsForGroup(t *testing.T) {
 	selector := metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}
 	cidr := "10.0.0.0/24"
@@ -601,7 +589,6 @@ func TestCreateAppliedToGroupsForGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestComputeEffectiveIPNetForIPBlocks(t *testing.T) {
 	tests := []struct {
 		name                   string

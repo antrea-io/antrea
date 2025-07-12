@@ -11,44 +11,34 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package featuregates
-
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
-
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/featuregates"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/apiserver/apis"
-	"antrea.io/antrea/pkg/apiserver/handlers/featuregates"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/apiserver/apis"
+	"antrea.io/antrea/v2/pkg/apiserver/handlers/featuregates"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 )
-
 var Command *cobra.Command
 var getClients = getConfigAndClients
 var getRestClient = getRestClientByMode
-
 var option = &struct {
 	insecure bool
 }{}
-
 func init() {
 	Command = &cobra.Command{
 		Use:   "featuregates",
@@ -66,31 +56,25 @@ func init() {
 		Command.RunE = controllerRemoteRunE
 	}
 }
-
 func agentRunE(cmd *cobra.Command, _ []string) error {
 	return featureGateRequest(cmd, runtime.ModeAgent)
 }
-
 func controllerLocalRunE(cmd *cobra.Command, _ []string) error {
 	return featureGateRequest(cmd, runtime.ModeController)
 }
-
 func controllerRemoteRunE(cmd *cobra.Command, _ []string) error {
 	return featureGateRequest(cmd, "remote")
 }
-
 func featureGateRequest(cmd *cobra.Command, mode string) error {
 	ctx := cmd.Context()
 	kubeconfig, k8sClientset, antreaClientset, err := getClients(cmd)
 	if err != nil {
 		return err
 	}
-
 	client, err := getRestClient(ctx, kubeconfig, k8sClientset, antreaClientset, mode)
 	if err != nil {
 		return err
 	}
-
 	var resp []apis.FeatureGateResponse
 	if resp, err = getFeatureGatesRequest(client); err != nil {
 		return err
@@ -119,7 +103,6 @@ func featureGateRequest(cmd *cobra.Command, mode string) error {
 	}
 	return nil
 }
-
 func getConfigAndClients(cmd *cobra.Command) (*rest.Config, kubernetes.Interface, antrea.Interface, error) {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
@@ -134,7 +117,6 @@ func getConfigAndClients(cmd *cobra.Command) (*rest.Config, kubernetes.Interface
 	}
 	return kubeconfig, k8sClientset, antreaClientset, nil
 }
-
 func getRestClientByMode(ctx context.Context, kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
 	cfg := rest.CopyConfig(kubeconfig)
 	cfg.GroupVersion = &schema.GroupVersion{Group: "", Version: ""}
@@ -152,7 +134,6 @@ func getRestClientByMode(ctx context.Context, kubeconfig *rest.Config, k8sClient
 	}
 	return client, nil
 }
-
 func getControllerClient(ctx context.Context, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, kubeconfig *rest.Config, insecure bool) (*rest.RESTClient, error) {
 	controllerClientCfg, err := raw.CreateControllerClientCfg(ctx, k8sClientset, antreaClientset, kubeconfig, insecure)
 	if err != nil {
@@ -164,7 +145,6 @@ func getControllerClient(ctx context.Context, k8sClientset kubernetes.Interface,
 	}
 	return controllerClient, nil
 }
-
 func getFeatureGatesRequest(client *rest.RESTClient) ([]apis.FeatureGateResponse, error) {
 	var resp []apis.FeatureGateResponse
 	u := url.URL{Path: "/featuregates"}
@@ -179,7 +159,6 @@ func getFeatureGatesRequest(client *rest.RESTClient) ([]apis.FeatureGateResponse
 	}
 	return resp, nil
 }
-
 func output(resps []apis.FeatureGateResponse, component string, output io.Writer) {
 	switch component {
 	case featuregates.AgentMode:
@@ -191,15 +170,12 @@ func output(resps []apis.FeatureGateResponse, component string, output io.Writer
 		output.Write([]byte("\n"))
 		output.Write([]byte("Antrea Controller Feature Gates\n"))
 	}
-
 	maxNameLen := len("FEATUREGATE")
 	maxStatusLen := len("STATUS")
-
 	for _, r := range resps {
 		maxNameLen = max(maxNameLen, len(r.Name))
 		maxStatusLen = max(maxStatusLen, len(r.Status))
 	}
-
 	formatter := fmt.Sprintf("%%-%ds%%-%ds%%-s\n", maxNameLen+5, maxStatusLen+5)
 	fmt.Fprintf(output, formatter, "FEATUREGATE", "STATUS", "VERSION")
 	for _, r := range resps {

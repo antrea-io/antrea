@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -28,25 +25,19 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/controller/networkpolicy/store"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 func TestREST(t *testing.T) {
 	r := NewREST(nil)
 	assert.Equal(t, &controlplane.NetworkPolicy{}, r.New())
 	assert.Equal(t, &controlplane.NetworkPolicyList{}, r.NewList())
 	assert.False(t, r.NamespaceScoped())
 }
-
 func TestRESTGet(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -93,7 +84,6 @@ func TestRESTGet(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTList(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -143,7 +133,6 @@ func TestRESTList(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTWatch(t *testing.T) {
 	networkPolicies := []*types.NetworkPolicy{
 		{

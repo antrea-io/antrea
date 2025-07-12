@@ -11,33 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"bytes"
 	"errors"
 	"io"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/pkg/antctl/transform/clusterset"
-=======
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/pkg/antctl/transform/clusterset"
->>>>>>> origin/main
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/pkg/antctl/transform/clusterset"
 )
-
 type fakeWriter struct{}
-
 func (f fakeWriter) Write(p []byte) (n int, err error) {
 	return 0, errors.New("not supported")
 }
-
 func TestOutput(t *testing.T) {
 	// Here we test error cases only since common cases will be
 	// covered by 'antctl mc get *' commands.
@@ -70,7 +60,6 @@ func TestOutput(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var writer io.Writer

@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package utils
-
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 type ClusterNetworkPolicySpecBuilder struct {
 	Spec crdv1beta1.ClusterNetworkPolicySpec
 	Name string
 }
-
 type ACNPAppliedToSpec struct {
 	PodSelector          map[string]string
 	NodeSelector         map[string]string
@@ -40,7 +32,6 @@ type ACNPAppliedToSpec struct {
 	Group                string
 	Service              *crdv1beta1.NamespacedName
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) Get() *crdv1beta1.ClusterNetworkPolicy {
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []crdv1beta1.Rule{}
@@ -55,22 +46,18 @@ func (b *ClusterNetworkPolicySpecBuilder) Get() *crdv1beta1.ClusterNetworkPolicy
 		Spec: b.Spec,
 	}
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) SetName(name string) *ClusterNetworkPolicySpecBuilder {
 	b.Name = name
 	return b
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) SetPriority(p float64) *ClusterNetworkPolicySpecBuilder {
 	b.Spec.Priority = p
 	return b
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) SetTier(tier string) *ClusterNetworkPolicySpecBuilder {
 	b.Spec.Tier = tier
 	return b
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ACNPAppliedToSpec) *ClusterNetworkPolicySpecBuilder {
 	for _, spec := range specs {
 		appliedToPeer := ACNPGetAppliedToPeer(spec.PodSelector,
@@ -85,7 +72,6 @@ func (b *ClusterNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ACNPAppliedT
 	}
 	return b
 }
-
 func ACNPGetAppliedToPeer(podSelector map[string]string,
 	nodeSelector map[string]string,
 	nsSelector map[string]string,
@@ -94,11 +80,9 @@ func ACNPGetAppliedToPeer(podSelector map[string]string,
 	nsSelectorMatchExp []metav1.LabelSelectorRequirement,
 	appliedToCG string,
 	service *crdv1beta1.NamespacedName) crdv1beta1.AppliedTo {
-
 	var podSel *metav1.LabelSelector
 	var nodeSel *metav1.LabelSelector
 	var nsSel *metav1.LabelSelector
-
 	if podSelector != nil || podSelectorMatchExp != nil {
 		podSel = &metav1.LabelSelector{
 			MatchLabels:      podSelector,
@@ -130,17 +114,14 @@ func ACNPGetAppliedToPeer(podSelector map[string]string,
 	}
 	return peer
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) AddIngress(rb RuleBuilder) *ClusterNetworkPolicySpecBuilder {
 	b.Spec.Ingress = append(b.Spec.Ingress, rb.GetIngress())
 	return b
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) AddEgress(rb RuleBuilder) *ClusterNetworkPolicySpecBuilder {
 	b.Spec.Egress = append(b.Spec.Egress, rb.GetEgress())
 	return b
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) AddNodeSelectorRule(nodeSelector *metav1.LabelSelector, protoc AntreaPolicyProtocol, port *int32, name string,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, isEgress bool) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1beta1.AppliedTo
@@ -173,7 +154,6 @@ func (b *ClusterNetworkPolicySpecBuilder) AddNodeSelectorRule(nodeSelector *meta
 	}
 	return b
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	protoc AntreaPolicyProtocol, port *int32, portName *string, endPort *int32, name string,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction) *ClusterNetworkPolicySpecBuilder {
@@ -204,7 +184,6 @@ func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	b.Spec.Egress = append(b.Spec.Egress, newRule)
 	return b
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1beta1.PeerService,
 	name string, ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1beta1.AppliedTo
@@ -228,10 +207,8 @@ func (b *ClusterNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1beta1
 	b.Spec.Egress = append(b.Spec.Egress, newRule)
 	return b
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) AddStretchedIngressRule(pSel, nsSel map[string]string,
 	name string, ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction) *ClusterNetworkPolicySpecBuilder {
-
 	var appliedTos []crdv1beta1.AppliedTo
 	for _, at := range ruleAppliedToSpecs {
 		appliedTos = append(appliedTos, ACNPGetAppliedToPeer(at.PodSelector,
@@ -258,7 +235,6 @@ func (b *ClusterNetworkPolicySpecBuilder) AddStretchedIngressRule(pSel, nsSel ma
 	b.Spec.Ingress = append(b.Spec.Ingress, newRule)
 	return b
 }
-
 // AddEgressDNS mutates the nth policy rule to allow DNS, convenience method
 func (b *ClusterNetworkPolicySpecBuilder) WithEgressDNS() *ClusterNetworkPolicySpecBuilder {
 	protocolUDP, _ := AntreaPolicyProtocolToK8sProtocol(ProtocolUDP)
@@ -266,14 +242,12 @@ func (b *ClusterNetworkPolicySpecBuilder) WithEgressDNS() *ClusterNetworkPolicyS
 		Protocol: &protocolUDP,
 		Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
 	}
-
 	for i, e := range b.Spec.Egress {
 		e.Ports = append(e.Ports, route53)
 		b.Spec.Egress[i] = e
 	}
 	return b
 }
-
 func (b *ClusterNetworkPolicySpecBuilder) AddEgressLogging(logLabel string) *ClusterNetworkPolicySpecBuilder {
 	for i, e := range b.Spec.Egress {
 		e.EnableLogging = true

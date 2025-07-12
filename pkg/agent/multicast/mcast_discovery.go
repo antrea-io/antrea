@@ -11,43 +11,34 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicast
-
 import (
 	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"time"
-
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 const (
 	IGMPProtocolNumber = 2
 )
-
 var (
 	// igmpMaxResponseTime is the maximum time allowed before sending a responding report which is used for the
 	// "Max Resp Code" field in the IGMP query message. It is also the maximum time to wait for the IGMP report message
@@ -58,7 +49,6 @@ var (
 	// igmpReportDstMac is the MAC address used in the dst MAC field in the IGMP report message
 	igmpReportDstMac, _ = net.ParseMAC("01:00:5e:00:00:16")
 )
-
 type IGMPSnooper struct {
 	ofClient      openflow.Client
 	ifaceStore    interfacestore.InterfaceStore
@@ -76,7 +66,6 @@ type IGMPSnooper struct {
 	igmpReportACNPStatsMutex sync.Mutex
 	encapEnabled             bool
 }
-
 func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore.InterfaceConfig, error) {
 	matches := pktIn.GetMatches()
 	ofPortField := matches.GetMatchByName(binding.OxmFieldInPort)
@@ -90,7 +79,6 @@ func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore
 	}
 	return ifaceConfig, nil
 }
-
 func (s *IGMPSnooper) queryIGMP(group net.IP) error {
 	for _, version := range s.queryVersions {
 		igmp, err := generateIGMPQueryPacket(group, version, s.queryInterval)
@@ -108,7 +96,6 @@ func (s *IGMPSnooper) queryIGMP(group net.IP) error {
 	}
 	return nil
 }
-
 func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8, packetInData protocol.Ethernet) (bool, error) {
 	if s.validator == nil {
 		// Return true directly if there is no validator.
@@ -122,14 +109,12 @@ func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8, packetInD
 	if event.iface.Type != interfacestore.ContainerInterface {
 		return true, fmt.Errorf("interface is not container")
 	}
-
 	ruleInfo, err := s.validator.GetIGMPNPRuleInfo(event.iface.PodName, event.iface.PodNamespace, event.group, igmpType)
 	if err != nil {
 		// It shall drop the packet if function Validate returns error
 		klog.ErrorS(err, "Failed to validate multicast group event")
 		return false, err
 	}
-
 	if ruleInfo != nil {
 		klog.V(2).InfoS("Got NetworkPolicy action for IGMP report", "RuleAction", ruleInfo.RuleAction, "uuid", ruleInfo.UUID, "Name", ruleInfo.Name)
 		s.addToIGMPReportNPStatsMap(*ruleInfo, uint64(packetInData.Len()))
@@ -137,10 +122,8 @@ func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8, packetInD
 			return false, nil
 		}
 	}
-
 	return true, nil
 }
-
 func (s *IGMPSnooper) validatePacketAndNotify(event *mcastGroupEvent, igmpType uint8, packetInData protocol.Ethernet) {
 	allow, err := s.validate(event, igmpType, packetInData)
 	if err != nil {
@@ -155,7 +138,6 @@ func (s *IGMPSnooper) validatePacketAndNotify(event *mcastGroupEvent, igmpType u
 	}
 	s.eventCh <- event
 }
-
 func (s *IGMPSnooper) addToIGMPReportNPStatsMap(item types.IGMPNPRuleInfo, packetLen uint64) {
 	updateRuleStats := func(igmpReportStatsMap map[apitypes.UID]map[string]*types.RuleMetric, uuid apitypes.UID, name string) {
 		if igmpReportStatsMap[uuid] == nil {
@@ -180,7 +162,6 @@ func (s *IGMPSnooper) addToIGMPReportNPStatsMap(item types.IGMPNPRuleInfo, packe
 		s.igmpReportACNPStatsMutex.Unlock()
 	}
 }
-
 // WARNING: This func will reset the saved stats.
 func (s *IGMPSnooper) collectStats() (igmpANNPStats, igmpACNPStats map[apitypes.UID]map[string]*types.RuleMetric) {
 	s.igmpReportANNPStatsMutex.Lock()
@@ -193,7 +174,6 @@ func (s *IGMPSnooper) collectStats() (igmpANNPStats, igmpACNPStats map[apitypes.
 	s.igmpReportACNPStatsMutex.Unlock()
 	return igmpANNPStats, igmpACNPStats
 }
-
 func (s *IGMPSnooper) sendIGMPReport(groupRecordType uint8, groups []net.IP) error {
 	igmp, err := s.generateIGMPReportPacket(groupRecordType, groups)
 	if err != nil {
@@ -205,7 +185,6 @@ func (s *IGMPSnooper) sendIGMPReport(groupRecordType uint8, groups []net.IP) err
 	klog.V(2).InfoS("Sent packetOut for IGMP v3 report", "groups", groups)
 	return nil
 }
-
 func (s *IGMPSnooper) generateIGMPReportPacket(groupRecordType uint8, groups []net.IP) (util.Message, error) {
 	records := make([]protocol.IGMPv3GroupRecord, len(groups))
 	for i, group := range groups {
@@ -221,15 +200,12 @@ func (s *IGMPSnooper) generateIGMPReportPacket(groupRecordType uint8, groups []n
 		GroupRecords:   records,
 	}, nil
 }
-
 func (s *IGMPSnooper) sendIGMPJoinReport(groups []net.IP) error {
 	return s.sendIGMPReport(protocol.IGMPIsEx, groups)
 }
-
 func (s *IGMPSnooper) sendIGMPLeaveReport(groups []net.IP) error {
 	return s.sendIGMPReport(protocol.IGMPToIn, groups)
 }
-
 func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	now := time.Now()
 	iface, err := s.parseSrcInterface(pktIn)
@@ -302,7 +278,6 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	}
 	return nil
 }
-
 func (s *IGMPSnooper) parseSrcNode(pktIn *ofctrl.PacketIn) (net.IP, error) {
 	matches := pktIn.GetMatches()
 	tunSrcField := matches.GetMatchByName(binding.NxmFieldTunIPv4Src)
@@ -312,7 +287,6 @@ func (s *IGMPSnooper) parseSrcNode(pktIn *ofctrl.PacketIn) (net.IP, error) {
 	tunSrc := tunSrcField.GetValue().(net.IP)
 	return tunSrc, nil
 }
-
 func generateIGMPQueryPacket(group net.IP, version uint8, queryInterval time.Duration) (util.Message, error) {
 	// The max response time field in IGMP protocol uses a value in units of 1/10 second.
 	// See https://datatracker.ietf.org/doc/html/rfc2236 and https://datatracker.ietf.org/doc/html/rfc3376
@@ -345,7 +319,6 @@ func generateIGMPQueryPacket(group net.IP, version uint8, queryInterval time.Dur
 	}
 	return nil, fmt.Errorf("unsupported IGMP version %d", version)
 }
-
 func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 	if pkt.Ethertype != protocol.IPv4_MSG {
 		return nil, errors.New("not IPv4 packet")
@@ -383,7 +356,6 @@ func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 		return nil, errors.New("unknown IGMP packet")
 	}
 }
-
 func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, igmpQueryVersions []uint8, multicastValidator types.McastNetworkPolicyController, encapEnabled bool) *IGMPSnooper {
 	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval, queryVersions: igmpQueryVersions, encapEnabled: encapEnabled}
 	snooper.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)

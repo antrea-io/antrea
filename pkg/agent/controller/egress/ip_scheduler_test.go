@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package egress
-
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,30 +27,24 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/consistenthash"
 	"antrea.io/antrea/v2/pkg/agent/memberlist"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
-	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
-=======
-	"antrea.io/antrea/pkg/agent/consistenthash"
-	"antrea.io/antrea/pkg/agent/memberlist"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/consistenthash"
+	"antrea.io/antrea/v2/pkg/agent/memberlist"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 )
-
 type fakeMemberlistCluster struct {
 	nodes         []string
 	hashMap       *consistenthash.Map
 	eventHandlers []memberlist.ClusterNodeEventHandler
 }
-
 func newFakeMemberlistCluster(nodes []string) *fakeMemberlistCluster {
 	hashMap := memberlist.NewNodeConsistentHashMap()
 	hashMap.Add(nodes...)
@@ -62,7 +53,6 @@ func newFakeMemberlistCluster(nodes []string) *fakeMemberlistCluster {
 		hashMap: hashMap,
 	}
 }
-
 func (f *fakeMemberlistCluster) updateNodes(nodes []string) {
 	hashMap := memberlist.NewNodeConsistentHashMap()
 	hashMap.Add(nodes...)
@@ -71,15 +61,12 @@ func (f *fakeMemberlistCluster) updateNodes(nodes []string) {
 		h("dummy")
 	}
 }
-
 func (f *fakeMemberlistCluster) AddClusterEventHandler(h memberlist.ClusterNodeEventHandler) {
 	f.eventHandlers = append(f.eventHandlers, h)
 }
-
 func (f *fakeMemberlistCluster) AliveNodes() sets.Set[string] {
 	return sets.New[string](f.nodes...)
 }
-
 func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
 	node := f.hashMap.GetWithFilters(ip, filters...)
 	if node == "" {
@@ -87,11 +74,9 @@ func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filte
 	}
 	return node, nil
 }
-
 func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error) {
 	return false, nil
 }
-
 func TestSchedule(t *testing.T) {
 	egresses := []runtime.Object{
 		&crdv1b1.Egress{
@@ -205,7 +190,6 @@ func TestSchedule(t *testing.T) {
 			clientset := fake.NewSimpleClientset()
 			informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 			nodeInformer := informerFactory.Core().V1().Nodes()
-
 			s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, tt.maxEgressIPsPerNode)
 			s.nodeToMaxEgressIPs = tt.nodeToMaxEgressIPs
 			stopCh := make(chan struct{})
@@ -214,13 +198,11 @@ func TestSchedule(t *testing.T) {
 			informerFactory.Start(stopCh)
 			crdInformerFactory.WaitForCacheSync(stopCh)
 			informerFactory.WaitForCacheSync(stopCh)
-
 			s.schedule()
 			assert.Equal(t, tt.expectedResults, s.scheduleResults)
 		})
 	}
 }
-
 func BenchmarkSchedule(b *testing.B) {
 	var egresses []runtime.Object
 	for i := 0; i < 1000; i++ {
@@ -240,7 +222,6 @@ func BenchmarkSchedule(b *testing.B) {
 	clientset := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
-
 	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, 10)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -249,12 +230,10 @@ func BenchmarkSchedule(b *testing.B) {
 	crdInformerFactory.WaitForCacheSync(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
 	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
 		s.schedule()
 	}
 }
-
 func TestRun(t *testing.T) {
 	ctx := context.Background()
 	egresses := []runtime.Object{
@@ -290,7 +269,6 @@ func TestRun(t *testing.T) {
 	clientset := fake.NewSimpleClientset(node1, node2)
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
-
 	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, 2)
 	egressUpdates := make(chan string, 10)
 	s.AddEventHandler(func(egress string) {
@@ -302,15 +280,12 @@ func TestRun(t *testing.T) {
 	informerFactory.Start(stopCh)
 	crdInformerFactory.WaitForCacheSync(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
-
 	go s.Run(stopCh)
-
 	// The original distribution when the total capacity is sufficient.
 	assertReceivedItems(t, egressUpdates, sets.New[string]("egressA", "egressB", "egressC"))
 	assertScheduleResult(t, s, "egressA", "1.1.1.1", "node1", true)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
 	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
-
 	// After egressA is updated, it should be moved to node2 determined by its consistent hash result.
 	patch := map[string]interface{}{
 		"spec": map[string]string{
@@ -323,7 +298,6 @@ func TestRun(t *testing.T) {
 	assertScheduleResult(t, s, "egressA", "1.1.1.5", "node2", true)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
 	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
-
 	// After node2 leaves, egress A and egressB should be moved to node1 as they were created earlier than egressC.
 	// egressC should be left unassigned.
 	fakeCluster.updateNodes([]string{"node1"})
@@ -331,14 +305,12 @@ func TestRun(t *testing.T) {
 	assertScheduleResult(t, s, "egressA", "1.1.1.5", "node1", true)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
 	assertScheduleResult(t, s, "egressC", "", "", false)
-
 	// After egressA is deleted, egressC should be assigned to node1.
 	crdClient.CrdV1beta1().Egresses().Delete(ctx, "egressA", metav1.DeleteOptions{})
 	assertReceivedItems(t, egressUpdates, sets.New[string]("egressA", "egressC"))
 	assertScheduleResult(t, s, "egressA", "", "", false)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
 	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
-
 	// After egressD is created, it should be left unassigned as the total capacity is insufficient.
 	crdClient.CrdV1beta1().Egresses().Create(ctx, &crdv1b1.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "egressD", UID: "uidD", CreationTimestamp: metav1.NewTime(time.Unix(4, 0))},
@@ -346,14 +318,12 @@ func TestRun(t *testing.T) {
 	}, metav1.CreateOptions{})
 	assertReceivedItems(t, egressUpdates, sets.New[string]("egressD"))
 	assertScheduleResult(t, s, "egressD", "", "", false)
-
 	// After node2 joins, egressB should be moved to node2 determined by its consistent hash result, and egressD should be assigned to node1.
 	fakeCluster.updateNodes([]string{"node1", "node2"})
 	assertReceivedItems(t, egressUpdates, sets.New[string]("egressB", "egressD"))
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
 	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
 	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
-
 	// Set node1's max-egress-ips annotation to invalid value, nothing should happen.
 	updatedNode1 := node1.DeepCopy()
 	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "invalid-value"
@@ -370,7 +340,6 @@ func TestRun(t *testing.T) {
 	assertReceivedItems(t, egressUpdates, sets.New[string]("egressD"))
 	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
 }
-
 func assertReceivedItems(t *testing.T, ch <-chan string, expectedItems sets.Set[string]) {
 	t.Helper()
 	receivedItems := sets.New[string]()
@@ -383,14 +352,12 @@ func assertReceivedItems(t *testing.T, ch <-chan string, expectedItems sets.Set[
 		}
 	}
 	assert.Equal(t, expectedItems, receivedItems)
-
 	select {
 	case <-time.After(100 * time.Millisecond):
 	case item := <-ch:
 		t.Fatalf("Got unexpected item %s from the channel", item)
 	}
 }
-
 func assertScheduleResult(t *testing.T, s *egressIPScheduler, egress, egressIP, egressNode string, scheduled bool) {
 	t.Helper()
 	gotEgressIP, gotEgressNode, _, gotScheduled := s.GetEgressIPAndNode(egress)

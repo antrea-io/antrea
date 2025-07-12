@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,19 +13,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package wireguard
-
 import (
 	"fmt"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
-=======
-	"antrea.io/antrea/pkg/agent/config"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
 )
-
 func New(nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (Interface, error) {
 	return nil, fmt.Errorf("WireGuard is not implemented for windows")
 }

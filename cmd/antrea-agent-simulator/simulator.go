@@ -11,61 +11,49 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // The simulator binary is responsible for running simulated antrea agent.
 // It watches NetworkPolicies, AddressGroups and AppliedToGroups from antrea controller
 // and prints the events of these resources to log.
 package main
-
 import (
 	"context"
 	"fmt"
 	"time"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/signals"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	"antrea.io/antrea/v2/pkg/version"
-=======
-	"antrea.io/antrea/pkg/agent/client"
-	"antrea.io/antrea/pkg/signals"
-	"antrea.io/antrea/pkg/util/env"
-	"antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/version"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/client"
+	"antrea.io/antrea/v2/pkg/signals"
+	"antrea.io/antrea/v2/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/version"
 )
-
 func run() error {
 	klog.InfoS("Starting Antrea agent simulator", "version", version.GetFullVersion())
 	k8sClient, _, _, _, _, _, err := k8s.CreateClients(componentbaseconfig.ClientConnectionConfiguration{}, "")
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
-
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		return fmt.Errorf("failed to get hostname: %v", err)
 	}
-
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider, err := client.NewAntreaClientProvider(componentbaseconfig.ClientConnectionConfiguration{}, k8sClient)
 	if err != nil {
 		return err
 	}
-
 	if err = antreaClientProvider.RunOnce(); err != nil {
 		return err
 	}
-
 	// Create the stop chan with signals
 	stopCh := signals.RegisterSignalHandlers()
 	// Generate a context for functions which require one (instead of stopCh).
@@ -73,9 +61,7 @@ func run() error {
 	// stopCh is closed.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	go antreaClientProvider.Run(ctx)
-
 	// Add loop to check whether client is ready
 	attempts := 0
 	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 200*time.Millisecond, true, func(ctx context.Context) (bool, error) {
@@ -91,14 +77,11 @@ func run() error {
 		klog.Info("Stopped waiting for Antrea client")
 		return err
 	}
-
 	klog.Info("Antrea client is ready")
-
 	options := metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("nodeName", nodeName).String(),
 	}
 	klog.Infof("Nodename: %s", nodeName)
-
 	// Wrapper watcher to call watch
 	networkPolicyControllerWatcher := &watchWrapper{
 		func() (watch.Interface, error) {
@@ -130,25 +113,20 @@ func run() error {
 		},
 		"appliedGroup",
 	}
-
 	// watch NetworkPolicies, AddressGroups, AppliedToGroups
 	go wait.NonSlidingUntil(networkPolicyControllerWatcher.watch, 5*time.Second, stopCh)
 	go wait.NonSlidingUntil(addressGroupWatcher.watch, 5*time.Second, stopCh)
 	go wait.NonSlidingUntil(appliedGroupWatcher.watch, 5*time.Second, stopCh)
-
 	<-stopCh
 	klog.Info("Stopping Antrea agent simulator")
 	return nil
 }
-
 type watchWrapper struct {
 	watchFunc func() (watch.Interface, error)
 	name      string
 }
-
 func (w *watchWrapper) watch() {
 	klog.Infof("Starting watch for %s", w.name)
-
 	// Call the watch func which is initialized in watchWrapper
 	watcher, err := w.watchFunc()
 	if err != nil {
@@ -156,14 +134,12 @@ func (w *watchWrapper) watch() {
 		return
 	}
 	eventCount := 0
-
 	// Stop the watcher upon exit
 	defer func() {
 		klog.Infof("Stopped watch for %s, total items received %d", w.name, eventCount)
 		watcher.Stop()
 	}()
 	initCount := 0
-
 	// Watch the init events from chan, and log the events
 loop:
 	for {
@@ -182,7 +158,6 @@ loop:
 	}
 	klog.Infof("Received %d init events for %s", initCount, w.name)
 	eventCount += initCount
-
 	// Watch the events from chan, and log the events
 	for {
 		event, ok := <-watcher.ResultChan()

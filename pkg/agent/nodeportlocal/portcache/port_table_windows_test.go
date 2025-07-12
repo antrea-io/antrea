@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,27 +13,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package portcache
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	portcachetesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache/testing"
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
 	rulestesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules/testing"
-=======
-	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-	rulestesting "antrea.io/antrea/pkg/agent/nodeportlocal/rules/testing"
->>>>>>> origin/main
+	portcachetesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache/testing"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
+	rulestesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules/testing"
 )
-
 func TestRestoreRules(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
@@ -63,16 +54,13 @@ func TestRestoreRules(t *testing.T) {
 			Protocol: "udp",
 		},
 	}
-
 	mockPortRules.EXPECT().AddRule(nodePort1, podIP, 1001, "tcp")
 	mockPortRules.EXPECT().AddRule(nodePort1, podIP, 1001, "udp")
 	mockPortRules.EXPECT().AddRule(nodePort2, podIP, 1002, "udp")
-
 	syncedCh := make(chan struct{})
 	err := portTable.RestoreRules(allNPLPorts, syncedCh)
 	require.NoError(t, err)
 }
-
 func TestDeleteRule(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
@@ -87,26 +75,22 @@ func TestDeleteRule(t *testing.T) {
 			Protocol: "tcp",
 		},
 	}
-
 	portTable.addPortTableCache(npData)
 	mockPortRules.EXPECT().DeleteRule(startPort, podIP, 1001, "tcp")
 	err := portTable.DeleteRule(podKey, 1001, "tcp")
 	require.NoError(t, err)
 }
-
 func TestAddRule(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
 	portTable := newPortTable(mockPortRules, mockPortOpener)
 	podPort := 1001
-
 	// Adding the rule the first time should succeed.
 	mockPortRules.EXPECT().AddRule(startPort, podIP, podPort, "udp")
 	gotNodePort, err := portTable.AddRule(podKey, podPort, "udp", podIP)
 	require.NoError(t, err)
 	assert.Equal(t, startPort, gotNodePort)
-
 	// Add the same rule the second time should fail.
 	_, err = portTable.AddRule(podKey, podPort, "udp", podIP)
 	assert.ErrorContains(t, err, "existing Windows Nodeport entry for")

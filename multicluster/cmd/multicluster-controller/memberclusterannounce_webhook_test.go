@@ -1,26 +1,20 @@
 /*
 Copyright 2021 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package main
-
 import (
 	"context"
 	j "encoding/json"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -29,20 +23,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
-
 var mcaWebhookUnderTest *memberClusterAnnounceValidator
-
 func TestMemberClusterAnnounceWebhook(t *testing.T) {
 	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -73,7 +61,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			},
 		},
 	}
-
 	mca := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "member-announce-from-east",
@@ -83,10 +70,8 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		ClusterSetID:    "clusterset1",
 		LeaderClusterID: "leader1",
 	}
-
 	oldmca := mca.DeepCopy()
 	oldmca.ClusterSetID = "old-clusterset"
-
 	mcafromAnotherClusterSet := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "member-announce-from-north",
@@ -96,7 +81,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		ClusterSetID:    "another-clusterset",
 		LeaderClusterID: "leader1",
 	}
-
 	mcaDifferentLeader := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "member-announce-from-north",
@@ -106,12 +90,10 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		ClusterSetID:    "clusterset1",
 		LeaderClusterID: "different-leader",
 	}
-
 	mcaMarshaled, _ := j.Marshal(mca)
 	oldmcaMarshaled, _ := j.Marshal(oldmca)
 	mcaAnotherMarshaled, _ := j.Marshal(mcafromAnotherClusterSet)
 	mcaDifferentLeaderMarshaled, _ := j.Marshal(mcaDifferentLeader)
-
 	userInfo := authenticationv1.UserInfo{
 		Username: "system:serviceaccount:mcs1:east-access-sa",
 		UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
@@ -121,7 +103,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			"system:authenticated",
 		},
 	}
-
 	reqAllow := admission.Request{
 		AdmissionRequest: v1.AdmissionRequest{
 			UID: "07e52e8d-4513-11e9-a716-42010a800270",
@@ -144,7 +125,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			UserInfo: userInfo,
 		},
 	}
-
 	reqAllowCopy := reqAllow.DeepCopy()
 	reqDenyAnother := admission.Request{
 		AdmissionRequest: *reqAllowCopy,
@@ -153,7 +133,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 	reqDenyAnother.Object = runtime.RawExtension{
 		Raw: mcaAnotherMarshaled,
 	}
-
 	reqDenyAnotherCopy := reqDenyAnother.DeepCopy()
 	reqDenyDifferentLeader := admission.Request{
 		AdmissionRequest: *reqDenyAnotherCopy,
@@ -161,7 +140,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 	reqDenyDifferentLeader.Object = runtime.RawExtension{
 		Raw: mcaDifferentLeaderMarshaled,
 	}
-
 	reqDenyUnknownSA := admission.Request{
 		AdmissionRequest: *reqAllowCopy,
 	}
@@ -174,7 +152,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			"system:authenticated",
 		},
 	}
-
 	reqDenyUpdateClusterSetID := admission.Request{
 		AdmissionRequest: *reqAllowCopy,
 	}
@@ -182,7 +159,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		Raw: oldmcaMarshaled,
 	}
 	reqDenyUpdateClusterSetID.Operation = v1.Update
-
 	reqDenyNoClusterSet := admission.Request{
 		AdmissionRequest: *reqAllowCopy,
 	}
@@ -190,7 +166,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		AdmissionRequest: *reqAllowCopy,
 	}
 	reqDelete.Operation = v1.Delete
-
 	reqInvalidUser := admission.Request{
 		AdmissionRequest: *reqAllowCopy,
 	}
@@ -201,7 +176,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			"system:authenticated",
 		},
 	}
-
 	tests := []struct {
 		name               string
 		existingClusterSet *mcv1alpha2.ClusterSet
@@ -256,7 +230,6 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			isAllowed:          false,
 		},
 	}
-
 	decoder := admission.NewDecoder(common.TestScheme)
 	for _, tt := range tests {
 		fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().WithLists(existingServiceAccounts).Build()
@@ -273,5 +246,4 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			assert.Equal(t, tt.isAllowed, response.Allowed)
 		})
 	}
-
 }

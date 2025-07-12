@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ovstracing
-
 import (
 	"context"
 	"encoding/json"
@@ -23,29 +21,23 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/querier"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/querier"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/querier"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 )
-
 type tracingPeer struct {
 	ovsPort string
 	// Name of a Pod or Service
@@ -54,7 +46,6 @@ type tracingPeer struct {
 	namespace string
 	ip        net.IP
 }
-
 func (p *tracingPeer) getAddressFamily() uint8 {
 	if p.ip == nil {
 		return 0
@@ -64,7 +55,6 @@ func (p *tracingPeer) getAddressFamily() uint8 {
 	}
 	return util.FamilyIPv6
 }
-
 type request struct {
 	// tracingPeer.ip is invalid for inputPort, as inputPort can only be
 	// specified by ovsPort or Pod Namespace/name.
@@ -74,7 +64,6 @@ type request struct {
 	flow        string
 	addrFamily  uint8
 }
-
 func getServiceClusterIP(aq querier.AgentQuerier, name, namespace string) (net.IP, *handlers.HandlerError) {
 	srv, err := aq.GetK8sClient().CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
@@ -86,7 +75,6 @@ func getServiceClusterIP(aq querier.AgentQuerier, name, namespace string) (net.I
 	}
 	return net.ParseIP(srv.Spec.ClusterIP).To4(), nil
 }
-
 func getLocalOVSInterface(aq querier.AgentQuerier, peer *tracingPeer) (*interfacestore.InterfaceConfig, *handlers.HandlerError) {
 	if peer.ovsPort != "" {
 		intf, ok := aq.GetInterfaceStore().GetInterfaceByName(peer.ovsPort)
@@ -96,16 +84,13 @@ func getLocalOVSInterface(aq querier.AgentQuerier, peer *tracingPeer) (*interfac
 		}
 		return intf, nil
 	}
-
 	interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(peer.name, peer.namespace)
 	if len(interfaces) > 0 {
 		// Local Pod.
 		return interfaces[0], nil
 	}
-
 	return nil, nil
 }
-
 // getPeerAddress looks up a Pod and returns its IP and MAC addresses. It
 // first looks up the Pod from the InterfaceStore, and returns the Pod's IP and
 // MAC addresses if found. If fails, it then gets the Pod from Kubernetes API,
@@ -114,7 +99,6 @@ func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer, addrFamily uint8
 	if peer.ip != nil {
 		return peer.ip, nil, nil
 	}
-
 	if intf, err := getLocalOVSInterface(aq, peer); err != nil {
 		return nil, nil, err
 	} else if intf != nil {
@@ -124,7 +108,6 @@ func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer, addrFamily uint8
 		}
 		return ipAddr, intf, nil
 	}
-
 	// Try getting the Pod from K8s API.
 	pod, err := aq.GetK8sClient().CoreV1().Pods(peer.namespace).Get(context.TODO(), peer.name, metav1.GetOptions{})
 	if err != nil {
@@ -142,7 +125,6 @@ func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer, addrFamily uint8
 	}
 	return podIP, nil, nil
 }
-
 // Todo: move this function to pkg/agent/util/net.go if it is called by other code
 func getPodIPWithAddressFamily(pod *corev1.Pod, addrFamily uint8) (net.IP, error) {
 	podIPs := []net.IP{net.ParseIP(pod.Status.PodIP)}
@@ -153,10 +135,8 @@ func getPodIPWithAddressFamily(pod *corev1.Pod, addrFamily uint8) (net.IP, error
 	}
 	return util.GetIPWithFamily(podIPs, addrFamily)
 }
-
 func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.TracingRequest, *handlers.HandlerError) {
 	traceReq := ovsctl.TracingRequest{Flow: req.flow, AllowOverrideInPort: false}
-
 	var inPort *interfacestore.InterfaceConfig
 	if req.inputPort != nil {
 		var ok bool
@@ -177,7 +157,6 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 		// the auto-chosen input port.
 		traceReq.AllowOverrideInPort = true
 	}
-
 	if req.source != nil {
 		ip, intf, err := getPeerAddress(aq, req.source, req.addrFamily)
 		if err != nil {
@@ -193,7 +172,6 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 			inPort = intf
 		}
 	}
-
 	gatewayConfig := aq.GetNodeConfig().GatewayConfig
 	if req.destination != nil {
 		ip, intf, err := getPeerAddress(aq, req.destination, req.addrFamily)
@@ -217,7 +195,6 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 			traceReq.DstMAC = gatewayConfig.MAC
 		}
 	}
-
 	if inPort == nil {
 		if req.source != nil && req.source.name != "" {
 			// Source is a remote Pod. Use the default tunnel port as the input port.
@@ -253,10 +230,8 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 		traceReq.InPort = gatewayConfig.Name
 		traceReq.SrcMAC = gatewayConfig.MAC
 	}
-
 	return &traceReq, nil
 }
-
 // parseTracingPeer parses Pod/Service name and Namespace or OVS port name or
 // IP address from the string. nil is returned if the string is not of a
 // valid Pod/Service reference ("Namespace/name") or OVS port name format, and
@@ -284,28 +259,23 @@ func parseTracingPeer(str string) *tracingPeer {
 	}
 	return nil
 }
-
 const (
 	flowRegexElementPattern = `[a-zA-Z0-9\.\-_]+(=[a-zA-Z0-9\.\-_]+)?`
 )
-
 var (
 	flowRegexPattern = fmt.Sprintf(`^(%s,\s*)*%s$`, flowRegexElementPattern, flowRegexElementPattern)
 	flowRegex        = regexp.MustCompile(flowRegexPattern)
 )
-
 func validateRequest(r *http.Request) (*request, *handlers.HandlerError) {
 	port := r.URL.Query().Get("port")
 	src := r.URL.Query().Get("source")
 	dst := r.URL.Query().Get("destination")
 	addrFamily := r.URL.Query().Get("addressFamily")
 	flow := r.URL.Query().Get("flow")
-
 	// sanitize user input since it is used to invoke exec.Command
 	if flow != "" && !flowRegex.MatchString(flow) {
 		return nil, handlers.NewHandlerError(errors.New("invalid flow format"), http.StatusBadRequest)
 	}
-
 	request := request{flow: flow}
 	if addrFamily == "6" {
 		request.addrFamily = util.FamilyIPv6
@@ -330,7 +300,6 @@ func validateRequest(r *http.Request) (*request, *handlers.HandlerError) {
 	} else {
 		request.addrFamily = util.FamilyIPv4
 	}
-
 	if port != "" {
 		request.inputPort = parseTracingPeer(port)
 		// Input port cannot be specified with an IP.
@@ -360,12 +329,10 @@ func validateRequest(r *http.Request) (*request, *handlers.HandlerError) {
 	}
 	return &request, nil
 }
-
 // HandleFunc returns the function which can handle API requests to "/ovstracing".
 func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var traceReq *ovsctl.TracingRequest
-
 		parsedReq, handlerErr := validateRequest(r)
 		if handlerErr == nil {
 			traceReq, handlerErr = prepareTracingRequest(aq, parsedReq)
@@ -374,7 +341,6 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			http.Error(w, handlerErr.Error(), handlerErr.HTTPStatusCode)
 			return
 		}
-
 		out, err := aq.GetOVSCtlClient().Trace(traceReq)
 		if err != nil {
 			if _, ok := err.(ovsctl.BadRequestError); ok {
@@ -394,7 +360,6 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 				return
 			}
 		}
-
 		err = json.NewEncoder(w).Encode(apis.OVSTracingResponse{Result: out})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

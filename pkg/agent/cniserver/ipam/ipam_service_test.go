@@ -11,34 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipam
-
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
-
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
-	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
-=======
-	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
-	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
->>>>>>> origin/main
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
 )
-
 type networkConf struct {
 	CNIVersion string `json:"cniVersion"`
 }
-
 var (
 	testNetworkConfig, _ = json.Marshal(networkConf{CNIVersion: testCNIVersion})
 	fakeExecWithResult   = func(ctx context.Context, pluginPath string, netconf []byte, args invoke.CNIArgs, exec invoke.Exec) (types.Result, error) {
@@ -50,7 +41,6 @@ var (
 		return nil
 	}
 )
-
 func TestArgsFromEnv(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -73,14 +63,12 @@ func TestArgsFromEnv(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, *tt.exceptedRes, *argsFromEnv(tt.cniArgs))
 		})
 	}
 }
-
 func TestGetIPFromCache(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -109,19 +97,16 @@ func TestGetIPFromCache(t *testing.T) {
 			resultKey: "emptyKey",
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.result != nil {
 				ipamResults.Store(tt.resultKey, tt.result)
 			}
-
 			res, _ := GetIPFromCache(tt.resultKey)
 			assert.Equal(t, tt.exceptedRes, res)
 		})
 	}
 }
-
 func TestGetAntreaIPAMDriver(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -138,7 +123,6 @@ func TestGetAntreaIPAMDriver(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.antreaIPAM != nil {
@@ -148,7 +132,6 @@ func TestGetAntreaIPAMDriver(t *testing.T) {
 		})
 	}
 }
-
 func TestExecIPAMAdd(t *testing.T) {
 	defaultExec = &mockExec{}
 	defer func() {
@@ -187,7 +170,6 @@ func TestExecIPAMAdd(t *testing.T) {
 			exceptedRes: nil,
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			RegisterIPAMDriver(ipamHostLocal, &IPAMDelegator{pluginType: ipamHostLocal})
@@ -197,7 +179,6 @@ func TestExecIPAMAdd(t *testing.T) {
 		})
 	}
 }
-
 func TestExecIPAMDelete(t *testing.T) {
 	defaultExec = &mockExec{}
 	defer func() {
@@ -236,7 +217,6 @@ func TestExecIPAMDelete(t *testing.T) {
 			exceptedRes: nil,
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			RegisterIPAMDriver(ipamHostLocal, &IPAMDelegator{pluginType: ipamHostLocal})
@@ -246,7 +226,6 @@ func TestExecIPAMDelete(t *testing.T) {
 		})
 	}
 }
-
 func TestExecIPAMCheck(t *testing.T) {
 	defaultExec = &mockExec{}
 	defer func() {
@@ -282,7 +261,6 @@ func TestExecIPAMCheck(t *testing.T) {
 			exceptedRes: nil,
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			RegisterIPAMDriver(ipamHostLocal, &IPAMDelegator{pluginType: ipamHostLocal})
@@ -292,7 +270,6 @@ func TestExecIPAMCheck(t *testing.T) {
 		})
 	}
 }
-
 func TestIsIPAMTypeValid(t *testing.T) {
 	testCases := []struct {
 		name         string
@@ -313,7 +290,6 @@ func TestIsIPAMTypeValid(t *testing.T) {
 			false,
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.existingType != "" {

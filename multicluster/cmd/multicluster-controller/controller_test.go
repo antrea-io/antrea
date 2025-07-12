@@ -11,32 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // Package main under directory cmd parses and validates user input,
 // instantiates and initializes objects imported from pkg, and runs
 // the process.
-
 package main
-
 import (
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
-
-<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/pkg/apiserver/certificate"
-=======
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/pkg/apiserver/certificate"
->>>>>>> origin/main
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apiserver/certificate"
 )
-
 func TestCreateClients(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -47,7 +38,6 @@ func TestCreateClients(t *testing.T) {
 			config: &rest.Config{},
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, _, err := createClients(tt.config)
@@ -55,7 +45,6 @@ func TestCreateClients(t *testing.T) {
 		})
 	}
 }
-
 func TestGetCAConfig(t *testing.T) {
 	testCases := []struct {
 		name         string
@@ -95,14 +84,12 @@ func TestGetCAConfig(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expectedRes, getCaConfig(tt.isLeader, tt.controllerNS))
 		})
 	}
 }
-
 func TestClusterClaimCRDAvailable(t *testing.T) {
 	groupVersion := mcv1alpha2.SchemeGroupVersion.String()
 	testCases := []struct {

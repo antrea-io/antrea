@@ -11,41 +11,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"net/netip"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
-
 	"antrea.io/antrea/v2/pkg/agent/metrics"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
-
-	"antrea.io/antrea/pkg/agent/metrics"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
 )
-
 const (
 	testActiveFlowTimeout      = 3 * time.Second
 	testIdleFlowTimeout        = 1 * time.Second
 	testPollInterval           = 0 // Not used in these tests, hence 0.
 	testStaleConnectionTimeout = 5 * time.Minute
 )
-
 var testFlowExporterOptions = &flowexporter.FlowExporterOptions{
 	FlowCollectorAddr:      "",
 	FlowCollectorProto:     "",
@@ -54,7 +43,6 @@ var testFlowExporterOptions = &flowexporter.FlowExporterOptions{
 	StaleConnectionTimeout: testStaleConnectionTimeout,
 	PollInterval:           testPollInterval,
 }
-
 func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// Create two flows; one is already in connectionStore and other one is new
@@ -96,7 +84,6 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
 	}
-
 	resetTwoFields := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
 		conn.IsPresent = false
 		conn.OriginalPackets = 0
@@ -111,7 +98,6 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		assert.Equal(t, conn.OriginalPackets, uint64(0), "OriginalPackets should be reset")
 	}
 }
-
 func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// test on deny connection store
@@ -123,19 +109,16 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	}
 	connKey := flowexporter.NewConnectionKey(conn)
 	denyConnStore.connections[connKey] = conn
-
 	// For testing purposes, set the metric
 	metrics.TotalDenyConnections.Set(1)
 	denyConnStore.deleteConnWithoutLock(connKey)
 	_, exists := denyConnStore.GetConnByKey(connKey)
 	assert.Equal(t, false, exists, "connection should be deleted in connection store")
 	checkDenyConnectionMetrics(t, len(denyConnStore.connections))
-
 	// test on conntrack connection store
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
 	conntrackConnStore.connections[connKey] = conn
-
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(1)
 	conntrackConnStore.deleteConnWithoutLock(connKey)
 	_, exists = conntrackConnStore.GetConnByKey(connKey)

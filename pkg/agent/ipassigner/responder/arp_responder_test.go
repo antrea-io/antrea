@@ -11,31 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package responder
-
 import (
 	"net"
 	"testing"
-
 	"github.com/mdlayher/arp"
 	"github.com/mdlayher/ethernet"
 	"github.com/mdlayher/packet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/nettest"
-=======
-	"antrea.io/antrea/pkg/agent/util/nettest"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util/nettest"
 )
-
 func newFakeARPClient(iface *net.Interface, conn *nettest.PacketConn) (*arp.Client, error) {
 	return arp.New(iface, conn)
 }
-
 func newFakeNetworkInterface(hardwareAddr []byte) *net.Interface {
 	return &net.Interface{
 		Index:        0,
@@ -44,7 +35,6 @@ func newFakeNetworkInterface(hardwareAddr []byte) *net.Interface {
 		HardwareAddr: hardwareAddr,
 	}
 }
-
 func getEthernetForARPPacket(p *arp.Packet, addr net.HardwareAddr) []byte {
 	pb, _ := p.MarshalBinary()
 	f := &ethernet.Frame{
@@ -56,7 +46,6 @@ func getEthernetForARPPacket(p *arp.Packet, addr net.HardwareAddr) []byte {
 	fb, _ := f.MarshalBinary()
 	return fb
 }
-
 func TestARPResponder_HandleARPRequest(t *testing.T) {
 	// The "local" endpoint is the one running the ARPRespondder.
 	// The "remote" endpoint is the one sending ARP requests to the "local" endpoint.
@@ -64,7 +53,6 @@ func TestARPResponder_HandleARPRequest(t *testing.T) {
 	remoteHWAddr := net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
 	localIP := net.ParseIP("192.168.10.1")
 	remoteIP := net.ParseIP("192.168.10.2")
-
 	tests := []struct {
 		name          string
 		assignedIPs   []net.IP
@@ -127,11 +115,9 @@ func TestARPResponder_HandleARPRequest(t *testing.T) {
 		})
 	}
 }
-
 func Test_arpResponder_addIP(t *testing.T) {
 	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
 	iface := newFakeNetworkInterface(hwAddr)
-
 	tests := []struct {
 		name                string
 		ip                  net.IP
@@ -175,11 +161,9 @@ func Test_arpResponder_addIP(t *testing.T) {
 		})
 	}
 }
-
 func Test_arpResponder_removeIP(t *testing.T) {
 	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
 	iface := newFakeNetworkInterface(hwAddr)
-
 	tests := []struct {
 		name                string
 		ip                  net.IP

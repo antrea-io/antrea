@@ -11,27 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
-
-<<<<<<< HEAD
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
 func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
@@ -41,11 +34,9 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
 		var obj interface{}
 		npq := aq.GetNetworkPolicyInfoQuerier()
 		var nps []cpv1beta.NetworkPolicy
-
 		if pod != "" {
 			namespaceAndPodName := strings.Split(pod, "/")
 			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(namespaceAndPodName[1], namespaceAndPodName[0])
@@ -56,13 +47,11 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			nps = npq.GetNetworkPolicies(npFilter)
 		}
 		obj = cpv1beta.NetworkPolicyList{Items: nps}
-
 		if err := json.NewEncoder(w).Encode(obj); err != nil {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
 		}
 	}
 }
-
 // Create a Network Policy Filter from URL Query
 func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter, string, error) {
 	namespace, pod := query.Get("namespace"), query.Get("pod")

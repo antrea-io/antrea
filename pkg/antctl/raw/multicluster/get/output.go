@@ -11,19 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"io"
-
-<<<<<<< HEAD
 	antctlOutput "antrea.io/antrea/v2/pkg/antctl/output"
-=======
-	antctlOutput "antrea.io/antrea/pkg/antctl/output"
->>>>>>> origin/main
+	antctlOutput "antrea.io/antrea/v2/pkg/antctl/output"
 )
-
 func output(resources interface{}, single bool, outputFormat string, output io.Writer,
 	transform func(r interface{}, single bool) (interface{}, error)) error {
 	switch outputFormat {
@@ -45,6 +38,5 @@ func output(resources interface{}, single bool, outputFormat string, output io.W
 			return err
 		}
 	}
-
 	return nil
 }

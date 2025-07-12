@@ -11,62 +11,45 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
 	"sync"
 	"testing"
 	"time"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/time/rate"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 type fakeConn struct{}
-
 func (f *fakeConn) Close() error {
 	return nil
 }
-
 func (f *fakeConn) Read(b []byte) (int, error) {
 	return len(b), nil
 }
-
 func (f *fakeConn) Write(b []byte) (int, error) {
 	return len(b), nil
 }
-
 func (f *fakeConn) LocalAddr() net.Addr {
 	return nil
 }
-
 func (f *fakeConn) RemoteAddr() net.Addr {
 	return nil
 }
-
 func (f *fakeConn) SetDeadline(t time.Time) error {
 	return nil
 }
-
 func (f *fakeConn) SetReadDeadline(t time.Time) error {
 	return nil
 }
-
 func (f *fakeConn) SetWriteDeadline(t time.Time) error {
 	return nil
 }
-
 func newFakeOFSwitch(app ofctrl.AppInterface) *ofctrl.OFSwitch {
 	stream := util.NewMessageStream(&fakeConn{}, nil)
 	dpid, _ := net.ParseMAC("01:02:03:04:05:06:07:08")
@@ -74,7 +57,6 @@ func newFakeOFSwitch(app ofctrl.AppInterface) *ofctrl.OFSwitch {
 	sw := ofctrl.NewSwitch(stream, dpid, app, connCh, 100)
 	return sw
 }
-
 // TestOFBridgeIsConnected verifies it's thread-safe to call OFBridge's IsConnected method.
 func TestOFBridgeIsConnected(t *testing.T) {
 	b := NewOFBridge("test-br", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"))
@@ -92,10 +74,8 @@ func TestOFBridgeIsConnected(t *testing.T) {
 	}()
 	wg.Wait()
 }
-
 func TestDeleteGroup(t *testing.T) {
 	b := NewOFBridge("test-br", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"))
-
 	for _, m := range []struct {
 		name            string
 		existingGroupID GroupIDType
@@ -121,7 +101,6 @@ func TestDeleteGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestConcurrentCreateGroups(t *testing.T) {
 	b := NewOFBridge("test-br", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"))
 	b.SwitchConnected(newFakeOFSwitch(b))
@@ -137,7 +116,6 @@ func TestConcurrentCreateGroups(t *testing.T) {
 	}
 	wg.Wait()
 }
-
 func TestOFBridgePacketRcvd(t *testing.T) {
 	b := NewOFBridge("test-br-pkt-rcvd", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br-pkt-rcvd"))
 	packetInQueueTracker := map[uint8]*PacketInQueue{}
@@ -164,12 +142,10 @@ func TestOFBridgePacketRcvd(t *testing.T) {
 		}
 	}
 }
-
 func TestOFMeterStats(t *testing.T) {
 	b := NewOFBridge("test-br", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"))
 	sw := newFakeOFSwitch(b)
 	b.SetOFSwitch(sw)
-
 	mpMeterStatsReply := openflow15.NewMpReply(openflow15.MultipartType_MeterStats)
 	newMeterStats := func(meterID uint32, packets uint64) *openflow15.MeterStats {
 		meterStats := openflow15.NewMeterStats(meterID)
@@ -203,7 +179,6 @@ func TestOFMeterStats(t *testing.T) {
 		return packetCounts[1] == int64(100) && packetCounts[2] == int64(0)
 	}, 2*time.Second, 50*time.Millisecond)
 }
-
 func TestPacketInQueue(t *testing.T) {
 	burst := 200
 	q := NewPacketInQueue(0, burst, rate.Limit(100))

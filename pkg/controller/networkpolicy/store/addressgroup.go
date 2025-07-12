@@ -11,32 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"fmt"
 	"reflect"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/apiserver/storage/ram"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 const IsNodeAddressGroupIndex = "isNodeAddressGroup"
-
 // addressGroupEvent implements storage.InternalEvent.
 type addressGroupEvent struct {
 	// The current version of the stored AddressGroup.
@@ -54,14 +45,12 @@ type addressGroupEvent struct {
 	Key             string
 	ResourceVersion uint64
 }
-
 // ToWatchEvent converts the addressGroupEvent to *watch.Event based on the provided Selectors. It has the following features:
 // 1. Added event will be generated if the Selectors was not interested in the object but is now.
 // 2. Modified event will be generated if the Selectors was and is interested in the object.
 // 3. Deleted event will be generated if the Selectors was interested in the object but is not now.
 func (event *addressGroupEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	prevObjSelected, currObjSelected := isSelected(event.Key, event.PrevGroup, event.CurrGroup, selectors, isInitEvent)
-
 	switch {
 	case !currObjSelected && !prevObjSelected:
 		// Watcher is not interested in that object.
@@ -81,11 +70,9 @@ func (event *addressGroupEvent) ToWatchEvent(selectors *storage.Selectors, isIni
 	}
 	return nil
 }
-
 func (event *addressGroupEvent) GetResourceVersion() uint64 {
 	return event.ResourceVersion
 }
-
 // ToAddressGroupMsg converts the stored AddressGroup to its message form.
 // If includeBody is true, IPAddresses will be copied.
 func ToAddressGroupMsg(in *types.AddressGroup, out *controlplane.AddressGroup, includeBody bool) {
@@ -98,9 +85,7 @@ func ToAddressGroupMsg(in *types.AddressGroup, out *controlplane.AddressGroup, i
 		out.GroupMembers = append(out.GroupMembers, *member)
 	}
 }
-
 var _ storage.GenEventFunc = genAddressGroupEvent
-
 // genAddressGroupEvent generates InternalEvent from the given versions of an AddressGroup.
 // It converts the stored AddressGroup to its message form, and calculates the incremental
 // message - an AddressGroupPatch object.
@@ -108,21 +93,17 @@ func genAddressGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (
 	if reflect.DeepEqual(prevObj, currObj) {
 		return nil, nil
 	}
-
 	event := &addressGroupEvent{Key: key, ResourceVersion: rv}
-
 	if prevObj != nil {
 		event.PrevGroup = prevObj.(*types.AddressGroup)
 		event.PrevObject = new(controlplane.AddressGroup)
 		ToAddressGroupMsg(event.PrevGroup, event.PrevObject, false)
 	}
-
 	if currObj != nil {
 		event.CurrGroup = currObj.(*types.AddressGroup)
 		event.CurrObject = new(controlplane.AddressGroup)
 		ToAddressGroupMsg(event.CurrGroup, event.CurrObject, true)
 	}
-
 	// Calculate PatchObject in advance so that we don't need to do it for
 	// each watcher when generating *event.Event.
 	if event.PrevGroup != nil && event.CurrGroup != nil {
@@ -146,10 +127,8 @@ func genAddressGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (
 			event.PatchObject.RemovedGroupMembers = removedMembers
 		}
 	}
-
 	return event, nil
 }
-
 // AddressGroupKeyFunc knows how to get the key of an AddressGroup.
 func AddressGroupKeyFunc(obj interface{}) (string, error) {
 	group, ok := obj.(*types.AddressGroup)
@@ -158,7 +137,6 @@ func AddressGroupKeyFunc(obj interface{}) (string, error) {
 	}
 	return group.Name, nil
 }
-
 // NewAddressGroupStore creates a store of AddressGroup.
 func NewAddressGroupStore() storage.Interface {
 	indexers := cache.Indexers{

@@ -11,40 +11,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 )
-
 var (
 	selectorA = metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB = metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC = metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-
 	icmpType8 = int32(8)
 	icmpCode0 = int32(0)
 )
-
 func TestProcessAntreaNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
 	svcA := v1.Service{
@@ -756,7 +746,6 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 		})
 	}
 }
-
 func TestAddANNP(t *testing.T) {
 	_, npc := newController(nil, nil)
 	annp := getANNP()
@@ -767,7 +756,6 @@ func TestAddANNP(t *testing.T) {
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
-
 func TestUpdateANNP(t *testing.T) {
 	_, npc := newController(nil, nil)
 	annp := getANNP()
@@ -781,7 +769,6 @@ func TestUpdateANNP(t *testing.T) {
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
-
 func TestDeleteANNP(t *testing.T) {
 	_, npc := newController(nil, nil)
 	annp := getANNP()
@@ -792,7 +779,6 @@ func TestDeleteANNP(t *testing.T) {
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
-
 // util functions for testing.
 func getANNP() *crdv1beta1.NetworkPolicy {
 	p10 := float64(10)

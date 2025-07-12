@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package serviceexternalip
-
 import (
 	"fmt"
 	"sort"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
@@ -29,20 +26,15 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	ipassignertest "antrea.io/antrea/v2/pkg/agent/ipassigner/testing"
 	"antrea.io/antrea/v2/pkg/agent/memberlist"
 	"antrea.io/antrea/v2/pkg/agent/types"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
-	"antrea.io/antrea/pkg/agent/memberlist"
-	"antrea.io/antrea/pkg/agent/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	ipassignertest "antrea.io/antrea/v2/pkg/agent/ipassigner/testing"
+	"antrea.io/antrea/v2/pkg/agent/memberlist"
+	"antrea.io/antrea/v2/pkg/agent/types"
 )
-
 const (
 	fakeNode1              = "node1"
 	fakeNode2              = "node2"
@@ -50,17 +42,14 @@ const (
 	fakeServiceExternalIP1 = "1.2.3.4"
 	fakeServiceExternalIP2 = "1.2.3.5"
 )
-
 var (
 	servicePolicyCluster = makeService("svc1", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyTypeCluster, fakeExternalIPPoolName, fakeServiceExternalIP1)
 	servicePolicyLocal   = makeService("svc2", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyTypeLocal, fakeExternalIPPoolName, fakeServiceExternalIP1)
 )
-
 type fakeMemberlistCluster struct {
 	nodes  []string
 	hashFn func([]string) []string
 }
-
 func fakeHashFn(invert bool) func([]string) []string {
 	return func(s []string) []string {
 		hashed := make([]string, len(s))
@@ -77,16 +66,12 @@ func fakeHashFn(invert bool) func([]string) []string {
 		return hashed
 	}
 }
-
 var _ memberlist.Interface = (*fakeMemberlistCluster)(nil)
-
 func (f *fakeMemberlistCluster) AddClusterEventHandler(h memberlist.ClusterNodeEventHandler) {
 }
-
 func (f *fakeMemberlistCluster) AliveNodes() sets.Set[string] {
 	return sets.New[string](f.nodes...)
 }
-
 func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
 	var selectNode string
 	for _, n := range f.hashFn(f.nodes) {
@@ -107,11 +92,9 @@ func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filte
 	}
 	return selectNode, nil
 }
-
 func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error) {
 	return false, nil
 }
-
 type fakeController struct {
 	*ServiceExternalIPController
 	mockController        *gomock.Controller
@@ -119,16 +102,13 @@ type fakeController struct {
 	mockIPAssigner        *ipassignertest.MockIPAssigner
 	fakeMemberlistCluster *fakeMemberlistCluster
 }
-
 func newFakeController(t *testing.T, objs ...runtime.Object) *fakeController {
 	controller := gomock.NewController(t)
 	clientset := fake.NewSimpleClientset(objs...)
 	mockIPAssigner := ipassignertest.NewMockIPAssigner(controller)
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
-
 	serviceInformer := informerFactory.Core().V1().Services()
 	endpointInformer := informerFactory.Core().V1().Endpoints()
-
 	memberlistCluster := &fakeMemberlistCluster{
 		// default fake hash function which will return the sorted string slice in ascending order.
 		hashFn: fakeHashFn(false),
@@ -160,7 +140,6 @@ func newFakeController(t *testing.T, objs ...runtime.Object) *fakeController {
 		fakeMemberlistCluster:       memberlistCluster,
 	}
 }
-
 func makeService(name, namespace string, serviceType corev1.ServiceType,
 	trafficPolicy corev1.ServiceExternalTrafficPolicyType, ipPool, externalIP string) *corev1.Service {
 	service := &corev1.Service{
@@ -185,7 +164,6 @@ func makeService(name, namespace string, serviceType corev1.ServiceType,
 	}
 	return service
 }
-
 func makeEndpoints(name, namespace string, addresses, notReadyAddresses map[string]string) *corev1.Endpoints {
 	var addr, notReadyAddr []corev1.EndpointAddress
 	for k, v := range addresses {
@@ -207,7 +185,6 @@ func makeEndpoints(name, namespace string, addresses, notReadyAddresses map[stri
 			Name:      name,
 			Namespace: namespace,
 		},
-
 		Subsets: []corev1.EndpointSubset{
 			{
 				Addresses:         addr,
@@ -217,7 +194,6 @@ func makeEndpoints(name, namespace string, addresses, notReadyAddresses map[stri
 	}
 	return service
 }
-
 func TestCreateService(t *testing.T) {
 	tests := []struct {
 		name                     string
@@ -421,24 +397,18 @@ func TestCreateService(t *testing.T) {
 		})
 	}
 }
-
 func TestUpdateService(t *testing.T) {
 	serviceExternalTrafficPolicyClusterUpdatedExternalIP := servicePolicyCluster.DeepCopy()
 	serviceExternalTrafficPolicyClusterUpdatedExternalIP.Status.LoadBalancer.Ingress[0].IP = fakeServiceExternalIP2
-
 	serviceExternalTrafficPolicyClusterWithSameExternalIP := servicePolicyCluster.DeepCopy()
 	serviceExternalTrafficPolicyClusterWithSameExternalIP.Name = "svc-same-eip"
 	serviceExternalTrafficPolicyClusterWithSameExternalIP.Status.LoadBalancer.Ingress[0].IP = fakeServiceExternalIP2
-
 	serviceChangedType := servicePolicyCluster.DeepCopy()
 	serviceChangedType.Spec.Type = corev1.ServiceTypeClusterIP
-
 	serviceExternalIPRecalimed := servicePolicyCluster.DeepCopy()
 	serviceExternalIPRecalimed.Status.LoadBalancer.Ingress = nil
-
 	serviceChangedExternalTrafficPolicy := servicePolicyCluster.DeepCopy()
 	serviceChangedExternalTrafficPolicy.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeLocal
-
 	tests := []struct {
 		name                     string
 		endpoints                []*corev1.Endpoints
@@ -628,18 +598,15 @@ func TestUpdateService(t *testing.T) {
 		})
 	}
 }
-
 func keyFor(svc *corev1.Service) apimachinerytypes.NamespacedName {
 	return apimachinerytypes.NamespacedName{
 		Namespace: svc.Namespace,
 		Name:      svc.Name,
 	}
 }
-
 func stringPtr(s string) *string {
 	return &s
 }
-
 func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -711,7 +678,6 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 		})
 	}
 }
-
 func TestServiceExternalIPController_GetServiceExternalIPStatus(t *testing.T) {
 	tests := []struct {
 		name                          string
@@ -730,7 +696,6 @@ func TestServiceExternalIPController_GetServiceExternalIPStatus(t *testing.T) {
 			},
 			expectedServiceExternalIPInfo: []apis.ServiceExternalIPInfo{
 				{
-
 					ServiceName:    servicePolicyCluster.Name,
 					Namespace:      servicePolicyCluster.Namespace,
 					ExternalIP:     fakeServiceExternalIP1,
@@ -747,7 +712,6 @@ func TestServiceExternalIPController_GetServiceExternalIPStatus(t *testing.T) {
 			},
 			expectedServiceExternalIPInfo: []apis.ServiceExternalIPInfo{
 				{
-
 					ServiceName:    servicePolicyCluster.Name,
 					Namespace:      servicePolicyCluster.Namespace,
 					ExternalIP:     fakeServiceExternalIP1,
@@ -755,7 +719,6 @@ func TestServiceExternalIPController_GetServiceExternalIPStatus(t *testing.T) {
 					AssignedNode:   fakeNode1,
 				},
 				{
-
 					ServiceName:    servicePolicyLocal.Name,
 					Namespace:      servicePolicyLocal.Namespace,
 					ExternalIP:     fakeServiceExternalIP2,

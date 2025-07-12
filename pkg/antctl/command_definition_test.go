@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package antctl
-
 import (
 	"bytes"
 	"encoding/json"
@@ -21,23 +19,16 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
 	"antrea.io/antrea/v2/pkg/antctl/transform/version"
-=======
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/antctl/transform/version"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/antctl/transform/version"
 )
-
 type Foobar struct {
 	Foo string `json:"foo"`
 }
-
 // TestFormat ensures the formatter and AddonTransform works as expected.
 func TestFormat(t *testing.T) {
 	for _, tc := range []struct {
@@ -109,7 +100,6 @@ func TestFormat(t *testing.T) {
 		})
 	}
 }
-
 // TestCommandDefinitionGenerateExample checks example strings are generated as
 // expected.
 func TestCommandDefinitionGenerateExample(t *testing.T) {
@@ -141,7 +131,6 @@ func TestCommandDefinitionGenerateExample(t *testing.T) {
 				cmd = tmp
 			}
 			cmd.Use = tc.use
-
 			co := &commandDefinition{
 				use:           tc.use,
 				agentEndpoint: &endpoint{nonResourceEndpoint: &nonResourceEndpoint{outputType: tc.outputType}},
@@ -151,7 +140,6 @@ func TestCommandDefinitionGenerateExample(t *testing.T) {
 		})
 	}
 }
-
 func TestNamespaced(t *testing.T) {
 	tc := []struct {
 		name     string
@@ -246,7 +234,6 @@ func TestNamespaced(t *testing.T) {
 		})
 	}
 }
-
 func TestAddonTransform(t *testing.T) {
 	tc := []struct {
 		name             string
@@ -300,7 +287,6 @@ func TestAddonTransform(t *testing.T) {
 		})
 	}
 }
-
 func TestValidate(t *testing.T) {
 	tc := []struct {
 		name           string
@@ -543,7 +529,6 @@ func TestValidate(t *testing.T) {
 		})
 	}
 }
-
 func TestGetRequestErrorFallback(t *testing.T) {
 	tc := []struct {
 		name string
@@ -597,7 +582,6 @@ func TestGetRequestErrorFallback(t *testing.T) {
 		})
 	}
 }
-
 func TestCollectFlags(t *testing.T) {
 	tc := []struct {
 		name          string

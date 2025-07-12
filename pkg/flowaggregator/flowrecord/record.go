@@ -11,22 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowrecord
-
 import (
 	"encoding/json"
 	"fmt"
 	"net"
 	"time"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
-
 type FlowRecord struct {
 	FlowStartSeconds                     time.Time
 	FlowEndSeconds                       time.Time
@@ -81,14 +74,12 @@ type FlowRecord struct {
 	HttpVals                             string
 	EgressNodeName                       string
 }
-
 // GetFlowRecord converts flowpb.Flow to FlowRecord.
 // It assumes that record.Aggregation is set, so it should only be used in Aggregate mode.
 func GetFlowRecord(record *flowpb.Flow) (*FlowRecord, error) {
 	if record.Aggregation == nil {
 		return nil, fmt.Errorf("aggregation section is unset")
 	}
-
 	var sourcePodLabels, destinationPodLabels string
 	if record.K8S.SourcePodLabels != nil {
 		// flow.K8S.SourcePodLabels.Labels can be nil or an empty map
@@ -116,14 +107,12 @@ func GetFlowRecord(record *flowpb.Flow) (*FlowRecord, error) {
 			destinationPodLabels = "{}"
 		}
 	}
-
 	ipAddressAsString := func(bytes []byte) string {
 		if len(bytes) == 0 {
 			return ""
 		}
 		return net.IP(bytes).String()
 	}
-
 	return &FlowRecord{
 		FlowStartSeconds:                  record.StartTs.AsTime(),
 		FlowEndSeconds:                    record.EndTs.AsTime(),

@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,31 +13,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	routetest "antrea.io/antrea/pkg/agent/route/testing"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 var (
 	ruleActionAllow = secv1beta1.RuleActionAllow
-
 	ipv4Net1 = newCIDR("192.168.1.0/24")
 	ipv6Net1 = newCIDR("fec0::192:168:1:0/124")
 	ipv4Net2 = newCIDR("192.168.1.128/25")
@@ -69,11 +59,9 @@ var (
 			},
 		},
 	}
-
 	policyPriority1 = float64(1)
 	tierPriority1   = int32(1)
 	tierPriority2   = int32(2)
-
 	ingressRuleID1 = "ingressRule1"
 	ingressRuleID2 = "ingressRule2"
 	ingressRuleID3 = "ingressRule3"
@@ -263,11 +251,9 @@ var (
 		FromAddresses: nil,
 	}
 )
-
 func newTestNodeReconciler(mockRouteClient *routetest.MockInterface, ipv4Enabled, ipv6Enabled bool) *nodeReconciler {
 	return newNodeReconciler(mockRouteClient, ipv4Enabled, ipv6Enabled)
 }
-
 func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -442,7 +428,6 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables([]string{"ANTREA-POL-INGRESS-RULES"}, coreRulesDeleted3, false),
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables([]string{"ANTREA-POL-INGRESS-RULES"}, coreRulesDelete2, false),
 				)
-
 			},
 			rulesToAdd: []*CompletedRule{
 				ingressRule1,
@@ -673,7 +658,6 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 			controller := gomock.NewController(t)
 			mockRouteClient := routetest.NewMockInterface(controller)
 			r := newTestNodeReconciler(mockRouteClient, tt.ipv4Enabled, tt.ipv6Enabled)
-
 			tt.expectedCalls(mockRouteClient.EXPECT())
 			for _, rule := range tt.rulesToAdd {
 				assert.NoError(t, r.Reconcile(rule))
@@ -684,7 +668,6 @@ func TestNodeReconcilerReconcileAndForget(t *testing.T) {
 		})
 	}
 }
-
 func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -833,7 +816,6 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 						`-A ANTREA-POL-INGRESS-RULES -s 2002:1a23:fb44::1/128 -p tcp --dport 443 -j ACCEPT -m comment --comment "Antrea: for rule ingress-rule-02, policy AntreaClusterNetworkPolicy:name1"`,
 					},
 				}
-
 				gomock.InOrder(
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPSet("ANTREA-POL-INGRESSRULE1-4", sets.New[string]("1.1.1.1/32", "192.168.1.0/25"), false),
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(svcChains, ipv4SvcRules, false),
@@ -1002,7 +984,6 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(coreChains, ipv4CoreRules, false),
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(svcChains, ipv6SvcRules, true),
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(coreChains, ipv6CoreRules, true),
-
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(coreChains, updatedIPv4CoreRules, false),
 					mockRouteClient.DeleteNodeNetworkPolicyIPTables(svcChains, false),
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(coreChains, updatedIPv6CoreRules, true),
@@ -1073,7 +1054,6 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(svcChains, svcRules, false),
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(ingressCoreChains, ingressCoreRules, false),
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(egressCoreChains, egressCoreRules, false),
-
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(ingressCoreChains, updatedIngressCoreRules, false),
 					mockRouteClient.DeleteNodeNetworkPolicyIPTables([]string{"ANTREA-POL-INGRESSRULE1"}, false),
 					mockRouteClient.DeleteNodeNetworkPolicyIPSet("ANTREA-POL-INGRESSRULE1-4", false),
@@ -1145,7 +1125,6 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(svcChains, svcRules, true),
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(ingressCoreChains, ingressCoreRules, true),
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(egressCoreChains, egressCoreRules, true),
-
 					mockRouteClient.AddOrUpdateNodeNetworkPolicyIPTables(ingressCoreChains, updatedIngressCoreRules, true),
 					mockRouteClient.DeleteNodeNetworkPolicyIPTables([]string{"ANTREA-POL-INGRESSRULE1"}, true),
 					mockRouteClient.DeleteNodeNetworkPolicyIPSet("ANTREA-POL-INGRESSRULE1-6", true),
@@ -1155,16 +1134,13 @@ func TestNodeReconcilerBatchReconcileAndForget(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
 			mockRouteClient := routetest.NewMockInterface(controller)
 			r := newTestNodeReconciler(mockRouteClient, tt.ipv4Enabled, tt.ipv6Enabled)
-
 			tt.expectedCalls(mockRouteClient.EXPECT())
 			assert.NoError(t, r.BatchReconcile(tt.rulesToAdd))
-
 			for _, ruleID := range tt.rulesToForget {
 				assert.NoError(t, r.Forget(ruleID))
 			}

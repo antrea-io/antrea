@@ -11,21 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowaggregator
-
 import (
 	"os"
 	"path/filepath"
 	"time"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
-=======
-	"antrea.io/antrea/pkg/apis"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis"
 )
-
 const (
 	DefaultExternalFlowCollectorTransport = "tcp"
 	DefaultExternalFlowCollectorPort      = "4739"
@@ -36,23 +29,19 @@ const (
 	DefaultTemplateRefreshTimeout         = "600s"
 	MinValidIPFIXMsgSize                  = 512
 	MaxValidIPFIXMsgSize                  = 65535
-
 	DefaultClickHouseDatabase       = "default"
 	DefaultClickHouseCommitInterval = "8s"
 	MinClickHouseCommitInterval     = 1 * time.Second
 	DefaultClickHouseDatabaseUrl    = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
-
 	DefaultS3Region            = "us-west-2"
 	DefaultS3RecordFormat      = "CSV"
 	DefaultS3MaxRecordsPerFile = 1000000
 	DefaultS3UploadInterval    = "60s"
 	MinS3CommitInterval        = 1 * time.Second
-
 	DefaultLoggerMaxSize      = 100
 	DefaultLoggerMaxBackups   = 3
 	DefaultLoggerRecordFormat = "CSV"
 )
-
 func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 	if flowAggregatorConf.Mode == "" {
 		flowAggregatorConf.Mode = AggregatorModeAggregate

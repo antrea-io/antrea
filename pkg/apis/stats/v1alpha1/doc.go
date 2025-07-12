@@ -11,16 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
 // +k8s:protobuf-gen=package
-<<<<<<< HEAD
-// +k8s:conversion-gen=antrea.io/antrea/apis/pkg/apis/stats
-=======
-// +k8s:conversion-gen=antrea.io/antrea/pkg/apis/stats
->>>>>>> origin/main
+// +k8s:conversion-gen=antrea.io/antrea/v2/pkg/apis/stats
+// +k8s:conversion-gen=antrea.io/antrea/v2/pkg/apis/stats
 // +groupName=stats.antrea.io
-
 // Package v1alpha1 is the v1alpha1 version of the Antrea Stats API.
 package v1alpha1

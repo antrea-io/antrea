@@ -11,28 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowexport
-
 import (
 	"fmt"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
-=======
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
->>>>>>> origin/main
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 )
-
 const (
 	defaultFlowCollectorProtocol = "tcp"
 	defaultFlowCollectorPort     = "4739"
 )
-
 func TestParseFlowCollectorAddr(t *testing.T) {
 	testcases := []struct {
 		// input
@@ -98,7 +89,6 @@ func TestParseFlowCollectorAddr(t *testing.T) {
 		}
 	}
 }
-
 func TestParseFlowIntervalString(t *testing.T) {
 	testcases := []struct {
 		// input
@@ -133,7 +123,6 @@ func TestParseFlowIntervalString(t *testing.T) {
 		}
 	}
 }
-
 func TestParseTransportProtocol(t *testing.T) {
 	testcases := []struct {
 		// input

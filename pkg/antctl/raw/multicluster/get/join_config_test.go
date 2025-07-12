@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"testing"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 var (
 	clusterSet1 = &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -60,7 +52,6 @@ var (
 		Spec:   mcv1alpha2.ClusterSetSpec{},
 		Status: mcv1alpha2.ClusterSetStatus{},
 	}
-
 	tokenSecret = &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "antrea-multi-cluster",
@@ -68,7 +59,6 @@ var (
 		},
 		Data: map[string][]byte{"token": []byte("12345")},
 	}
-
 	jcOutput = `---
 apiVersion: multicluster.antrea.io/v1alpha1
 kind: ClusterSetJoinConfig
@@ -83,7 +73,6 @@ leaderAPIServer: https://localhost
 # Create a token Secret with the manifest file.
 #tokenSecretFile: ""
 `
-
 	tkOutput = `# Manifest to create a Secret for an Antrea Multi-cluster member token.
 ---
 apiVersion: v1
@@ -96,15 +85,12 @@ metadata:
 type: Opaque
 `
 )
-
 func TestJoinConfig(t *testing.T) {
 	cmd := NewJoinConfigCommand()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-
 	joinConfigOpts.namespace = "antrea-multi-cluster"
-
 	kcFile, err := createFakeKubeconfigFile()
 	if err != nil {
 		log.Fatal(err)
@@ -112,7 +98,6 @@ func TestJoinConfig(t *testing.T) {
 	defer os.Remove(kcFile)
 	kcOption := ""
 	cmd.Flags().StringVarP(&kcOption, "kubeconfig", "k", kcFile, "path of kubeconfig")
-
 	tests := []struct {
 		name           string
 		clusterSets    []*mcv1alpha2.ClusterSet
@@ -173,7 +158,6 @@ func TestJoinConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestOptValidate(t *testing.T) {
 	tests := []struct {
 		name string
@@ -212,7 +196,6 @@ func TestOptValidate(t *testing.T) {
 			err: fmt.Errorf("flag accessed but not defined: kubeconfig"),
 		},
 	}
-
 	cmd := &cobra.Command{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -221,7 +204,6 @@ func TestOptValidate(t *testing.T) {
 		})
 	}
 }
-
 func createFakeKubeconfigFile() (string, error) {
 	fakeKubeconfig := []byte(`apiVersion: v1
 clusters:
@@ -236,7 +218,6 @@ contexts:
   name:  fake-cluster
 current-context:  fake-cluster
 kind: Config`)
-
 	fileName := "fakeKubeconfig"
 	kcFile, err := os.CreateTemp("", fileName)
 	if err != nil {

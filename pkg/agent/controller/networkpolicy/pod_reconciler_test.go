@@ -11,50 +11,41 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"errors"
 	"fmt"
 	"net"
 	"reflect"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	proxytypes "antrea.io/antrea/v2/pkg/agent/proxy/types"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/third_party/proxy"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	proxytypes "antrea.io/antrea/v2/pkg/agent/proxy/types"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 var (
 	addressGroup1     = v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))
 	addressGroup2     = v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))
 	ipv6AddressGroup1 = v1beta2.NewGroupMemberSet(newAddressGroupMember("2002:1a23:fb44::1"))
 	dualAddressGroup1 = v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1", "2002:1a23:fb44::1"))
-
 	appliedToGroup1                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1"))
 	appliedToGroup2                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod2", "ns1"))
 	appliedToGroup3                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod4", "ns1"))
@@ -68,15 +59,12 @@ var (
 	)
 	appliedToGroupWithSingleContainerPort = v1beta2.NewGroupMemberSet(
 		newAppliedToGroupMemberPod("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}))
-
 	protocolTCP = v1beta2.ProtocolTCP
-
 	port80    = intstr.FromInt(80)
 	port443   = intstr.FromInt(443)
 	port8080  = intstr.FromInt(8080)
 	portHTTP  = intstr.FromString("http")
 	portHTTPS = intstr.FromString("https")
-
 	serviceTCP80          = v1beta2.Service{Protocol: &protocolTCP, Port: &port80}
 	serviceTCP443         = v1beta2.Service{Protocol: &protocolTCP, Port: &port443}
 	serviceTCP8080        = v1beta2.Service{Protocol: &protocolTCP, Port: &port8080}
@@ -84,15 +72,12 @@ var (
 	serviceHTTPNoProtocol = v1beta2.Service{Port: &portHTTP}
 	serviceHTTP           = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTP}
 	serviceHTTPS          = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTPS}
-
 	services1    = []v1beta2.Service{serviceTCP80}
 	servicesKey1 = normalizeServices(services1)
 	services2    = []v1beta2.Service{serviceTCP}
 	servicesKey2 = normalizeServices(services2)
-
 	policyPriority = float64(1)
 	tierPriority   = int32(1)
-
 	np1 = v1beta2.NetworkPolicyReference{
 		Type:      v1beta2.K8sNetworkPolicy,
 		Namespace: "ns1",
@@ -109,15 +94,12 @@ var (
 		Name: "anp1",
 		UID:  "uid2",
 	}
-
 	errTransient = errors.New("Transient OVS error")
 )
-
 func newCIDR(cidrStr string) *net.IPNet {
 	_, tmpIPNet, _ := net.ParseCIDR(cidrStr)
 	return tmpIPNet
 }
-
 func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore interfacestore.InterfaceStore, ofClient *openflowtest.MockClient, v4Enabled, v6Enabled bool) *podReconciler {
 	f, _ := newMockFQDNController(t, controller, nil, nil, 0)
 	ch := make(chan string, 100)
@@ -126,7 +108,6 @@ func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore i
 	r := newPodReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled, true, false)
 	return r
 }
-
 func TestReconcilerForget(t *testing.T) {
 	prepareMockTables()
 	tests := []struct {
@@ -215,7 +196,6 @@ func TestReconcilerForget(t *testing.T) {
 		})
 	}
 }
-
 func TestReconcilerReconcile(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
@@ -247,7 +227,6 @@ func TestReconcilerReconcile(t *testing.T) {
 	diffNet10 := newCIDR("10.20.2.64/26")
 	diffNet11 := newCIDR("10.20.2.32/27")
 	diffNet12 := newCIDR("10.20.2.16/28")
-
 	ipBlock1 := v1beta2.IPBlock{
 		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet1.IP), PrefixLength: 16},
 	}
@@ -261,7 +240,6 @@ func TestReconcilerReconcile(t *testing.T) {
 	ipBlock3 := v1beta2.IPBlock{
 		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet5.IP), PrefixLength: 32},
 	}
-
 	tests := []struct {
 		name            string
 		args            *CompletedRule
@@ -632,7 +610,6 @@ func TestReconcilerReconcile(t *testing.T) {
 		})
 	}
 }
-
 func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
@@ -641,12 +618,10 @@ func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1", ContainerID: "container1"},
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
 	})
-
 	ipNet := newCIDR("10.10.0.0/16")
 	ipBlock := v1beta2.IPBlock{
 		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet.IP), PrefixLength: 16},
 	}
-
 	svc1Ref := v1beta2.ServiceReference{
 		Name:      "svc1",
 		Namespace: "ns1",
@@ -655,12 +630,10 @@ func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 		Name:      "svc2",
 		Namespace: "ns2",
 	}
-
 	appliedToGroupWithServices := v1beta2.NewGroupMemberSet(
 		newAppliedToGroupMemberService(svc1Ref.Name, svc1Ref.Namespace),
 		newAppliedToGroupMemberService(svc2Ref.Name, svc2Ref.Namespace),
 	)
-
 	svc1PortName := proxy.ServicePortName{
 		NamespacedName: k8stypes.NamespacedName{
 			Namespace: svc1Ref.Namespace,
@@ -677,7 +650,6 @@ func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 		Port:     "80",
 		Protocol: v1.ProtocolTCP,
 	}
-
 	tests := []struct {
 		name            string
 		completeRule    *CompletedRule
@@ -874,7 +846,6 @@ func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 		})
 	}
 }
-
 // TestReconcileWithTransientError ensures the podReconciler can reconcile a rule properly after the first attempt meets
 // transient error.
 // The input rule is an egress rule with named port, applying to 3 Pods and 1 IPBlock. The first 2 Pods have different
@@ -890,7 +861,6 @@ func TestReconcileWithTransientError(t *testing.T) {
 			IPs:                      []net.IP{net.ParseIP("2.2.2.2")},
 			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1", ContainerID: "container1"},
 			OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1}})
-
 	ipNet := *newCIDR("10.10.0.0/16")
 	ipBlock := v1beta2.IPBlock{
 		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet.IP), PrefixLength: 16},
@@ -908,7 +878,6 @@ func TestReconcileWithTransientError(t *testing.T) {
 	member3 := &v1beta2.GroupMember{
 		IPs: []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.3"))},
 	}
-
 	egressRule := &CompletedRule{
 		rule: &rule{
 			ID:        "egress-rule",
@@ -922,13 +891,11 @@ func TestReconcileWithTransientError(t *testing.T) {
 		ToAddresses:   v1beta2.NewGroupMemberSet(member1, member2, member3),
 		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1")),
 	}
-
 	controller := gomock.NewController(t)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	r := newTestReconciler(t, controller, ifaceStore, mockOFClient, true, true)
 	// Set deleteInterval to verify openflow ID is released immediately.
 	r.idAllocator.deleteInterval = 0
-
 	// Make the first call fail.
 	mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any()).Return(errTransient).Times(1)
 	err := r.Reconcile(egressRule)
@@ -938,7 +905,6 @@ func TestReconcileWithTransientError(t *testing.T) {
 	assert.True(t, exists)
 	assert.Empty(t, value.(*podPolicyLastRealized).ofIDs)
 	assert.Equal(t, 1, r.idAllocator.deleteQueue.Len())
-
 	// Make the second call success.
 	// The following PolicyRules are expected to be installed.
 	policyRules := []*types.PolicyRule{
@@ -978,12 +944,10 @@ func TestReconcileWithTransientError(t *testing.T) {
 	assert.Len(t, value.(*podPolicyLastRealized).ofIDs, 3)
 	// Ensure the number of released IDs doesn't change.
 	assert.Equal(t, 1, r.idAllocator.deleteQueue.Len())
-
 	// Reconciling the same rule should be idempotent.
 	err = r.Reconcile(egressRule)
 	assert.NoError(t, err)
 }
-
 func TestReconcilerBatchReconcile(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
@@ -1106,7 +1070,6 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 		})
 	}
 }
-
 func TestReconcilerUpdate(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(
@@ -1364,12 +1327,10 @@ func TestReconcilerUpdate(t *testing.T) {
 		})
 	}
 }
-
 func TestGroupMembersByServices(t *testing.T) {
 	numberedServices := []v1beta2.Service{serviceTCP80, serviceTCP443}
 	numberedServicesKey := normalizeServices(numberedServices)
 	namedServices := []v1beta2.Service{serviceHTTP, serviceHTTPS}
-
 	tests := []struct {
 		name                     string
 		services                 []v1beta2.Service
@@ -1479,7 +1440,6 @@ func TestGroupMembersByServices(t *testing.T) {
 		})
 	}
 }
-
 func TestReconcilerReconcileIPv6Only(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
@@ -1512,7 +1472,6 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 	diffNet11 := newCIDR("2002:1a23:fb46::11:220/123")
 	diffNet12 := newCIDR("2002:1a23:fb46::11:210/124")
 	diffNet13 := newCIDR("10.10.0.0/24")
-
 	ipBlock1 := v1beta2.IPBlock{
 		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet1.IP), PrefixLength: 112},
 	}
@@ -1529,7 +1488,6 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 			{IP: v1beta2.IPAddress(diffNet13.IP), PrefixLength: 24},
 		},
 	}
-
 	tests := []struct {
 		name            string
 		args            *CompletedRule
@@ -1864,7 +1822,6 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 		})
 	}
 }
-
 func TestReconcilerReconcileDualStack(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
@@ -1906,7 +1863,6 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 	diffNet18 := newCIDR("10.20.4.0/22")
 	diffNet19 := newCIDR("10.20.2.0/23")
 	diffNet20 := newCIDR("10.20.0.0/24")
-
 	ipBlock1 := v1beta2.IPBlock{
 		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet1.IP), PrefixLength: 112},
 	}
@@ -1926,7 +1882,6 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 			{IP: v1beta2.IPAddress(ipNet7.IP), PrefixLength: 24},
 		},
 	}
-
 	tests := []struct {
 		name            string
 		args            *CompletedRule
@@ -2264,17 +2219,14 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 		})
 	}
 }
-
 func BenchmarkNormalizeServices(b *testing.B) {
 	services := []v1beta2.Service{serviceTCP80, serviceTCP8080}
-
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		normalizeServices(services)
 	}
 }
-
 func benchmarkGroupMembersByServices(b *testing.B, withNamedPort bool) {
 	serviceHTTP := v1beta2.Service{Protocol: &protocolTCP}
 	if withNamedPort {
@@ -2282,7 +2234,6 @@ func benchmarkGroupMembersByServices(b *testing.B, withNamedPort bool) {
 	} else {
 		serviceHTTP.Port = &port80
 	}
-
 	services := []v1beta2.Service{serviceHTTP}
 	pods := v1beta2.NewGroupMemberSet()
 	// 50,000 Pods in this group.
@@ -2307,26 +2258,21 @@ func benchmarkGroupMembersByServices(b *testing.B, withNamedPort bool) {
 		groupMembersByServices(services, pods)
 	}
 }
-
 func BenchmarkGroupPodsByServicesWithNamedPort(b *testing.B) {
 	benchmarkGroupMembersByServices(b, true)
 }
-
 func BenchmarkGroupPodsByServicesWithoutNamedPort(b *testing.B) {
 	benchmarkGroupMembersByServices(b, false)
 }
-
 // policyRuleMatcher implements gomock.Matcher.
 // It is used to check whether the argument of the mocked method is expected. It ignores differences in slice element
 // order and some fields including "Priority" and "FlowID" which are a little difficult to predict.
 type policyRuleMatcher struct {
 	ofPolicyRule *types.PolicyRule
 }
-
 func newPolicyRulesMatcher(ofRule *types.PolicyRule) gomock.Matcher {
 	return policyRuleMatcher{ofPolicyRule: ofRule}
 }
-
 // Matches checks if predictable fields of *types.PolicyRule match.
 func (m policyRuleMatcher) Matches(x interface{}) bool {
 	b, ok := x.(*types.PolicyRule)
@@ -2345,7 +2291,6 @@ func (m policyRuleMatcher) Matches(x interface{}) bool {
 	}
 	return true
 }
-
 func sliceEqual(a, b interface{}) bool {
 	if a == nil && b == nil {
 		return true
@@ -2363,7 +2308,6 @@ func sliceEqual(a, b interface{}) bool {
 	if aValue.Len() != bValue.Len() {
 		return false
 	}
-
 	visited := make([]bool, aValue.Len())
 	for i := 0; i < aValue.Len(); i++ {
 		found := false
@@ -2383,7 +2327,6 @@ func sliceEqual(a, b interface{}) bool {
 	}
 	return true
 }
-
 func (m policyRuleMatcher) String() string {
 	return fmt.Sprintf("is equal to %v", m.ofPolicyRule)
 }

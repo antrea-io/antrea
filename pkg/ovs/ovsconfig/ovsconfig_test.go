@@ -11,34 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ovsconfig
-
 import (
 	"runtime"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	ofconfig "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	ofconfig "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 const (
 	ovsRunDirWin      = `C:\openvswitch\var\run\openvswitch`
 	ovsRunDirWinSlash = `C:/openvswitch/var/run/openvswitch`
 	ovsRunDirUnix     = `/var/run/openvswitch`
 )
-
 func TestGetOVSDBConnNetAddress(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		expectedAddr := `\\.\pipe\C:openvswitchvarrunopenvswitchdb.sock`
 		addr := GetConnAddress(ovsRunDirWin)
 		assert.Equal(t, expectedAddr, addr)
-
 		addr = GetConnAddress(ovsRunDirWinSlash)
 		assert.Equal(t, expectedAddr, addr)
 	} else {
@@ -47,14 +37,12 @@ func TestGetOVSDBConnNetAddress(t *testing.T) {
 		assert.Equal(t, expectedAddr, addr)
 	}
 }
-
 func TestGetOVSMgmtAddress(t *testing.T) {
 	brName := "br"
 	if runtime.GOOS == "windows" {
 		expectedAddr := `\\.\pipe\C:openvswitchvarrunopenvswitchbr.mgmt`
 		mgmtAddr := ofconfig.GetMgmtAddress(ovsRunDirWin, brName)
 		assert.Equal(t, expectedAddr, mgmtAddr)
-
 		mgmtAddr = ofconfig.GetMgmtAddress(ovsRunDirWinSlash, brName)
 		assert.Equal(t, expectedAddr, mgmtAddr)
 	} else {

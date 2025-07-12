@@ -11,21 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
-=======
-	"antrea.io/antrea/pkg/agent/config"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
 )
-
 func egressInitFlows(isIPv4 bool) []string {
 	if isIPv4 {
 		return []string{
@@ -46,7 +38,6 @@ func egressInitFlows(isIPv4 bool) []string {
 		"cookie=0x1040000000000, table=EgressMark, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 	}
 }
-
 func Test_featureEgress_initFlows(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -69,7 +60,6 @@ func Test_featureEgress_initFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fc := newFakeClient(nil, tc.enableIPv4, tc.enableIPv6, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
-
 			flows := getFlowStrings(fc.featureEgress.initFlows())
 			assert.ElementsMatch(t, tc.expectedFlows, flows)
 		})

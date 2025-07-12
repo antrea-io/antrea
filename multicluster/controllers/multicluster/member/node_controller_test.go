@@ -1,25 +1,19 @@
 /*
 Copyright 2022 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package member
-
 import (
 	"context"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,20 +23,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
 )
-
 var (
 	node1           *corev1.Node
 	node2           *corev1.Node
@@ -51,7 +40,6 @@ var (
 	updatedGateway2 *mcv1alpha1.Gateway
 	gateway3        *mcv1alpha1.Gateway
 )
-
 func initializeCommonData() {
 	node1 = &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -79,7 +67,6 @@ func initializeCommonData() {
 			},
 		},
 	}
-
 	node2 = node1.DeepCopy()
 	node2.Name = "node-2"
 	node2.Status.Addresses = []corev1.NodeAddress{
@@ -92,7 +79,6 @@ func initializeCommonData() {
 			Address: "172.11.10.2",
 		},
 	}
-
 	node3 = node1.DeepCopy()
 	node3.Name = "node-3"
 	node3.Status.Conditions = []corev1.NodeCondition{
@@ -101,14 +87,12 @@ func initializeCommonData() {
 			Status: corev1.ConditionFalse,
 		},
 	}
-
 	node4 = node1.DeepCopy()
 	node4.Name = "node-4"
 	node4.Annotations = map[string]string{
 		common.GatewayAnnotation:   "true",
 		common.GatewayIPAnnotation: "invalid-gatewayip",
 	}
-
 	updatedGateway2 = &mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "node-2",
@@ -117,11 +101,9 @@ func initializeCommonData() {
 		GatewayIP:  "10.10.10.12",
 		InternalIP: "172.11.10.2",
 	}
-
 	gateway3 = gwNode1.DeepCopy()
 	gateway3.Name = "node-3"
 }
-
 func TestNodeReconciler(t *testing.T) {
 	initializeCommonData()
 	node1NoAnnotation := *node1
@@ -143,7 +125,6 @@ func TestNodeReconciler(t *testing.T) {
 			Address: "node-1",
 		},
 	}
-
 	tests := []struct {
 		name          string
 		nodes         []*corev1.Node
@@ -272,7 +253,6 @@ func TestNodeReconciler(t *testing.T) {
 		})
 	}
 }
-
 func TestInitialize(t *testing.T) {
 	initializeCommonData()
 	node5 := node1.DeepCopy()
@@ -309,7 +289,6 @@ func TestInitialize(t *testing.T) {
 			candidatesSize:        1,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var obj []client.Object
@@ -343,7 +322,6 @@ func TestInitialize(t *testing.T) {
 		})
 	}
 }
-
 func TestClusterSetMapFunc(t *testing.T) {
 	clusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -359,7 +337,6 @@ func TestClusterSetMapFunc(t *testing.T) {
 			},
 		},
 	}
-
 	deletedClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -382,20 +359,16 @@ func TestClusterSetMapFunc(t *testing.T) {
 		},
 	}
 	ctx := context.Background()
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet, node1).Build()
 	r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.200.1.1/16", "", nil)
 	requests := r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, expectedReqs, requests)
-
 	requests = r.clusterSetMapFunc(ctx, deletedClusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
-
 	r = NewNodeReconciler(fakeClient, common.TestScheme, "mismatch_ns", "10.200.1.1/16", "", nil)
 	requests = r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 }
-
 func Test_StatusPredicate(t *testing.T) {
 	tests := []struct {
 		name        string

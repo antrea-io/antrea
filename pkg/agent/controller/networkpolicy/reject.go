@@ -11,31 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"net"
-
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 type rejectType int
-
 const (
 	// rejectPodLocal represents this packetOut is used to reject Pod-to-Pod traffic
 	// and for this response, the srcPod and the dstPod are on the same Node.
@@ -76,7 +67,6 @@ const (
 	// packetIn.
 	unsupported
 )
-
 // rejectRequest sends reject response to the requesting client, based on the
 // packet-in message.
 func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
@@ -88,7 +78,6 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	}
 	srcMAC := ethernetPkt.HWDst.String()
 	dstMAC := ethernetPkt.HWSrc.String()
-
 	var (
 		srcIP  string
 		dstIP  string
@@ -109,7 +98,6 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		proto = ipPkt.NextHeader
 		isIPv6 = true
 	}
-
 	sIface, srcIsLocal := c.ifaceStore.GetInterfaceByIP(srcIP)
 	dIface, dstIsLocal := c.ifaceStore.GetInterfaceByIP(dstIP)
 	// dstIsDirect means that the reject packet destination is on the same Node and the reject packet can be forwarded
@@ -128,7 +116,6 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	if err != nil {
 		return err
 	}
-
 	// isServiceTraffic checks if it's a Service traffic when the destination of the
 	// reject response is on local Node. When the destination of the reject response is
 	// remote, isServiceTraffic will always return false. Because there is no
@@ -177,10 +164,8 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		srcMAC = sIface.MAC.String()
 		dstMAC = dIface.MAC.String()
 	}
-
 	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface, c.gwPort, c.tunPort)
 	mutateFunc := getRejectPacketOutMutateFunc(packetOutType, c.nodeType, isFlexibleIPAMSrc, isFlexibleIPAMDst, ctZone)
-
 	return openflow.SendRejectPacketOut(c.ofClient,
 		srcMAC,
 		dstMAC,
@@ -193,7 +178,6 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		proto,
 		mutateFunc)
 }
-
 // getRejectType returns rejectType of a rejection.
 func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal bool) rejectType {
 	if !isServiceTraffic {
@@ -228,7 +212,6 @@ func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal 
 	}
 	return rejectServiceRemoteToExternal
 }
-
 // getRejectOFPorts returns the inPort and outPort of a packetOut based on the rejectType.
 func getRejectOFPorts(rejectType rejectType, sIface, dIface *interfacestore.InterfaceConfig, gwOFPort, tunOFPort uint32) (uint32, uint32) {
 	inPort := gwOFPort
@@ -281,7 +264,6 @@ func getRejectOFPorts(rejectType rejectType, sIface, dIface *interfacestore.Inte
 	}
 	return inPort, outPort
 }
-
 // getRejectPacketOutMutateFunc returns the mutate func of a packetOut based on the rejectType.
 func getRejectPacketOutMutateFunc(rejectType rejectType, nodeType config.NodeType, isFlexibleIPAMSrc, isFlexibleIPAMDst bool, ctZone uint32) func(binding.PacketOutBuilder) binding.PacketOutBuilder {
 	var mutatePacketOut func(binding.PacketOutBuilder) binding.PacketOutBuilder
@@ -335,7 +317,6 @@ func getRejectPacketOutMutateFunc(rejectType rejectType, nodeType config.NodeTyp
 	}
 	return mutatePacketOut
 }
-
 func parseFlexibleIPAMStatus(pktIn *ofctrl.PacketIn, nodeConfig *config.NodeConfig, srcIP string, srcIsLocal bool, dstIP string, dstIsLocal bool) (isFlexibleIPAMSrc bool, isFlexibleIPAMDst bool, ctZone uint32, err error) {
 	// isFlexibleIPAMSrc is true if srcIP belongs to a local FlexibleIPAM Pod.
 	// isFlexibleIPAMDst is true if dstIP belongs to a local FlexibleIPAM Pod.

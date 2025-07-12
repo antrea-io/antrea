@@ -11,30 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stesting "k8s.io/client-go/testing"
-
-<<<<<<< HEAD
-	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
-=======
-	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
->>>>>>> origin/main
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 )
-
 func TestInitializeTier(t *testing.T) {
 	makeTestTier := func(priority int32) *secv1beta1.Tier {
 		return &secv1beta1.Tier{
@@ -47,7 +39,6 @@ func TestInitializeTier(t *testing.T) {
 		}
 	}
 	testTier := makeTestTier(10)
-
 	tests := []struct {
 		name                string
 		createReactor       k8stesting.ReactionFunc
@@ -111,7 +102,6 @@ func TestInitializeTier(t *testing.T) {
 			defer close(stopCh)
 			c.crdInformerFactory.Start(stopCh)
 			c.crdInformerFactory.WaitForCacheSync(stopCh)
-
 			if tc.createReactor != nil {
 				c.crdClient.(*fake.Clientset).PrependReactor("create", "tiers", tc.createReactor)
 			}
@@ -136,18 +126,14 @@ func TestInitializeTier(t *testing.T) {
 			assert.Equal(t, tc.updateExpectedCalls, updateCalls)
 		})
 	}
-
 }
-
 func TestInitializeTiers(t *testing.T) {
 	ctx := context.Background()
-
 	_, c := newController(nil, nil)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.crdInformerFactory.Start(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
-
 	// All system Tiers should be created on the first try, so we can use a small timeout.
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()

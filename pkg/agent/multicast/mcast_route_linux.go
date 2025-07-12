@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,29 +13,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicast
-
 import (
 	"fmt"
 	"net"
 	"syscall"
 	"time"
-
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/runtime"
-=======
-	"antrea.io/antrea/pkg/util/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
-
 const (
 	mRouteTimeout = time.Minute * 10
 )
-
 // parseIGMPMsg parses the kernel version into parsedIGMPMsg. Note we need to consider the change
 // after linux 5.9 in the igmpmsg struct when parsing vif. Please check
 // https://github.com/torvalds/linux/commit/c8715a8e9f38906e73d6d78764216742db13ba0e.
@@ -68,7 +58,6 @@ func (c *MRouteClient) parseIGMPMsg(msg []byte) (*parsedIGMPMsg, error) {
 		Dst: net.IPv4(msg[16], msg[17], msg[18], msg[19]),
 	}, nil
 }
-
 func (c *MRouteClient) run(stopCh <-chan struct{}) {
 	klog.InfoS("Start running multicast routing daemon")
 	go func() {
@@ -87,13 +76,11 @@ func (c *MRouteClient) run(stopCh <-chan struct{}) {
 			}
 		}
 	}()
-
 	// Check packet count difference every minute for each multicast route and
 	// remove ones that do not route any packets in past mRouteTimeout.
 	// The remaining multicast routes' statistics are getting updated by
 	// this process as well.
 	go wait.NonSlidingUntil(c.updateMrouteStats, time.Minute, stopCh)
-
 	for i := 0; i < int(workerCount); i++ {
 		go c.worker(stopCh)
 	}
@@ -101,7 +88,6 @@ func (c *MRouteClient) run(stopCh <-chan struct{}) {
 	c.socket.FlushMRoute()
 	syscall.Close(c.socket.GetFD())
 }
-
 func (c *MRouteClient) updateMulticastRouteStatsEntry(entry multicastRouteEntry) (isStale bool, newEntry *multicastRouteEntry) {
 	packetCount, err := c.socket.GetMroutePacketCount(net.ParseIP(entry.src), net.ParseIP(entry.group))
 	if err != nil {
@@ -117,7 +103,6 @@ func (c *MRouteClient) updateMulticastRouteStatsEntry(entry multicastRouteEntry)
 	newEntry = &multicastRouteEntry{group: entry.group, src: entry.src, pktCount: packetCount, updatedTime: now}
 	return false, newEntry
 }
-
 func (c *MRouteClient) updateInboundMrouteStats() {
 	for _, obj := range c.inboundRouteCache.List() {
 		entry := obj.(*inboundMulticastRouteEntry)
@@ -134,7 +119,6 @@ func (c *MRouteClient) updateInboundMrouteStats() {
 		}
 	}
 }
-
 func (c *MRouteClient) updateOutboundMrouteStats() {
 	for _, obj := range c.outboundRouteCache.List() {
 		entry := obj.(*outboundMulticastRouteEntry)
@@ -151,7 +135,6 @@ func (c *MRouteClient) updateOutboundMrouteStats() {
 		}
 	}
 }
-
 func (c *MRouteClient) updateMrouteStats() {
 	klog.V(2).InfoS("Updating multicast route statistics and removing stale multicast routes")
 	c.updateInboundMrouteStats()

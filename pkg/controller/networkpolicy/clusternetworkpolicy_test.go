@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -27,22 +24,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 func TestProcessClusterNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
 	t10 := int32(10)
@@ -71,7 +63,6 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			Labels: map[string]string{"foo2": "bar2"},
 		},
 	}
-
 	svcA := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "svcA",
@@ -86,16 +77,13 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			},
 		},
 	}
-
 	saA := v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "saA",
 			Namespace: nsA.Name,
 		},
 	}
-
 	ipA := "1.1.1.1"
-
 	allowAction := crdv1beta1.RuleActionAllow
 	dropAction := crdv1beta1.RuleActionDrop
 	protocolTCP := controlplane.ProtocolTCP
@@ -1918,7 +1906,6 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		})
 	}
 }
-
 func TestAddACNP(t *testing.T) {
 	_, npc := newController(nil, nil)
 	cnp := getACNP()
@@ -1929,7 +1916,6 @@ func TestAddACNP(t *testing.T) {
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
-
 func TestUpdateACNP(t *testing.T) {
 	_, npc := newController(nil, nil)
 	cnp := getACNP()
@@ -1943,7 +1929,6 @@ func TestUpdateACNP(t *testing.T) {
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
-
 func TestDeleteACNP(t *testing.T) {
 	_, npc := newController(nil, nil)
 	cnp := getACNP()
@@ -1954,7 +1939,6 @@ func TestDeleteACNP(t *testing.T) {
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
-
 func TestGetTierPriority(t *testing.T) {
 	p10 := int32(10)
 	tests := []struct {
@@ -1992,7 +1976,6 @@ func TestGetTierPriority(t *testing.T) {
 		})
 	}
 }
-
 func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cidr := "10.0.0.0/24"
@@ -2201,9 +2184,7 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 		})
 	}
 }
-
 // util functions for testing.
-
 func getACNP() *crdv1beta1.ClusterNetworkPolicy {
 	p10 := float64(10)
 	allowAction := crdv1beta1.RuleActionAllow
@@ -2243,7 +2224,6 @@ func getACNP() *crdv1beta1.ClusterNetworkPolicy {
 	}
 	return npObj
 }
-
 func TestFilterPerNamespaceRuleACNPsByNSLabels(t *testing.T) {
 	group := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "group1"},
@@ -2358,7 +2338,6 @@ func TestFilterPerNamespaceRuleACNPsByNSLabels(t *testing.T) {
 		})
 	}
 }
-
 func TestGetACNPsWithRulesMatchingLabelKeysAcrossNSUpdate(t *testing.T) {
 	acnp1 := &crdv1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "acnp-with-tier-label-rule"},

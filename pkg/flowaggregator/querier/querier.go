@@ -11,17 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package querier
-
 import (
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
-=======
-	"antrea.io/antrea/pkg/flowaggregator/intermediate"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
 )
-
 type Metrics struct {
 	NumRecordsExported     int64
 	NumRecordsReceived     int64
@@ -33,12 +27,10 @@ type Metrics struct {
 	WithLogExporter        bool
 	WithIPFIXExporter      bool
 }
-
 type FlowAggregatorQuerier interface {
 	GetFlowRecords(flowKey *intermediate.FlowKey) []map[string]interface{}
 	GetRecordMetrics() Metrics
 }
-
 type ExternalFlowCollectorAddr struct {
 	Address  string
 	Protocol string

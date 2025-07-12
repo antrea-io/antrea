@@ -11,20 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package secondarynetwork
-
 import (
 	"fmt"
-
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/secondarynetwork/podwatch"
@@ -32,27 +27,22 @@ import (
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/secondarynetwork/podwatch"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 var (
 	newOVSBridgeFn = ovsconfig.NewOVSBridge
 )
-
 type Controller struct {
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	secNetConfig    *agentconfig.SecondaryNetworkConfig
 	podController   *podwatch.PodController
 }
-
 func NewController(
 	clientConnectionConfig componentbaseconfig.ClientConnectionConfiguration,
 	kubeAPIServerOverride string,
@@ -67,14 +57,12 @@ func NewController(
 	if err != nil {
 		return nil, err
 	}
-
 	// Create the NetworkAttachmentDefinition client, which handles access to secondary network object
 	// definition from the API Server.
 	netAttachDefClient, err := createNetworkAttachDefClient(clientConnectionConfig, kubeAPIServerOverride)
 	if err != nil {
 		return nil, fmt.Errorf("NetworkAttachmentDefinition client creation failed: %v", err)
 	}
-
 	// Create podController to handle secondary network configuration for Pods with
 	// k8s.v1.cni.cncf.io/networks Annotation defined.
 	podWatchController, err := podwatch.NewPodController(
@@ -88,26 +76,22 @@ func NewController(
 		secNetConfig:    secNetConfig,
 		podController:   podWatchController}, nil
 }
-
 // Run starts the Pod controller for secondary networks.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	c.podController.Run(stopCh)
 }
-
 // CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.
 func createNetworkAttachDefClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (netdefclient.K8sCniCncfIoV1Interface, error) {
 	kubeConfig, err := k8s.CreateRestConfig(config, kubeAPIServerOverride)
 	if err != nil {
 		return nil, err
 	}
-
 	netAttachDefClient, err := netdefclient.NewForConfig(kubeConfig)
 	if err != nil {
 		return nil, err
 	}
 	return netAttachDefClient, nil
 }
-
 func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdb *ovsdb.OVSDB) (ovsconfig.OVSBridgeClient, error) {
 	if len(bridges) == 0 {
 		return nil, nil

@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cniserver
-
 import (
 	"fmt"
-
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 func NewSecondaryInterfaceConfigurator(ovsBridgeClient ovsconfig.OVSBridgeClient, interfaceStore interfacestore.InterfaceStore) (*podConfigurator, error) {
 	pc, err := newPodConfigurator(nil, ovsBridgeClient, nil, nil, interfaceStore, nil, ovsconfig.OVSDatapathSystem, false, false, nil, nil, nil)
 	if err == nil {
@@ -38,7 +30,6 @@ func NewSecondaryInterfaceConfigurator(ovsBridgeClient ovsconfig.OVSBridgeClient
 	}
 	return pc, err
 }
-
 // ConfigureSriovSecondaryInterface configures a SR-IOV secondary interface for a Pod.
 func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	podName, podNamespace string,
@@ -49,20 +40,17 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	if podSriovVFDeviceID == "" {
 		return fmt.Errorf("error getting the Pod SR-IOV VF device ID")
 	}
-
 	err := pc.ifConfigurator.configureContainerLink(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, "", podSriovVFDeviceID, result, nil)
 	if err != nil {
 		return err
 	}
 	containerIface := result.Interfaces[1]
 	klog.InfoS("Configured SR-IOV interface", "Pod", klog.KRef(podNamespace, podName), "interface", containerInterfaceName)
-
 	// Use podSriovVFDeviceID as the interface name in the interface store.
 	hostInterfaceName := podSriovVFDeviceID
 	containerConfig := buildContainerConfig(hostInterfaceName, containerID, podName, podNamespace,
 		containerNetNS, containerIface, result.IPs, 0)
 	pc.ifaceStore.AddInterface(containerConfig)
-
 	if result.IPs != nil {
 		if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
 			klog.ErrorS(err, "Failed to advertise IP address for SR-IOV interface",
@@ -71,16 +59,13 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	}
 	return nil
 }
-
 // DeleteSriovSecondaryInterface deletes a SRIOV secondary interface.
 func (pc *podConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
 	pc.ifaceStore.DeleteInterface(interfaceConfig)
 	klog.InfoS("Deleted SR-IOV interface", "Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
 		"interface", interfaceConfig.IFDev)
 	return nil
-
 }
-
 // ConfigureVLANSecondaryInterface configures a VLAN secondary interface on the secondary network
 // OVS bridge, and returns the OVS port UUID.
 func (pc *podConfigurator) ConfigureVLANSecondaryInterface(
@@ -90,7 +75,6 @@ func (pc *podConfigurator) ConfigureVLANSecondaryInterface(
 	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
 		containerInterfaceName, mtu, "", ipamResult, nil)
 }
-
 // DeleteVLANSecondaryInterface deletes a VLAN secondary interface.
 func (pc *podConfigurator) DeleteVLANSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
 	if err := pc.disconnectInterfaceFromOVS(interfaceConfig); err != nil {

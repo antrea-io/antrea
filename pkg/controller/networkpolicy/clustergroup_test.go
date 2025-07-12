@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -26,20 +23,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1alpha2 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 )
-
 func TestProcessClusterGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -211,7 +203,6 @@ func TestProcessClusterGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestAddClusterGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -347,7 +338,6 @@ func TestAddClusterGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestUpdateClusterGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -498,7 +488,6 @@ func TestUpdateClusterGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteCG(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	testCG := crdv1beta1.ClusterGroup{
@@ -514,7 +503,6 @@ func TestDeleteCG(t *testing.T) {
 	_, found, _ := npc.internalGroupStore.Get(key)
 	assert.False(t, found, "expected internal Group to be deleted")
 }
-
 func TestClusterClusterGroupMembersComputedConditionEqual(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -566,7 +554,6 @@ func TestClusterClusterGroupMembersComputedConditionEqual(t *testing.T) {
 		})
 	}
 }
-
 func TestFilterInternalGroupsForService(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{
 		MatchLabels: map[string]string{"purpose": "test-select"},
@@ -635,7 +622,6 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 			Name: "svc3",
 		},
 	}
-
 	tests := []struct {
 		name           string
 		toMatch        *corev1.Service
@@ -659,7 +645,6 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 	npc.internalGroupStore.Create(grp4)
 	npc.serviceStore.Add(svc1)
 	npc.serviceStore.Add(svc2)
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expectedGroups, npc.filterInternalGroupsForService(tt.toMatch),
@@ -667,7 +652,6 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 		})
 	}
 }
-
 func TestServiceToGroupSelector(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{
 		MatchLabels: map[string]string{"purpose": "test-select"},
@@ -697,7 +681,6 @@ func TestServiceToGroupSelector(t *testing.T) {
 		},
 		Spec: corev1.ServiceSpec{},
 	}
-
 	grp1 := &antreatypes.Group{
 		UID: "uid1",
 		SourceReference: &controlplane.GroupReference{
@@ -760,7 +743,6 @@ func TestServiceToGroupSelector(t *testing.T) {
 	npc.serviceStore.Add(svc1)
 	npc.serviceStore.Add(svc2)
 	npc.serviceStore.Add(svc3)
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sel := npc.serviceToGroupSelector(tt.toProcess)
@@ -769,7 +751,6 @@ func TestServiceToGroupSelector(t *testing.T) {
 		})
 	}
 }
-
 // Pods for testing proper query results
 var testPods = []*corev1.Pod{
 	{
@@ -807,7 +788,6 @@ var testPods = []*corev1.Pod{
 		},
 	},
 }
-
 var externalEntities = []*crdv1alpha2.ExternalEntity{
 	{
 		ObjectMeta: metav1.ObjectMeta{
@@ -844,7 +824,6 @@ var externalEntities = []*crdv1alpha2.ExternalEntity{
 		},
 	},
 }
-
 var groups = []antreatypes.Group{
 	{
 		UID: "groupUID0",
@@ -895,7 +874,6 @@ var groups = []antreatypes.Group{
 		ChildGroups: []string{"group1", "group2"},
 	},
 }
-
 func TestGetAssociatedGroups(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -946,7 +924,6 @@ func TestGetAssociatedGroups(t *testing.T) {
 		})
 	}
 }
-
 func TestGetClusterGroupMembers(t *testing.T) {
 	pod1MemberSet := controlplane.GroupMemberSet{}
 	pod1MemberSet.Insert(podToGroupMember(testPods[0], true))
@@ -991,7 +968,6 @@ func TestGetClusterGroupMembers(t *testing.T) {
 		})
 	}
 }
-
 func TestSyncInternalGroup(t *testing.T) {
 	p10 := float64(10)
 	p20 := float64(20)
@@ -1036,13 +1012,11 @@ func TestSyncInternalGroup(t *testing.T) {
 			},
 		},
 	}
-
 	_, npc := newControllerWithoutEventHandler(nil, []runtime.Object{cnp1, cnp2, cg})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	npc.crdInformerFactory.Start(stopCh)
 	npc.crdInformerFactory.WaitForCacheSync(stopCh)
-
 	// cnp1 is synced before the ClusterGroup. The rule's From should be empty as the ClusterGroup hasn't been synced,
 	require.NoError(t, npc.syncInternalNetworkPolicy(getACNPReference(cnp1)))
 	assert.Equal(t, 0, npc.internalNetworkPolicyQueue.Len())
@@ -1069,7 +1043,6 @@ func TestSyncInternalGroup(t *testing.T) {
 	actualInternalNetworkPolicy1, exists, _ := npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp1))
 	require.True(t, exists)
 	require.Equal(t, expectedInternalNetworkPolicy1, actualInternalNetworkPolicy1)
-
 	// After creating a ClusterGroup:
 	// - A corresponding internal group should be added for it.
 	// - The internal NetworkPolicies for the ClusterNetworkPolicies that use it should be enqueued.
@@ -1089,13 +1062,11 @@ func TestSyncInternalGroup(t *testing.T) {
 		npc.internalNetworkPolicyQueue.Done(key)
 	}
 	assert.ElementsMatch(t, expectedKeys, actualKeys)
-
 	expectedInternalNetworkPolicy1.Rules[0].From = controlplane.NetworkPolicyPeer{AddressGroups: []string{cgName}}
 	require.NoError(t, npc.syncInternalNetworkPolicy(getACNPReference(cnp1)))
 	actualInternalNetworkPolicy1, exists, _ = npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp1))
 	require.True(t, exists)
 	require.Equal(t, expectedInternalNetworkPolicy1, actualInternalNetworkPolicy1)
-
 	// cnp2 is synced after the ClusterGroup.
 	expectedInternalNetworkPolicy2 := &antreatypes.NetworkPolicy{
 		UID:      "uid2",
@@ -1122,7 +1093,6 @@ func TestSyncInternalGroup(t *testing.T) {
 	actualInternalNetworkPolicy2, exists, _ := npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp2))
 	require.True(t, exists)
 	assert.Equal(t, expectedInternalNetworkPolicy2, actualInternalNetworkPolicy2)
-
 	expectedInternalGroup := &antreatypes.Group{
 		UID: cgUID,
 		SourceReference: &controlplane.GroupReference{
@@ -1137,7 +1107,6 @@ func TestSyncInternalGroup(t *testing.T) {
 	assert.Equal(t, expectedInternalGroup, actualInternalGroup)
 	_, exists, _ = npc.addressGroupStore.Get(cgName)
 	require.True(t, exists, "An AddressGroup should be created for the ClusterGroup when it's referenced by any ClusterNetworkPolicy")
-
 	// After deleting the ClusterGroup:
 	// - Its corresponding internal group should be removed.
 	// - The internal NetworkPolicies for the ClusterNetworkPolicies that use it should be updated.
@@ -1145,27 +1114,22 @@ func TestSyncInternalGroup(t *testing.T) {
 	npc.deleteClusterGroup(cg)
 	err = npc.syncInternalGroup(internalGroupKeyFunc(cg))
 	require.NoError(t, err)
-
 	require.Equal(t, 2, npc.internalNetworkPolicyQueue.Len())
 	_, exists, _ = npc.internalGroupStore.Get(internalGroupKeyFunc(cg))
 	require.False(t, exists)
-
 	require.NoError(t, npc.syncInternalNetworkPolicy(getACNPReference(cnp1)))
 	expectedInternalNetworkPolicy1.Rules[0].From.AddressGroups = nil
 	actualInternalNetworkPolicy1, exists, _ = npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp1))
 	require.True(t, exists)
 	assert.Equal(t, expectedInternalNetworkPolicy1, actualInternalNetworkPolicy1)
-
 	require.NoError(t, npc.syncInternalNetworkPolicy(getACNPReference(cnp2)))
 	expectedInternalNetworkPolicy2.Rules[0].From.AddressGroups = nil
 	actualInternalNetworkPolicy2, exists, _ = npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp2))
 	require.True(t, exists)
 	assert.Equal(t, expectedInternalNetworkPolicy2, actualInternalNetworkPolicy2)
-
 	_, exists, _ = npc.addressGroupStore.Get(cgName)
 	require.False(t, exists, "The AddressGroup for the ClusterGroup should be deleted when it's no longer referenced by any ClusterNetworkPolicy")
 }
-
 func TestGetClusterGroupSourceRef(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1191,7 +1155,6 @@ func TestGetClusterGroupSourceRef(t *testing.T) {
 		})
 	}
 }
-
 func TestGetAssociatedIPBlockGroups(t *testing.T) {
 	cg1 := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "ipBlockGrp1", UID: "UID1"},
@@ -1241,18 +1204,15 @@ func TestGetAssociatedIPBlockGroups(t *testing.T) {
 			},
 		},
 	}
-
 	_, npc := newControllerWithoutEventHandler(nil, []runtime.Object{cg1, cg2, cg2Parent, cgExceptIPv4, cgExceptIPv6})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	npc.crdInformerFactory.Start(stopCh)
 	npc.crdInformerFactory.WaitForCacheSync(stopCh)
-
 	for _, cg := range []*crdv1beta1.ClusterGroup{cg1, cg2, cg2Parent, cgExceptIPv4, cgExceptIPv6} {
 		npc.addClusterGroup(cg)
 		npc.syncInternalGroup(internalGroupKeyFunc(cg))
 	}
-
 	tests := []struct {
 		name           string
 		ipQuery        net.IP

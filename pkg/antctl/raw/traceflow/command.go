@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package traceflow
-
 import (
 	"bytes"
 	"context"
@@ -25,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,20 +31,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 )
-
 const defaultTimeout time.Duration = time.Second * 10
-
 var (
 	Command *cobra.Command
 	option  = &struct {
@@ -62,13 +53,11 @@ var (
 	}{}
 	getClients = getK8sClient
 )
-
 var protocols = map[string]int32{
 	"icmp": 1,
 	"tcp":  6,
 	"udp":  17,
 }
-
 type CapturedPacket struct {
 	SrcIP           string                   `json:"srcIP" yaml:"srcIP"`
 	DstIP           string                   `json:"dstIP" yaml:"dstIP"`
@@ -77,7 +66,6 @@ type CapturedPacket struct {
 	IPv6Header      *v1beta1.IPv6Header      `json:"ipv6Header,omitempty" yaml:"ipv6Header,omitempty"`
 	TransportHeader *v1beta1.TransportHeader `json:"transportHeader,omitempty" yaml:"tranportHeader,omitempty"`
 }
-
 // Response is the response of antctl Traceflow.
 type Response struct {
 	Name           string                 `json:"name" yaml:"name"`                                         // Traceflow name
@@ -88,7 +76,6 @@ type Response struct {
 	NodeResults    []v1beta1.NodeResult   `json:"results,omitempty" yaml:"results,omitempty"`               // Traceflow node results
 	CapturedPacket *CapturedPacket        `json:"capturedPacket,omitempty" yaml:"capturedPacket,omitempty"` // Captured packet in live-traffic Traceflow
 }
-
 func init() {
 	Command = &cobra.Command{
 		Use:     "traceflow",
@@ -111,7 +98,6 @@ func init() {
 		RunE: runE,
 		Args: cobra.NoArgs,
 	}
-
 	Command.Flags().StringVarP(&option.source, "source", "S", "", "source of the Traceflow: Namespace/Pod, Pod, or IP")
 	Command.Flags().StringVarP(&option.destination, "destination", "D", "", "destination of the Traceflow: Namespace/Pod, Pod, Namespace/Service, Service or IP")
 	Command.Flags().StringVarP(&option.outputType, "output", "o", "yaml", "output type: yaml (default), json")
@@ -120,7 +106,6 @@ func init() {
 	Command.Flags().BoolVarP(&option.droppedOnly, "dropped-only", "", false, "if set, capture only the dropped packet in a live-traffic Traceflow")
 	Command.Flags().BoolVarP(&option.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 }
-
 func getK8sClient(cmd *cobra.Command) (kubernetes.Interface, antrea.Interface, error) {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
@@ -132,7 +117,6 @@ func getK8sClient(cmd *cobra.Command) (kubernetes.Interface, antrea.Interface, e
 	}
 	return k8sClientset, client, nil
 }
-
 func runE(cmd *cobra.Command, _ []string) error {
 	option.timeout, _ = cmd.Flags().GetDuration("timeout")
 	if option.timeout > time.Hour*12 {
@@ -142,27 +126,22 @@ func runE(cmd *cobra.Command, _ []string) error {
 	if option.timeout == 0 {
 		option.timeout = defaultTimeout
 	}
-
 	if !option.liveTraffic && option.source == "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "Please provide source")
 		return nil
 	}
-
 	if !option.liveTraffic && option.destination == "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "Please provide destination")
 		return nil
 	}
-
 	if option.source == "" && option.destination == "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "One of source and destination must be a Pod")
 		return nil
 	}
-
 	if !option.liveTraffic && option.droppedOnly {
 		fmt.Fprintf(cmd.OutOrStdout(), "--dropped-only works only with live-traffic Traceflow")
 		return nil
 	}
-
 	k8sclient, client, err := getClients(cmd)
 	if err != nil {
 		return err
@@ -171,7 +150,6 @@ func runE(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("error when filling up Traceflow config: %w", err)
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, err = client.CrdV1beta1().Traceflows().Create(ctx, tf, metav1.CreateOptions{}); err != nil {
@@ -184,11 +162,9 @@ func runE(cmd *cobra.Command, _ []string) error {
 			}
 		}
 	}()
-
 	if option.nowait {
 		return nil
 	}
-
 	var res *v1beta1.Traceflow
 	err = wait.PollUntilContextTimeout(context.TODO(), 1*time.Second, option.timeout, false, func(ctx context.Context) (bool, error) {
 		res, err = client.CrdV1beta1().Traceflows().Get(context.TODO(), tf.Name, metav1.GetOptions{})
@@ -209,17 +185,14 @@ func runE(cmd *cobra.Command, _ []string) error {
 	} else if err != nil {
 		return fmt.Errorf("error when retrieving Traceflow: %w", err)
 	}
-
 	if err := output(res, cmd.OutOrStdout()); err != nil {
 		return fmt.Errorf("error when outputting result: %w", err)
 	}
 	return err
 }
-
 func newTraceflow(client kubernetes.Interface) (*v1beta1.Traceflow, error) {
 	var srcName, dstName string
 	var src v1beta1.Source
-
 	if option.source != "" {
 		srcIP := net.ParseIP(option.source)
 		if srcIP != nil {
@@ -245,7 +218,6 @@ func newTraceflow(client kubernetes.Interface) (*v1beta1.Traceflow, error) {
 	} else {
 		srcName = "any"
 	}
-
 	var dst v1beta1.Destination
 	if option.destination != "" {
 		dstIP := net.ParseIP(option.destination)
@@ -280,16 +252,13 @@ func newTraceflow(client kubernetes.Interface) (*v1beta1.Traceflow, error) {
 	} else {
 		dstName = "any"
 	}
-
 	if src.Pod == "" && dst.Pod == "" {
 		return nil, errors.New("one of source and destination must be a Pod")
 	}
-
 	pkt, err := parseFlow()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse flow: %w", err)
 	}
-
 	name := getTFName(fmt.Sprintf("%s-to-%s", srcName, dstName))
 	tf := &v1beta1.Traceflow{
 		ObjectMeta: metav1.ObjectMeta{
@@ -306,7 +275,6 @@ func newTraceflow(client kubernetes.Interface) (*v1beta1.Traceflow, error) {
 	}
 	return tf, nil
 }
-
 func dstIsPod(client kubernetes.Interface, ns string, name string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -319,16 +287,13 @@ func dstIsPod(client kubernetes.Interface, ns string, name string) (bool, error)
 	}
 	return true, nil
 }
-
 func parseFlow() (*v1beta1.Packet, error) {
 	cleanFlow := strings.ReplaceAll(option.flow, " ", "")
 	fields, err := getPortFields(cleanFlow)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing the flow: %w", err)
 	}
-
 	var pkt v1beta1.Packet
-
 	_, isIPv6 := fields["ipv6"]
 	if isIPv6 {
 		pkt.IPv6Header = new(v1beta1.IPv6Header)
@@ -346,7 +311,6 @@ func parseFlow() (*v1beta1.Packet, error) {
 			break
 		}
 	}
-
 	if r, ok := fields["tcp_src"]; ok {
 		pkt.TransportHeader.TCP = new(v1beta1.TCPHeader)
 		pkt.TransportHeader.TCP.SrcPort = int32(r)
@@ -374,10 +338,8 @@ func parseFlow() (*v1beta1.Packet, error) {
 		}
 		pkt.TransportHeader.UDP.DstPort = int32(r)
 	}
-
 	return &pkt, nil
 }
-
 func getPortFields(cleanFlow string) (map[string]int, error) {
 	fields := map[string]int{}
 	for _, v := range strings.Split(cleanFlow, ",") {
@@ -398,7 +360,6 @@ func getPortFields(cleanFlow string) (map[string]int, error) {
 	}
 	return fields, nil
 }
-
 func output(tf *v1beta1.Traceflow, writer io.Writer) error {
 	r := Response{
 		Name:        tf.Name,
@@ -414,7 +375,6 @@ func output(tf *v1beta1.Traceflow, writer io.Writer) error {
 	} else if len(tf.Spec.Destination.Service) != 0 {
 		r.Destination = fmt.Sprintf("%s/%s", tf.Spec.Destination.Namespace, tf.Spec.Destination.Service)
 	}
-
 	pkt := tf.Status.CapturedPacket
 	if pkt != nil {
 		r.CapturedPacket = &CapturedPacket{SrcIP: pkt.SrcIP, DstIP: pkt.DstIP, Length: pkt.Length, IPv6Header: pkt.IPv6Header}
@@ -425,7 +385,6 @@ func output(tf *v1beta1.Traceflow, writer io.Writer) error {
 			r.CapturedPacket.TransportHeader = &pkt.TransportHeader
 		}
 	}
-
 	switch option.outputType {
 	case "json":
 		if err := jsonOutput(&r, writer); err != nil {
@@ -440,7 +399,6 @@ func output(tf *v1beta1.Traceflow, writer io.Writer) error {
 	}
 	return nil
 }
-
 func yamlOutput(r *Response, writer io.Writer) error {
 	o, err := yaml.Marshal(&r)
 	if err != nil {
@@ -452,7 +410,6 @@ func yamlOutput(r *Response, writer io.Writer) error {
 	}
 	return nil
 }
-
 func jsonOutput(r *Response, writer io.Writer) error {
 	o, err := json.Marshal(r)
 	if err != nil {
@@ -468,7 +425,6 @@ func jsonOutput(r *Response, writer io.Writer) error {
 	}
 	return nil
 }
-
 func getTFName(prefix string) string {
 	// prefix may contain IPv6 address. Replace "::"  and ":" to make it a valid RFC 1123 subdomain.
 	prefix = strings.ReplaceAll(prefix, "::", "-")

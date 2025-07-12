@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowaggregator
-
 import (
 	"net"
 	"net/netip"
-
 	"github.com/vmware/go-ipfix/pkg/entities"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
-
 // preprocessor is in charge of converting data records in IPFIX messages received from the IPFIX
 // collector to individual Protobuf messages (one per record). If an IPFIX record has extra fields
 // (no corresponding field in Protobuf), these will be discarded. If some fields are missing, the
@@ -37,14 +29,12 @@ type preprocessor struct {
 	inCh  <-chan *entities.Message
 	outCh chan<- *flowpb.Flow
 }
-
 func newPreprocessor(inCh <-chan *entities.Message, outCh chan<- *flowpb.Flow) (*preprocessor, error) {
 	return &preprocessor{
 		inCh:  inCh,
 		outCh: outCh,
 	}, nil
 }
-
 func (p *preprocessor) Run(stopCh <-chan struct{}) {
 	for {
 		select {
@@ -58,7 +48,6 @@ func (p *preprocessor) Run(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 func (p *preprocessor) processMsg(msg *entities.Message) {
 	set := msg.GetSet()
 	if set.GetSetType() != entities.Data {
@@ -215,7 +204,6 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 				flow.K8S.EgressNodeName = ie.GetStringValue()
 			}
 		}
-
 		p.outCh <- flow
 	}
 }

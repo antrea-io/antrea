@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package featuregates
-
 import (
 	"encoding/json"
 	"net/http"
 	"sort"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 // HandleFunc returns the function which can handle queries issued by 'antctl get featuregates' command.
 // The handler function populates Antrea Agent feature gates information to the response.
 func HandleFunc() http.HandlerFunc {

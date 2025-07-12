@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package apis
-
-<<<<<<< HEAD
-import "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-import "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
-
+import "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+import "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 // EndpointQueryResponse is the reply struct for anctl endpoint queries
 type EndpointQueryResponse struct {
 	Endpoints []Endpoint `json:"endpoints,omitempty"`
 }
-
 type Rule struct {
 	PolicyRef v1beta2.NetworkPolicyReference `json:"policyref,omitempty"`
 	Direction v1beta2.Direction              `json:"direction,omitempty"`
 	RuleIndex int32                          `json:"ruleindex,omitempty"`
 }
-
 type Endpoint struct {
 	Namespace       string                           `json:"namespace,omitempty"`
 	Name            string                           `json:"name,omitempty"`
@@ -38,7 +30,6 @@ type Endpoint struct {
 	IngressSrcRules []Rule                           `json:"ingresssrcrules,omitempty"`
 	EgressDstRules  []Rule                           `json:"egressdstrules,omitempty"`
 }
-
 type FeatureGateResponse struct {
 	Component string `json:"component,omitempty"`
 	Name      string `json:"name,omitempty"`

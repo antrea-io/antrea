@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,21 +13,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package portcache
-
 import (
 	"fmt"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
-=======
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
 )
-
 func addRuleForPort(podPortRules rules.PodPortRules, port int, podIP string, podPort int, protocol string) (ProtocolSocketData, error) {
 	// Only the protocol used here should be returned if NetNatStaticMapping rule
 	// can be inserted to an unused protocol port.
@@ -43,7 +34,6 @@ func addRuleForPort(podPortRules rules.PodPortRules, port int, podIP string, pod
 	}
 	return protocolData, nil
 }
-
 func (pt *PortTable) addRuleforFreePort(podIP string, podPort int, protocol string) (int, ProtocolSocketData, error) {
 	klog.V(2).InfoS("Looking for free Node port on Windows", "podIP", podIP, "podPort", podPort, "protocol", protocol)
 	numPorts := pt.EndPort - pt.StartPort + 1
@@ -57,13 +47,11 @@ func (pt *PortTable) addRuleforFreePort(podIP string, podPort int, protocol stri
 			// protocol port is already taken
 			continue
 		}
-
 		protocolData, err := addRuleForPort(pt.PodPortRules, port, podIP, podPort, protocol)
 		if err != nil {
 			klog.ErrorS(err, "Port cannot be reserved, moving on to the next one", "port", port)
 			continue
 		}
-
 		pt.PortSearchStart = port + 1
 		if pt.PortSearchStart > pt.EndPort {
 			pt.PortSearchStart = pt.StartPort
@@ -72,7 +60,6 @@ func (pt *PortTable) addRuleforFreePort(podIP string, podPort int, protocol stri
 	}
 	return 0, ProtocolSocketData{}, fmt.Errorf("no free port found")
 }
-
 func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP string) (int, error) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
@@ -91,7 +78,6 @@ func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP 
 			PodPort:  podPort,
 			Protocol: protocolData,
 		}
-
 		pt.addPortTableCache(npData)
 	} else {
 		// Only add rules if the entry does not exist.
@@ -99,7 +85,6 @@ func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP 
 	}
 	return npData.NodePort, nil
 }
-
 // RestoreRules should be called at Antrea Agent startup to restore a set of NPL rules.
 func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<- struct{}) error {
 	pt.tableLock.Lock()
@@ -113,7 +98,6 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 			klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort)
 			continue
 		}
-
 		npData := &NodePortData{
 			PodKey:   nplPort.PodKey,
 			NodePort: nplPort.NodePort,
@@ -127,7 +111,6 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 	close(synced)
 	return nil
 }
-
 func (pt *PortTable) DeleteRule(podKey string, podPort int, protocol string) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
@@ -136,7 +119,6 @@ func (pt *PortTable) DeleteRule(podKey string, podPort int, protocol string) err
 		// Delete not required when the PortTable entry does not exist
 		return nil
 	}
-
 	data.defunct = true
 	// Calling DeleteRule is idempotent.
 	if err := pt.PodPortRules.DeleteRule(data.NodePort, data.PodIP, podPort, protocol); err != nil {

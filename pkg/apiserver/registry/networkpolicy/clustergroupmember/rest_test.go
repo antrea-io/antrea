@@ -11,31 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package clustergroupmember
-
 import (
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/endpoints/request"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 )
-
 type fakeQuerier struct {
 	members   map[string]controlplane.GroupMemberSet
 	ipMembers map[string][]controlplane.IPBlock
 }
-
 func (q fakeQuerier) GetGroupMembers(uid string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error) {
 	if ipMemberList, ok := q.ipMembers[uid]; ok {
 		return nil, ipMemberList, nil
@@ -45,7 +36,6 @@ func (q fakeQuerier) GetGroupMembers(uid string) (controlplane.GroupMemberSet, [
 	}
 	return nil, nil, nil
 }
-
 func getTestMembersBasic() map[string]controlplane.GroupMemberSet {
 	return map[string]controlplane.GroupMemberSet{
 		"cgA": {
@@ -72,7 +62,6 @@ func getTestMembersBasic() map[string]controlplane.GroupMemberSet {
 		},
 	}
 }
-
 func getTestMembersPagination(ifExternalEntity bool) map[string]controlplane.GroupMemberSet {
 	if ifExternalEntity {
 		return map[string]controlplane.GroupMemberSet{
@@ -130,7 +119,6 @@ func getTestMembersPagination(ifExternalEntity bool) map[string]controlplane.Gro
 		},
 	}
 }
-
 func getTestIPMembers() map[string][]controlplane.IPBlock {
 	testCIDR := controlplane.IPNet{
 		IP:           controlplane.IPAddress(net.ParseIP("10.0.0.1")),
@@ -141,13 +129,11 @@ func getTestIPMembers() map[string][]controlplane.IPBlock {
 		"cgIPBlock": ipb,
 	}
 }
-
 func TestREST(t *testing.T) {
 	r := NewREST(nil)
 	assert.Equal(t, &controlplane.ClusterGroupMembers{}, r.New())
 	assert.False(t, r.NamespaceScoped())
 }
-
 func TestRESTGetBasic(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -247,7 +233,6 @@ func TestRESTGetBasic(t *testing.T) {
 		assert.Equal(t, tt.expectedObj, actualGroupList)
 	}
 }
-
 func TestRESTGetPagination(t *testing.T) {
 	tests := []struct {
 		name              string

@@ -1,25 +1,19 @@
 /*
 Copyright 2023 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package member
-
 import (
 	"context"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -28,31 +22,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	k8smcv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 var clusterSet = &mcv1alpha2.ClusterSet{
 	ObjectMeta: metav1.ObjectMeta{
 		Namespace: "default",
 		Name:      "test-cluster",
 	},
 }
-
 func TestStaleController_CleanUpService(t *testing.T) {
 	mcSvcNginx := common.SvcNginx.DeepCopy()
 	mcSvcNginx.Name = "antrea-mc-nginx"
@@ -143,7 +131,6 @@ func TestStaleController_CleanUpService(t *testing.T) {
 		})
 	}
 }
-
 func TestStaleController_CleanUpACNP(t *testing.T) {
 	acnpImportName := "acnp-for-isolation"
 	acnpResImportName := common.LeaderNamespace + "-" + acnpImportName
@@ -207,7 +194,6 @@ func TestStaleController_CleanUpACNP(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(tt.existingACNPList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
-
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
@@ -229,7 +215,6 @@ func TestStaleController_CleanUpACNP(t *testing.T) {
 		})
 	}
 }
-
 func TestStaleController_CleanUpResourceExports(t *testing.T) {
 	svcExpNginx := k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -291,7 +276,6 @@ func TestStaleController_CleanUpResourceExports(t *testing.T) {
 			Kind:      constants.ServiceKind,
 		},
 	}
-
 	svcResExportFromOtherCluster := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -445,7 +429,6 @@ func TestStaleController_CleanUpResourceExports(t *testing.T) {
 				WithLists(tt.existSvcExpList, tt.existPodList, tt.existNamespaceList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existResExpList).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
-
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
@@ -465,7 +448,6 @@ func TestStaleController_CleanUpResourceExports(t *testing.T) {
 		})
 	}
 }
-
 func TestStaleController_CleanUpClusterInfoImports(t *testing.T) {
 	ci := mcv1alpha1.ClusterInfo{
 		ClusterID:   "cluster-a",
@@ -522,7 +504,6 @@ func TestStaleController_CleanUpClusterInfoImports(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(tt.existCIImpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			commonarea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
-
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonarea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
@@ -543,7 +524,6 @@ func TestStaleController_CleanUpClusterInfoImports(t *testing.T) {
 		})
 	}
 }
-
 func TestStaleController_CleanUpLabelIdentites(t *testing.T) {
 	normalizedLabelA := "namespace:kubernetes.io/metadata.name=test&pod:app=client"
 	normalizedLabelB := "namespace:kubernetes.io/metadata.name=test&pod:app=db"
@@ -605,7 +585,6 @@ func TestStaleController_CleanUpLabelIdentites(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(tt.existLabelIdentityList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			ca := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
-
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(ca)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
@@ -626,12 +605,10 @@ func TestStaleController_CleanUpLabelIdentites(t *testing.T) {
 		})
 	}
 }
-
 func TestStaleController_CleanupAllWithEmptyClusterSet(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	commonarea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
-
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonarea)
 	c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
@@ -639,7 +616,6 @@ func TestStaleController_CleanupAllWithEmptyClusterSet(t *testing.T) {
 		t.Errorf("StaleController.cleanup() should clean up all stale resources but got err = %v", err)
 	}
 }
-
 func TestCleanUpMCServiceAndServiceImport(t *testing.T) {
 	existingSVCs := &corev1.ServiceList{
 		Items: []corev1.Service{
@@ -667,7 +643,6 @@ func TestCleanUpMCServiceAndServiceImport(t *testing.T) {
 			},
 		},
 	}
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(existingSVCImports, existingSVCs).Build()
 	ctx := context.Background()
 	err := cleanUpMCServicesAndServiceImports(ctx, fakeClient)
@@ -676,13 +651,11 @@ func TestCleanUpMCServiceAndServiceImport(t *testing.T) {
 	err = fakeClient.List(ctx, actualSvcList)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(actualSvcList.Items))
-
 	actualSvcImpList := &k8smcv1alpha1.ServiceImportList{}
 	err = fakeClient.List(ctx, actualSvcImpList)
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(actualSvcImpList.Items))
 }
-
 func TestCleanUpReplicatedACNP(t *testing.T) {
 	acnpList := &v1beta1.ClusterNetworkPolicyList{
 		Items: []v1beta1.ClusterNetworkPolicy{
@@ -701,18 +674,15 @@ func TestCleanUpReplicatedACNP(t *testing.T) {
 			},
 		},
 	}
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(acnpList).Build()
 	ctx := context.Background()
 	err := cleanUpReplicatedACNPs(ctx, fakeClient)
 	require.NoError(t, err)
-
 	actualACNPList := &v1beta1.ClusterNetworkPolicyList{}
 	err = fakeClient.List(ctx, actualACNPList, &client.ListOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(actualACNPList.Items))
 }
-
 func TestCleanUpLabelIdentities(t *testing.T) {
 	labelIdentityList := &mcv1alpha1.LabelIdentityList{
 		Items: []mcv1alpha1.LabelIdentity{
@@ -730,18 +700,15 @@ func TestCleanUpLabelIdentities(t *testing.T) {
 			},
 		},
 	}
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(labelIdentityList).Build()
 	ctx := context.Background()
 	err := cleanUpLabelIdentities(ctx, fakeClient)
 	require.NoError(t, err)
-
 	actualIdtList := &mcv1alpha1.LabelIdentityList{}
 	err = fakeClient.List(ctx, actualIdtList, &client.ListOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(actualIdtList.Items))
 }
-
 func TestCleanUpClusterInfoImport(t *testing.T) {
 	ciImpList := &mcv1alpha1.ClusterInfoImportList{
 		Items: []mcv1alpha1.ClusterInfoImport{
@@ -759,18 +726,15 @@ func TestCleanUpClusterInfoImport(t *testing.T) {
 			},
 		},
 	}
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(ciImpList).Build()
 	ctx := context.Background()
 	err := cleanUpClusterInfoImports(ctx, fakeClient)
 	require.NoError(t, err)
-
 	actualCIImpList := &mcv1alpha1.ClusterInfoImportList{}
 	err = fakeClient.List(ctx, actualCIImpList, &client.ListOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(actualCIImpList.Items))
 }
-
 func TestCleanUpGateway(t *testing.T) {
 	gwList := &mcv1alpha1.GatewayList{
 		Items: []mcv1alpha1.Gateway{
@@ -782,12 +746,10 @@ func TestCleanUpGateway(t *testing.T) {
 			},
 		},
 	}
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(gwList).Build()
 	ctx := context.Background()
 	err := cleanUpGateways(ctx, fakeClient)
 	require.NoError(t, err)
-
 	actualGWList := &mcv1alpha1.ClusterInfoImportList{}
 	err = fakeClient.List(ctx, actualGWList, &client.ListOptions{})
 	require.NoError(t, err)

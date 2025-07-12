@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"bufio"
 	"encoding/json"
@@ -23,24 +21,18 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 )
-
 var (
 	fakeDestPod = &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -55,9 +47,7 @@ var (
 		},
 	}
 )
-
 type fakePodL7FlowExporterAttrGetter struct{}
-
 func (fl *fakePodL7FlowExporterAttrGetter) IsL7FlowExporterRequested(podNN string, ingress bool) bool {
 	podToDirectionMap := map[string]v1alpha2.Direction{
 		"destPodNNDirIngress": v1alpha2.DirectionIngress,
@@ -68,7 +58,6 @@ func (fl *fakePodL7FlowExporterAttrGetter) IsL7FlowExporterRequested(podNN strin
 		"srcPodNNDirBoth":     v1alpha2.DirectionBoth,
 		"fakeNS/fakePod":      v1alpha2.DirectionIngress,
 	}
-
 	if direction, ok := podToDirectionMap[podNN]; ok {
 		switch direction {
 		case v1alpha2.DirectionIngress:
@@ -81,7 +70,6 @@ func (fl *fakePodL7FlowExporterAttrGetter) IsL7FlowExporterRequested(podNN strin
 	}
 	return false
 }
-
 func newFakeL7Listener(socketPath string, podStore *podstoretest.MockInterface) *L7Listener {
 	return &L7Listener{
 		l7Events:                    make(map[flowexporter.ConnectionKey]L7ProtocolFields),
@@ -90,7 +78,6 @@ func newFakeL7Listener(socketPath string, podStore *podstoretest.MockInterface) 
 		podStore:                    podStore,
 	}
 }
-
 func TestFlowExporterL7ListenerHttp(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -258,7 +245,6 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 			socketPath := socketFile.Name()
 			defer os.RemoveAll(socketPath)
 			l := newFakeL7Listener(socketPath, mockPodStore)
-
 			stopCh := make(chan struct{})
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -268,7 +254,6 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 			}()
 			defer wg.Wait()
 			defer close(stopCh)
-
 			var socketConn net.Conn
 			require.EventuallyWithT(t, func(t *assert.CollectT) {
 				var err error
@@ -276,7 +261,6 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 				assert.NoError(t, err)
 			}, 1*time.Second, 100*time.Millisecond, "Failed to connect to Suricata event socket %s", l.suricataEventSocketPath)
 			defer socketConn.Close()
-
 			writer := bufio.NewWriter(socketConn)
 			for _, msg := range tc.input {
 				jsonData, err := json.Marshal(msg)

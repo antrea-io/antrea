@@ -11,28 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"strings"
-
 	"github.com/spf13/cobra"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
-=======
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 )
-
 var destroyOpts *common.CleanOptions
-
 var destroyExamples = strings.Trim(`
 # Destroy the ClusterSet in the antrea-multicluster Namespace
   antctl mc destroy --clusterset clusterset1 -n antrea-multicluster
 `, "\n")
-
 func NewDestroyCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:     "destroy",
@@ -41,15 +31,12 @@ func NewDestroyCommand() *cobra.Command {
 		Example: destroyExamples,
 		RunE:    destroyRunE,
 	}
-
 	o := common.CleanOptions{}
 	destroyOpts = &o
 	command.Flags().StringVarP(&o.Namespace, "namespace", "n", "", "Namespace of the ClusterSet")
 	command.Flags().StringVarP(&o.ClusterSet, "clusterset", "", "", "ClusterSet ID")
-
 	return command
 }
-
 func destroyRunE(cmd *cobra.Command, args []string) error {
 	return common.Cleanup(cmd, destroyOpts)
 }

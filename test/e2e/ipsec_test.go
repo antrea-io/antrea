@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"testing"
-
 	"k8s.io/apimachinery/pkg/util/wait"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/agent/util"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 // TestIPSec is the top-level test which contains all subtests for
 // IPsec related test cases so they can share setup, teardown.
 func TestIPSec(t *testing.T) {
@@ -42,19 +34,16 @@ func TestIPSec(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaIPAMTest(t)
 	skipIfProviderIs(t, "kind", "IPsec tests take too long to run and do not work with multiple Docker bridges")
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 	skipIfMulticastEnabled(t, data)
-
 	t.Logf("Redeploy Antrea with IPsec tunnel enabled")
 	data.redeployAntrea(t, deployAntreaIPsec)
 	// Restore normal Antrea deployment with IPsec disabled.
 	defer data.redeployAntrea(t, deployAntreaDefault)
-
 	t.Run("testIPSecPSKAuth", func(t *testing.T) {
 		conf, err := data.getAgentConf(antreaNamespace)
 		failOnError(err, t)
@@ -69,7 +58,6 @@ func TestIPSec(t *testing.T) {
 		}
 		t.Run("testIPSecTunnelConnectivity", func(t *testing.T) { testIPSecTunnelConnectivity(t, data, false) })
 	})
-
 	t.Run("testIPSecCertificateAuth", func(t *testing.T) {
 		skipIfFeatureDisabled(t, features.IPsecCertAuth, true, true)
 		conf, err := data.getAgentConf(antreaNamespace)
@@ -85,10 +73,8 @@ func TestIPSec(t *testing.T) {
 		}
 		t.Run("testIPSecTunnelConnectivity", func(t *testing.T) { testIPSecTunnelConnectivity(t, data, true) })
 	})
-
 	t.Run("testIPSecDeleteStaleTunnelPorts", func(t *testing.T) { testIPSecDeleteStaleTunnelPorts(t, data) })
 }
-
 func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, connecting int, isCertAuth bool, err error) {
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
@@ -114,13 +100,11 @@ func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, c
 		return 0, 0, false, fmt.Errorf("error when retrieving 'connecting' SAs from 'ipsec statusall' output: %v", err)
 	}
 	connecting = int(v)
-
 	re = regexp.MustCompile(`uses ([a-z-]+) key authentication`)
 	match := re.FindStringSubmatch(stdout)
 	if len(match) == 0 {
 		return 0, 0, false, fmt.Errorf("failed to determine authentication method from 'ipsec statusall' output: %s", stdout)
 	}
-
 	switch match[1] {
 	case "pre-shared":
 		isCertAuth = false
@@ -129,10 +113,8 @@ func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, c
 	default:
 		return 0, 0, false, fmt.Errorf("unknown key authentication mode %q", match[1])
 	}
-
 	return up, connecting, isCertAuth, nil
 }
-
 // testIPSecTunnelConnectivity checks that Pod traffic across two Nodes over
 // the IPsec tunnel, by creating multiple Pods across distinct Nodes and having
 // them ping each other.
@@ -147,13 +129,9 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData, certAuth bool) {
 	defer deletePods()
 	t.Logf("Executing ping tests across Nodes: '%s' <-> '%s'", podInfos[0].NodeName, podInfos[1].NodeName)
 	// PMTU is wrong when using GRE+IPsec with some Linux kernel versions, do not set DF to work around.
-<<<<<<< HEAD
 	// See https://github.com/antrea.io/antrea/v2/issues/5922 for more details.
-=======
 	// See https://github.com/antrea-io/antrea/issues/5922 for more details.
->>>>>>> origin/main
 	data.runPingMesh(t, podInfos[:2], toolboxContainerName, false)
-
 	// Check that there is at least one 'up' Security Association on the Node
 	nodeName := podInfos[0].NodeName
 	if up, _, isCertAuth, err := data.readSecurityAssociationsStatus(nodeName); err != nil {
@@ -166,12 +144,10 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData, certAuth bool) {
 		t.Logf("Found %d 'up' SecurityAssociation(s) for Node '%s', certificate auth: %t", up, nodeName, isCertAuth)
 	}
 }
-
 // testIPSecDeleteStaleTunnelPorts checks that when switching from IPsec mode to
 // non-encrypted mode, the previously created tunnel ports are deleted
 // correctly.
 func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
-
 	nodeName0 := nodeName(0)
 	nodeName1 := nodeName(1)
 	antreaPodName := func() string {
@@ -183,7 +159,6 @@ func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 		return antreaPodName
 	}
 	portName := util.GenerateNodeTunnelInterfaceName(nodeName1)
-
 	doesOVSPortExist := func() bool {
 		exists, err := data.doesOVSPortExist(antreaPodName(), portName)
 		if err != nil {
@@ -191,7 +166,6 @@ func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 		}
 		return exists
 	}
-
 	t.Logf("Checking that tunnel port has been created")
 	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (found bool, err error) {
 		return doesOVSPortExist(), nil
@@ -200,10 +174,8 @@ func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 	} else if err != nil {
 		t.Fatalf("Error while waiting for OVS tunnel port to be created")
 	}
-
 	t.Logf("Redeploy Antrea with IPsec tunnel disabled")
 	data.redeployAntrea(t, deployAntreaDefault)
-
 	t.Logf("Checking that tunnel port has been deleted")
 	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (found bool, err error) {
 		return !doesOVSPortExist(), nil

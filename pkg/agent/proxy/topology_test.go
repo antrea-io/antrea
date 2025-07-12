@@ -11,28 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package proxy
-
 import (
 	"fmt"
 	"net"
 	"testing"
-
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
-=======
 	k8sproxy "antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 func checkExpectedEndpoints(expected sets.Set[string], actual []k8sproxy.Endpoint) error {
 	var errs []error
-
 	expectedCopy := sets.New[string](expected.UnsortedList()...)
 	for _, ep := range actual {
 		if !expectedCopy.Has(ep.String()) {
@@ -43,10 +34,8 @@ func checkExpectedEndpoints(expected sets.Set[string], actual []k8sproxy.Endpoin
 	if len(expectedCopy) > 0 {
 		errs = append(errs, fmt.Errorf("missing endpoints %v", expectedCopy.UnsortedList()))
 	}
-
 	return kerrors.NewAggregate(errs)
 }
-
 func TestCategorizeEndpoints(t *testing.T) {
 	testCases := []struct {
 		name               string
@@ -359,7 +348,6 @@ func TestCategorizeEndpoints(t *testing.T) {
 			clusterEndpoints: nil,
 			localEndpoints:   sets.New[string](),
 		},
-
 		{
 			name:        "iTP: Local, but all endpoints are remote",
 			serviceInfo: k8sproxy.NewBaseServiceInfo(net.ParseIP("10.96.0.1"), 80, v1.ProtocolTCP, 0, nil, "", 0, nil, nil, 0, false, true, nil, ""),
@@ -517,9 +505,7 @@ func TestCategorizeEndpoints(t *testing.T) {
 				endpointSliceEnabled:              true,
 				topologyAwareHintsEnabled:         tc.hintsEnabled,
 				serviceTrafficDistributionEnabled: tc.trafficDistEnabled}
-
 			clusterEndpoints, localEndpoints, allEndpoints := fp.categorizeEndpoints(tc.endpoints, tc.serviceInfo)
-
 			if tc.clusterEndpoints == nil && clusterEndpoints != nil {
 				t.Errorf("expected no cluster endpoints but got %v", clusterEndpoints)
 			} else {
@@ -528,7 +514,6 @@ func TestCategorizeEndpoints(t *testing.T) {
 					t.Errorf("error with cluster endpoints: %v", err)
 				}
 			}
-
 			if tc.localEndpoints == nil && localEndpoints != nil {
 				t.Errorf("expected no local endpoints but got %v", localEndpoints)
 			} else {
@@ -537,7 +522,6 @@ func TestCategorizeEndpoints(t *testing.T) {
 					t.Errorf("error with local endpoints: %v", err)
 				}
 			}
-
 			var expectedAllEndpoints sets.Set[string]
 			if tc.clusterEndpoints != nil && tc.localEndpoints == nil {
 				expectedAllEndpoints = tc.clusterEndpoints
@@ -550,7 +534,6 @@ func TestCategorizeEndpoints(t *testing.T) {
 			if err != nil {
 				t.Errorf("error with allEndpoints: %v", err)
 			}
-
 		})
 	}
 }

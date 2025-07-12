@@ -11,55 +11,43 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package linkmonitor
-
 import (
 	"slices"
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sys/unix"
 	"k8s.io/utils/set"
-
-<<<<<<< HEAD
 	netlinktesting "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
-=======
-	netlinktesting "antrea.io/antrea/pkg/agent/util/netlink/testing"
->>>>>>> origin/main
+	netlinktesting "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
 )
-
 type linkEventHandler struct {
 	watchLinkNames     []string
 	receivedEvents     []string
 	mutex              sync.Mutex
 	expectedLinkEvents []string
 }
-
 func (l *linkEventHandler) onLinkEvent(linkName string) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	l.receivedEvents = append(l.receivedEvents, linkName)
 }
-
 func (l *linkEventHandler) getReceivedLinkEvents() []string {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	return slices.Clone(l.receivedEvents)
 }
-
 func newLinkEventHandler(expectedLinkEvents []string, watchLinkNames ...string) *linkEventHandler {
 	return &linkEventHandler{
 		expectedLinkEvents: expectedLinkEvents,
 		watchLinkNames:     watchLinkNames,
 	}
 }
-
 func newLinkEvent(remove bool, linkName string, index int) netlink.LinkUpdate {
 	et := unix.RTM_NEWLINK
 	if remove {
@@ -82,7 +70,6 @@ func newLinkEvent(remove bool, linkName string, index int) netlink.LinkUpdate {
 	}
 	return e
 }
-
 func newLink(name string, index int) netlink.Link {
 	return &netlink.Device{
 		LinkAttrs: netlink.LinkAttrs{
@@ -91,7 +78,6 @@ func newLink(name string, index int) netlink.Link {
 		},
 	}
 }
-
 func Test_linkMonitor_listAndWatchLinks(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -248,7 +234,6 @@ func Test_linkMonitor_listAndWatchLinks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-
 			mockLinkSubscribeFunc := func(ch chan<- netlink.LinkUpdate, done <-chan struct{}, options netlink.LinkSubscribeOptions) error {
 				go func() {
 					for _, e := range tt.linkEvents {
@@ -257,10 +242,8 @@ func Test_linkMonitor_listAndWatchLinks(t *testing.T) {
 				}()
 				return nil
 			}
-
 			netlink := netlinktesting.NewMockInterface(ctrl)
 			netlink.EXPECT().LinkList().Return(tt.initialLinkList, nil)
-
 			d := &linkMonitor{
 				linkSubscribeFunc: mockLinkSubscribeFunc,
 				eventHandlers:     map[string][]LinkEventHandler{},
@@ -271,7 +254,6 @@ func Test_linkMonitor_listAndWatchLinks(t *testing.T) {
 			for _, h := range tt.eventHandlers {
 				d.AddEventHandler(h.onLinkEvent, h.watchLinkNames...)
 			}
-
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			go d.listAndWatchLinks(stopCh)

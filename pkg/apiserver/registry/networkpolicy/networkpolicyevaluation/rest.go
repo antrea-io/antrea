@@ -11,50 +11,37 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicyevaluation
-
 import (
 	"context"
 	"fmt"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/controller/networkpolicy"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
 )
-
 type REST struct {
 	querier networkpolicy.PolicyRuleQuerier
 }
-
 var (
 	_ rest.Storage              = &REST{}
 	_ rest.Scoper               = &REST{}
 	_ rest.Creater              = &REST{}
 	_ rest.SingularNameProvider = &REST{}
 )
-
 // NewREST returns a REST object that will work against API services.
 func NewREST(querier networkpolicy.PolicyRuleQuerier) *REST {
 	return &REST{querier}
 }
-
 func (r *REST) New() runtime.Object {
 	return &controlplane.NetworkPolicyEvaluation{}
 }
-
 func (r *REST) Destroy() {
 }
-
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	eval, ok := obj.(*controlplane.NetworkPolicyEvaluation)
 	if !ok {
@@ -67,11 +54,9 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	eval.Response = response
 	return eval, nil
 }
-
 func (r *REST) NamespaceScoped() bool {
 	return false
 }
-
 func (r *REST) GetSingularName() string {
 	return "networkpolicyevaluation"
 }

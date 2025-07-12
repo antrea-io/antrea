@@ -11,30 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package linkmonitor
-
 import (
 	"sync"
 	"time"
-
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/set"
-
-<<<<<<< HEAD
 	utilnetlink "antrea.io/antrea/v2/pkg/agent/util/netlink"
-=======
-	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
->>>>>>> origin/main
+	utilnetlink "antrea.io/antrea/v2/pkg/agent/util/netlink"
 )
-
 const (
 	linkAny = ""
 )
-
 type linkMonitor struct {
 	mutex             sync.RWMutex
 	cacheSynced       bool
@@ -44,7 +35,6 @@ type linkMonitor struct {
 	linkIndexMap      map[int32]string // map from link index to link name
 	netlink           utilnetlink.Interface
 }
-
 func NewLinkMonitor() *linkMonitor {
 	return &linkMonitor{
 		linkSubscribeFunc: netlink.LinkSubscribeWithOptions,
@@ -54,13 +44,11 @@ func NewLinkMonitor() *linkMonitor {
 		netlink:           &netlink.Handle{},
 	}
 }
-
 func (d *linkMonitor) HasSynced() bool {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return d.cacheSynced
 }
-
 func (d *linkMonitor) AddEventHandler(handler LinkEventHandler, linkNames ...string) {
 	if len(linkNames) == 0 {
 		d.eventHandlers[linkAny] = append(d.eventHandlers[linkAny], handler)
@@ -70,15 +58,11 @@ func (d *linkMonitor) AddEventHandler(handler LinkEventHandler, linkNames ...str
 		d.eventHandlers[name] = append(d.eventHandlers[name], handler)
 	}
 }
-
 func (d *linkMonitor) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting LinkMonitor")
-
 	wait.NonSlidingUntil(func() { d.listAndWatchLinks(stopCh) }, 5*time.Second, stopCh)
-
 	<-stopCh
 }
-
 func (d *linkMonitor) listAndWatchLinks(stopCh <-chan struct{}) {
 	ch := make(chan netlink.LinkUpdate, 100)
 	if err := d.linkSubscribeFunc(ch, stopCh, netlink.LinkSubscribeOptions{
@@ -89,13 +73,11 @@ func (d *linkMonitor) listAndWatchLinks(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to subscribe link update")
 		return
 	}
-
 	links, err := d.netlink.LinkList()
 	if err != nil {
 		klog.ErrorS(err, "failed to list links on the Node")
 		return
 	}
-
 	d.mutex.Lock()
 	for _, l := range links {
 		d.linkIndexMap[int32(l.Attrs().Index)] = l.Attrs().Name
@@ -103,11 +85,9 @@ func (d *linkMonitor) listAndWatchLinks(stopCh <-chan struct{}) {
 	}
 	d.cacheSynced = true
 	d.mutex.Unlock()
-
 	for _, l := range links {
 		d.notifyHandlers(l.Attrs().Name)
 	}
-
 	for {
 		select {
 		case <-stopCh:
@@ -116,7 +96,6 @@ func (d *linkMonitor) listAndWatchLinks(stopCh <-chan struct{}) {
 			eventLinkName := event.Attrs().Name
 			index := event.Index
 			previousName, exists := d.linkIndexMap[index]
-
 			isDelete := event.Header.Type == unix.RTM_DELLINK
 			if isDelete {
 				delete(d.linkIndexMap, index)
@@ -125,7 +104,6 @@ func (d *linkMonitor) listAndWatchLinks(stopCh <-chan struct{}) {
 				d.linkIndexMap[index] = eventLinkName
 				d.addLinkName(eventLinkName)
 			}
-
 			// For link rename events, notify handlers watching the original name
 			if exists && previousName != eventLinkName {
 				d.deleteLinkName(previousName)
@@ -135,7 +113,6 @@ func (d *linkMonitor) listAndWatchLinks(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 func (d *linkMonitor) notifyHandlers(linkName string) {
 	for _, h := range d.eventHandlers[linkName] {
 		h(linkName)
@@ -144,20 +121,17 @@ func (d *linkMonitor) notifyHandlers(linkName string) {
 		h(linkName)
 	}
 }
-
 // LinkExists checks if the provided interface is configured on the Node.
 func (d *linkMonitor) LinkExists(name string) bool {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 	return d.linkNames.Has(name)
 }
-
 func (d *linkMonitor) addLinkName(name string) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	d.linkNames.Insert(name)
 }
-
 func (d *linkMonitor) deleteLinkName(name string) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()

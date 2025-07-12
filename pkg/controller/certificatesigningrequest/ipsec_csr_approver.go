@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package certificatesigningrequest
-
 import (
 	"context"
 	"crypto/x509"
 	"fmt"
 	"reflect"
 	"strings"
-
 	certificatesv1 "k8s.io/api/certificates/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,48 +26,36 @@ import (
 	sautil "k8s.io/apiserver/pkg/authentication/serviceaccount"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	antreaapis "antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/util/env"
-=======
-	antreaapis "antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/util/env"
->>>>>>> origin/main
+	antreaapis "antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
-
 const (
 	ipsecCSRApproverName = "AntreaIPsecCSRApprover"
 )
-
 type ipsecCSRApprover struct {
 	client                        clientset.Interface
 	antreaAgentServiceAccountName string
 }
-
 var ipsecTunnelUsages = sets.New[string](
 	string(certificatesv1.UsageIPsecTunnel),
 )
-
 var _ approver = (*ipsecCSRApprover)(nil)
-
 func getAntreaAgentServiceAccount() string {
 	return strings.Join([]string{
 		"system", "serviceaccount", env.GetAntreaNamespace(), "antrea-agent",
 	}, ":")
 }
-
 func newIPsecCSRApprover(client clientset.Interface) *ipsecCSRApprover {
 	return &ipsecCSRApprover{
 		client:                        client,
 		antreaAgentServiceAccountName: getAntreaAgentServiceAccount(),
 	}
 }
-
 func (ic *ipsecCSRApprover) recognize(csr *certificatesv1.CertificateSigningRequest) bool {
 	return csr.Spec.SignerName == antreaapis.AntreaIPsecCSRSignerName
 }
-
 func (ic *ipsecCSRApprover) verify(csr *certificatesv1.CertificateSigningRequest) (bool, error) {
 	var failedReasons []string
 	cr, err := decodeCertificateRequest(csr.Spec.Request)
@@ -90,18 +75,15 @@ func (ic *ipsecCSRApprover) verify(csr *certificatesv1.CertificateSigningRequest
 		}
 		failedReasons = append(failedReasons, err.Error())
 	}
-
 	if len(failedReasons) > 0 {
 		klog.InfoS("Verifing CertificateSigningRequest for IPsec failed", "reasons", failedReasons, "CSR", csr.Name)
 		return false, nil
 	}
 	return true, nil
 }
-
 func (ic *ipsecCSRApprover) name() string {
 	return ipsecCSRApproverName
 }
-
 func (ic *ipsecCSRApprover) verifyCertificateRequest(req *x509.CertificateRequest, usages []certificatesv1.KeyUsage) error {
 	if !reflect.DeepEqual(req.Subject.Organization, []string{antreaapis.AntreaOrganizationName}) {
 		return errOrganizationNotAntrea
@@ -134,7 +116,6 @@ func (ic *ipsecCSRApprover) verifyCertificateRequest(req *x509.CertificateReques
 	}
 	return nil
 }
-
 func (ic *ipsecCSRApprover) verifyIdentity(nodeName string, csr *certificatesv1.CertificateSigningRequest) error {
 	if csr.Spec.Username != ic.antreaAgentServiceAccountName {
 		return errUserUnauthorized

@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"context"
 	"fmt"
 	"hash/fnv"
 	"net"
 	"time"
-
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
@@ -28,8 +25,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
@@ -45,25 +40,22 @@ import (
 	"antrea.io/antrea/v2/pkg/util/env"
 	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
 	"antrea.io/antrea/v2/pkg/util/podstore"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/controller/noderoute"
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	"antrea.io/antrea/pkg/agent/metrics"
-	"antrea.io/antrea/pkg/agent/proxy"
-	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/ipfix"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/util/env"
-	k8sutil "antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/podstore"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/proxy"
+	"antrea.io/antrea/v2/pkg/features"
+	"antrea.io/antrea/v2/pkg/ipfix"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/util/env"
+	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/podstore"
 )
-
 // When initializing flowExporter, a slice is allocated with a fixed size to
 // store expired connections. The advantage is every time we export, the connection
 // store lock will only be held for a bounded time. The disadvantages are: 1. the
@@ -75,7 +67,6 @@ import (
 // number of expired connections, while having a min and a max to handle edge cases,
 // e.g. min(50 + 0.1 * connectionStore.size(), 200)
 const maxConnsToExport = 64
-
 var (
 	IANAInfoElementsCommon = []string{
 		"flowStartSeconds",
@@ -128,7 +119,6 @@ var (
 	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
 )
-
 type FlowExporter struct {
 	collectorAddr          string
 	conntrackConnStore     *connections.ConntrackConnectionStore
@@ -155,18 +145,15 @@ type FlowExporter struct {
 	podStore               podstore.Interface
 	l7Listener             *connections.L7Listener
 }
-
 func genObservationID(nodeName string) uint32 {
 	h := fnv.New32()
 	h.Write([]byte(nodeName))
 	return h.Sum32()
 }
-
 func prepareExporterInputArgs(collectorProto, nodeName string) exporter.ExporterInput {
 	expInput := exporter.ExporterInput{}
 	// Exporting process requires domain observation ID.
 	expInput.ObservationDomainID = genObservationID(nodeName)
-
 	if collectorProto == "tls" {
 		expInput.TLSClientConfig = &exporter.ExporterTLSClientConfig{}
 		expInput.CollectorProtocol = "tcp"
@@ -174,10 +161,8 @@ func prepareExporterInputArgs(collectorProto, nodeName string) exporter.Exporter
 		expInput.TLSClientConfig = nil
 		expInput.CollectorProtocol = collectorProto
 	}
-
 	return expInput
 }
-
 func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
 	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
 	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *flowexporter.FlowExporterOptions,
@@ -185,14 +170,12 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
-
 	// Prepare input args for IPFIX exporting process.
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		return nil, err
 	}
 	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
-
 	protocolFilter := filter.NewProtocolFilter(o.ProtocolFilter)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocolFilter)
 	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o, protocolFilter)
@@ -206,7 +189,6 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
-
 	return &FlowExporter{
 		collectorAddr:          o.FlowCollectorAddr,
 		conntrackConnStore:     conntrackConnStore,
@@ -228,11 +210,9 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 		l7Listener:             l7Listener,
 	}, nil
 }
-
 func (exp *FlowExporter) GetDenyConnStore() *connections.DenyConnectionStore {
 	return exp.denyConnStore
 }
-
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	go exp.podStore.Run(stopCh)
 	// Start L7 connection flow socket
@@ -241,10 +221,8 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	}
 	// Start the goroutine to periodically delete stale deny connections.
 	go exp.denyConnStore.RunPeriodicDeletion(stopCh)
-
 	// Start the goroutine to poll conntrack flows.
 	go exp.conntrackConnStore.Run(stopCh)
-
 	if exp.nodeRouteController != nil {
 		// Wait for NodeRouteController to have processed the initial list of Nodes so that
 		// the list of Pod subnets is up-to-date.
@@ -252,7 +230,6 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 			return
 		}
 	}
-
 	defaultTimeout := exp.conntrackPriorityQueue.ActiveFlowTimeout
 	expireTimer := time.NewTimer(defaultTimeout)
 	for {
@@ -299,7 +276,6 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
 	currTime := time.Now()
 	var expireTime1, expireTime2 time.Duration
@@ -323,7 +299,6 @@ func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
 	exp.expiredConns = exp.expiredConns[:0]
 	return nextExpireTime, nil
 }
-
 func (exp *FlowExporter) resolveCollectorAddress(ctx context.Context) error {
 	exp.exporterInput.CollectorAddress = ""
 	host, port, err := net.SplitHostPort(exp.collectorAddr)
@@ -349,7 +324,6 @@ func (exp *FlowExporter) resolveCollectorAddress(ctx context.Context) error {
 	klog.V(2).InfoS("Resolved FlowAggregator Service address", "address", exp.exporterInput.CollectorAddress)
 	return nil
 }
-
 func (exp *FlowExporter) initFlowExporter(ctx context.Context) error {
 	if err := exp.resolveCollectorAddress(ctx); err != nil {
 		return err
@@ -400,10 +374,8 @@ func (exp *FlowExporter) initFlowExporter(ctx context.Context) error {
 	metrics.ReconnectionsToFlowCollector.Inc()
 	return nil
 }
-
 func (exp *FlowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
-
 	IANAInfoElements := IANAInfoElementsIPv4
 	AntreaInfoElements := AntreaInfoElementsIPv4
 	templateID := exp.templateIDv4
@@ -457,20 +429,16 @@ func (exp *FlowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("error in IPFIX exporting process when sending template record: %v", err)
 	}
-
 	// Get all elements from template record.
 	if !isIPv6 {
 		exp.elementsListv4 = elements
 	} else {
 		exp.elementsListv6 = elements
 	}
-
 	return sentBytes, nil
 }
-
 func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 	exp.ipfixSet.ResetSet()
-
 	eL := exp.elementsListv4
 	templateID := exp.templateIDv4
 	if conn.FlowKey.SourceAddress.Is6() {
@@ -630,7 +598,6 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 	}
 	return nil
 }
-
 func (exp *FlowExporter) sendDataSet() (int, error) {
 	sentBytes, err := exp.process.SendSet(exp.ipfixSet)
 	if err != nil {
@@ -641,7 +608,6 @@ func (exp *FlowExporter) sendDataSet() (int, error) {
 	}
 	return sentBytes, nil
 }
-
 const (
 	// flowTypeUnknown indicates that we are unable to determine the flow type.
 	flowTypeUnknown = uint8(0)
@@ -649,7 +615,6 @@ const (
 	// skip exporting it.
 	flowTypeUnsupported = uint8(0xff)
 )
-
 func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 	// TODO: support Pod-To-External flows in network policy only mode.
 	if exp.isNetworkPolicyOnly {
@@ -658,7 +623,6 @@ func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 		}
 		return ipfixregistry.FlowTypeIntraNode
 	}
-
 	if exp.nodeRouteController == nil {
 		if klog.V(5).Enabled() {
 			klog.InfoS("Can't find flowType without nodeRouteController")
@@ -689,7 +653,6 @@ func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 	}
 	return ipfixregistry.FlowTypeIntraNode
 }
-
 func (exp *FlowExporter) fillEgressInfo(conn *flowexporter.Connection) {
 	egressName, egressIP, egressNodeName, err := exp.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
 	if err != nil {
@@ -703,7 +666,6 @@ func (exp *FlowExporter) fillEgressInfo(conn *flowexporter.Connection) {
 		klog.InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "EgressNode", conn.EgressNodeName, "SourcePod", klog.KRef(conn.SourcePodNamespace, conn.SourcePodName))
 	}
 }
-
 func (exp *FlowExporter) exportConn(conn *flowexporter.Connection) error {
 	conn.FlowType = exp.findFlowType(*conn)
 	if conn.FlowType == flowTypeUnsupported {
@@ -730,7 +692,6 @@ func (exp *FlowExporter) exportConn(conn *flowexporter.Connection) error {
 	}
 	return nil
 }
-
 func getMinTime(t1, t2 time.Duration) time.Duration {
 	if t1 <= t2 {
 		return t1

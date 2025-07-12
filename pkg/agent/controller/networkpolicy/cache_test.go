@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"net"
@@ -21,30 +19,23 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 var (
 	k8sNPMaxPriority = int32(-1)
 )
-
 func TestAddressGroupIndexFunc(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -83,7 +74,6 @@ func TestAddressGroupIndexFunc(t *testing.T) {
 		})
 	}
 }
-
 func TestAppliedToGroupIndexFunc(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -122,7 +112,6 @@ func TestAppliedToGroupIndexFunc(t *testing.T) {
 		})
 	}
 }
-
 func TestGetMaxPriority(t *testing.T) {
 	networkPolicyRule1 := &v1beta2.NetworkPolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -178,36 +167,29 @@ func TestGetMaxPriority(t *testing.T) {
 	assert.Equal(t, int32(-1), getMaxPriority(k8sNP), "got unexpected maxPriority for K8s NetworkPolicy")
 	assert.Equal(t, int32(1), getMaxPriority(antreaNP), "got unexpected maxPriority for AntreaPolicy")
 }
-
 type dirtyRuleRecorder struct {
 	m     sync.Mutex
 	rules sets.Set[string]
 }
-
 func newDirtyRuleRecorder() *dirtyRuleRecorder {
 	return &dirtyRuleRecorder{rules: sets.New[string]()}
 }
-
 func (r *dirtyRuleRecorder) Record(ruleID string) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.rules.Insert(ruleID)
 }
-
 func (r *dirtyRuleRecorder) Rules() sets.Set[string] {
 	r.m.Lock()
 	defer r.m.Unlock()
 	return r.rules.Clone()
 }
-
 func newAppliedToGroupMemberPod(name, namespace string, containerPorts ...v1beta2.NamedPort) *v1beta2.GroupMember {
 	return &v1beta2.GroupMember{Pod: &v1beta2.PodReference{Name: name, Namespace: namespace}, Ports: containerPorts}
 }
-
 func newAppliedToGroupMemberService(name, namespace string) *v1beta2.GroupMember {
 	return &v1beta2.GroupMember{Service: &v1beta2.ServiceReference{Name: name, Namespace: namespace}}
 }
-
 func newAddressGroupMember(ips ...string) *v1beta2.GroupMember {
 	ipAddrs := make([]v1beta2.IPAddress, len(ips))
 	for idx, ip := range ips {
@@ -215,7 +197,6 @@ func newAddressGroupMember(ips ...string) *v1beta2.GroupMember {
 	}
 	return &v1beta2.GroupMember{IPs: ipAddrs}
 }
-
 func newAddressGroupPodMember(name, namespace string, ips ...string) *v1beta2.GroupMember {
 	ipAddrs := make([]v1beta2.IPAddress, len(ips))
 	for idx, ip := range ips {
@@ -227,7 +208,6 @@ func newAddressGroupPodMember(name, namespace string, ips ...string) *v1beta2.Gr
 	}
 	return &v1beta2.GroupMember{Pod: pod, IPs: ipAddrs}
 }
-
 func TestRuleCacheAddAddressGroup(t *testing.T) {
 	rule1 := &rule{
 		ID:   "rule1",
@@ -282,7 +262,6 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 				c.rules.Add(rule)
 			}
 			c.AddAddressGroup(tt.args)
-
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
@@ -294,7 +273,6 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 		})
 	}
 }
-
 func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, *channel.SubscribableChannel, chan string) {
 	recorder := newDirtyRuleRecorder()
 	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
@@ -302,7 +280,6 @@ func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, *channel.SubscribableCh
 	c := newRuleCache(recorder.Record, podUpdateChannel, nil, serviceGroupIDUpdateChannel, config.K8sNode)
 	return c, recorder, podUpdateChannel, serviceGroupIDUpdateChannel
 }
-
 func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 	rule1 := &rule{
 		ID:              "rule1",
@@ -376,7 +353,6 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 			}
 			c.appliedToSetByGroup = tt.preExistingGroups
 			c.ReplaceAppliedToGroups(tt.args)
-
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
@@ -386,7 +362,6 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 	rule1 := &rule{
 		ID:   "rule1",
@@ -460,7 +435,6 @@ func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 			}
 			c.addressSetByGroup = tt.preExistingGroups
 			c.ReplaceAddressGroups(tt.args)
-
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
@@ -470,7 +444,6 @@ func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
 	networkPolicyRule1 := &v1beta2.NetworkPolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -546,7 +519,6 @@ func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
 				c.policyMap[string(rule.PolicyUID)] = &v1beta2.NetworkPolicy{}
 			}
 			c.ReplaceNetworkPolicies(tt.args)
-
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
@@ -554,7 +526,6 @@ func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 	rule1 := &rule{
 		ID:              "rule1",
@@ -609,7 +580,6 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 				c.rules.Add(rule)
 			}
 			c.AddAppliedToGroup(tt.args)
-
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
@@ -621,7 +591,6 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 	networkPolicyRule1 := &v1beta2.NetworkPolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -742,7 +711,6 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 	rule1 := &rule{
 		ID:        "rule1",
@@ -798,7 +766,6 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 				c.rules.Add(rule)
 			}
 			c.DeleteNetworkPolicy(tt.args)
-
 			actualRules := c.rules.List()
 			if !assert.ElementsMatch(t, tt.expectedRules, actualRules) {
 				t.Errorf("Got rules %v, expected %v", actualRules, tt.expectedRules)
@@ -809,7 +776,6 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCacheGetCompletedRule(t *testing.T) {
 	addressGroup1 := v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("1.1.1.2"))
 	addressGroup2 := v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.3"), newAddressGroupMember("1.1.1.2"))
@@ -976,7 +942,6 @@ func TestRuleCacheGetCompletedRule(t *testing.T) {
 			c.rules.Add(rule5)
 			c.rules.Add(rule6)
 			c.rules.Add(rule7)
-
 			gotCompletedRule, gotEffective, gotRealizable := c.GetCompletedRule(tt.args)
 			if !reflect.DeepEqual(gotCompletedRule, tt.wantCompletedRule) {
 				t.Errorf("GetCompletedRule() gotCompletedRule = %v, want %v", gotCompletedRule, tt.wantCompletedRule)
@@ -990,7 +955,6 @@ func TestRuleCacheGetCompletedRule(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 	rule1 := &rule{
 		ID:              "rule1",
@@ -1070,7 +1034,6 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCachePatchAddressGroup(t *testing.T) {
 	rule1 := &rule{
 		ID:   "rule1",
@@ -1150,7 +1113,6 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
 	networkPolicyRule1 := &v1beta2.NetworkPolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -1229,7 +1191,6 @@ func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
 				c.rules.Add(rule)
 			}
 			c.UpdateNetworkPolicy(tt.args)
-
 			actualRules := c.rules.List()
 			if !assert.ElementsMatch(t, tt.expectedRules, actualRules) {
 				t.Errorf("Got rules %v, expected %v", actualRules, tt.expectedRules)
@@ -1240,7 +1201,6 @@ func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCacheProcessPodUpdates(t *testing.T) {
 	rule1 := &rule{
 		ID:              "rule1",
@@ -1304,7 +1264,6 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 		})
 	}
 }
-
 func TestRuleCacheProcessServiceGroupIDUpdates(t *testing.T) {
 	rule1 := &rule{
 		ID:              "rule1",
@@ -1400,7 +1359,6 @@ func TestRuleCacheProcessServiceGroupIDUpdates(t *testing.T) {
 		})
 	}
 }
-
 func BenchmarkRuleCacheUnionAddressGroups(b *testing.B) {
 	var addressGroupMembers1, addressGroupMembers2 []*v1beta2.GroupMember
 	// addressGroup1 includes 10K members.
@@ -1418,7 +1376,6 @@ func BenchmarkRuleCacheUnionAddressGroups(b *testing.B) {
 	c, _, _, _ := newFakeRuleCache()
 	c.addressSetByGroup["addressGroup1"] = addressGroup1
 	c.addressSetByGroup["addressGroup2"] = addressGroup2
-
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {

@@ -11,37 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"encoding/binary"
-
 	"antrea.io/libOpenflow/protocol"
-
-<<<<<<< HEAD
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 const (
 	ipv4HdrLen uint16 = 20
 	ipv6HdrLen uint16 = 40
-
 	icmpUnusedHdrLen uint16 = 4
-
 	tcpAck uint8 = 0b010000
 	tcpRst uint8 = 0b000100
-
 	icmpDstUnreachableType         uint8 = 3
 	icmpDstHostAdminProhibitedCode uint8 = 10
-
 	icmpv6DstUnreachableType     uint8 = 1
 	icmpv6DstAdminProhibitedCode uint8 = 1
 )
-
 func SendRejectPacketOut(ofClient Client,
 	srcMAC string,
 	dstMAC string,

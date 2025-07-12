@@ -1,6 +1,5 @@
 //go:build !race
 // +build !race
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"crypto/rand"
 	"flag"
@@ -25,14 +22,11 @@ import (
 	"net/netip"
 	"testing"
 	"time"
-
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
 	exptest "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
@@ -41,50 +35,38 @@ import (
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
-	"antrea.io/antrea/pkg/agent/openflow"
-	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	exptest "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 const (
 	testNumOfConns        = 10000
 	testNumOfNewConns     = 1000
 	testNumOfDeletedConns = 1000
-
 	testWithIPv6 = false
 )
-
 var (
 	svcIPv4 = netip.MustParseAddr("10.0.0.1")
 	svcIPv6 = netip.MustParseAddr("2001:0:3238:dfe1:63::fefc")
 )
-
 /*
 Sample output (10000 init connections, 1000 new connections, 1000 deleted connections):
 go test -test.v -run=BenchmarkPoll -test.benchmem -bench=. -memprofile memprofile.out -cpuprofile profile.out
 goos: linux
 goarch: amd64
-<<<<<<< HEAD
 pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/connections
-=======
-pkg: antrea.io/antrea/pkg/agent/flowexporter/connections
->>>>>>> origin/main
+pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/connections
 cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
 BenchmarkPoll
 BenchmarkPoll-2   	     116	   9068998 ns/op	  889713 B/op	   54458 allocs/op
 PASS
-<<<<<<< HEAD
 ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/connections	3.618s
-=======
-ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	3.618s
->>>>>>> origin/main
+ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/connections	3.618s
 */
 func BenchmarkPoll(b *testing.B) {
 	disableLogToStderr()
@@ -101,25 +83,21 @@ func BenchmarkPoll(b *testing.B) {
 	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
 }
-
 /*
 Sample output:
 $ go test -run=XXX -bench=BenchmarkConnStore -benchtime=100x -test.benchmem -memprofile memprofile.out
 goos: darwin
 goarch: amd64
-<<<<<<< HEAD
 pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/connections
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 BenchmarkConnStore-12    	     100	 119354325 ns/op	20490802 B/op	  272626 allocs/op
 PASS
 ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/connections	13.111s
-=======
-pkg: antrea.io/antrea/pkg/agent/flowexporter/connections
+pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/connections
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 BenchmarkConnStore-12    	     100	 119354325 ns/op	20490802 B/op	  272626 allocs/op
 PASS
-ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	13.111s
->>>>>>> origin/main
+ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/connections	13.111s
 */
 func BenchmarkConnStore(b *testing.B) {
 	disableLogToStderr()
@@ -137,7 +115,6 @@ func BenchmarkConnStore(b *testing.B) {
 	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
 }
-
 func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connectionstest.MockConnTrackDumper) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
@@ -153,10 +130,8 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 		},
 	}
 	mockPodStore.EXPECT().GetPodByIPAndTime(gomock.Any(), gomock.Any()).Return(pod, true).AnyTimes()
-
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	mockConnDumper.EXPECT().GetMaxConnections().Return(100000, nil).AnyTimes()
-
 	svcIP := svcIPv4
 	if testWithIPv6 {
 		svcIP = svcIPv6
@@ -172,12 +147,10 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 	}
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
-
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	l7Listener := NewL7Listener(nil, mockPodStore)
 	return NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, nil, l7Listener, testFlowExporterOptions), mockConnDumper
 }
-
 func generateConns() []*flowexporter.Connection {
 	conns := make([]*flowexporter.Connection, testNumOfConns)
 	for i := 0; i < testNumOfConns; i++ {
@@ -185,7 +158,6 @@ func generateConns() []*flowexporter.Connection {
 	}
 	return conns
 }
-
 func generateUpdatedConns(conns []*flowexporter.Connection) []*flowexporter.Connection {
 	length := len(conns) - testNumOfDeletedConns + testNumOfNewConns
 	updatedConns := make([]*flowexporter.Connection, length)
@@ -212,7 +184,6 @@ func generateUpdatedConns(conns []*flowexporter.Connection) []*flowexporter.Conn
 	}
 	return updatedConns
 }
-
 func getNewConn() *flowexporter.Connection {
 	randomNum1 := getRandomNum(255)
 	randomNum2 := getRandomNum(255)
@@ -242,12 +213,10 @@ func getNewConn() *flowexporter.Connection {
 		TCPState:                   "SYN_SENT",
 	}
 }
-
 func getRandomNum(value int64) uint64 {
 	number, _ := rand.Int(rand.Reader, big.NewInt(value))
 	return number.Uint64()
 }
-
 func disableLogToStderr() {
 	klogFlagSet := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(klogFlagSet)

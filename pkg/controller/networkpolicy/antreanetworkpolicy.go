@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 )
-
 func getANNPReference(annp *crdv1beta1.NetworkPolicy) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
 		Type:      controlplane.AntreaNetworkPolicy,
@@ -40,7 +32,6 @@ func getANNPReference(annp *crdv1beta1.NetworkPolicy) *controlplane.NetworkPolic
 		UID:       annp.UID,
 	}
 }
-
 // addANNP receives AntreaNetworkPolicy ADD events and enqueues a reference of
 // the AntreaNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) addANNP(obj interface{}) {
@@ -49,7 +40,6 @@ func (n *NetworkPolicyController) addANNP(obj interface{}) {
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
 	n.enqueueInternalNetworkPolicy(getANNPReference(np))
 }
-
 // updateANNP receives AntreaNetworkPolicy UPDATE events and enqueues a reference
 // of the AntreaNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) updateANNP(old, cur interface{}) {
@@ -58,7 +48,6 @@ func (n *NetworkPolicyController) updateANNP(old, cur interface{}) {
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
 	n.enqueueInternalNetworkPolicy(getANNPReference(curNP))
 }
-
 // deleteANNP receives AntreaNetworkPolicy DELETE events and enqueues a reference
 // of the AntreaNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) deleteANNP(old interface{}) {
@@ -79,7 +68,6 @@ func (n *NetworkPolicyController) deleteANNP(old interface{}) {
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
 	n.enqueueInternalNetworkPolicy(getANNPReference(np))
 }
-
 // processAntreaNetworkPolicy creates an internal NetworkPolicy instance
 // corresponding to the crdv1beta1.NetworkPolicy object. This method
 // does not commit the internal NetworkPolicy in store, instead returns an
@@ -179,7 +167,6 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1beta1.Netw
 	}
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }
-
 func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo []crdv1beta1.AppliedTo) []*antreatypes.AppliedToGroup {
 	var appliedToGroups []*antreatypes.AppliedToGroup
 	for _, at := range appliedTo {
@@ -195,14 +182,12 @@ func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo [
 	}
 	return appliedToGroups
 }
-
 // ErrNetworkPolicyAppliedToUnsupportedGroup is an error response when
 // a Group with Pods in other Namespaces is used as AppliedTo.
 type ErrNetworkPolicyAppliedToUnsupportedGroup struct {
 	namespace string
 	groupName string
 }
-
 func (e *ErrNetworkPolicyAppliedToUnsupportedGroup) Error() string {
 	return fmt.Sprintf("Group %s/%s with Pods in other Namespaces can not be used as AppliedTo", e.namespace, e.groupName)
 }

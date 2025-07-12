@@ -11,50 +11,38 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"github.com/spf13/cobra"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/create"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/delete"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/deploy"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/get"
-=======
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/create"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/delete"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/deploy"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/get"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/create"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/delete"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/deploy"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/get"
 )
-
 var GetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Display one or many resources in a ClusterSet",
 }
-
 var CreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a member token for a ClusterSet",
 }
-
 var DeployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Deploy Antrea Multi-cluster Controller to a leader or member cluster",
 }
-
 var DeleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete a member token",
 }
-
 var JoinCmd = NewJoinCommand()
 var LeaveCmd = NewLeaveCommand()
 var InitCmd = NewInitCommand()
 var DestroyCmd = NewDestroyCommand()
-
 func init() {
 	GetCmd.AddCommand(get.NewClusterSetCommand())
 	GetCmd.AddCommand(get.NewResourceImportCommand())

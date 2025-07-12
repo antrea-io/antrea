@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,38 +13,29 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package util
-
 import (
 	"fmt"
 	"net"
 	"strings"
 	"testing"
-
 	"github.com/Microsoft/hcsshim"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
 	"antrea.io/antrea/v2/pkg/agent/util/winnet"
 	winnettesting "antrea.io/antrea/v2/pkg/agent/util/winnet/testing"
-=======
-	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
-	"antrea.io/antrea/pkg/agent/util/winnet"
-	winnettesting "antrea.io/antrea/pkg/agent/util/winnet/testing"
->>>>>>> origin/main
+	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
+	"antrea.io/antrea/v2/pkg/agent/util/winnet"
+	winnettesting "antrea.io/antrea/v2/pkg/agent/util/winnet/testing"
 )
-
 func TestGetNSPath(t *testing.T) {
 	testNSPath := "/dev/null"
 	gotNSPath, err := GetNSPath(testNSPath)
 	require.NoError(t, err)
 	assert.Equal(t, testNSPath, gotNSPath)
 }
-
 func TestSetLinkUp(t *testing.T) {
 	testName := "test-link"
 	tests := []struct {
@@ -90,7 +80,6 @@ func TestSetLinkUp(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer mockUtilWinnet(ctrl, tc.expectedCalls)()
 			defer mockNetInterfaceByName(tc.gwInterface, tc.gwInterfaceErr)()
-
 			gotMac, gotIndex, err := SetLinkUp(testName)
 			assert.Equal(t, tc.gwInterface.HardwareAddr, gotMac)
 			assert.Equal(t, tc.gwInterface.Index, gotIndex)
@@ -102,7 +91,6 @@ func TestSetLinkUp(t *testing.T) {
 		})
 	}
 }
-
 func TestConfigureLinkAddresses(t *testing.T) {
 	testNetInterface := generateNetInterface("0")
 	tests := []struct {
@@ -167,7 +155,6 @@ func TestConfigureLinkAddresses(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -179,7 +166,6 @@ func TestConfigureLinkAddresses(t *testing.T) {
 		})
 	}
 }
-
 func TestPrepareHNSNetwork(t *testing.T) {
 	gw, subnet, _ := net.ParseCIDR("8.8.8.8/32")
 	alreadyExistsErr := fmt.Errorf("already exists")
@@ -313,7 +299,6 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			wantErr: fmt.Errorf("failed to create new IPForward row: ip route not found"),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -328,7 +313,6 @@ func TestPrepareHNSNetwork(t *testing.T) {
 		})
 	}
 }
-
 func TestGetDefaultGatewayByInterfaceIndex(t *testing.T) {
 	_, subnet, _ := net.ParseCIDR("1.1.1.0/28")
 	testGateway := net.ParseIP("1.1.1.254")
@@ -341,7 +325,6 @@ func TestGetDefaultGatewayByInterfaceIndex(t *testing.T) {
 			RouteMetric:       winnet.MetricDefault,
 		},
 	}
-
 	ip, defaultDestination, _ := net.ParseCIDR("0.0.0.0/0")
 	family := winnet.AddressFamilyByIP(ip)
 	filter := &winnet.Route{
@@ -350,7 +333,6 @@ func TestGetDefaultGatewayByInterfaceIndex(t *testing.T) {
 	}
 	filterMask := winnet.RT_FILTER_IF | winnet.RT_FILTER_DST
 	listRouteErr := fmt.Errorf("unable to list Windows IPForward rows: ip route not found")
-
 	tests := []struct {
 		name          string
 		expectedCalls func(mockNetUtil *winnettesting.MockInterfaceMockRecorder)
@@ -378,7 +360,6 @@ func TestGetDefaultGatewayByInterfaceIndex(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -389,7 +370,6 @@ func TestGetDefaultGatewayByInterfaceIndex(t *testing.T) {
 		})
 	}
 }
-
 func TestGetInterfaceConfig(t *testing.T) {
 	_, subnet, _ := net.ParseCIDR("1.1.1.0/28")
 	testGateway := net.ParseIP("1.1.1.254")
@@ -403,15 +383,12 @@ func TestGetInterfaceConfig(t *testing.T) {
 		},
 	}
 	testNetInterface := generateNetInterface("0")
-
 	family := antreasyscall.AF_UNSPEC
 	filter := &winnet.Route{
 		LinkIndex: testIndex,
 	}
 	filterMask := winnet.RT_FILTER_IF
-
 	listRouteErr := fmt.Errorf("unable to list Windows IPForward rows: unable to list IP forward rows")
-
 	tests := []struct {
 		name                string
 		testNetInterfaceErr error
@@ -447,7 +424,6 @@ func TestGetInterfaceConfig(t *testing.T) {
 			defer mockUtilWinnet(ctrl, tc.expectedCalls)()
 			defer mockNetInterfaceByName(&testNetInterface, tc.testNetInterfaceErr)()
 			defer mockNetInterfaceAddrs(testNetInterface, nil)()
-
 			gotInterface, gotAddrs, gotRoutes, gotErr := GetInterfaceConfig("0")
 			if tc.wantErr == nil {
 				assert.EqualValues(t, testNetInterface, *gotInterface)
@@ -458,7 +434,6 @@ func TestGetInterfaceConfig(t *testing.T) {
 		})
 	}
 }
-
 func convertTestRoutes(routes []winnet.Route) []interface{} {
 	testRoutes := make([]interface{}, len(routes))
 	for i, v := range routes {
@@ -466,12 +441,10 @@ func convertTestRoutes(routes []winnet.Route) []interface{} {
 	}
 	return testRoutes
 }
-
 func TestGenHostInterfaceName(t *testing.T) {
 	hostInterface := GenHostInterfaceName("host~")
 	assert.Equal(t, "host", hostInterface)
 }
-
 func mockUtilWinnet(ctrl *gomock.Controller, expectedCalls func(mockWinnet *winnettesting.MockInterfaceMockRecorder)) func() {
 	originalWinnetInterface := winnetUtil
 	testWinnetInterface := winnettesting.NewMockInterface(ctrl)
@@ -483,7 +456,6 @@ func mockUtilWinnet(ctrl *gomock.Controller, expectedCalls func(mockWinnet *winn
 		winnetUtil = originalWinnetInterface
 	}
 }
-
 func mockHNSNetworkRequest(testNetwork *hcsshim.HNSNetwork, err error) func() {
 	originalHNSNetworkRequest := hnsNetworkRequest
 	hnsNetworkRequest = func(method, path, request string) (*hcsshim.HNSNetwork, error) {
@@ -493,7 +465,6 @@ func mockHNSNetworkRequest(testNetwork *hcsshim.HNSNetwork, err error) func() {
 		hnsNetworkRequest = originalHNSNetworkRequest
 	}
 }
-
 func mockHNSNetworkCreate(err error) func() {
 	originalHNSNetworkCreate := hnsNetworkCreate
 	hnsNetworkCreate = func(network *hcsshim.HNSNetwork) (*hcsshim.HNSNetwork, error) {
@@ -503,7 +474,6 @@ func mockHNSNetworkCreate(err error) func() {
 		hnsNetworkCreate = originalHNSNetworkCreate
 	}
 }
-
 func mockHNSNetworkDelete(err error) func() {
 	originalHNSNetworkDelete := hnsNetworkDelete
 	hnsNetworkDelete = func(network *hcsshim.HNSNetwork) (*hcsshim.HNSNetwork, error) {

@@ -11,62 +11,49 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	certutil "k8s.io/client-go/util/cert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/certificate"
 	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/certificate"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/certificate"
+	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	// Namespace and name of the Secret that holds user-provided TLS certificate.
 	tlsSecretNamespace = "kube-system"
 	tlsSecretName      = "antrea-controller-tls"
-
 	caConfigMapNamespace = "kube-system"
 )
-
 // TestSecurity is the top-level test which contains all subtests for
 // Security related test cases so they can share setup, teardown.
 func TestSecurity(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	t.Run("testUserProvidedCert", func(t *testing.T) { testUserProvidedCert(t, data) })
 	t.Run("testSelfSignedCert", func(t *testing.T) { testSelfSignedCert(t, data) })
 }
-
 // testUserProvidedCert tests the selfSignedCert=false case. It covers dynamic server certificate.
 func testUserProvidedCert(t *testing.T, data *TestData) {
 	// Re-configure antrea-controller to use user-provided cert.
@@ -83,7 +70,6 @@ func testUserProvidedCert(t *testing.T, data *TestData) {
 			config.SelfSignedCert = nil
 		}, nil, true, false)
 	})
-
 	genCertKeyAndUpdateSecret := func() ([]byte, []byte) {
 		certPem, keyPem, _ := certutil.GenerateSelfSignedCertKey("antrea", nil, k8s.GetServiceDNSNames("kube-system", apis.AntreaServiceName))
 		secret, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Get(context.TODO(), tlsSecretName, metav1.GetOptions{})
@@ -122,7 +108,6 @@ func testUserProvidedCert(t *testing.T, data *TestData) {
 		}
 		return certPem, keyPem
 	}
-
 	// Create/update the secret and restart antrea-controller, then verify apiserver and its clients are using the
 	// provided certificate.
 	certPem, _ := genCertKeyAndUpdateSecret()
@@ -130,25 +115,20 @@ func testUserProvidedCert(t *testing.T, data *TestData) {
 		data.clientset.CoreV1().Secrets(tlsSecretNamespace).Delete(context.TODO(), tlsSecretName, metav1.DeleteOptions{})
 	})
 	testCert(t, data, string(certPem), true)
-
 	// Update the secret and do not restart antrea-controller, then verify apiserver and its clients are using the
 	// new certificate.
 	certPem, _ = genCertKeyAndUpdateSecret()
 	testCert(t, data, string(certPem), false)
 }
-
 // testSelfSignedCert tests the selfSignedCert=true case.
 func testSelfSignedCert(t *testing.T, data *TestData) {
 	secretBeforeRestart, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Get(context.TODO(), tlsSecretName, metav1.GetOptions{})
 	require.NoError(t, err)
-
 	testCert(t, data, string(secretBeforeRestart.Data[certificate.TLSCertFile]), true)
-
 	secretAfterRestart, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Get(context.TODO(), tlsSecretName, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, secretBeforeRestart, secretAfterRestart)
 }
-
 // testCert optionally restarts antrea-controller, then checks:
 // 1. The CA bundle published in antrea-ca ConfigMap matches expectedCABundle if provided.
 // 1. The CA bundle published in antrea-ca ConfigMap can be used to verify antrea-controller's serving cert.
@@ -173,7 +153,6 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 		}
 		timeout += 2 * time.Minute
 	}
-
 	var caBundle string
 	var configMap *v1.ConfigMap
 	if err := wait.PollUntilContextTimeout(context.Background(), 2*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
@@ -188,7 +167,6 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 			t.Log("Missing content for CA bundle, retrying")
 			return false, nil
 		}
-
 		if expectedCABundle != "" && expectedCABundle != caBundle {
 			t.Log("CA bundle doesn't match the expected one, retrying")
 			return false, nil
@@ -197,7 +175,6 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	}); err != nil {
 		t.Fatalf("Failed to get CA bundle availability: %v", err)
 	}
-
 	// We create a test Pod which needs access to the CA bundle.
 	// Because this Pod will be created inside the test Namespace, it will not have direct access to the antrea-ca ConfigMap,
 	// which is in the kube-system Namespace. Therefore, we make a "copy" of the antrea-ca ConfigMap in the test Namespace.
@@ -216,7 +193,6 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 			t.Errorf("Error when deleting ConfigMap %s: %v", configMapCopy.Name, err)
 		}
 	}()
-
 	caFile := "/etc/config/ca.crt"
 	clientName := "agnhost"
 	reqURL := fmt.Sprintf("https://%s/readyz", k8s.GetServiceDNSNames("kube-system", apis.AntreaServiceName)[0])
@@ -235,7 +211,6 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	}); err != nil {
 		t.Fatalf("Failed to get a valid CA cert from ConfigMap: %v", err)
 	}
-
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea",
 	}
@@ -249,7 +224,6 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 		}
 		t.Logf("The CABundle in APIService %s is valid", apiService.Name)
 	}
-
 	// antrea-agents reconnect every 5 seconds, we expect their connections are restored in a few seconds.
 	if err := wait.PollUntilContextTimeout(context.Background(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 		cmds := []string{"antctl", "get", "controllerinfo", "-o", "json"}

@@ -11,29 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package nodelatencystats
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	clocktesting "k8s.io/utils/clock/testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-<<<<<<< HEAD
-	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
-=======
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
->>>>>>> origin/main
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 )
-
 func TestREST(t *testing.T) {
 	fakeClock := clocktesting.NewFakeClock(time.Now())
 	r := newRESTWithClock(fakeClock)
@@ -41,7 +32,6 @@ func TestREST(t *testing.T) {
 	assert.Equal(t, &statsv1alpha1.NodeLatencyStats{}, r.NewList())
 	assert.False(t, r.NamespaceScoped())
 }
-
 func TestRESTCreate(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
@@ -75,7 +65,6 @@ func TestRESTCreate(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClock := clocktesting.NewFakeClock(now)
@@ -87,7 +76,6 @@ func TestRESTCreate(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTGet(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
@@ -126,7 +114,6 @@ func TestRESTGet(t *testing.T) {
 			fakeClock := clocktesting.NewFakeClock(now)
 			r := newRESTWithClock(fakeClock)
 			ctx := context.Background()
-
 			_, err := r.Create(ctx, tt.summary, nil, nil)
 			require.NoError(t, err)
 			obj, err := r.Get(ctx, tt.nodeName, nil)
@@ -139,7 +126,6 @@ func TestRESTGet(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTDelete(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
@@ -178,7 +164,6 @@ func TestRESTDelete(t *testing.T) {
 			fakeClock := clocktesting.NewFakeClock(now)
 			r := newRESTWithClock(fakeClock)
 			ctx := context.Background()
-
 			_, err := r.Create(ctx, tt.summary, nil, nil)
 			require.NoError(t, err)
 			obj, deleted, err := r.Delete(ctx, tt.nodeName, nil, nil)
@@ -192,7 +177,6 @@ func TestRESTDelete(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTList(t *testing.T) {
 	now := time.Now()
 	fakeClock := clocktesting.NewFakeClock(now)
@@ -208,17 +192,14 @@ func TestRESTList(t *testing.T) {
 			},
 		},
 	}
-
 	r := newRESTWithClock(fakeClock)
 	ctx := context.Background()
-
 	_, err := r.Create(ctx, summary, nil, nil)
 	require.NoError(t, err)
 	objs, err := r.List(ctx, nil)
 	require.NoError(t, err)
 	assert.Equal(t, expectedObj, objs)
 }
-
 func TestRESTConvertToTable(t *testing.T) {
 	mockTime := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 	summary := &statsv1alpha1.NodeLatencyStats{
@@ -249,10 +230,8 @@ func TestRESTConvertToTable(t *testing.T) {
 		},
 	}
 	expectedCells := []interface{}{"node1", 2, "1.5ms", "2ms"}
-
 	r := NewREST()
 	ctx := context.Background()
-
 	_, err := r.Create(ctx, summary, nil, nil)
 	require.NoError(t, err)
 	obj, err := r.ConvertToTable(ctx, summary, nil)

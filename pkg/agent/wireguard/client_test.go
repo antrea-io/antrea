@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,40 +13,29 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package wireguard
-
 import (
 	"errors"
 	"net"
 	"sync"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
-=======
-	"antrea.io/antrea/pkg/agent/config"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
 )
-
 type fakeWireGuardClient struct {
 	peers map[wgtypes.Key]wgtypes.Peer
 }
-
 func (f *fakeWireGuardClient) Close() error {
 	return nil
 }
-
 func (f *fakeWireGuardClient) Devices() ([]*wgtypes.Device, error) {
 	return nil, nil
 }
-
 func (f *fakeWireGuardClient) Device(name string) (*wgtypes.Device, error) {
 	var res []wgtypes.Peer
 	for _, p := range f.peers {
@@ -57,7 +45,6 @@ func (f *fakeWireGuardClient) Device(name string) (*wgtypes.Device, error) {
 		Peers: res,
 	}, nil
 }
-
 func (f *fakeWireGuardClient) ConfigureDevice(name string, cfg wgtypes.Config) error {
 	for _, c := range cfg.Peers {
 		if c.Remove {
@@ -72,7 +59,6 @@ func (f *fakeWireGuardClient) ConfigureDevice(name string, cfg wgtypes.Config) e
 	}
 	return nil
 }
-
 func getFakeClient() *client {
 	return &client{
 		wgClient: &fakeWireGuardClient{},
@@ -84,7 +70,6 @@ func getFakeClient() *client {
 		peerPublicKeyByNodeName: &sync.Map{},
 	}
 }
-
 func Test_RemoveStalePeers(t *testing.T) {
 	pk1, _ := wgtypes.GeneratePrivateKey()
 	pk2, _ := wgtypes.GeneratePrivateKey()
@@ -154,7 +139,6 @@ func Test_RemoveStalePeers(t *testing.T) {
 		})
 	}
 }
-
 func Test_UpdatePeer(t *testing.T) {
 	pk1, _ := wgtypes.GeneratePrivateKey()
 	pk2, _ := wgtypes.GeneratePrivateKey()
@@ -333,7 +317,6 @@ func Test_UpdatePeer(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := getFakeClient()
@@ -354,7 +337,6 @@ func Test_UpdatePeer(t *testing.T) {
 		})
 	}
 }
-
 func Test_DeletePeer(t *testing.T) {
 	client := getFakeClient()
 	fc := &fakeWireGuardClient{
@@ -375,7 +357,6 @@ func Test_DeletePeer(t *testing.T) {
 		_, ok = client.peerPublicKeyByNodeName.Load("fake-node-1")
 		assert.True(t, ok)
 	})
-
 	t.Run("delete existing peer", func(tt *testing.T) {
 		err := client.DeletePeer("fake-node-1")
 		require.NoError(tt, err)
@@ -384,12 +365,10 @@ func Test_DeletePeer(t *testing.T) {
 		assert.False(t, ok)
 	})
 }
-
 func Test_New(t *testing.T) {
 	_, err := New(&config.NodeConfig{Name: "test"}, &config.WireGuardConfig{})
 	require.NoError(t, err)
 }
-
 func Test_Init(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -443,13 +422,11 @@ func Test_Init(t *testing.T) {
 			extraIPv6: net.ParseIP("0000:0000:0000:0000:0000:0000:0000:0000"),
 		},
 	}
-
 	client := getFakeClient()
 	client.gatewayConfig = &config.GatewayConfig{
 		IPv4: net.ParseIP("192.168.0.2"),
 		IPv6: net.ParseIP("fd12:ab:34:a001::11"),
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			linkAdd = func(link netlink.Link) error {
@@ -464,7 +441,6 @@ func Test_Init(t *testing.T) {
 			utilConfigureLinkAddresses = func(idx int, ipNets []*net.IPNet) error {
 				return tt.utilConfigErr
 			}
-
 			_, err := client.Init(tt.extraIPv4, tt.extraIPv6)
 			if tt.expectedErr != "" {
 				assert.Equal(t, tt.expectedErr, err.Error())

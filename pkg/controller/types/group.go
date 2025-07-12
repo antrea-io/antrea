@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package types
-
 import (
 	"fmt"
 	"net"
 	"sort"
 	"strings"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 )
-
 // GroupSelector describes how to select GroupMembers.
 type GroupSelector struct {
 	// The normalized name is calculated from Namespace, PodSelector, ExternalEntitySelector and NamespaceSelector.
@@ -54,12 +46,10 @@ type GroupSelector struct {
 	// If Namespace and NamespaceSelector both are unset, it selects the ExternalEntities in all the Namespaces.
 	// TODO: Add validation in API to not allow externalEntitySelector and podSelector in the same group.
 	ExternalEntitySelector labels.Selector
-
 	// This is a label selector which selects certain Node IPs. Within a group NodeSelector cannot be set together with
 	// other selectors: Namespace/NamespaceSelector/PodSelector/ExternalEntitySelector.
 	NodeSelector labels.Selector
 }
-
 // NewGroupSelector converts the podSelector, namespaceSelector, externalEntitySelector and nodeSelector
 // and NetworkPolicy Namespace to a networkpolicy.GroupSelector object.
 func NewGroupSelector(namespace string, podSelector, nsSelector, extEntitySelector, nodeSelector *metav1.LabelSelector) *GroupSelector {
@@ -77,17 +67,14 @@ func NewGroupSelector(namespace string, podSelector, nsSelector, extEntitySelect
 	} else {
 		groupSelector.NamespaceSelector, _ = metav1.LabelSelectorAsSelector(nsSelector)
 	}
-
 	if nodeSelector != nil {
 		groupSelector.NodeSelector, _ = metav1.LabelSelectorAsSelector(nodeSelector)
 	}
-
 	name := GenerateNormalizedName(groupSelector.Namespace, groupSelector.PodSelector,
 		groupSelector.NamespaceSelector, groupSelector.ExternalEntitySelector, groupSelector.NodeSelector)
 	groupSelector.NormalizedName = name
 	return &groupSelector
 }
-
 // GenerateNormalizedName generates a string, based on the selectors, in
 // the following format: "namespace=NamespaceName And podSelector=normalizedPodSelector".
 // Note: Namespace and nsSelector may or may not be set depending on the
@@ -111,7 +98,6 @@ func GenerateNormalizedName(namespace string, podSelector, nsSelector, eeSelecto
 	sort.Strings(normalizedName)
 	return strings.Join(normalizedName, " And ")
 }
-
 // Group describes a set of GroupMembers which can be referenced in Antrea-native NetworkPolicies. These Groups can
 // then be converted to AppliedToGroup or AddressGroup. Each internal Group corresponds to a single ClusterGroup,
 // i.e. unlike AppliedTo/AddressGroups created for standalone selectors, these internal Groups are not shared by

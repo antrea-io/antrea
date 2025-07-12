@@ -11,12 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package integration
-
 import (
 	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -25,22 +22,16 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
-
 // This file contains test cases for below basic scenarios:
 //  * Clean up MC Service and ServiceImport if no corresponding ResourceImport.
 //  * Clean up ResourceExport if no corresponding exported Service.
-
 var _ = Describe("Stale controller", func() {
 	svcSpec := corev1.ServiceSpec{
 		Ports: svcPorts,
@@ -64,7 +55,6 @@ var _ = Describe("Stale controller", func() {
 				},
 			},
 		}
-
 		resImport := &mcsv1alpha1.ResourceImport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "resourceimportexist",
@@ -79,7 +69,6 @@ var _ = Describe("Stale controller", func() {
 		}
 		err := k8sClient.Create(ctx, resImport, &client.CreateOptions{})
 		Expect(err == nil).Should(BeTrue())
-
 		svcToDelete := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "antrea-mc-nginx",
@@ -90,7 +79,6 @@ var _ = Describe("Stale controller", func() {
 			},
 			Spec: svcSpec,
 		}
-
 		svcImpToDelete := &k8smcsv1alpha1.ServiceImport{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: testNSForStale,
@@ -107,12 +95,10 @@ var _ = Describe("Stale controller", func() {
 				},
 			},
 		}
-
 		svcToDeleteNamespacedName := types.NamespacedName{
 			Namespace: svcToDelete.Namespace,
 			Name:      svcToDelete.Name,
 		}
-
 		svcNoDelete := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "nginx-no-delete",
@@ -120,7 +106,6 @@ var _ = Describe("Stale controller", func() {
 			},
 			Spec: svcSpec,
 		}
-
 		mcSvcNoDelete := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "antrea-mc-nginxnodelete",
@@ -131,7 +116,6 @@ var _ = Describe("Stale controller", func() {
 			},
 			Spec: svcSpec,
 		}
-
 		Expect(k8sClient.Create(ctx, svcToDelete)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcImpToDelete)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcNoDelete)).Should(Succeed())
@@ -142,26 +126,22 @@ var _ = Describe("Stale controller", func() {
 		Expect(err == nil || apierrors.IsAlreadyExists(err)).Should(BeTrue())
 		err = k8sClient.Create(ctx, svcImpNoDelete)
 		Expect(err == nil || apierrors.IsAlreadyExists(err)).Should(BeTrue())
-
 		Eventually(func() bool {
 			latestSvc := &corev1.Service{}
 			err := k8sClient.Get(ctx, svcToDeleteNamespacedName, latestSvc)
 			return apierrors.IsNotFound(err)
 		}, timeout, interval).Should(BeTrue())
-
 		Eventually(func() bool {
 			latestSvcImp := &k8smcsv1alpha1.ServiceImport{}
 			err := k8sClient.Get(ctx, svcToDeleteNamespacedName, latestSvcImp)
 			return apierrors.IsNotFound(err)
 		}, timeout, interval).Should(BeTrue())
-
 		Eventually(func() bool {
 			svcList := &corev1.ServiceList{}
 			err = k8sClient.List(ctx, svcList, &client.ListOptions{Namespace: testNSForStale})
 			Expect(err).ToNot(HaveOccurred())
 			return len(svcList.Items) == 2
 		}, timeout, interval).Should(BeTrue())
-
 		Eventually(func() bool {
 			svcImpList := &k8smcsv1alpha1.ServiceImportList{}
 			err = k8sClient.List(ctx, svcImpList, &client.ListOptions{Namespace: testNSForStale})
@@ -169,7 +149,6 @@ var _ = Describe("Stale controller", func() {
 			return len(svcImpList.Items) == 1
 		}, timeout, interval).Should(BeTrue())
 	})
-
 	It("Should clean up ResourceExport if no corresponding ServiceExport in member cluster", func() {
 		By("By create some ResourceExports without ServiceExport in local cluster")
 		svcResExpFromA := &mcsv1alpha1.ResourceExport{
@@ -194,14 +173,12 @@ var _ = Describe("Stale controller", func() {
 				},
 			},
 		}
-
 		svcExp := &k8smcsv1alpha1.ServiceExport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "nginx",
 				Namespace: testNSForStale,
 			},
 		}
-
 		svcResExpToBeDeletedFromA := &mcsv1alpha1.ResourceExport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-a-testns-stale-busybus-service",
@@ -224,7 +201,6 @@ var _ = Describe("Stale controller", func() {
 				},
 			},
 		}
-
 		svcResExpFromB := &mcsv1alpha1.ResourceExport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-b-testns-stale-nginx-service",
@@ -247,12 +223,10 @@ var _ = Describe("Stale controller", func() {
 				},
 			},
 		}
-
 		Expect(k8sClient.Create(ctx, svcExp)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcResExpFromA)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcResExpToBeDeletedFromA)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcResExpFromB)).Should(Succeed())
-
 		Eventually(func() bool {
 			resExpList := &mcsv1alpha1.ResourceExportList{}
 			err := k8sClient.List(ctx, resExpList, &client.ListOptions{Namespace: LeaderNamespace})

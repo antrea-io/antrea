@@ -11,40 +11,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package bgproute
-
 import (
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/utils/net"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	bgpcontroller "antrea.io/antrea/v2/pkg/agent/controller/bgp"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/bgp"
-	bgpcontroller "antrea.io/antrea/pkg/agent/controller/bgp"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/bgp"
+	bgpcontroller "antrea.io/antrea/v2/pkg/agent/controller/bgp"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 const (
 	namespaceDefault = "default"
 	ipv4Suffix       = "/32"
 	ipv6Suffix       = "/128"
 )
-
 var (
 	podIPv4CIDR           = "10.10.0.0/24"
 	podIPv4CIDRRoute      = bgp.Route{Prefix: podIPv4CIDR}
@@ -56,12 +47,10 @@ var (
 	loadBalancerIPv6Route = bgp.Route{Prefix: ipStrToPrefix(loadBalancerIPv6)}
 	egressIPv6            = "fec0::192:168:77:200"
 	egressIPv6Route       = bgp.Route{Prefix: ipStrToPrefix(egressIPv6)}
-
 	ipv4ClusterIPName    = "clusterip-4"
 	ipv4EgressName       = "egress-4"
 	ipv6LoadBalancerName = "loadbalancer-6"
 	ipv6EgressName       = "egress-6"
-
 	allRoutes = map[bgp.Route]bgpcontroller.RouteMetadata{
 		clusterIPv4Route:      {Type: bgpcontroller.ServiceClusterIP, K8sObjRef: getServiceName(ipv4ClusterIPName)},
 		egressIPv4Route:       {Type: bgpcontroller.EgressIP, K8sObjRef: ipv4EgressName},
@@ -70,7 +59,6 @@ var (
 		podIPv4CIDRRoute:      {Type: bgpcontroller.NodeIPAMPodCIDR},
 	}
 )
-
 func TestBGPRouteQuery(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
@@ -210,7 +198,6 @@ func TestBGPRouteQuery(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -219,14 +206,11 @@ func TestBGPRouteQuery(t *testing.T) {
 				tt.expectedCalls(q)
 			}
 			handler := HandleFunc(q)
-
 			req, err := http.NewRequest(http.MethodGet, tt.url, nil)
 			require.NoError(t, err)
-
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, req)
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
-
 			if tt.expectedStatus == http.StatusOK {
 				var received []apis.BGPRouteResponse
 				err = json.Unmarshal(recorder.Body.Bytes(), &received)
@@ -236,11 +220,9 @@ func TestBGPRouteQuery(t *testing.T) {
 		})
 	}
 }
-
 func getServiceName(name string) string {
 	return namespaceDefault + "/" + name
 }
-
 func ipStrToPrefix(ipStr string) string {
 	if net.IsIPv4String(ipStr) {
 		return ipStr + ipv4Suffix

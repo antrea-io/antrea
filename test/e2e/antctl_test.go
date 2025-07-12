@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"encoding/json"
@@ -22,39 +20,30 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
-=======
-	"antrea.io/antrea/pkg/antctl"
-	"antrea.io/antrea/pkg/antctl/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
 )
-
 type cmdAndReturnCode struct {
 	args               []string
 	expectedReturnCode int
 }
-
 // TestAntctl is the top-level test which contains all subtests for
 // Antctl related test cases as they can share setup, teardown.
 func TestAntctl(t *testing.T) {
 	skipIfNotRequired(t, "mode-irrelevant")
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	// This is used to determine the Antrea container image being tested. We will use the same
 	// image when creating a Pod to run antctl.
 	// Note that this is the Linux image, so we will always schedule the antctl Pod on the
@@ -62,13 +51,11 @@ func TestAntctl(t *testing.T) {
 	ds, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{})
 	require.NoError(t, err, "Error when getting antrea DaemonSet")
 	antreaImage := ds.Spec.Template.Spec.Containers[0].Image
-
 	// This ServiceAccount is granted the antctl ClusterRole and will be used for antctl test
 	// Pods. We do not use the "default" ServiceAccount for the test Namespace, as we do not
 	// want other test Pods to be granted the antctl ClusterRole.
 	antctlServiceAccountName := randName("antctl-antrea-e2e-")
 	createAntctlServiceAccount(t, data, antctlServiceAccountName)
-
 	t.Run("testAntctlAgentLocalAccess", func(t *testing.T) {
 		testAntctlAgentLocalAccess(t, data)
 	})
@@ -82,12 +69,10 @@ func TestAntctl(t *testing.T) {
 		testAntctlProxy(t, data, antctlServiceAccountName, antreaImage)
 	})
 }
-
 // antctlOutput is a helper function for generating antctl outputs.
 func antctlOutput(stdout, stderr string) string {
 	return fmt.Sprintf("antctl stdout:\n%s\nantctl stderr:\n%s", stdout, stderr)
 }
-
 // runAntctl runs antctl commands on antrea Pods, the controller, or agents.
 func runAntctl(podName string, cmds []string, data *TestData) (string, string, error) {
 	var containerName string
@@ -112,7 +97,6 @@ func runAntctl(podName string, cmds []string, data *TestData) (string, string, e
 	}
 	return stdout, stderr, err
 }
-
 // testAntctlAgentLocalAccess ensures antctl is accessible in an agent Pod.
 func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 	podName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
@@ -123,7 +107,6 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 		args := []string{"antctl"}
 		args = append(args, c...)
 		t.Logf("args: %s", args)
-
 		cmd := strings.Join(args, " ")
 		t.Run(cmd, func(t *testing.T) {
 			stdout, stderr, err := runAntctl(podName, args, data)
@@ -133,7 +116,6 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 		})
 	}
 }
-
 func runAntctlPod(t *testing.T, data *TestData, podName string, antctlServiceAccountName string, antctlImage string, covDir string) {
 	b := NewPodBuilder(podName, data.testNamespace, antctlImage).WithServiceAccountName(antctlServiceAccountName).
 		WithContainerName("antctl").WithCommand([]string{"sleep", "3600"}).
@@ -147,21 +129,17 @@ func runAntctlPod(t *testing.T, data *TestData, podName string, antctlServiceAcc
 		data.DeletePod(data.testNamespace, podName)
 	})
 }
-
 func runAntctlCommandFromPod(data *TestData, podName string, cmd []string) (string, string, error) {
 	return data.RunCommandFromPod(data.testNamespace, podName, "antctl", cmd)
 }
-
 // testAntctlControllerRemoteAccess ensures antctl is able to be run outside of
 // the kubernetes cluster. It uses the antctl client binary copied from the controller
 // Pod.
 func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServiceAccountName string, antctlImage string) {
 	const podName = "antctl"
 	const covDir = "/tmp/coverage"
-
 	runAntctlPod(t, data, podName, antctlServiceAccountName, antctlImage, covDir)
 	require.NoError(t, data.podWaitForRunning(30*time.Second, podName, data.testNamespace), "antctl Pod not in the Running state")
-
 	testCmds := []cmdAndReturnCode{}
 	// Add all controller commands.
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
@@ -175,7 +153,6 @@ func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServic
 			expectedReturnCode: 1,
 		},
 	)
-
 	for _, tc := range testCmds {
 		cmd := tc.args
 		t.Run(strings.Join(cmd, " "), func(t *testing.T) {
@@ -188,7 +165,6 @@ func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServic
 		})
 	}
 }
-
 // testAntctlVerboseMode ensures no unexpected outputs during the execution of
 // the antctl client.
 func testAntctlVerboseMode(t *testing.T, data *TestData) {
@@ -218,7 +194,6 @@ func testAntctlVerboseMode(t *testing.T, data *TestData) {
 		})
 	}
 }
-
 // runAntctProxy runs the antctl reverse proxy as a host network Podon the provided Node; to stop the
 // proxy call the returned function.
 func runAntctProxy(
@@ -242,7 +217,6 @@ func runAntctProxy(
 		// Retry until AntreaAgentInfo is updated by Antrea Agent.
 		require.NoError(t, data.checkAntreaAgentInfo(5*time.Second, 2*time.Minute, agentNodeName))
 	}
-
 	b := NewPodBuilder(podName, data.testNamespace, containerImage).WithServiceAccountName(serviceAccountName).
 		WithContainerName(containerName).WithCommand(proxyCmd).
 		OnNode(controlPlaneNodeName()).InHostNetwork().
@@ -255,17 +229,14 @@ func runAntctProxy(
 				},
 			},
 		})
-
 	t.Logf("Starting antctl proxy")
 	require.NoError(t, b.Create(data), "error when creating antctl proxy Pod '%s'", podName)
-
 	t.Cleanup(func() {
 		t.Logf("Stopping antctl proxy")
 		if err := data.DeletePodAndWait(defaultTimeout, podName, data.testNamespace); err != nil {
 			t.Errorf("Error when stopping antctl proxy: %v", err)
 		}
 	})
-
 	if err := data.podWaitForReady(30*time.Second, podName, data.testNamespace); err != nil {
 		logs, err := data.GetPodLogs(context.TODO(), data.testNamespace, podName, "")
 		if err != nil {
@@ -274,18 +245,15 @@ func runAntctProxy(
 		require.Fail(t, "proxy not ready", "antctl proxy Pod '%s' never became ready:\n%s", podName, logs)
 	}
 }
-
 // testAntctlProxy validates "antctl proxy" for both the Antrea Controller and Agent API.
 func testAntctlProxy(t *testing.T, data *TestData, antctlServiceAccountName string, antctlImage string) {
 	const testPodName = "toolbox"
 	const testContainerName = "toolbox"
 	const proxyContainerName = "proxy"
 	const proxyPort = 8001
-
 	require.NoError(t, NewPodBuilder(testPodName, data.testNamespace, ToolboxImage).WithContainerName(testContainerName).OnNode(controlPlaneNodeName()).InHostNetwork().Create(data))
 	defer data.DeletePodAndWait(defaultTimeout, testPodName, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, testPodName, data.testNamespace), "test Pod not in the Running state")
-
 	// getEndpointStatus will return "Success", "Failure", or the empty string when out is not a
 	// marshalled metav1.Status object.
 	getEndpointStatus := func(out []byte) string {
@@ -296,7 +264,6 @@ func testAntctlProxy(t *testing.T, data *TestData, antctlServiceAccountName stri
 		}
 		return status.Status
 	}
-
 	checkEndpointAccess := func(address string, endpoint string, checkStatus bool) error {
 		t.Logf("Checking for access to endpoint '/%s' through antctl proxy", endpoint)
 		cmd := []string{"curl", fmt.Sprintf("%s/%s", net.JoinHostPort(address, fmt.Sprint(proxyPort)), endpoint)}
@@ -309,7 +276,6 @@ func testAntctlProxy(t *testing.T, data *TestData, antctlServiceAccountName stri
 		}
 		return nil
 	}
-
 	addressV4 := "127.0.0.1"
 	addressV6 := "::1"
 	testcases := []struct {
@@ -323,7 +289,6 @@ func testAntctlProxy(t *testing.T, data *TestData, antctlServiceAccountName stri
 		{"ControllerIPv6", "", 6, addressV6},
 		{"AgentIPv6", controlPlaneNodeName(), 6, addressV6},
 	}
-
 	for idx, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			proxyPodName := fmt.Sprintf("antctl-proxy-%d", idx)
@@ -337,7 +302,6 @@ func testAntctlProxy(t *testing.T, data *TestData, antctlServiceAccountName stri
 		})
 	}
 }
-
 func createAntctlServiceAccount(t *testing.T, data *TestData, name string) {
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -347,12 +311,10 @@ func createAntctlServiceAccount(t *testing.T, data *TestData, name string) {
 	}
 	_, err := data.clientset.CoreV1().ServiceAccounts(data.testNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
 	require.NoErrorf(t, err, "failed to create ServiceAccount '%s/%s' for antctl test Pods", data.testNamespace, name)
-
 	t.Cleanup(func() {
 		err := data.clientset.CoreV1().ServiceAccounts(data.testNamespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
 		assert.NoError(t, err, "Error when deleting ServiceAccount")
 	})
-
 	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name, // we use the same name as for the ServiceAccount
@@ -372,7 +334,6 @@ func createAntctlServiceAccount(t *testing.T, data *TestData, name string) {
 	}
 	_, err = data.clientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), clusterRoleBinding, metav1.CreateOptions{})
 	require.NoErrorf(t, err, "Failed to create ClusterRoleBinding to grant antctl ClusterRole to ServiceAccount '%s/%s'", data.testNamespace, name)
-
 	t.Cleanup(func() {
 		err := data.clientset.RbacV1().ClusterRoleBindings().Delete(context.TODO(), name, metav1.DeleteOptions{})
 		assert.NoError(t, err, "Error when deleting ClusterRoleBinding")

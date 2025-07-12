@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package podinterface
-
 import (
 	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
 	queriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
-	queriertest "antrea.io/antrea/pkg/agent/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	queriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
 )
-
 // There are 3 pod-interfaces:
 // Two pod-interfaces have same podName: podNames[0] which are in namespaceA and namespaceB.
 // Another pod-interface with podName: podNames[1] is in namespaceA.
@@ -45,24 +37,20 @@ var ipStrs = []string{
 	"192.168.0.1",
 	"192.168.0.2",
 }
-
 var macStrs = []string{
 	"00:00:00:00:00:00",
 	"00:00:00:00:00:01",
 	"00:00:00:00:00:02",
 }
-
 var macs = []net.HardwareAddr{
 	parseMAC(macStrs[0]),
 	parseMAC(macStrs[1]),
 	parseMAC(macStrs[2]),
 }
-
 var podNames = []string{
 	"pod0",
 	"pod1",
 }
-
 var responses = []apis.PodInterfaceResponse{
 	{
 		PodName:       podNames[0],
@@ -95,7 +83,6 @@ var responses = []apis.PodInterfaceResponse{
 		ContainerID:   "containerid2",
 	},
 }
-
 var testInterfaceConfigs = []*interfacestore.InterfaceConfig{
 	{
 		InterfaceName: "interface0",
@@ -140,12 +127,10 @@ var testInterfaceConfigs = []*interfacestore.InterfaceConfig{
 		},
 	},
 }
-
 func parseMAC(mac string) net.HardwareAddr {
 	res, _ := net.ParseMAC(mac)
 	return res
 }
-
 func TestPodInterfaceQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testcases := map[string]struct {
@@ -174,22 +159,17 @@ func TestPodInterfaceQuery(t *testing.T) {
 			expectedContent: []apis.PodInterfaceResponse{},
 		},
 	}
-
 	for k, tc := range testcases {
 		i := interfacestoretest.NewMockInterfaceStore(ctrl)
 		i.EXPECT().GetInterfacesByType(interfacestore.ContainerInterface).Return(testInterfaceConfigs).AnyTimes()
-
 		q := queriertest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetInterfaceStore().Return(i).AnyTimes()
 		handler := HandleFunc(q)
-
 		req, err := http.NewRequest(http.MethodGet, tc.query, nil)
 		assert.Nil(t, err)
-
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, req)
 		assert.Equal(t, tc.expectedStatus, recorder.Code, k)
-
 		if tc.expectedStatus == http.StatusOK {
 			var received []apis.PodInterfaceResponse
 			err = json.Unmarshal(recorder.Body.Bytes(), &received)
@@ -198,7 +178,6 @@ func TestPodInterfaceQuery(t *testing.T) {
 		}
 	}
 }
-
 func TestPodInterfaceListQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testcases := map[string]struct {
@@ -222,22 +201,17 @@ func TestPodInterfaceListQuery(t *testing.T) {
 			expectedContent: []apis.PodInterfaceResponse{responses[0], responses[1], responses[2]},
 		},
 	}
-
 	for k, tc := range testcases {
 		i := interfacestoretest.NewMockInterfaceStore(ctrl)
 		i.EXPECT().GetInterfacesByType(interfacestore.ContainerInterface).Return(testInterfaceConfigs).AnyTimes()
-
 		q := queriertest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetInterfaceStore().Return(i).AnyTimes()
 		handler := HandleFunc(q)
-
 		req, err := http.NewRequest(http.MethodGet, tc.query, nil)
 		assert.Nil(t, err)
-
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, req)
 		assert.Equal(t, tc.expectedStatus, recorder.Code, k)
-
 		if tc.expectedStatus == http.StatusOK {
 			var received []apis.PodInterfaceResponse
 			err = json.Unmarshal(recorder.Body.Bytes(), &received)

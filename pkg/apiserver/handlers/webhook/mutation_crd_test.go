@@ -11,36 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package webhook
-
 import (
 	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	admv1 "k8s.io/api/admission/v1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
-=======
-	"antrea.io/antrea/pkg/controller/networkpolicy"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
 )
-
 var (
 	ar = &admv1.AdmissionReview{
 		Request: &admv1.AdmissionRequest{
 			UID: "uid",
 		},
 	}
-
 	requestBody, _ = json.Marshal(ar)
 )
-
 func TestHandleMutationNetworkPolicy(t *testing.T) {
 	testCases := []struct {
 		name               string
@@ -65,7 +55,6 @@ func TestHandleMutationNetworkPolicy(t *testing.T) {
 			contentType:        contentTypeJson,
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			resp := httptest.NewRecorder()

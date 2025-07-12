@@ -11,34 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"encoding/binary"
 	"net"
 	"testing"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	mocks "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	mocks "antrea.io/antrea/pkg/ovs/openflow/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	mocks "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
 )
-
 func TestGetRejectType(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -144,7 +136,6 @@ func TestGetRejectType(t *testing.T) {
 		})
 	}
 }
-
 func Test_parseFlexibleIPAMStatus(t *testing.T) {
 	ctZone := uint16(1)
 	ctZoneBytes := make([]byte, 8)
@@ -242,7 +233,6 @@ func Test_parseFlexibleIPAMStatus(t *testing.T) {
 		})
 	}
 }
-
 func TestGetRejectOFPorts(t *testing.T) {
 	unsetPort := uint32(0)
 	tunPort := uint32(1)
@@ -388,7 +378,6 @@ func TestGetRejectOFPorts(t *testing.T) {
 		})
 	}
 }
-
 func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 	openflow.InitMockTables(
 		map[*openflow.Table]uint8{

@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package monitor
-
 import (
 	"context"
 	"errors"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -31,10 +28,8 @@ import (
 	cgtesting "k8s.io/client-go/testing"
 	fakepolicyversioned "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/fake"
 	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/controller/grouping"
@@ -42,23 +37,19 @@ import (
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	"antrea.io/antrea/v2/pkg/controller/querier"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/controller/grouping"
-	"antrea.io/antrea/pkg/controller/labelidentity"
-	"antrea.io/antrea/pkg/controller/networkpolicy"
-	"antrea.io/antrea/pkg/controller/networkpolicy/store"
-	"antrea.io/antrea/pkg/controller/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	"antrea.io/antrea/v2/pkg/controller/labelidentity"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/v2/pkg/controller/querier"
 )
-
 const (
 	informerDefaultResync = 12 * time.Hour
 )
-
 type fakeController struct {
 	controllerMonitor  *controllerMonitor
 	crdClient          *fakeclientset.Clientset
@@ -66,7 +57,6 @@ type fakeController struct {
 	informerFactory    informers.SharedInformerFactory
 	crdInformerFactory crdinformers.SharedInformerFactory
 }
-
 func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 	client := fake.NewSimpleClientset()
 	policyClient := fakepolicyversioned.NewSimpleClientset()
@@ -85,14 +75,12 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 	cgInformer := crdInformerFactory.Crd().V1beta1().ClusterGroups()
 	grpInformer := crdInformerFactory.Crd().V1beta1().Groups()
 	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
-
 	addressGroupStore := store.NewAddressGroupStore()
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	networkPolicyStore := store.NewNetworkPolicyStore()
 	groupStore := store.NewGroupStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	labelIdentityIndex := labelidentity.NewLabelIdentityIndex()
-
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
@@ -113,11 +101,9 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 		networkPolicyStore,
 		groupStore,
 		false)
-
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, 10349)
 	externalNodeEnabled := true
 	controllerMonitor := NewControllerMonitor(crdClient, nodeInformer, externalNodeInformer, controllerQuerier, externalNodeEnabled)
-
 	return &fakeController{
 		controllerMonitor,
 		crdClient,
@@ -126,14 +112,12 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 		crdInformerFactory,
 	}
 }
-
 func initController(controller *fakeController, stopCh chan struct{}) {
 	controller.informerFactory.Start(stopCh)
 	controller.crdInformerFactory.Start(stopCh)
 	controller.informerFactory.WaitForCacheSync(stopCh)
 	controller.crdInformerFactory.WaitForCacheSync(stopCh)
 }
-
 func TestSyncExternalNode(t *testing.T) {
 	ctx := context.Background()
 	en := &v1alpha1.ExternalNode{
@@ -208,7 +192,6 @@ func TestSyncExternalNode(t *testing.T) {
 		})
 	}
 }
-
 func TestSyncNode(t *testing.T) {
 	ctx := context.Background()
 	node := &v1.Node{
@@ -283,7 +266,6 @@ func TestSyncNode(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteAgentCRD(t *testing.T) {
 	ctx := context.Background()
 	testAgentCRD := &v1beta1.AntreaAgentInfo{
@@ -347,7 +329,6 @@ func TestDeleteAgentCRD(t *testing.T) {
 		})
 	}
 }
-
 func TestCreateAgentCRD(t *testing.T) {
 	ctx := context.Background()
 	testAgentCRD := &v1beta1.AntreaAgentInfo{
@@ -416,7 +397,6 @@ func TestCreateAgentCRD(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteStaleAgentCRD(t *testing.T) {
 	ctx := context.Background()
 	tc := []struct {
@@ -495,7 +475,6 @@ func TestDeleteStaleAgentCRD(t *testing.T) {
 		})
 	}
 }
-
 func TestSyncControllerCRD(t *testing.T) {
 	ctx := context.Background()
 	crdName := v1beta1.AntreaControllerInfoResourceName
@@ -631,7 +610,6 @@ func TestSyncControllerCRD(t *testing.T) {
 		assert.Nil(t, controller.controllerMonitor.controllerCRD)
 	})
 }
-
 func TestEnqueueNode(t *testing.T) {
 	node := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -647,7 +625,6 @@ func TestEnqueueNode(t *testing.T) {
 	key, _ := controller.controllerMonitor.nodeQueue.Get()
 	assert.Equal(t, expectedkey, key)
 }
-
 func TestEnqueueExternalNode(t *testing.T) {
 	externalNode := &v1alpha1.ExternalNode{
 		ObjectMeta: metav1.ObjectMeta{
@@ -663,7 +640,6 @@ func TestEnqueueExternalNode(t *testing.T) {
 	key, _ := controller.controllerMonitor.externalNodeQueue.Get()
 	assert.Equal(t, expectedkey, key)
 }
-
 func TestAntreaAgentInfoAPIAvailable(t *testing.T) {
 	for _, tc := range []struct {
 		name         string

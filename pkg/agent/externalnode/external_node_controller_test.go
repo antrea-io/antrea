@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package externalnode
-
 import (
 	"fmt"
 	"net"
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,12 +25,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdv1alpha1informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
@@ -42,22 +37,19 @@ import (
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha1informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
-	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1alpha1informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
-
 var (
 	ifaceName1      = "intf1"
 	ifaceName2      = "intf2"
@@ -106,7 +98,6 @@ var (
 		},
 	}
 )
-
 func TestCreateOVSPortsAndFlowsFailure(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -114,7 +105,6 @@ func TestCreateOVSPortsAndFlowsFailure(t *testing.T) {
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(controller)
 	c := newExternalNodeController(t, controller, mockOVSBridgeClient, mockOFClient, mockOVSCtlClient, mockIfaceStore)
-
 	iface := &net.Interface{
 		Index:        1,
 		HardwareAddr: net.HardwareAddr{0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
@@ -136,7 +126,6 @@ func TestCreateOVSPortsAndFlowsFailure(t *testing.T) {
 	}
 	defer mockRenameInterface(nil)()
 	defer mockGetInterfaceConfig([]mockGetInterfaceConfigParam{{iface, []*net.IPNet{cidr1}, nil}})()
-
 	mockOVSBridgeClient.EXPECT().CreatePort(uplinkName, uplinkName, map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
 	}).Return(uplinkUUID, nil)
@@ -149,7 +138,6 @@ func TestCreateOVSPortsAndFlowsFailure(t *testing.T) {
 	assert.Equal(t, ovsconfig.NewTransactionError(fmt.Errorf("interface %s not found", hostIfName), false), err)
 	assert.Nil(t, hostIFConfig)
 }
-
 func TestUpdateOVSPortsData(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -190,7 +178,6 @@ func TestUpdateOVSPortsData(t *testing.T) {
 	assert.Equal(t, expectedIface, iface)
 	assert.NoError(t, err)
 }
-
 func TestParseProtocol(t *testing.T) {
 	for _, tt := range []struct {
 		name           string
@@ -229,11 +216,9 @@ func TestParseProtocol(t *testing.T) {
 		})
 	}
 }
-
 func TestParseHostInterfaceConfig(t *testing.T) {
 	randomUUID := uuid.NewString()
 	portUUID := uuid.NewString()
-
 	for _, tt := range []struct {
 		name                  string
 		portData              *ovsconfig.OVSPortData
@@ -310,7 +295,6 @@ func TestParseHostInterfaceConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestReconcile(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -318,7 +302,6 @@ func TestReconcile(t *testing.T) {
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(controller)
 	c := newExternalNodeController(t, controller, mockOVSBridgeClient, mockOFClient, mockOVSCtlClient, mockIfaceStore)
-
 	mockIfaceStore.EXPECT().GetInterfacesByType(interfacestore.ExternalEntityInterface).Return(
 		[]*interfacestore.InterfaceConfig{&intf1, &intf2},
 	)
@@ -344,7 +327,6 @@ func TestReconcile(t *testing.T) {
 	mockOFClient.EXPECT().InstallPolicyBypassFlows(binding.ProtocolUDP, cidrEgress, uint16(244), false).Times(1)
 	c.reconcile()
 }
-
 func TestAddExternalNode(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -393,7 +375,6 @@ func TestAddExternalNode(t *testing.T) {
 	c.addExternalNode(externalNode)
 	assert.Equal(t, externalNode, c.syncedExternalNode)
 }
-
 func TestEnqueueExternalNodeUpdate(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -442,7 +423,6 @@ func TestEnqueueExternalNodeUpdate(t *testing.T) {
 		})
 	}
 }
-
 func newExternalNodeController(t *testing.T, controller *gomock.Controller, mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient, mockOFClient *openflowtest.MockClient, mockOVSCtlClient *ovsctltest.MockOVSCtlClient, mockIfaceStore *interfacestoretest.MockInterfaceStore) *ExternalNodeController {
 	mockOVSBridgeClient.EXPECT().GetBridgeName().Times(1)
 	localExternalNodeInformer := crdv1alpha1informers.NewExternalNodeInformer(
@@ -464,7 +444,6 @@ func newExternalNodeController(t *testing.T, controller *gomock.Controller, mock
 	require.NoError(t, err)
 	return c
 }
-
 func TestGetHostInterfaceName(t *testing.T) {
 	for _, tt := range []struct {
 		name                       string
@@ -514,10 +493,8 @@ func TestGetHostInterfaceName(t *testing.T) {
 		})
 	}
 }
-
 func TestGetOVSAttachInfo(t *testing.T) {
 	uplinkUUID := uuid.NewString()
-
 	ips := []string{"10.20.30.40"}
 	info := GetOVSAttachInfo(uplinkName, uplinkUUID, entityName, entityNamespace, ips)
 	expectedInfo := map[string]interface{}{
@@ -530,7 +507,6 @@ func TestGetOVSAttachInfo(t *testing.T) {
 	}
 	assert.Equal(t, expectedInfo, info)
 }
-
 func mockRenameInterface(renameIntefaceErr error) func() {
 	originalRenameInterface := renameInterface
 	renameInterface = func(from, to string) error {
@@ -540,12 +516,10 @@ func mockRenameInterface(renameIntefaceErr error) func() {
 		renameInterface = originalRenameInterface
 	}
 }
-
 type mockGetIPNetDeviceFromIPParam struct {
 	link                    *net.Interface
 	getIPNetDeviceFromIPErr error
 }
-
 func mockGetIPNetDeviceFromIP(params []mockGetIPNetDeviceFromIPParam) func() {
 	originalGetIPNetDeviceFromIP := getIPNetDeviceFromIP
 	counter := 0
@@ -558,13 +532,11 @@ func mockGetIPNetDeviceFromIP(params []mockGetIPNetDeviceFromIPParam) func() {
 		getIPNetDeviceFromIP = originalGetIPNetDeviceFromIP
 	}
 }
-
 type mockGetInterfaceConfigParam struct {
 	iface                 *net.Interface
 	addrs                 []*net.IPNet
 	getInterfaceConfigErr error
 }
-
 func mockGetInterfaceConfig(ifaceConfigs []mockGetInterfaceConfigParam) func() {
 	originalGetInterfaceConfig := getInterfaceConfig
 	counter := 0

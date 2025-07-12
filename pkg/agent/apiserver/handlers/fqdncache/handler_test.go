@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package fqdncache
-
 import (
 	"encoding/json"
 	"net"
@@ -23,24 +21,18 @@ import (
 	"regexp"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/querier"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/querier"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/querier"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 func TestFqdnCacheQuery(t *testing.T) {
 	expirationTime := time.Now().Add(1 * time.Hour).UTC()
 	tests := []struct {
@@ -108,7 +100,6 @@ func TestFqdnCacheQuery(t *testing.T) {
 		})
 	}
 }
-
 func TestNewFilterFromURLQuery(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -144,7 +135,6 @@ func TestNewFilterFromURLQuery(t *testing.T) {
 			expectedError:  "missing closing )",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := newFilterFromURLQuery(tt.queryParams)

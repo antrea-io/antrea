@@ -11,21 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"reflect"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 // keyAndSpanSelectFunc returns whether the provided selectors matches the key and/or the nodeNames.
 func keyAndSpanSelectFunc(selectors *storage.Selectors, key string, obj interface{}) bool {
 	// If Key is present in selectors, the provided key must match it.
@@ -40,7 +33,6 @@ func keyAndSpanSelectFunc(selectors *storage.Selectors, key string, obj interfac
 	}
 	return true
 }
-
 // isSelected determines if the previous and the current version of an object should be selected by the given selectors.
 func isSelected(key string, prevObj, currObj interface{}, selectors *storage.Selectors, isInitEvent bool) (bool, bool) {
 	// We have filtered out init events that we are not interested in, so the current object must be selected.

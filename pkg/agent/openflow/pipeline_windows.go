@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,24 +13,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
-
-<<<<<<< HEAD
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 // matchUplinkInPortInClassifierTable matches dstIP field to prevent unintended forwarding when promiscuous mode is enabled on Windows.
 func (f *featurePodConnectivity) matchUplinkInPortInClassifierTable(flowBuilder binding.FlowBuilder) binding.FlowBuilder {
 	return flowBuilder.MatchInPort(f.uplinkPort).MatchProtocol(binding.ProtocolIP).MatchDstIP(f.nodeConfig.NodeTransportIPv4Addr.IP)
 }
-
 // hostBridgeUplinkFlows generates the flows that forward traffic between the bridge local port and the uplink port to
 // support the host traffic with outside.
 func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
@@ -72,13 +63,11 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
 	}
 	return flows
 }
-
 func (f *featurePodConnectivity) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr,
 	remoteGatewayMAC net.HardwareAddr,
 	peerIP net.IP,
 	peerPodCIDR *net.IPNet) []binding.Flow {
 	var flows []binding.Flow
-
 	if f.networkConfig.NeedsDirectRoutingToPeer(peerIP, f.nodeConfig.NodeTransportIPv4Addr) && remoteGatewayMAC != nil {
 		ipProtocol := getIPProtocol(peerIP)
 		cookieID := f.cookieAllocator.Request(f.category).Raw()

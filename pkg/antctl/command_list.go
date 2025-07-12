@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package antctl
-
 import (
 	"fmt"
 	"io"
 	"math"
 	"os"
 	"strings"
-
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
-=======
-	"antrea.io/antrea/pkg/antctl/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
 )
-
 // commandList organizes commands definitions.
 // It is the protocol for a pair of antctl client and server.
 type commandList struct {
@@ -39,14 +31,12 @@ type commandList struct {
 	rawCommands []rawCommand
 	codec       serializer.CodecFactory
 }
-
 func (cl *commandList) applyPersistentFlagsToRoot(root *cobra.Command) {
 	root.PersistentFlags().BoolP("verbose", "v", false, "enable verbose output")
 	root.PersistentFlags().StringP("kubeconfig", "k", "", "absolute path to the kubeconfig file")
 	root.PersistentFlags().DurationP("timeout", "t", 0, "time limit of the execution of the command")
 	root.PersistentFlags().StringP("server", "s", "", "address and port of the API server, taking precedence over the default endpoint and the one set in kubeconfig")
 }
-
 // applyToRootCommand is the "internal" version of ApplyToRootCommand, used for testing
 func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClient, out io.Writer) {
 	for _, groupCommand := range groupCommands {
@@ -62,7 +52,6 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 		def.applySubCommandToRoot(root, client, out)
 	}
 	cl.applyPersistentFlagsToRoot(root)
-
 	for _, cmd := range cl.rawCommands {
 		if (runtime.Mode == runtime.ModeAgent && cmd.supportAgent) ||
 			(runtime.Mode == runtime.ModeController && cmd.supportController) ||
@@ -77,7 +66,6 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 			}
 		}
 	}
-
 	root.SilenceUsage = true
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		enableVerbose, err := root.PersistentFlags().GetBool("verbose")
@@ -95,14 +83,12 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 	}
 	renderDescription(root)
 }
-
 // ApplyToRootCommand applies the commandList to the root cobra command, it applies
 // each commandDefinition of it to the root command as a sub-command.
 func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 	client := newClient(cl.codec)
 	cl.applyToRootCommand(root, client, os.Stdout)
 }
-
 // validate checks the validation of the commandList.
 func (cl *commandList) validate() []error {
 	var errs []error
@@ -117,7 +103,6 @@ func (cl *commandList) validate() []error {
 	}
 	return errs
 }
-
 // GetDebugCommands returns all commands supported by Controller, Agent or Flow Aggregator
 // that are used for debugging purpose.
 func (cl *commandList) GetDebugCommands(mode string) [][]string {
@@ -143,7 +128,6 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 		}
 	}
 	for _, cmd := range cl.rawCommands {
-
 		if cmd.cobraCommand.Use == "proxy" || cmd.cobraCommand.Use == "packetcapture" {
 			// proxy will keep running until interrupted so it
 			// cannot be used as is in e2e tests. For packetcapture, the default values didn't
@@ -162,7 +146,6 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 	}
 	return allCommands
 }
-
 // renderDescription replaces placeholders ${component} in Short and Long of a command
 // to the determined component during runtime.
 func renderDescription(command *cobra.Command) {

@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundlecollection
-
 import (
 	"encoding/json"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	adminv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
-
 func TestValidateSupportBundleCollection(t *testing.T) {
 	const name = "b1"
 	existingConfig := &bundleConfig{
@@ -55,10 +47,8 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 	}
 	nodeSpan := sets.New[string]("n1", "n2", "n3", "n4")
 	expiredAt := metav1.NewTime(time.Now().Add(time.Minute))
-
 	hostPublicKey, _, err := sftptesting.GenerateEd25519Key()
 	require.NoError(t, err)
-
 	tests := []struct {
 		name               string
 		requestOperation   adminv1.Operation
@@ -285,7 +275,6 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 		})
 	}
 }
-
 func marshal(object runtime.Object) []byte {
 	if object == nil {
 		return nil

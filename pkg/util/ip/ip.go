@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ip
-
 import (
 	"bytes"
 	"encoding/binary"
@@ -21,30 +19,21 @@ import (
 	"net"
 	"net/netip"
 	"sort"
-
 	utilnet "k8s.io/utils/net"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 const (
 	V4BitLen = 8 * net.IPv4len
 	V6BitLen = 8 * net.IPv6len
 )
-
 type DualStackIPs struct {
 	IPv4 net.IP
 	IPv6 net.IP
 }
-
 func (ips DualStackIPs) Equal(x DualStackIPs) bool {
 	return ips.IPv4.Equal(x.IPv4) && ips.IPv6.Equal(x.IPv6)
 }
-
 // This function takes in one allow CIDR and multiple except CIDRs and gives diff CIDRs
 // in allowCIDR eliminating except CIDRs. It currently supports only IPv4. except CIDR input
 // can be changed.
@@ -77,13 +66,11 @@ func DiffFromCIDRs(allowCIDR *net.IPNet, exceptCIDRs []*net.IPNet) ([]*net.IPNet
 	}
 	return newCIDRs, nil
 }
-
 // This function gives diff CIDRs between a superset CIDR (allow CIDR) and subset CIDR
 // (except CIDR)
 func diffFromCIDR(allowCIDR, exceptCIDR *net.IPNet) []*net.IPNet {
 	allowPrefix, _ := allowCIDR.Mask.Size()
 	exceptPrefix, _ := exceptCIDR.Mask.Size()
-
 	// Mask the IP to get the start IP of range
 	allowStartIP := allowCIDR.IP.Mask(allowCIDR.Mask)
 	exceptStartIP := exceptCIDR.IP.Mask(exceptCIDR.Mask)
@@ -93,7 +80,6 @@ func diffFromCIDR(allowCIDR, exceptCIDR *net.IPNet) []*net.IPNet {
 	} else {
 		bits = V6BitLen
 	}
-
 	// New CIDRs should not contain the IPs in exceptCIDR. Manipulating the bits in start IP of
 	// exceptCIDR will give remainder IPs in allowCIDR, specifically the masked IPs for remaining
 	// CIDRs with prefix ranging from [allowPrefix+1, exceptPrefix].
@@ -105,13 +91,11 @@ func diffFromCIDR(allowCIDR, exceptCIDR *net.IPNet) []*net.IPNet {
 		for j := range allowStartIP {
 			ipOfNewCIDR[j] = allowStartIP[j] | ipOfNewCIDR[j]
 		}
-
 		newCIDR := net.IPNet{IP: ipOfNewCIDR.Mask(newCIDRMask), Mask: newCIDRMask}
 		remainingCIDRs = append(remainingCIDRs, &newCIDR)
 	}
 	return remainingCIDRs
 }
-
 func flipSingleBit(ip *net.IP, bitIndex int) net.IP {
 	newIP := make(net.IP, len(*ip))
 	copy(newIP, *ip)
@@ -120,7 +104,6 @@ func flipSingleBit(ip *net.IP, bitIndex int) net.IP {
 	newIP[byteIndex] = newIP[byteIndex] ^ (1 << (bitIndex % 8))
 	return newIP
 }
-
 // This function is to check for redundant CIDRs in the list that are
 // covered by other CIDRs and remove them. Input array can be modified.
 func MergeCIDRs(cidrBlocks []*net.IPNet) []*net.IPNet {
@@ -128,7 +111,6 @@ func MergeCIDRs(cidrBlocks []*net.IPNet) []*net.IPNet {
 	sort.Slice(cidrBlocks, func(i, j int) bool {
 		return bytes.Compare(cidrBlocks[i].Mask, cidrBlocks[j].Mask) < 0
 	})
-
 	// Check and remove if there are redundant CIDRs that are part of bigger CIDRs
 	// or repeated CIDRs
 	for i := 0; i < len(cidrBlocks); i++ {
@@ -145,7 +127,6 @@ func MergeCIDRs(cidrBlocks []*net.IPNet) []*net.IPNet {
 	}
 	return cidrBlocks
 }
-
 // IPNetToNetIPNet converts Antrea IPNet to *net.IPNet.
 // Note that K8s allows non-standard CIDRs to be specified (e.g. 10.0.1.1/16, fe80::7015:efff:fe9a:146b/64). However,
 // OVS will report OFPBMC_BAD_WILDCARDS error if using them in the OpenFlow messages. The function will normalize the
@@ -160,7 +141,6 @@ func IPNetToNetIPNet(ipNet *v1beta2.IPNet) *net.IPNet {
 	maskedIP := ip.Mask(mask)
 	return &net.IPNet{IP: maskedIP, Mask: mask}
 }
-
 const (
 	ICMPProtocol   = 1
 	IGMPProtocol   = 2
@@ -169,7 +149,6 @@ const (
 	ICMPv6Protocol = 58
 	SCTPProtocol   = 132
 )
-
 // IPProtocolNumberToString returns the string name of the IP protocol with number protocolNum. If
 // the number does not match a "known" protocol, we return the defaultValue string.
 func IPProtocolNumberToString(protocolNum uint8, defaultValue string) string {
@@ -190,7 +169,6 @@ func IPProtocolNumberToString(protocolNum uint8, defaultValue string) string {
 		return defaultValue
 	}
 }
-
 // MustParseCIDR turns the given string into IPNet or panics, for tests or other cases where the string must be valid.
 func MustParseCIDR(cidr string) *net.IPNet {
 	_, ipNet, err := net.ParseCIDR(cidr)
@@ -199,7 +177,6 @@ func MustParseCIDR(cidr string) *net.IPNet {
 	}
 	return ipNet
 }
-
 func MustParseMAC(mac string) net.HardwareAddr {
 	addr, err := net.ParseMAC(mac)
 	if err != nil {
@@ -207,7 +184,6 @@ func MustParseMAC(mac string) net.HardwareAddr {
 	}
 	return addr
 }
-
 // IPNetEqual returns if the provided IPNets are the same subnet.
 func IPNetEqual(ipNet1, ipNet2 *net.IPNet) bool {
 	if ipNet1 == nil && ipNet2 == nil {
@@ -224,7 +200,6 @@ func IPNetEqual(ipNet1, ipNet2 *net.IPNet) bool {
 	}
 	return true
 }
-
 // IPNetContains returns if the first IPNet contains the second IPNet.
 // For example:
 //
@@ -250,7 +225,6 @@ func IPNetContains(ipNet1, ipNet2 *net.IPNet) bool {
 	}
 	return true
 }
-
 func MustIPv6(s string) net.IP {
 	ip := net.ParseIP(s)
 	if !utilnet.IsIPv6(ip) {
@@ -258,7 +232,6 @@ func MustIPv6(s string) net.IP {
 	}
 	return ip
 }
-
 // GetLocalBroadcastIP returns the last IP address in a subnet. This IP is always working as the broadcast address in
 // the subnet on Windows, and an active route entry that uses it as the destination is added by default when a new IP is
 // configured on the interface.
@@ -267,43 +240,35 @@ func GetLocalBroadcastIP(ipNet *net.IPNet) net.IP {
 	binary.BigEndian.PutUint32(lastAddr, binary.BigEndian.Uint32(ipNet.IP.To4())|^binary.BigEndian.Uint32(net.IP(ipNet.Mask).To4()))
 	return lastAddr
 }
-
 // AppendPortIfMissing appends the given port to the address if the address doesn't contain any port.
 func AppendPortIfMissing(addr, port string) string {
 	if _, _, err := net.SplitHostPort(addr); err == nil {
 		return addr
 	}
-
 	ip := net.ParseIP(addr)
 	// Return the address directly if it's not a valid address.
 	if ip == nil {
 		return addr
 	}
-
 	return net.JoinHostPort(addr, port)
 }
-
 // GetStartAndEndOfPrefix retrieves the start and end addresses of a netip.Prefix.
 // For example:  10.10.40.0/24 -> 10.10.40.0, 10.10.40.255
 func GetStartAndEndOfPrefix(prefix netip.Prefix) (netip.Addr, netip.Addr) {
 	var start, end netip.Addr
 	var mask net.IPMask
-
 	if prefix.Addr().Is4() {
 		mask = net.CIDRMask(prefix.Bits(), 32)
 	} else {
 		mask = net.CIDRMask(prefix.Bits(), 128)
 	}
-
 	// use gateway address, of canonical form of prefix, as start address.
 	start = prefix.Masked().Addr()
-
 	// calculate the end address by performing bitwise OR with the complement of the mask.
 	slice := start.AsSlice()
 	for i := 0; i < len(slice); i++ {
 		slice[i] |= ^mask[i]
 	}
-
 	end, _ = netip.AddrFromSlice(slice)
 	return start, end
 }

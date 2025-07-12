@@ -11,37 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package gobgp
-
 import (
 	"context"
 	"fmt"
 	"net/netip"
 	"time"
-
 	gobgpapi "github.com/osrg/gobgp/v3/api"
 	"github.com/osrg/gobgp/v3/pkg/server"
 	"google.golang.org/protobuf/types/known/anypb"
 	"k8s.io/utils/net"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/bgp"
-=======
-	"antrea.io/antrea/pkg/agent/bgp"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/bgp"
 )
-
 const (
 	ipv4AllZero = "0.0.0.0"
 	ipv6AllZero = "::"
 )
-
 type Server struct {
 	server       *server.BgpServer
 	globalConfig *gobgpapi.Global
 }
-
 func NewGoBGPServer(globalConfig *bgp.GlobalConfig) *Server {
 	s := &Server{
 		server: server.NewBgpServer(server.LoggerOption(newGoBGPLogger())),
@@ -60,7 +50,6 @@ func NewGoBGPServer(globalConfig *bgp.GlobalConfig) *Server {
 	}
 	return s
 }
-
 func (s *Server) Start(ctx context.Context) error {
 	go s.server.Serve()
 	if err := s.server.StartBgp(ctx, &gobgpapi.StartBgpRequest{Global: s.globalConfig}); err != nil {
@@ -68,14 +57,12 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 	return nil
 }
-
 func (s *Server) Stop(ctx context.Context) error {
 	if err := s.server.StopBgp(ctx, &gobgpapi.StopBgpRequest{}); err != nil {
 		return err
 	}
 	return nil
 }
-
 func (s *Server) AddPeer(ctx context.Context, peerConf bgp.PeerConfig) error {
 	peer, err := convertPeerConfigToGoBGPPeer(peerConf)
 	if err != nil {
@@ -87,7 +74,6 @@ func (s *Server) AddPeer(ctx context.Context, peerConf bgp.PeerConfig) error {
 	}
 	return nil
 }
-
 func (s *Server) UpdatePeer(ctx context.Context, peerConf bgp.PeerConfig) error {
 	peer, err := convertPeerConfigToGoBGPPeer(peerConf)
 	if err != nil {
@@ -99,7 +85,6 @@ func (s *Server) UpdatePeer(ctx context.Context, peerConf bgp.PeerConfig) error 
 	}
 	return nil
 }
-
 func (s *Server) RemovePeer(ctx context.Context, peerConf bgp.PeerConfig) error {
 	request := &gobgpapi.DeletePeerRequest{Address: peerConf.Address}
 	if err := s.server.DeletePeer(ctx, request); err != nil {
@@ -107,7 +92,6 @@ func (s *Server) RemovePeer(ctx context.Context, peerConf bgp.PeerConfig) error 
 	}
 	return nil
 }
-
 func (s *Server) GetPeers(ctx context.Context) ([]bgp.PeerStatus, error) {
 	var peerStatuses []bgp.PeerStatus
 	fn := func(peer *gobgpapi.Peer) {
@@ -122,7 +106,6 @@ func (s *Server) GetPeers(ctx context.Context) ([]bgp.PeerStatus, error) {
 	}
 	return peerStatuses, nil
 }
-
 func (s *Server) AdvertiseRoutes(ctx context.Context, routes []bgp.Route) error {
 	for i := range routes {
 		request := &gobgpapi.AddPathRequest{Path: convertRouteToGoBGPPath(&routes[i])}
@@ -132,7 +115,6 @@ func (s *Server) AdvertiseRoutes(ctx context.Context, routes []bgp.Route) error 
 	}
 	return nil
 }
-
 func (s *Server) WithdrawRoutes(ctx context.Context, routes []bgp.Route) error {
 	for i := range routes {
 		request := &gobgpapi.DeletePathRequest{Path: convertRouteToGoBGPPath(&routes[i])}
@@ -142,7 +124,6 @@ func (s *Server) WithdrawRoutes(ctx context.Context, routes []bgp.Route) error {
 	}
 	return nil
 }
-
 func (s *Server) GetRoutes(ctx context.Context, routeType bgp.RouteType, peerAddress string) ([]bgp.Route, error) {
 	if !isValidIPString(peerAddress) {
 		return nil, fmt.Errorf("invalid peer address: %s", peerAddress)
@@ -164,7 +145,6 @@ func (s *Server) GetRoutes(ctx context.Context, routeType bgp.RouteType, peerAdd
 	}
 	return routes, nil
 }
-
 func convertGoBGPPeerToPeerStatus(peer *gobgpapi.Peer) *bgp.PeerStatus {
 	if peer == nil {
 		return nil
@@ -197,7 +177,6 @@ func convertGoBGPPeerToPeerStatus(peer *gobgpapi.Peer) *bgp.PeerStatus {
 	}
 	return peerStatus
 }
-
 func convertGoBGPDestinationToRoute(destination *gobgpapi.Destination) *bgp.Route {
 	if destination == nil {
 		return nil
@@ -205,14 +184,12 @@ func convertGoBGPDestinationToRoute(destination *gobgpapi.Destination) *bgp.Rout
 	route := &bgp.Route{Prefix: destination.GetPrefix()}
 	return route
 }
-
 func convertRouteTypeToGoBGPTableType(routeType bgp.RouteType) gobgpapi.TableType {
 	if routeType == bgp.RouteAdvertised {
 		return gobgpapi.TableType_ADJ_OUT
 	}
 	return gobgpapi.TableType_ADJ_IN
 }
-
 func convertRouteToGoBGPPath(route *bgp.Route) *gobgpapi.Path {
 	isIPv6 := net.IsIPv6CIDRString(route.Prefix)
 	goBGPIPFamily := convertToGoBGPFamilyAfi(isIPv6)
@@ -221,7 +198,6 @@ func convertRouteToGoBGPPath(route *bgp.Route) *gobgpapi.Path {
 		Prefix:    prefix.Addr().String(),
 		PrefixLen: uint32(prefix.Bits()),
 	})
-
 	var attrs []*anypb.Any
 	a1, _ := anypb.New(&gobgpapi.OriginAttribute{
 		Origin: 0,
@@ -239,21 +215,18 @@ func convertRouteToGoBGPPath(route *bgp.Route) *gobgpapi.Path {
 		})
 	}
 	attrs = append(attrs, a1, a2)
-
 	return &gobgpapi.Path{
 		Family: &gobgpapi.Family{Afi: goBGPIPFamily, Safi: gobgpapi.Family_SAFI_UNICAST},
 		Nlri:   nlri,
 		Pattrs: attrs,
 	}
 }
-
 func convertToGoBGPFamilyAfi(isIPv6 bool) gobgpapi.Family_Afi {
 	if isIPv6 {
 		return gobgpapi.Family_AFI_IP6
 	}
 	return gobgpapi.Family_AFI_IP
 }
-
 func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, error) {
 	// The following fields are required and are validated when the corresponding BGPPolicy is created.
 	// Nonetheless, it is both safe and prudent to check them here as an additional safeguard.
@@ -263,7 +236,6 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 	if peerConfig.ASN == 0 {
 		return nil, fmt.Errorf("invalid peer ASN: %d", peerConfig.ASN)
 	}
-
 	peer := &gobgpapi.Peer{
 		Conf: &gobgpapi.PeerConf{
 			NeighborAddress: peerConfig.Address,
@@ -308,7 +280,6 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 	}
 	return peer, nil
 }
-
 func convertGoBGPSessionStateToSessionState(s gobgpapi.PeerState_SessionState) bgp.SessionState {
 	switch s {
 	case gobgpapi.PeerState_UNKNOWN:
@@ -329,7 +300,6 @@ func convertGoBGPSessionStateToSessionState(s gobgpapi.PeerState_SessionState) b
 		return bgp.SessionUnknown
 	}
 }
-
 func isValidIPString(ip string) bool {
 	return net.IsIPv6String(ip) || net.IsIPv4String(ip)
 }

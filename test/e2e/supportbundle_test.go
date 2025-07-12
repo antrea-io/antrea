@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"crypto/sha256"
@@ -25,7 +23,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -34,26 +31,21 @@ import (
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	"antrea.io/antrea/v2/pkg/features"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 	"antrea.io/antrea/v2/test/e2e/utils/portforwarder"
-=======
-	"antrea.io/antrea/pkg/apis"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/features"
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
+	"antrea.io/antrea/v2/pkg/apis"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	"antrea.io/antrea/v2/pkg/features"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 	"antrea.io/antrea/test/e2e/utils/portforwarder"
->>>>>>> origin/main
 )
-
 // getAccessToken retrieves the local access token of an antrea component API server.
 func getAccessToken(podName string, containerName string, tokenPath string, data *TestData) (string, error) {
 	stdout, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, podName, containerName, []string{"cat", tokenPath})
@@ -62,18 +54,15 @@ func getAccessToken(podName string, containerName string, tokenPath string, data
 	}
 	return stdout, nil
 }
-
 // testSupportBundle tests all support bundle related APIs.
 func testSupportBundle(name string, t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	var podName string
 	var podPort int
 	if name == "controller" {
@@ -92,12 +81,10 @@ func testSupportBundle(name string, t *testing.T) {
 	require.NoError(t, err)
 	podIP, err := data.podWaitForIPs(defaultTimeout, podName, metav1.NamespaceSystem)
 	require.NoError(t, err)
-
 	for _, podIPStr := range podIP.IPStrings {
 		getAndCheckSupportBundle(t, name, podIPStr, podPort, token, podName, data)
 	}
 }
-
 func getAndCheckSupportBundle(t *testing.T, name, podIP string, podPort int, token string, podName string, data *TestData) {
 	// Setup clients.
 	localConfig := rest.CopyConfig(data.KubeConfig)
@@ -162,17 +149,13 @@ func getAndCheckSupportBundle(t *testing.T, name, podIP string, podPort int, tok
 	bundle, err = clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, systemv1beta1.SupportBundleStatusNone, bundle.Status)
-
 }
-
 func TestSupportBundleController(t *testing.T) {
 	testSupportBundle("controller", t)
 }
-
 func TestSupportBundleAgent(t *testing.T) {
 	testSupportBundle("agent", t)
 }
-
 func TestSupportBundleCollection(t *testing.T) {
 	skipIfFeatureDisabled(t, features.SupportBundleCollection, true, true)
 	skipIfHasWindowsNodes(t)
@@ -181,13 +164,11 @@ func TestSupportBundleCollection(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	deployment, svc, pubKeys, err := data.deploySFTPServer(context.TODO(), 0)
 	require.NoError(t, err, "failed to deploy SFTP server")
 	require.NotEmpty(t, pubKeys)
 	require.NoError(t, data.waitForDeploymentReady(t, deployment.Namespace, deployment.Name, defaultTimeout))
 	require.NotEmpty(t, svc.Spec.ClusterIP)
-
 	secretName := "support-bundle-secret"
 	sec := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -202,16 +183,12 @@ func TestSupportBundleCollection(t *testing.T) {
 	_, err = data.clientset.CoreV1().Secrets(sec.Namespace).Create(context.TODO(), sec, metav1.CreateOptions{})
 	require.NoError(t, err)
 	defer data.clientset.CoreV1().Secrets(sec.Namespace).Delete(context.TODO(), sec.Name, metav1.DeleteOptions{})
-
 	grantAntreaAccessToSecret(t, data, secretName)
-
 	clientPod := "client"
 	require.NoError(t, data.createToolboxPodOnNode(clientPod, data.testNamespace, "", false))
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPod, data.testNamespace))
-
 	invalidPubKey, _, err := sftptesting.GenerateEd25519Key()
 	require.NoError(t, err)
-
 	// If cluster has more than 3 Nodes, only consider the first 3.
 	const maxNodes = 3
 	var nodeNames []string
@@ -219,7 +196,6 @@ func TestSupportBundleCollection(t *testing.T) {
 		nodeNames = append(nodeNames, nodeName(idx))
 	}
 	sortedNodeNames := slices.Sorted(slices.Values(nodeNames))
-
 	expectedStatusSuccess := crdv1alpha1.SupportBundleCollectionStatus{
 		CollectedNodes: int32(len(nodeNames)),
 		DesiredNodes:   int32(len(nodeNames)),
@@ -242,7 +218,6 @@ func TestSupportBundleCollection(t *testing.T) {
 			},
 		},
 	}
-
 	t.Run("with ssh host key", func(t *testing.T) {
 		testSupportBundleCollection(t, data, "sbc-0", nodeNames, clientPod, svc.Spec.ClusterIP, pubKeys[0].Marshal(), expectedStatusSuccess)
 	})
@@ -278,7 +253,6 @@ func TestSupportBundleCollection(t *testing.T) {
 		testSupportBundleCollection(t, data, "sbc-2", nodeNames, clientPod, svc.Spec.ClusterIP, invalidPubKey.Marshal(), expectedStatus)
 	})
 }
-
 func testSupportBundleCollection(
 	t *testing.T,
 	data *TestData,
@@ -290,12 +264,10 @@ func testSupportBundleCollection(
 	expectedStatus crdv1alpha1.SupportBundleCollectionStatus,
 ) {
 	sftpURL := fmt.Sprintf("sftp://%s/%s", sftpServerIP, sftpUploadDir)
-
 	// First, create a dedicated upload directory for this test case.
 	cmd := []string{"curl", "--insecure", "--user", fmt.Sprintf("%s:%s", sftpUser, sftpPassword), "-Q", fmt.Sprintf("mkdir %s/%s", sftpUploadDir, bundleName), sftpURL + "/"}
 	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPod, toolboxContainerName, cmd)
 	require.NoErrorf(t, err, "failed to create upload directory with sftp, stdout: %s, stderr: %s", stdout, stderr)
-
 	sbc := &crdv1alpha1.SupportBundleCollection{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bundleName,
@@ -323,15 +295,12 @@ func testSupportBundleCollection(
 	defer data.CRDClient.CrdV1alpha1().SupportBundleCollections().Delete(context.TODO(), bundleName, metav1.DeleteOptions{})
 	sbc, err = data.waitForSupportBundleCollectionCompleted(t, bundleName, 30*time.Second)
 	require.NoError(t, err)
-
 	require.True(t, supportBundleCollectionStatusEqual(sbc.Status, expectedStatus))
-
 	condFailure := findSupportBundleCollectionCondition(sbc.Status.Conditions, crdv1alpha1.CollectionFailure)
 	if condFailure != nil && condFailure.Status == metav1.ConditionTrue || sbc.Status.CollectedNodes != int32(len(nodeNames)) {
 		// don't check for uploaded files in case of failure
 		return
 	}
-
 	// Finally, we check that the expected files have been uploaded the server, but we do not
 	// check their contents.
 	// --list-only is to ensure that the output only includes file names, with no additional metadata
@@ -348,7 +317,6 @@ func testSupportBundleCollection(
 	}
 	assert.ElementsMatch(t, expectedFiles, files, "files uploaded by Antrea to sftp server do not match expectations")
 }
-
 func (data *TestData) waitForSupportBundleCollection(
 	t *testing.T,
 	name string,
@@ -374,7 +342,6 @@ func (data *TestData) waitForSupportBundleCollection(
 	}
 	return sbc, nil
 }
-
 func findSupportBundleCollectionCondition(conditions []crdv1alpha1.SupportBundleCollectionCondition, t crdv1alpha1.SupportBundleCollectionConditionType) *crdv1alpha1.SupportBundleCollectionCondition {
 	for idx := range conditions {
 		cond := &conditions[idx]
@@ -384,7 +351,6 @@ func findSupportBundleCollectionCondition(conditions []crdv1alpha1.SupportBundle
 	}
 	return nil
 }
-
 func (data *TestData) waitForSupportBundleCollectionCompleted(t *testing.T, name string, timeout time.Duration) (*crdv1alpha1.SupportBundleCollection, error) {
 	t.Logf("Waiting for SupportBundleCollection '%s' to be completed", name)
 	return data.waitForSupportBundleCollection(t, name, timeout, func(sbc *crdv1alpha1.SupportBundleCollection) bool {
@@ -392,21 +358,17 @@ func (data *TestData) waitForSupportBundleCollectionCompleted(t *testing.T, name
 		return cond != nil && cond.Status == metav1.ConditionTrue
 	})
 }
-
 func supportBundleCollectionConditionEqual(c1, c2 crdv1alpha1.SupportBundleCollectionCondition) bool {
 	c1.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	c2.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	return c1 == c2
 }
-
 var supportBundleCollectionStatusSemanticEquality = conversion.EqualitiesOrDie(
 	supportBundleCollectionConditionSliceEqual,
 )
-
 func supportBundleCollectionStatusEqual(status1, status2 crdv1alpha1.SupportBundleCollectionStatus) bool {
 	return supportBundleCollectionStatusSemanticEquality.DeepEqual(status1, status2)
 }
-
 func supportBundleCollectionConditionSliceEqual(s1, s2 []crdv1alpha1.SupportBundleCollectionCondition) bool {
 	sort.Slice(s1, func(i, j int) bool {
 		return s1[i].Type < s1[j].Type
@@ -414,7 +376,6 @@ func supportBundleCollectionConditionSliceEqual(s1, s2 []crdv1alpha1.SupportBund
 	sort.Slice(s2, func(i, j int) bool {
 		return s2[i].Type < s2[j].Type
 	})
-
 	if len(s1) != len(s2) {
 		return false
 	}
@@ -427,7 +388,6 @@ func supportBundleCollectionConditionSliceEqual(s1, s2 []crdv1alpha1.SupportBund
 	}
 	return true
 }
-
 func grantAntreaAccessToSecret(t *testing.T, data *TestData, secretName string) {
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -448,7 +408,6 @@ func grantAntreaAccessToSecret(t *testing.T, data *TestData, secretName string) 
 		err := data.clientset.RbacV1().Roles(antreaNamespace).Delete(context.TODO(), role.Name, metav1.DeleteOptions{})
 		assert.NoError(t, err)
 	})
-
 	for _, serviceAccount := range []string{"antrea-controller", "antrea-agent"} {
 		name := fmt.Sprintf("%s-%s", serviceAccount, secretName)
 		roleBinding := &rbacv1.RoleBinding{

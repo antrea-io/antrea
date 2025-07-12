@@ -11,29 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package responder
-
 import (
 	"net/netip"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
-=======
-	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
 )
-
 var (
 	// map of transportInterfaceName to ARP responder
 	arpResponders = make(map[string]*arpResponder)
 	// map of transportInterfaceName to NDP responder
 	ndpResponders = make(map[string]*ndpResponder)
 )
-
 // NewARPResponder creates a new ARP responder if it does not exist for the given transportInterfaceName.
 // This function is not thread-safe.
 func NewARPResponder(transportInterfaceName string, linkMonitor linkmonitor.Interface) *arpResponder {
@@ -53,7 +44,6 @@ func NewARPResponder(transportInterfaceName string, linkMonitor linkmonitor.Inte
 	arpResponders[transportInterfaceName] = a
 	return a
 }
-
 // NewNDPResponder creates a new NDP responder if it does not exist for the given transportInterfaceName.
 // This function is not thread-safe.
 func NewNDPResponder(transportInterfaceName string, linkMonitor linkmonitor.Interface) *ndpResponder {

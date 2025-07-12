@@ -1,24 +1,18 @@
 /*
 Copyright 2022 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package member
-
 import (
 	"context"
-
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,22 +25,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
 )
-
 type (
 	// GatewayReconciler is for member cluster only.
 	GatewayReconciler struct {
@@ -59,7 +48,6 @@ type (
 		leaderNamespace  string
 	}
 )
-
 // NewGatewayReconciler creates a GatewayReconciler which will watch Gateway events
 // and create a ClusterInfo kind of ResourceExport in the leader cluster.
 func NewGatewayReconciler(
@@ -77,14 +65,12 @@ func NewGatewayReconciler(
 	}
 	return reconciler
 }
-
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=gateways/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=gateways/finalizers,verbs=update
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterinfoimports,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterinfoimports/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterinfoimports/finalizers,verbs=update
-
 func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconciling Gateway", "gateway", req.NamespacedName)
 	var commonArea commonarea.RemoteCommonArea
@@ -97,7 +83,6 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 	r.leaderNamespace = commonArea.GetNamespace()
-
 	resExportName := common.NewClusterInfoResourceExportName(r.localClusterID)
 	resExportNamespacedName := types.NamespacedName{
 		Name:      resExportName,
@@ -109,7 +94,6 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			Namespace: r.leaderNamespace,
 		},
 	}
-
 	createOrUpdate := func(gateway *mcv1alpha1.Gateway) error {
 		existingResExport := &mcv1alpha1.ResourceExport{}
 		err := commonArea.Get(ctx, resExportNamespacedName, existingResExport)
@@ -129,7 +113,6 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		return nil
 	}
-
 	gw := &mcv1alpha1.Gateway{}
 	if err := r.Client.Get(ctx, req.NamespacedName, gw); err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -140,13 +123,11 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		return ctrl.Result{}, nil
 	}
-
 	if err := createOrUpdate(gw); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
 }
-
 func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.Request,
 	commonArea commonarea.RemoteCommonArea, existingResExport *mcv1alpha1.ResourceExport, gw *mcv1alpha1.Gateway) error {
 	resExportSpec := mcv1alpha1.ResourceExportSpec{
@@ -164,7 +145,6 @@ func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.R
 	}
 	return nil
 }
-
 func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.Request,
 	commonArea commonarea.RemoteCommonArea, gateway *mcv1alpha1.Gateway) error {
 	resExportSpec := mcv1alpha1.ResourceExportSpec{
@@ -188,7 +168,6 @@ func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.R
 	klog.InfoS("Created a ClusterInfo kind of ResourceExport", "clusterinfo", klog.KObj(resExport))
 	return nil
 }
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -203,7 +182,6 @@ func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Complete(r)
 }
-
 func (r *GatewayReconciler) clusterSetMapFunc(ctx context.Context, a client.Object) []reconcile.Request {
 	clusterSet := &mcv1alpha2.ClusterSet{}
 	requests := []reconcile.Request{}
@@ -228,7 +206,6 @@ func (r *GatewayReconciler) clusterSetMapFunc(ctx context.Context, a client.Obje
 	}
 	return requests
 }
-
 func (r *GatewayReconciler) getClusterInfo(gateway *mcv1alpha1.Gateway) *mcv1alpha1.ClusterInfo {
 	clusterInfo := &mcv1alpha1.ClusterInfo{
 		ClusterID:   r.localClusterID,
@@ -245,6 +222,5 @@ func (r *GatewayReconciler) getClusterInfo(gateway *mcv1alpha1.Gateway) *mcv1alp
 			PublicKey: gateway.WireGuard.PublicKey,
 		}
 	}
-
 	return clusterInfo
 }

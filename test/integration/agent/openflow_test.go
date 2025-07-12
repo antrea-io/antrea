@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package agent
-
 import (
 	"encoding/hex"
 	"fmt"
@@ -24,14 +21,11 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/component-base/metrics/legacyregistry"
-
-<<<<<<< HEAD
 	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
@@ -40,9 +34,9 @@ import (
 	k8stypes "antrea.io/antrea/v2/pkg/agent/proxy/types"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	ofconfig "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
@@ -50,28 +44,25 @@ import (
 	antrearuntime "antrea.io/antrea/v2/pkg/util/runtime"
 	ofTestUtils "antrea.io/antrea/v2/test/integration/ovs"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
-=======
-	agentconfig "antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/metrics"
-	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
-	ofClient "antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	k8stypes "antrea.io/antrea/pkg/agent/proxy/types"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	utilip "antrea.io/antrea/pkg/util/ip"
-	antrearuntime "antrea.io/antrea/pkg/util/runtime"
+	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
+	ofClient "antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	k8stypes "antrea.io/antrea/v2/pkg/agent/proxy/types"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	ofconfig "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
+	antrearuntime "antrea.io/antrea/v2/pkg/util/runtime"
 	ofTestUtils "antrea.io/antrea/test/integration/ovs"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 var (
 	br                  = "br01"
 	c                   ofClient.Client
@@ -81,30 +72,25 @@ var (
 	groupIDAllocator    = ofClient.NewGroupAllocator()
 	defaultPacketInRate = 500
 )
-
 const (
 	ingressRuleTable    = "IngressRule"
 	ingressDefaultTable = "IngressDefaultRule"
 	priorityNormal      = 200
 )
-
 type expectTableFlows struct {
 	tableName string
 	flows     []*ofTestUtils.ExpectFlow
 }
-
 type testPortConfig struct {
 	ips    []net.IP
 	mac    net.HardwareAddr
 	ofPort uint32
 	vlanID uint16
 }
-
 type testLocalPodConfig struct {
 	name string
 	*testPortConfig
 }
-
 type testPeerConfig struct {
 	name        string
 	nodeAddress net.IP
@@ -112,7 +98,6 @@ type testPeerConfig struct {
 	gateway     net.IP
 	nodeMAC     net.HardwareAddr
 }
-
 type testConfig struct {
 	bridge                       string
 	nodeConfig                   *agentconfig.NodeConfig
@@ -124,23 +109,19 @@ type testConfig struct {
 	connectUplinkToBridge        bool
 	enableStretchedNetworkPolicy bool
 }
-
 var (
 	_, podIPv4CIDR, _ = net.ParseCIDR("192.168.1.0/24")
 	_, podIPv6CIDR, _ = net.ParseCIDR("fd74:ca9b:172:19::/64")
 )
-
 func TestConnectivityFlows(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	// Hack the OS type if we run the test not on Windows Node.
 	// Because we test some Windows only functions.
 	if !antrearuntime.IsWindowsPlatform() {
 		antrearuntime.WindowsOS = runtime.GOOS
 	}
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, true, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
@@ -152,9 +133,7 @@ func TestConnectivityFlows(t *testing.T) {
 		ofClient.CleanOFTableCache()
 		ofClient.ResetOFTable()
 	}()
-
 	config := prepareConfiguration(true, false, false)
-
 	t.Run("testInitialize", func(t *testing.T) {
 		testInitialize(t, config)
 	})
@@ -182,7 +161,6 @@ func TestConnectivityFlows(t *testing.T) {
 	t.Run("testExternalFlows", func(t *testing.T) {
 		testExternalFlows(t, config)
 	})
-
 	stretchedNetworkPolicyConfig := prepareConfiguration(true, false, true)
 	t.Run("testInstallPodFlows", func(t *testing.T) {
 		testInstallPodFlows(t, stretchedNetworkPolicyConfig)
@@ -191,12 +169,10 @@ func TestConnectivityFlows(t *testing.T) {
 		testUninstallPodFlows(t, stretchedNetworkPolicyConfig)
 	})
 }
-
 func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, true, false, false, false, true, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
@@ -208,7 +184,6 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 		ofClient.CleanOFTableCache()
 		ofClient.ResetOFTable()
 	}()
-
 	config := prepareConfiguration(true, false, false)
 	config.connectUplinkToBridge = true
 	config.localPods[0].ips = []net.IP{net.ParseIP("192.168.255.3")}
@@ -254,16 +229,13 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 		f(t, config)
 	}
 }
-
 func TestReplayFlowsConnectivityFlows(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, true, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
-
 	defer func() {
 		err = c.Disconnect()
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
@@ -272,7 +244,6 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 		ofClient.CleanOFTableCache()
 		ofClient.ResetOFTable()
 	}()
-
 	config := prepareConfiguration(true, false, false)
 	t.Run("testInitialize", func(t *testing.T) {
 		testInitialize(t, config)
@@ -296,20 +267,16 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 		testReplayFlows(t)
 	})
 }
-
 func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
-
 	config := prepareConfiguration(true, false, false)
 	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
-
 	defer func() {
 		err = c.Disconnect()
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
@@ -318,11 +285,9 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 		ofClient.CleanOFTableCache()
 		ofClient.ResetOFTable()
 	}()
-
 	ruleID := uint32(100)
 	fromList := []string{"192.168.1.3", "192.168.1.25", "192.168.2.4"}
 	toList := []string{"192.168.3.4", "192.168.3.5"}
-
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta2.ProtocolTCP
 	defaultAction := crdv1beta1.RuleActionAllow
@@ -343,19 +308,15 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 			UID:       "uid1",
 		},
 	}
-
 	err = c.InstallPolicyRuleFlows(rule)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
-
 	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}), nil, false, false)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 	ofport := int32(100)
 	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil, false, false)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
-
 	testReplayFlows(t)
 }
-
 func testExternalFlows(t *testing.T, config *testConfig) {
 	gwMACStr := config.nodeConfig.GatewayConfig.MAC.String()
 	if config.enableIPv4 {
@@ -369,16 +330,13 @@ func testExternalFlows(t *testing.T, config *testConfig) {
 		}
 	}
 }
-
 func testReplayFlows(t *testing.T) {
 	var err error
-
 	countFlows := func() int {
 		flowList, err := ofTestUtils.OfctlDumpFlows(ovsCtlClient)
 		require.Nil(t, err, "Error when dumping flows from OVS bridge")
 		return len(flowList)
 	}
-
 	count1 := countFlows()
 	t.Logf("Counted %d flows before deletion & reconciliation", count1)
 	err = ofTestUtils.OfctlDeleteFlows(ovsCtlClient)
@@ -392,7 +350,6 @@ func testReplayFlows(t *testing.T) {
 	t.Logf("Counted %d flows after reconciliation", count3)
 	assert.Equal(t, count1, count3, "Expected same number of flows after reconciliation")
 }
-
 func testInitialize(t *testing.T, config *testConfig) {
 	if _, err := c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4, IPv6Enabled: config.enableIPv6}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{}); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
@@ -402,19 +359,16 @@ func testInitialize(t *testing.T, config *testConfig) {
 	}
 	checkOVSFlowMetrics(t, c)
 }
-
 func testInstallTunnelFlows(t *testing.T, config *testConfig) {
 	for _, tableFlow := range prepareTunnelFlows(agentconfig.DefaultTunOFPort, config.globalMAC) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 	}
 }
-
 func testInstallServiceFlows(t *testing.T, config *testConfig) {
 	for _, tableFlow := range prepareServiceHelperFlows() {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 	}
 }
-
 func testInstallNodeFlows(t *testing.T, config *testConfig) {
 	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, node := range config.peers {
@@ -436,7 +390,6 @@ func testInstallNodeFlows(t *testing.T, config *testConfig) {
 		}
 	}
 }
-
 func testUninstallNodeFlows(t *testing.T, config *testConfig) {
 	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, node := range config.peers {
@@ -449,7 +402,6 @@ func testUninstallNodeFlows(t *testing.T, config *testConfig) {
 		}
 	}
 }
-
 func testInstallPodFlows(t *testing.T, config *testConfig) {
 	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, pod := range config.localPods {
@@ -468,7 +420,6 @@ func testInstallPodFlows(t *testing.T, config *testConfig) {
 		}
 	}
 }
-
 func testUninstallPodFlows(t *testing.T, config *testConfig) {
 	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, pod := range config.localPods {
@@ -481,20 +432,16 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 		}
 	}
 }
-
 func TestNetworkPolicyFlows(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
-
 	config := prepareConfiguration(true, true, false)
 	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
-
 	defer func() {
 		err = c.Disconnect()
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
@@ -503,11 +450,9 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		ofClient.CleanOFTableCache()
 		ofClient.ResetOFTable()
 	}()
-
 	ruleID := uint32(100)
 	fromList := []string{"192.168.1.3", "192.168.1.25", "192.168.2.4", "fd12:ab:34:a001::3"}
 	toList := []string{"192.168.3.4", "192.168.3.5", "fd12:ab:34:a002::4"}
-
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta2.ProtocolTCP
 	defaultAction := crdv1beta1.RuleActionAllow
@@ -532,22 +477,18 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 	checkConjunctionFlows(t, ingressRuleTable, priorityNormal, ruleID, rule, assert.True)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, true)
-
 	addedFrom := prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24", "fd12:ab:34:a003::/64"})
 	checkAddAddress(t, ingressRuleTable, priorityNormal, ruleID, addedFrom, types.SrcAddress)
 	checkDeleteAddress(t, ingressRuleTable, priorityNormal, ruleID, addedFrom, types.SrcAddress)
-
 	ofport := int32(100)
 	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil, false, false)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
-
 	// Dump flows.
 	flowList, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
 	conjMatch := fmt.Sprintf("priority=%d,reg1=0x%x", priorityNormal, ofport)
 	flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
 	assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow), "Failed to install conjunctive match flow")
-
 	// Verify multiple conjunctions share the same match conditions.
 	ruleID2 := uint32(101)
 	toList2 := []string{"192.168.3.4", "fd12:ab:34:a002::4"}
@@ -570,7 +511,6 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	}
 	err = c.InstallPolicyRuleFlows(rule2)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
-
 	// Dump flows
 	flowList, err = ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
@@ -584,27 +524,22 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		}
 	}
 	checkOVSFlowMetrics(t, c)
-
 	_, err = c.UninstallPolicyRuleFlows(ruleID2)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList2, true)
-
 	_, err = c.UninstallPolicyRuleFlows(ruleID)
 	require.Nil(t, err, "Failed to DeletePolicyRuleService")
 	checkConjunctionFlows(t, ingressRuleTable, priorityNormal, ruleID, rule, assert.False)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, false)
 	checkOVSFlowMetrics(t, c)
 }
-
 func TestIPv6ConnectivityFlows(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, true, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
-
 	defer func() {
 		err = c.Disconnect()
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
@@ -636,20 +571,16 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 		testExternalFlows(t, config)
 	})
 }
-
 func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
-
 	config := prepareConfiguration(true, false, false)
 	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
-
 	defer func() {
 		err = c.Disconnect()
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
@@ -658,7 +589,6 @@ func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 		ofClient.CleanOFTableCache()
 		ofClient.ResetOFTable()
 	}()
-
 	endpoints := []k8sproxy.Endpoint{
 		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
 			Endpoint: net.JoinHostPort("192.168.1.2", "8081"),
@@ -670,9 +600,7 @@ func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 			NodeName: "node1",
 		}),
 	}
-
 	stickyMaxAgeSeconds := uint16(30)
-
 	tcs := []struct {
 		svc       *types.ServiceConfig
 		endpoints []k8sproxy.Endpoint
@@ -709,7 +637,6 @@ func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 			endpoints: endpoints,
 		},
 	}
-
 	for _, tc := range tcs {
 		groupID := tc.svc.ClusterGroupID
 		expTableFlows, expGroupBuckets := expectedProxyServiceGroupAndFlows(tc.svc, tc.endpoints, false)
@@ -718,7 +645,6 @@ func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 		}
 		ofTestUtils.CheckGroupExists(t, ovsCtlClient, groupID, "select", expGroupBuckets, true)
-
 		uninstallServiceFlowsFunc(t, tc.svc, tc.endpoints)
 		for _, tableFlow := range expTableFlows {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, false, tableFlow.flows)
@@ -726,20 +652,16 @@ func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 		ofTestUtils.CheckGroupExists(t, ovsCtlClient, groupID, "select", expGroupBuckets, false)
 	}
 }
-
 func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
-
 	config := prepareConfiguration(true, false, false)
 	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
-
 	defer func() {
 		err = c.Disconnect()
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
@@ -748,7 +670,6 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 		ofClient.CleanOFTableCache()
 		ofClient.ResetOFTable()
 	}()
-
 	endpoints := []k8sproxy.Endpoint{
 		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
 			Endpoint: net.JoinHostPort("192.168.1.2", "8081"),
@@ -760,9 +681,7 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 			NodeName: "node1",
 		}),
 	}
-
 	stickyMaxAgeSeconds := uint16(30)
-
 	tcs := []struct {
 		svc       *types.ServiceConfig
 		endpoints []k8sproxy.Endpoint
@@ -779,7 +698,6 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 			endpoints: endpoints,
 		},
 	}
-
 	for _, tc := range tcs {
 		groupID := ofconfig.GroupIDType(tc.svc.ClusterGroupID)
 		expTableFlows, expGroupBuckets := expectedProxyServiceGroupAndFlows(tc.svc, tc.endpoints, true)
@@ -788,7 +706,6 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 		}
 		ofTestUtils.CheckGroupExists(t, ovsCtlClient, groupID, "select", expGroupBuckets, true)
-
 		uninstallServiceFlowsFunc(t, tc.svc, tc.endpoints)
 		for _, tableFlow := range expTableFlows {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, false, tableFlow.flows)
@@ -796,7 +713,6 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 		ofTestUtils.CheckGroupExists(t, ovsCtlClient, groupID, "select", expGroupBuckets, false)
 	}
 }
-
 func installServiceFlows(t *testing.T, svc *types.ServiceConfig, endpointList []k8sproxy.Endpoint) {
 	err := c.InstallEndpointFlows(svc.Protocol, endpointList)
 	assert.NoError(t, err, "no error should return when installing flows for Endpoints")
@@ -805,7 +721,6 @@ func installServiceFlows(t *testing.T, svc *types.ServiceConfig, endpointList []
 	err = c.InstallServiceFlows(svc)
 	assert.NoError(t, err, "no error should return when installing flows for Service")
 }
-
 func uninstallServiceFlowsFunc(t *testing.T, svc *types.ServiceConfig, endpointList []k8sproxy.Endpoint) {
 	err := c.UninstallServiceFlows(svc.ServiceIP, svc.ServicePort, svc.Protocol)
 	assert.Nil(t, err)
@@ -813,7 +728,6 @@ func uninstallServiceFlowsFunc(t *testing.T, svc *types.ServiceConfig, endpointL
 	assert.Nil(t, err)
 	assert.NoError(t, c.UninstallEndpointFlows(svc.Protocol, endpointList))
 }
-
 func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []k8sproxy.Endpoint, antreaPolicyEnabled bool) (tableFlows []expectTableFlows, groupBuckets []string) {
 	nw_proto := 6
 	learnProtoField := "NXM_OF_TCP_DST[]"
@@ -825,13 +739,11 @@ func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []
 		nw_proto = 132
 		learnProtoField = "OXM_OF_SCTP_DST[]"
 	}
-
 	serviceLearnReg := 2
 	if svc.AffinityTimeout != 0 {
 		serviceLearnReg = 3
 	}
 	cookieAllocator := cookie.NewAllocator(roundInfo.RoundNum)
-
 	loadGourpID := ""
 	ctTable := "EgressRule"
 	if antreaPolicyEnabled {
@@ -861,13 +773,11 @@ func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []
 			bucket = fmt.Sprintf("weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:%s->reg3,set_field:0x%x/0xffff->reg4,resubmit(,%d)", epIP, epPort, ofClient.ServiceLBTable.GetID())
 		}
 		groupBuckets = append(groupBuckets, bucket)
-
 		unionVal := (0b010 << 16) + uint32(epPort)
 		epDNATFlows.flows = append(epDNATFlows.flows, &ofTestUtils.ExpectFlow{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg3=%s,reg4=0x%x/0x7ffff", string(svc.Protocol), epIP, unionVal),
 			ActStr:   fmt.Sprintf("ct(commit,table=%s,zone=65520,nat(dst=%s:%d),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ctTable, ep.IP(), epPort),
 		})
-
 		if ep.GetIsLocal() {
 			hairpinFlows.flows = append(hairpinFlows.flows, &ofTestUtils.ExpectFlow{
 				MatchStr: fmt.Sprintf("priority=190,ct_state=+new+trk,ip,nw_src=%s,nw_dst=%s", ep.IP(), ep.IP()),
@@ -875,11 +785,9 @@ func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []
 			})
 		}
 	}
-
 	tableFlows = []expectTableFlows{svcFlows, epDNATFlows, hairpinFlows}
 	return
 }
-
 func ipToHexString(ip net.IP) string {
 	ipBytes := ip
 	if ip.To4() != nil {
@@ -890,7 +798,6 @@ func ipToHexString(ip net.IP) string {
 	ipStr = "0x" + strings.TrimLeft(ipStr, "0")
 	return ipStr
 }
-
 func checkDefaultDropFlows(t *testing.T, table string, priority int, addrType types.AddressType, addresses []types.Address, add bool) {
 	// dump flows
 	flowList, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, table)
@@ -906,27 +813,22 @@ func checkDefaultDropFlows(t *testing.T, table string, priority int, addrType ty
 		}
 	}
 }
-
 func checkAddAddress(t *testing.T, ruleTable string, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
 	err := c.AddPolicyRuleAddress(ruleID, addrType, addedAddress, nil, false, false)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
-
 	// dump flows
 	flowList, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
-
 	action := fmt.Sprintf("conjunction(%d,1/3)", ruleID)
 	if addrType == types.DstAddress {
 		action = fmt.Sprintf("conjunction(%d,2/3)", ruleID)
 	}
-
 	for _, addr := range addedAddress {
 		_, ipProto := getIPProtoStr(addr)
 		conjMatch := fmt.Sprintf("priority=%d,%s,%s=%s", priority, ipProto, addr.GetMatchKey(addrType).GetKeyString(), addr.GetMatchValue())
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: action}
 		assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow")
 	}
-
 	tableStatus := c.GetFlowTableStatus()
 	for _, tableStatus := range tableStatus {
 		if tableStatus.Name == ruleTable {
@@ -935,25 +837,21 @@ func checkAddAddress(t *testing.T, ruleTable string, priority int, ruleID uint32
 		}
 	}
 }
-
 func checkDeleteAddress(t *testing.T, ruleTable string, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
 	err := c.DeletePolicyRuleAddress(ruleID, addrType, addedAddress, nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 	flowList, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
-
 	action := fmt.Sprintf("conjunction(%d,1/3)", ruleID)
 	if addrType == types.DstAddress {
 		action = fmt.Sprintf("conjunction(%d,2/3)", ruleID)
 	}
-
 	for _, addr := range addedAddress {
 		_, ipProto := getIPProtoStr(addr)
 		conjMatch := fmt.Sprintf("priority=%d,%s,%s=%s", priority, ipProto, addr.GetMatchKey(addrType).GetKeyString(), addr.GetMatchValue())
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: action}
 		assert.False(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow")
 	}
-
 	tableStatus := c.GetFlowTableStatus()
 	for _, tableStatus := range tableStatus {
 		if tableStatus.Name == ruleTable {
@@ -962,23 +860,19 @@ func checkDeleteAddress(t *testing.T, ruleTable string, priority int, ruleID uin
 		}
 	}
 }
-
 func checkConjunctionFlows(t *testing.T, ruleTable string, priority int, ruleID uint32, rule *types.PolicyRule, testFunc func(t assert.TestingT, value bool, msgAndArgs ...interface{}) bool) {
 	flowList, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
-
 	conjunctionActionMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip", priority-10, ruleID)
 	conjReg := 6
 	nextTable := ofClient.IngressMetricTable.GetName()
 	if ruleTable == ofClient.EgressRuleTable.GetName() {
 		nextTable = ofClient.EgressMetricTable.GetName()
 	}
-
 	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("set_field:0x%x->reg%d,ct(commit,table=%s,zone=65520,exec(set_field:0x%x/0xffffffff->ct_label)", ruleID, conjReg, nextTable, ruleID)}
 	testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to update conjunction action flow")
 	useIPv4 := false
 	useIPv6 := false
-
 	for _, addr := range rule.From {
 		isIPv6, ipProto := getIPProtoStr(addr)
 		if isIPv6 && !useIPv6 {
@@ -990,7 +884,6 @@ func checkConjunctionFlows(t *testing.T, ruleTable string, priority int, ruleID 
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,1/3)", ruleID)}
 		testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause1")
 	}
-
 	for _, addr := range rule.To {
 		isIPv6, ipProto := getIPProtoStr(addr)
 		if isIPv6 && !useIPv6 {
@@ -1002,7 +895,6 @@ func checkConjunctionFlows(t *testing.T, ruleTable string, priority int, ruleID 
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
 		testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause2")
 	}
-
 	for _, service := range rule.Service {
 		if useIPv4 {
 			conjMatch1 := fmt.Sprintf("priority=%d,%s,tp_dst=%d", priority, strings.ToLower(string(*service.Protocol)), service.Port.IntVal)
@@ -1015,7 +907,6 @@ func checkConjunctionFlows(t *testing.T, ruleTable string, priority int, ruleID 
 			testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause3")
 		}
 	}
-
 	tablesStatus := c.GetFlowTableStatus()
 	for _, tableStatus := range tablesStatus {
 		if tableStatus.Name == ruleTable {
@@ -1024,7 +915,6 @@ func checkConjunctionFlows(t *testing.T, ruleTable string, priority int, ruleID 
 		}
 	}
 }
-
 func getIPProtoStr(addr types.Address) (bool, string) {
 	var addrIP net.IP
 	switch v := addr.GetValue().(type) {
@@ -1038,7 +928,6 @@ func getIPProtoStr(addr types.Address) (bool, string) {
 	}
 	return true, "ipv6"
 }
-
 func checkOVSFlowMetrics(t *testing.T, client ofClient.Client) {
 	expectedFlowCount := `
 	# HELP antrea_agent_ovs_flow_count [STABLE] Flow count for each OVS flow table. The TableID and TableName are used as labels.
@@ -1055,12 +944,9 @@ func checkOVSFlowMetrics(t *testing.T, client ofClient.Client) {
 	# TYPE antrea_agent_ovs_total_flow_count gauge
 	`
 	expectedTotalFlowCount = expectedTotalFlowCount + fmt.Sprintf("antrea_agent_ovs_total_flow_count %d\n", totalFlowCount)
-
 	assert.Equal(t, nil, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedTotalFlowCount), "antrea_agent_ovs_total_flow_count"))
 	assert.Equal(t, nil, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedFlowCount), "antrea_agent_ovs_flow_count"))
-
 }
-
 func testInstallGatewayFlows(t *testing.T, config *testConfig) {
 	gatewayConfig := config.nodeConfig.GatewayConfig
 	var ips []net.IP
@@ -1074,20 +960,17 @@ func testInstallGatewayFlows(t *testing.T, config *testConfig) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 	}
 }
-
 func prepareConfiguration(enableIPv4, enableIPv6, enableStretchedNetworkPolicy bool) *testConfig {
 	podMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:13")
 	gwMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:11")
 	uplinkMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:12")
 	peerNodeMAC, _ := net.ParseMAC("aa:aa:aa:aa:ab:00")
-
 	nodeIPv4, nodeIPv4Subnet, _ := net.ParseCIDR("10.10.10.1/24")
 	nodeIPv4Subnet.IP = nodeIPv4
 	nodeIPv6, nodeIPv6Subnet, _ := net.ParseCIDR("a963:ca9b:172:10::11/64")
 	nodeIPv6Subnet.IP = nodeIPv6
 	_, peerIPv4Subnet, _ := net.ParseCIDR("192.168.2.0/24")
 	_, peerIPv6Subnet, _ := net.ParseCIDR("fd74:ca9b:172:20::/64")
-
 	gatewayConfig := &agentconfig.GatewayConfig{MAC: gwMAC, OFPort: uint32(agentconfig.DefaultHostGatewayOFPort)}
 	uplinkConfig := &agentconfig.AdapterNetConfig{MAC: uplinkMAC}
 	nodeConfig := &agentconfig.NodeConfig{GatewayConfig: gatewayConfig, UplinkNetConfig: uplinkConfig, TunnelOFPort: uint32(agentconfig.DefaultTunOFPort), Type: agentconfig.K8sNode}
@@ -1103,7 +986,6 @@ func prepareConfiguration(enableIPv4, enableIPv6, enableStretchedNetworkPolicy b
 		nodeAddress: net.ParseIP("10.1.1.2"),
 		nodeMAC:     peerNodeMAC,
 	}
-
 	if enableIPv4 {
 		gatewayConfig.IPv4 = net.ParseIP("192.168.1.1")
 		nodeConfig.NodeIPv4Addr = nodeIPv4Subnet
@@ -1120,7 +1002,6 @@ func prepareConfiguration(enableIPv4, enableIPv6, enableStretchedNetworkPolicy b
 		peerNode.gateway = net.ParseIP("fd74:ca9b:172:20::1")
 		peerNode.subnet = *peerIPv6Subnet
 	}
-
 	vMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	return &testConfig{
 		bridge:                       br,
@@ -1133,7 +1014,6 @@ func prepareConfiguration(enableIPv4, enableIPv6, enableStretchedNetworkPolicy b
 		enableStretchedNetworkPolicy: enableStretchedNetworkPolicy,
 	}
 }
-
 func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32, gwMAC, vMAC net.HardwareAddr, nodeConfig *agentconfig.NodeConfig, connectUplinkToBridge bool, vlanID uint16, enableStretchedNetworkPolicy bool) []expectTableFlows {
 	podIPv4 := util.GetIPv4Addr(podIPs)
 	isAntreaFlexibleIPAM := connectUplinkToBridge && podIPv4 != nil && !nodeConfig.PodIPv4CIDR.Contains(podIPv4)
@@ -1167,7 +1047,6 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 			},
 		},
 	}
-
 	matchVlanVIDString := ""
 	matchVlanRegString := ""
 	vlanVIDString := "0"
@@ -1180,7 +1059,6 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 			vlanVIDString = fmt.Sprintf("0x%x", vlanID)
 		}
 	}
-
 	if isAntreaFlexibleIPAM {
 		flows = append(flows, []expectTableFlows{{
 			"Classifier",
@@ -1213,7 +1091,6 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 			}}...)
 		}
 	}
-
 	for _, podIP := range podIPs {
 		var ipProto, nwSrcField, nwDstField string
 		var nextTableForSpoofguard string
@@ -1269,10 +1146,8 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 			},
 		)
 	}
-
 	return flows
 }
-
 func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.HardwareAddr, nodeConfig *agentconfig.NodeConfig, connectUplinkToBridge bool) []expectTableFlows {
 	flows := []expectTableFlows{
 		{
@@ -1294,7 +1169,6 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 			},
 		},
 	}
-
 	for _, gwIP := range gwIPs {
 		var ipProtoStr, nwSrcStr, nwDstStr string
 		actionSetCtZoneField := ""
@@ -1365,10 +1239,8 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 			},
 		)
 	}
-
 	return flows
 }
-
 func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableFlows {
 	return []expectTableFlows{
 		{
@@ -1391,7 +1263,6 @@ func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableF
 		},
 	}
 }
-
 func prepareNodeFlows(peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, localGwMAC, peerNodeMAC net.HardwareAddr, connectUplinkToBridge bool) []expectTableFlows {
 	var expFlows []expectTableFlows
 	var ipProtoStr, nwDstFieldName string
@@ -1431,10 +1302,8 @@ func prepareNodeFlows(peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, l
 			},
 		})
 	}
-
 	return expFlows
 }
-
 func prepareServiceHelperFlows() []expectTableFlows {
 	return []expectTableFlows{
 		{
@@ -1448,7 +1317,6 @@ func prepareServiceHelperFlows() []expectTableFlows {
 		},
 	}
 }
-
 func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 	outputStageTable := "Output"
 	ctZone := "65520"
@@ -1599,7 +1467,6 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			},
 		)
 	}
-
 	tableFlows := []expectTableFlows{
 		tableConntrackZoneFlows,
 		tableConntrackStateFlows,
@@ -1670,7 +1537,6 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 	}
 	return tableFlows
 }
-
 func prepareIPAddresses(addresses []string) []types.Address {
 	var ipAddresses = make([]types.Address, 0)
 	for _, addr := range addresses {
@@ -1679,7 +1545,6 @@ func prepareIPAddresses(addresses []string) []types.Address {
 	}
 	return ipAddresses
 }
-
 func prepareIPNetAddresses(addresses []string) []types.Address {
 	var ipAddresses = make([]types.Address, 0)
 	for _, addr := range addresses {
@@ -1688,7 +1553,6 @@ func prepareIPNetAddresses(addresses []string) []types.Address {
 	}
 	return ipAddresses
 }
-
 func expectedExternalFlows(ipProtoStr, gwMACStr string) []expectTableFlows {
 	return []expectTableFlows{
 		{
@@ -1719,7 +1583,6 @@ func expectedExternalFlows(ipProtoStr, gwMACStr string) []expectTableFlows {
 		},
 	}
 }
-
 func prepareEgressMarkFlows(snatIP net.IP, mark, podOFPort, podOFPortRemote uint32, vMAC, localGwMAC net.HardwareAddr, trafficShaping bool) []expectTableFlows {
 	var ipProtoStr, tunDstFieldName, nextTableName string
 	if snatIP.To4() != nil {
@@ -1754,7 +1617,6 @@ func prepareEgressMarkFlows(snatIP net.IP, mark, podOFPort, podOFPortRemote uint
 		},
 	}
 }
-
 func prepareTrafficControlFlows(sourceOFPorts []uint32, targetOFPort, returnOFPort uint32) []expectTableFlows {
 	expectedFlows := []expectTableFlows{
 		{
@@ -1804,25 +1666,20 @@ func prepareTrafficControlFlows(sourceOFPorts []uint32, targetOFPort, returnOFPo
 	expectedFlows = append(expectedFlows, trafficControlTableFlows)
 	return expectedFlows
 }
-
 func TestEgressMarkFlows(t *testing.T) {
 	testEgressMarkFlows(t, true)
 	testEgressMarkFlows(t, false)
 }
-
 func testEgressMarkFlows(t *testing.T, trafficShaping bool) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), false, false, false, true, trafficShaping, false, false, false, false, false, false, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
-
 	config := prepareConfiguration(true, true, false)
 	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
-
 	defer func() {
 		err = c.Disconnect()
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
@@ -1831,7 +1688,6 @@ func testEgressMarkFlows(t *testing.T, trafficShaping bool) {
 		ofClient.CleanOFTableCache()
 		ofClient.ResetOFTable()
 	}()
-
 	snatIP := net.ParseIP("10.10.10.14")
 	snatIPV6 := net.ParseIP("a963:ca9b:172:10::16")
 	snatMark := uint32(14)
@@ -1840,12 +1696,10 @@ func testEgressMarkFlows(t *testing.T, trafficShaping bool) {
 	podOFPortRemote := uint32(204)
 	podOFPortV6 := uint32(106)
 	podOFPortRemoteV6 := uint32(206)
-
 	vMAC := config.globalMAC
 	gwMAC := config.nodeConfig.GatewayConfig.MAC
 	expectedFlows := append(prepareEgressMarkFlows(snatIP, snatMark, podOFPort, podOFPortRemote, vMAC, gwMAC, trafficShaping),
 		prepareEgressMarkFlows(snatIPV6, snatMarkV6, podOFPortV6, podOFPortRemoteV6, vMAC, gwMAC, trafficShaping)...)
-
 	c.InstallSNATMarkFlows(snatIP, snatMark)
 	c.InstallSNATMarkFlows(snatIPV6, snatMarkV6)
 	c.InstallPodSNATFlows(podOFPort, snatIP, snatMark)
@@ -1855,7 +1709,6 @@ func testEgressMarkFlows(t *testing.T, trafficShaping bool) {
 	for _, tableFlow := range expectedFlows {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 	}
-
 	c.UninstallPodSNATFlows(podOFPort)
 	c.UninstallPodSNATFlows(podOFPortRemote)
 	c.UninstallPodSNATFlows(podOFPortV6)
@@ -1866,20 +1719,16 @@ func testEgressMarkFlows(t *testing.T, trafficShaping bool) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, false, tableFlow.flows)
 	}
 }
-
 func TestTrafficControlFlows(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
-
 	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), false, false, false, false, false, false, false, false, false, false, true, false, false, groupIDAllocator, false, defaultPacketInRate)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
-
 	config := prepareConfiguration(true, false, false)
 	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
-
 	defer func() {
 		err = c.Disconnect()
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
@@ -1888,7 +1737,6 @@ func TestTrafficControlFlows(t *testing.T) {
 		ofClient.CleanOFTableCache()
 		ofClient.ResetOFTable()
 	}()
-
 	sourceOFPorts := []uint32{100, 101, 102}
 	targetOFPort := uint32(200)
 	returnOFPort := uint32(201)

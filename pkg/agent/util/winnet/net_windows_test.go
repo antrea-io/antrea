@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,48 +13,36 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package winnet
-
 import (
 	"fmt"
 	"net"
 	"os"
 	"strings"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/windows"
-
-<<<<<<< HEAD
 	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
 	antreasyscalltest "antrea.io/antrea/v2/pkg/agent/util/syscall/testing"
 	"antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/ip"
-=======
-	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
-	antreasyscalltest "antrea.io/antrea/pkg/agent/util/syscall/testing"
-	"antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
+	antreasyscalltest "antrea.io/antrea/v2/pkg/agent/util/syscall/testing"
+	"antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
-
 var (
 	testMACAddr, _  = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	ipv4Public      = net.ParseIP("8.8.8.8")
 	ipv4PublicIPNet = ip.MustParseCIDR("8.8.8.8/32")
-
 	errTestInvalid = fmt.Errorf("invalid")
-
 	h = &Handle{}
 )
-
 const (
 	testVMSwitchName = "antrea-switch"
 	testAdapterName  = "test-en0"
 )
-
 func TestNetRouteString(t *testing.T) {
 	gw, subnet, _ := net.ParseCIDR("192.168.2.0/24")
 	testRoute := Route{
@@ -67,7 +54,6 @@ func TestNetRouteString(t *testing.T) {
 	gotRoute := testRoute.String()
 	assert.Equal(t, "LinkIndex: 1, DestinationSubnet: 192.168.2.0/24, GatewayAddress: 192.168.2.0, RouteMetric: 256", gotRoute)
 }
-
 func TestNetRouteTranslation(t *testing.T) {
 	subnet := ip.MustParseCIDR("1.1.1.0/28")
 	oriRoute := &Route{
@@ -80,7 +66,6 @@ func TestNetRouteTranslation(t *testing.T) {
 	newRoute := routeFromIPForwardRow(row)
 	assert.Equal(t, oriRoute, newRoute)
 }
-
 func TestNetNeighborString(t *testing.T) {
 	testNeighbor := Neighbor{
 		LinkIndex:        1,
@@ -91,7 +76,6 @@ func TestNetNeighborString(t *testing.T) {
 	gotNeighbor := testNeighbor.String()
 	assert.Equal(t, "LinkIndex: 1, IPAddress: 169.254.0.253, LinkLayerAddress: aa:bb:cc:dd:ee:ff", gotNeighbor)
 }
-
 func TestIsVirtualNetAdapter(t *testing.T) {
 	adapter := "test-adapter"
 	tests := []struct {
@@ -112,7 +96,6 @@ func TestIsVirtualNetAdapter(t *testing.T) {
 			wantIsVirtual: false,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, []string{
@@ -124,7 +107,6 @@ func TestIsVirtualNetAdapter(t *testing.T) {
 		})
 	}
 }
-
 func TestGetDNServersByNetAdapterIndex(t *testing.T) {
 	testIndex := 1
 	tests := []struct {
@@ -144,7 +126,6 @@ func TestGetDNServersByNetAdapterIndex(t *testing.T) {
 			commandErr: errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, []string{
@@ -156,7 +137,6 @@ func TestGetDNServersByNetAdapterIndex(t *testing.T) {
 		})
 	}
 }
-
 func TestNetAdapterExists(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -172,7 +152,6 @@ func TestNetAdapterExists(t *testing.T) {
 			name: "Interface not exist",
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockGetAdaptersAddresses(t, tc.testAdapterAddresses, nil)
@@ -181,7 +160,6 @@ func TestNetAdapterExists(t *testing.T) {
 		})
 	}
 }
-
 func TestSetNetAdapterMTU(t *testing.T) {
 	testName := "host"
 	testAdapterAddresses := createTestAdapterAddresses(testName)
@@ -220,7 +198,6 @@ func TestSetNetAdapterMTU(t *testing.T) {
 			wantErr:              fmt.Errorf("unable to set IPInterface with MTU %d: %w", testMTU, fmt.Errorf("IP interface set error")),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockGetAdaptersAddresses(t, tc.testAdapterAddresses, nil)
@@ -233,7 +210,6 @@ func TestSetNetAdapterMTU(t *testing.T) {
 		})
 	}
 }
-
 func TestReplaceNetRoute(t *testing.T) {
 	subnet := ip.MustParseCIDR("1.1.1.0/28")
 	testGateway := net.ParseIP("1.1.1.254")
@@ -282,7 +258,6 @@ func TestReplaceNetRoute(t *testing.T) {
 			wantErr:            createIPForwardEntryErr,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockAntreaNetIO(t,
@@ -296,7 +271,6 @@ func TestReplaceNetRoute(t *testing.T) {
 		})
 	}
 }
-
 func TestRemoveNetRoute(t *testing.T) {
 	subnet := ip.MustParseCIDR("1.1.1.0/28")
 	testGateway := net.ParseIP("1.1.1.254")
@@ -333,7 +307,6 @@ func TestRemoveNetRoute(t *testing.T) {
 			wantErr:            deleteIPForwardEntryErr,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockAntreaNetIO(t,
@@ -346,7 +319,6 @@ func TestRemoveNetRoute(t *testing.T) {
 		})
 	}
 }
-
 func TestRouteListFiltered(t *testing.T) {
 	subnet1 := ip.MustParseCIDR("1.1.1.0/28")
 	subnet2 := ip.MustParseCIDR("1.1.1.128/28")
@@ -372,7 +344,6 @@ func TestRouteListFiltered(t *testing.T) {
 		createTestMibIPForwardRow(testIndex1, subnet1, testGateway1),
 		createTestMibIPForwardRow(testIndex2, subnet2, testGateway2),
 	}
-
 	listIPForwardRowsErr := fmt.Errorf("unable to list Windows IPForward rows: %w", fmt.Errorf("unable to list IP forward entry"))
 	tests := []struct {
 		name        string
@@ -437,7 +408,6 @@ func TestRouteListFiltered(t *testing.T) {
 			wantRoutes:  []Route{testRoute1},
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockAntreaNetIO(t,
@@ -450,7 +420,6 @@ func TestRouteListFiltered(t *testing.T) {
 		})
 	}
 }
-
 func TestAddNetNat(t *testing.T) {
 	notFoundErr := fmt.Errorf("received error No MSFT_NetNat objects found")
 	testNetNat := "test-nat"
@@ -491,7 +460,6 @@ func TestAddNetNat(t *testing.T) {
 			wantErr:    fmt.Errorf("failed to add netnat '%s' with internalIPInterfaceAddressPrefix '%s': %w", testNetNat, testSubnetCIDR.String(), notFoundErr),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, true)
@@ -500,7 +468,6 @@ func TestAddNetNat(t *testing.T) {
 		})
 	}
 }
-
 func TestReplaceNetNatStaticMapping(t *testing.T) {
 	notFoundErr := fmt.Errorf("received error No MSFT_NetNatStaticMapping objects found")
 	testNetNatName := "test-nat"
@@ -515,7 +482,6 @@ func TestReplaceNetNatStaticMapping(t *testing.T) {
 		InternalPort: testInternalPort,
 		Protocol:     testProto,
 	}
-
 	getCmd := fmt.Sprintf("Get-NetNatStaticMapping -NatName %s", testNetNatName) +
 		fmt.Sprintf("|? ExternalIPAddress -EQ %s", testExternalIPAddr) +
 		fmt.Sprintf("|? ExternalPort -EQ %d", testExternalPort) +
@@ -558,7 +524,6 @@ func TestReplaceNetNatStaticMapping(t *testing.T) {
 			wantErr:    notFoundErr,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, true)
@@ -567,7 +532,6 @@ func TestReplaceNetNatStaticMapping(t *testing.T) {
 		})
 	}
 }
-
 func TestRemoveNetNatStaticMapping(t *testing.T) {
 	testNetNatName := "test-nat"
 	testExternalPort, testInternalPort := (uint16)(80), (uint16)(8080)
@@ -607,7 +571,6 @@ func TestRemoveNetNatStaticMapping(t *testing.T) {
 			wantErr:    errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, false)
@@ -619,7 +582,6 @@ func TestRemoveNetNatStaticMapping(t *testing.T) {
 		})
 	}
 }
-
 func TestReplaceNetNeighbor(t *testing.T) {
 	netNeighborNotFoundErr := fmt.Errorf("received error No matching MSFT_NetNeighbor objects")
 	testNeighbor := &Neighbor{
@@ -671,7 +633,6 @@ func TestReplaceNetNeighbor(t *testing.T) {
 			wantCmds:   []string{getCmd},
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, true)
@@ -680,12 +641,10 @@ func TestReplaceNetNeighbor(t *testing.T) {
 		})
 	}
 }
-
 func TestVirtualAdapterName(t *testing.T) {
 	gotName := VirtualAdapterName("0")
 	assert.Equal(t, "vEthernet (0)", gotName)
 }
-
 func TestRenameNetAdapter(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -703,7 +662,6 @@ func TestRenameNetAdapter(t *testing.T) {
 			wantErr:    fmt.Errorf("invalid"),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, []string{
@@ -714,7 +672,6 @@ func TestRenameNetAdapter(t *testing.T) {
 		})
 	}
 }
-
 func TestAddVMSwitch(t *testing.T) {
 	testSwitchName := "test-switch"
 	tests := []struct {
@@ -731,7 +688,6 @@ func TestAddVMSwitch(t *testing.T) {
 			wantErr:    fmt.Errorf("invalid"),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, []string{fmt.Sprintf(`New-VMSwitch -Name "%s" -NetAdapterName "%s" -EnableEmbeddedTeaming $true -AllowManagementOS $true -ComputerName localhost| Enable-VMSwitchExtension "%s"`, testVMSwitchName, testSwitchName, ovsExtensionName)}, "", tc.commandErr, false)
@@ -740,7 +696,6 @@ func TestAddVMSwitch(t *testing.T) {
 		})
 	}
 }
-
 func TestEnableVMSwitchOVSExtension(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -756,7 +711,6 @@ func TestEnableVMSwitchOVSExtension(t *testing.T) {
 			wantErr:    fmt.Errorf("invalid"),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, []string{fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName localhost| Enable-VMSwitchExtension "%s"`, testVMSwitchName, ovsExtensionName)}, "", tc.commandErr, false)
@@ -765,7 +719,6 @@ func TestEnableVMSwitchOVSExtension(t *testing.T) {
 		})
 	}
 }
-
 func TestIsVMSwitchOVSExtensionEnabled(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -790,7 +743,6 @@ func TestIsVMSwitchOVSExtensionEnabled(t *testing.T) {
 			wantErr:    fmt.Errorf("invalid"),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, []string{fmt.Sprintf(`Get-VMSwitchExtension -VMSwitchName "%s" -ComputerName localhost | ? Id -EQ "%s"`, testVMSwitchName, OVSExtensionID)}, tc.commandOut, tc.commandErr, false)
@@ -800,7 +752,6 @@ func TestIsVMSwitchOVSExtensionEnabled(t *testing.T) {
 		})
 	}
 }
-
 func TestGetVMSwitchInterfaceName(t *testing.T) {
 	getVMCmd := fmt.Sprintf(`Get-VMSwitchTeam -Name "%s" -ComputerName localhost | select NetAdapterInterfaceDescription |  Format-Table -HideTableHeaders`, testVMSwitchName)
 	getAdapterCmd := fmt.Sprintf(`Get-NetAdapter -InterfaceDescription "%s" | select Name | Format-Table -HideTableHeaders`, "test")
@@ -825,7 +776,6 @@ func TestGetVMSwitchInterfaceName(t *testing.T) {
 			wantErr:    errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, true)
@@ -835,7 +785,6 @@ func TestGetVMSwitchInterfaceName(t *testing.T) {
 		})
 	}
 }
-
 func TestRemoveVMSwitch(t *testing.T) {
 	getCmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName localhost`, testVMSwitchName)
 	removeCmd := fmt.Sprintf(`Remove-VMSwitch -Name "%s" -ComputerName localhost -Force`, testVMSwitchName)
@@ -858,7 +807,6 @@ func TestRemoveVMSwitch(t *testing.T) {
 			wantErr:    errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, true)
@@ -867,7 +815,6 @@ func TestRemoveVMSwitch(t *testing.T) {
 		})
 	}
 }
-
 func TestGetAdapterInAllCompartmentsByName(t *testing.T) {
 	testName := "host"
 	testFlags := net.FlagUp | net.FlagBroadcast | net.FlagPointToPoint | net.FlagMulticast
@@ -912,7 +859,6 @@ func TestGetAdapterInAllCompartmentsByName(t *testing.T) {
 			wantErr:  &net.OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: errNoSuchInterface},
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockGetAdaptersAddresses(t, tc.testAdapters, tc.testAdaptersErr)
@@ -922,7 +868,6 @@ func TestGetAdapterInAllCompartmentsByName(t *testing.T) {
 		})
 	}
 }
-
 func TestEnableNetAdapter(t *testing.T) {
 	enableCmd := fmt.Sprintf(`Enable-NetAdapter -InterfaceAlias "%s"`, testAdapterName)
 	tests := []struct {
@@ -954,7 +899,6 @@ func TestEnableNetAdapter(t *testing.T) {
 		})
 	}
 }
-
 func TestRemoveNetAdapterIPAddress(t *testing.T) {
 	removeCmd := fmt.Sprintf(`Remove-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -Confirm:$false`, testAdapterName, ipv4Public.String())
 	tests := []struct {
@@ -984,7 +928,6 @@ func TestRemoveNetAdapterIPAddress(t *testing.T) {
 			wantCmds:   []string{removeCmd},
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, true)
@@ -993,7 +936,6 @@ func TestRemoveNetAdapterIPAddress(t *testing.T) {
 		})
 	}
 }
-
 func TestAddNetAdapterIPAddress(t *testing.T) {
 	ipStr := strings.Split(ipv4PublicIPNet.String(), "/")
 	configCmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s`, testAdapterName, ipStr[0], ipStr[1])
@@ -1034,7 +976,6 @@ func TestAddNetAdapterIPAddress(t *testing.T) {
 			wantCmds:   []string{configCmd},
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, true)
@@ -1042,9 +983,7 @@ func TestAddNetAdapterIPAddress(t *testing.T) {
 			assert.Equal(t, tc.wantErr, gotErr)
 		})
 	}
-
 }
-
 func createTestAdapterAddresses(name string) *windows.IpAdapterAddresses {
 	testPhysicalAddress := [8]byte{}
 	copy(testPhysicalAddress[:6], testMACAddr)
@@ -1061,7 +1000,6 @@ func createTestAdapterAddresses(name string) *windows.IpAdapterAddresses {
 		Flags:                 IP_ADAPTER_DHCP_ENABLED,
 	}
 }
-
 func createTestMibIPForwardRow(index uint32, subnet *net.IPNet, ip net.IP) antreasyscall.MibIPForwardRow {
 	return antreasyscall.MibIPForwardRow{
 		Index:             index,
@@ -1070,7 +1008,6 @@ func createTestMibIPForwardRow(index uint32, subnet *net.IPNet, ip net.IP) antre
 		NextHop:           *antreasyscall.NewRawSockAddrInetFromIP(ip),
 	}
 }
-
 func mockAntreaNetIO(t *testing.T, mockNetIO *antreasyscalltest.MockNetIO) {
 	originalNetIO := antreaNetIO
 	antreaNetIO = mockNetIO
@@ -1078,7 +1015,6 @@ func mockAntreaNetIO(t *testing.T, mockNetIO *antreasyscalltest.MockNetIO) {
 		antreaNetIO = originalNetIO
 	})
 }
-
 func mockGetAdaptersAddresses(t *testing.T, testAdaptersAddresses *windows.IpAdapterAddresses, err error) {
 	originalGetAdaptersAddresses := getAdaptersAddresses
 	getAdaptersAddresses = func(family uint32, flags uint32, reserved uintptr, adapterAddresses *windows.IpAdapterAddresses, sizePointer *uint32) (errcode error) {
@@ -1099,7 +1035,6 @@ func mockGetAdaptersAddresses(t *testing.T, testAdaptersAddresses *windows.IpAda
 		getAdaptersAddresses = originalGetAdaptersAddresses
 	})
 }
-
 // mockRunCommand mocks runCommand with a custom command output and error message.
 // If exactMatch is enabled, this function asserts that the executed commands are
 // exactly the same as wantCmds in terms of order and value. Otherwise, for tests

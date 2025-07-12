@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package apiserver
-
 import (
 	"context"
 	"time"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,15 +27,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	cpinstall "antrea.io/antrea/apis/pkg/apis/controlplane/install"
-	apistats "antrea.io/antrea/apis/pkg/apis/stats"
-	statsinstall "antrea.io/antrea/apis/pkg/apis/stats/install"
-	systeminstall "antrea.io/antrea/apis/pkg/apis/system/install"
-	system "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	cpinstall "antrea.io/antrea/v2/pkg/apis/controlplane/install"
+	apistats "antrea.io/antrea/v2/pkg/apis/stats"
+	statsinstall "antrea.io/antrea/v2/pkg/apis/stats/install"
+	systeminstall "antrea.io/antrea/v2/pkg/apis/system/install"
+	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/certificate"
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/endpoint"
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/featuregates"
@@ -73,51 +68,48 @@ import (
 	controllerbundlecollection "antrea.io/antrea/v2/pkg/controller/supportbundlecollection"
 	"antrea.io/antrea/v2/pkg/controller/traceflow"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/apis/controlplane"
-	cpinstall "antrea.io/antrea/pkg/apis/controlplane/install"
-	apistats "antrea.io/antrea/pkg/apis/stats"
-	statsinstall "antrea.io/antrea/pkg/apis/stats/install"
-	systeminstall "antrea.io/antrea/pkg/apis/system/install"
-	system "antrea.io/antrea/pkg/apis/system/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/certificate"
-	"antrea.io/antrea/pkg/apiserver/handlers/endpoint"
-	"antrea.io/antrea/pkg/apiserver/handlers/featuregates"
-	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
-	"antrea.io/antrea/pkg/apiserver/handlers/webhook"
-	"antrea.io/antrea/pkg/apiserver/registry/controlplane/egressgroup"
-	"antrea.io/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
-	"antrea.io/antrea/pkg/apiserver/registry/controlplane/supportbundlecollection"
-	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
-	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
-	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
-	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupassociation"
-	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupmember"
-	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/ipgroupassociation"
-	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
-	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/networkpolicyevaluation"
-	"antrea.io/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
-	"antrea.io/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
-	"antrea.io/antrea/pkg/apiserver/registry/stats/multicastgroup"
-	"antrea.io/antrea/pkg/apiserver/registry/stats/networkpolicystats"
-	"antrea.io/antrea/pkg/apiserver/registry/stats/nodelatencystats"
-	"antrea.io/antrea/pkg/apiserver/registry/system/controllerinfo"
-	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	"antrea.io/antrea/pkg/controller/egress"
-	"antrea.io/antrea/pkg/controller/externalippool"
-	"antrea.io/antrea/pkg/controller/ipam"
-	controllernetworkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
-	"antrea.io/antrea/pkg/controller/querier"
-	"antrea.io/antrea/pkg/controller/stats"
-	controllerbundlecollection "antrea.io/antrea/pkg/controller/supportbundlecollection"
-	"antrea.io/antrea/pkg/controller/traceflow"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	cpinstall "antrea.io/antrea/v2/pkg/apis/controlplane/install"
+	apistats "antrea.io/antrea/v2/pkg/apis/stats"
+	statsinstall "antrea.io/antrea/v2/pkg/apis/stats/install"
+	systeminstall "antrea.io/antrea/v2/pkg/apis/system/install"
+	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/certificate"
+	"antrea.io/antrea/v2/pkg/apiserver/handlers/endpoint"
+	"antrea.io/antrea/v2/pkg/apiserver/handlers/featuregates"
+	"antrea.io/antrea/v2/pkg/apiserver/handlers/loglevel"
+	"antrea.io/antrea/v2/pkg/apiserver/handlers/webhook"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/controlplane/egressgroup"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/controlplane/nodestatssummary"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/controlplane/supportbundlecollection"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/addressgroup"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/appliedtogroup"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/clustergroupmember"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/groupassociation"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/groupmember"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/ipgroupassociation"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/networkpolicy"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/networkpolicyevaluation"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/antreanetworkpolicystats"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/multicastgroup"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/networkpolicystats"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/nodelatencystats"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/system/controllerinfo"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/system/supportbundle"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/controller/egress"
+	"antrea.io/antrea/v2/pkg/controller/externalippool"
+	"antrea.io/antrea/v2/pkg/controller/ipam"
+	controllernetworkpolicy "antrea.io/antrea/v2/pkg/controller/networkpolicy"
+	"antrea.io/antrea/v2/pkg/controller/querier"
+	"antrea.io/antrea/v2/pkg/controller/stats"
+	controllerbundlecollection "antrea.io/antrea/v2/pkg/controller/supportbundlecollection"
+	"antrea.io/antrea/v2/pkg/controller/traceflow"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 var (
 	// Scheme defines methods for serializing and deserializing API objects.
 	Scheme = runtime.NewScheme()
@@ -127,7 +119,6 @@ var (
 	// ParameterCodec defines methods for serializing and deserializing url values
 	// to versioned API objects and back.
 	parameterCodec = runtime.NewParameterCodec(Scheme)
-
 	// antreaServedLabelSelector selects resources served by antrea-controller.
 	antreaServedLabelSelector = &metav1.LabelSelector{
 		MatchLabels: map[string]string{
@@ -136,16 +127,13 @@ var (
 		},
 	}
 )
-
 func init() {
 	cpinstall.Install(Scheme)
 	systeminstall.Install(Scheme)
 	statsinstall.Install(Scheme)
-
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
 }
-
 // ExtraConfig holds custom apiserver config.
 type ExtraConfig struct {
 	k8sClient                     kubernetes.Interface
@@ -167,34 +155,28 @@ type ExtraConfig struct {
 	bundleCollectionController    *controllerbundlecollection.Controller
 	traceflowController           *traceflow.Controller
 }
-
 // Config defines the config for Antrea apiserver.
 type Config struct {
 	genericConfig *genericapiserver.Config
 	extraConfig   ExtraConfig
 }
-
 // APIServer contains state for a Kubernetes cluster apiserver.
 type APIServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
 	caCertController *certificate.CACertController
 }
-
 func (s *APIServer) Run(ctx context.Context) error {
 	// Make sure CACertController runs once to publish the CA cert before starting APIServer.
 	if err := s.caCertController.RunOnce(ctx); err != nil {
 		klog.Warningf("caCertController RunOnce failed: %v", err)
 	}
 	go s.caCertController.Run(ctx, 1)
-
 	return s.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
-
 type completedConfig struct {
 	genericConfig genericapiserver.CompletedConfig
 	extraConfig   *ExtraConfig
 }
-
 func NewConfig(
 	genericConfig *genericapiserver.Config,
 	k8sClient kubernetes.Interface,
@@ -235,11 +217,9 @@ func NewConfig(
 		},
 	}
 }
-
 func (c *Config) Complete(informers informers.SharedInformerFactory) completedConfig {
 	return completedConfig{c.genericConfig.Complete(informers), &c.extraConfig}
 }
-
 func installAPIGroup(s *APIServer, c completedConfig) error {
 	addressGroupStorage := addressgroup.NewREST(c.extraConfig.addressGroupStore)
 	appliedToGroupStorage := appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
@@ -270,7 +250,6 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["supportbundlecollections"] = bundleCollectionStorage
 	cpv1beta2Storage["supportbundlecollections/status"] = bundleCollectionStatusStorage
 	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage
-
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	systemStorage := map[string]rest.Storage{}
 	systemStorage["controllerinfos"] = controllerinfo.NewREST(c.extraConfig.controllerQuerier)
@@ -278,7 +257,6 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	systemStorage["supportbundles"] = bundleStorage.SupportBundle
 	systemStorage["supportbundles/download"] = bundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
-
 	statsGroup := genericapiserver.NewDefaultAPIGroupInfo(apistats.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	statsStorage := map[string]rest.Storage{}
 	statsStorage["networkpolicystats"] = networkpolicystats.NewREST(c.extraConfig.statsAggregator)
@@ -287,9 +265,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	statsStorage["multicastgroups"] = multicastgroup.NewREST(c.extraConfig.statsAggregator)
 	statsStorage["nodelatencystats"] = nodelatencystats.NewREST()
 	statsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
-
 	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup, &statsGroup}
-
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
 			return err
@@ -297,26 +273,21 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	}
 	return nil
 }
-
 func (c completedConfig) New() (*APIServer, error) {
 	genericServer, err := c.genericConfig.New("antrea-apiserver", genericapiserver.NewEmptyDelegate())
 	if err != nil {
 		return nil, err
 	}
-
 	s := &APIServer{
 		GenericAPIServer: genericServer,
 		caCertController: c.extraConfig.caCertController,
 	}
-
 	if err := installAPIGroup(s, c); err != nil {
 		return nil, err
 	}
 	installHandlers(c.extraConfig, s.GenericAPIServer)
-
 	return s, nil
 }
-
 // CleanupDeprecatedAPIServices deletes the registered APIService resources for
 // the deprecated Antrea API groups.
 func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
@@ -324,11 +295,8 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	// After Antrea upgrades from an old version to a new version that
 	// deprecates a registered APIService, the APIService should be deleted,
 	// otherwise K8s will fail to delete an existing Namespace.
-<<<<<<< HEAD
 	// Also check: https://github.com/antrea.io/antrea/v2/issues/494
-=======
 	// Also check: https://github.com/antrea-io/antrea/issues/494
->>>>>>> origin/main
 	deprecatedAPIServices := []string{}
 	for _, as := range deprecatedAPIServices {
 		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})
@@ -340,14 +308,12 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	}
 	return nil
 }
-
 func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/featuregates", featuregates.HandleFunc(c.k8sClient))
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
 	// Webhook to mutate Namespace labels and add its metadata.name as a label
 	s.Handler.NonGoRestfulMux.HandleFunc("/mutate/namespace", webhook.HandleMutationLabels())
-
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		// Get new NetworkPolicyMutator
 		m := controllernetworkpolicy.NewNetworkPolicyMutator(c.networkPolicyController)
@@ -355,7 +321,6 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/acnp", webhook.HandleMutationNetworkPolicy(m))
 		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/annp", webhook.HandleMutationNetworkPolicy(m))
 		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/anp", webhook.HandleMutationNetworkPolicy(m))
-
 		// Get new NetworkPolicyValidator
 		v := controllernetworkpolicy.NewNetworkPolicyValidator(c.networkPolicyController)
 		// Install handlers for NetworkPolicy related validation
@@ -366,7 +331,6 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/banp", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/group", webhook.HandlerForValidateFunc(v.Validate))
-
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
 			go func() {
@@ -378,29 +342,23 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 			return nil
 		})
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/externalippool", webhook.HandlerForValidateFunc(c.externalIPPoolController.ValidateExternalIPPool))
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/egress", webhook.HandlerForValidateFunc(c.egressController.ValidateEgress))
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) || features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/convert/ippool", webhook.HandleCRDConversion(ipam.ConvertIPPool))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/ippool", webhook.HandlerForValidateFunc(ipam.ValidateIPPool))
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/supportbundlecollection", webhook.HandlerForValidateFunc(c.bundleCollectionController.Validate))
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/traceflow", webhook.HandlerForValidateFunc(c.traceflowController.Validate))
 	}
 }
-
 func DefaultCAConfig() *certificate.CAConfig {
 	return &certificate.CAConfig{
 		CAConfigMapName:              apis.AntreaCAConfigMapName,

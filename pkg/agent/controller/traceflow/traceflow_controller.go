@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package traceflow
-
 import (
 	"context"
 	"encoding/json"
@@ -22,7 +20,6 @@ import (
 	"net"
 	"sync"
 	"time"
-
 	"antrea.io/libOpenflow/protocol"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,32 +32,27 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/util"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 const (
 	controllerName = "AntreaAgentTraceflowController"
 	// Set resyncPeriod to 0 to disable resyncing.
@@ -74,15 +66,12 @@ const (
 	// synchronized, which requires a delay before inject packet.
 	injectPacketDelay      = 2000
 	injectLocalPacketDelay = 100
-
 	// ICMP Echo Request type and code.
 	icmpEchoRequestType   uint8 = 8
 	icmpv6EchoRequestType uint8 = 128
 	icmpEchoRequestCode   uint8 = 0
-
 	defaultTTL uint8 = 64
 )
-
 type traceflowState struct {
 	name string
 	// Used to uniquely identify Traceflow.
@@ -96,7 +85,6 @@ type traceflowState struct {
 	// Agent received the first Traceflow packet from OVS.
 	receivedPacket bool
 }
-
 // Controller is responsible for setting up Openflow entries and injecting traceflow packet into
 // the switch for traceflow request.
 type Controller struct {
@@ -121,7 +109,6 @@ type Controller struct {
 	runningTraceflows map[int8]*traceflowState
 	enableAntreaProxy bool
 }
-
 // NewTraceflowController instantiates a new Controller object which will process Traceflow
 // events.
 func NewTraceflowController(
@@ -159,7 +146,6 @@ func NewTraceflowController(
 		runningTraceflows: make(map[int8]*traceflowState),
 		enableAntreaProxy: enableAntreaProxy,
 	}
-
 	// Add handlers for Traceflow events.
 	traceflowInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -178,20 +164,16 @@ func NewTraceflowController(
 	}
 	return c
 }
-
 // enqueueTraceflow adds an object to the controller work queue.
 func (c *Controller) enqueueTraceflow(tf *crdv1beta1.Traceflow) {
 	c.queue.Add(tf.Name)
 }
-
 // Run will create defaultWorkers workers (go routines) which will process the Traceflow events from the
 // workqueue.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
-
 	cacheSyncs := []cache.InformerSynced{c.traceflowListerSynced}
 	if c.enableAntreaProxy {
 		cacheSyncs = append(cacheSyncs, c.serviceListerSynced)
@@ -199,38 +181,32 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
 	}
-
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
 	<-stopCh
 }
-
 func (c *Controller) addTraceflow(obj interface{}) {
 	tf := obj.(*crdv1beta1.Traceflow)
 	klog.Infof("Processing Traceflow %s ADD event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
-
 func (c *Controller) updateTraceflow(_, curObj interface{}) {
 	tf := curObj.(*crdv1beta1.Traceflow)
 	klog.Infof("Processing Traceflow %s UPDATE event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
-
 func (c *Controller) deleteTraceflow(old interface{}) {
 	tf := old.(*crdv1beta1.Traceflow)
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
-
 // worker is a long-running function that will continually call the processTraceflowItem function
 // in order to read and process a message on the workqueue.
 func (c *Controller) worker() {
 	for c.processTraceflowItem() {
 	}
 }
-
 // processTraceflowItem processes an item in the "traceflow" work queue, by calling syncTraceflow
 // after casting the item to a string (Traceflow name). If syncTraceflow returns an error, this
 // function logs error. If syncTraceflow is successful, the Traceflow is removed from the queue
@@ -246,7 +222,6 @@ func (c *Controller) processTraceflowItem() bool {
 	// example, we do not call Forget if a transient error occurs, instead the item is put back
 	// on the workqueue and attempted again after a back-off period.
 	defer c.queue.Done(key)
-
 	if err := c.syncTraceflow(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again.
 		c.queue.Forget(key)
@@ -256,7 +231,6 @@ func (c *Controller) processTraceflowItem() bool {
 	}
 	return true
 }
-
 // TODO: Let controller compute which Node is the sender, and each Node watch the TF CRD with some
 // filter to get and process only TF from the Node.
 //
@@ -266,7 +240,6 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 	defer func() {
 		klog.V(4).Infof("Finished syncing Traceflow for %s. (%v)", traceflowName, time.Since(startTime))
 	}()
-
 	tf, err := c.traceflowLister.Get(traceflowName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -275,7 +248,6 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 		}
 		return err
 	}
-
 	switch tf.Status.Phase {
 	case crdv1beta1.Running:
 		if tf.Status.DataplaneTag != 0 {
@@ -303,7 +275,6 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 	}
 	return err
 }
-
 // startTraceflow deploys OVS flow entries for Traceflow and inject packet if current Node
 // is Sender Node.
 func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
@@ -317,7 +288,6 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	if err != nil {
 		return err
 	}
-
 	receiverOnly := false
 	var pod, ns string
 	if tf.Spec.Source.Pod != "" {
@@ -329,12 +299,10 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 		ns = tf.Spec.Destination.Namespace
 		receiverOnly = true
 	}
-
 	// TODO: let controller compute the sender/receiver Node, and the sender
 	// /receiver Node can just return an error, if fails to find the Pod.
 	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
 	isSender := len(podInterfaces) > 0 && !receiverOnly
-
 	liveTraffic := tf.Spec.LiveTraffic
 	var packet, matchPacket *binding.Packet
 	var ofPort uint32
@@ -352,7 +320,6 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 		}
 		klog.V(2).Infof("Traceflow packet %v", *packet)
 	}
-
 	// Store Traceflow to cache.
 	c.runningTraceflowsMutex.Lock()
 	tfState := traceflowState{
@@ -361,7 +328,6 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 		receiverOnly: receiverOnly, isSender: isSender}
 	c.runningTraceflows[tfState.tag] = &tfState
 	c.runningTraceflowsMutex.Unlock()
-
 	// Install flow entries for traceflow.
 	klog.V(2).Infof("Installing flow entries for Traceflow %s", tf.Name)
 	timeout := tf.Spec.Timeout
@@ -372,7 +338,6 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	if err != nil {
 		return err
 	}
-
 	// Skip packet injection if the source Pod is not found on the local Node.
 	if !liveTraffic && isSender {
 		if packet.DestinationMAC == nil {
@@ -390,7 +355,6 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	}
 	return err
 }
-
 func (c *Controller) validateTraceflow(tf *crdv1beta1.Traceflow) error {
 	if tf.Spec.Destination.Service != "" && !c.enableAntreaProxy {
 		return errors.New("using Service destination requires AntreaProxy enabled")
@@ -405,7 +369,6 @@ func (c *Controller) validateTraceflow(tf *crdv1beta1.Traceflow) error {
 	}
 	return nil
 }
-
 func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestore.InterfaceConfig, receiverOnly bool) (*binding.Packet, error) {
 	liveTraffic := tf.Spec.LiveTraffic
 	isICMP := false
@@ -425,7 +388,6 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 		}
 		packet.SourceMAC = intf.MAC
 	}
-
 	if receiverOnly {
 		if tf.Spec.Source.IP != "" {
 			packet.SourceIP = net.ParseIP(tf.Spec.Source.IP)
@@ -515,7 +477,6 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 	} else if !liveTraffic {
 		return nil, errors.New("destination is not specified")
 	}
-
 	if tf.Spec.Packet.IPv6Header != nil {
 		// IP Protocol 0 (IPv6 Hop-by-Hop Option) is not supported by
 		// Traceflow. If NextHeader is not provided, protocol ICMPv6
@@ -539,7 +500,6 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 	if !liveTraffic && packet.TTL == 0 {
 		packet.TTL = defaultTTL
 	}
-
 	// TCP > UDP > ICMP > other IP protocol.
 	if tf.Spec.Packet.TransportHeader.TCP != nil {
 		packet.IPProto = protocol.Type_TCP
@@ -568,7 +528,6 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 			packet.ICMPEchoSeq = uint16(tf.Spec.Packet.TransportHeader.ICMP.Sequence)
 		}
 	}
-
 	// Defaults to ICMP if not live-traffic Traceflow.
 	if packet.IPProto == 0 && !liveTraffic || packet.IPProto == protocol.Type_ICMP || packet.IPProto == protocol.Type_IPv6ICMP {
 		isICMP = true
@@ -589,13 +548,10 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 			packet.ICMPCode = icmpEchoRequestCode
 		}
 	}
-
 	return packet, nil
 }
-
 func (c *Controller) errorTraceflowCRD(tf *crdv1beta1.Traceflow, reason string) (*crdv1beta1.Traceflow, error) {
 	tf.Status.Phase = crdv1beta1.Failed
-
 	type Traceflow struct {
 		Status crdv1beta1.TraceflowStatus `json:"status,omitempty"`
 	}
@@ -603,7 +559,6 @@ func (c *Controller) errorTraceflowCRD(tf *crdv1beta1.Traceflow, reason string) 
 	payloads, _ := json.Marshal(patchData)
 	return c.crdClient.CrdV1beta1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
-
 // Delete Traceflow state and OVS flows.
 func (c *Controller) cleanupTraceflow(tfName string) {
 	c.runningTraceflowsMutex.Lock()

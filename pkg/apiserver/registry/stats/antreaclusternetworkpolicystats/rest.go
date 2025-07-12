@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package antreaclusternetworkpolicystats
-
 import (
 	"context"
 	"time"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metatable "k8s.io/apimachinery/pkg/api/meta/table"
@@ -26,16 +23,11 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
-
-<<<<<<< HEAD
-	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 var (
 	tableColumnDefinitions = []metav1.TableColumnDefinition{
 		{Name: "Name", Type: "string", Format: "name", Description: swaggerMetadataDescriptions["name"]},
@@ -45,16 +37,13 @@ var (
 		{Name: "Created At", Type: "date", Description: swaggerMetadataDescriptions["creationTimestamp"]},
 	}
 )
-
 type REST struct {
 	statsProvider statsProvider
 }
-
 // NewREST returns a REST object that will work against API services.
 func NewREST(p statsProvider) *REST {
 	return &REST{p}
 }
-
 var (
 	_ rest.Storage              = &REST{}
 	_ rest.Scoper               = &REST{}
@@ -62,24 +51,18 @@ var (
 	_ rest.Lister               = &REST{}
 	_ rest.SingularNameProvider = &REST{}
 )
-
 type statsProvider interface {
 	ListAntreaClusterNetworkPolicyStats() []statsv1alpha1.AntreaClusterNetworkPolicyStats
-
 	GetAntreaClusterNetworkPolicyStats(name string) (*statsv1alpha1.AntreaClusterNetworkPolicyStats, bool)
 }
-
 func (r *REST) New() runtime.Object {
 	return &statsv1alpha1.AntreaClusterNetworkPolicyStats{}
 }
-
 func (r *REST) Destroy() {
 }
-
 func (r *REST) NewList() runtime.Object {
 	return &statsv1alpha1.AntreaClusterNetworkPolicyStatsList{}
 }
-
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	if !features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		return &statsv1alpha1.AntreaClusterNetworkPolicyStatsList{}, nil
@@ -103,7 +86,6 @@ func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (
 	}
 	return metricList, nil
 }
-
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	if !features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		return &statsv1alpha1.AntreaClusterNetworkPolicyStats{}, nil
@@ -117,13 +99,10 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	}
 	return metric, nil
 }
-
 var swaggerMetadataDescriptions = metav1.ObjectMeta{}.SwaggerDoc()
-
 func formatTimestamp(t metav1.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }
-
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	table := &metav1.Table{
 		ColumnDefinitions: tableColumnDefinitions,
@@ -137,7 +116,6 @@ func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOpti
 			table.ResourceVersion = m.GetResourceVersion()
 		}
 	}
-
 	var err error
 	table.Rows, err = metatable.MetaToTableRow(obj, func(obj runtime.Object, m metav1.Object, name, age string) ([]interface{}, error) {
 		stats := obj.(*statsv1alpha1.AntreaClusterNetworkPolicyStats)
@@ -145,11 +123,9 @@ func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOpti
 	})
 	return table, err
 }
-
 func (r *REST) NamespaceScoped() bool {
 	return false
 }
-
 func (r *REST) GetSingularName() string {
 	return "antreaclusternetworkpolicystats"
 }

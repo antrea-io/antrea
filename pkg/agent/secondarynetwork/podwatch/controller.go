@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package podwatch
-
 import (
 	"context"
 	"encoding/json"
@@ -21,7 +19,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -30,35 +27,29 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
 	current "github.com/containernetworking/cni/pkg/types/100"
 	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	cnitypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/util/channel"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver"
-	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	cnitypes "antrea.io/antrea/pkg/agent/cniserver/types"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/types"
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/util/channel"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver"
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
+	cnitypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/util/channel"
 )
-
 const (
 	controllerName = "SecondaryNetworkController"
 	minRetryDelay  = 2 * time.Second
@@ -67,33 +58,27 @@ const (
 	// Set resyncPeriod to 0 to disable resyncing.
 	resyncPeriod = 0 * time.Minute
 )
-
 const (
 	resourceNameAnnotationKey = "k8s.v1.cni.cncf.io/resourceName"
 	startIfaceIndex           = 1
 	endIfaceIndex             = 101
-
 	interfaceDefaultMTU = 1500
 	vlanIDMax           = 4094
 )
-
 type InterfaceConfigurator interface {
 	ConfigureSriovSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, podSriovVFDeviceID string, result *current.Result) error
 	DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error
 	ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, ipamResult *ipam.IPAMResult) error
 	DeleteVLANSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error
 }
-
 type IPAMAllocator interface {
 	SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networkConfig *cnitypes.NetworkConfig) (*ipam.IPAMResult, error)
 	SecondaryNetworkRelease(podOwner *crdv1b1.PodOwner) error
 }
-
 type podCNIInfo struct {
 	containerID string
 	netNS       string
 }
-
 type PodController struct {
 	kubeClient            clientset.Interface
 	netAttachDefClient    netdefclient.K8sCniCncfIoV1Interface
@@ -110,7 +95,6 @@ type PodController struct {
 	vfDeviceIDUsageMap sync.Map
 	nodeConfig         *config.NodeConfig
 }
-
 func NewPodController(
 	kubeClient clientset.Interface,
 	netAttachDefClient netdefclient.K8sCniCncfIoV1Interface,
@@ -151,19 +135,16 @@ func NewPodController(
 		},
 		resyncPeriod,
 	)
-
 	// This is the case when secondary bridge is not configured and no VLAN interfaces at all. In this case,
 	// we should skip both initializeSecondaryInterfaceStore and reconcileSecondaryInterfaces.
 	if ovsBridgeClient != nil {
 		if err := pc.initializeSecondaryInterfaceStore(); err != nil {
 			return nil, fmt.Errorf("failed to initialize secondary interface store: %w", err)
 		}
-
 		if err := pc.reconcileSecondaryInterfaces(); err != nil {
 			return nil, fmt.Errorf("failed to restore CNI cache and reconcile secondary interfaces: %w", err)
 		}
 	}
-
 	// podUpdateSubscriber can be nil with test code.
 	if podUpdateSubscriber != nil {
 		// Subscribe Pod CNI add/del events.
@@ -171,11 +152,9 @@ func NewPodController(
 	}
 	return &pc, nil
 }
-
 func podKeyGet(podName, podNamespace string) string {
 	return podNamespace + "/" + podName
 }
-
 func allocatePodSecondaryIfaceName(usedIFNames sets.Set[string]) (string, error) {
 	// Generate new interface name (eth1,eth2..eth100) and return to caller.
 	for ifaceIndex := startIfaceIndex; ifaceIndex < endIfaceIndex; ifaceIndex++ {
@@ -187,7 +166,6 @@ func allocatePodSecondaryIfaceName(usedIFNames sets.Set[string]) (string, error)
 	}
 	return "", fmt.Errorf("no more interface names")
 }
-
 func (pc *PodController) enqueuePod(obj interface{}) {
 	pod, isPod := obj.(*corev1.Pod)
 	if !isPod {
@@ -205,7 +183,6 @@ func (pc *PodController) enqueuePod(obj interface{}) {
 	podKey := podKeyGet(pod.Name, pod.Namespace)
 	pc.queue.Add(podKey)
 }
-
 // processCNIUpdate will be called when CNIServer publishes a Pod update event.
 func (pc *PodController) processCNIUpdate(e interface{}) {
 	event := e.(types.PodUpdate)
@@ -217,7 +194,6 @@ func (pc *PodController) processCNIUpdate(e interface{}) {
 	}
 	pc.queue.Add(podKeyGet(event.PodName, event.PodNamespace))
 }
-
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
 func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNIInfo, storedSecondaryInterfaces []*interfacestore.InterfaceConfig) error {
 	if len(storedSecondaryInterfaces) > 0 {
@@ -233,7 +209,6 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 		// update events.
 		return nil
 	}
-
 	secondaryNetwork, ok := checkForPodSecondaryNetworkAttachment(pod)
 	if !ok {
 		// NOTE: We do not handle Pod annotation deletion/update scenario at present.
@@ -248,10 +223,8 @@ func (pc *PodController) handleAddUpdatePod(pod *corev1.Pod, podCNIInfo *podCNII
 		// When the annotation is fixed, the Pod will be enqueued again.
 		return nil
 	}
-
 	return pc.configurePodSecondaryNetwork(pod, networklist, podCNIInfo)
 }
-
 func (pc *PodController) removeInterfaces(interfaces []*interfacestore.InterfaceConfig) error {
 	var savedErr error
 	for _, interfaceConfig := range interfaces {
@@ -259,7 +232,6 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 		podNamespace := interfaceConfig.PodNamespace
 		klog.V(1).InfoS("Deleting secondary interface",
 			"Pod", klog.KRef(podNamespace, podName), "interface", interfaceConfig.IFDev)
-
 		var err error
 		// Since only VLAN and SR-IOV interfaces are supported by now, we judge the
 		// interface type by checking interfaceConfig.OVSPortConfig is set or not.
@@ -274,7 +246,6 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 			savedErr = err
 			continue
 		}
-
 		podOwner := &crdv1b1.PodOwner{
 			Name:        interfaceConfig.PodName,
 			Namespace:   interfaceConfig.PodNamespace,
@@ -288,12 +259,10 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 	}
 	return savedErr
 }
-
 func (pc *PodController) syncPod(key string) error {
 	var pod *corev1.Pod
 	var cniInfo *podCNIInfo
 	podExists := false
-
 	if cniObj, cniAdded := pc.cniCache.Load(key); cniAdded {
 		podObj, ok, err := pc.podInformer.GetIndexer().GetByKey(key)
 		if err != nil {
@@ -305,7 +274,6 @@ func (pc *PodController) syncPod(key string) error {
 			podExists = true
 		}
 	}
-
 	namespacePod := strings.Split(key, "/")
 	podNamespace := namespacePod[0]
 	podName := namespacePod[1]
@@ -322,19 +290,16 @@ func (pc *PodController) syncPod(key string) error {
 			}
 		}
 	}
-
 	if !podExists {
 		pc.deleteVFDeviceIDListPerPod(podName, podNamespace)
 		return nil
 	}
 	return pc.handleAddUpdatePod(pod, cniInfo, storedSecondaryInterfaces)
 }
-
 func (pc *PodController) Worker() {
 	for pc.processNextWorkItem() {
 	}
 }
-
 func (pc *PodController) processNextWorkItem() bool {
 	key, quit := pc.queue.Get()
 	if quit {
@@ -349,7 +314,6 @@ func (pc *PodController) processNextWorkItem() bool {
 	}
 	return true
 }
-
 // Configure Secondary Network Interface.
 func (pc *PodController) configureSecondaryInterface(
 	pod *corev1.Pod,
@@ -386,7 +350,6 @@ func (pc *PodController) configureSecondaryInterface(
 	} else {
 		ipamResult = &ipam.IPAMResult{}
 	}
-
 	switch networkConfig.NetworkType {
 	case sriovNetworkType:
 		ifConfigErr = pc.configureSriovAsSecondaryInterface(pod, network, resourceName, podCNIInfo, int(networkConfig.MTU), &ipamResult.Result)
@@ -403,7 +366,6 @@ func (pc *PodController) configureSecondaryInterface(
 	}
 	return &ipamResult.Result, ifConfigErr
 }
-
 func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkList []*netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo) error {
 	usedIFNames := sets.New[string]()
 	for _, network := range networkList {
@@ -411,7 +373,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			usedIFNames.Insert(network.InterfaceRequest)
 		}
 	}
-
 	var savedErr error
 	interfacesConfigured := 0
 	var netStatus []netdefv1.NetworkStatus
@@ -435,7 +396,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 		}
 		netStatus = append(netStatus, primaryNetworkStatus)
 	}
-
 	for _, network := range networkList {
 		klog.V(2).InfoS("Secondary Network attached to Pod", "network", network, "Pod", klog.KObj(pod))
 		netAttachDef, err := pc.netAttachDefClient.NetworkAttachmentDefinitions(network.Namespace).Get(context.TODO(), network.Name, metav1.GetOptions{})
@@ -445,7 +405,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			savedErr = err
 			continue
 		}
-
 		cniConfig, err := netdefutils.GetCNIConfig(netAttachDef, "")
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse NetworkAttachmentDefinition",
@@ -453,7 +412,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			// NetworkAttachmentDefinition Spec.Config parsing failed. Do not retry.
 			continue
 		}
-
 		networkConfig, err := validateNetworkConfig(cniConfig)
 		if err != nil {
 			if networkConfig != nil && networkConfig.Type != cniserver.AntreaCNIType {
@@ -466,7 +424,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			}
 			continue
 		}
-
 		var resourceName string
 		if networkConfig.NetworkType == sriovNetworkType {
 			v, ok := netAttachDef.Annotations[resourceNameAnnotationKey]
@@ -482,7 +439,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			}
 			resourceName = v
 		}
-
 		// Generate a new interface name, if the secondary interface name was not provided in the
 		// Pod annotation.
 		if network.InterfaceRequest == "" {
@@ -493,7 +449,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 				continue
 			}
 		}
-
 		// Secondary network information retrieved from API server. Proceed to configure secondary interface now.
 		res, err := pc.configureSecondaryInterface(pod, network, resourceName, podCNIInfo, networkConfig)
 		if err != nil {
@@ -507,28 +462,23 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			Name:    network.Name,
 			Default: false, // Secondary interfaces are not for the default Pod network
 		}
-
 		for _, iface := range res.Interfaces {
 			if iface.Sandbox != "" {
 				status.Interface = iface.Name
 				status.Mac = iface.Mac
 			}
 		}
-
 		for _, ip := range res.IPs {
 			status.IPs = append(status.IPs, ip.Address.IP.String())
 		}
-
 		netStatus = append(netStatus, *status)
 		interfacesConfigured++
 	}
-
 	if savedErr != nil && interfacesConfigured == 0 {
 		// As we do not support secondary network update, do not return error to
 		// retry, if at least one secondary network is configured.
 		return savedErr
 	}
-
 	// Update the Pod's network status annotation
 	if netStatus != nil {
 		if err := netdefutils.SetNetworkStatus(pc.kubeClient, pod, netStatus); err != nil {
@@ -539,7 +489,6 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 	}
 	return nil
 }
-
 func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
 	var networkConfig SecondaryNetworkConfig
 	if err := json.Unmarshal(cniConfig, &networkConfig); err != nil {
@@ -567,14 +516,12 @@ func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
 			return &networkConfig, fmt.Errorf("unsupported IPAM type %s", networkConfig.IPAM.Type)
 		}
 	}
-
 	if networkConfig.MTU == 0 {
 		// TODO: use the physical interface MTU as the default.
 		networkConfig.MTU = interfaceDefaultMTU
 	}
 	return &networkConfig, nil
 }
-
 func (pc *PodController) Run(stopCh <-chan struct{}) {
 	defer func() {
 		klog.InfoS("Shutting down", "controller", controllerName)
@@ -589,7 +536,6 @@ func (pc *PodController) Run(stopCh <-chan struct{}) {
 	}
 	<-stopCh
 }
-
 func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 	annotations := pod.GetAnnotations()
 	if annotations == nil {
@@ -598,14 +544,12 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 	netObj, netObjExist := annotations[netdefv1.NetworkAttachmentAnnot]
 	return netObj, netObjExist
 }
-
 // initializeSecondaryInterfaceStore restores secondary interfaceStore when agent restarts.
 func (pc *PodController) initializeSecondaryInterfaceStore() error {
 	ovsPorts, err := pc.ovsBridgeClient.GetPortList()
 	if err != nil {
 		return fmt.Errorf("failed to list OVS ports for the secondary bridge: %w", err)
 	}
-
 	ifaceList := make([]*interfacestore.InterfaceConfig, 0, len(ovsPorts))
 	for index := range ovsPorts {
 		port := &ovsPorts[index]
@@ -613,13 +557,11 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 			PortUUID: port.UUID,
 			OFPort:   port.OFPort,
 		}
-
 		interfaceType, ok := port.ExternalIDs[interfacestore.AntreaInterfaceTypeKey]
 		if !ok {
 			klog.InfoS("Interface type is not set for the secondary bridge", "interfaceName", port.Name)
 			continue
 		}
-
 		var intf *interfacestore.InterfaceConfig
 		switch interfaceType {
 		case interfacestore.AntreaContainer:
@@ -630,13 +572,10 @@ func (pc *PodController) initializeSecondaryInterfaceStore() error {
 		}
 		ifaceList = append(ifaceList, intf)
 	}
-
 	pc.interfaceStore.Initialize(ifaceList)
 	klog.InfoS("Successfully initialized the secondary bridge interface store")
-
 	return nil
 }
-
 // reconcileSecondaryInterfaces restores cniCache when agent restarts using primary interfaceStore.
 func (pc *PodController) reconcileSecondaryInterfaces() error {
 	knownInterfaces := pc.primaryInterfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
@@ -648,7 +587,6 @@ func (pc *PodController) reconcileSecondaryInterfaces() error {
 			netNS:       config.NetNS,
 		})
 	}
-
 	var staleInterfaces []*interfacestore.InterfaceConfig
 	// secondaryInterfaces is the list of interfaces currently in the secondary local cache.
 	secondaryInterfaces := pc.interfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
@@ -659,13 +597,11 @@ func (pc *PodController) reconcileSecondaryInterfaces() error {
 			staleInterfaces = append(staleInterfaces, containerConfig)
 		}
 	}
-
 	// If there are any stale interfaces, pass them to removeInterfaces()
 	if len(staleInterfaces) > 0 {
 		if err := pc.removeInterfaces(staleInterfaces); err != nil {
 			klog.ErrorS(err, "Failed to remove stale secondary interfaces", "staleInterfaces", staleInterfaces)
 		}
 	}
-
 	return nil
 }

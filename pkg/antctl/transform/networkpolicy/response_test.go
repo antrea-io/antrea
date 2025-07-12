@@ -11,28 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"math"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 func TestListTransform(t *testing.T) {
 	var npA = cpv1beta.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -90,14 +82,12 @@ func TestListTransform(t *testing.T) {
 			Name: "e",
 		},
 	}
-
 	var npList1 = &cpv1beta.NetworkPolicyList{
 		Items: []cpv1beta.NetworkPolicy{npA, npC, npB},
 	}
 	var npList2 = &cpv1beta.NetworkPolicyList{
 		Items: []cpv1beta.NetworkPolicy{npA, npE, npD, npC},
 	}
-
 	tests := []struct {
 		name             string
 		opts             map[string]string
@@ -168,7 +158,6 @@ func TestListTransform(t *testing.T) {
 			expectedResponse: "",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := listTransform(tt.npList, tt.opts)
@@ -181,14 +170,12 @@ func TestListTransform(t *testing.T) {
 		})
 	}
 }
-
 func TestEvaluationResponseTransform(t *testing.T) {
 	test := EvaluationResponse{&cpv1beta.NetworkPolicyEvaluation{}}
 	assert.Equal(t, []string{"NAME", "NAMESPACE", "POLICY-TYPE", "RULE-INDEX", "DIRECTION", "ACTION"}, test.GetTableHeader())
 	assert.False(t, test.SortRows())
 	assert.Equal(t, []string{"", "", "", "", "", ""}, test.GetTableRow(32))
 	testDropAction, testAllowAction := crdv1beta1.RuleActionDrop, crdv1beta1.RuleActionAllow
-
 	tests := []struct {
 		name           string
 		testResponse   *cpv1beta.NetworkPolicyEvaluationResponse
@@ -247,7 +234,6 @@ func TestEvaluationResponseTransform(t *testing.T) {
 			expectedOutput: []string{"testError", "ns", "AntreaNetworkPolicy", "10", "In", "Unknown"},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			test.Response = tt.testResponse

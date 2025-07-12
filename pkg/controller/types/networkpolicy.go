@@ -11,36 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package types
-
 import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 )
-
 // SpanMeta describes the span information of an object.
 type SpanMeta struct {
 	// NodeNames is a set of node names that this object should be sent to.
 	// nil means it's not calculated yet while empty set means the span is 0 Node.
 	NodeNames sets.Set[string]
 }
-
 // Span provides methods to work with SpanMeta and objects composed of it.
 type Span interface {
 	Has(nodeName string) bool
 }
-
 func (meta *SpanMeta) Has(nodeName string) bool {
 	return meta.NodeNames.Has(nodeName)
 }
-
 // AppliedToGroup describes a set of GroupMembers or a Service to apply Network Policies to.
 type AppliedToGroup struct {
 	SpanMeta
@@ -52,7 +42,6 @@ type AppliedToGroup struct {
 	// In case the AddressGroup is created for a Group, it's the Namespace/Name of the corresponding Group.
 	// Otherwise, it's same as UID.
 	Name string
-
 	// Selector, Service, and SourceGroup are mutually exclusive ways of selecting GroupMembers for the AppliedToGroup.
 	// For any AppliedToGroup, only one must be set.
 	// Selector describes how the group selects pods using selector.
@@ -62,7 +51,6 @@ type AppliedToGroup struct {
 	Service *controlplane.ServiceReference
 	// SourceGroup refers to the ClusterGroup or Group the AppliedToGroup is derived from.
 	SourceGroup string
-
 	// GroupMemberByNode is a mapping from nodeName to a set of GroupMembers on the Node,
 	// either GroupMembers or ExternalEntity on the external node.
 	// It will be converted to a slice of GroupMember for transferring according
@@ -71,7 +59,6 @@ type AppliedToGroup struct {
 	// SyncError is the Error encountered when syncing this AppliedToGroup.
 	SyncError error
 }
-
 // AddressGroup describes a set of addresses used as source or destination of Network Policy rules.
 type AddressGroup struct {
 	SpanMeta
@@ -82,20 +69,17 @@ type AddressGroup struct {
 	// In case the AddressGroup is created for a Group, it's the Namespace/Name of the corresponding ClusterGroup.
 	// Otherwise, it's same as UID.
 	Name string
-
 	// Selector and SourceGroup are mutually exclusive ways of selecting GroupMembers for the AddressGroup.
 	// For any AddressGroup, only one must be set.
 	// Selector describes how the group selects pods to get their addresses.
 	Selector *GroupSelector
 	// SourceGroup refers to the ClusterGroup or Group the AddressGroup is derived from.
 	SourceGroup string
-
 	// GroupMembers is a set of GroupMembers selected by this group.
 	// It will be converted to a slice of GroupMember for transferring according
 	// to client's selection.
 	GroupMembers controlplane.GroupMemberSet
 }
-
 // NetworkPolicy describes what network traffic is allowed for a set of GroupMembers.
 type NetworkPolicy struct {
 	SpanMeta
@@ -123,7 +107,6 @@ type NetworkPolicy struct {
 	// SyncError is the Error encountered when syncing this NetworkPolicy.
 	SyncError error
 }
-
 // GetAddressGroups returns AddressGroups used by this NetworkPolicy.
 func (p *NetworkPolicy) GetAddressGroups() sets.Set[string] {
 	addressGroups := sets.New[string]()
@@ -133,12 +116,10 @@ func (p *NetworkPolicy) GetAddressGroups() sets.Set[string] {
 	}
 	return addressGroups
 }
-
 // GetAppliedToGroups returns AppliedToGroups used by this NetworkPolicy.
 func (p *NetworkPolicy) GetAppliedToGroups() sets.Set[string] {
 	return sets.New[string](p.AppliedToGroups...)
 }
-
 // RuleInfo stores the original NetworkPolicy info, index of this rule in the NetworkPolicy
 // corresponding ingress/egress rules, and the original rule info.
 type RuleInfo struct {
@@ -146,7 +127,6 @@ type RuleInfo struct {
 	Index  int32
 	Rule   *controlplane.NetworkPolicyRule
 }
-
 // EndpointNetworkPolicyRules records policies applied to this endpoint, and rules
 // that refer this endpoint in their address groups.
 type EndpointNetworkPolicyRules struct {

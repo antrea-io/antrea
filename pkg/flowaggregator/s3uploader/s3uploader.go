@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package s3uploader
-
 import (
 	"bytes"
 	"compress/gzip"
@@ -23,36 +21,27 @@ import (
 	"math/rand/v2"
 	"sync"
 	"time"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	config "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	config "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	config "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 )
-
 const (
 	bufferFlushTimeout         = 1 * time.Minute
 	maxNumBuffersPendingUpload = 5
 )
-
 // GetS3BucketRegion is used for unit testing
 var GetS3BucketRegion = getBucketRegion
-
 type stopPayload struct {
 	flushQueue bool
 }
-
 type S3UploadProcess struct {
 	bucketName       string
 	bucketPrefix     string
@@ -89,25 +78,20 @@ type S3UploadProcess struct {
 	s3UploaderAPI S3UploaderAPI
 	clusterUUID   string
 }
-
 type S3Input struct {
 	Config         config.S3UploaderConfig
 	UploadInterval time.Duration
 }
-
 // Define a wrapper interface S3UploaderAPI to assist unit testing.
 type S3UploaderAPI interface {
 	Upload(ctx context.Context, input *s3.PutObjectInput, awsS3Uploader *s3manager.Uploader, opts ...func(*s3manager.Uploader)) (
 		*s3manager.UploadOutput, error,
 	)
 }
-
 type S3Uploader struct{}
-
 func (u *S3Uploader) Upload(ctx context.Context, input *s3.PutObjectInput, awsS3Uploader *s3manager.Uploader, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
 	return awsS3Uploader.Upload(ctx, input, opts...)
 }
-
 // getBucketRegion determines the exact region in which the bucket is
 // located. regionHint can be any region in the same partition as the one in
 // which the bucket is located.
@@ -115,7 +99,6 @@ func getBucketRegion(ctx context.Context, bucket string, regionHint string) (str
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(regionHint))
 	if err != nil {
 		return "", fmt.Errorf("unable to load AWS SDK config: %w", err)
-
 	}
 	s3Client := s3.NewFromConfig(awsCfg)
 	bucketRegion, err := s3manager.GetBucketRegion(ctx, s3Client, bucket)
@@ -124,7 +107,6 @@ func getBucketRegion(ctx context.Context, bucket string, regionHint string) (str
 	}
 	return bucketRegion, err
 }
-
 func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, error) {
 	config := input.Config
 	region, err := GetS3BucketRegion(context.TODO(), config.BucketName, config.Region)
@@ -138,9 +120,7 @@ func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, er
 	}
 	awsS3Client := s3.NewFromConfig(awsCfg)
 	awsS3Uploader := s3manager.NewUploader(awsS3Client)
-
 	buf := &bytes.Buffer{}
-
 	s3ExportProcess := &S3UploadProcess{
 		bucketName:       config.BucketName,
 		bucketPrefix:     config.BucketPrefix,
@@ -159,31 +139,26 @@ func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, er
 	}
 	return s3ExportProcess, nil
 }
-
 func (p *S3UploadProcess) GetBucketName() string {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	return p.bucketName
 }
-
 func (p *S3UploadProcess) GetBucketPrefix() string {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	return p.bucketPrefix
 }
-
 func (p *S3UploadProcess) GetRegion() string {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	return p.region
 }
-
 func (p *S3UploadProcess) GetUploadInterval() time.Duration {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	return p.uploadInterval
 }
-
 func (p *S3UploadProcess) UpdateS3Uploader(bucketName, bucketPrefix, region string) error {
 	p.stopExportProcess(false)
 	defer p.startExportProcess()
@@ -206,7 +181,6 @@ func (p *S3UploadProcess) UpdateS3Uploader(bucketName, bucketPrefix, region stri
 	}
 	return nil
 }
-
 func (p *S3UploadProcess) SetUploadInterval(uploadInterval time.Duration) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -215,7 +189,6 @@ func (p *S3UploadProcess) SetUploadInterval(uploadInterval time.Duration) {
 		p.uploadTicker.Reset(p.uploadInterval)
 	}
 }
-
 func (p *S3UploadProcess) CacheRecord(record *flowpb.Flow) error {
 	r, err := flowrecord.GetFlowRecord(record)
 	if err != nil {
@@ -231,15 +204,12 @@ func (p *S3UploadProcess) CacheRecord(record *flowpb.Flow) error {
 	}
 	return nil
 }
-
 func (p *S3UploadProcess) Start() {
 	p.startExportProcess()
 }
-
 func (p *S3UploadProcess) Stop() {
 	p.stopExportProcess(true)
 }
-
 func (p *S3UploadProcess) startExportProcess() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -255,7 +225,6 @@ func (p *S3UploadProcess) startExportProcess() {
 		p.flowRecordPeriodicCommit()
 	}()
 }
-
 func (p *S3UploadProcess) stopExportProcess(flushQueue bool) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -269,7 +238,6 @@ func (p *S3UploadProcess) stopExportProcess(flushQueue bool) {
 	}
 	p.exportWg.Wait()
 }
-
 func (p *S3UploadProcess) flowRecordPeriodicCommit() {
 	klog.InfoS("Starting S3 exporting process")
 	ctx := context.Background()
@@ -295,7 +263,6 @@ func (p *S3UploadProcess) flowRecordPeriodicCommit() {
 		}
 	}
 }
-
 // batchUploadAll uploads all buffers cached in bufferQueue and previous fail-
 // to-upload buffers stored in buffersToUpload. Returns error encountered
 // during upload if any.
@@ -303,7 +270,6 @@ func (p *S3UploadProcess) batchUploadAll(ctx context.Context) error {
 	func() {
 		p.queueMutex.Lock()
 		defer p.queueMutex.Unlock()
-
 		if p.cachedRecordCount != 0 {
 			p.appendBufferToQueue()
 		}
@@ -316,7 +282,6 @@ func (p *S3UploadProcess) batchUploadAll(ctx context.Context) error {
 		}
 		p.bufferQueue = p.bufferQueue[:0]
 	}()
-
 	uploaded := 0
 	for _, buf := range p.buffersToUpload {
 		reader := bytes.NewReader(buf.Bytes())
@@ -330,7 +295,6 @@ func (p *S3UploadProcess) batchUploadAll(ctx context.Context) error {
 	p.buffersToUpload = p.buffersToUpload[:0]
 	return nil
 }
-
 func (p *S3UploadProcess) writeRecordToBuffer(record *flowrecord.FlowRecord) {
 	var writer io.Writer
 	writer = p.currentBuffer
@@ -341,7 +305,6 @@ func (p *S3UploadProcess) writeRecordToBuffer(record *flowrecord.FlowRecord) {
 	io.WriteString(writer, "\n")
 	p.cachedRecordCount += 1
 }
-
 func (p *S3UploadProcess) uploadFile(ctx context.Context, reader *bytes.Reader) error {
 	fileName := fmt.Sprintf("records-%s.csv", randSeq(12))
 	if p.compress {
@@ -360,7 +323,6 @@ func (p *S3UploadProcess) uploadFile(ctx context.Context, reader *bytes.Reader) 
 	}
 	return nil
 }
-
 // appendBufferToQueue appends currentBuffer to bufferQueue, and reset
 // currentBuffer. Caller of this function should acquire queueMutex.
 func (p *S3UploadProcess) appendBufferToQueue() {
@@ -375,7 +337,6 @@ func (p *S3UploadProcess) appendBufferToQueue() {
 		p.gzipWriter.Reset(p.currentBuffer)
 	}
 }
-
 func randSeq(n int) string {
 	var alphabet = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 	b := make([]rune, n)
@@ -385,7 +346,6 @@ func randSeq(n int) string {
 	}
 	return string(b)
 }
-
 func writeRecord(w io.Writer, r *flowrecord.FlowRecord, clusterUUID string) {
 	io.WriteString(w, fmt.Sprintf("%d", r.FlowStartSeconds.Unix()))
 	io.WriteString(w, ",")

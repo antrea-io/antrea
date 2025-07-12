@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"fmt"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/yaml"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster"
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
-=======
 	"antrea.io/antrea/multicluster"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
->>>>>>> origin/main
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 )
-
 func TestComplete(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -86,7 +78,6 @@ func TestComplete(t *testing.T) {
 			exceptdErr: fmt.Errorf("invalid endpointIPType: None, only 'PodIP' or 'ClusterIP' is allowed"),
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.o.complete(nil)
@@ -94,7 +85,6 @@ func TestComplete(t *testing.T) {
 		})
 	}
 }
-
 func TestUnmarshalDefaultConfig(t *testing.T) {
 	configBytes := multicluster.DefaultControllerManagerConfigBytes
 	var multiclusterConfig mcsv1alpha1.MultiClusterConfig
@@ -103,7 +93,6 @@ func TestUnmarshalDefaultConfig(t *testing.T) {
 	// not have yaml tags.
 	assert.NoError(t, yaml.UnmarshalStrict(configBytes, &multiclusterConfig), "Default config should unmarshal correctly")
 }
-
 func TestLoadConfig(t *testing.T) {
 	configBytes := multicluster.DefaultControllerManagerConfigBytes
 	var multiclusterConfig mcsv1alpha1.MultiClusterConfig

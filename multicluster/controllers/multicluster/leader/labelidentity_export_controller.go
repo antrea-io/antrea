@@ -1,28 +1,22 @@
 /*
 Copyright 2022 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package leader
-
 import (
 	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
-
 	"golang.org/x/tools/container/intsets"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,23 +30,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
-
 const (
 	// 24 bits are available in VNI. The max value 16777215 is reserved for unknown ID.
 	maxIDForAllocation = 16777214
 )
-
 // LabelIdentityExportReconciler watches LabelIdentity ResourceExport events in the Common Area,
 // computes if such an event causes a new LabelIdentity to become present/stale in the entire
 // ClusterSet, and updates ResourceImports accordingly.
@@ -69,7 +57,6 @@ type LabelIdentityExportReconciler struct {
 	labelsToID       sync.Map
 	allocator        *idAllocator
 }
-
 func NewLabelIdentityExportReconciler(
 	client client.Client,
 	scheme *runtime.Scheme,
@@ -87,7 +74,6 @@ func NewLabelIdentityExportReconciler(
 		allocator:        newIDAllocator(1, maxIDForAllocation),
 	}
 }
-
 // +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/status,verbs=get;update;patch
 func (r *LabelIdentityExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -105,7 +91,6 @@ func (r *LabelIdentityExportReconciler) Reconcile(ctx context.Context, req ctrl.
 	r.onLabelExportAdd(clusterID, labelHash, normalizedLabel)
 	return ctrl.Result{}, nil
 }
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *LabelIdentityExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Ignore status update event via GenerationChangedPredicate
@@ -131,13 +116,11 @@ func (r *LabelIdentityExportReconciler) SetupWithManager(mgr ctrl.Manager) error
 		}).
 		Complete(r)
 }
-
 // onLabelExportDelete updates the label to cluster caches, and deletes stale LabelIdentity kind of
 // ResourceImport object if needed.
 func (r *LabelIdentityExportReconciler) onLabelExportDelete(clusterID, labelHash string) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-
 	if clusterLabels, ok := r.clusterToLabels[clusterID]; ok {
 		clusterLabels.Delete(labelHash)
 	}
@@ -152,13 +135,11 @@ func (r *LabelIdentityExportReconciler) onLabelExportDelete(clusterID, labelHash
 		clusters.Delete(clusterID)
 	}
 }
-
 // onLabelExportAdd updates the label to cluster caches, and creates LabelIdentity kind of
 // ResourceImport object if needed.
 func (r *LabelIdentityExportReconciler) onLabelExportAdd(clusterID, labelHash, label string) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-
 	if labels, ok := r.clusterToLabels[clusterID]; ok {
 		labels.Insert(labelHash)
 	} else {
@@ -173,22 +154,18 @@ func (r *LabelIdentityExportReconciler) onLabelExportAdd(clusterID, labelHash, l
 		clusters.Insert(clusterID)
 	}
 }
-
 // Run begins syncing of ResourceImports for label identities.
 func (r *LabelIdentityExportReconciler) Run(stopCh <-chan struct{}) {
 	defer r.labelQueue.ShutDown()
-
 	for i := 0; i < common.LabelIdentityWorkerCount; i++ {
 		go wait.Until(r.labelQueueWorker, time.Second, stopCh)
 	}
 	<-stopCh
 }
-
 func (r *LabelIdentityExportReconciler) labelQueueWorker() {
 	for r.processLabelForResourceImport() {
 	}
 }
-
 // Processes an item in the labelQueue. If syncLabelResourceImport returns an error,
 // this function handles it by re-queuing the item so that it can be processed again
 // later. If syncLabelResourceExport is successful, the label is removed from the queue
@@ -210,7 +187,6 @@ func (r *LabelIdentityExportReconciler) processLabelForResourceImport() bool {
 	r.labelQueue.Forget(key)
 	return true
 }
-
 // syncLabelResourceImport checks the label cache and determines whether a ResourceImport
 // needs to be created or deleted for the queued label hash.
 func (r *LabelIdentityExportReconciler) syncLabelResourceImport(labelHash string) error {
@@ -232,7 +208,6 @@ func (r *LabelIdentityExportReconciler) syncLabelResourceImport(labelHash string
 	}
 	return nil
 }
-
 // handleLabelIdentityDelete deletes the ResourceImport of a label identity hash that no longer exists
 // in the ClusterSet. Note that the ID of a label identity hash is only released if the deletion of its
 // corresponding ResourceImport succeeded.
@@ -253,7 +228,6 @@ func (r *LabelIdentityExportReconciler) handleLabelIdentityDelete(ctx context.Co
 	}
 	return nil
 }
-
 // handleLabelIdentityAdd creates ResourceImport of a label identity that is added in the ClusterSet.
 // Note that the ID of a label identity is only allocated and stored if the creation of its corresponding
 // ResourceImport succeeded.
@@ -291,7 +265,6 @@ func (r *LabelIdentityExportReconciler) handleLabelIdentityAdd(ctx context.Conte
 	r.labelsToID.Store(labelHash, id)
 	return nil
 }
-
 func getLabelIdentityResImport(labelHash, label, ns string, id uint32) *mcsv1alpha1.ResourceImport {
 	return &mcsv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -307,7 +280,6 @@ func getLabelIdentityResImport(labelHash, label, ns string, id uint32) *mcsv1alp
 		},
 	}
 }
-
 // parseLabelIdentityExportNamespacedName gets the clusterID and label identity
 // hash from the API request.
 func parseLabelIdentityExportNamespacedName(namespacedName types.NamespacedName) (string, string) {
@@ -316,7 +288,6 @@ func parseLabelIdentityExportNamespacedName(namespacedName types.NamespacedName)
 	labelHash := namespacedName.Name[lastIdx+1:]
 	return clusterID, labelHash
 }
-
 // idAllocator allocates an unique uint32 ID for each label identity.
 type idAllocator struct {
 	sync.Mutex
@@ -325,7 +296,6 @@ type idAllocator struct {
 	previouslyAllocatedIDs intsets.Sparse
 	releasedIDs            intsets.Sparse
 }
-
 // allocate will first try to allocate an ID within the pool of IDs that has been
 // released (due to label identity deletions). If there's no such IDs, it will
 // then allocate the first ID that has not been pre-allocated, or return an error
@@ -333,7 +303,6 @@ type idAllocator struct {
 func (a *idAllocator) allocate() (uint32, error) {
 	a.Lock()
 	defer a.Unlock()
-
 	available := -1
 	if ok := a.releasedIDs.TakeMin(&available); ok {
 		return uint32(available), nil
@@ -348,13 +317,11 @@ func (a *idAllocator) allocate() (uint32, error) {
 	}
 	return 0, fmt.Errorf("no ID available")
 }
-
 // setAllocated reserves IDs allocated during the previous round of label identity
 // ResourceExport reconcilaion, before controller restarted.
 func (a *idAllocator) setAllocated(id uint32) error {
 	a.Lock()
 	defer a.Unlock()
-
 	if a.releasedIDs.Has(int(id)) {
 		a.releasedIDs.Remove(int(id))
 		return nil
@@ -364,17 +331,14 @@ func (a *idAllocator) setAllocated(id uint32) error {
 	}
 	return fmt.Errorf("ID %d has already been allocated", id)
 }
-
 func (a *idAllocator) release(id uint32) {
 	a.Lock()
 	defer a.Unlock()
-
 	a.releasedIDs.Insert(int(id))
 	if a.previouslyAllocatedIDs.Has(int(a.nextID)) {
 		a.previouslyAllocatedIDs.Remove(int(id))
 	}
 }
-
 func newIDAllocator(minID, maxID uint32) *idAllocator {
 	preAllocated, availableIDs := intsets.Sparse{}, intsets.Sparse{}
 	return &idAllocator{

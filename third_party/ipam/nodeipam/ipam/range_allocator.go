@@ -1,12 +1,9 @@
 /*
 Copyright 2016 The Kubernetes Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,24 +24,17 @@ limitations under the License.
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 Modifies:
 - Replace k8s.io/kubernetes/pkg/controller/nodeipam/ipam import with
-<<<<<<< HEAD
  antrea.io/antrea/v2/third_party/nodeipam/ipam
-=======
  antrea.io/antrea/third_party/nodeipam/ipam
->>>>>>> origin/main
 - Remove recorder from rangeAllocator type, NewCIDRRangeAllocator(), RecordNodeStatusChange() calls
 */
-
 package ipam
-
 import (
 	"fmt"
 	"net"
 	"sync"
-
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -55,25 +45,19 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	nodeutil "antrea.io/antrea/v2/third_party/ipam/controller_util_node"
 	"antrea.io/antrea/v2/third_party/ipam/nodeipam/ipam/cidrset"
 	utilnode "antrea.io/antrea/v2/third_party/ipam/util_node"
-=======
 	nodeutil "antrea.io/antrea/third_party/ipam/controller_util_node"
 	"antrea.io/antrea/third_party/ipam/nodeipam/ipam/cidrset"
 	utilnode "antrea.io/antrea/third_party/ipam/util_node"
->>>>>>> origin/main
 )
-
 // cidrs are reserved, then node resource is patched with them
 // this type holds the reservation info for a node
 type nodeReservedCIDRs struct {
 	allocatedCIDRs []*net.IPNet
 	nodeName       string
 }
-
 type rangeAllocator struct {
 	client clientset.Interface
 	// cluster cidrs as passed in during controller creation
@@ -91,7 +75,6 @@ type rangeAllocator struct {
 	lock              sync.Mutex
 	nodesInProcessing sets.Set[string]
 }
-
 // NewCIDRRangeAllocator returns a CIDRAllocator to allocate CIDRs for node (one from each of clusterCIDRs)
 // Caller must ensure subNetMaskSize is not less than cluster CIDR mask size.
 // Caller must always pass in a list of existing nodes so the new allocator.
@@ -101,9 +84,7 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 	if client == nil {
 		klog.Fatalf("kubeClient is nil when starting NodeController")
 	}
-
 	klog.V(0).Infof("Sending events to api server.")
-
 	// create a cidrSet for each cidr we operate on
 	// cidrSet are mapped to clusterCIDR by index
 	cidrSets := make([]*cidrset.CidrSet, len(allocatorParams.ClusterCIDRs))
@@ -114,7 +95,6 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 		}
 		cidrSets[idx] = cidrSet
 	}
-
 	ra := &rangeAllocator{
 		client:                client,
 		clusterCIDRs:          allocatorParams.ClusterCIDRs,
@@ -124,19 +104,16 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 		nodeCIDRUpdateChannel: make(chan nodeReservedCIDRs, cidrUpdateQueueSize),
 		nodesInProcessing:     sets.New[string](),
 	}
-
 	if allocatorParams.ServiceCIDR != nil {
 		ra.filterOutServiceRange(allocatorParams.ServiceCIDR)
 	} else {
 		klog.V(0).Info("No Service CIDR provided. Skipping filtering out service addresses.")
 	}
-
 	if allocatorParams.SecondaryServiceCIDR != nil {
 		ra.filterOutServiceRange(allocatorParams.SecondaryServiceCIDR)
 	} else {
 		klog.V(0).Info("No Secondary Service CIDR provided. Skipping filtering out secondary service addresses.")
 	}
-
 	if nodeList != nil {
 		for _, node := range nodeList.Items {
 			if len(node.Spec.PodCIDRs) == 0 {
@@ -153,7 +130,6 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 			}
 		}
 	}
-
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: nodeutil.CreateAddNodeHandler(ra.AllocateOrOccupyCIDR),
 		UpdateFunc: nodeutil.CreateUpdateNodeHandler(func(_, newNode *v1.Node) error {
@@ -183,27 +159,20 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 		}),
 		DeleteFunc: nodeutil.CreateDeleteNodeHandler(ra.ReleaseCIDR),
 	})
-
 	return ra, nil
 }
-
 func (r *rangeAllocator) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
-
 	klog.Infof("Starting range CIDR allocator")
 	defer klog.Infof("Shutting down range CIDR allocator")
-
 	if !cache.WaitForNamedCacheSync("cidrallocator", stopCh, r.nodesSynced) {
 		return
 	}
-
 	for i := 0; i < cidrUpdateWorkers; i++ {
 		go r.worker(stopCh)
 	}
-
 	<-stopCh
 }
-
 func (r *rangeAllocator) worker(stopChan <-chan struct{}) {
 	for {
 		select {
@@ -221,7 +190,6 @@ func (r *rangeAllocator) worker(stopChan <-chan struct{}) {
 		}
 	}
 }
-
 func (r *rangeAllocator) insertNodeToProcessing(nodeName string) bool {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -231,13 +199,11 @@ func (r *rangeAllocator) insertNodeToProcessing(nodeName string) bool {
 	r.nodesInProcessing.Insert(nodeName)
 	return true
 }
-
 func (r *rangeAllocator) removeNodeFromProcessing(nodeName string) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	r.nodesInProcessing.Delete(nodeName)
 }
-
 // marks node.PodCIDRs[...] as used in allocator's tracked cidrSet
 func (r *rangeAllocator) occupyCIDRs(node *v1.Node) error {
 	defer r.removeNodeFromProcessing(node.Name)
@@ -255,14 +221,12 @@ func (r *rangeAllocator) occupyCIDRs(node *v1.Node) error {
 		if idx >= len(r.cidrSets) {
 			return fmt.Errorf("node:%s has an allocated cidr: %v at index:%v that does not exist in cluster cidrs configuration", node.Name, cidr, idx)
 		}
-
 		if err := r.cidrSets[idx].Occupy(podCIDR); err != nil {
 			return fmt.Errorf("failed to mark cidr[%v] at idx [%v] as occupied for node: %v: %v", podCIDR, idx, node.Name, err)
 		}
 	}
 	return nil
 }
-
 // WARNING: If you're adding any return calls or defer any more work from this
 // function you have to make sure to update nodesInProcessing properly with the
 // disposition of the node when the work is done.
@@ -274,7 +238,6 @@ func (r *rangeAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 		klog.V(2).Infof("Node %v is already in a process of CIDR assignment.", node.Name)
 		return nil
 	}
-
 	if len(node.Spec.PodCIDRs) > 0 {
 		return r.occupyCIDRs(node)
 	}
@@ -283,7 +246,6 @@ func (r *rangeAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 		nodeName:       node.Name,
 		allocatedCIDRs: make([]*net.IPNet, len(r.cidrSets)),
 	}
-
 	for idx := range r.cidrSets {
 		podCIDR, err := r.cidrSets[idx].AllocateNext()
 		if err != nil {
@@ -293,32 +255,27 @@ func (r *rangeAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 		}
 		allocated.allocatedCIDRs[idx] = podCIDR
 	}
-
 	//queue the assignment
 	klog.V(4).Infof("Putting node %s with CIDR %v into the work queue", node.Name, allocated.allocatedCIDRs)
 	r.nodeCIDRUpdateChannel <- allocated
 	return nil
 }
-
 // ReleaseCIDR marks node.podCIDRs[...] as unused in our tracked cidrSets
 func (r *rangeAllocator) ReleaseCIDR(node *v1.Node) error {
 	if node == nil || len(node.Spec.PodCIDRs) == 0 {
 		return nil
 	}
-
 	for idx, cidr := range node.Spec.PodCIDRs {
 		_, podCIDR, err := net.ParseCIDR(cidr)
 		if err != nil {
 			return fmt.Errorf("failed to parse CIDR %s on Node %v: %v", cidr, node.Name, err)
 		}
-
 		// If node has a pre allocate cidr that does not exist in our cidrs.
 		// This will happen if cluster went from dualstack(multi cidrs) to non-dualstack
 		// then we have now way of locking it
 		if idx >= len(r.cidrSets) {
 			return fmt.Errorf("node:%s has an allocated cidr: %v at index:%v that does not exist in cluster cidrs configuration", node.Name, cidr, idx)
 		}
-
 		klog.V(4).Infof("release CIDR %s for node:%v", cidr, node.Name)
 		if err = r.cidrSets[idx].Release(podCIDR); err != nil {
 			return fmt.Errorf("error when releasing CIDR %v: %v", cidr, err)
@@ -326,7 +283,6 @@ func (r *rangeAllocator) ReleaseCIDR(node *v1.Node) error {
 	}
 	return nil
 }
-
 // Marks all CIDRs with subNetMaskSize that belongs to serviceCIDR as used across all cidrs
 // so that they won't be assignable.
 func (r *rangeAllocator) filterOutServiceRange(serviceCIDR *net.IPNet) {
@@ -340,14 +296,12 @@ func (r *rangeAllocator) filterOutServiceRange(serviceCIDR *net.IPNet) {
 		if !cidr.Contains(serviceCIDR.IP.Mask(cidr.Mask)) && !serviceCIDR.Contains(cidr.IP.Mask(serviceCIDR.Mask)) {
 			continue
 		}
-
 		// at this point, len(cidrSet) == len(clusterCidr)
 		if err := r.cidrSets[idx].Occupy(serviceCIDR); err != nil {
 			klog.Errorf("Error filtering out service cidr out cluster cidr:%v (index:%v) %v: %v", cidr, idx, serviceCIDR, err)
 		}
 	}
 }
-
 // updateCIDRsAllocation assigns CIDR to Node and sends an update to the API server.
 func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 	var err error
@@ -359,7 +313,6 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 		klog.Errorf("Failed while getting node %v for updating Node.Spec.PodCIDRs: %v", data.nodeName, err)
 		return err
 	}
-
 	// if cidr list matches the proposed.
 	// then we possibly updated this node
 	// and just failed to ack the success.
@@ -376,7 +329,6 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 			return nil
 		}
 	}
-
 	// node has cidrs, release the reserved
 	if len(node.Spec.PodCIDRs) != 0 {
 		klog.Errorf("Node %v already has a CIDR allocated %v. Releasing the new one.", node.Name, node.Spec.PodCIDRs)
@@ -387,7 +339,6 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 		}
 		return nil
 	}
-
 	// If we reached here, it means that the node has no CIDR currently assigned. So we set it.
 	for i := 0; i < cidrUpdateRetries; i++ {
 		if err = utilnode.PatchNodeCIDRs(r.client, types.NodeName(node.Name), cidrsString); err == nil {
@@ -411,7 +362,6 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 	}
 	return err
 }
-
 // converts a slice of cidrs into <c-1>,<c-2>,<c-n>
 func cidrsAsString(inCIDRs []*net.IPNet) []string {
 	outCIDRs := make([]string, len(inCIDRs))

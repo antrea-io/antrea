@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"fmt"
@@ -22,7 +20,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,20 +29,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 type testcase struct {
 	name            string
 	tf              *v1beta1.Traceflow
@@ -59,18 +51,15 @@ type testcase struct {
 	srcPod       string
 	skipIfNeeded func(t *testing.T)
 }
-
 // TestTraceflow is the top-level test which contains all subtests for
 // Traceflow related test cases so they can share setup, teardown.
 func TestTraceflow(t *testing.T) {
 	skipIfTraceflowDisabled(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	t.Run("testTraceflowIntraNodeANNP", func(t *testing.T) {
 		skipIfAntreaPolicyDisabled(t)
 		testTraceflowIntraNodeANNP(t, data)
@@ -98,11 +87,9 @@ func TestTraceflow(t *testing.T) {
 		testTraceflowValidation(t, data)
 	})
 }
-
 func skipIfTraceflowDisabled(t *testing.T) {
 	skipIfFeatureDisabled(t, features.Traceflow, true, true)
 }
-
 var (
 	protocolICMP   = int32(1)
 	protocolTCP    = int32(6)
@@ -110,13 +97,11 @@ var (
 	protocolICMPv6 = int32(58)
 	tcpFlags       = int32(2) // SYN flag set
 )
-
 // testTraceflowIntraNodeANNP verifies if traceflow can trace intra node traffic with some Antrea NetworkPolicy sets.
 func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 	var err error
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-
 	nodeIdx := 0
 	if len(clusterInfo.windowsNodes) != 0 {
 		nodeIdx = clusterInfo.windowsNodes[0]
@@ -127,7 +112,6 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 	// Give a little time for Windows containerd Nodes to setup OVS.
 	// Containerd configures port asynchronously, which could cause execution time of installing flow longer than docker.
 	time.Sleep(time.Second * 1)
-
 	var pod0IPv4Str, pod0IPv6Str string
 	if node1PodIPs[0].IPv4 != nil {
 		pod0IPv4Str = node1PodIPs[0].IPv4.String()
@@ -135,7 +119,6 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 	if node1PodIPs[0].IPv6 != nil {
 		pod0IPv6Str = node1PodIPs[0].IPv6.String()
 	}
-
 	var denyIngress *v1beta1.NetworkPolicy
 	denyIngressName := "test-annp-deny-ingress"
 	if denyIngress, err = data.createANNPDenyIngress("antrea-e2e", node1Pods[1], denyIngressName, false); err != nil {
@@ -162,7 +145,6 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 	if err = data.waitForANNPRealized(t, data.testNamespace, rejectIngressName, policyRealizedTimeout); err != nil {
 		t.Fatal(err)
 	}
-
 	testcases := []testcase{
 		{
 			name:      "ANNPDenyIngressIPv4",
@@ -328,7 +310,6 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 		}
 	})
 }
-
 // testTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
 func testTraceflowIntraNode(t *testing.T, data *TestData) {
 	nodeIdx := 0
@@ -337,7 +318,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 		nodeIdx = clusterInfo.windowsNodes[0]
 	}
 	node1 := nodeName(nodeIdx)
-
 	node1Pods, node1IPs, node1CleanupFn := createTestAgnhostPods(t, data, 3, data.testNamespace, node1)
 	defer node1CleanupFn()
 	// Give a little time for Windows containerd Nodes to setup OVS.
@@ -360,7 +340,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 		dstPodIPv6Str = node1IPs[2].IPv6.String()
 	}
 	gwIPv4Str, gwIPv6Str := nodeGatewayIPs(nodeIdx)
-
 	// Setup 2 NetworkPolicies:
 	// 1. Allow all egress traffic.
 	// 2. Deny ingress traffic on pod with label antrea-e2e = node1Pods[1]. So flow node1Pods[0] -> node1Pods[1] will be dropped.
@@ -375,7 +354,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			t.Errorf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	var denyAllIngress *networkingv1.NetworkPolicy
 	denyAllIngressName := "test-networkpolicy-deny-ingress"
 	if denyAllIngress, err = data.createNPDenyAllIngress("antrea-e2e", node1Pods[1], denyAllIngressName); err != nil {
@@ -386,7 +364,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			t.Errorf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	antreaPod, err := data.getAntreaPodOnNode(node1)
 	if err = data.waitForNetworkpolicyRealized(antreaPod, node1, isWindows, allowAllEgressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
@@ -394,7 +371,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 	if err = data.waitForNetworkpolicyRealized(antreaPod, node1, isWindows, denyAllIngressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
 	}
-
 	// default Ubuntu ping packet properties.
 	expectedLength := int32(84)
 	expectedTTL := int32(64)
@@ -1026,7 +1002,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			},
 		},
 	}
-
 	if gwIPv4Str != "" {
 		testcases = append(testcases, testcase{
 			name:      "localGatewayDestinationIPv4",
@@ -1076,7 +1051,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			},
 		})
 	}
-
 	if gwIPv6Str != "" {
 		testcases = append(testcases, testcase{
 			name:      "localGatewayDestinationIPv6",
@@ -1126,7 +1100,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			},
 		})
 	}
-
 	t.Run("traceflowGroupTest", func(t *testing.T) {
 		for _, tc := range testcases {
 			tc := tc
@@ -1137,7 +1110,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 		}
 	})
 }
-
 // testTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
 func testTraceflowInterNode(t *testing.T, data *TestData) {
 	nodeIdx0 := 0
@@ -1150,7 +1122,6 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 	}
 	node1 := nodeName(nodeIdx0)
 	node2 := nodeName(nodeIdx1)
-
 	node1Pods, node1IPs, node1CleanupFn := createTestAgnhostPods(t, data, 1, data.testNamespace, node1)
 	node2Pods, node2IPs, node2CleanupFn := createTestAgnhostPods(t, data, 3, data.testNamespace, node2)
 	gatewayIPv4, gatewayIPv6 := nodeGatewayIPs(1)
@@ -1169,14 +1140,12 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 	if node1IPs[0].IPv6 != nil {
 		srcPodIPv6Str = node1IPs[0].IPv6.String()
 	}
-
 	// Create Service backend Pod. The "hairpin" testcases require the Service to have a single backend Pod,
 	// and no more, in order to be deterministic.
 	agnhostPodName := "agnhost"
 	require.NoError(t, NewPodBuilder(agnhostPodName, data.testNamespace, agnhostImage).OnNode(node2).WithLabels(map[string]string{"app": "agnhost-server"}).Create(data))
 	agnhostIP, err := data.podWaitForIPs(defaultTimeout, agnhostPodName, data.testNamespace)
 	require.NoError(t, err)
-
 	var agnhostIPv4Str, agnhostIPv6Str, svcIPv4Name, svcIPv6Name string
 	if agnhostIP.IPv4 != nil {
 		agnhostIPv4Str = agnhostIP.IPv4.String()
@@ -1192,7 +1161,6 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 		require.NoError(t, err)
 		svcIPv6Name = svcIPv6.Name
 	}
-
 	// Mesh ping to activate tunnel on Windows Node
 	// TODO: Remove this after Windows OVS fixes the issue (openvswitch/ovs-issues#253) that first packet is possibly
 	// dropped on tunnel because the ARP entry doesn't exist in host cache.
@@ -1207,7 +1175,6 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 		podInfos[1].OS = "windows"
 		data.runPingMesh(t, podInfos, agnhostContainerName, false)
 	}
-
 	// Setup 2 NetworkPolicies:
 	// 1. Allow all egress traffic.
 	// 2. Deny ingress traffic on pod with label antrea-e2e = node1Pods[1]. So flow node1Pods[0] -> node1Pods[1] will be dropped.
@@ -1221,7 +1188,6 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			t.Errorf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	var denyAllIngress *networkingv1.NetworkPolicy
 	denyAllIngressName := "test-networkpolicy-deny-ingress"
 	if denyAllIngress, err = data.createNPDenyAllIngress("antrea-e2e", node2Pods[1], denyAllIngressName); err != nil {
@@ -1232,7 +1198,6 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			t.Errorf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	antreaPod, err := data.getAntreaPodOnNode(node2)
 	if err = data.waitForNetworkpolicyRealized(antreaPod, node2, isWindows, allowAllEgressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
@@ -1240,7 +1205,6 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 	if err = data.waitForNetworkpolicyRealized(antreaPod, node2, isWindows, denyAllIngressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
 	}
-
 	testcases := []testcase{
 		{
 			name:      "interNodeTraceflowIPv4",
@@ -2044,7 +2008,6 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			},
 		},
 	}
-
 	t.Run("traceflowGroupTest", func(t *testing.T) {
 		for _, tc := range testcases {
 			tc := tc
@@ -2060,7 +2023,6 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 		}
 	})
 }
-
 func testTraceflowExternalIP(t *testing.T, data *TestData) {
 	nodeIdx := 0
 	if len(clusterInfo.windowsNodes) != 0 {
@@ -2120,15 +2082,12 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 			},
 		},
 	}
-
 	runTestTraceflow(t, data, testcase)
 }
-
 func testTraceflowEgress(t *testing.T, data *TestData) {
 	egressNode := nodeName(0)
 	egressIP := nodeIP(0)
 	externalDstIP := "1.1.1.1"
-
 	localPodNames, localPodIPs, localCleanupFn := createTestAgnhostPods(t, data, 1, data.testNamespace, egressNode)
 	defer localCleanupFn()
 	var srcPodIP string
@@ -2137,7 +2096,6 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 	} else {
 		srcPodIP = localPodIPs[0].IPv6.String()
 	}
-
 	matchExpressions := []metav1.LabelSelectorRequirement{
 		{
 			Key:      "antrea-e2e",
@@ -2145,10 +2103,8 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 			Values:   []string{localPodNames[0]},
 		},
 	}
-
 	egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressIP, nil)
 	defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-
 	testcaseLocalEgress := testcase{
 		name:      "egressFromLocalNode",
 		ipVersion: 4,
@@ -2197,11 +2153,9 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 			},
 		},
 	}
-
 	t.Run(testcaseLocalEgress.name, func(t *testing.T) {
 		runTestTraceflow(t, data, testcaseLocalEgress)
 	})
-
 	skipIfNumNodesLessThan(t, 2)
 	remoteNode := nodeName(1)
 	remotePodNames, remotePodIPs, remoteCleanupFn := createTestAgnhostPods(t, data, 1, data.testNamespace, remoteNode)
@@ -2211,7 +2165,6 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 	} else {
 		srcPodIP = remotePodIPs[0].IPv6.String()
 	}
-
 	toUpdate := egress.DeepCopy()
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		toUpdate.Spec.AppliedTo = v1beta1.AppliedTo{
@@ -2226,7 +2179,6 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 		return err
 	})
 	require.NoError(t, err, "Failed to update Egress")
-
 	testcaseRemoteEgress := testcase{
 		name:      "egressFromRemoteNode",
 		ipVersion: 4,
@@ -2294,17 +2246,14 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 			},
 		},
 	}
-
 	t.Run(testcaseRemoteEgress.name, func(t *testing.T) {
 		runTestTraceflow(t, data, testcaseRemoteEgress)
 	})
 }
-
 func testTraceflowValidation(t *testing.T, data *TestData) {
 	podNames, _, cleanupFn := createTestPods(t, data, 1, data.testNamespace, nodeName(0), true, data.createAgnhostPodOnNode)
 	defer cleanupFn()
 	podName := podNames[0]
-
 	testCases := []struct {
 		name         string
 		spec         v1beta1.TraceflowSpec
@@ -2360,7 +2309,6 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 			allowed: true,
 		},
 	}
-
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -2378,9 +2326,7 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 			}
 		})
 	}
-
 }
-
 func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1beta1.TraceflowPhase) (*v1beta1.Traceflow, error) {
 	var tf *v1beta1.Traceflow
 	var err error
@@ -2399,7 +2345,6 @@ func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1beta1.
 	}
 	return tf, nil
 }
-
 // compareObservations compares expected results and actual results.
 func compareObservations(expected v1beta1.NodeResult, actual v1beta1.NodeResult) error {
 	if expected.Node != actual.Node {
@@ -2427,7 +2372,6 @@ func compareObservations(expected v1beta1.NodeResult, actual v1beta1.NodeResult)
 	}
 	return nil
 }
-
 // createANNPDenyIngress creates an Antrea NetworkPolicy that denies ingress traffic for pods of specific label.
 func (data *TestData) createANNPDenyIngress(key string, value string, name string, isReject bool) (*v1beta1.NetworkPolicy, error) {
 	dropACT := v1beta1.RuleActionDrop
@@ -2473,7 +2417,6 @@ func (data *TestData) createANNPDenyIngress(key string, value string, name strin
 	}
 	return annpCreated, nil
 }
-
 // deleteAntreaNetworkpolicy deletes an Antrea NetworkPolicy.
 func (data *TestData) deleteAntreaNetworkpolicy(policy *v1beta1.NetworkPolicy) error {
 	if err := k8sUtils.CRDClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
@@ -2481,7 +2424,6 @@ func (data *TestData) deleteAntreaNetworkpolicy(policy *v1beta1.NetworkPolicy) e
 	}
 	return nil
 }
-
 // createNPDenyAllIngress creates a NetworkPolicy that denies all ingress traffic for pods of specific label.
 func (data *TestData) createNPDenyAllIngress(key string, value string, name string) (*networkingv1.NetworkPolicy, error) {
 	spec := &networkingv1.NetworkPolicySpec{
@@ -2494,7 +2436,6 @@ func (data *TestData) createNPDenyAllIngress(key string, value string, name stri
 	}
 	return data.createNetworkPolicy(name, spec)
 }
-
 // createNPAllowAllEgress creates a NetworkPolicy that allows all egress traffic.
 func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.NetworkPolicy, error) {
 	spec := &networkingv1.NetworkPolicySpec{
@@ -2506,7 +2447,6 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 	}
 	return data.createNetworkPolicy(name, spec)
 }
-
 // waitForNetworkpolicyRealized waits for the NetworkPolicy to be realized by the antrea-agent Pod.
 func (data *TestData) waitForNetworkpolicyRealized(pod string, node string, isWindows bool, networkpolicy string, npType v1beta2.NetworkPolicyType) error {
 	npOption := "K8sNP"
@@ -2536,7 +2476,6 @@ func (data *TestData) waitForNetworkpolicyRealized(pod string, node string, isWi
 	}
 	return nil
 }
-
 func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 	switch tc.ipVersion {
 	case 4:
@@ -2555,7 +2494,6 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			t.Errorf("Error when deleting traceflow: %v", err)
 		}
 	}()
-
 	if tc.tf.Spec.LiveTraffic {
 		// LiveTraffic Traceflow test supports only ICMP traffic from
 		// the source Pod to an IP or another Pod.
@@ -2584,7 +2522,6 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
 		}
 	}
-
 	tf, err := data.waitForTraceflow(t, tc.tf.Name, tc.expectedPhase)
 	if err != nil {
 		t.Fatalf("Error: Get Traceflow failed: %v", err)

@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package delete
-
 import (
 	"bytes"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 func TestDeleteToken(t *testing.T) {
 	secretContent := []byte(`apiVersion: v1
 kind: Secret
@@ -51,7 +43,6 @@ type: Opaque`)
 		},
 		Data: map[string][]byte{"token": secretContent},
 	}
-
 	existingRolebinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -61,7 +52,6 @@ type: Opaque`)
 			},
 		},
 	}
-
 	existingServiceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -71,7 +61,6 @@ type: Opaque`)
 			},
 		},
 	}
-
 	tests := []struct {
 		name           string
 		namespace      string
@@ -101,14 +90,11 @@ type: Opaque`)
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
-
 			deleteTokenOpts.namespace = tt.namespace
 			deleteTokenOpts.k8sClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(existingSecret, existingRolebinding, existingServiceAccount).Build()
-
 			if tt.tokenName != "" {
 				cmd.SetArgs([]string{tt.tokenName})
 			}
-
 			err := cmd.Execute()
 			if err != nil {
 				assert.Contains(t, err.Error(), tt.expectedOutput)

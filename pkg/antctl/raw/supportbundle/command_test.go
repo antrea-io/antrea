@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundle
-
 import (
 	"bytes"
 	"context"
@@ -23,7 +21,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -35,26 +32,21 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	antreaclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	systemclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/compress"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	antreaclientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
-	systemclientset "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
-	"antrea.io/antrea/pkg/util/compress"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	antreaclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
+	systemclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/util/compress"
 )
-
 var (
 	clientConfig = &rest.Config{
 		APIPath: "/supportbundle",
@@ -198,7 +190,6 @@ var (
 	}
 	nameList = []string{"node-1", "node-3"}
 )
-
 func createFakeSupportBundleClient() systemclientset.SupportBundleInterface {
 	fakeClient := fakeclientset.NewSimpleClientset()
 	fakeClient.PrependReactor("create", "supportbundles", k8stesting.ReactionFunc(
@@ -211,7 +202,6 @@ func createFakeSupportBundleClient() systemclientset.SupportBundleInterface {
 	)
 	return fakeClient.SystemV1beta1().SupportBundles()
 }
-
 func TestLocalSupportBundleRequest(t *testing.T) {
 	getSupportBundleClient = func() (systemclientset.SupportBundleInterface, error) {
 		return createFakeSupportBundleClient(), nil
@@ -230,7 +220,6 @@ func TestLocalSupportBundleRequest(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, writer.String(), expected)
 }
-
 func TestCreateControllerClient(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
@@ -263,7 +252,6 @@ func TestCreateControllerClient(t *testing.T) {
 			antreaClientset: fakeclientset.NewSimpleClientset(&controllerInfo),
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := createControllerClient(ctx, tt.k8sClientset, tt.antreaClientset, clientConfig, true /* insecure */)
@@ -275,7 +263,6 @@ func TestCreateControllerClient(t *testing.T) {
 		})
 	}
 }
-
 func TestCreateAgentClients(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -319,7 +306,6 @@ func TestCreateAgentClients(t *testing.T) {
 			expectedErr: "error listing nodes",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.prepareReactor != nil {
@@ -339,7 +325,6 @@ func TestCreateAgentClients(t *testing.T) {
 		})
 	}
 }
-
 func TestRequest(t *testing.T) {
 	agentClients := map[string]systemclientset.SupportBundleInterface{}
 	for _, name := range nameList {
@@ -357,7 +342,6 @@ func TestRequest(t *testing.T) {
 	//results[""] corresponds to error received for controller node
 	assert.Equal(t, map[string]error{"": nil, "node-1": nil, "node-3": nil}, results)
 }
-
 func TestDownload(t *testing.T) {
 	path := option.dir
 	option.dir = "/out"
@@ -389,7 +373,6 @@ func TestDownload(t *testing.T) {
 		assert.True(t, ok, "expected support bundle file not found")
 	}
 }
-
 func TestProcessResults(t *testing.T) {
 	path := option.dir
 	option.dir = "/out"
@@ -447,7 +430,6 @@ func TestProcessResults(t *testing.T) {
 		defaultFS = afero.NewOsFs()
 		option.dir = ""
 	}()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			option.dir = strings.ReplaceAll(tt.name, " ", "-")
@@ -461,7 +443,6 @@ func TestProcessResults(t *testing.T) {
 			ok, checkErr := afero.Exists(defaultFS, filepath.Join(option.dir, "controllerinfo"))
 			require.NoError(t, checkErr)
 			assert.True(t, ok)
-
 			for node, err := range tt.resultMap {
 				tgzFileName := fmt.Sprintf("agent_%s.tar.gz", node)
 				if node == "" {
@@ -472,7 +453,6 @@ func TestProcessResults(t *testing.T) {
 					ok, checkErr := afero.Exists(defaultFS, filepath.Join(option.dir, tgzFileName))
 					require.NoError(t, checkErr)
 					require.True(t, ok, "expected bundle file %s not found", tgzFileName)
-
 					unpackError := compress.UnpackDir(defaultFS, filepath.Join(option.dir, tgzFileName), option.dir)
 					require.NoError(t, unpackError)
 					files := tt.expectFileList[node]
@@ -481,7 +461,6 @@ func TestProcessResults(t *testing.T) {
 						require.NoError(t, checkErr)
 						assert.True(t, ok, "expected bundle file %s for %s not found", expectFileName, node)
 					}
-
 				}
 				if node == "" {
 					continue

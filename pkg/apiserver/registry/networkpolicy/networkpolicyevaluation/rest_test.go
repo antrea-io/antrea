@@ -11,35 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicyevaluation
-
 import (
 	"context"
 	"fmt"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	queriermock "antrea.io/antrea/v2/pkg/controller/networkpolicy/testing"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	queriermock "antrea.io/antrea/pkg/controller/networkpolicy/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	queriermock "antrea.io/antrea/v2/pkg/controller/networkpolicy/testing"
 )
-
 func TestREST(t *testing.T) {
 	r := NewREST(nil)
 	assert.Equal(t, &controlplane.NetworkPolicyEvaluation{}, r.New())
 	assert.False(t, r.NamespaceScoped())
 }
-
 func TestRESTCreate(t *testing.T) {
 	request := controlplane.NetworkPolicyEvaluationRequest{Source: controlplane.Entity{Pod: &controlplane.PodReference{Namespace: "ns", Name: "pod1"}}, Destination: controlplane.Entity{Pod: &controlplane.PodReference{Namespace: "ns", Name: "pod2"}}}
 	tests := []struct {

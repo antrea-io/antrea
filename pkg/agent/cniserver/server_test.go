@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cniserver
-
 import (
 	"context"
 	"encoding/json"
@@ -22,7 +20,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/google/uuid"
@@ -31,8 +28,6 @@ import (
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
 	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
@@ -42,31 +37,28 @@ import (
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/v2/pkg/cni"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/wait"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"
-	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
-	types "antrea.io/antrea/pkg/agent/cniserver/types"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	routetest "antrea.io/antrea/pkg/agent/route/testing"
-	"antrea.io/antrea/pkg/agent/util"
-	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
-	"antrea.io/antrea/pkg/cni"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	utilip "antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/wait"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
+	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
+	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
+	types "antrea.io/antrea/v2/pkg/agent/cniserver/types"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/v2/pkg/cni"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/wait"
 )
-
 const (
 	netns                   = "ns-1"
 	ifname                  = "eth0"
@@ -80,7 +72,6 @@ const (
 	supportedCNIVersion     = "0.4.0"
 	unsupportedCNIVersion   = "0.5.1"
 )
-
 var (
 	routes         = []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 	dns            = []string{"192.168.100.1"}
@@ -90,14 +81,11 @@ var (
 	testNodeConfig *config.NodeConfig
 	gwIPv4         net.IP
 	gwIPv6         net.IP
-
 	mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient
 	mockRoute           *routetest.MockInterface
 	mockOFClient        *openflowtest.MockClient
 	ifaceStore          interfacestore.InterfaceStore
-
 	emptyResponse = &cnipb.CniCmdResponse{CniResult: []byte("")}
-
 	nodeName = "node1"
 	gwMAC    = utilip.MustParseMAC("00:00:11:11:11:11")
 	pod1     = &v1.Pod{
@@ -175,7 +163,6 @@ var (
 		},
 	}
 )
-
 func TestLoadNetConfig(t *testing.T) {
 	assert := assert.New(t)
 	cniService := newCNIServer(t)
@@ -184,10 +171,8 @@ func TestLoadNetConfig(t *testing.T) {
 	requestMsg, containerID := newRequest(args, networkCfg, "", t)
 	ipam.RegisterIPAMDriver(ipamType, nil)
 	netCfg, resp := cniService.validateRequestMessage(requestMsg)
-
 	// just make sure that cniService.nodeConfig matches the testNodeConfig.
 	require.Equal(t, testNodeConfig, cniService.nodeConfig)
-
 	assert.Nil(resp, "Error while parsing request message, %v", resp)
 	assert.Equal(supportedCNIVersion, netCfg.CNIVersion)
 	assert.Equal(containerID, netCfg.ContainerId)
@@ -212,7 +197,6 @@ func TestLoadNetConfig(t *testing.T) {
 		"Network configuration (Gateway IPv6) was not updated",
 	)
 }
-
 func TestCNIVersionCheck(t *testing.T) {
 	valid := IsCNIVersionSupported(unsupportedCNIVersion)
 	if valid {
@@ -223,7 +207,6 @@ func TestCNIVersionCheck(t *testing.T) {
 		t.Error("Failed accept supported version")
 	}
 }
-
 func checkErrorResponse(t *testing.T, resp *cnipb.CniCmdResponse, code cnipb.ErrorCode, message string) {
 	assert.NotNil(t, resp, "Response is nil")
 	assert.NotNil(t, resp.GetError(), "Error field is not set")
@@ -236,12 +219,10 @@ func checkErrorResponse(t *testing.T, resp *cnipb.CniCmdResponse, code cnipb.Err
 		assert.Contains(t, resp.GetError().GetMessage(), message, "Error message does not match")
 	}
 }
-
 // networkConfigIPAMMatcher is used to validate the IPAMConfig received by the IPAM driver mock.
 type networkConfigIPAMMatcher struct {
 	ipamConfig *types.IPAMConfig
 }
-
 func (m *networkConfigIPAMMatcher) Matches(x interface{}) bool {
 	var networkConfig types.NetworkConfig
 	if err := json.Unmarshal(x.([]byte), &networkConfig); err != nil {
@@ -249,14 +230,11 @@ func (m *networkConfigIPAMMatcher) Matches(x interface{}) bool {
 	}
 	return reflect.DeepEqual(networkConfig.IPAM, m.ipamConfig)
 }
-
 func (m *networkConfigIPAMMatcher) String() string {
 	return fmt.Sprintf("IPAMConfig is equal to %v", m.ipamConfig)
 }
-
 func TestIPAMService(t *testing.T) {
 	networkCfg := generateNetworkConfiguration("", supportedCNIVersion, "", testIpamType)
-
 	setup := func(t *testing.T) (*ipamtest.MockIPAMDriver, *CNIServer, *cnipb.CniCmdRequest) {
 		// required to provide isolation between subtests
 		// note that subtests CANNOT share an instance of gomock.Controller
@@ -267,16 +245,13 @@ func TestIPAMService(t *testing.T) {
 		cniServer := newCNIServer(t)
 		ifaceStore := interfacestore.NewInterfaceStore()
 		cniServer.podConfigurator = &podConfigurator{ifaceStore: ifaceStore}
-
 		require.True(t, ipam.IsIPAMTypeValid(testIpamType), "Failed to register IPAM service")
 		require.False(t, ipam.IsIPAMTypeValid("not_a_valid_IPAM_driver"))
 		requestMsg, _ := newRequest(args, networkCfg, "", t)
 		return ipamMock, cniServer, requestMsg
 	}
-
 	// Test IPAM_Failure cases
 	cxt := context.Background()
-
 	expectedIPAMConfig := &types.IPAMConfig{
 		Type: testIpamType,
 		Ranges: []types.RangeSet{
@@ -294,7 +269,6 @@ func TestIPAMService(t *testing.T) {
 			},
 		},
 	}
-
 	t.Run("Error on ADD", func(t *testing.T) {
 		ipamMock, cniServer, requestMsg := setup(t)
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), &networkConfigIPAMMatcher{expectedIPAMConfig}).Return(true, nil, fmt.Errorf("IPAM add error"))
@@ -305,7 +279,6 @@ func TestIPAMService(t *testing.T) {
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
 	})
-
 	t.Run("Error on DEL", func(t *testing.T) {
 		ipamMock, cniServer, requestMsg := setup(t)
 		// Prepare cached IPAM result which will be deleted later.
@@ -317,14 +290,11 @@ func TestIPAMService(t *testing.T) {
 		response, err := cniServer.CmdDel(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM delete error")
-
 		// Cached result would be removed after a successful retry of IPAM DEL.
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 		err = ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Del error")
-
 	})
-
 	t.Run("Error on CHECK", func(t *testing.T) {
 		ipamMock, cniServer, requestMsg := setup(t)
 		ipamMock.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, fmt.Errorf("IPAM check error"))
@@ -332,7 +302,6 @@ func TestIPAMService(t *testing.T) {
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM check error")
 	})
-
 	t.Run("Idempotent Call of IPAM ADD/DEL for the same Pod", func(t *testing.T) {
 		ipamMock, cniServer, requestMsg := setup(t)
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, nil)
@@ -349,7 +318,6 @@ func TestIPAMService(t *testing.T) {
 		err = ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no IPAM del error")
 	})
-
 	t.Run("Idempotent Call of IPAM ADD/DEL for the same Pod with different containers", func(t *testing.T) {
 		ipamMock, cniServer, requestMsg := setup(t)
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, nil).Times(2)
@@ -371,36 +339,28 @@ func TestIPAMService(t *testing.T) {
 		require.Nil(t, err, "expected no IPAM del error")
 	})
 }
-
 func TestIPAMServiceMultiDriver(t *testing.T) {
 	controller := gomock.NewController(t)
-
 	mockDriverA := ipamtest.NewMockIPAMDriver(controller)
 	mockDriverB := ipamtest.NewMockIPAMDriver(controller)
-
 	ipam.RegisterIPAMDriver(testIpamType2, mockDriverA)
 	ipam.RegisterIPAMDriver(testIpamType2, mockDriverB)
 	cniServer := newCNIServer(t)
 	ifaceStore := interfacestore.NewInterfaceStore()
 	cniServer.podConfigurator = &podConfigurator{ifaceStore: ifaceStore}
-
 	require.True(t, ipam.IsIPAMTypeValid(testIpamType2), "Failed to register IPAM service")
 	require.False(t, ipam.IsIPAMTypeValid("not_a_valid_IPAM_driver"))
-
 	// Test IPAM_Failure cases
 	cxt := context.Background()
 	networkCfg := generateNetworkConfiguration("", supportedCNIVersion, "", testIpamType2)
-
 	argsPodA := cniservertest.GenerateCNIArgs(testPodNameA, testPodNamespace, testPodInfraContainerID)
 	argsPodB := cniservertest.GenerateCNIArgs(testPodNameB, testPodNamespace, testPodInfraContainerID)
 	requestMsgA, _ := newRequest(argsPodA, networkCfg, "", t)
 	requestMsgB, _ := newRequest(argsPodB, networkCfg, "", t)
-
 	ips := []string{"10.1.2.100/24,10.1.2.1,4"}
 	routes := []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 	dns := []string{"192.168.100.1"}
 	ipamResult := &ipam.IPAMResult{Result: *ipamtest.GenerateIPAMResult(ips, routes, dns)}
-
 	t.Run("Error on ADD for first registered driver", func(t *testing.T) {
 		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, fmt.Errorf("IPAM add error"))
 		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
@@ -408,7 +368,6 @@ func TestIPAMServiceMultiDriver(t *testing.T) {
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
 	})
-
 	t.Run("Error on ADD for second registered driver", func(t *testing.T) {
 		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil, nil)
 		mockDriverB.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, fmt.Errorf("IPAM add error"))
@@ -418,26 +377,21 @@ func TestIPAMServiceMultiDriver(t *testing.T) {
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
 	})
-
 	t.Run("Error on DEL for first registered driver", func(t *testing.T) {
 		// Prepare cached IPAM result which will be deleted later.
 		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, ipamResult, nil)
 		cniConfig, _ := cniServer.validateRequestMessage(requestMsgA)
 		_, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Add error")
-
 		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, fmt.Errorf("IPAM delete error"))
 		response, err := cniServer.CmdDel(cxt, requestMsgA)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM delete error")
-
 		// Cached result would be removed after a successful retry of IPAM DEL.
 		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 		err = ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Del error")
-
 	})
-
 	t.Run("Error on DEL for second registered driver", func(t *testing.T) {
 		// Prepare cached IPAM result which will be deleted later.
 		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil, nil)
@@ -445,28 +399,23 @@ func TestIPAMServiceMultiDriver(t *testing.T) {
 		cniConfig, _ := cniServer.validateRequestMessage(requestMsgB)
 		_, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Add error")
-
 		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
 		mockDriverB.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, fmt.Errorf("IPAM delete error"))
 		response, err := cniServer.CmdDel(cxt, requestMsgB)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM delete error")
-
 		// Cached result would be removed after a successful retry of IPAM DEL.
 		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
 		mockDriverB.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 		err = ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Del error")
-
 	})
-
 	t.Run("Error on CHECK for first registered driver", func(t *testing.T) {
 		mockDriverA.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, fmt.Errorf("IPAM check error"))
 		response, err := cniServer.CmdCheck(cxt, requestMsgA)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM check error")
 	})
-
 	t.Run("Error on CHECK for second registered driver", func(t *testing.T) {
 		mockDriverA.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
 		mockDriverB.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, fmt.Errorf("IPAM check error"))
@@ -475,13 +424,11 @@ func TestIPAMServiceMultiDriver(t *testing.T) {
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM check error")
 	})
 }
-
 func TestValidateRequestMessage(t *testing.T) {
 	hostLocal := "host-local"
 	ipam.RegisterIPAMDriver(hostLocal, nil)
 	ipam.RegisterIPAMDriver(ipam.AntreaIPAMType, nil)
 	cniServer := newCNIServer(t)
-
 	type testCase struct {
 		test                       string
 		cniVersion                 string
@@ -494,7 +441,6 @@ func TestValidateRequestMessage(t *testing.T) {
 		resSecondaryNetworkIPAM    bool
 		errorCode                  cnipb.ErrorCode
 	}
-
 	testCases := []testCase{
 		{
 			test:       "Incompatible CNI version",
@@ -555,7 +501,6 @@ func TestValidateRequestMessage(t *testing.T) {
 			enableSecondaryNetworkIPAM: true,
 		},
 	}
-
 	for _, c := range testCases {
 		t.Run(c.test, func(t *testing.T) {
 			cniVersion := c.cniVersion
@@ -566,13 +511,11 @@ func TestValidateRequestMessage(t *testing.T) {
 			if ipamType == "" {
 				ipamType = hostLocal
 			}
-
 			networkCfg := generateNetworkConfiguration("", cniVersion, c.cniType, ipamType)
 			requestMsg, _ := newRequest(args, networkCfg, "", t)
 			cniServer.isChaining = c.isChaining
 			cniServer.enableBridgingMode = c.enableBridgingMode
 			cniServer.enableSecondaryNetworkIPAM = c.enableSecondaryNetworkIPAM
-
 			resCfg, response := cniServer.validateRequestMessage(requestMsg)
 			if c.errorCode != 0 {
 				assert.NotNil(t, response, "Error code %v is expected", c.errorCode)
@@ -580,23 +523,19 @@ func TestValidateRequestMessage(t *testing.T) {
 				return
 			}
 			assert.Nil(t, response, "Unexpected error response: %v", response)
-
 			assert.Equal(t, resCfg.IPAM.Type, c.resIPAMType)
 			assert.Equal(t, resCfg.secondaryNetworkIPAM, c.resSecondaryNetworkIPAM)
 		})
 	}
 }
-
 func TestParsePrevResultFromRequest(t *testing.T) {
 	cniServer := newCNIServer(t)
-
 	getNetworkCfg := func(cniVersion string) *types.NetworkConfig {
 		networkCfg := generateNetworkConfiguration("", cniVersion, "", testIpamType)
 		networkCfg.PrevResult = nil
 		networkCfg.RawPrevResult = nil
 		return networkCfg
 	}
-
 	t.Run("Correct prevResult", func(t *testing.T) {
 		networkCfg := getNetworkCfg(supportedCNIVersion)
 		prevResult := ipamtest.GenerateIPAMResult(ips, routes, dns)
@@ -607,13 +546,11 @@ func TestParsePrevResultFromRequest(t *testing.T) {
 		assert.NotNil(t, parsedPrevResult)
 		// TODO: check that parsedPrevResult matches prevResult
 	})
-
 	t.Run("Missing prevResult", func(t *testing.T) {
 		networkCfg := getNetworkCfg(supportedCNIVersion)
 		_, response := cniServer.parsePrevResultFromRequest(networkCfg)
 		checkErrorResponse(t, response, cnipb.ErrorCode_UNSUPPORTED_FIELD, "prevResult")
 	})
-
 	t.Run("Unsupported CNI version", func(t *testing.T) {
 		networkCfg := getNetworkCfg(unsupportedCNIVersion)
 		prevResult := ipamtest.GenerateIPAMResult(ips, routes, dns)
@@ -624,21 +561,15 @@ func TestParsePrevResultFromRequest(t *testing.T) {
 		checkErrorResponse(t, response, cnipb.ErrorCode_DECODING_FAILURE, "prevResult")
 	})
 }
-
 func TestUpdateResultIfaceConfig(t *testing.T) {
 	require := require.New(t)
-
 	testIps := []string{"192.168.1.100/24, , 4", "fd74:ca9b:172:18::8/64, , 6"}
-
 	require.Equal(gwIPv4, testNodeConfig.GatewayConfig.IPv4)
 	require.Equal(gwIPv6, testNodeConfig.GatewayConfig.IPv6)
-
 	t.Run("Gateways updated", func(t *testing.T) {
 		assert := assert.New(t)
-
 		result := ipamtest.GenerateIPAMResult(testIps, routes, dns)
 		updateResultIfaceConfig(result, gwIPv4, gwIPv6)
-
 		assert.Len(result.IPs, 2, "Failed to construct result")
 		for _, ipc := range result.IPs {
 			switch ipc.Address.IP.String() {
@@ -651,7 +582,6 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 			}
 		}
 	})
-
 	t.Run("Default route added", func(t *testing.T) {
 		emptyRoutes := []string{}
 		result := ipamtest.GenerateIPAMResult(testIps, emptyRoutes, dns)
@@ -670,7 +600,6 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 		}
 	})
 }
-
 func TestValidateOVSInterface(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	podConfigurator := &podConfigurator{ifaceStore: ifaceStore}
@@ -686,12 +615,10 @@ func TestValidateOVSInterface(t *testing.T) {
 	containerConfig := buildContainerConfig(hostIfaceName, containerID, testPodNameA, testPodNamespace,
 		"netns1", containerIface, result.IPs, 0)
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID}
-
 	ifaceStore.AddInterface(containerConfig)
 	err := podConfigurator.validateOVSInterfaceConfig(containerID, containerMACStr, result.IPs)
 	assert.Nil(t, err, "Failed to validate OVS port configuration")
 }
-
 func TestBuildOVSPortExternalIDs(t *testing.T) {
 	containerID := uuid.New().String()
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
@@ -714,7 +641,6 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	assert.Equal(t, containerID, parsedID)
 	parsedNetNS := externalIDs[ovsExternalIDNetNS]
 	assert.Equal(t, "netns1", parsedNetNS)
-
 	testConfigParsingFn := func() {
 		portExternalIDs := make(map[string]string)
 		for k, v := range externalIDs {
@@ -743,7 +669,6 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 		}
 	}
 	testConfigParsingFn()
-
 	// Secondary interface with no IP.
 	containerIPs = nil
 	containerConfig = interfacestore.NewContainerInterface("pod1-abcd", containerID,
@@ -754,9 +679,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	parsedIP, existed = externalIDs[ovsExternalIDIP]
 	assert.True(t, existed && parsedIP.(string) == "")
 	testConfigParsingFn()
-
 }
-
 func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[string]interface{}, error) {
 	prevVersionedResult, err := prevResult.GetAsVersion(cniVersion)
 	if err != nil {
@@ -766,19 +689,16 @@ func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[
 		"cniVersion": cniVersion,
 		"prevResult": prevVersionedResult,
 	}
-
 	newBytes, err := json.Marshal(config)
 	if err != nil {
 		return nil, err
 	}
-
 	conf := &cnitypes.NetConf{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
 		return nil, fmt.Errorf("Error while parsing configuration: %s", err)
 	}
 	return conf.RawPrevResult, nil
 }
-
 func newCNIServer(t *testing.T) *CNIServer {
 	cniServer := &CNIServer{
 		cniSocket:               testSocket,
@@ -791,7 +711,6 @@ func newCNIServer(t *testing.T) *CNIServer {
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer
 }
-
 func generateNetworkConfiguration(name, cniVersion, cniType, ipamType string) *types.NetworkConfig {
 	netCfg := new(types.NetworkConfig)
 	if name == "" {
@@ -808,14 +727,12 @@ func generateNetworkConfiguration(name, cniVersion, cniType, ipamType string) *t
 	netCfg.IPAM = &types.IPAMConfig{Type: ipamType}
 	return netCfg
 }
-
 func newRequest(args string, netCfg *types.NetworkConfig, path string, t *testing.T) (*cnipb.CniCmdRequest, string) {
 	_, _, containerID := cniservertest.ParseCNIArgs(args)
 	networkConfig, err := json.Marshal(netCfg)
 	if err != nil {
 		t.Error("Failed to generate Network configuration")
 	}
-
 	cmdRequest := &cnipb.CniCmdRequest{
 		CniArgs: &cnipb.CniCmdArgs{
 			ContainerId:          containerID,
@@ -828,12 +745,10 @@ func newRequest(args string, netCfg *types.NetworkConfig, path string, t *testin
 	}
 	return cmdRequest, containerID
 }
-
 func generateUUID() string {
 	newID, _ := uuid.NewUUID()
 	return newID.String()
 }
-
 func init() {
 	nodeName := "node1"
 	gwIPv4 = net.ParseIP("192.168.1.1")

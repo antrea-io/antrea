@@ -11,31 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package antctl
-
 import (
 	"fmt"
 	"reflect"
 	"testing"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
-=======
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 )
-
 type testResponse struct {
 	Label string `json:"label" antctl:"key"`
 	Value uint64 `json:"value"`
 }
-
 var testCommandList = &commandList{
 	definitions: []commandDefinition{
 		{
@@ -47,7 +38,6 @@ var testCommandList = &commandList{
 	},
 	codec: scheme.Codecs,
 }
-
 func TestCommandListApplyToCommand(t *testing.T) {
 	testRoot := new(cobra.Command)
 	testRoot.Short = "The component is ${component}"
@@ -59,7 +49,6 @@ func TestCommandListApplyToCommand(t *testing.T) {
 	assert.Contains(t, testRoot.Short, fmt.Sprintf("The component is %s", runtime.Mode))
 	assert.Contains(t, testRoot.Long, fmt.Sprintf("The component is %s", runtime.Mode))
 }
-
 func TestGetDebugCommands(t *testing.T) {
 	tc := []struct {
 		name     string

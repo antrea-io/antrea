@@ -11,32 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package version
-
 import (
 	"encoding/json"
 	"io"
-
 	k8sversion "k8s.io/apimachinery/pkg/version"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	clusterinfov1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	clusterinfov1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreaversion "antrea.io/antrea/v2/pkg/version"
-=======
-	clusterinfov1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreaversion "antrea.io/antrea/pkg/version"
->>>>>>> origin/main
+	clusterinfov1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreaversion "antrea.io/antrea/v2/pkg/version"
 )
-
 type Response struct {
 	AgentVersion          string `json:"agentVersion,omitempty"`
 	ControllerVersion     string `json:"controllerVersion,omitempty"`
 	FlowAggregatorVersion string `json:"flowAggregatorVersion,omitempty"`
 	AntctlVersion         string `json:"antctlVersion,omitempty"`
 }
-
 // AgentVersion is the AddonTransform for the version command. This function
 // will try to parse the response as a AgentVersionResponse and then populate
 // it with the version of antctl to a transformedVersionResponse object.
@@ -64,7 +55,6 @@ func AgentTransform(reader io.Reader, _ bool, _ map[string]string) (interface{},
 	}
 	return resp, nil
 }
-
 func ControllerTransform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
 	b, err := io.ReadAll(reader)
 	if err != nil {
@@ -82,7 +72,6 @@ func ControllerTransform(reader io.Reader, _ bool, _ map[string]string) (interfa
 	}
 	return resp, nil
 }
-
 // FlowAggregatorTransform is the AddonTransform for the flow aggregator version command.
 // This function will try to parse the response as a FlowAggregatorVersionResponse and
 // then populate it with the version of antctl to a transformedVersionResponse object.

@@ -11,23 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"math"
 	"sort"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/types"
-=======
-	"antrea.io/antrea/pkg/agent/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/types"
 )
-
 const (
 	zoneOffset                   = uint16(5)
 	defaultTierPriority          = int32(250)
@@ -41,13 +33,11 @@ const (
 	priorityOffsetDefaultTier    = float64(100)
 	tierOffsetMultiTier          = uint16(200)
 )
-
 // priorityUpdate stores the original and updated ofPriority of a Priority.
 type priorityUpdate struct {
 	Original uint16
 	Updated  uint16
 }
-
 // reassignCost stores the cost of reassigning registered Priorities, if all registered
 // Priorities in the lowerBound-upperBound range were to be rearranged.
 type reassignCost struct {
@@ -55,7 +45,6 @@ type reassignCost struct {
 	upperBound uint16
 	cost       int
 }
-
 // priorityUpdatesToOFUpdates converts a map of Priority and its ofPriority update to a map
 // of ofPriority updates.
 func priorityUpdatesToOFUpdates(allUpdates map[types.Priority]*priorityUpdate) map[uint16]uint16 {
@@ -65,7 +54,6 @@ func priorityUpdatesToOFUpdates(allUpdates map[types.Priority]*priorityUpdate) m
 	}
 	return processed
 }
-
 // priorityAssigner is a struct that maintains the current boundaries of
 // all ClusterNetworkPolicy categories/priorities and rule priorities, and knows
 // how to re-assign priorities if certain section overflows.
@@ -84,7 +72,6 @@ type priorityAssigner struct {
 	// policyTopPriority keeps track of the highest ofPriority allowed for flow creation in the table it manages.
 	policyTopPriority uint16
 }
-
 func newPriorityAssigner(isBaselineTier bool) *priorityAssigner {
 	bottomPriority := policyBottomPriority
 	topPriority := policyTopPriority
@@ -102,7 +89,6 @@ func newPriorityAssigner(isBaselineTier bool) *priorityAssigner {
 	}
 	return pa
 }
-
 // initialOFPriority is a heuristic function that will map types.Priority to a specific initial
 // OpenFlow priority in a table. It is used to space out the priorities in the OVS table and provide an
 // initial guess on the OpenFlow priority that can be assigned to the input Priority. If that OpenFlow
@@ -129,7 +115,6 @@ func (pa *priorityAssigner) initialOFPriority(p types.Priority) uint16 {
 	}
 	return pa.policyTopPriority - offSet
 }
-
 // updatePriorityAssignment updates all the local maps to correlate input ofPriority and Priority.
 func (pa *priorityAssigner) updatePriorityAssignment(ofPriority uint16, p types.Priority) {
 	if _, exists := pa.priorityMap[p]; !exists {
@@ -143,7 +128,6 @@ func (pa *priorityAssigner) updatePriorityAssignment(ofPriority uint16, p types.
 	pa.ofPriorityMap[ofPriority] = p
 	pa.priorityMap[p] = ofPriority
 }
-
 // findReassignBoundaries finds the range to reassign Priorities that minimizes the number of
 // registered Priorities to be reassigned.
 func (pa *priorityAssigner) findReassignBoundaries(lowerBound, upperBound uint16, numNewPriorities, gap int) (uint16, uint16, error) {
@@ -203,7 +187,6 @@ func (pa *priorityAssigner) findReassignBoundaries(lowerBound, upperBound uint16
 	}
 	return costMap[minCostIndex].lowerBound, costMap[minCostIndex].upperBound, nil
 }
-
 // reassignBoundaryPriorities reassigns Priorities from lowerBound / upperBound or both, to make room for
 // new Priorities to be registered. It also records all the priority updates due to the reassignment in the
 // map of updates, which is passed to it as parameter.
@@ -248,14 +231,12 @@ func (pa *priorityAssigner) reassignBoundaryPriorities(lowerBound, upperBound ui
 	}
 	return nil
 }
-
 // getOFPriority returns if the Priority is registered with the priorityAssigner,
 // and retrieves the corresponding ofPriority.
 func (pa *priorityAssigner) getOFPriority(p types.Priority) (uint16, bool) {
 	of, registered := pa.priorityMap[p]
 	return of, registered
 }
-
 // registerPriorities registers a list of types.Priority with the priorityAssigner. It allocates ofPriorities for
 // input priorities that are not yet registered. It also returns the ofPriority updates if there are reassignments,
 // as well as a revert function that can undo the registration if any error occurred in data plane.
@@ -291,7 +272,6 @@ func (pa *priorityAssigner) registerPriorities(priorities []types.Priority) (map
 	}
 	return pa.registerConsecutivePriorities(consecutivePriorities)
 }
-
 // registerConsecutivePriorities registers lists of consecutive Priorities with the priorityAssigner.
 func (pa *priorityAssigner) registerConsecutivePriorities(consecutivePriorities [][]types.Priority) (map[uint16]uint16, func(), error) {
 	allPriorityUpdates := map[types.Priority]*priorityUpdate{}
@@ -323,7 +303,6 @@ func (pa *priorityAssigner) registerConsecutivePriorities(consecutivePriorities 
 	}
 	return priorityUpdatesToOFUpdates(allPriorityUpdates), revertFunc, nil
 }
-
 // insertConsecutivePriorities inserts a list of consecutive Priorities into the ofPriority space.
 // It first identifies the lower and upper bound for insertion, by obtaining the ofPriorities of
 // registered Priorities surrounding (immediately lower and higher than) the inserting Priorities.
@@ -373,7 +352,6 @@ func (pa *priorityAssigner) insertConsecutivePriorities(priorities types.ByPrior
 	}
 	return nil
 }
-
 // release removes the priority that currently corresponds to the input OFPriority from the known priorities.
 func (pa *priorityAssigner) release(ofPriority uint16) {
 	priority, exists := pa.ofPriorityMap[ofPriority]
@@ -385,13 +363,11 @@ func (pa *priorityAssigner) release(ofPriority uint16) {
 	pa.deletePriorityMapping(ofPriority, priority)
 	pa.unregisterPriority(priority)
 }
-
 // deletePriorityMapping removes the Priority <-> ofPriority mapping from the input
 func (pa *priorityAssigner) deletePriorityMapping(ofPriority uint16, priority types.Priority) {
 	delete(pa.priorityMap, priority)
 	delete(pa.ofPriorityMap, ofPriority)
 }
-
 // unregisterPriority unregisters the Priority from the known Priorities.
 func (pa *priorityAssigner) unregisterPriority(priority types.Priority) {
 	idxToDel := sort.Search(len(pa.sortedPriorities), func(i int) bool { return priority.Less(pa.sortedPriorities[i]) }) - 1

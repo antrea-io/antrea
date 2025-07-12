@@ -11,19 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package types
-
 import (
 	"net"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 // ServiceConfig contains the configuration needed to install flows for a given Service entrypoint.
 type ServiceConfig struct {
 	ServiceIP          net.IP
@@ -42,7 +35,6 @@ type ServiceConfig struct {
 	// IsDSR indicates that whether the Service works in Direct Server Return mode.
 	IsDSR bool
 }
-
 func (c *ServiceConfig) TrafficPolicyGroupID() openflow.GroupIDType {
 	if c.TrafficPolicyLocal {
 		return c.LocalGroupID

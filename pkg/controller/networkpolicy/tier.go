@@ -11,35 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // Package networkpolicy provides NetworkPolicyController implementation to manage
 // and synchronize the Pods and Namespaces affected by Network Policies and enforce
 // their rules.
 package networkpolicy
-
 import (
 	"context"
 	"fmt"
 	"time"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 var (
 	// maxSupportedTiers is the soft limit on the maximum number of supported
 	// Tiers.
 	maxSupportedTiers = 20
-
 	// defaultTierName maintains the name of the default Tier in Antrea.
 	defaultTierName = "application"
 	// emergencyTierName maintains the name of the Emergency Tier in Antrea.
@@ -119,7 +110,6 @@ var (
 		},
 	}
 )
-
 // InitializeTiers initializes the default Tiers created by Antrea on init. It
 // will first attempt to retrieve the Tier by it's name from K8s and if missing,
 // create the CR. InitializeTiers will be called as part of a Post-Start hook
@@ -136,7 +126,6 @@ func (n *NetworkPolicyController) InitializeTiers(ctx context.Context) error {
 	}
 	return nil
 }
-
 func (n *NetworkPolicyController) initializeTier(ctx context.Context, t *secv1beta1.Tier) error {
 	// Tier creation or update may fail because antrea APIService is not yet ready to accept
 	// requests for validation. We will keep retrying until it succeeds, using an exponential
@@ -192,7 +181,6 @@ func (n *NetworkPolicyController) initializeTier(ctx context.Context, t *secv1be
 	}
 	return nil
 }
-
 func (n *NetworkPolicyController) createTier(ctx context.Context, t *secv1beta1.Tier) error {
 	klog.V(2).InfoS("Creating system Tier", "tier", klog.KObj(t))
 	if _, err := n.crdClient.CrdV1beta1().Tiers().Create(ctx, t, metav1.CreateOptions{}); err != nil {
@@ -201,7 +189,6 @@ func (n *NetworkPolicyController) createTier(ctx context.Context, t *secv1beta1.
 	klog.InfoS("Created system Tier", "tier", klog.KObj(t))
 	return nil
 }
-
 func (n *NetworkPolicyController) updateTier(ctx context.Context, t *secv1beta1.Tier) error {
 	klog.V(2).InfoS("Updating system Tier", "tier", klog.KObj(t))
 	if _, err := n.crdClient.CrdV1beta1().Tiers().Update(ctx, t, metav1.UpdateOptions{}); err != nil {

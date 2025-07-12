@@ -1,6 +1,5 @@
 //go:build !race
 // +build !race
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"container/heap"
 	"context"
@@ -29,53 +26,40 @@ import (
 	"net/netip"
 	"testing"
 	"time"
-
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
 	exptest "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
 	"antrea.io/antrea/v2/pkg/ipfix"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
-	"antrea.io/antrea/pkg/ipfix"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
+	exptest "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
+	"antrea.io/antrea/v2/pkg/ipfix"
 )
-
 const (
 	testNumOfConns         = 20000
 	testNumOfDenyConns     = 20000
 	testNumOfDyingConns    = 2000
 	testNumOfIdleDenyConns = 2000
 	testBufferSize         = 1048
-
 	testWithIPv6 = false
 )
-
 var recordsReceived = 0
-
 /*
 Sample output:
 go test -test.v -run=BenchmarkExport -test.benchmem -bench=BenchmarkExportConntrackConns -benchtime=100x -memprofile memprofile.out -cpuprofile profile.out
 goos: linux
 goarch: amd64
-<<<<<<< HEAD
 pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/exporter
-=======
-pkg: antrea.io/antrea/pkg/agent/flowexporter/exporter
->>>>>>> origin/main
+pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/exporter
 cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
 BenchmarkExportConntrackConns
-
 	exporter_perf_test.go:95:
 	    Summary:
 	    Number of conntrack connections: 20000
@@ -86,16 +70,11 @@ BenchmarkExportConntrackConns
 	    Number of conntrack connections: 20000
 	    Number of dying conntrack connections: 2000
 	    Total connections received: 18259
-
 BenchmarkExportConntrackConns-2   	     100	   3174982 ns/op	  328104 B/op	    3262 allocs/op
 PASS
-<<<<<<< HEAD
 ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/exporter	1.249s
-=======
-ok  	antrea.io/antrea/pkg/agent/flowexporter/exporter	1.249s
->>>>>>> origin/main
+ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/exporter	1.249s
 Reference value:
-
 	#conns
 	20000     100	   3174982 ns/op	  328104 B/op	    3262 allocs/op
 	30000     100	   5074667 ns/op	  489624 B/op	    4874 allocs/op
@@ -104,7 +83,6 @@ Reference value:
 */
 func BenchmarkExportConntrackConns(b *testing.B) {
 	disableLogToStderr()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	recordsReceived = 0
@@ -122,20 +100,15 @@ func BenchmarkExportConntrackConns(b *testing.B) {
 	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of conntrack connections: %d\nNumber of dying conntrack connections: %d\nTotal connections received: %d\n", testNumOfConns, testNumOfDyingConns, recordsReceived)
 }
-
 /*
 Sample output:
 go test -test.v -run=BenchmarkExport -test.benchmem -bench=BenchmarkExportDenyConns -benchtime=100x -memprofile memprofile.out -cpuprofile profile.out
 goos: linux
 goarch: amd64
-<<<<<<< HEAD
 pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/exporter
-=======
-pkg: antrea.io/antrea/pkg/agent/flowexporter/exporter
->>>>>>> origin/main
+pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/exporter
 cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
 BenchmarkExportDenyConns
-
 	exporter_perf_test.go:143:
 	    Summary:
 	    Number of deny connections: 20000
@@ -146,16 +119,11 @@ BenchmarkExportDenyConns
 	    Number of deny connections: 20000
 	    Number of idle deny connections: 2000
 	    Total connections received: 19237
-
 BenchmarkExportDenyConns-2   	     100	   3133778 ns/op	  322203 B/op	    3474 allocs/op
 PASS
-<<<<<<< HEAD
 ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/exporter	1.238s
-=======
-ok  	antrea.io/antrea/pkg/agent/flowexporter/exporter	1.238s
->>>>>>> origin/main
+ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/exporter	1.238s
 Reference value:
-
 	#conns
 	20000   100	   3133778 ns/op	  322203 B/op	    3474 allocs/op
 	30000   100	   4813561 ns/op	  480075 B/op	    5175 allocs/op
@@ -164,7 +132,6 @@ Reference value:
 */
 func BenchmarkExportDenyConns(b *testing.B) {
 	disableLogToStderr()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	recordsReceived = 0
@@ -182,23 +149,18 @@ func BenchmarkExportDenyConns(b *testing.B) {
 	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of deny connections: %d\nNumber of idle deny connections: %d\nTotal connections received: %d\n", testNumOfDenyConns, testNumOfIdleDenyConns, recordsReceived)
 }
-
 func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
-
 	// Prepare input args for IPFIX exporting process.
 	nodeName := "test-node"
 	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
-
 	v4Enabled := !testWithIPv6
 	v6Enabled := testWithIPv6
-
 	l7Listener := connections.NewL7Listener(nil, nil)
 	denyConnStore := connections.NewDenyConnectionStore(nil, nil, o, filter.NewProtocolFilter(nil))
 	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, l7Listener, o)
-
 	return &FlowExporter{
 		collectorAddr:          o.FlowCollectorAddr,
 		conntrackConnStore:     conntrackConnStore,
@@ -218,14 +180,12 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 		l7Listener:             l7Listener,
 	}
 }
-
 func setupExporter(isConntrackConn bool, stopCh <-chan struct{}) (*FlowExporter, error) {
 	var err error
 	collectorAddr, err := startLocalServer(stopCh)
 	if err != nil {
 		return nil, err
 	}
-
 	// create connection store and generate connections
 	o := &flowexporter.FlowExporterOptions{
 		FlowCollectorAddr:      collectorAddr.String(),
@@ -243,7 +203,6 @@ func setupExporter(isConntrackConn bool, stopCh <-chan struct{}) (*FlowExporter,
 	}
 	return exp, err
 }
-
 func startLocalServer(stopCh <-chan struct{}) (net.Addr, error) {
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
@@ -269,7 +228,6 @@ func startLocalServer(stopCh <-chan struct{}) (net.Addr, error) {
 	}()
 	return conn.LocalAddr(), nil
 }
-
 func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQueue *priorityqueue.ExpirePriorityQueue) {
 	randomNum := int(getRandomNum(int64(testNumOfConns - testNumOfDyingConns)))
 	for i := 0; i < testNumOfConns; i++ {
@@ -319,7 +277,6 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 		expirePriorityQueue.KeyToItem[connKey] = pqItem
 	}
 }
-
 func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueue *priorityqueue.ExpirePriorityQueue) {
 	for i := 0; i < testNumOfDenyConns; i++ {
 		var src, dst netip.Addr
@@ -356,12 +313,10 @@ func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueu
 		expirePriorityQueue.KeyToItem[connKey] = pqItem
 	}
 }
-
 func getRandomNum(value int64) uint64 {
 	number, _ := rand.Int(rand.Reader, big.NewInt(value))
 	return number.Uint64()
 }
-
 func disableLogToStderr() {
 	klogFlagSet := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(klogFlagSet)

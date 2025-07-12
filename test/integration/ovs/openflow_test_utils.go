@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ovs
-
 import (
 	"context"
 	"fmt"
@@ -21,24 +19,17 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
-
-<<<<<<< HEAD
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
-=======
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
->>>>>>> origin/main
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 )
-
 const (
 	openFlowCheckTimeout  = 500 * time.Millisecond
 	openFlowCheckInterval = 100 * time.Millisecond
 )
-
 func PrepareOVSBridge(brName string) error {
 	// using the netdev datapath type does not impact test coverage but
 	// ensures that the integration tests can be run with Docker Desktop on
@@ -50,26 +41,21 @@ func PrepareOVSBridge(brName string) error {
 	}
 	return nil
 }
-
 func DeleteOVSBridge(brName string) error {
 	cmdStr := fmt.Sprintf("ovs-vsctl --if-exist del-br %s", brName)
 	err := exec.Command("/bin/sh", "-c", cmdStr).Run()
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
-
 type ExpectFlow struct {
 	MatchStr string
 	ActStr   string
 }
-
 func (f ExpectFlow) flowStr(name string) string {
 	return fmt.Sprintf("table=%s,%s actions=%s", name, f.MatchStr, f.ActStr)
 }
-
 func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableName string, tableID uint8, expectFound bool, flows []*ExpectFlow) []string {
 	var flowList []string
 	var unexpectedFlows []*ExpectFlow
@@ -85,7 +71,6 @@ func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableName s
 			flowList, err = OfctlDumpTableFlowsWithoutName(ovsCtlClient, tableID)
 		}
 		require.NoError(t, err, "Error dumping flows")
-
 		for _, flow := range flows {
 			found := OfctlFlowMatch(flowList, table, flow)
 			if found != expectFound {
@@ -105,7 +90,6 @@ func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableName s
 	}
 	return flowList
 }
-
 func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectFound bool) {
 	var bucketStrs []string
 	for _, bucket := range buckets {
@@ -142,7 +126,6 @@ func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID bi
 		t.Logf("Existing groups:\n%s", groupList)
 	}
 }
-
 func OfctlFlowMatch(flowList []string, tableName string, flow *ExpectFlow) bool {
 	mtStr := fmt.Sprintf("table=%s, %s ", tableName, flow.MatchStr)
 	aStr := fmt.Sprintf("actions=%s", flow.ActStr)
@@ -151,10 +134,8 @@ func OfctlFlowMatch(flowList []string, tableName string, flow *ExpectFlow) bool 
 			return true
 		}
 	}
-
 	return false
 }
-
 func formatFlowDump(rawFlows []string) []string {
 	flowList := []string{}
 	for _, flow := range rawFlows {
@@ -167,7 +148,6 @@ func formatFlowDump(rawFlows []string) []string {
 	}
 	return flowList
 }
-
 func OfctlDumpFlows(ovsCtlClient ovsctl.OVSCtlClient, args ...string) ([]string, error) {
 	rawFlows, err := ovsCtlClient.DumpFlowsWithoutTableNames(args...)
 	if err != nil {
@@ -175,7 +155,6 @@ func OfctlDumpFlows(ovsCtlClient ovsctl.OVSCtlClient, args ...string) ([]string,
 	}
 	return formatFlowDump(rawFlows), nil
 }
-
 func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table string) ([]string, error) {
 	rawFlows, err := ovsCtlClient.DumpFlows(fmt.Sprintf("table=%s", table))
 	if err != nil {
@@ -183,7 +162,6 @@ func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table string) ([]stri
 	}
 	return formatFlowDump(rawFlows), nil
 }
-
 func OfctlDumpTableFlowsWithoutName(ovsCtlClient ovsctl.OVSCtlClient, table uint8) ([]string, error) {
 	rawFlows, err := ovsCtlClient.DumpFlowsWithoutTableNames(fmt.Sprintf("table=%d", table))
 	if err != nil {
@@ -191,18 +169,15 @@ func OfctlDumpTableFlowsWithoutName(ovsCtlClient ovsctl.OVSCtlClient, table uint
 	}
 	return formatFlowDump(rawFlows), nil
 }
-
 func OfctlDeleteFlows(ovsCtlClient ovsctl.OVSCtlClient) error {
 	_, err := ovsCtlClient.RunOfctlCmd("del-flows")
 	return err
 }
-
 func OfCtlDumpGroups(ovsCtlClient ovsctl.OVSCtlClient) ([][]string, error) {
 	rawGroupItems, err := ovsCtlClient.DumpGroups()
 	if err != nil {
 		return nil, err
 	}
-
 	var groupList [][]string
 	for _, item := range rawGroupItems {
 		elems := strings.Split(item, ",bucket=")
@@ -210,7 +185,6 @@ func OfCtlDumpGroups(ovsCtlClient ovsctl.OVSCtlClient) ([][]string, error) {
 	}
 	return groupList, nil
 }
-
 func OfctlDeleteGroups(ovsCtlClient ovsctl.OVSCtlClient) error {
 	_, err := ovsCtlClient.RunOfctlCmd("del-groups")
 	return err

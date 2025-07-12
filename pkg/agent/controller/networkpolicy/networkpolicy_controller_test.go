@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"encoding/base64"
 	"fmt"
@@ -24,7 +22,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -36,40 +33,34 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/component-base/metrics/legacyregistry"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/controller/networkpolicy/l7engine"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	proxytypes "antrea.io/antrea/v2/pkg/agent/proxy/types"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/wait"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
-	"antrea.io/antrea/pkg/agent/metrics"
-	"antrea.io/antrea/pkg/agent/openflow"
-	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/wait"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/controller/networkpolicy/l7engine"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	proxytypes "antrea.io/antrea/v2/pkg/agent/proxy/types"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/wait"
 )
-
 const testNamespace = "ns1"
-
 var mockOFTables = map[*openflow.Table]uint8{
 	openflow.AntreaPolicyEgressRuleTable:  uint8(5),
 	openflow.EgressRuleTable:              uint8(6),
@@ -79,15 +70,12 @@ var mockOFTables = map[*openflow.Table]uint8{
 	openflow.IngressDefaultTable:          uint8(14),
 	openflow.OutputTable:                  uint8(28),
 }
-
 type antreaClientGetter struct {
 	clientset versioned.Interface
 }
-
 func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 	return g.clientset, nil
 }
-
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
@@ -129,7 +117,6 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	controller.auditLogger = nil
 	return controller, clientset, reconciler
 }
-
 // mockReconciler implements Reconciler. It simply records the latest states of rules
 // it has been asked to reconcile, and provides two channels to receive its notifications
 // for testing.
@@ -140,7 +127,6 @@ type mockReconciler struct {
 	deleted        chan string
 	fqdnController *fqdnController
 }
-
 func newMockReconciler() *mockReconciler {
 	return &mockReconciler{
 		lastRealized: map[string]*CompletedRule{},
@@ -148,7 +134,6 @@ func newMockReconciler() *mockReconciler {
 		deleted:      make(chan string, 10),
 	}
 }
-
 func (r *mockReconciler) Reconcile(rule *CompletedRule) error {
 	r.Lock()
 	defer r.Unlock()
@@ -156,7 +141,6 @@ func (r *mockReconciler) Reconcile(rule *CompletedRule) error {
 	r.updated <- rule.ID
 	return nil
 }
-
 func (r *mockReconciler) BatchReconcile(rules []*CompletedRule) error {
 	r.Lock()
 	defer r.Unlock()
@@ -166,7 +150,6 @@ func (r *mockReconciler) BatchReconcile(rules []*CompletedRule) error {
 	}
 	return nil
 }
-
 func (r *mockReconciler) Forget(ruleID string) error {
 	r.Lock()
 	defer r.Unlock()
@@ -174,27 +157,21 @@ func (r *mockReconciler) Forget(ruleID string) error {
 	r.deleted <- ruleID
 	return nil
 }
-
 func (r *mockReconciler) RunIDAllocatorWorker(_ <-chan struct{}) {
 }
-
 func (r *mockReconciler) RegisterFQDNController(fc *fqdnController) {
 	r.fqdnController = fc
 }
-
 func (r *mockReconciler) GetRuleByFlowID(_ uint32) (*agenttypes.PolicyRule, bool, error) {
 	return nil, false, nil
 }
-
 func (r *mockReconciler) getLastRealized(ruleID string) (*CompletedRule, bool) {
 	r.Lock()
 	defer r.Unlock()
 	lastRealized, exists := r.lastRealized[ruleID]
 	return lastRealized, exists
 }
-
 var _ Reconciler = &mockReconciler{}
-
 func newAddressGroup(name string, addresses []v1beta2.GroupMember) *v1beta2.AddressGroup {
 	return &v1beta2.AddressGroup{
 		TypeMeta:     v1.TypeMeta{Kind: "AddressGroup", APIVersion: "controlplane.antrea.io/v1beta2"},
@@ -202,7 +179,6 @@ func newAddressGroup(name string, addresses []v1beta2.GroupMember) *v1beta2.Addr
 		GroupMembers: addresses,
 	}
 }
-
 func newAppliedToGroup(name string, pods []v1beta2.GroupMember) *v1beta2.AppliedToGroup {
 	return &v1beta2.AppliedToGroup{
 		TypeMeta:     v1.TypeMeta{Kind: "AppliedToGroup", APIVersion: "controlplane.antrea.io/v1beta2"},
@@ -210,7 +186,6 @@ func newAppliedToGroup(name string, pods []v1beta2.GroupMember) *v1beta2.Applied
 		GroupMembers: pods,
 	}
 }
-
 func newNetworkPolicy(name string, uid types.UID, from, to, appliedTo []string, services []v1beta2.Service) *v1beta2.NetworkPolicy {
 	dir := v1beta2.DirectionIn
 	if len(from) == 0 && len(to) > 0 {
@@ -230,7 +205,6 @@ func newNetworkPolicy(name string, uid types.UID, from, to, appliedTo []string, 
 		},
 	}
 }
-
 func newPolicyRule(direction v1beta2.Direction, from []string, to []string, services []v1beta2.Service) v1beta2.NetworkPolicyRule {
 	return v1beta2.NetworkPolicyRule{
 		Direction: direction,
@@ -239,7 +213,6 @@ func newPolicyRule(direction v1beta2.Direction, from []string, to []string, serv
 		Services:  services,
 	}
 }
-
 func newNetworkPolicyWithMultipleRules(name string, uid types.UID, from, to, appliedTo []string, services []v1beta2.Service) *v1beta2.NetworkPolicy {
 	networkPolicyRule1 := v1beta2.NetworkPolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -265,11 +238,9 @@ func newNetworkPolicyWithMultipleRules(name string, uid types.UID, from, to, app
 		},
 	}
 }
-
 func prepareMockTables() {
 	openflow.InitMockTables(mockOFTables)
 }
-
 func TestAddSingleGroupRule(t *testing.T) {
 	prepareMockTables()
 	controller, clientset, reconciler := newTestController()
@@ -279,7 +250,6 @@ func TestAddSingleGroupRule(t *testing.T) {
 	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
 	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
-
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
 	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
@@ -292,7 +262,6 @@ func TestAddSingleGroupRule(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
-
 	// policy1 comes first, no rule will be synced due to missing addressGroup1 and appliedToGroup1.
 	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
 	networkPolicyWatcher.Add(policy1)
@@ -308,7 +277,6 @@ func TestAddSingleGroupRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 0, controller.GetAddressGroupNum())
 	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
-
 	// addressGroup1 comes, no rule will be synced due to missing appliedToGroup1 data.
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
@@ -320,7 +288,6 @@ func TestAddSingleGroupRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
-
 	// appliedToGroup1 comes, policy1 will be synced.
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
@@ -349,7 +316,6 @@ func TestAddSingleGroupRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 }
-
 func TestAddMultipleGroupsRule(t *testing.T) {
 	prepareMockTables()
 	controller, clientset, reconciler := newTestController()
@@ -359,7 +325,6 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
 	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
-
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
 	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
@@ -372,7 +337,6 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
-
 	// addressGroup1 comes, no rule will be synced.
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
@@ -394,7 +358,6 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
-
 	// addressGroup2 comes, policy1 will be synced with the TargetMembers populated from appliedToGroup1.
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("3.3.3.3")}))
 	select {
@@ -411,7 +374,6 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
-
 	// appliedToGroup2 comes, policy1 will be synced with the TargetMembers populated from appliedToGroup1 and appliedToGroup2.
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod2", "ns2")}))
 	select {
@@ -429,7 +391,6 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
 	assert.Equal(t, 2, controller.GetAppliedToGroupNum())
 }
-
 func TestDeleteRule(t *testing.T) {
 	prepareMockTables()
 	controller, clientset, reconciler := newTestController()
@@ -439,14 +400,12 @@ func TestDeleteRule(t *testing.T) {
 	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
 	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
-
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
 	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
-
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
@@ -465,7 +424,6 @@ func TestDeleteRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
-
 	networkPolicyWatcher.Delete(newNetworkPolicy("policy1", "uid1", []string{}, []string{}, []string{}, nil))
 	select {
 	case ruleID := <-reconciler.deleted:
@@ -477,7 +435,6 @@ func TestDeleteRule(t *testing.T) {
 		t.Fatal("Expected one update, got none")
 	}
 }
-
 func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	prepareMockTables()
 	controller, clientset, reconciler := newTestController()
@@ -487,7 +444,6 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
 	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
-
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
 	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
@@ -506,7 +462,6 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
-
 	// Test NetworkPolicyInfoQuerier functions when the NetworkPolicy has multiple rules.
 	policy1 := newNetworkPolicyWithMultipleRules("policy1", "uid1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services)
 	networkPolicyWatcher.Add(policy1)
@@ -560,7 +515,6 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 }
-
 func writeToFile(t *testing.T, fs afero.Fs, dir, file string, base64Str string) {
 	data, err := base64.StdEncoding.DecodeString(base64Str)
 	require.NoError(t, err)
@@ -570,7 +524,6 @@ func writeToFile(t *testing.T, fs afero.Fs, dir, file string, base64Str string) 
 	_, err = f.Write(data)
 	require.NoError(t, err)
 }
-
 func TestFallbackToFileStore(t *testing.T) {
 	prepareMockTables()
 	tests := []struct {
@@ -655,13 +608,10 @@ func TestFallbackToFileStore(t *testing.T) {
 			clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, fmt.Errorf("network unavailable")))
 			clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, fmt.Errorf("network unavailable")))
 			clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, fmt.Errorf("network unavailable")))
-
 			tt.initFileStore(controller.networkPolicyStore, controller.appliedToGroupStore, controller.addressGroupStore)
-
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			go controller.Run(stopCh)
-
 			select {
 			case ruleID := <-reconciler.updated:
 				actualRule, _ := reconciler.getLastRealized(ruleID)
@@ -674,7 +624,6 @@ func TestFallbackToFileStore(t *testing.T) {
 		})
 	}
 }
-
 func TestOverrideFileStore(t *testing.T) {
 	prepareMockTables()
 	controller, clientset, reconciler := newTestController()
@@ -684,7 +633,6 @@ func TestOverrideFileStore(t *testing.T) {
 	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
 	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
-
 	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, nil, []string{"appliedToGroup1"}, nil)
 	policy2 := newNetworkPolicy("policy2", "uid2", []string{"addressGroup2"}, nil, []string{"appliedToGroup2"}, nil)
 	atgMember1 := newAppliedToGroupMemberPod("pod1", "namespace")
@@ -698,18 +646,15 @@ func TestOverrideFileStore(t *testing.T) {
 	controller.networkPolicyStore.save(policy1)
 	controller.appliedToGroupStore.save(atg1)
 	controller.addressGroupStore.save(ag1)
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
-
 	networkPolicyWatcher.Add(policy2)
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	addressGroupWatcher.Add(ag2)
 	addressGroupWatcher.Action(watch.Bookmark, nil)
 	appliedToGroupWatcher.Add(atg2)
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
-
 	select {
 	case ruleID := <-reconciler.updated:
 		actualRule, _ := reconciler.getLastRealized(ruleID)
@@ -719,7 +664,6 @@ func TestOverrideFileStore(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Expected one rule update, got timeout")
 	}
-
 	objects, err := controller.appliedToGroupStore.loadAll()
 	require.NoError(t, err)
 	assert.Equal(t, []runtime.Object{atg2}, objects)
@@ -730,13 +674,11 @@ func TestOverrideFileStore(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []runtime.Object{policy2}, objects)
 }
-
 func TestNetworkPolicyMetrics(t *testing.T) {
 	prepareMockTables()
 	// Initialize NetworkPolicy metrics (prometheus)
 	metrics.InitializeNetworkPolicyMetrics()
 	controller, clientset, reconciler := newTestController()
-
 	// Define functions to wait for a message from reconciler
 	waitForReconcilerUpdated := func() {
 		select {
@@ -760,27 +702,22 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 			t.Fatal("Expected one update, got none")
 		}
 	}
-
 	// Define a function to check networkpolicy metrics
 	checkNetworkPolicyMetrics := func() {
 		expectedEgressNetworkPolicyRuleCount := `
 		# HELP antrea_agent_egress_networkpolicy_rule_count [STABLE] Number of egress NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_egress_networkpolicy_rule_count gauge
 		`
-
 		expectedIngressNetworkPolicyRuleCount := `
 		# HELP antrea_agent_ingress_networkpolicy_rule_count [STABLE] Number of ingress NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_ingress_networkpolicy_rule_count gauge
 		`
-
 		expectedNetworkPolicyCount := `
 		# HELP antrea_agent_networkpolicy_count [STABLE] Number of NetworkPolicies on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_networkpolicy_count gauge
 		`
-
 		ingressRuleCount := 0
 		egressRuleCount := 0
-
 		// Get all networkpolicies
 		networkpolicies := controller.GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{})
 		for _, networkpolicy := range networkpolicies {
@@ -792,30 +729,25 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 				}
 			}
 		}
-
 		expectedEgressNetworkPolicyRuleCount = expectedEgressNetworkPolicyRuleCount + fmt.Sprintf("antrea_agent_egress_networkpolicy_rule_count %d\n", egressRuleCount)
 		expectedIngressNetworkPolicyRuleCount = expectedIngressNetworkPolicyRuleCount + fmt.Sprintf("antrea_agent_ingress_networkpolicy_rule_count %d\n", ingressRuleCount)
 		expectedNetworkPolicyCount = expectedNetworkPolicyCount + fmt.Sprintf("antrea_agent_networkpolicy_count %d\n", controller.GetNetworkPolicyNum())
-
 		assert.NoError(t, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedEgressNetworkPolicyRuleCount), "antrea_agent_egress_networkpolicy_rule_count"))
 		assert.NoError(t, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedIngressNetworkPolicyRuleCount), "antrea_agent_ingress_networkpolicy_rule_count"))
 		assert.NoError(t, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedNetworkPolicyCount), "antrea_agent_networkpolicy_count"))
 	}
-
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
 	networkPolicyWatcher := watch.NewFake()
 	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
 	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
-
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
 	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
-
 	// Test adding policy1 with a single rule
 	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
@@ -826,7 +758,6 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	waitForReconcilerUpdated()
 	checkNetworkPolicyMetrics()
-
 	// Test adding policy2 with multiple rules
 	policy2 := newNetworkPolicyWithMultipleRules("policy2", "uid2", []string{"addressGroup2"}, []string{"addressGroup2"}, []string{"appliedToGroup2"}, services)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta2.GroupMember{*newAddressGroupMember("3.3.3.3"), *newAddressGroupMember("4.4.4.4")}))
@@ -836,18 +767,15 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	networkPolicyWatcher.Add(policy2)
 	waitForReconcilerUpdated()
 	checkNetworkPolicyMetrics()
-
 	// Test deleting policy1
 	networkPolicyWatcher.Delete(newNetworkPolicy("policy1", "uid1", []string{}, []string{}, []string{}, nil))
 	waitForReconcilerDeleted()
 	checkNetworkPolicyMetrics()
-
 	// Test deleting policy2
 	networkPolicyWatcher.Delete(newNetworkPolicy("policy2", "uid2", []string{}, []string{}, []string{}, nil))
 	waitForReconcilerDeleted()
 	checkNetworkPolicyMetrics()
 }
-
 func TestValidate(t *testing.T) {
 	controller, _, _ := newTestController()
 	igmpType := int32(0x12)
@@ -899,7 +827,6 @@ func TestValidate(t *testing.T) {
 	}
 	groups := v1beta2.GroupMemberSet{}
 	groupAddress1, groupAddress2 := "225.1.2.3", "225.1.2.4"
-
 	groups["Pod:ns1/pod1"] = newAppliedToGroupMemberPod("pod1", "ns1")
 	controller.ruleCache.appliedToSetByGroup["appliedToGroup01"] = groups
 	controller.ruleCache.rules.Add(rule1)
@@ -919,13 +846,11 @@ func TestValidate(t *testing.T) {
 		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress2, v1beta1.RuleActionDrop, item.RuleAction)
 	}
 }
-
 func TestGetFqdnCache(t *testing.T) {
 	controller, _, _ := newTestController()
 	expectedEntryList := []agenttypes.DnsCacheEntry{}
 	assert.Equal(t, expectedEntryList, controller.GetFQDNCache(nil))
 	expirationTime := time.Now().Add(1 * time.Hour).UTC()
-
 	controller.fqdnController.dnsEntryCache = map[string]dnsMeta{
 		"example.com": {
 			responseIPs: map[string]ipWithExpiration{
@@ -952,7 +877,6 @@ func TestGetFqdnCache(t *testing.T) {
 			},
 		},
 	}
-
 	expectedEntryList = []agenttypes.DnsCacheEntry{
 		{
 			FQDNName:       "example.com",

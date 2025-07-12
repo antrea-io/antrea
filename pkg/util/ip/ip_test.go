@@ -11,33 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ip
-
 import (
 	"net"
 	"net/netip"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 func newCIDR(cidrStr string) *net.IPNet {
 	_, tmpIPNet, _ := net.ParseCIDR(cidrStr)
 	return tmpIPNet
 }
-
 func TestDiffCIDRs(t *testing.T) {
 	testList := []*net.IPNet{newCIDR("10.20.0.0/16"),
 		newCIDR("10.20.1.0/24"),
 		newCIDR("10.20.2.0/28")}
-
 	exceptList1 := []*net.IPNet{testList[1]}
 	correctList1 := []*net.IPNet{newCIDR("10.20.128.0/17"),
 		newCIDR("10.20.64.0/18"),
@@ -47,14 +37,12 @@ func TestDiffCIDRs(t *testing.T) {
 		newCIDR("10.20.4.0/22"),
 		newCIDR("10.20.2.0/23"),
 		newCIDR("10.20.0.0/24")}
-
 	diffCIDRs, err := DiffFromCIDRs(testList[0], exceptList1)
 	if err != nil {
 		t.Fatalf("diffFromCIDRs() error = %v", err)
 	} else {
 		assert.ElementsMatch(t, correctList1, diffCIDRs)
 	}
-
 	exceptList2 := []*net.IPNet{testList[1], testList[2]}
 	correctList2 := []*net.IPNet{newCIDR("10.20.128.0/17"),
 		newCIDR("10.20.64.0/18"),
@@ -74,48 +62,34 @@ func TestDiffCIDRs(t *testing.T) {
 	} else {
 		assert.ElementsMatch(t, correctList2, diffCIDRs)
 	}
-
 }
-
 func TestMergeCIDRs(t *testing.T) {
 	testList := []*net.IPNet{newCIDR("10.10.0.0/16"),
 		newCIDR("10.20.0.0/16"),
 		newCIDR("10.20.1.2/32"),
 		newCIDR("10.20.1.3/32")}
-
 	ipNetList0 := []*net.IPNet{testList[0], testList[1],
 		testList[2], testList[3]}
 	correctList0 := []*net.IPNet{testList[0], testList[1]}
-
 	ipNetList0 = MergeCIDRs(ipNetList0)
-
 	assert.ElementsMatch(t, correctList0, ipNetList0)
-
 	ipNetList1 := []*net.IPNet{testList[0]}
 	correctList1 := []*net.IPNet{testList[0]}
-
 	ipNetList1 = MergeCIDRs(ipNetList1)
 	assert.ElementsMatch(t, correctList1, ipNetList1)
-
 	ipNetList2 := []*net.IPNet{testList[2], testList[3]}
 	correctList2 := []*net.IPNet{testList[2], testList[3]}
-
 	ipNetList2 = MergeCIDRs(ipNetList2)
 	assert.ElementsMatch(t, correctList2, ipNetList2)
-
 	ipNetList3 := []*net.IPNet{testList[0], testList[3]}
 	correctList3 := []*net.IPNet{testList[0], testList[3]}
-
 	ipNetList3 = MergeCIDRs(ipNetList3)
 	assert.ElementsMatch(t, correctList3, ipNetList3)
-
 	ipNetList4 := []*net.IPNet{}
 	correctList4 := []*net.IPNet{}
-
 	ipNetList4 = MergeCIDRs(ipNetList4)
 	assert.ElementsMatch(t, correctList4, ipNetList4)
 }
-
 func TestIPNetToNetIPNet(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -161,13 +135,11 @@ func TestIPNetToNetIPNet(t *testing.T) {
 		})
 	}
 }
-
 func TestIPProtocolNumberToString(t *testing.T) {
 	const defaultValue = "UnknownProtocol"
 	assert.Equal(t, "IPv6-ICMP", IPProtocolNumberToString(ICMPv6Protocol, defaultValue))
 	assert.Equal(t, defaultValue, IPProtocolNumberToString(44, defaultValue))
 }
-
 func TestMustIPv6(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -191,7 +163,6 @@ func TestMustIPv6(t *testing.T) {
 		})
 	}
 }
-
 func TestAppendPortIfMissing(t *testing.T) {
 	tests := []struct {
 		name string
@@ -244,7 +215,6 @@ func TestAppendPortIfMissing(t *testing.T) {
 		})
 	}
 }
-
 func TestIPNetEqual(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -283,7 +253,6 @@ func TestIPNetEqual(t *testing.T) {
 		})
 	}
 }
-
 func TestIPNetContains(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -334,7 +303,6 @@ func TestIPNetContains(t *testing.T) {
 		})
 	}
 }
-
 func TestGetStartAndEndOfPrefix(t *testing.T) {
 	testCases := []struct {
 		prefix string
@@ -407,7 +375,6 @@ func TestGetStartAndEndOfPrefix(t *testing.T) {
 			end:    "2001:4860:4860::888f",
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.prefix, func(t *testing.T) {
 			start, end := GetStartAndEndOfPrefix(netip.MustParsePrefix(tc.prefix))

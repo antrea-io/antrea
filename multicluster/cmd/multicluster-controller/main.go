@@ -11,31 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // Package main under directory cmd parses and validates user input,
 // instantiates and initializes objects imported from pkg, and runs
 // the process.
 package main
-
 import (
 	"fmt"
 	"os"
-
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/log"
-=======
-	"antrea.io/antrea/pkg/log"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/log"
 )
-
 var (
 	scheme = runtime.NewScheme()
 	opts   = newOptions()
 )
-
 func main() {
 	command := newControllerCommand()
 	flags := command.PersistentFlags()
@@ -43,12 +34,10 @@ func main() {
 	log.AddFlags(flags)
 	command.AddCommand(newLeaderCommand())
 	command.AddCommand(newMemberCommand())
-
 	if err := command.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
-
 func newControllerCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:  "antrea-mc-controller",

@@ -11,23 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package v1beta2
-
 import (
 	"context"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 type SupportBundleCollectionExpansion interface {
 	UpdateStatus(ctx context.Context, name string, status *v1beta2.SupportBundleCollectionStatus) error
 }
-
 func (c *supportBundleCollections) UpdateStatus(ctx context.Context, name string, status *v1beta2.SupportBundleCollectionStatus) error {
 	return c.GetClient().Post().Resource("supportbundlecollections").Name(name).SubResource("status").Body(status).Do(ctx).Error()
 }

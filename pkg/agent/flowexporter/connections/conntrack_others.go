@@ -1,6 +1,5 @@
 //go:build !linux
 // +build !linux
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,30 +13,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"fmt"
 	"net/netip"
 	"strconv"
 	"strings"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
 )
-
 type connTrackOvsCtlWindows struct {
 	connTrackOvsCtl
 }
-
 func (ct *connTrackOvsCtlWindows) GetMaxConnections() (int, error) {
 	var zoneID int
 	if ct.serviceCIDRv4.IsValid() {
@@ -63,7 +54,6 @@ func (ct *connTrackOvsCtlWindows) GetMaxConnections() (int, error) {
 	}
 	return 0, fmt.Errorf("couldn't find limit field in dpctl/ct-get-limits command output '%s'", cmdOutput)
 }
-
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) *connTrackOvsCtlWindows {
 	return &connTrackOvsCtlWindows{*NewConnTrackOvsAppCtl(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled, protocolFilter)}
 }

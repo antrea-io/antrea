@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipam
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/json"
-
-<<<<<<< HEAD
-	crdv1alpha2 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 func TestIPPoolConverter(t *testing.T) {
 	v1a2Pool := &crdv1alpha2.IPPool{
 		TypeMeta: metav1.TypeMeta{
@@ -156,12 +148,10 @@ func TestIPPoolConverter(t *testing.T) {
 				Message: "failed to convert IPPool from version v1alpha2 to to version v1beta1 because the original ipRanges have different subnet information"},
 		},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			inputUnstructured := &unstructured.Unstructured{}
 			outputUnstructured := &unstructured.Unstructured{}
-
 			inputJson, err := json.Marshal(tc.inputIPPool)
 			assert.NoError(t, err)
 			err = inputUnstructured.UnmarshalJSON(inputJson)
@@ -172,7 +162,6 @@ func TestIPPoolConverter(t *testing.T) {
 				err = outputUnstructured.UnmarshalJSON(outputJson)
 				assert.NoError(t, err)
 			}
-
 			convertedPool, status := ConvertIPPool(inputUnstructured, tc.toVersion)
 			assert.Equal(t, tc.status, status)
 			if status.Status == metav1.StatusSuccess {

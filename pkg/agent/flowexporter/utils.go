@@ -11,26 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowexporter
-
 import (
 	"fmt"
 	"strings"
-
 	"github.com/vmware/go-ipfix/pkg/registry"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 const (
 	connectionDyingFlag = uint32(1 << 9)
 )
-
 var (
 	Protocols = map[string]uint8{
 		"icmp":      1,
@@ -40,12 +31,10 @@ var (
 		"ipv6-icmp": 58,
 	}
 )
-
 // NewConnectionKey creates 5-tuple of flow as connection key
 func NewConnectionKey(conn *Connection) ConnectionKey {
 	return conn.FlowKey
 }
-
 func IsConnectionDying(conn *Connection) bool {
 	// "TIME_WAIT" state indicates local endpoint has closed the connection.
 	// "CLOSE" state indicates closing RST flag is set and connection is closed.
@@ -62,7 +51,6 @@ func IsConnectionDying(conn *Connection) bool {
 	}
 	return false
 }
-
 // checkConntrackConnActive returns true if there are changes in connection's stats or
 // TCP state, indicating that the connection is active.
 func CheckConntrackConnActive(conn *Connection) bool {
@@ -73,7 +61,6 @@ func CheckConntrackConnActive(conn *Connection) bool {
 	}
 	return false
 }
-
 // RuleActionToUint8 converts network policy rule action to uint8.
 func RuleActionToUint8(action string) uint8 {
 	switch action {
@@ -87,7 +74,6 @@ func RuleActionToUint8(action string) uint8 {
 		return registry.NetworkPolicyRuleActionNoAction
 	}
 }
-
 // policyTypeToUint8 converts NetworkPolicy type to uint8
 func PolicyTypeToUint8(policyType v1beta2.NetworkPolicyType) uint8 {
 	switch policyType {
@@ -101,7 +87,6 @@ func PolicyTypeToUint8(policyType v1beta2.NetworkPolicyType) uint8 {
 		return registry.PolicyTypeK8sNetworkPolicy
 	}
 }
-
 // LookupProtocolMap returns protocol identifier given protocol name
 func LookupProtocolMap(name string) (uint8, error) {
 	name = strings.TrimSpace(name)

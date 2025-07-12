@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package agent
-
 import (
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
-=======
-	"antrea.io/antrea/pkg/agent/util"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util"
 )
-
 func createTestInterface(t *testing.T, name string) string {
 	t.Logf("Creating dummy test interface '%s'", name)
 	gwLink := &netlink.Dummy{}
@@ -38,19 +30,16 @@ func createTestInterface(t *testing.T, name string) string {
 	require.NoError(t, netlink.LinkSetUp(link))
 	return name
 }
-
 func setTestInterfaceUp(t *testing.T, name string) int {
 	_, ifaceIdx, err := util.SetLinkUp(name)
 	require.NoError(t, err)
 	return ifaceIdx
 }
-
 func deleteTestInterface(t *testing.T, name string) {
 	t.Logf("Deleting dummy test interface '%s'", name)
 	link, _ := netlink.LinkByName(name)
 	assert.NoError(t, netlink.LinkDel(link))
 }
-
 func getTestInterfaceAddresses(t *testing.T, name string) []*net.IPNet {
 	link, _ := netlink.LinkByName(name)
 	addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
@@ -61,7 +50,6 @@ func getTestInterfaceAddresses(t *testing.T, name string) []*net.IPNet {
 	}
 	return result
 }
-
 func addTestInterfaceAddress(t *testing.T, name string, addr *net.IPNet) {
 	link, _ := netlink.LinkByName(name)
 	require.NoError(t, netlink.AddrAdd(link, &netlink.Addr{IPNet: addr}))

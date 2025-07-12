@@ -1,6 +1,5 @@
 //go:build !windows
 // +build !windows
-
 // Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,22 +13,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package iptables
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/ipset"
-=======
-	"antrea.io/antrea/pkg/agent/util/ipset"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util/ipset"
 )
-
 var (
 	ipsetAlfa  = "alfa"
 	ipsetBravo = "bravo"
@@ -44,7 +35,6 @@ var (
 	icmpCode0  = int32(0)
 	cidr       = "192.168.1.0/24"
 )
-
 func TestBuilders(t *testing.T) {
 	testCases := []struct {
 		name      string
@@ -156,7 +146,6 @@ func TestBuilders(t *testing.T) {
 			expected: `-A PREROUTING -s 192.168.77.100 -d 10.96.0.10 -p tcp --dport 8080 -j DNAT --to-destination 10.10.0.2:40000`,
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := NewRuleBuilder(tc.chain)

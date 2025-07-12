@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundlecollection
-
 import (
 	"context"
 	"encoding/base64"
@@ -22,7 +20,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -35,10 +32,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
@@ -47,23 +42,19 @@ import (
 	"antrea.io/antrea/v2/pkg/util/auth"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	bundlecollectionstore "antrea.io/antrea/pkg/controller/supportbundlecollection/store"
-	"antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/auth"
-	"antrea.io/antrea/pkg/util/k8s"
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	bundlecollectionstore "antrea.io/antrea/v2/pkg/controller/supportbundlecollection/store"
+	"antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/auth"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
-
 const (
 	informerDefaultResync = 30 * time.Second
-
 	testKeyString       = "it is a valid API key"
 	testTokenString     = "it is a valid token"
 	secretWithAPIKey    = "s1"
@@ -71,26 +62,21 @@ const (
 	secretWithBasicAuth = "s3"
 	secretNamespace     = "ns"
 )
-
 type bundleNodes struct {
 	names  []string
 	labels map[string]string
 }
-
 type bundleExternalNodes struct {
 	namespace string
 	names     []string
 	labels    map[string]string
 }
-
 type bundlePhase int
-
 const (
 	pending bundlePhase = iota
 	processing
 	completed
 )
-
 type bundleConfig struct {
 	name            string
 	nodes           *bundleNodes
@@ -103,7 +89,6 @@ type bundleConfig struct {
 	phase           bundlePhase
 	createTime      *time.Time
 }
-
 func TestReconcileSupportBundles(t *testing.T) {
 	// Prepare test resources.
 	testConfigs := testBundleConfigs()
@@ -111,7 +96,6 @@ func TestReconcileSupportBundles(t *testing.T) {
 	coreObjects := prepareNodes(nodeConfigs)
 	crdObjects := prepareExternalNodes(externalNodeConfigs)
 	crdObjects = append(crdObjects, prepareBundleCollections(testConfigs)...)
-
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "secret1",
@@ -122,13 +106,11 @@ func TestReconcileSupportBundles(t *testing.T) {
 		},
 	}
 	coreObjects = append(coreObjects, secret)
-
 	testClient := newTestClient(coreObjects, crdObjects)
 	controller := newController(testClient)
 	stopCh := make(chan struct{})
 	testClient.start(stopCh)
 	testClient.waitForSync(stopCh)
-
 	processingBundleCollections := sets.New[string]()
 	ignoredBundleCollections := sets.New[string]()
 	for _, c := range testConfigs {
@@ -138,17 +120,14 @@ func TestReconcileSupportBundles(t *testing.T) {
 			ignoredBundleCollections.Insert(c.name)
 		}
 	}
-
 	err := controller.reconcileSupportBundleCollections()
 	assert.NoError(t, err)
-
 	for name := range processingBundleCollections {
 		_, exists, _ := controller.supportBundleCollectionStore.Get(name)
 		assert.True(t, exists)
 		_, appliedToExists, _ := controller.supportBundleCollectionAppliedToStore.GetByKey(name)
 		assert.True(t, appliedToExists)
 	}
-
 	for name := range ignoredBundleCollections {
 		_, exists, _ := controller.supportBundleCollectionStore.Get(name)
 		assert.False(t, exists)
@@ -156,7 +135,6 @@ func TestReconcileSupportBundles(t *testing.T) {
 		assert.False(t, appliedToExists)
 	}
 }
-
 func parseDependentResources(configs []bundleConfig) ([]nodeConfig, []externalNodeConfig) {
 	nodeNames := sets.New[string]()
 	nodeLabels := make(map[string]string)
@@ -210,7 +188,6 @@ func parseDependentResources(configs []bundleConfig) ([]nodeConfig, []externalNo
 	}
 	return nodeConfigs, externalNodeConfigs
 }
-
 func TestAddSupportBundleCollection(t *testing.T) {
 	for _, tc := range []struct {
 		name                    string
@@ -404,7 +381,6 @@ func TestAddSupportBundleCollection(t *testing.T) {
 		})
 	}
 }
-
 func TestSupportBundleCollectionEvents(t *testing.T) {
 	existingBundleCollection := generateSupportBundleResource(bundleConfig{
 		name:            "b0",
@@ -424,11 +400,9 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 	})
 	testClient := newTestClient(nil, []runtime.Object{existingBundleCollection})
 	controller := newController(testClient)
-
 	stopCh := make(chan struct{})
 	testClient.start(stopCh)
 	testClient.waitForSync(stopCh)
-
 	enqueuedBundleNameCountMappings := make(map[string]int)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -450,7 +424,6 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 		}
 		wg.Done()
 	}()
-
 	testBundleConfig := generateSupportBundleResource(bundleConfig{
 		name:            "b1",
 		nodes:           &bundleNodes{},
@@ -461,7 +434,6 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 	bundleCollection, err := testClient.crdClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), testBundleConfig, metav1.CreateOptions{})
 	require.NoError(t, err)
 	time.Sleep(time.Millisecond * 200)
-
 	updateBundleStatus := func(oriBundleCollection *v1alpha1.SupportBundleCollection, updatedStatus v1alpha1.SupportBundleCollectionStatus) {
 		collection := &v1alpha1.SupportBundleCollection{
 			ObjectMeta: oriBundleCollection.ObjectMeta,
@@ -472,7 +444,6 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 		require.NoError(t, err)
 		time.Sleep(time.Millisecond * 200)
 	}
-
 	updateBundleStatus(bundleCollection, v1alpha1.SupportBundleCollectionStatus{
 		DesiredNodes:   10,
 		CollectedNodes: 0,
@@ -539,12 +510,10 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 	assert.True(t, exists2)
 	assert.Equal(t, 2, eventCount2)
 }
-
 type nodeConfig struct {
 	name   string
 	labels map[string]string
 }
-
 func TestGetBundleNodes(t *testing.T) {
 	nodeObjects := prepareNodes([]nodeConfig{
 		{name: "n1"},
@@ -560,9 +529,7 @@ func TestGetBundleNodes(t *testing.T) {
 	}
 	stopCh := make(chan struct{})
 	testClient.start(stopCh)
-
 	testClient.waitForSync(stopCh)
-
 	for _, tc := range []struct {
 		bundleNodes   *v1alpha1.BundleNodes
 		expectedNodes sets.Set[string]
@@ -605,13 +572,11 @@ func TestGetBundleNodes(t *testing.T) {
 		assert.Equal(t, tc.expectedNodes, actualNodes)
 	}
 }
-
 type externalNodeConfig struct {
 	namespace string
 	name      string
 	labels    map[string]string
 }
-
 func TestGetBundleExternalNodes(t *testing.T) {
 	externalNodeObjects := prepareExternalNodes([]externalNodeConfig{
 		{namespace: "ns1", name: "n1"},
@@ -628,9 +593,7 @@ func TestGetBundleExternalNodes(t *testing.T) {
 	}
 	stopCh := make(chan struct{})
 	testClient.start(stopCh)
-
 	testClient.waitForSync(stopCh)
-
 	for _, tc := range []struct {
 		bundleNodes   *v1alpha1.BundleExternalNodes
 		expectedNodes sets.Set[string]
@@ -672,24 +635,19 @@ func TestGetBundleExternalNodes(t *testing.T) {
 		assert.Equal(t, tc.expectedNodes, actualNodes)
 	}
 }
-
 type secretConfig struct {
 	name string
 	data map[string][]byte
 }
-
 func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 	coreObjects, crdObjects := prepareTopology()
 	testClient := newTestClient(coreObjects, crdObjects)
 	controller := newController(testClient)
 	stopCh := make(chan struct{})
 	testClient.start(stopCh)
-
 	testClient.waitForSync(stopCh)
-
 	hostPublicKey, _, err := sftptesting.GenerateEd25519Key()
 	require.NoError(t, err)
-
 	expiredDuration, _ := time.ParseDuration("-61m")
 	expiredCreationTime := time.Now().Add(expiredDuration)
 	testCases := []struct {
@@ -769,7 +727,6 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 			expectFailure: true,
 		},
 	}
-
 	for _, tc := range testCases {
 		bundleConfig := tc.bundleConfig
 		if bundleConfig.secretName == "" {
@@ -827,7 +784,6 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 			}
 		}
 	}
-
 	// Test update span
 	require.NoError(t, testClient.client.CoreV1().Nodes().Delete(context.TODO(), "n3", metav1.DeleteOptions{}))
 	updatedBundleCollection := generateSupportBundleResource(
@@ -845,7 +801,6 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 	time.Sleep(time.Millisecond * 500)
 	_, err = controller.createInternalSupportBundleCollection(updatedBundleCollection)
 	assert.NoError(t, err)
-
 	// Test deletion.
 	for _, tc := range testCases {
 		err = controller.deleteInternalSupportBundleCollection(tc.name)
@@ -858,7 +813,6 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 		assert.False(t, exists)
 	}
 }
-
 func TestSyncSupportBundleCollection(t *testing.T) {
 	coreObjects, crdObjects := prepareTopology()
 	expiredDuration, _ := time.ParseDuration("-70m")
@@ -955,7 +909,6 @@ func TestSyncSupportBundleCollection(t *testing.T) {
 			created: false,
 		},
 	}
-
 	for _, tc := range testCases {
 		secretName := secretWithAPIKey
 		if tc.bundleConfig.authType == v1alpha1.BearerToken {
@@ -967,16 +920,12 @@ func TestSyncSupportBundleCollection(t *testing.T) {
 		bundleCollection := generateSupportBundleResource(bundleConfig)
 		crdObjects = append(crdObjects, bundleCollection)
 	}
-
 	testClient := newTestClient(coreObjects, crdObjects)
 	controller := newController(testClient)
 	stopCh := make(chan struct{})
 	testClient.start(stopCh)
-
 	testClient.waitForSync(stopCh)
-
 	go controller.worker()
-
 	for _, tc := range testCases {
 		err := wait.PollUntilContextTimeout(context.Background(), time.Millisecond*100, time.Second, true, func(ctx context.Context) (done bool, err error) {
 			_, exists, err := controller.supportBundleCollectionStore.Get(tc.bundleConfig.name)
@@ -990,17 +939,14 @@ func TestSyncSupportBundleCollection(t *testing.T) {
 		})
 		assert.NoError(t, err)
 	}
-
 }
 func TestAddInternalSupportBundleCollection(t *testing.T) {
 	testClient := newTestClient(nil, nil)
 	controller := newController(testClient)
-
 	authentication := &controlplane.BundleServerAuthConfiguration{
 		APIKey: "bundle_api_key",
 	}
 	expiredAt := metav1.NewTime(time.Now().Add(time.Minute * 60))
-
 	verifyBundleCollectionAppliedToStoreIndexers := func(indexer, indexerKey, collectionName string) {
 		selectedSupportBundleCollections, err := controller.supportBundleCollectionAppliedToStore.ByIndex(indexer, indexerKey)
 		assert.NoError(t, err)
@@ -1056,7 +1002,6 @@ func TestAddInternalSupportBundleCollection(t *testing.T) {
 		}
 	}
 }
-
 func TestIsCollectionAvailable(t *testing.T) {
 	testClient := newTestClient(nil, nil)
 	controller := newController(testClient)
@@ -1131,7 +1076,6 @@ func TestIsCollectionAvailable(t *testing.T) {
 	} {
 		testBundleCollections = append(testBundleCollections, generateSupportBundleResource(bc))
 	}
-
 	processingCollections := map[string]*supportBundleCollectionAppliedTo{
 		"b0": {
 			name:         "b0",
@@ -1147,7 +1091,6 @@ func TestIsCollectionAvailable(t *testing.T) {
 			enNamespace:  "ns1",
 		},
 	}
-
 	for _, tc := range []struct {
 		existedAppliedTo       string
 		availableCollections   sets.Set[string]
@@ -1197,7 +1140,6 @@ func TestIsCollectionAvailable(t *testing.T) {
 		}
 	}
 }
-
 func TestSupportBundleCollectionStatusEqual(t *testing.T) {
 	for _, tc := range []struct {
 		oldStatus v1alpha1.SupportBundleCollectionStatus
@@ -1303,12 +1245,10 @@ func TestSupportBundleCollectionStatusEqual(t *testing.T) {
 				return a.Type < b.Type
 			})
 		}
-
 		equals := supportBundleCollectionStatusEqual(tc.oldStatus, tc.newStatus)
 		assert.Equal(t, tc.equal, equals)
 	}
 }
-
 func TestUpdateSupportBundleCollectionStatus(t *testing.T) {
 	now := time.Now()
 	for _, tc := range []struct {
@@ -1519,7 +1459,6 @@ func TestUpdateSupportBundleCollectionStatus(t *testing.T) {
 		assert.True(t, supportBundleCollectionStatusEqual(tc.expectedStatus, updatedCollection.Status))
 	}
 }
-
 func TestUpdateStatus(t *testing.T) {
 	var controller *Controller
 	namespace := "ns1"
@@ -1565,7 +1504,6 @@ func TestUpdateStatus(t *testing.T) {
 		testClient.start(stopCh)
 		testClient.waitForSync(stopCh)
 	}
-
 	updateStatusFunc := func(collectionName string, nodeStatus controlplane.SupportBundleCollectionNodeStatus) {
 		status := &controlplane.SupportBundleCollectionStatus{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1578,14 +1516,12 @@ func TestUpdateStatus(t *testing.T) {
 		err := controller.UpdateStatus(status)
 		require.NoError(t, err)
 	}
-
 	syncSupportBundleCollection := func() {
 		key, _ := controller.queue.Get()
 		controller.queue.Done(key)
 		err := controller.syncSupportBundleCollection(key)
 		assert.NoError(t, err)
 	}
-
 	agentReportStatus := func(nodesCount, failedNodes int, collectionName string) {
 		for i := 0; i < nodesCount; i++ {
 			nodeName := fmt.Sprintf("n%d", i)
@@ -1608,7 +1544,6 @@ func TestUpdateStatus(t *testing.T) {
 			updateStatusFunc(collectionName, nodeStatus)
 		}
 	}
-
 	updateFailure := func(collectionName, name string, errMessage string) {
 		nodeStatus := controlplane.SupportBundleCollectionNodeStatus{
 			NodeName:  name,
@@ -1618,7 +1553,6 @@ func TestUpdateStatus(t *testing.T) {
 		}
 		updateStatusFunc(collectionName, nodeStatus)
 	}
-
 	checkCompletedStatus := func(bundleCollection *v1alpha1.SupportBundleCollection) {
 		collectionName := bundleCollection.Name
 		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, v1alpha1.SupportBundleCollectionCondition{
@@ -1632,11 +1566,9 @@ func TestUpdateStatus(t *testing.T) {
 			assert.NoError(t, err)
 			return !exists
 		}, time.Second, time.Millisecond*10)
-
 		_, exists := controller.statuses[collectionName]
 		assert.False(t, exists)
 	}
-
 	t.Run("all-agent-succeeded", func(t *testing.T) {
 		collectionName := "b1"
 		desiredNodes := 5
@@ -1648,7 +1580,6 @@ func TestUpdateStatus(t *testing.T) {
 		assert.Equal(t, int32(desiredNodes), bundleCollection.Status.CollectedNodes)
 		checkCompletedStatus(bundleCollection)
 	})
-
 	t.Run("agent-failure", func(t *testing.T) {
 		collectionName := "b2"
 		desiredNodes := 6
@@ -1684,7 +1615,6 @@ func TestUpdateStatus(t *testing.T) {
 		}))
 		checkCompletedStatus(bundleCollection)
 	})
-
 	t.Run("unknown-agent-report", func(t *testing.T) {
 		collectionName := "b3"
 		desiredNodes := 3
@@ -1707,7 +1637,6 @@ func TestUpdateStatus(t *testing.T) {
 		statusPerNode = controller.statuses[collectionName]
 		assert.Equal(t, reportedNodes, len(statusPerNode))
 	})
-
 	t.Run("non-existing-collection", func(t *testing.T) {
 		// Test UpdateStatus with non-existing SupportBundleCollection
 		nonExistCollectionName := "no-existing-collection"
@@ -1720,17 +1649,14 @@ func TestUpdateStatus(t *testing.T) {
 		assert.False(t, exists)
 	})
 }
-
 func newController(tc *testClient) *Controller {
 	nodeInformer := tc.informerFactory.Core().V1().Nodes()
 	externalNodeInformer := tc.crdInformerFactory.Crd().V1alpha1().ExternalNodes()
 	supportBundleInformer := tc.crdInformerFactory.Crd().V1alpha1().SupportBundleCollections()
-
 	store := bundlecollectionstore.NewSupportBundleCollectionStore()
 	fakeController := NewSupportBundleCollectionController(tc.client, tc.crdClient, supportBundleInformer, nodeInformer, externalNodeInformer, store)
 	return fakeController
 }
-
 func testBundleConfigs() []bundleConfig {
 	return []bundleConfig{
 		{
@@ -1864,7 +1790,6 @@ func testBundleConfigs() []bundleConfig {
 		},
 	}
 }
-
 func prepareBundleCollections(bundleConfigs []bundleConfig) []runtime.Object {
 	bundleCollections := make([]runtime.Object, 0)
 	for _, bc := range bundleConfigs {
@@ -1873,7 +1798,6 @@ func prepareBundleCollections(bundleConfigs []bundleConfig) []runtime.Object {
 	}
 	return bundleCollections
 }
-
 func generateSupportBundleResource(b bundleConfig) *v1alpha1.SupportBundleCollection {
 	bundle := &v1alpha1.SupportBundleCollection{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1930,7 +1854,6 @@ func generateSupportBundleResource(b bundleConfig) *v1alpha1.SupportBundleCollec
 	}
 	return bundle
 }
-
 func prepareNodes(nodeConfigs []nodeConfig) []runtime.Object {
 	var nodes []runtime.Object
 	for _, n := range nodeConfigs {
@@ -1944,7 +1867,6 @@ func prepareNodes(nodeConfigs []nodeConfig) []runtime.Object {
 	}
 	return nodes
 }
-
 func prepareExternalNodes(externalNodeConfigs []externalNodeConfig) []runtime.Object {
 	externalNodes := make([]runtime.Object, 0)
 	for _, en := range externalNodeConfigs {
@@ -1959,7 +1881,6 @@ func prepareExternalNodes(externalNodeConfigs []externalNodeConfig) []runtime.Ob
 	}
 	return externalNodes
 }
-
 func prepareSecrets(ns string, secretConfigs []secretConfig) []*corev1.Secret {
 	secrets := make([]*corev1.Secret, 0)
 	for _, s := range secretConfigs {
@@ -1974,7 +1895,6 @@ func prepareSecrets(ns string, secretConfigs []secretConfig) []*corev1.Secret {
 	}
 	return secrets
 }
-
 func prepareTopology() ([]runtime.Object, []runtime.Object) {
 	var coreObjects, crdObjects []runtime.Object
 	coreObjects = append(coreObjects, prepareNodes([]nodeConfig{
@@ -1991,7 +1911,6 @@ func prepareTopology() ([]runtime.Object, []runtime.Object) {
 		{namespace: "ns1", name: "en4", labels: map[string]string{"test": "not-selected"}},
 		{namespace: "ns2", name: "en5", labels: map[string]string{"test": "selected"}},
 	})...)
-
 	apiKey := []byte(testKeyString)
 	token := []byte(testTokenString)
 	username := []byte("testUsername")
@@ -2005,14 +1924,12 @@ func prepareTopology() ([]runtime.Object, []runtime.Object) {
 	}
 	return coreObjects, crdObjects
 }
-
 type testClient struct {
 	client             kubernetes.Interface
 	crdClient          clientset.Interface
 	informerFactory    informers.SharedInformerFactory
 	crdInformerFactory crdinformers.SharedInformerFactory
 }
-
 func newTestClient(coreObjects []runtime.Object, crdObjects []runtime.Object) *testClient {
 	client := fake.NewSimpleClientset(coreObjects...)
 	crdClient := fakeclientset.NewSimpleClientset(crdObjects...)
@@ -2023,12 +1940,10 @@ func newTestClient(coreObjects []runtime.Object, crdObjects []runtime.Object) *t
 		crdInformerFactory: crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync),
 	}
 }
-
 func (c *testClient) start(stopCh <-chan struct{}) {
 	c.informerFactory.Start(stopCh)
 	c.crdInformerFactory.Start(stopCh)
 }
-
 func (c *testClient) waitForSync(stopCh <-chan struct{}) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)

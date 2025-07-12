@@ -11,46 +11,34 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package featuregates
-
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/component-base/featuregate"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 func TestGetStatus(t *testing.T) {
 	assert.Equal(t, "Enabled", features.GetStatus(true))
 	assert.Equal(t, "Disabled", features.GetStatus(false))
 }
-
 func TestHandleFunc(t *testing.T) {
 	handler := HandleFunc()
 	req, err := http.NewRequest(http.MethodGet, "", nil)
 	require.Nil(t, err)
-
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)
 	require.Equal(t, http.StatusOK, recorder.Code)
-
 	var resp []apis.FeatureGateResponse
 	err = json.Unmarshal(recorder.Body.Bytes(), &resp)
 	require.Nil(t, err)
-
 	for _, v := range resp {
 		df, ok := features.DefaultAntreaFeatureGates[featuregate.Feature(v.Name)]
 		require.True(t, ok)

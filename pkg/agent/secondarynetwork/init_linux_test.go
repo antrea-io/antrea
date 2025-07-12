@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,32 +13,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package secondarynetwork
-
 import (
 	"errors"
 	"net"
 	"testing"
-
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	mock "go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
-=======
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
->>>>>>> origin/main
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 )
-
 const nonExistingInterface = "non-existing"
-
 func TestCreateOVSBridge(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -80,15 +70,12 @@ func TestCreateOVSBridge(t *testing.T) {
 				br := agentconfig.OVSBridgeConfig{BridgeName: brName}
 				bridges = append(bridges, br)
 			}
-
 			controller := mock.NewController(t)
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
-
 			mockNewOVSBridge(t, mockOVSBridgeClient)
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(mockOVSBridgeClient)
 			}
-
 			brClient, err := createOVSBridge(bridges, nil)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
@@ -102,7 +89,6 @@ func TestCreateOVSBridge(t *testing.T) {
 		})
 	}
 }
-
 func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -152,15 +138,12 @@ func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-
 			controller := mock.NewController(t)
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
-
 			mockInterfaceByName(t)
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(mockOVSBridgeClient)
 			}
-
 			err := connectPhyInterfacesToOVSBridge(mockOVSBridgeClient, tc.physicalInterfaces)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
@@ -170,7 +153,6 @@ func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 		})
 	}
 }
-
 func mockInterfaceByName(t *testing.T) {
 	prevFunc := interfaceByNameFn
 	interfaceByNameFn = func(name string) (*net.Interface, error) {
@@ -181,7 +163,6 @@ func mockInterfaceByName(t *testing.T) {
 	}
 	t.Cleanup(func() { interfaceByNameFn = prevFunc })
 }
-
 func mockNewOVSBridge(t *testing.T, brClient ovsconfig.OVSBridgeClient) {
 	prevFunc := newOVSBridgeFn
 	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdb *ovsdb.OVSDB, options ...ovsconfig.OVSBridgeOption) ovsconfig.OVSBridgeClient {

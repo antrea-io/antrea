@@ -11,20 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ovstracing
-
 import (
 	"encoding/json"
 	"io"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
 )
-
 func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
 	b, err := io.ReadAll(reader)
 	if err != nil {

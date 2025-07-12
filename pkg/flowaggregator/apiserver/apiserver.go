@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package apiserver
-
 import (
 	"context"
 	"fmt"
 	"net"
 	"os"
 	"path"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -28,26 +25,21 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	apiserverversion "k8s.io/apiserver/pkg/util/version"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
-	systeminstall "antrea.io/antrea/apis/pkg/apis/system/install"
+	systeminstall "antrea.io/antrea/v2/pkg/apis/system/install"
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/loglevel"
 	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver/handlers/flowrecords"
 	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver/handlers/recordmetrics"
 	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
 	antreaversion "antrea.io/antrea/v2/pkg/version"
-=======
-	"antrea.io/antrea/pkg/apis"
-	systeminstall "antrea.io/antrea/pkg/apis/system/install"
-	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
-	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/flowrecords"
-	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
-	"antrea.io/antrea/pkg/flowaggregator/querier"
-	antreaversion "antrea.io/antrea/pkg/version"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis"
+	systeminstall "antrea.io/antrea/v2/pkg/apis/system/install"
+	"antrea.io/antrea/v2/pkg/apiserver/handlers/loglevel"
+	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver/handlers/flowrecords"
+	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver/handlers/recordmetrics"
+	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
+	antreaversion "antrea.io/antrea/v2/pkg/version"
 )
-
 const (
 	Name = "flow-aggregator-api"
 	// authenticationTimeout specifies a time limit for requests made by the authorization webhook client
@@ -56,7 +48,6 @@ const (
 	// A value of zero means no timeout.
 	authenticationTimeout = 0
 )
-
 var (
 	// Scheme defines methods for serializing and deserializing API objects.
 	scheme = runtime.NewScheme()
@@ -64,26 +55,21 @@ var (
 	// versions and content types.
 	codecs = serializer.NewCodecFactory(scheme)
 )
-
 func init() {
 	systeminstall.Install(scheme)
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
 }
-
 type flowAggregatorAPIServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
 }
-
 func (s *flowAggregatorAPIServer) Run(ctx context.Context) error {
 	return s.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
-
 func installHandlers(s *genericapiserver.GenericAPIServer, faq querier.FlowAggregatorQuerier) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/flowrecords", flowrecords.HandleFunc(faq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/recordmetrics", recordmetrics.HandleFunc(faq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 }
-
 // New creates an APIServer for running in flow aggregator.
 func New(faq querier.FlowAggregatorQuerier, bindPort int, cipherSuites []uint16, tlsMinVersion uint16) (*flowAggregatorAPIServer, error) {
 	cfg, err := newConfig(bindPort)
@@ -99,20 +85,16 @@ func New(faq querier.FlowAggregatorQuerier, bindPort int, cipherSuites []uint16,
 	installHandlers(s, faq)
 	return &flowAggregatorAPIServer{GenericAPIServer: s}, nil
 }
-
 func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz", "/livez", "/readyz")
-
 	// Set the PairName but leave certificate directory blank to generate in-memory by default.
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = Name
 	secureServing.BindAddress = net.IPv4zero
 	secureServing.BindPort = bindPort
-
 	authentication.WithRequestTimeout(authenticationTimeout)
-
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
@@ -133,7 +115,6 @@ func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
 		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
 	}
 	serverConfig.EffectiveVersion = apiserverversion.NewEffectiveVersion(antreaversion.GetFullVersion())
-
 	completedServerCfg := serverConfig.Complete(nil)
 	return &completedServerCfg, nil
 }

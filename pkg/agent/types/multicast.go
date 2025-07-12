@@ -11,36 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package types
-
 import (
 	"net"
-
 	apitypes "k8s.io/apimachinery/pkg/types"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 type IGMPNPRuleInfo struct {
 	RuleAction v1beta1.RuleAction
 	UUID       apitypes.UID
 	NPType     *v1beta2.NetworkPolicyType
 	Name       string
 }
-
 var (
 	McastAllHosts   = net.ParseIP("224.0.0.1").To4()
 	IGMPv3Router    = net.ParseIP("224.0.0.22").To4()
 	_, McastCIDR, _ = net.ParseCIDR("224.0.0.0/4")
 )
-
 type McastNetworkPolicyController interface {
 	// GetIGMPNPRuleInfo looks up the IGMP NetworkPolicy rule that matches the given Pod and groupAddress,
 	// and returns the rule information if found.

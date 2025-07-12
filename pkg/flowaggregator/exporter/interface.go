@@ -11,19 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/pkg/flowaggregator/options"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 )
-
 // Interface is the interface that all supported exporters must implement.
 // Note that the objects implementing this interface make no concurrency
 // guarantee: none of the interface functions should be called concurrently.

@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package stats
-
 import (
 	"sort"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/types"
-
-<<<<<<< HEAD
 	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 var (
 	np1 = cpv1beta.NetworkPolicyReference{
 		Type:      cpv1beta.K8sNetworkPolicy,
@@ -63,7 +55,6 @@ var (
 		UID:       "uid4",
 	}
 )
-
 func TestCollect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	tests := []struct {
@@ -205,14 +196,12 @@ func TestCollect(t *testing.T) {
 			for ofID, policy := range tt.ofIDToPolicyMap {
 				npQuerier.EXPECT().GetRuleByFlowID(ofID).Return(policy)
 			}
-
 			m := &Collector{ofClient: ofClient, networkPolicyQuerier: npQuerier, multicastQuerier: mcQuerier}
 			actualPolicyStats := m.collect()
 			assert.Equal(t, tt.expectedStatsCollection, actualPolicyStats)
 		})
 	}
 }
-
 func TestCalculateDiff(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -341,7 +330,6 @@ func TestCalculateDiff(t *testing.T) {
 		})
 	}
 }
-
 func TestCalculateNodeStatsSummary(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	tests := []struct {
@@ -415,14 +403,12 @@ func TestCalculateNodeStatsSummary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mcQuerier := queriertest.NewMockAgentMulticastInfoQuerier(ctrl)
 			mcQuerier.EXPECT().CollectIGMPReportNPStats().AnyTimes()
-
 			m := &Collector{multicastQuerier: mcQuerier, lastStatsCollection: tt.lastStatsCollection, multicastEnabled: true}
 			summary := m.calculateNodeStatsSummary(tt.curStatsCollection)
 			assert.Equal(t, tt.expectedSummary, summary)
 		})
 	}
 }
-
 func TestConvertMulticastGroups(t *testing.T) {
 	tests := []struct {
 		name                      string
@@ -453,7 +439,6 @@ func TestConvertMulticastGroups(t *testing.T) {
 		})
 	}
 }
-
 func TestMergeStatsWithIGMPReports(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	tests := []struct {
@@ -620,7 +605,6 @@ func TestMergeStatsWithIGMPReports(t *testing.T) {
 		})
 	}
 }
-
 func TestCalculateRuleDiff(t *testing.T) {
 	tests := []struct {
 		name              string

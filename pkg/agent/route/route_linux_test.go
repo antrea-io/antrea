@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package route
-
 import (
 	"fmt"
 	"net"
 	"sync"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
@@ -27,8 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	servicecidrtest "antrea.io/antrea/v2/pkg/agent/servicecidr/testing"
@@ -41,35 +36,29 @@ import (
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow"
-	servicecidrtest "antrea.io/antrea/pkg/agent/servicecidr/testing"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util/ipset"
-	ipsettest "antrea.io/antrea/pkg/agent/util/ipset/testing"
-	"antrea.io/antrea/pkg/agent/util/iptables"
-	iptablestest "antrea.io/antrea/pkg/agent/util/iptables/testing"
-	netlinktest "antrea.io/antrea/pkg/agent/util/netlink/testing"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	servicecidrtest "antrea.io/antrea/v2/pkg/agent/servicecidr/testing"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util/ipset"
+	ipsettest "antrea.io/antrea/v2/pkg/agent/util/ipset/testing"
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
+	iptablestest "antrea.io/antrea/v2/pkg/agent/util/iptables/testing"
+	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
-
 var (
 	nodeConfig = &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
-
 	externalIPv4Addr1 = "1.1.1.1"
 	externalIPv4Addr2 = "1.1.1.2"
 	externalIPv6Addr1 = "fd00:1234:5678:dead:beaf::1"
 	externalIPv6Addr2 = "fd00:1234:5678:dead:beaf::a"
-
 	ipv4Route1 = generateRoute(net.ParseIP(externalIPv4Addr1), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE)
 	ipv4Route2 = generateRoute(net.ParseIP(externalIPv4Addr2), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE)
 	ipv6Route1 = generateRoute(net.ParseIP(externalIPv6Addr1), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE)
 	ipv6Route2 = generateRoute(net.ParseIP(externalIPv6Addr2), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE)
-
 	serviceIPSets = map[string]*sync.Map{
 		antreaNodePortIPSet:    {},
 		antreaNodePortIP6Set:   {},
@@ -77,11 +66,9 @@ var (
 		antreaExternalIPIP6Set: {},
 	}
 )
-
 func TestSyncRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
-
 	nodeRoute1 := &netlink.Route{Dst: ip.MustParseCIDR("192.168.1.0/24"), Gw: net.ParseIP("1.1.1.1")}
 	nodeRoute2 := &netlink.Route{Dst: ip.MustParseCIDR("192.168.2.0/24"), Gw: net.ParseIP("1.1.1.2")}
 	serviceRoute1 := &netlink.Route{Dst: ip.MustParseCIDR("169.254.0.253/32"), LinkIndex: 10}
@@ -109,7 +96,6 @@ func TestSyncRoutes(t *testing.T) {
 		Dst:       ip.MustParseCIDR("fe80::/64"),
 		Scope:     netlink.SCOPE_LINK,
 	})
-
 	c := &Client{
 		netlink:       mockNetlink,
 		proxyAll:      true,
@@ -126,14 +112,11 @@ func TestSyncRoutes(t *testing.T) {
 	c.serviceRoutes.Store("169.254.0.253/32", serviceRoute1)
 	c.serviceRoutes.Store("169.254.0.252/32", serviceRoute2)
 	c.egressRoutes.Store(101, []*netlink.Route{egressRoute1, egressRoute2})
-
 	assert.NoError(t, c.syncRoute())
 }
-
 func TestSyncNeighbors(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
-
 	c := &Client{
 		netlink:          mockNetlink,
 		proxyAll:         true,
@@ -145,7 +128,6 @@ func TestSyncNeighbors(t *testing.T) {
 			PodIPv6CIDR:   ip.MustParseCIDR("aabb:ccdd::/64"),
 		},
 	}
-
 	tamperedMAC, _ := net.ParseMAC("de:ad:be:ef:12:34")
 	tamperedNodeNeighbor1 := &netlink.Neigh{LinkIndex: 10, Family: netlink.FAMILY_V6, State: netlink.NUD_PERMANENT, IP: net.ParseIP("aabb:ccee::1"), HardwareAddr: tamperedMAC}
 	nodeNeighbor1 := &netlink.Neigh{LinkIndex: 10, Family: netlink.FAMILY_V6, State: netlink.NUD_PERMANENT, IP: net.ParseIP("aabb:ccee::1"), HardwareAddr: globalVMAC}
@@ -156,19 +138,15 @@ func TestSyncNeighbors(t *testing.T) {
 	mockNetlink.EXPECT().NeighSet(nodeNeighbor1)
 	mockNetlink.EXPECT().NeighSet(nodeNeighbor2)
 	mockNetlink.EXPECT().NeighSet(serviceNeighbor2)
-
 	c.nodeNeighbors.Store("aabb:ccee::1", nodeNeighbor1)
 	c.nodeNeighbors.Store("aabb:ccdd::1", nodeNeighbor2)
 	c.serviceNeighbors.Store(config.VirtualServiceIPv4.String(), serviceNeighbor1)
 	c.serviceNeighbors.Store(config.VirtualServiceIPv6.String(), serviceNeighbor2)
-
 	assert.NoError(t, c.syncNeighbor())
 }
-
 func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
-
 	// route1 and route2 should be removed
 	route1 := &netlink.Route{Scope: netlink.SCOPE_LINK, Dst: ip.MustParseCIDR("10.10.10.0/24"), LinkIndex: 10, Table: 101}
 	route2 := &netlink.Route{Gw: net.ParseIP("10.10.10.1"), LinkIndex: 10, Table: 101}
@@ -183,7 +161,6 @@ func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	rule2.Table = 50
 	rule2.Mark = 10
 	rule2.Mask = ptr.To(types.SNATIPMarkMask)
-
 	mockNetlink.EXPECT().RouteList(nil, netlink.FAMILY_ALL).Return([]netlink.Route{*route1, *route2, *route3, *route4}, nil)
 	mockNetlink.EXPECT().RuleList(netlink.FAMILY_ALL).Return([]netlink.Rule{*rule1, *rule2}, nil)
 	mockNetlink.EXPECT().RouteDel(route1)
@@ -202,7 +179,6 @@ func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	}
 	assert.NoError(t, c.RestoreEgressRoutesAndRules(101, 120))
 }
-
 func TestSyncIPSet(t *testing.T) {
 	podCIDRStr := "172.16.10.0/24"
 	_, podCIDR, _ := net.ParseCIDR(podCIDRStr)
@@ -367,7 +343,6 @@ func TestSyncIPSet(t *testing.T) {
 		})
 	}
 }
-
 func TestSyncIPTables(t *testing.T) {
 	tests := []struct {
 		name                      string
@@ -833,13 +808,11 @@ COMMIT
 		})
 	}
 }
-
 func TestInitIPRoutes(t *testing.T) {
 	ipv4, nodeTransPortIPv4Addr, _ := net.ParseCIDR("172.16.10.2/24")
 	nodeTransPortIPv4Addr.IP = ipv4
 	ipv6, nodeTransPortIPv6Addr, _ := net.ParseCIDR("fe80::e643:4bff:fe44:ee/64")
 	nodeTransPortIPv6Addr.IP = ipv6
-
 	tests := []struct {
 		name          string
 		networkConfig *config.NetworkConfig
@@ -886,7 +859,6 @@ func TestInitIPRoutes(t *testing.T) {
 		})
 	}
 }
-
 func TestInitServiceIPRoutes(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -972,7 +944,6 @@ func TestInitServiceIPRoutes(t *testing.T) {
 		})
 	}
 }
-
 func TestReconcile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
@@ -988,7 +959,6 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 	podCIDRs := []string{"192.168.0.0/24", "192.168.1.0/24", "2001:ab03:cd04:55ee:1001::/80", "2001:ab03:cd04:55ee:1002::/80"}
-
 	mockIPSet.EXPECT().ListEntries(antreaPodIPSet).Return([]string{
 		"192.168.0.0/24", // existing podCIDR, should not be deleted.
 		"192.168.2.0/24", // non-existing podCIDR, should be deleted.
@@ -1001,7 +971,6 @@ func TestReconcile(t *testing.T) {
 	mockIPSet.EXPECT().DelEntry(antreaPodIP6Set, "2001:ab03:cd04:55ee:1003::/80")
 	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("192.168.2.0/24")})
 	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1003::/80")})
-
 	mockNetlink.EXPECT().RouteListFiltered(netlink.FAMILY_V4, &netlink.Route{LinkIndex: 10}, netlink.RT_FILTER_OIF).Return([]netlink.Route{
 		{Dst: ip.MustParseCIDR("192.168.10.0/24")},  // local podCIDR, should not be deleted.
 		{Dst: ip.MustParseCIDR("192.168.1.0/24")},   // existing podCIDR, should not be deleted.
@@ -1017,7 +986,6 @@ func TestReconcile(t *testing.T) {
 	}, nil)
 	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("192.168.11.0/24")})
 	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:100b::/80")})
-
 	mockNetlink.EXPECT().NeighList(10, netlink.FAMILY_V6).Return([]netlink.Neigh{
 		{IP: net.ParseIP("2001:ab03:cd04:55ee:1001::1")}, // existing podCIDR, should not be deleted.
 		{IP: net.ParseIP("fc01::aabb:ccdd:eeff")},        // virtual service IP, should not be deleted.
@@ -1026,13 +994,11 @@ func TestReconcile(t *testing.T) {
 	mockNetlink.EXPECT().NeighDel(&netlink.Neigh{IP: net.ParseIP("2001:ab03:cd04:55ee:100b::1")})
 	assert.NoError(t, c.Reconcile(podCIDRs))
 }
-
 func TestAddRoutes(t *testing.T) {
 	ipv4, nodeTransPortIPv4Addr, _ := net.ParseCIDR("172.16.10.2/24")
 	nodeTransPortIPv4Addr.IP = ipv4
 	ipv6, nodeTransPortIPv6Addr, _ := net.ParseCIDR("fe80::e643:4bff:fe44:ee/64")
 	nodeTransPortIPv6Addr.IP = ipv6
-
 	tests := []struct {
 		name                 string
 		networkConfig        *config.NetworkConfig
@@ -1254,7 +1220,6 @@ func TestAddRoutes(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteRoutes(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -1317,12 +1282,10 @@ func TestDeleteRoutes(t *testing.T) {
 		})
 	}
 }
-
 func TestMigrateRoutesToGw(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
 	mockIPSet := ipsettest.NewMockInterface(ctrl)
-
 	gwLinkName := "antrea-gw0"
 	gwLink := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Index: 11}}
 	linkName := "eth0"
@@ -1331,7 +1294,6 @@ func TestMigrateRoutesToGw(t *testing.T) {
 	linkAddr2, _ := netlink.ParseAddr("169.254.0.2/32") // LinkLocalUnicast address should not be migrated.
 	linkAddr3, _ := netlink.ParseAddr("2001:ab03:cd04:55ee:1001::1/80")
 	linkAddr4, _ := netlink.ParseAddr("fe80:ab03:cd04:55ee:1001::1/80") // LinkLocalUnicast address should not be migrated.
-
 	mockNetlink.EXPECT().LinkByName(gwLinkName).Return(gwLink, nil)
 	mockNetlink.EXPECT().LinkByName(linkName).Return(link, nil)
 	mockNetlink.EXPECT().RouteList(link, netlink.FAMILY_V4).Return([]netlink.Route{
@@ -1348,7 +1310,6 @@ func TestMigrateRoutesToGw(t *testing.T) {
 	mockNetlink.EXPECT().AddrReplace(gwLink, linkAddr1)
 	mockNetlink.EXPECT().AddrDel(link, linkAddr3)
 	mockNetlink.EXPECT().AddrReplace(gwLink, linkAddr3)
-
 	c := &Client{
 		netlink: mockNetlink,
 		ipset:   mockIPSet,
@@ -1358,7 +1319,6 @@ func TestMigrateRoutesToGw(t *testing.T) {
 	}
 	c.MigrateRoutesToGw(linkName)
 }
-
 func TestUnMigrateRoutesToGw(t *testing.T) {
 	gwLink := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Index: 11}}
 	link := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Index: 10}}
@@ -1410,7 +1370,6 @@ func TestUnMigrateRoutesToGw(t *testing.T) {
 		})
 	}
 }
-
 func TestAddSNATRule(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -1469,7 +1428,6 @@ func TestAddSNATRule(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteSNATRule(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -1563,7 +1521,6 @@ func TestDeleteSNATRule(t *testing.T) {
 		})
 	}
 }
-
 func TestAddNodePortConfigs(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -1613,7 +1570,6 @@ func TestAddNodePortConfigs(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteNodePortConfigs(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -1659,7 +1615,6 @@ func TestDeleteNodePortConfigs(t *testing.T) {
 		})
 	}
 }
-
 func TestAddServiceCIDRRoute(t *testing.T) {
 	_, serviceIPv4CIDR1, _ := net.ParseCIDR("10.96.0.1/32")
 	_, serviceIPv4CIDR2, _ := net.ParseCIDR("10.96.0.0/28")
@@ -1786,7 +1741,6 @@ func TestAddServiceCIDRRoute(t *testing.T) {
 				nodeConfig: nodeConfig,
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
-
 			if tt.curServiceIPv4CIDR != nil {
 				c.serviceRoutes.Store(serviceIPv4CIDRKey, &netlink.Route{
 					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.1").To4(), Mask: net.CIDRMask(32, 32)},
@@ -1803,7 +1757,6 @@ func TestAddServiceCIDRRoute(t *testing.T) {
 					LinkIndex: 10,
 				})
 			}
-
 			if tt.newServiceIPv4CIDR != nil {
 				assert.NoError(t, c.addServiceCIDRRoute(tt.newServiceIPv4CIDR))
 			}
@@ -1813,7 +1766,6 @@ func TestAddServiceCIDRRoute(t *testing.T) {
 		})
 	}
 }
-
 func TestAddExternalIPConfigs(t *testing.T) {
 	tests := []struct {
 		name                                string
@@ -1874,7 +1826,6 @@ func TestAddExternalIPConfigs(t *testing.T) {
 				},
 			}
 			tt.expectedCalls(mockNetlink.EXPECT(), mockIPSet.EXPECT())
-
 			for svcInfo, externalIPs := range tt.svcToExternalIPs {
 				for _, externalIP := range externalIPs {
 					assert.NoError(t, c.AddExternalIPConfigs(svcInfo, net.ParseIP(externalIP)))
@@ -1884,7 +1835,6 @@ func TestAddExternalIPConfigs(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteExternalIPRoute(t *testing.T) {
 	tests := []struct {
 		name                        string
@@ -1964,7 +1914,6 @@ func TestDeleteExternalIPRoute(t *testing.T) {
 					c.serviceIPSets[antreaExternalIPIPSet].Store(ipStr, struct{}{})
 				}
 			}
-
 			tt.expectedCalls(mockNetlink.EXPECT(), mockIPSet.EXPECT())
 			for svcInfo, externalIPs := range tt.svcToExternalIPs {
 				for _, externalIP := range externalIPs {
@@ -1975,7 +1924,6 @@ func TestDeleteExternalIPRoute(t *testing.T) {
 		})
 	}
 }
-
 func TestAddLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -2028,12 +1976,10 @@ func TestAddLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 				connectUplinkToBridge: tt.connectUplinkToBridge,
 			}
 			tt.expectedCalls(mockIPSet.EXPECT())
-
 			assert.NoError(t, c.AddLocalAntreaFlexibleIPAMPodRule(tt.podAddresses))
 		})
 	}
 }
-
 func TestDeleteLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
 	tests := []struct {
@@ -2068,12 +2014,10 @@ func TestDeleteLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 				connectUplinkToBridge: tt.connectUplinkToBridge,
 			}
 			tt.expectedCalls(mockIPSet.EXPECT())
-
 			assert.NoError(t, c.DeleteLocalAntreaFlexibleIPAMPodRule(tt.podAddresses))
 		})
 	}
 }
-
 func TestAddAndDeleteNodeIP(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -2116,7 +2060,6 @@ func TestAddAndDeleteNodeIP(t *testing.T) {
 				multicastEnabled: tt.multicastEnabled,
 			}
 			tt.expectedCalls(mockIPSet.EXPECT())
-
 			ipv6 := tt.nodeIP.To4() == nil
 			assert.NoError(t, c.addNodeIP(tt.podCIDR, tt.nodeIP))
 			var exists bool
@@ -2126,7 +2069,6 @@ func TestAddAndDeleteNodeIP(t *testing.T) {
 				_, exists = c.clusterNodeIPs.Load(tt.podCIDR.String())
 			}
 			assert.True(t, exists)
-
 			assert.NoError(t, c.deleteNodeIP(tt.podCIDR))
 			if ipv6 {
 				_, exists = c.clusterNodeIP6s.Load(tt.podCIDR.String())
@@ -2137,7 +2079,6 @@ func TestAddAndDeleteNodeIP(t *testing.T) {
 		})
 	}
 }
-
 func TestEgressRoutes(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -2156,7 +2097,6 @@ func TestEgressRoutes(t *testing.T) {
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(&netlink.Route{Dst: ip.MustParseCIDR("1.1.1.0/24"), Scope: netlink.SCOPE_LINK, LinkIndex: 10, Table: 101})
 				mockNetlink.RouteReplace(&netlink.Route{Gw: net.ParseIP("1.1.1.1"), LinkIndex: 10, Table: 101})
-
 				mockNetlink.RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("1.1.1.0/24"), Scope: netlink.SCOPE_LINK, LinkIndex: 10, Table: 101})
 				mockNetlink.RouteDel(&netlink.Route{Gw: net.ParseIP("1.1.1.1"), LinkIndex: 10, Table: 101})
 			},
@@ -2170,7 +2110,6 @@ func TestEgressRoutes(t *testing.T) {
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(&netlink.Route{Dst: ip.MustParseCIDR("1122:3344::/80"), Scope: netlink.SCOPE_LINK, LinkIndex: 11, Table: 102})
 				mockNetlink.RouteReplace(&netlink.Route{Gw: net.ParseIP("1122:3344::5566"), LinkIndex: 11, Table: 102})
-
 				mockNetlink.RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("1122:3344::/80"), Scope: netlink.SCOPE_LINK, LinkIndex: 11, Table: 102})
 				mockNetlink.RouteDel(&netlink.Route{Gw: net.ParseIP("1122:3344::5566"), LinkIndex: 11, Table: 102})
 			},
@@ -2185,7 +2124,6 @@ func TestEgressRoutes(t *testing.T) {
 				nodeConfig: nodeConfig,
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
-
 			assert.NoError(t, c.AddEgressRoutes(tt.tableID, tt.dev, tt.gateway, tt.prefixLength))
 			assert.NoError(t, c.DeleteEgressRoutes(tt.tableID))
 			c.egressRoutes.Range(func(key, value any) bool {
@@ -2195,7 +2133,6 @@ func TestEgressRoutes(t *testing.T) {
 		})
 	}
 }
-
 func TestEgressRule(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -2239,13 +2176,11 @@ func TestEgressRule(t *testing.T) {
 				nodeConfig: nodeConfig,
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
-
 			assert.NoError(t, c.AddEgressRule(tt.tableID, tt.mark))
 			assert.NoError(t, c.DeleteEgressRule(tt.tableID, tt.mark))
 		})
 	}
 }
-
 func TestAddAndDeleteNodeNetworkPolicyIPSet(t *testing.T) {
 	ipv4SetName := "TEST-IPSET-4"
 	ipv4Net1 := "1.1.1.1/32"
@@ -2255,7 +2190,6 @@ func TestAddAndDeleteNodeNetworkPolicyIPSet(t *testing.T) {
 	ipv6Net1 := "fec0::1111/128"
 	ipv6Net2 := "fec0::2222/128"
 	ipv6Net3 := "fec0::3333/128"
-
 	tests := []struct {
 		name             string
 		ipsetName        string
@@ -2321,7 +2255,6 @@ func TestAddAndDeleteNodeNetworkPolicyIPSet(t *testing.T) {
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
 			c := &Client{ipset: mockIPSet}
 			tt.expectedCalls(mockIPSet.EXPECT())
-
 			if tt.prevIPSetEntries != nil {
 				if tt.isIPv6 {
 					c.nodeNetworkPolicyIPSetsIPv6.Store(tt.ipsetName, tt.prevIPSetEntries)
@@ -2329,7 +2262,6 @@ func TestAddAndDeleteNodeNetworkPolicyIPSet(t *testing.T) {
 					c.nodeNetworkPolicyIPSetsIPv4.Store(tt.ipsetName, tt.prevIPSetEntries)
 				}
 			}
-
 			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPSet(tt.ipsetName, tt.curIPSetEntries, tt.isIPv6))
 			var exists bool
 			if tt.isIPv6 {
@@ -2338,7 +2270,6 @@ func TestAddAndDeleteNodeNetworkPolicyIPSet(t *testing.T) {
 				_, exists = c.nodeNetworkPolicyIPSetsIPv4.Load(tt.ipsetName)
 			}
 			assert.True(t, exists)
-
 			assert.NoError(t, c.DeleteNodeNetworkPolicyIPSet(tt.ipsetName, tt.isIPv6))
 			if tt.isIPv6 {
 				_, exists = c.nodeNetworkPolicyIPSetsIPv6.Load(tt.ipsetName)
@@ -2349,7 +2280,6 @@ func TestAddAndDeleteNodeNetworkPolicyIPSet(t *testing.T) {
 		})
 	}
 }
-
 func TestAddAndDeleteNodeNetworkPolicyIPTables(t *testing.T) {
 	ingressChain := config.NodeNetworkPolicyIngressRulesChain
 	ingressRules := []string{
@@ -2360,7 +2290,6 @@ func TestAddAndDeleteNodeNetworkPolicyIPTables(t *testing.T) {
 		"-A ANTREA-POL-12619C0214FB0845 -p tcp --dport 80 -j ACCEPT",
 		"-A ANTREA-POL-12619C0214FB0845 -p tcp --dport 443 -j ACCEPT",
 	}
-
 	tests := []struct {
 		name          string
 		isIPv6        bool
@@ -2389,7 +2318,6 @@ COMMIT
 `, false, false)
 			},
 		},
-
 		{
 			name:   "IPv6",
 			isIPv6: true,
@@ -2413,7 +2341,6 @@ COMMIT
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -2425,9 +2352,7 @@ COMMIT
 				},
 			}
 			c.initNodeNetworkPolicy()
-
 			tt.expectedCalls(mockIPTables.EXPECT())
-
 			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables([]string{ingressChain}, [][]string{ingressRules}, tt.isIPv6))
 			var gotRules any
 			var exists bool
@@ -2438,7 +2363,6 @@ COMMIT
 			}
 			assert.True(t, exists)
 			assert.EqualValues(t, ingressRules, gotRules)
-
 			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables([]string{svcChain}, [][]string{svcRules}, tt.isIPv6))
 			if tt.isIPv6 {
 				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(svcChain)
@@ -2447,7 +2371,6 @@ COMMIT
 			}
 			assert.True(t, exists)
 			assert.EqualValues(t, svcRules, gotRules)
-
 			assert.NoError(t, c.DeleteNodeNetworkPolicyIPTables([]string{svcChain}, tt.isIPv6))
 			if tt.isIPv6 {
 				_, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(svcChain)
@@ -2455,7 +2378,6 @@ COMMIT
 				_, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(svcChain)
 			}
 			assert.False(t, exists)
-
 			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables([]string{ingressChain}, [][]string{nil}, tt.isIPv6))
 			if tt.isIPv6 {
 				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(ingressChain)
@@ -2467,7 +2389,6 @@ COMMIT
 		})
 	}
 }
-
 func TestClearConntrackEntryForService(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -2523,7 +2444,6 @@ func TestClearConntrackEntryForService(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)

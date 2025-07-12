@@ -1,12 +1,9 @@
 /*
 Copyright 2015 The Kubernetes Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,53 +24,37 @@ limitations under the License.
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 Modifies:
-<<<<<<< HEAD
 - Replace import "k8s.io/kubernetes/pkg/proxy/config" with "antrea.io/antrea/v2/third_party/proxy/config"
-=======
 - Replace import "k8s.io/kubernetes/pkg/proxy/config" with "antrea.io/antrea/third_party/proxy/config"
->>>>>>> origin/main
 - Remove config.EndpointSliceHandler, config.NodeHandler from Provider interface type
 - Remove NodeHandler, EndpointSliceHandler, Sync() from Provider interface
 - Add Run() to Provider interface
 */
-
 package proxy
-
 import (
 	"fmt"
 	"net"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/third_party/proxy/config"
-=======
 	"antrea.io/antrea/third_party/proxy/config"
->>>>>>> origin/main
 )
-
 // Provider is the interface provided by proxier implementations.
 type Provider interface {
 	config.EndpointsHandler
 	config.EndpointSliceHandler
 	config.NodeHandler
 	config.ServiceHandler
-
 	// SyncLoop runs periodic work.
 	// This is expected to run as a goroutine or as the main loop of the app.
 	// It does not return.
 	SyncLoop()
-
 	// SyncedOnce returns true if the proxier has synced rules at least once.
 	SyncedOnce() bool
-
 	Run(stopCh <-chan struct{})
 }
-
 // ServicePortName carries a namespace + name + portname.  This is the unique
 // identifier for a load-balanced service.
 type ServicePortName struct {
@@ -81,11 +62,9 @@ type ServicePortName struct {
 	Port     string
 	Protocol v1.Protocol
 }
-
 func (spn ServicePortName) String() string {
 	return fmt.Sprintf("%s:%s", spn.NamespacedName.String(), spn.Port)
 }
-
 // ServicePort is an interface which abstracts information about a service.
 type ServicePort interface {
 	// String returns service string.  An example format can be: `IP:Port/Protocol`.
@@ -129,7 +108,6 @@ type ServicePort interface {
 	// endpoints based on "Local" traffic policy
 	UsesLocalEndpoints() bool
 }
-
 // Endpoint in an interface which abstracts information about an endpoint.
 // TODO: Rename functions to be consistent with ServicePort.
 type Endpoint interface {
@@ -166,7 +144,6 @@ type Endpoint interface {
 	// GetZone returns the zone for the endpoint
 	GetZone() string
 }
-
 // ServiceEndpoint is used to identify a service and one of its endpoint pair.
 type ServiceEndpoint struct {
 	Endpoint        string

@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package grouping
-
 import (
 	"context"
 	"fmt"
 	"sync/atomic"
 	"time"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 const (
 	controllerName = "GroupEntityController"
 	// Set resyncPeriod to 0 to disable resyncing.
@@ -46,7 +38,6 @@ const (
 	// PodIP index name for Pod cache.
 	PodIPsIndex = "podIPs"
 )
-
 func PodIPsIndexFunc(obj interface{}) ([]string, error) {
 	pod, ok := obj.(*v1.Pod)
 	if !ok {
@@ -61,7 +52,6 @@ func PodIPsIndexFunc(obj interface{}) ([]string, error) {
 	}
 	return nil, nil
 }
-
 func ExternalEntityIPsIndexFunc(obj interface{}) ([]string, error) {
 	ee, ok := obj.(*v1alpha2.ExternalEntity)
 	if !ok {
@@ -77,7 +67,6 @@ func ExternalEntityIPsIndexFunc(obj interface{}) ([]string, error) {
 	}
 	return nil, nil
 }
-
 // eventsCounter is used to keep track of the number of occurrences of an event type. It uses the
 // low-level atomic memory primitives from the sync/atomic package to provide atomic operations
 // (Increment and Load).
@@ -90,37 +79,30 @@ func ExternalEntityIPsIndexFunc(obj interface{}) ([]string, error) {
 type eventsCounter struct {
 	count uint64
 }
-
 func (c *eventsCounter) Increment() {
 	atomic.AddUint64(&c.count, 1)
 }
-
 func (c *eventsCounter) Load() uint64 {
 	return atomic.LoadUint64(&c.count)
 }
-
 type GroupEntityController struct {
 	podInformer coreinformers.PodInformer
 	// podListerSynced is a function which returns true if the Pod shared informer has been synced at least once.
 	podListerSynced cache.InformerSynced
 	// podAddEvents tracks the number of Pod Add events that have been processed.
 	podAddEvents *eventsCounter
-
 	externalEntityInformer crdv1a2informers.ExternalEntityInformer
 	// externalEntityListerSynced is a function which returns true if the ExternalEntity shared informer has been synced at least once.
 	externalEntityListerSynced cache.InformerSynced
 	// externalEntityAddEvents tracks the number of ExternalEntity Add events that have been processed.
 	externalEntityAddEvents *eventsCounter
-
 	namespaceInformer coreinformers.NamespaceInformer
 	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
 	namespaceListerSynced cache.InformerSynced
 	// namespaceAddEvents tracks the number of Namespace Add events that have been processed.
 	namespaceAddEvents *eventsCounter
-
 	groupEntityIndex *GroupEntityIndex
 }
-
 func NewGroupEntityController(groupEntityIndex *GroupEntityIndex,
 	podInformer coreinformers.PodInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
@@ -168,11 +150,9 @@ func NewGroupEntityController(groupEntityIndex *GroupEntityIndex,
 	}
 	return c
 }
-
 func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
-
 	cacheSyncs := []cache.InformerSynced{c.podListerSynced, c.namespaceListerSynced}
 	// Wait for externalEntityListerSynced when AntreaPolicy feature gate is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
@@ -189,7 +169,6 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		initialExternalEntityCount = len(c.externalEntityInformer.Informer().GetStore().List())
 	}
-
 	// Wait until all event handlers process the initial resources before setting groupEntityIndex as synced.
 	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 100*time.Millisecond, true, func(ctx context.Context) (done bool, err error) {
 		if uint64(initialPodCount) > c.podAddEvents.Load() {
@@ -207,23 +186,19 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 	}); err == nil {
 		c.groupEntityIndex.setSynced(true)
 	}
-
 	<-stopCh
 }
-
 func (c *GroupEntityController) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	klog.V(2).InfoS("Processing Pod ADD event", "pod", klog.KObj(pod), "labels", pod.Labels)
 	c.groupEntityIndex.AddPod(pod)
 	c.podAddEvents.Increment()
 }
-
 func (c *GroupEntityController) updatePod(_, curObj interface{}) {
 	curPod := curObj.(*v1.Pod)
 	klog.V(2).InfoS("Processing Pod UPDATE event", "pod", klog.KObj(curPod), "labels", curPod.Labels, "phase", curPod.Status.Phase)
 	c.groupEntityIndex.AddPod(curPod)
 }
-
 func (c *GroupEntityController) deletePod(old interface{}) {
 	pod, ok := old.(*v1.Pod)
 	if !ok {
@@ -240,20 +215,17 @@ func (c *GroupEntityController) deletePod(old interface{}) {
 	}
 	c.groupEntityIndex.DeletePod(pod)
 }
-
 func (c *GroupEntityController) addNamespace(obj interface{}) {
 	namespace := obj.(*v1.Namespace)
 	klog.V(2).InfoS("Processing Namespace ADD event", "namespace", namespace.Name, "labels", namespace.Labels)
 	c.groupEntityIndex.AddNamespace(namespace)
 	c.namespaceAddEvents.Increment()
 }
-
 func (c *GroupEntityController) updateNamespace(_, curObj interface{}) {
 	curNamespace := curObj.(*v1.Namespace)
 	klog.V(2).InfoS("Processing Namespace UPDATE event", "namespace", curNamespace.Name, "labels", curNamespace.Labels)
 	c.groupEntityIndex.AddNamespace(curNamespace)
 }
-
 func (c *GroupEntityController) deleteNamespace(old interface{}) {
 	namespace, ok := old.(*v1.Namespace)
 	if !ok {
@@ -271,20 +243,17 @@ func (c *GroupEntityController) deleteNamespace(old interface{}) {
 	klog.V(2).Infof("Processing Namespace %s DELETE event, labels: %v", namespace.Name, namespace.Labels)
 	c.groupEntityIndex.DeleteNamespace(namespace)
 }
-
 func (c *GroupEntityController) addExternalEntity(obj interface{}) {
 	ee := obj.(*v1alpha2.ExternalEntity)
 	klog.V(2).Infof("Processing ExternalEntity %s/%s ADD event, labels: %v", ee.GetNamespace(), ee.GetName(), ee.GetLabels())
 	c.groupEntityIndex.AddExternalEntity(ee)
 	c.externalEntityAddEvents.Increment()
 }
-
 func (c *GroupEntityController) updateExternalEntity(_, curObj interface{}) {
 	curEE := curObj.(*v1alpha2.ExternalEntity)
 	klog.V(2).Infof("Processing ExternalEntity %s/%s UPDATE event, labels: %v", curEE.GetNamespace(), curEE.GetName(), curEE.GetLabels())
 	c.groupEntityIndex.AddExternalEntity(curEE)
 }
-
 func (c *GroupEntityController) deleteExternalEntity(old interface{}) {
 	ee, ok := old.(*v1alpha2.ExternalEntity)
 	if !ok {
@@ -299,7 +268,6 @@ func (c *GroupEntityController) deleteExternalEntity(old interface{}) {
 			return
 		}
 	}
-
 	klog.V(2).Infof("Processing ExternalEntity %s/%s DELETE event, labels: %v", ee.GetNamespace(), ee.GetName(), ee.GetLabels())
 	c.groupEntityIndex.DeleteExternalEntity(ee)
 }

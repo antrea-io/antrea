@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package proxy
-
 import (
 	"fmt"
 	"math"
@@ -22,7 +20,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
@@ -39,8 +36,6 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/strings/slices"
-
-<<<<<<< HEAD
 	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/nodeip"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
@@ -55,24 +50,21 @@ import (
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 	"antrea.io/antrea/v2/third_party/proxy/config"
 	"antrea.io/antrea/v2/third_party/proxy/healthcheck"
-=======
-	agentconfig "antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/nodeip"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/proxy/metrics"
-	"antrea.io/antrea/pkg/agent/proxy/types"
-	"antrea.io/antrea/pkg/agent/route"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
-	antreaconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/features"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	k8sutil "antrea.io/antrea/pkg/util/k8s"
+	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/nodeip"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/proxy/metrics"
+	"antrea.io/antrea/v2/pkg/agent/proxy/types"
+	"antrea.io/antrea/v2/pkg/agent/route"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	antreaconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/features"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 	"antrea.io/antrea/third_party/proxy/config"
 	"antrea.io/antrea/third_party/proxy/healthcheck"
->>>>>>> origin/main
 )
-
 const (
 	resyncPeriod  = time.Minute
 	componentName = "antrea-agent-proxy"
@@ -83,7 +75,6 @@ const (
 	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-network/2447-Make-kube-proxy-service-abstraction-optional
 	labelServiceProxyName = "service.kubernetes.io/service-proxy-name"
 )
-
 // Proxier wraps proxy.Provider and adds extra methods. It is introduced for
 // extending the proxy.Provider implementations with extra methods, without
 // modifying the proxy.Provider interface.
@@ -98,7 +89,6 @@ type Proxier interface {
 	// False is returned if the serviceString is not found in serviceStringMap.
 	GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool)
 }
-
 type proxier struct {
 	once                sync.Once
 	endpointSliceConfig *config.EndpointSliceConfig
@@ -133,14 +123,11 @@ type proxier struct {
 	serviceStringMap map[string]k8sproxy.ServicePortName
 	// serviceStringMapMutex protects serviceStringMap object.
 	serviceStringMapMutex sync.Mutex
-
 	serviceHealthServer healthcheck.ServiceHealthServer
 	numLocalEndpoints   map[apimachinerytypes.NamespacedName]int
-
 	// syncedOnce returns true if the proxier has synced rules at least once.
 	syncedOnce      bool
 	syncedOnceMutex sync.RWMutex
-
 	runner                            *k8sproxy.BoundedFrequencyRunner
 	stopChan                          <-chan struct{}
 	ofClient                          openflow.Client
@@ -155,7 +142,6 @@ type proxier struct {
 	serviceTrafficDistributionEnabled bool
 	supportNestedService              bool
 	cleanupStaleUDPSvcConntrack       bool
-
 	// When a Service's LoadBalancerMode is DSR, the following changes will be applied to the OpenFlow flows and groups:
 	// 1. ClusterGroup will be used by traffic working in DSR mode on ingress Node.
 	//   * If a local Endpoint is selected, it will just be handled normally as DSR is not applicable in this case.
@@ -174,17 +160,14 @@ type proxier struct {
 	// packet of a connection, and rely on the learned flow to process subsequent packets of the same connection.
 	defaultLoadBalancerMode agentconfig.LoadBalancerMode
 }
-
 func (p *proxier) SyncedOnce() bool {
 	p.syncedOnceMutex.RLock()
 	defer p.syncedOnceMutex.RUnlock()
 	return p.syncedOnce
 }
-
 func endpointKey(endpoint k8sproxy.Endpoint, protocol binding.Protocol) string {
 	return fmt.Sprintf("%s/%s", endpoint.String(), protocol)
 }
-
 func (p *proxier) isInitialized() bool {
 	// When LoadBalancerModeDSR is enabled, we wait for NodeIPChecker to be initialized before processing any Service, to
 	// ensure we get correct result when checking if an Endpoint is running in host network.
@@ -195,7 +178,6 @@ func (p *proxier) isInitialized() bool {
 	}
 	return p.endpointsChanges.Synced() && p.serviceChanges.Synced()
 }
-
 // removeStaleServices removes all the configurations of expired Services and their associated Endpoints.
 func (p *proxier) removeStaleServices() {
 	for svcPortName, svcPort := range p.serviceInstalledMap {
@@ -228,12 +210,10 @@ func (p *proxier) removeStaleServices() {
 				continue
 			}
 		}
-
 		delete(p.serviceInstalledMap, svcPortName)
 		p.deleteServiceByIP(svcInfoStr)
 	}
 }
-
 func (p *proxier) removeServiceFlows(svcInfo *types.ServiceInfo) bool {
 	svcInfoStr := svcInfo.String()
 	svcPort := uint16(svcInfo.Port())
@@ -243,7 +223,6 @@ func (p *proxier) removeServiceFlows(svcInfo *types.ServiceInfo) bool {
 		klog.ErrorS(err, "Error when uninstalling ClusterIP flows for Service", "ServiceInfo", svcInfoStr)
 		return false
 	}
-
 	if p.proxyAll {
 		// Remove NodePort flows and configurations.
 		if err := p.uninstallNodePortService(uint16(svcInfo.NodePort()), svcProto); err != nil {
@@ -265,7 +244,6 @@ func (p *proxier) removeServiceFlows(svcInfo *types.ServiceInfo) bool {
 	}
 	return true
 }
-
 func (p *proxier) installServiceGroup(svcPortName k8sproxy.ServicePortName, needUpdate, local, withSessionAffinity bool, endpoints []k8sproxy.Endpoint) (binding.GroupIDType, bool) {
 	groupID, exists := p.groupCounter.Get(svcPortName, local)
 	if exists && !needUpdate {
@@ -288,7 +266,6 @@ func (p *proxier) installServiceGroup(svcPortName k8sproxy.ServicePortName, need
 	success = true
 	return groupID, true
 }
-
 func (p *proxier) removeServiceGroup(svcPortName k8sproxy.ServicePortName, local bool) bool {
 	if groupID, exist := p.groupCounter.Get(svcPortName, local); exist {
 		if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
@@ -299,7 +276,6 @@ func (p *proxier) removeServiceGroup(svcPortName k8sproxy.ServicePortName, local
 	}
 	return true
 }
-
 // removeStaleEndpoints removes flows for the given Endpoints from the data path if these flows are no longer
 // needed by any Service. Endpoints from different Services can have the same characteristics and thus
 // can share the same flows. removeStaleEndpoints must be called whenever Endpoints are no longer used by a
@@ -308,7 +284,6 @@ func (p *proxier) removeServiceGroup(svcPortName k8sproxy.ServicePortName, local
 // removed from the data path, the method returns nil.
 func (p *proxier) removeStaleEndpoints(svcPortName k8sproxy.ServicePortName, protocol binding.Protocol, staleEndpoints map[string]k8sproxy.Endpoint) bool {
 	var endpointsToRemove []k8sproxy.Endpoint
-
 	// Get all Endpoints whose reference counter is 1, and these Endpoints should be removed.
 	for _, endpoint := range staleEndpoints {
 		key := endpointKey(endpoint, protocol)
@@ -318,7 +293,6 @@ func (p *proxier) removeStaleEndpoints(svcPortName k8sproxy.ServicePortName, pro
 			klog.V(2).InfoS("Endpoint will be removed", "Endpoint", endpoint.String(), "Protocol", protocol)
 		}
 	}
-
 	// Remove flows for these Endpoints.
 	if len(endpointsToRemove) != 0 {
 		if err := p.ofClient.UninstallEndpointFlows(protocol, endpointsToRemove); err != nil {
@@ -326,7 +300,6 @@ func (p *proxier) removeStaleEndpoints(svcPortName k8sproxy.ServicePortName, pro
 			return false
 		}
 	}
-
 	// Update the reference counter of Endpoints and remove them from the installed Endpoints of the ServicePortName.
 	for _, endpoint := range staleEndpoints {
 		key := endpointKey(endpoint, protocol)
@@ -340,10 +313,8 @@ func (p *proxier) removeStaleEndpoints(svcPortName k8sproxy.ServicePortName, pro
 		}
 		delete(p.endpointsInstalledMap[svcPortName], endpoint.String())
 	}
-
 	return true
 }
-
 func (p *proxier) removeStaleServiceConntrackEntries(svcPortName k8sproxy.ServicePortName, svcInfo *types.ServiceInfo) bool {
 	svcPort := uint16(svcInfo.Port())
 	nodePort := uint16(svcInfo.NodePort())
@@ -352,7 +323,6 @@ func (p *proxier) removeStaleServiceConntrackEntries(svcPortName k8sproxy.Servic
 	if p.isIPv6 {
 		virtualNodePortDNATIP = agentconfig.VirtualNodePortDNATIPv6
 	}
-
 	svcIPToPort := make(map[string]uint16)
 	svcIPToPort[svcInfo.ClusterIP().String()] = svcPort
 	for _, ip := range svcInfo.ExternalIPStrings() {
@@ -369,7 +339,6 @@ func (p *proxier) removeStaleServiceConntrackEntries(svcPortName k8sproxy.Servic
 		}
 		svcIPToPort[virtualNodePortDNATIP.String()] = nodePort
 	}
-
 	// Clean up the UDP conntrack entries matching the stale Service IPs and ports. For a UDP Service without Endpoint,
 	// no UDP conntrack entry will have been generated, but there is no harm in calling this function.
 	for svcIPStr, port := range svcIPToPort {
@@ -379,10 +348,8 @@ func (p *proxier) removeStaleServiceConntrackEntries(svcPortName k8sproxy.Servic
 			return false
 		}
 	}
-
 	return true
 }
-
 func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortName, pSvcInfo, svcInfo *types.ServiceInfo, staleEndpoints map[string]k8sproxy.Endpoint) bool {
 	pSvcPort := uint16(pSvcInfo.Port())
 	svcPort := uint16(svcInfo.Port())
@@ -399,7 +366,6 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 		virtualNodePortDNATIP = agentconfig.VirtualNodePortDNATIPv6
 	}
 	var svcPortChanged, svcNodePortChanged bool
-
 	staleSvcIPToPort := make(map[string]uint16)
 	// If the port of the Service is changed, delete all conntrack entries related to the previous Service IPs and the
 	// previous Service port. These previous Service IPs includes external IPs, loadBalancer IPs and the ClusterIP.
@@ -446,7 +412,6 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 			return false
 		}
 	}
-
 	remainingSvcIPToPort := make(map[string]uint16)
 	if !svcPortChanged {
 		// Get all remaining Service IPs.
@@ -475,13 +440,10 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 			}
 		}
 	}
-
 	return true
 }
-
 func (p *proxier) addNewEndpoints(svcPortName k8sproxy.ServicePortName, protocol binding.Protocol, newEndpoints map[string]k8sproxy.Endpoint) bool {
 	var endpointsToAdd []k8sproxy.Endpoint
-
 	// Get all Endpoints whose reference counter is 0, and these Endpoints should be added.
 	for _, endpoint := range newEndpoints {
 		key := endpointKey(endpoint, protocol)
@@ -491,7 +453,6 @@ func (p *proxier) addNewEndpoints(svcPortName k8sproxy.ServicePortName, protocol
 			klog.V(2).InfoS("Endpoint will be added", "Endpoint", endpoint.String(), "Protocol", protocol)
 		}
 	}
-
 	// Add flows for these Endpoints.
 	if len(endpointsToAdd) != 0 {
 		if err := p.ofClient.InstallEndpointFlows(protocol, endpointsToAdd); err != nil {
@@ -499,7 +460,6 @@ func (p *proxier) addNewEndpoints(svcPortName k8sproxy.ServicePortName, protocol
 			return false
 		}
 	}
-
 	// Update the reference counter of Endpoints.
 	for _, endpoint := range newEndpoints {
 		p.endpointsInstalledMap[svcPortName][endpoint.String()] = endpoint
@@ -508,24 +468,20 @@ func (p *proxier) addNewEndpoints(svcPortName k8sproxy.ServicePortName, protocol
 	}
 	return true
 }
-
 func serviceIdentityChanged(svcInfo, pSvcInfo *types.ServiceInfo) bool {
 	return svcInfo.ClusterIP().String() != pSvcInfo.ClusterIP().String() ||
 		svcInfo.Port() != pSvcInfo.Port() ||
 		svcInfo.OFProtocol != pSvcInfo.OFProtocol
 }
-
 func serviceExternalAddressesChanged(svcInfo, pSvcInfo *types.ServiceInfo) bool {
 	return svcInfo.NodePort() != pSvcInfo.NodePort() ||
 		!slices.Equal(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings()) ||
 		!slices.Equal(svcInfo.ExternalIPStrings(), pSvcInfo.ExternalIPStrings())
 }
-
 // smallSliceDifference builds a slice which includes all the strings from s1
 // which are not in s2.
 func smallSliceDifference(s1, s2 []string) []string {
 	var diff []string
-
 	for _, e1 := range s1 {
 		found := false
 		for _, e2 := range s2 {
@@ -538,14 +494,11 @@ func smallSliceDifference(s1, s2 []string) []string {
 			diff = append(diff, e1)
 		}
 	}
-
 	return diff
 }
-
 // smallSliceSame builds a slice which includes all the strings are both in s1 and s2.
 func smallSliceSame(s1, s2 []string) []string {
 	var same []string
-
 	for _, e1 := range s1 {
 		for _, e2 := range s2 {
 			if e1 == e2 {
@@ -554,10 +507,8 @@ func smallSliceSame(s1, s2 []string) []string {
 			}
 		}
 	}
-
 	return same
 }
-
 func (p *proxier) installNodePortService(localGroupID, clusterGroupID binding.GroupIDType, svcPort uint16, protocol binding.Protocol, trafficPolicyLocal bool, affinityTimeout uint16) error {
 	if svcPort == 0 {
 		return nil
@@ -586,7 +537,6 @@ func (p *proxier) installNodePortService(localGroupID, clusterGroupID binding.Gr
 	}
 	return nil
 }
-
 func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Protocol) error {
 	if svcPort == 0 {
 		return nil
@@ -603,7 +553,6 @@ func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Prot
 	}
 	return nil
 }
-
 func (p *proxier) installExternalIPService(svcInfoStr string,
 	localGroupID,
 	clusterGroupID binding.GroupIDType,
@@ -636,7 +585,6 @@ func (p *proxier) installExternalIPService(svcInfoStr string,
 	}
 	return nil
 }
-
 func (p *proxier) uninstallExternalIPService(svcInfoStr string, externalIPStrings []string, svcPort uint16, protocol binding.Protocol) error {
 	for _, externalIP := range externalIPStrings {
 		ip := net.ParseIP(externalIP)
@@ -649,7 +597,6 @@ func (p *proxier) uninstallExternalIPService(svcInfoStr string, externalIPString
 	}
 	return nil
 }
-
 func (p *proxier) installLoadBalancerService(svcInfoStr string,
 	localGroupID,
 	clusterGroupID binding.GroupIDType,
@@ -686,7 +633,6 @@ func (p *proxier) installLoadBalancerService(svcInfoStr string,
 	}
 	return nil
 }
-
 func (p *proxier) uninstallLoadBalancerService(svcInfoStr string, loadBalancerIPStrings []string, svcPort uint16, protocol binding.Protocol) error {
 	for _, ingress := range loadBalancerIPStrings {
 		if ingress != "" {
@@ -703,7 +649,6 @@ func (p *proxier) uninstallLoadBalancerService(svcInfoStr string, loadBalancerIP
 	}
 	return nil
 }
-
 func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
@@ -714,7 +659,6 @@ func (p *proxier) installServices() {
 			p.endpointsInstalledMap[svcPortName] = endpointsInstalled
 		}
 		endpointsToInstall := p.endpointsMap[svcPortName]
-
 		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
 		var pSvcInfo *types.ServiceInfo
 		var needUpdateServiceExternalAddresses, needUpdateService, needUpdateEndpoints bool
@@ -760,7 +704,6 @@ func (p *proxier) installServices() {
 			// otherwise it would fail to install Service flows because the group doesn't exist.
 			needUpdateEndpoints = true
 		}
-
 		clusterEndpoints, localEndpoints, allReachableEndpoints := p.categorizeEndpoints(endpointsToInstall, svcInfo)
 		// Get the stale Endpoints and new Endpoints based on the diff of endpointsInstalled and allReachableEndpoints.
 		staleEndpoints, newEndpoints := compareEndpoints(endpointsInstalled, allReachableEndpoints)
@@ -772,7 +715,6 @@ func (p *proxier) installServices() {
 		if len(staleEndpoints) > 0 && needClearConntrackEntries(svcInfo.OFProtocol) {
 			needCleanupStaleUDPServiceConntrack = true
 		}
-
 		if needUpdateEndpoints {
 			if !p.addNewEndpoints(svcPortName, svcInfo.OFProtocol, newEndpoints) {
 				continue
@@ -781,7 +723,6 @@ func (p *proxier) installServices() {
 				continue
 			}
 		}
-
 		withSessionAffinity := svcInfo.SessionAffinityType() == corev1.ServiceAffinityClientIP
 		var localGroupID, clusterGroupID binding.GroupIDType
 		// categorizeEndpoints has checked if localGroup and clusterGroup should exist. We just create the group if its
@@ -806,7 +747,6 @@ func (p *proxier) installServices() {
 				continue
 			}
 		}
-
 		if needUpdateService {
 			// Delete previous flows.
 			if pSvcInfo != nil {
@@ -827,12 +767,10 @@ func (p *proxier) installServices() {
 				continue
 			}
 		}
-
 		p.serviceInstalledMap[svcPortName] = svcPort
 		p.addServiceByIP(svcInfoStr, svcPortName)
 	}
 }
-
 // getLoadBalancerMode returns the default load balancer mode if the Service doesn't have the annotation overriding it.
 // Otherwise, it returns the mode specified in the annotation.
 func (p *proxier) getLoadBalancerMode(svcInfo *types.ServiceInfo) agentconfig.LoadBalancerMode {
@@ -845,7 +783,6 @@ func (p *proxier) getLoadBalancerMode(svcInfo *types.ServiceInfo) agentconfig.Lo
 	}
 	return *svcInfo.LoadBalancerMode
 }
-
 func getAffinityTimeout(svcInfo *types.ServiceInfo) uint16 {
 	affinityTimeout := svcInfo.StickyMaxAgeSeconds()
 	if svcInfo.StickyMaxAgeSeconds() > maxSupportedAffinityTimeout {
@@ -866,13 +803,11 @@ func getAffinityTimeout(svcInfo *types.ServiceInfo) uint16 {
 	}
 	return uint16(affinityTimeout)
 }
-
 func (p *proxier) installServiceFlows(svcInfo *types.ServiceInfo, localGroupID, clusterGroupID binding.GroupIDType) bool {
 	svcInfoStr := svcInfo.String()
 	svcPort := uint16(svcInfo.Port())
 	svcProto := svcInfo.OFProtocol
 	affinityTimeout := getAffinityTimeout(svcInfo)
-
 	var isNestedService bool
 	if p.supportNestedService {
 		// Check the `IsNested` field only when Proxy is enabled with `supportNestedService`.
@@ -880,7 +815,6 @@ func (p *proxier) installServiceFlows(svcInfo *types.ServiceInfo, localGroupID, 
 		isNestedService = svcInfo.IsNested
 	}
 	loadBalancerMode := p.getLoadBalancerMode(svcInfo)
-
 	// Install ClusterIP flows.
 	if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
 		ServiceIP:          svcInfo.ClusterIP(),
@@ -919,7 +853,6 @@ func (p *proxier) installServiceFlows(svcInfo *types.ServiceInfo, localGroupID, 
 	}
 	return true
 }
-
 func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.ServiceInfo, localGroupID, clusterGroupID binding.GroupIDType) bool {
 	pSvcInfoStr := pSvcInfo.String()
 	svcInfoStr := svcInfo.String()
@@ -967,19 +900,16 @@ func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.Servic
 	}
 	return true
 }
-
 func compareEndpoints(endpointsCached map[string]k8sproxy.Endpoint, endpointsInstalled []k8sproxy.Endpoint) (map[string]k8sproxy.Endpoint, map[string]k8sproxy.Endpoint) {
 	// Map endpointsToRemove is used to store the Endpoints that should be removed.
 	endpointsToRemove := map[string]k8sproxy.Endpoint{}
 	// Map endpointsToAdd is used to store the Endpoints that are newly added.
 	endpointsToAdd := map[string]k8sproxy.Endpoint{}
-
 	// Copy every Endpoint in endpointsCached to endpointsToRemove. After removing all actually installed Endpoints,
 	// only stale Endpoints are left.
 	for endpointString, endpoint := range endpointsCached {
 		endpointsToRemove[endpointString] = endpoint
 	}
-
 	for _, endpoint := range endpointsInstalled {
 		// If the Endpoint is in the map endpointsCached, then it is not newly installed, remove it from map endpointsToRemove;
 		// otherwise, add it to map endpointsToAdd.
@@ -991,7 +921,6 @@ func compareEndpoints(endpointsCached map[string]k8sproxy.Endpoint, endpointsIns
 	}
 	return endpointsToRemove, endpointsToAdd
 }
-
 // syncProxyRules applies current changes in change trackers and then updates
 // flows for services and endpoints. It will return immediately if either
 // endpoints or services resources are not synced. syncProxyRules is only called
@@ -1005,7 +934,6 @@ func (p *proxier) syncProxyRules() {
 		klog.V(4).Info("Not syncing rules until both Services and Endpoints have been synced")
 		return
 	}
-
 	start := time.Now()
 	defer func() {
 		delta := time.Since(start)
@@ -1016,17 +944,14 @@ func (p *proxier) syncProxyRules() {
 		}
 		klog.V(4).Infof("syncProxyRules took %v", time.Since(start))
 	}()
-
 	// Protect Service and endpoints maps, which can be read by
 	// GetServiceFlowKeys().
 	p.serviceEndpointsMapsMutex.Lock()
 	defer p.serviceEndpointsMapsMutex.Unlock()
 	p.endpointsChanges.Update(p.endpointsMap, p.numLocalEndpoints)
 	serviceUpdateResult := p.serviceChanges.Update(p.serviceMap)
-
 	p.removeStaleServices()
 	p.installServices()
-
 	if p.serviceHealthServer != nil {
 		if err := p.serviceHealthServer.SyncServices(serviceUpdateResult.HCServiceNodePorts); err != nil {
 			klog.ErrorS(err, "Error syncing healthcheck Services")
@@ -1035,7 +960,6 @@ func (p *proxier) syncProxyRules() {
 			klog.ErrorS(err, "Error syncing healthcheck Endpoints")
 		}
 	}
-
 	counter := 0
 	for _, endpoints := range p.endpointsMap {
 		counter += len(endpoints)
@@ -1047,21 +971,17 @@ func (p *proxier) syncProxyRules() {
 		metrics.ServicesInstalledTotal.Set(float64(len(p.serviceMap)))
 		metrics.EndpointsInstalledTotal.Set(float64(counter))
 	}
-
 	p.syncedOnceMutex.Lock()
 	defer p.syncedOnceMutex.Unlock()
 	p.syncedOnce = true
 }
-
 func (p *proxier) SyncLoop() {
 	p.runner.Loop(p.stopChan)
 }
-
 func (p *proxier) OnEndpointsAdd(endpoints *corev1.Endpoints) {
 	klog.V(2).InfoS("Processing Endpoints ADD event", "Endpoints", klog.KObj(endpoints))
 	p.OnEndpointsUpdate(nil, endpoints)
 }
-
 func (p *proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
 	if oldEndpoints != nil && endpoints != nil {
 		klog.V(2).InfoS("Processing Endpoints UPDATE event", "Endpoints", klog.KObj(endpoints))
@@ -1075,52 +995,44 @@ func (p *proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
 		p.runner.Run()
 	}
 }
-
 func (p *proxier) OnEndpointsDelete(endpoints *corev1.Endpoints) {
 	klog.V(2).InfoS("Processing Endpoints DELETE event", "Endpoints", klog.KObj(endpoints))
 	p.OnEndpointsUpdate(endpoints, nil)
 }
-
 func (p *proxier) OnEndpointsSynced() {
 	p.endpointsChanges.OnEndpointsSynced()
 	if p.isInitialized() {
 		p.runner.Run()
 	}
 }
-
 func (p *proxier) OnEndpointSliceAdd(endpointSlice *discovery.EndpointSlice) {
 	klog.V(2).InfoS("Processing EndpointSlice ADD event", "EndpointSlice", klog.KObj(endpointSlice))
 	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, false) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
-
 func (p *proxier) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *discovery.EndpointSlice) {
 	klog.V(2).InfoS("Processing EndpointSlice UPDATE event", "EndpointSlice", klog.KObj(newEndpointSlice))
 	if p.endpointsChanges.OnEndpointSliceUpdate(newEndpointSlice, false) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
-
 func (p *proxier) OnEndpointSliceDelete(endpointSlice *discovery.EndpointSlice) {
 	klog.V(2).InfoS("Processing EndpointSlice DELETE event", "EndpointSlice", klog.KObj(endpointSlice))
 	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, true) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
-
 func (p *proxier) OnEndpointSlicesSynced() {
 	p.endpointsChanges.OnEndpointsSynced()
 	if p.isInitialized() {
 		p.runner.Run()
 	}
 }
-
 func (p *proxier) OnServiceAdd(service *corev1.Service) {
 	klog.V(2).InfoS("Processing Service ADD event", "Service", klog.KObj(service))
 	p.OnServiceUpdate(nil, service)
 }
-
 func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
 	if oldService != nil && service != nil {
 		klog.V(2).InfoS("Processing Service UPDATE event", "Service", klog.KObj(service))
@@ -1136,30 +1048,25 @@ func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
 		}
 	}
 }
-
 func (p *proxier) OnServiceDelete(service *corev1.Service) {
 	klog.V(2).InfoS("Processing Service DELETE event", "Service", klog.KObj(service))
 	p.OnServiceUpdate(service, nil)
 }
-
 func (p *proxier) OnServiceSynced() {
 	p.serviceChanges.OnServiceSynced()
 	if p.isInitialized() {
 		p.runner.Run()
 	}
 }
-
 // OnNodeAdd is called whenever creation of new node object
 // is observed.
 func (p *proxier) OnNodeAdd(node *corev1.Node) {
 	if node.Name != p.hostname {
 		return
 	}
-
 	if reflect.DeepEqual(p.nodeLabels, node.Labels) {
 		return
 	}
-
 	p.serviceEndpointsMapsMutex.Lock()
 	p.nodeLabels = map[string]string{}
 	for k, v := range node.Labels {
@@ -1167,21 +1074,17 @@ func (p *proxier) OnNodeAdd(node *corev1.Node) {
 	}
 	p.serviceEndpointsMapsMutex.Unlock()
 	klog.V(4).InfoS("Updated proxier Node labels", "labels", node.Labels)
-
 	p.syncProxyRules()
 }
-
 // OnNodeUpdate is called whenever modification of an existing
 // node object is observed.
 func (p *proxier) OnNodeUpdate(oldNode, node *corev1.Node) {
 	if node.Name != p.hostname {
 		return
 	}
-
 	if reflect.DeepEqual(p.nodeLabels, node.Labels) {
 		return
 	}
-
 	p.serviceEndpointsMapsMutex.Lock()
 	p.nodeLabels = map[string]string{}
 	for k, v := range node.Labels {
@@ -1189,10 +1092,8 @@ func (p *proxier) OnNodeUpdate(oldNode, node *corev1.Node) {
 	}
 	p.serviceEndpointsMapsMutex.Unlock()
 	klog.V(4).InfoS("Updated proxier Node labels", "labels", node.Labels)
-
 	p.syncProxyRules()
 }
-
 // OnNodeDelete is called whenever deletion of an existing node
 // object is observed.
 func (p *proxier) OnNodeDelete(node *corev1.Node) {
@@ -1202,37 +1103,28 @@ func (p *proxier) OnNodeDelete(node *corev1.Node) {
 	p.serviceEndpointsMapsMutex.Lock()
 	p.nodeLabels = nil
 	p.serviceEndpointsMapsMutex.Unlock()
-
 	p.syncProxyRules()
 }
-
 // OnNodeSynced is called once all the initial event handlers were
 // called and the state is fully propagated to local cache.
 func (p *proxier) OnNodeSynced() {
 }
-
 func (p *proxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
 	p.serviceStringMapMutex.Lock()
 	defer p.serviceStringMapMutex.Unlock()
-
 	serviceInfo, exists := p.serviceStringMap[serviceStr]
 	return serviceInfo, exists
 }
-
 func (p *proxier) addServiceByIP(serviceStr string, servicePortName k8sproxy.ServicePortName) {
 	p.serviceStringMapMutex.Lock()
 	defer p.serviceStringMapMutex.Unlock()
-
 	p.serviceStringMap[serviceStr] = servicePortName
 }
-
 func (p *proxier) deleteServiceByIP(serviceStr string) {
 	p.serviceStringMapMutex.Lock()
 	defer p.serviceStringMapMutex.Unlock()
-
 	delete(p.serviceStringMap, serviceStr)
 }
-
 func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
 		p.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategorySvcReject), p)
@@ -1249,17 +1141,14 @@ func (p *proxier) Run(stopCh <-chan struct{}) {
 		p.SyncLoop()
 	})
 }
-
 func (p *proxier) GetProxyProvider() k8sproxy.Provider {
 	// Return myself.
 	return p
 }
-
 func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool) {
 	namespacedName := apimachinerytypes.NamespacedName{Namespace: namespace, Name: serviceName}
 	p.serviceEndpointsMapsMutex.Lock()
 	defer p.serviceEndpointsMapsMutex.Unlock()
-
 	var flows []string
 	var groups []binding.GroupIDType
 	found := false
@@ -1268,14 +1157,12 @@ func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, [
 			continue
 		}
 		found = true
-
 		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
 		if !ok {
 			// Service flows not installed.
 			continue
 		}
 		svcInfo := installedSvcPort.(*types.ServiceInfo)
-
 		var epList []k8sproxy.Endpoint
 		endpoints, ok := p.endpointsMap[svcPortName]
 		if ok && len(endpoints) > 0 {
@@ -1284,10 +1171,8 @@ func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, [
 				epList = append(epList, ep)
 			}
 		}
-
 		svcFlows := p.ofClient.GetServiceFlowKeys(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, epList)
 		flows = append(flows, svcFlows...)
-
 		if groupID, ok := p.groupCounter.Get(svcPortName, false); ok {
 			groups = append(groups, groupID)
 		}
@@ -1295,16 +1180,13 @@ func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, [
 			groups = append(groups, groupID)
 		}
 	}
-
 	return flows, groups, found
 }
-
 func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if pktIn == nil {
 		return fmt.Errorf("empty packetin for Antrea Proxy")
 	}
 	matches := pktIn.GetMatches()
-
 	// Get Ethernet data.
 	ethernetPkt, err := openflow.GetEthernetPacket(pktIn)
 	if err != nil {
@@ -1312,7 +1194,6 @@ func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	}
 	srcMAC := ethernetPkt.HWDst.String()
 	dstMAC := ethernetPkt.HWSrc.String()
-
 	var (
 		srcIP, dstIP string
 		proto        uint8
@@ -1330,7 +1211,6 @@ func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		proto = ipPkt.NextHeader
 		isIPv6 = true
 	}
-
 	inPortField := matches.GetMatchByName(binding.OxmFieldInPort)
 	if inPortField == nil {
 		return fmt.Errorf("error when getting match field inPort")
@@ -1351,7 +1231,6 @@ func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		proto,
 		nil)
 }
-
 func newProxier(
 	hostname string,
 	serviceProxyName string,
@@ -1379,7 +1258,6 @@ func newProxier(
 	)
 	metrics.Register()
 	klog.V(2).Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
-
 	endpointSliceEnabled := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
 	if endpointSliceEnabled {
 		apiAvailable, err := k8sutil.EndpointSliceAPIAvailable(k8sClient)
@@ -1397,7 +1275,6 @@ func newProxier(
 	if isIPv6 {
 		ipFamily = corev1.IPv6Protocol
 	}
-
 	var serviceHealthServer healthcheck.ServiceHealthServer
 	if proxyAllEnabled {
 		if serviceHealthServerDisabled {
@@ -1410,7 +1287,6 @@ func newProxier(
 			serviceHealthServer = healthcheck.NewServiceHealthServer(hostname, nil, nodePortAddressesString)
 		}
 	}
-
 	// TODO: The label selector nonHeadlessServiceSelector was added to pass the Kubernetes e2e test
 	//  'Services should implement service.kubernetes.io/headless'. You can find the test case at:
 	//  https://github.com/kubernetes/kubernetes/blob/027ac5a426a261ba6b66a40e79e123e75e9baf5b/test/e2e/network/service.go#L2281
@@ -1424,7 +1300,6 @@ func newProxier(
 	}
 	serviceLabelSelector := labels.NewSelector()
 	serviceLabelSelector = serviceLabelSelector.Add(*serviceProxyNameSelector, *nonHeadlessServiceSelector)
-
 	p := &proxier{
 		nodeIPChecker:                     nodeIPChecker,
 		serviceConfig:                     config.NewServiceConfig(serviceInformer, resyncPeriod),
@@ -1454,7 +1329,6 @@ func newProxier(
 		supportNestedService:              supportNestedService,
 		defaultLoadBalancerMode:           defaultLoadBalancerMode,
 	}
-
 	p.serviceConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	if endpointSliceEnabled {
@@ -1470,7 +1344,6 @@ func newProxier(
 	}
 	return p, nil
 }
-
 // metaProxierWrapper wraps metaProxier, and implements the extra methods added
 // in interface Proxier.
 type metaProxierWrapper struct {
@@ -1478,19 +1351,15 @@ type metaProxierWrapper struct {
 	ipv6Proxier *proxier
 	metaProxier k8sproxy.Provider
 }
-
 func (p *metaProxierWrapper) GetProxyProvider() k8sproxy.Provider {
 	return p.metaProxier
 }
-
 func (p *metaProxierWrapper) GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool) {
 	v4Flows, v4Groups, v4Found := p.ipv4Proxier.GetServiceFlowKeys(serviceName, namespace)
 	v6Flows, v6Groups, v6Found := p.ipv6Proxier.GetServiceFlowKeys(serviceName, namespace)
-
 	// Return the unions of IPv4 and IPv6 flows and groups.
 	return append(v4Flows, v6Flows...), append(v4Groups, v6Groups...), v4Found || v6Found
 }
-
 func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
 	// Format of serviceStr is <clusterIP>:<svcPort>/<protocol>.
 	lastColonIndex := strings.LastIndex(serviceStr, ":")
@@ -1499,7 +1368,6 @@ func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.Service
 	}
 	return p.ipv4Proxier.GetServiceByIP(serviceStr)
 }
-
 func newDualStackProxier(
 	hostname string,
 	serviceProxyName string,
@@ -1573,10 +1441,8 @@ func newDualStackProxier(
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.
 	metaProxier := k8sproxy.NewMetaProxier(ipv4Proxier, ipv6Proxier)
-
 	return &metaProxierWrapper{ipv4Proxier, ipv6Proxier, metaProxier}, nil
 }
-
 func NewProxier(hostname string,
 	k8sClient clientset.Interface,
 	serviceInformer coreinformers.ServiceInformer,
@@ -1600,7 +1466,6 @@ func NewProxier(hostname string,
 	proxyLoadBalancerIPs := *proxyConfig.ProxyLoadBalancerIPs
 	serviceProxyName := proxyConfig.ServiceProxyName
 	serviceHealthServerDisabled := proxyConfig.DisableServiceHealthCheckServer
-
 	var proxier Proxier
 	var err error
 	switch {
@@ -1680,10 +1545,8 @@ func NewProxier(hostname string,
 	default:
 		return nil, fmt.Errorf("either IPv4 or IPv6 proxier, or both proxiers should be created")
 	}
-
 	return proxier, nil
 }
-
 func needClearConntrackEntries(protocol binding.Protocol) bool {
 	return protocol == binding.ProtocolUDP || protocol == binding.ProtocolUDPv6
 }

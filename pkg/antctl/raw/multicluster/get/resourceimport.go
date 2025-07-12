@@ -11,41 +11,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"context"
 	"fmt"
 	"strings"
-
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-<<<<<<< HEAD
 	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 	"antrea.io/antrea/v2/pkg/antctl/transform/resourceimport"
-=======
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
-	"antrea.io/antrea/pkg/antctl/transform/resourceimport"
->>>>>>> origin/main
+	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
+	"antrea.io/antrea/v2/pkg/antctl/transform/resourceimport"
 )
-
 type resourceImportOptions struct {
 	namespace     string
 	outputFormat  string
 	allNamespaces bool
 	k8sClient     client.Client
 }
-
 var options *resourceImportOptions
-
 var resourceImportExamples = strings.Trim(`
 Gel all ResourceImports of a ClusterSet in default Namespace
 $ antctl mc get resourceimport
@@ -58,7 +48,6 @@ $ antctl mc get resourceimport -o json
 Get the specified ResourceImport
 $ antctl mc get resourceimport <RESOURCEIMPORT> -n <NAMESPACE>
 `, "\n")
-
 func (o *resourceImportOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.allNamespaces {
 		o.namespace = metav1.NamespaceAll
@@ -70,7 +59,6 @@ func (o *resourceImportOptions) validateAndComplete(cmd *cobra.Command) error {
 		if err != nil {
 			return err
 		}
-
 		o.k8sClient, err = client.New(kubeconfig, client.Options{Scheme: scheme.Scheme})
 		if err != nil {
 			return err
@@ -78,7 +66,6 @@ func (o *resourceImportOptions) validateAndComplete(cmd *cobra.Command) error {
 	}
 	return nil
 }
-
 func NewResourceImportCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use: "resourceimport",
@@ -96,10 +83,8 @@ func NewResourceImportCommand() *cobra.Command {
 	command.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace of ResourceImports")
 	command.Flags().StringVarP(&o.outputFormat, "output", "o", "", "Output format. Supported formats: json|yaml")
 	command.Flags().BoolVarP(&o.allNamespaces, "all-namespaces", "A", false, "If present, list ResourceImports across all Namespaces")
-
 	return command
 }
-
 func runE(cmd *cobra.Command, args []string) error {
 	err := options.validateAndComplete(cmd)
 	if err != nil {
@@ -107,13 +92,10 @@ func runE(cmd *cobra.Command, args []string) error {
 	}
 	argsNum := len(args)
 	singleResource := argsNum > 0
-
 	if options.allNamespaces && singleResource {
 		return fmt.Errorf("a resource cannot be retrieved by name across all Namespaces")
 	}
-
 	var res interface{}
-
 	if singleResource {
 		resourceImportName := args[0]
 		resourceImport := multiclusterv1alpha1.ResourceImport{}
@@ -124,7 +106,6 @@ func runE(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-
 		gvks, unversioned, err := options.k8sClient.Scheme().ObjectKinds(&resourceImport)
 		if err != nil {
 			return err
@@ -149,6 +130,5 @@ func runE(cmd *cobra.Command, args []string) error {
 		}
 		res = resourceImportList.Items
 	}
-
 	return output(res, singleResource, options.outputFormat, cmd.OutOrStdout(), resourceimport.Transform)
 }

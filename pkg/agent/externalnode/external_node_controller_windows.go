@@ -11,29 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package externalnode
-
 import (
 	"fmt"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/agent/util/winnet"
 	"antrea.io/antrea/v2/pkg/signals"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/agent/util/winnet"
-	"antrea.io/antrea/pkg/signals"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util/winnet"
+	"antrea.io/antrea/v2/pkg/signals"
 )
-
 var winnetUtil winnet.Interface = &winnet.Handle{}
-
 // moveIFConfigurations returns nil for single interface case, as it relies
 // on Windows New-VMSwitch command to create a host network adapter and copy
 // the uplink adapter configurations to host adapter.
@@ -46,7 +37,6 @@ var winnetUtil winnet.Interface = &winnet.Handle{}
 func (c *ExternalNodeController) moveIFConfigurations(adapterConfig *config.AdapterNetConfig, src string, dst string) error {
 	return nil
 }
-
 // TODO: Handle for multiple interfaces
 // For multiple interfaces, should remove VMSwitch only
 // when the last interface is deleted from the ExternalNode.
@@ -54,7 +44,6 @@ func (c *ExternalNodeController) removeExternalNodeConfig() error {
 	if ovsErr := c.ovsBridgeClient.Delete(); ovsErr != nil {
 		klog.ErrorS(ovsErr, "Failed to delete OVS bridge")
 	}
-
 	if err := winnetUtil.RemoveVMSwitch(util.LocalVMSwitch); err != nil {
 		return fmt.Errorf("failed to delete VM Switch, err: %v", err)
 	}

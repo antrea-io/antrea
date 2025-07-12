@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,25 +13,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 func TestCheckUnsupportedFeatures(t *testing.T) {
 	testCases := []struct {
 		desc   string
@@ -83,7 +74,6 @@ func TestCheckUnsupportedFeatures(t *testing.T) {
 			false,
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			o := &Options{config: &tc.config}

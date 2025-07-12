@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipam
-
 import (
 	"fmt"
 	"net"
 	"strings"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -26,32 +23,26 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
-
-<<<<<<< HEAD
-	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	annotation "antrea.io/antrea/v2/pkg/ipam"
 	"antrea.io/antrea/v2/pkg/ipam/poolallocator"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	annotation "antrea.io/antrea/pkg/ipam"
-	"antrea.io/antrea/pkg/ipam/poolallocator"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	annotation "antrea.io/antrea/v2/pkg/ipam"
+	"antrea.io/antrea/v2/pkg/ipam/poolallocator"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	controllerName = "AntreaIPAMController"
 	// Pod index name for IPPool cache.
 	podIndex = "pod"
 )
-
 // Antrea IPAM Controller maintains map of Namespace annotations using
 // Namespace informer. In future, which Antrea IPAM support expands,
 // this controller can be used to store annotations for other objects,
@@ -65,7 +56,6 @@ type AntreaIPAMController struct {
 	podInformer       cache.SharedIndexInformer
 	podLister         corelisters.PodLister
 }
-
 func podIndexFunc(obj interface{}) ([]string, error) {
 	ipPool, ok := obj.(*crdv1b1.IPPool)
 	if !ok {
@@ -79,7 +69,6 @@ func podIndexFunc(obj interface{}) ([]string, error) {
 	}
 	return podNames.UnsortedList(), nil
 }
-
 func InitializeAntreaIPAMController(crdClient clientsetversioned.Interface,
 	namespaceInformer coreinformers.NamespaceInformer,
 	ipPoolInformer crdinformers.IPPoolInformer,
@@ -90,10 +79,8 @@ func InitializeAntreaIPAMController(crdClient clientsetversioned.Interface,
 	if antreaIPAMDriver == nil {
 		return nil, fmt.Errorf("Antrea IPAM driver failed to initialize")
 	}
-
 	var antreaIPAMController *AntreaIPAMController
 	ipPoolInformer.Informer().AddIndexers(cache.Indexers{podIndex: podIndexFunc})
-
 	// Create podInformer/Lister and namespaceInformer/Lister if need to read the AntreaIPAM
 	// annotation on Pods and Namespaces.
 	if ipamAnnotations {
@@ -115,14 +102,12 @@ func InitializeAntreaIPAMController(crdClient clientsetversioned.Interface,
 	}
 	return antreaIPAMController, nil
 }
-
 // Run starts to watch and process Namespace updates for the Node where Antrea Agent
 // is running, and maintain a mapping between Namespace name and IPAM annotations.
 func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 	defer func() {
 		klog.V(2).InfoS("Shutting down", "controller", controllerName)
 	}()
-
 	klog.InfoS("Starting", "controller", controllerName)
 	cacheSyncs := []cache.InformerSynced{c.ipPoolInformer.Informer().HasSynced}
 	if c.podInformer != nil && c.namespaceInformer != nil {
@@ -132,10 +117,8 @@ func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 		return
 	}
 	antreaIPAMDriver.setController(c)
-
 	<-stopCh
 }
-
 // Look up IPPools from the Pod annotation.
 func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string, []net.IP, *crdv1b1.IPAddressOwner, error) {
 	var ips []net.IP
@@ -144,7 +127,6 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	annotations, exists := pod.Annotations[annotation.AntreaIPAMAnnotationKey]
 	if !exists {
 		// Find IPPool by Namespace
@@ -157,7 +139,6 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 			return nil, nil, nil, nil
 		}
 	}
-
 	// Collect specified IPs if exist
 	ipStrings := pod.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
 	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
@@ -174,7 +155,6 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 			ips = append(ips, ip)
 		}
 	}
-
 ownerReferenceLoop:
 	for _, ownerReference := range pod.OwnerReferences {
 		if ownerReference.Controller != nil && *ownerReference.Controller {
@@ -196,10 +176,8 @@ ownerReferenceLoop:
 			}
 		}
 	}
-
 	return strings.Split(annotations, annotation.AntreaIPAMAnnotationDelimiter), ips, reservedOwner, ipErr
 }
-
 // Look up IPPools from the Pod annotation.
 func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) (mineType, *poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
 	poolNames, ips, reservedOwner, err := c.getIPPoolsByPod(namespace, podName)
@@ -208,7 +186,6 @@ func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) 
 	} else if len(poolNames) == 0 {
 		return mineFalse, nil, nil, nil, nil
 	}
-
 	var allocator *poolallocator.IPPoolAllocator
 	for _, p := range poolNames {
 		allocator, err = poolallocator.NewIPPoolAllocator(p, c.crdClient, c.ipPoolLister)
@@ -227,10 +204,8 @@ func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) 
 	if err == nil && allocator == nil {
 		err = fmt.Errorf("no valid IPPool found")
 	}
-
 	return mineTrue, allocator, ips, reservedOwner, err
 }
-
 // Look up IPPools by matching PodOwnder.
 func (c *AntreaIPAMController) getPoolAllocatorsByOwner(podOwner *crdv1b1.PodOwner) ([]*poolallocator.IPPoolAllocator, error) {
 	var allocators []*poolallocator.IPPoolAllocator
@@ -251,7 +226,6 @@ func (c *AntreaIPAMController) getPoolAllocatorsByOwner(podOwner *crdv1b1.PodOwn
 	}
 	return allocators, nil
 }
-
 func (c *AntreaIPAMController) getPoolAllocatorByName(poolName string) (*poolallocator.IPPoolAllocator, error) {
 	return poolallocator.NewIPPoolAllocator(poolName, c.crdClient, c.ipPoolLister)
 }

@@ -11,23 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
-=======
-	"antrea.io/antrea/pkg/agent/util"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util"
 )
-
 func TestGetAvailableNodePortAddresses(t *testing.T) {
 	testCases := []struct {
 		name                        string
@@ -56,7 +48,6 @@ func TestGetAvailableNodePortAddresses(t *testing.T) {
 	defer func() {
 		getAllNodeAddresses = util.GetAllNodeAddresses
 	}()
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			gotIPv4, gotIPv6, err := getAvailableNodePortAddresses(tc.nodePortAddressesFromConfig, []string{"antrea-egress0", "antrea-ingress0", "kube-ipvs0", "antrea-gw0"})
@@ -66,7 +57,6 @@ func TestGetAvailableNodePortAddresses(t *testing.T) {
 		})
 	}
 }
-
 func TestParsePortRange(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -122,7 +112,6 @@ func TestParsePortRange(t *testing.T) {
 			}
 			assert.Equal(t, tc.expectedStart, start)
 			assert.Equal(t, tc.expectedEnd, end)
-
 		})
 	}
 }

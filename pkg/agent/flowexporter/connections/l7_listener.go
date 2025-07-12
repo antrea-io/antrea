@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"bufio"
 	"encoding/json"
@@ -25,32 +23,24 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
 	"antrea.io/antrea/v2/pkg/util/podstore"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	k8sutil "antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/podstore"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/podstore"
 )
-
 type PodL7FlowExporterAttrGetter interface {
 	IsL7FlowExporterRequested(podNN string, ingress bool) bool
 }
-
 // L7ProtocolFields holds layer 7 protocols supported
 type L7ProtocolFields struct {
 	http map[int32]*Http
 }
-
 // Http holds the L7 HTTP flow JSON values.
 type Http struct {
 	Hostname      string `json:"hostname"`
@@ -62,7 +52,6 @@ type Http struct {
 	Status        int32  `json:"status"`
 	ContentLength int32  `json:"length"`
 }
-
 // JsonToEvent holds Suricata event JSON values.
 // See https://docs.suricata.io/en/latest/output/eve/eve-json-format.html?highlight=HTTP%20event#event-types
 type JsonToEvent struct {
@@ -79,7 +68,6 @@ type JsonToEvent struct {
 	TxID        int32      `json:"tx_id"`
 	HTTP        *Http      `json:"http"`
 }
-
 type L7Listener struct {
 	l7Events                    map[flowexporter.ConnectionKey]L7ProtocolFields
 	l7mut                       sync.Mutex
@@ -87,7 +75,6 @@ type L7Listener struct {
 	podL7FlowExporterAttrGetter PodL7FlowExporterAttrGetter
 	podStore                    podstore.Interface
 }
-
 func NewL7Listener(
 	podL7FlowExporterAttrGetter PodL7FlowExporterAttrGetter,
 	podStore podstore.Interface) *L7Listener {
@@ -98,13 +85,11 @@ func NewL7Listener(
 		podStore:                    podStore,
 	}
 }
-
 func (l *L7Listener) Run(stopCh <-chan struct{}) {
 	wait.Until(func() {
 		l.listenAndAcceptConn(stopCh)
 	}, 5*time.Second, stopCh)
 }
-
 func (l *L7Listener) listenAndAcceptConn(stopCh <-chan struct{}) {
 	// Remove stale connections
 	if err := os.Remove(l.suricataEventSocketPath); err != nil && !os.IsNotExist(err) {
@@ -149,7 +134,6 @@ func (l *L7Listener) listenAndAcceptConn(stopCh <-chan struct{}) {
 	case <-errCh:
 	}
 }
-
 func (l *L7Listener) handleClientConnection(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
@@ -169,7 +153,6 @@ func (l *L7Listener) handleClientConnection(conn net.Conn) {
 		}
 	}
 }
-
 func (l *L7Listener) processLog(data []byte) error {
 	var event JsonToEvent
 	err := json.Unmarshal(data, &event)
@@ -184,7 +167,6 @@ func (l *L7Listener) processLog(data []byte) error {
 	}
 	return nil
 }
-
 func (l *L7Listener) addOrUpdateL7EventMap(event *JsonToEvent) error {
 	protocol, err := flowexporter.LookupProtocolMap(event.Proto)
 	if err != nil {
@@ -232,7 +214,6 @@ func (l *L7Listener) addOrUpdateL7EventMap(event *JsonToEvent) error {
 	}
 	return nil
 }
-
 func (l *L7Listener) ConsumeL7EventMap() map[flowexporter.ConnectionKey]L7ProtocolFields {
 	l.l7mut.Lock()
 	defer l.l7mut.Unlock()

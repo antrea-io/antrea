@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"fmt"
 	"strings"
 	"testing"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	annotation "antrea.io/antrea/v2/pkg/ipam"
 	e2eutils "antrea.io/antrea/v2/test/e2e/utils"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	annotation "antrea.io/antrea/pkg/ipam"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	annotation "antrea.io/antrea/v2/pkg/ipam"
 	e2eutils "antrea.io/antrea/test/e2e/utils"
->>>>>>> origin/main
 )
-
 // initializeAntreaIPAM must be called after Namespace in antreaIPAMNamespaces created
 func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	podsPerNamespace = []string{"a", "b", "c"}
@@ -56,7 +48,6 @@ func initializeAntreaIPAM(t *testing.T, data *TestData) {
 			podsByNamespace[ns.Name] = append(podsByNamespace[ns.Name], NewPod(ns.Name, podName))
 		}
 	}
-
 	var err error
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
@@ -67,18 +58,15 @@ func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	failOnError(err, t)
 	podIPs = ips
 }
-
 func TestAntreaIPAMAntreaPolicy(t *testing.T) {
 	skipIfNotAntreaIPAMTest(t)
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	// Create AntreaIPAM IPPool and test Namespace
 	for _, namespace := range antreaIPAMNamespaces {
 		ipPool, err := createIPPool(t, data, namespace)
@@ -95,7 +83,6 @@ func TestAntreaIPAMAntreaPolicy(t *testing.T) {
 		defer deleteAntreaIPAMNamespace(t, data, namespace)
 	}
 	initializeAntreaIPAM(t, data)
-
 	t.Run("TestGroupNoK8sNP", func(t *testing.T) {
 		// testcases below do not depend on underlying default-deny K8s NetworkPolicies.
 		t.Run("Case=ACNPAllowNoDefaultIsolationTCP", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t, e2eutils.ProtocolTCP) })
@@ -107,12 +94,10 @@ func TestAntreaIPAMAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPIngressDrop", func(t *testing.T) { testAntreaIPAMACNP(t, e2eutils.ProtocolTCP, Dropped, true) })
 		t.Run("Case=ACNPIngressDropUDP", func(t *testing.T) { testAntreaIPAMACNP(t, e2eutils.ProtocolUDP, Dropped, true) })
 		t.Run("Case=ACNPIngressDropSCTP", func(t *testing.T) { testAntreaIPAMACNP(t, e2eutils.ProtocolSCTP, Dropped, true) })
-
 		t.Run("Case=ACNPEgressReject", func(t *testing.T) { testAntreaIPAMACNP(t, e2eutils.ProtocolTCP, Rejected, false) })
 		t.Run("Case=ACNPEgressRejectUDP", func(t *testing.T) { testAntreaIPAMACNP(t, e2eutils.ProtocolUDP, Rejected, false) })
 		t.Run("Case=ACNPIngressReject", func(t *testing.T) { testAntreaIPAMACNP(t, e2eutils.ProtocolTCP, Rejected, true) })
 		t.Run("Case=ACNPIngressRejectUDP", func(t *testing.T) { testAntreaIPAMACNP(t, e2eutils.ProtocolUDP, Rejected, true) })
-
 		t.Run("Case=RejectServiceTrafficAntreaIPAMToAntreaIPAM", func(t *testing.T) {
 			testRejectServiceTraffic(t, data, testAntreaIPAMNamespace, testAntreaIPAMNamespace)
 		})
@@ -132,7 +117,6 @@ func TestAntreaIPAMAntreaPolicy(t *testing.T) {
 		t.Run("Case=RejectServiceTrafficAntreaIPAMVLAN11ToAntreaIPAMVLAN12", func(t *testing.T) {
 			testRejectServiceTraffic(t, data, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12)
 		})
-
 		t.Run("Case=RejectNoInfiniteLoopAntreaIPAMToAntreaIPAM", func(t *testing.T) {
 			testRejectNoInfiniteLoop(t, data, testAntreaIPAMNamespace, testAntreaIPAMNamespace)
 		})
@@ -152,17 +136,14 @@ func TestAntreaIPAMAntreaPolicy(t *testing.T) {
 		t.Run("Case=RejectNoInfiniteLoopAntreaIPAMVLAN11ToAntreaIPAMVLAN12", func(t *testing.T) {
 			testRejectNoInfiniteLoop(t, data, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12)
 		})
-
 		t.Run("Case=ACNPAntreaIPAMNodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data, testAntreaIPAMNamespace) })
 		t.Run("Case=ACNPAntreaIPAMVLAN11NodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data, testAntreaIPAMNamespace11) })
 		t.Run("Case=ACNPAntreaIPAMMulticast", func(t *testing.T) { testMulticastNP(t, data, testAntreaIPAMNamespace) })
 	})
 	// print results for reachability tests
 	printResults()
-
 	k8sUtils.Cleanup(namespaces)
 }
-
 func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, action PodConnectivityMark, isIngress bool) {
 	if protocol == e2eutils.ProtocolSCTP {
 		// SCTP testing is failing on our IPv6 CI testbeds at the moment. This seems to be
@@ -217,7 +198,6 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		builder2.AddEgress(ruleBuilder)
 		builder3.AddEgress(ruleBuilder)
 	}
-
 	reachability := NewReachability(allPods, action)
 	reachability.ExpectSelf(allPods, Connected)
 	testStep := []*TestStep{

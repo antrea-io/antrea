@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"math"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -30,20 +27,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	queriermock "antrea.io/antrea/v2/pkg/controller/networkpolicy/testing"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	queriermock "antrea.io/antrea/pkg/controller/networkpolicy/testing"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	queriermock "antrea.io/antrea/v2/pkg/controller/networkpolicy/testing"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 )
-
 // pods represent kubernetes pods for testing proper query results
 var pods = []*corev1.Pod{
 	{
@@ -91,13 +83,11 @@ var pods = []*corev1.Pod{
 		},
 	},
 }
-
 // polices represent kubernetes policies for testing proper query results
 //
 // policy 0: select all matching pods and allow ingress and egress from matching pods
 // policy 1: select all matching pods and deny default egress
 // policy 2: select all matching pods and allow ingress from multiple matching pods
-
 var policies = []*networkingv1.NetworkPolicy{
 	{
 		ObjectMeta: metav1.ObjectMeta{
@@ -185,7 +175,6 @@ var policies = []*networkingv1.NetworkPolicy{
 		},
 	},
 }
-
 var namespaces = []*corev1.Namespace{
 	{
 		ObjectMeta: metav1.ObjectMeta{
@@ -194,7 +183,6 @@ var namespaces = []*corev1.Namespace{
 		},
 	},
 }
-
 func makeControllerAndEndpointQuerier(objects ...runtime.Object) *EndpointQuerierImpl {
 	// create controller
 	_, c := newController(objects, nil)
@@ -227,13 +215,11 @@ func makeControllerAndEndpointQuerier(objects ...runtime.Object) *EndpointQuerie
 	<-stopCh
 	return querier
 }
-
 func TestQueryNetworkPolicyRules(t *testing.T) {
 	policyRef := controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: policies[0].Namespace, Name: policies[0].Name, UID: policies[0].UID}
 	policyRef1 := controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: policies[1].Namespace, Name: policies[1].Name, UID: policies[1].UID}
 	policyRef2 := controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: policies[2].Namespace, Name: policies[2].Name, UID: policies[2].UID}
 	ns, podA := "testNamespace", "podA"
-
 	testCases := []struct {
 		name             string
 		objs             []runtime.Object
@@ -315,7 +301,6 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 			},
 		},
 	}
-
 	evaluateResponse := func(expectedRules, responseRules []*antreatypes.RuleInfo) {
 		assert.Equal(t, len(expectedRules), len(responseRules))
 		for idx := range expectedRules {
@@ -325,7 +310,6 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 			assert.Equal(t, expectedRules[idx].Policy.SourceRef, responseRules[idx].Policy.SourceRef)
 		}
 	}
-
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -351,7 +335,6 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 		})
 	}
 }
-
 type AccessTestCase struct {
 	name              string
 	request           *controlplane.NetworkPolicyEvaluationRequest
@@ -359,12 +342,10 @@ type AccessTestCase struct {
 	expectedResult    *controlplane.NetworkPolicyEvaluationResponse
 	expectedErr       string
 }
-
 type mockResponse struct {
 	response *antreatypes.EndpointNetworkPolicyRules
 	error    error
 }
-
 func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	namespace, pod1, pod2 := "ns", "pod1", "pod2"
@@ -375,7 +356,6 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 	argsMock := []string{namespace, pod1, namespace, pod2}
 	uid1, uid2 := types.UID(fmt.Sprint(111)), types.UID(fmt.Sprint(222))
 	priority1, priority2, defaultPriority, tierEmergency := float64(10), float64(15), float64(-1), int32(50)
-
 	// functions used to generate mock responses
 	generatePolicies := func(policyUID types.UID, policyType controlplane.NetworkPolicyType, direction controlplane.Direction, tierPriority *int32, policyPriority *float64, numRules int, action *crdv1beta1.RuleAction) []*antreatypes.NetworkPolicy {
 		rules := make([]controlplane.NetworkPolicyRule, numRules)
@@ -421,7 +401,6 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 		}
 		return endpointRule
 	}
-
 	expectedResponse111 := controlplane.NetworkPolicyEvaluationResponse{
 		NetworkPolicy: controlplane.NetworkPolicyReference{Type: controlplane.AntreaNetworkPolicy, Namespace: namespace, Name: "Policy111", UID: uid1},
 		RuleIndex:     0,
@@ -432,7 +411,6 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 		RuleIndex:     0,
 		Rule:          controlplane.RuleRef{Direction: controlplane.DirectionIn, Name: "Policy222Rule0", Action: &allowAction},
 	}
-
 	testCases := []AccessTestCase{
 		{
 			name:    "Pass rule fallthrough",
@@ -579,7 +557,6 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			expectedErr: "invalid NetworkPolicyEvaluation request entities",
 		},
 	}
-
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -601,7 +578,6 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			} else {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			}
-
 		})
 	}
 }

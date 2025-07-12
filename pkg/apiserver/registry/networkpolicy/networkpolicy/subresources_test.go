@@ -11,39 +11,28 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"context"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 )
-
 type fakeCollector struct {
 	gotStatus *controlplane.NetworkPolicyStatus
 }
-
 func (f *fakeCollector) UpdateStatus(status *controlplane.NetworkPolicyStatus) error {
 	f.gotStatus = status
 	return nil
 }
-
 func TestStatusREST(t *testing.T) {
 	r := NewStatusREST(nil)
 	assert.Equal(t, &controlplane.NetworkPolicyStatus{}, r.New())
 }
-
 func TestStatusRESTCreate(t *testing.T) {
 	tests := []struct {
 		name                string

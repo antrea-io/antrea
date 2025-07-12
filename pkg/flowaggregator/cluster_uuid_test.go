@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowaggregator
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/kubernetes/fake"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/clusteridentity"
-=======
-	"antrea.io/antrea/pkg/clusteridentity"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/clusteridentity"
 )
-
 func TestGetClusterUUID(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
@@ -40,7 +32,6 @@ func TestGetClusterUUID(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go clusterIdentityAllocator.Run(stopCh)
-
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	_, err := GetClusterUUID(ctx, client)

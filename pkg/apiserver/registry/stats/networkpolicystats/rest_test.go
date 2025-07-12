@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicystats
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -27,20 +24,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
-
-<<<<<<< HEAD
-	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 type fakeStatsProvider struct {
 	stats map[string]map[string]statsv1alpha1.NetworkPolicyStats
 }
-
 func (p *fakeStatsProvider) ListNetworkPolicyStats(namespace string) []statsv1alpha1.NetworkPolicyStats {
 	var list []statsv1alpha1.NetworkPolicyStats
 	if namespace == "" {
@@ -57,7 +48,6 @@ func (p *fakeStatsProvider) ListNetworkPolicyStats(namespace string) []statsv1al
 	}
 	return list
 }
-
 func (p *fakeStatsProvider) GetNetworkPolicyStats(namespace, name string) (*statsv1alpha1.NetworkPolicyStats, bool) {
 	m, exists := p.stats[namespace][name]
 	if !exists {
@@ -65,14 +55,12 @@ func (p *fakeStatsProvider) GetNetworkPolicyStats(namespace, name string) (*stat
 	}
 	return &m, true
 }
-
 func TestREST(t *testing.T) {
 	r := NewREST(nil)
 	assert.Equal(t, &statsv1alpha1.NetworkPolicyStats{}, r.New())
 	assert.Equal(t, &statsv1alpha1.NetworkPolicyStatsList{}, r.NewList())
 	assert.True(t, r.NamespaceScoped())
 }
-
 func TestRESTGet(t *testing.T) {
 	tests := []struct {
 		name                      string
@@ -132,7 +120,6 @@ func TestRESTGet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.NetworkPolicyStats, tt.networkPolicyStatsEnabled)
-
 			r := &REST{
 				statsProvider: &fakeStatsProvider{stats: tt.stats},
 			}
@@ -147,7 +134,6 @@ func TestRESTGet(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTList(t *testing.T) {
 	tests := []struct {
 		name                      string
@@ -298,7 +284,6 @@ func TestRESTList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.NetworkPolicyStats, tt.networkPolicyStatsEnabled)
-
 			r := &REST{
 				statsProvider: &fakeStatsProvider{stats: tt.stats},
 			}
@@ -317,7 +302,6 @@ func TestRESTList(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTConvertToTable(t *testing.T) {
 	stats := &statsv1alpha1.NetworkPolicyStats{
 		ObjectMeta: metav1.ObjectMeta{

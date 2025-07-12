@@ -11,30 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package providers
-
 import (
 	"flag"
 	"fmt"
 	"os"
 	"path"
-
 	"github.com/kevinburke/ssh_config"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/test/e2e/providers/exec"
-=======
 	"antrea.io/antrea/test/e2e/providers/exec"
->>>>>>> origin/main
 )
-
 var (
 	homedir, _       = os.UserHomeDir()
 	sshConfig        = flag.String("remote.sshconfig", path.Join(homedir, ".ssh", "config"), "Path of the sshconfig")
 	remoteKubeconfig = flag.String("remote.kubeconfig", path.Join(homedir, ".kube", "config"), "Path of the kubeconfig of the cluster")
 )
-
 func getSSHConfig() (*ssh_config.Config, error) {
 	info, err := os.Stat(*sshConfig)
 	if err != nil {
@@ -50,11 +41,9 @@ func getSSHConfig() (*ssh_config.Config, error) {
 	defer f.Close()
 	return ssh_config.Decode(f)
 }
-
 type RemoteProvider struct {
 	sshConfig *ssh_config.Config
 }
-
 func (p *RemoteProvider) RunCommandOnNode(nodeName string, cmd string) (code int, stdout string, stderr string, err error) {
 	host, clientCfg, err := convertConfig(p.sshConfig, nodeName)
 	if err != nil {
@@ -62,7 +51,6 @@ func (p *RemoteProvider) RunCommandOnNode(nodeName string, cmd string) (code int
 	}
 	return exec.RunSSHCommand(host, clientCfg, cmd, nil, "", false)
 }
-
 func (p *RemoteProvider) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]string, stdin string, sudo bool) (
 	code int, stdout, stderr string, err error) {
 	host, clientCfg, err := convertConfig(p.sshConfig, nodeName)
@@ -71,11 +59,9 @@ func (p *RemoteProvider) RunCommandOnNodeExt(nodeName, cmd string, envs map[stri
 	}
 	return exec.RunSSHCommand(host, clientCfg, cmd, envs, stdin, sudo)
 }
-
 func (p *RemoteProvider) GetKubeconfigPath() (string, error) {
 	return *remoteKubeconfig, nil
 }
-
 // NewRemoteProvider returns an implementation of ProviderInterface which enables tests to run on a remote cluster.
 // configPath is unused for the remote provider
 func NewRemoteProvider(configPath string) (ProviderInterface, error) {

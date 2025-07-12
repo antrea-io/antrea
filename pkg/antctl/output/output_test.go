@@ -11,51 +11,41 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package output
-
 import (
 	"bytes"
 	"fmt"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
 	agentapis "antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/antctl/transform/addressgroup"
 	"antrea.io/antrea/v2/pkg/antctl/transform/appliedtogroup"
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 	"antrea.io/antrea/v2/pkg/antctl/transform/controllerinfo"
 	"antrea.io/antrea/v2/pkg/antctl/transform/networkpolicy"
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
-=======
-	agentapis "antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
-	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
-	"antrea.io/antrea/pkg/antctl/transform/common"
-	"antrea.io/antrea/pkg/antctl/transform/controllerinfo"
-	"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/apis"
->>>>>>> origin/main
+	agentapis "antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/antctl/transform/addressgroup"
+	"antrea.io/antrea/v2/pkg/antctl/transform/appliedtogroup"
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
+	"antrea.io/antrea/v2/pkg/antctl/transform/controllerinfo"
+	"antrea.io/antrea/v2/pkg/antctl/transform/networkpolicy"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/apis"
 )
-
 type Foobar struct {
 	Foo string `json:"foo"`
 }
-
 var (
 	AntreaPolicyTierPriority = int32(250)
 	AntreaPolicyPriority     = float64(1.0)
 )
-
 func TestCommandList_tableOutputForGetCommands(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
@@ -349,7 +339,6 @@ node2 192.168.1.3 Dead
 		})
 	}
 }
-
 func TestTableOutputForQueryEndpoint(t *testing.T) {
 	policyRef0 := cpv1beta.NetworkPolicyReference{Namespace: "testNamespace", Name: "test-ingress-egress", UID: "uid-1", Type: cpv1beta.AntreaNetworkPolicy}
 	policyRef1 := cpv1beta.NetworkPolicyReference{Namespace: "testNamespace", Name: "default-deny-egress", UID: "uid-2", Type: cpv1beta.AntreaNetworkPolicy}
@@ -367,11 +356,8 @@ func TestTableOutputForQueryEndpoint(t *testing.T) {
 			},
 			expected: `Endpoint testNamespace/podA
 Applied Policies on Endpoint: None
-
 Egress Rules Referencing Endpoint as Destination: None
-
 Ingress Rules Referencing Endpoint as Source: None
-
 `,
 		},
 		{
@@ -395,15 +381,12 @@ Ingress Rules Referencing Endpoint as Source: None
 Applied Policies on Endpoint:
 Name                Namespace     UID  
 test-ingress-egress testNamespace uid-1
-
 Egress Rules Referencing Endpoint as Destination:
 Name                Namespace     Index UID  
 test-ingress-egress testNamespace 0     uid-1
-
 Ingress Rules Referencing Endpoint as Source:
 Name                Namespace     Index UID  
 test-ingress-egress testNamespace 0     uid-1
-
 `,
 		},
 		{
@@ -430,15 +413,12 @@ Applied Policies on Endpoint:
 Name                Namespace     UID  
 default-deny-egress testNamespace uid-2
 test-ingress-egress testNamespace uid-1
-
 Egress Rules Referencing Endpoint as Destination:
 Name                Namespace     Index UID  
 test-ingress-egress testNamespace 0     uid-1
-
 Ingress Rules Referencing Endpoint as Source:
 Name                Namespace     Index UID  
 test-ingress-egress testNamespace 0     uid-1
-
 `,
 		},
 	}

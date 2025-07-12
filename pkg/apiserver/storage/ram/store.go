@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ram
-
 import (
 	"context"
 	"fmt"
 	"sync"
 	"time"
-
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,14 +25,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-
-<<<<<<< HEAD
 	antreastorage "antrea.io/antrea/v2/pkg/apiserver/storage"
-=======
-	antreastorage "antrea.io/antrea/pkg/apiserver/storage"
->>>>>>> origin/main
+	antreastorage "antrea.io/antrea/v2/pkg/apiserver/storage"
 )
-
 const (
 	// watcherChanSize is the buffer size of watchers.
 	watcherChanSize = 1000
@@ -43,9 +35,7 @@ const (
 	// Watchers whose buffer can't be available in it will be terminated.
 	watcherAddTimeout = 50 * time.Millisecond
 )
-
 type watchersMap map[int]*storeWatcher
-
 // store implements ram.Interface, serving the requests for a given resource from its internal cache storage.
 type store struct {
 	// watcherMutex protects the watchers map from concurrent access during watcher insertion and deletion.
@@ -57,7 +47,6 @@ type store struct {
 	incomingHWM storage.HighWaterMark
 	// incoming stores the incoming events that should be dispatched to watchers.
 	incoming chan antreastorage.InternalEvent
-
 	// storage is the underlying storage.
 	storage cache.Indexer
 	// keyFunc is used to get a key in the underlying storage for a given object.
@@ -68,7 +57,6 @@ type store struct {
 	genEventFunc antreastorage.GenEventFunc
 	// newFunc is a function that creates new empty object of this type.
 	newFunc func() runtime.Object
-
 	// resourceVersion up to which the store has generated.
 	resourceVersion uint64
 	// watcherIdx is the index that will be allocated to next watcher and used as key in watchersMap
@@ -76,13 +64,11 @@ type store struct {
 	watcherIdx int
 	// watchers is a mapping from the index of a watcher to the watcher.
 	watchers watchersMap
-
 	stopCh chan struct{}
 	// timer is used when sending events to watchers. Hold it here to avoid unnecessary
 	// re-allocation for each event.
 	timer clock.Timer
 }
-
 func newStoreWithClock(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc, selectorFunc antreastorage.SelectFunc, newFunc func() runtime.Object, clock clock.Clock) *store {
 	stopCh := make(chan struct{})
 	storage := cache.NewIndexer(keyFunc, indexers)
@@ -102,11 +88,9 @@ func newStoreWithClock(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventF
 		timer:        timer,
 		newFunc:      newFunc,
 	}
-
 	go s.dispatchEvents()
 	return s
 }
-
 // NewStore creates a store based on the provided KeyFunc, Indexers, and GenEventFunc.
 // KeyFunc decides how to get the key from an object.
 // Indexers decides how to build indices for an object.
@@ -114,14 +98,12 @@ func newStoreWithClock(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventF
 func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc, selectorFunc antreastorage.SelectFunc, newFunc func() runtime.Object) *store {
 	return newStoreWithClock(keyFunc, indexers, genEventFunc, selectorFunc, newFunc, clock.RealClock{})
 }
-
 // nextResourceVersion increments the resourceVersion and returns it.
 // It is not thread safe and should be called while holding a lock on eventMutex.
 func (s *store) nextResourceVersion() uint64 {
 	s.resourceVersion++
 	return s.resourceVersion
 }
-
 func (s *store) processEvent(event antreastorage.InternalEvent) {
 	if curLen := int64(len(s.incoming)); s.incomingHWM.Update(curLen) {
 		// Monitor if this gets backed up, and how much.
@@ -129,32 +111,27 @@ func (s *store) processEvent(event antreastorage.InternalEvent) {
 	}
 	s.incoming <- event
 }
-
 // Get returns the object matching the provided key along with a boolean value
 // indicating of its presence in the store and an error, if any.
 func (s *store) Get(key string) (interface{}, bool, error) {
 	return s.storage.GetByKey(key)
 }
-
 // GetByIndex returns the objects which match the indexer or the error encountered.
 func (s *store) GetByIndex(indexName, indexKey string) ([]interface{}, error) {
 	return s.storage.ByIndex(indexName, indexKey)
 }
-
 // Create stores the object in internal cache storage.
 func (s *store) Create(obj interface{}) error {
 	key, err := s.keyFunc(obj)
 	if err != nil {
 		return fmt.Errorf("couldn't get key for object %+v: %v", obj, err)
 	}
-
 	s.eventMutex.Lock()
 	defer s.eventMutex.Unlock()
 	_, exists, _ := s.storage.GetByKey(key)
 	if exists {
 		return fmt.Errorf("object %+v already exists in storage", obj)
 	}
-
 	var event antreastorage.InternalEvent
 	if s.genEventFunc != nil {
 		event, err = s.genEventFunc(key, nil, obj, s.nextResourceVersion())
@@ -162,7 +139,6 @@ func (s *store) Create(obj interface{}) error {
 			return fmt.Errorf("error generating event for Create operation of object %+v: %v", obj, err)
 		}
 	}
-
 	// The object has been verified with keyFunc in the beginning, can never encounter any error.
 	s.storage.Add(obj)
 	if event != nil {
@@ -170,21 +146,18 @@ func (s *store) Create(obj interface{}) error {
 	}
 	return nil
 }
-
 // Update updates the store with the latest copy of the object, if it exists.
 func (s *store) Update(obj interface{}) error {
 	key, err := s.keyFunc(obj)
 	if err != nil {
 		return fmt.Errorf("couldn't get key for object %+v: %v", obj, err)
 	}
-
 	s.eventMutex.Lock()
 	defer s.eventMutex.Unlock()
 	prevObj, exists, _ := s.storage.GetByKey(key)
 	if !exists {
 		return fmt.Errorf("object %+v not found in storage", obj)
 	}
-
 	var event antreastorage.InternalEvent
 	if s.genEventFunc != nil {
 		event, err = s.genEventFunc(key, prevObj, obj, s.nextResourceVersion())
@@ -192,19 +165,16 @@ func (s *store) Update(obj interface{}) error {
 			return fmt.Errorf("error generating event for Update operation of object %+v: %v", obj, err)
 		}
 	}
-
 	s.storage.Update(obj)
 	if event != nil {
 		s.processEvent(event)
 	}
 	return nil
 }
-
 // List returns a list of all the objects.
 func (s *store) List() []interface{} {
 	return s.storage.List()
 }
-
 // Delete deletes the object from internal cache storage.
 func (s *store) Delete(key string) error {
 	s.eventMutex.Lock()
@@ -213,7 +183,6 @@ func (s *store) Delete(key string) error {
 	if !exists {
 		return fmt.Errorf("object %+v not found in storage", key)
 	}
-
 	var event antreastorage.InternalEvent
 	var err error
 	if s.genEventFunc != nil {
@@ -222,14 +191,12 @@ func (s *store) Delete(key string) error {
 			return fmt.Errorf("error generating event for Delete operation: %v", err)
 		}
 	}
-
 	s.storage.Delete(prevObj)
 	if event != nil {
 		s.processEvent(event)
 	}
 	return nil
 }
-
 // Watch creates a watcher based on the key, label selector and field selector.
 func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Selector, fieldSelector fields.Selector) (watch.Interface, error) {
 	if s.genEventFunc == nil {
@@ -239,13 +206,11 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 	// while other watchers won't be blocked.
 	s.eventMutex.RLock()
 	defer s.eventMutex.RUnlock()
-
 	selectors := &antreastorage.Selectors{
 		Key:   key,
 		Label: labelSelector,
 		Field: fieldSelector,
 	}
-
 	allObjects := s.storage.List()
 	initEvents := make([]antreastorage.InternalEvent, 0, len(allObjects))
 	for _, obj := range allObjects {
@@ -255,47 +220,38 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 		if s.selectFunc != nil && !s.selectFunc(selectors, key, obj) {
 			continue
 		}
-
 		event, err := s.genEventFunc(key, nil, obj, s.resourceVersion)
 		if err != nil {
 			return nil, err
 		}
 		initEvents = append(initEvents, event)
 	}
-
 	watcher := func() *storeWatcher {
 		s.watcherMutex.Lock()
 		defer s.watcherMutex.Unlock()
-
 		w := newStoreWatcher(watcherChanSize, selectors, forgetWatcher(s, s.watcherIdx), s.newFunc)
 		s.watchers[s.watcherIdx] = w
 		s.watcherIdx++
 		return w
 	}()
-
 	// Specify current resourceVersion so that old events that were currently buffered in incoming channel won't be
 	// delivered to the watcher twice when initEvents already have them.
 	go watcher.process(ctx, initEvents, s.resourceVersion)
 	return watcher, nil
 }
-
 // GetWatchersNum gets the number of watchers for the store.
 func (s *store) GetWatchersNum() int {
 	s.watcherMutex.RLock()
 	defer s.watcherMutex.RUnlock()
-
 	return len(s.watchers)
 }
-
 func forgetWatcher(s *store, index int) func() {
 	return func() {
 		s.watcherMutex.Lock()
 		defer s.watcherMutex.Unlock()
-
 		delete(s.watchers, index)
 	}
 }
-
 func (s *store) dispatchEvents() {
 	for {
 		select {
@@ -309,14 +265,11 @@ func (s *store) dispatchEvents() {
 		}
 	}
 }
-
 func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
 	var failedWatchers []*storeWatcher
-
 	func() {
 		s.watcherMutex.RLock()
 		defer s.watcherMutex.RUnlock()
-
 		// First try to send events without blocking, to avoid setting up a timer
 		// for every event.
 		// blockedWatchers keeps watchers whose buffer are full.
@@ -331,14 +284,12 @@ func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
 			return
 		}
 		klog.V(2).Infof("%d watchers were not available to receive event %+v immediately", len(blockedWatchers), event)
-
 		// Then try to send events to blocked watchers with a timeout. If it
 		// timeouts, it means the watcher is too slow to consume the events or the
 		// underlying connection is already dead, terminate the watcher in this case.
 		// antrea-agent will start a new watch after it's disconnected.
 		s.timer.Reset(watcherAddTimeout)
 		timer := s.timer
-
 		for _, watcher := range blockedWatchers {
 			if !watcher.add(event, timer) {
 				failedWatchers = append(failedWatchers, watcher)
@@ -346,13 +297,11 @@ func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
 				timer = nil
 			}
 		}
-
 		// Stop the timer and drain its channel if it is not fired.
 		if timer != nil && !timer.Stop() {
 			<-timer.C()
 		}
 	}()
-
 	// Terminate unresponsive watchers, this must be executed without watcherMutex as
 	// watcher.Stop will require the lock itself.
 	for _, watcher := range failedWatchers {
@@ -360,7 +309,6 @@ func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
 		watcher.Stop()
 	}
 }
-
 func (s *store) Stop() {
 	close(s.stopCh)
 }

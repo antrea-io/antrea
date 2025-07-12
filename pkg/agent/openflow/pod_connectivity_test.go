@@ -11,23 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/util/runtime"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/util/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
-
 func podConnectivityInitFlows(
 	trafficEncapMode config.TrafficEncapModeType,
 	trafficEncryptionMode config.TrafficEncryptionModeType,
@@ -283,7 +275,6 @@ func podConnectivityInitFlows(
 	}
 	return flows
 }
-
 func Test_featurePodConnectivity_initFlows(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -371,10 +362,8 @@ func Test_featurePodConnectivity_initFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			skipTest(t, tc.skipLinux, tc.skipWindows)
-
 			fc := newFakeClient(nil, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
 			defer resetPipelines()
-
 			flows := getFlowStrings(fc.featurePodConnectivity.initFlows())
 			assert.ElementsMatch(t, tc.expectedFlows, flows)
 		})

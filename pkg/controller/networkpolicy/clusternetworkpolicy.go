@@ -11,44 +11,35 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"reflect"
 	"sort"
 	"strings"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/grouping"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	utilsets "antrea.io/antrea/v2/pkg/util/sets"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/controller/grouping"
-	"antrea.io/antrea/pkg/controller/networkpolicy/store"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
-	utilsets "antrea.io/antrea/pkg/util/sets"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	utilsets "antrea.io/antrea/v2/pkg/util/sets"
 )
-
 const (
 	labelValueSeparator = ","
 )
-
 func getACNPReference(cnp *crdv1beta1.ClusterNetworkPolicy) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
 		Type: controlplane.AntreaClusterNetworkPolicy,
@@ -56,7 +47,6 @@ func getACNPReference(cnp *crdv1beta1.ClusterNetworkPolicy) *controlplane.Networ
 		UID:  cnp.UID,
 	}
 }
-
 // addCNP receives ClusterNetworkPolicy ADD events and enqueues a reference of
 // the ClusterNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) addCNP(obj interface{}) {
@@ -65,7 +55,6 @@ func (n *NetworkPolicyController) addCNP(obj interface{}) {
 	klog.Infof("Processing ClusterNetworkPolicy %s ADD event", cnp.Name)
 	n.enqueueInternalNetworkPolicy(getACNPReference(cnp))
 }
-
 // updateCNP receives ClusterNetworkPolicy UPDATE events and enqueues a
 // reference of the ClusterNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) updateCNP(_, cur interface{}) {
@@ -74,7 +63,6 @@ func (n *NetworkPolicyController) updateCNP(_, cur interface{}) {
 	klog.Infof("Processing ClusterNetworkPolicy %s UPDATE event", curCNP.Name)
 	n.enqueueInternalNetworkPolicy(getACNPReference(curCNP))
 }
-
 // deleteCNP receives ClusterNetworkPolicy DELETE events and enqueues a
 // reference of the ClusterNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) deleteCNP(old interface{}) {
@@ -95,7 +83,6 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	klog.Infof("Processing ClusterNetworkPolicy %s DELETE event", cnp.Name)
 	n.enqueueInternalNetworkPolicy(getACNPReference(cnp))
 }
-
 // filterPerNamespaceRuleACNPsByNSLabels gets all ClusterNetworkPolicy names that will need to be
 // re-processed based on the entire label set of an added/updated/deleted Namespace.
 func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels labels.Set) sets.Set[string] {
@@ -124,7 +111,6 @@ func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels
 		}
 		return false
 	}
-
 	peerNamespacesSelectorExists := func(peers []crdv1beta1.NetworkPolicyPeer) bool {
 		for _, peer := range peers {
 			if peer.Namespaces != nil {
@@ -133,7 +119,6 @@ func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels
 		}
 		return false
 	}
-
 	affectedPolicies := sets.New[string]()
 	objs, _ := n.acnpInformer.Informer().GetIndexer().ByIndex(perNamespaceRuleIndex, indexValueTrue)
 	for _, obj := range objs {
@@ -163,7 +148,6 @@ func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels
 	}
 	return affectedPolicies
 }
-
 // getACNPsWithRulesMatchingAnyLabelKey gets all ACNPs that have relevant rules based on Namespace label keys.
 func (n *NetworkPolicyController) getACNPsWithRulesMatchingAnyLabelKey(labelKeys sets.Set[string]) sets.Set[string] {
 	matchedPolicyNames := sets.New[string]()
@@ -176,7 +160,6 @@ func (n *NetworkPolicyController) getACNPsWithRulesMatchingAnyLabelKey(labelKeys
 	}
 	return matchedPolicyNames
 }
-
 // getACNPsWithRulesMatchingAnyUpdatedLabels gets all ACNPs that have rules based on Namespace
 // label keys, which have changes in value across Namespace update.
 func (n *NetworkPolicyController) getACNPsWithRulesMatchingAnyUpdatedLabels(oldNSLabels, newNSLabels map[string]string) sets.Set[string] {
@@ -193,7 +176,6 @@ func (n *NetworkPolicyController) getACNPsWithRulesMatchingAnyUpdatedLabels(oldN
 	}
 	return n.getACNPsWithRulesMatchingAnyLabelKey(updatedLabelKeys)
 }
-
 // addNamespace receives Namespace ADD events and triggers all ClusterNetworkPolicies that have a
 // per-namespace rule applied to this Namespace to be re-processed.
 func (n *NetworkPolicyController) addNamespace(obj interface{}) {
@@ -208,7 +190,6 @@ func (n *NetworkPolicyController) addNamespace(obj interface{}) {
 		}
 	}
 }
-
 // updateNamespace receives Namespace UPDATE events and triggers all ClusterNetworkPolicies that have a
 // per-namespace rule applied to either the original or the new Namespace to be re-processed.
 // It also triggers all K8s NetworkPolicies in the new Namespace to be re-processed
@@ -233,7 +214,6 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 			}
 		}
 	}
-
 	if oldNamespace.Annotations[EnableNPLoggingAnnotationKey] != curNamespace.Annotations[EnableNPLoggingAnnotationKey] {
 		affectedNPs, _ := n.networkPolicyLister.NetworkPolicies(curNamespace.Name).List(labels.Everything())
 		for _, np := range affectedNPs {
@@ -241,7 +221,6 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 		}
 	}
 }
-
 // deleteNamespace receives Namespace DELETE events and triggers all ClusterNetworkPolicies that have a
 // per-namespace rule applied to this Namespace to be re-processed.
 func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
@@ -268,7 +247,6 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 		}
 	}
 }
-
 func (c *NetworkPolicyController) filterAGsFromNodeLabels(node *v1.Node) sets.Set[string] {
 	ags := sets.New[string]()
 	addressGroupObjs, _ := c.addressGroupStore.GetByIndex(store.IsNodeAddressGroupIndex, "true")
@@ -281,7 +259,6 @@ func (c *NetworkPolicyController) filterAGsFromNodeLabels(node *v1.Node) sets.Se
 	}
 	return ags
 }
-
 func (c *NetworkPolicyController) getATGsAppliedToService() sets.Set[string] {
 	atgs := sets.New[string]()
 	appliedToGroupObjs, _ := c.appliedToGroupStore.GetByIndex(store.IsAppliedToServiceIndex, "true")
@@ -291,7 +268,6 @@ func (c *NetworkPolicyController) getATGsAppliedToService() sets.Set[string] {
 	}
 	return atgs
 }
-
 func (c *NetworkPolicyController) addNode(obj interface{}) {
 	node := obj.(*v1.Node)
 	affectedAGs := c.filterAGsFromNodeLabels(node)
@@ -305,7 +281,6 @@ func (c *NetworkPolicyController) addNode(obj interface{}) {
 	}
 	klog.V(2).InfoS("Processed Node CREATE event", "nodeName", node.Name, "affectedAGs", affectedAGs.Len())
 }
-
 func (c *NetworkPolicyController) deleteNode(obj interface{}) {
 	node, ok := obj.(*v1.Node)
 	if !ok {
@@ -332,13 +307,11 @@ func (c *NetworkPolicyController) deleteNode(obj interface{}) {
 	}
 	klog.V(2).InfoS("Processed Node DELETE event", "nodeName", node.Name, "affectedAGs", affectedAGs.Len())
 }
-
 func nodeIPChanged(oldNode, newNode *v1.Node) (changed bool) {
 	oldIPs, _ := k8s.GetNodeAllAddrs(oldNode)
 	newIPs, _ := k8s.GetNodeAllAddrs(newNode)
 	return !oldIPs.Equal(newIPs)
 }
-
 func (c *NetworkPolicyController) updateNode(oldObj, newObj interface{}) {
 	node := newObj.(*v1.Node)
 	oldNode := oldObj.(*v1.Node)
@@ -348,7 +321,6 @@ func (c *NetworkPolicyController) updateNode(oldObj, newObj interface{}) {
 		klog.V(2).InfoS("Processed Node UPDATE event, labels and IPs not changed", "nodeName", node.Name)
 		return
 	}
-
 	affectedAGs := c.filterAGsFromNodeLabels(node)
 	if labelsChanged {
 		oldAGs := c.filterAGsFromNodeLabels(oldNode)
@@ -363,7 +335,6 @@ func (c *NetworkPolicyController) updateNode(oldObj, newObj interface{}) {
 	}
 	klog.V(2).InfoS("Processed Node UPDATE event", "nodeName", node.Name, "affectedAGs", affectedAGs.Len())
 }
-
 // processClusterNetworkPolicy creates an internal NetworkPolicy instance
 // corresponding to the crdv1beta1.ClusterNetworkPolicy object. This method
 // does not commit the internal NetworkPolicy in store, instead returns an
@@ -558,7 +529,6 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1beta1.Cl
 	}
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }
-
 // serviceAccountNameToPodSelector returns a PodSelector which could be used to
 // select Pods based on their ServiceAccountName.
 func serviceAccountNameToPodSelector(saName string) *metav1.LabelSelector {
@@ -566,7 +536,6 @@ func serviceAccountNameToPodSelector(saName string) *metav1.LabelSelector {
 		MatchLabels: map[string]string{grouping.CustomLabelKeyPrefix + grouping.CustomLabelKeyServiceAccount: saName},
 	}
 }
-
 // hasPerNamespaceRule returns true if there is at least one per-namespace rule
 func hasPerNamespaceRule(cnp *crdv1beta1.ClusterNetworkPolicy) bool {
 	for _, ingress := range cnp.Spec.Ingress {
@@ -585,7 +554,6 @@ func hasPerNamespaceRule(cnp *crdv1beta1.ClusterNetworkPolicy) bool {
 	}
 	return false
 }
-
 func namespaceRuleLabelKeys(cnp *crdv1beta1.ClusterNetworkPolicy) sets.Set[string] {
 	keys := sets.New[string]()
 	for _, ingress := range cnp.Spec.Ingress {
@@ -608,7 +576,6 @@ func namespaceRuleLabelKeys(cnp *crdv1beta1.ClusterNetworkPolicy) sets.Set[strin
 	}
 	return keys
 }
-
 func (n *NetworkPolicyController) getNamespaceLabels(ns string) labels.Set {
 	namespace, err := n.namespaceLister.Get(ns)
 	if err != nil {
@@ -618,7 +585,6 @@ func (n *NetworkPolicyController) getNamespaceLabels(ns string) labels.Set {
 	}
 	return namespace.Labels
 }
-
 // groupNamespaceByLabelValue groups Namespaces if they have the same label value for all the
 // label keys listed. If a Namespace is missing at least one of the label keys, it will not
 // be grouped. Example:
@@ -641,7 +607,6 @@ func groupNamespacesByLabelValue(affectedNSAndLabels map[string]labels.Set, labe
 	}
 	return nsGroupedByLabelVal
 }
-
 func getLabelValues(labels map[string]string, labelKeys []string) string {
 	key := ""
 	for _, k := range labelKeys {
@@ -653,7 +618,6 @@ func getLabelValues(labels map[string]string, labelKeys []string) string {
 	}
 	return key
 }
-
 // convertSameLabelsToSelector creates a LabelSelector based on a list of label keys
 // and their expected values.
 func convertSameLabelsToSelector(labelKeys []string, labelValues string) *metav1.LabelSelector {
@@ -666,7 +630,6 @@ func convertSameLabelsToSelector(labelKeys []string, labelValues string) *metav1
 		MatchLabels: labelMatchCriteria,
 	}
 }
-
 // toAntreaPeerForSameLabelNamespaces computes the appliedToGroups and addressGroups for each
 // group of Namespaces who have the same values for the sameLabels keys.
 func (n *NetworkPolicyController) toAntreaPeerForSameLabelNamespaces(peer crdv1beta1.NetworkPolicyPeer,
@@ -705,7 +668,6 @@ func (n *NetworkPolicyController) toAntreaPeerForSameLabelNamespaces(peer crdv1b
 	}
 	return antreaPeer, atgs, addressGroups, clusterSetScopeSelectorKeys
 }
-
 // processClusterAppliedTo processes appliedTo groups in Antrea ClusterNetworkPolicy set
 // at cluster level (appliedTo groups which will not need to be split by Namespaces).
 func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1beta1.AppliedTo) []*antreatypes.AppliedToGroup {
@@ -729,7 +691,6 @@ func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1beta1
 	}
 	return appliedToGroups
 }
-
 // splitPeersByScope splits the ClusterNetworkPolicy peers in the rule by whether the peer
 // is cluster-scoped or per-namespace.
 func splitPeersByScope(rule *crdv1beta1.Rule, dir controlplane.Direction) ([]crdv1beta1.NetworkPolicyPeer, []crdv1beta1.NetworkPolicyPeer, []crdv1beta1.NetworkPolicyPeer) {
@@ -751,12 +712,10 @@ func splitPeersByScope(rule *crdv1beta1.Rule, dir controlplane.Direction) ([]crd
 	}
 	return clusterPeers, perNSPeers, nsLabelPeers
 }
-
 // getAffectedNamespacesForAppliedTo computes the Namespaces currently affected by the appliedTo
 // Namespace selectors, and returns these Namespaces along with their labels.
 func (n *NetworkPolicyController) getAffectedNamespacesForAppliedTo(appliedTo crdv1beta1.AppliedTo) map[string]labels.Set {
 	affectedNSAndLabels := map[string]labels.Set{}
-
 	nsLabelSelector := appliedTo.NamespaceSelector
 	if appliedTo.Group != "" {
 		cg, err := n.cgLister.Get(appliedTo.Group)
@@ -778,7 +737,6 @@ func (n *NetworkPolicyController) getAffectedNamespacesForAppliedTo(appliedTo cr
 	}
 	return affectedNSAndLabels
 }
-
 // processInternalGroupForRule examines the internal group (and its childGroups if applicable)
 // to determine whether an addressGroup needs to be created, and returns any ipBlocks contained
 // by the internal Group as well.
@@ -804,7 +762,6 @@ func (n *NetworkPolicyController) processInternalGroupForRule(group *antreatypes
 	}
 	return createAddrGroup, ipBlocks
 }
-
 // processRefGroupOrClusterGroup processes the Group/ClusterGroup reference present in the rule and returns the
 // NetworkPolicyPeer with the corresponding AddressGroup or IPBlock.
 func (n *NetworkPolicyController) processRefGroupOrClusterGroup(g, namespace string) (*antreatypes.AddressGroup, []controlplane.IPBlock) {

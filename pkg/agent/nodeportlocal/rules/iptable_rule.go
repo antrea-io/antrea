@@ -1,6 +1,5 @@
 //go:build !windows
 // +build !windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,37 +13,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package rules
-
 import (
 	"bytes"
 	"fmt"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
-=======
-	"antrea.io/antrea/pkg/agent/util/iptables"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
 )
-
 // InitRules initializes rules based on the underlying implementation
 func InitRules() PodPortRules {
 	// This can be extended based on the system capability.
 	return NewIPTableRules()
 }
-
 // NodePortLocalChain is the name of the chain in IPTABLES for Node Port Local
 const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
-
 // IPTableRules provides a client to perform IPTABLES operations
 type iptablesRules struct {
 	name  string
 	table iptables.Interface
 }
-
 // NewIPTableRules retruns a new instance of IPTableRules
 func NewIPTableRules() *iptablesRules {
 	iptInstance, _ := iptables.New(true, false)
@@ -54,7 +42,6 @@ func NewIPTableRules() *iptablesRules {
 	}
 	return &iptRule
 }
-
 // Init initializes IPTABLES rules for NPL. Currently it deletes existing rules to ensure that no stale entries are present.
 func (ipt *iptablesRules) Init() error {
 	if err := ipt.initRules(); err != nil {
@@ -62,7 +49,6 @@ func (ipt *iptablesRules) Init() error {
 	}
 	return nil
 }
-
 // initRules creates the NPL chain and links it to the PREROUTING (for incoming
 // traffic) and OUTPUT chain (for locally-generated traffic). All NPL DNAT rules
 // will be added to this chain.
@@ -81,14 +67,12 @@ func (ipt *iptablesRules) initRules() error {
 	}
 	return nil
 }
-
 func buildRuleForPod(port int, podIP, protocol string) []string {
 	return []string{
 		"-p", protocol, "-m", protocol, "--dport", fmt.Sprint(port),
 		"-j", "DNAT", "--to-destination", podIP,
 	}
 }
-
 // AddRule appends a DNAT rule in NodePortLocalChain chain of NAT table.
 func (ipt *iptablesRules) AddRule(nodePort int, podIP string, podPort int, protocol string) error {
 	podAddr := fmt.Sprintf("%s:%d", podIP, podPort)
@@ -99,7 +83,6 @@ func (ipt *iptablesRules) AddRule(nodePort int, podIP string, podPort int, proto
 	klog.InfoS("Successfully added DNAT rule", "podAddr", podAddr, "nodePort", nodePort, "protocol", protocol)
 	return nil
 }
-
 // AddAllRules constructs a list of iptables rules for the NPL chain and performs a
 // iptables-restore on this chain. It uses --no-flush to keep the previous rules intact.
 func (ipt *iptablesRules) AddAllRules(nplList []PodNodePort) error {
@@ -117,7 +100,6 @@ func (ipt *iptablesRules) AddAllRules(nplList []PodNodePort) error {
 	}
 	return nil
 }
-
 // DeleteRule deletes a specific NPL rule from NodePortLocalChain chain
 func (ipt *iptablesRules) DeleteRule(nodePort int, podIP string, podPort int, protocol string) error {
 	podAddr := fmt.Sprintf("%s:%d", podIP, podPort)
@@ -128,7 +110,6 @@ func (ipt *iptablesRules) DeleteRule(nodePort int, podIP string, podPort int, pr
 	klog.InfoS("Successfully deleted DNAT rule", "podAddr", podAddr, "nodePort", nodePort, "protocol", protocol)
 	return nil
 }
-
 // DeleteAllRules deletes all NPL rules programmed in the node
 func (ipt *iptablesRules) DeleteAllRules() error {
 	exists, err := ipt.table.ChainExists(iptables.ProtocolIPv4, iptables.NATTable, NodePortLocalChain)
@@ -152,7 +133,6 @@ func (ipt *iptablesRules) DeleteAllRules() error {
 	}
 	return nil
 }
-
 // Join all words with spaces, terminate with newline and write to buf.
 func writeLine(buf *bytes.Buffer, words ...string) {
 	// We avoid strings.Join for performance reasons.

@@ -11,28 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package testing
-
 import (
 	"sync"
-
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	k8stesting "k8s.io/client-go/testing"
-
-<<<<<<< HEAD
-	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
-=======
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
->>>>>>> origin/main
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 )
-
 // Simple client is not sufficient for pool allocator testing,
 // since pool allocator relies on both crd client and pool informer
 // to work in sync. This client extension mimics the real client in
@@ -45,19 +37,14 @@ type IPPoolClientset struct {
 	poolVersion sync.Map
 	watcher     *watch.RaceFreeFakeWatcher
 }
-
 func (c *IPPoolClientset) InitPool(pool *crdv1b1.IPPool) {
 	pool.ResourceVersion = uuid.New().String()
 	c.poolVersion.Store(pool.Name, pool.ResourceVersion)
-
 	c.watcher.Add(pool)
 }
-
 func NewIPPoolClient() *IPPoolClientset {
-
 	crdClient := &IPPoolClientset{watcher: watch.NewRaceFreeFake(),
 		poolVersion: sync.Map{}}
-
 	crdClient.AddReactor("update", "ippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		updatedPool := action.(k8stesting.UpdateAction).GetObject().(*crdv1b1.IPPool)
 		obj, exists := crdClient.poolVersion.Load(updatedPool.Name)
@@ -68,14 +55,11 @@ func NewIPPoolClient() *IPPoolClientset {
 		if storedPoolVersion != updatedPool.ResourceVersion {
 			return true, nil, &errors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonConflict, Message: "pool status update conflict"}}
 		}
-
 		updatedPool.ResourceVersion = uuid.New().String()
 		crdClient.poolVersion.Store(updatedPool.Name, updatedPool.ResourceVersion)
 		crdClient.watcher.Modify(updatedPool)
 		return true, updatedPool, nil
 	})
-
 	crdClient.AddWatchReactor("ippools", k8stesting.DefaultWatchReactor(crdClient.watcher, nil))
-
 	return crdClient
 }

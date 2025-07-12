@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package antctl
-
 import (
 	"fmt"
 	"net/http"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/errors"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 )
-
 func TestGenerateMessage(t *testing.T) {
 	for _, tc := range []struct {
 		name            string

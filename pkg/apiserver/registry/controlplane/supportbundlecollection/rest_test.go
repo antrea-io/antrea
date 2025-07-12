@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundlecollection
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -28,20 +25,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/controller/supportbundlecollection/store"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/controller/supportbundlecollection/store"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/controller/supportbundlecollection/store"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 func TestRESTList(t *testing.T) {
 	testDuration := "2h"
 	expireMinutes, _ := time.ParseDuration("120m")
@@ -137,7 +129,6 @@ func TestRESTList(t *testing.T) {
 		})
 	}
 }
-
 func TestWatch(t *testing.T) {
 	storage := store.NewSupportBundleCollectionStore()
 	expireAt := v1.Date(2022, 12, 31, 0, 0, 0, 0, time.UTC)
@@ -152,7 +143,6 @@ func TestWatch(t *testing.T) {
 			APIKey: "123456789",
 		},
 	}
-
 	r := NewREST(storage)
 	watcher, err := r.Watch(context.TODO(), &internalversion.ListOptions{})
 	require.NoError(t, err)
@@ -172,7 +162,6 @@ func TestWatch(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, collection.Name, watchedObj.Name)
 }
-
 func TestWatchWithFilter(t *testing.T) {
 	storage := store.NewSupportBundleCollectionStore()
 	expireAt := v1.Date(2022, 12, 31, 0, 0, 0, 0, time.UTC)
@@ -190,7 +179,6 @@ func TestWatchWithFilter(t *testing.T) {
 			APIKey: "123456789",
 		},
 	}
-
 	err := storage.Create(collection)
 	require.NoError(t, err)
 	for _, tc := range []struct {

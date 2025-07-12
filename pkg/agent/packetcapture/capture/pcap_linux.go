@@ -11,44 +11,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package capture
-
 import (
 	"context"
 	"net"
 	"time"
-
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcapgo"
 	"golang.org/x/net/bpf"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-=======
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
->>>>>>> origin/main
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
-
 type pcapCapture struct {
 }
-
 func NewPcapCapture() (*pcapCapture, error) {
 	return &pcapCapture{}, nil
 }
-
 // zeroFilter is a filter that will drop all packets.
-<<<<<<< HEAD
 // see: https://github.com/antrea.io/antrea/v2/issues/6815 for the user case.
-=======
 // see: https://github.com/antrea-io/antrea/issues/6815 for the user case.
->>>>>>> origin/main
 func zeroFilter() []bpf.Instruction {
 	return []bpf.Instruction{returnDrop}
 }
-
 func (p *pcapCapture) Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet, direction crdv1alpha1.CaptureDirection) (chan gopacket.Packet, error) {
 	// Compile the BPF filter in advance to reduce the time window between starting the capture and applying the filter.
 	inst := compilePacketFilter(packet, srcIP, dstIP, direction)
@@ -57,12 +43,10 @@ func (p *pcapCapture) Capture(ctx context.Context, device string, snapLen int, s
 	if err != nil {
 		return nil, err
 	}
-
 	zeroRawInst, err := bpf.Assemble(zeroFilter())
 	if err != nil {
 		return nil, err
 	}
-
 	eth, err := pcapgo.NewEthernetHandle(device)
 	if err != nil {
 		return nil, err
@@ -86,7 +70,6 @@ func (p *pcapCapture) Capture(ctx context.Context, device string, snapLen int, s
 	if err = eth.SetCaptureLength(snapLen); err != nil {
 		return nil, err
 	}
-
 	packetSource := gopacket.NewPacketSource(eth, layers.LinkTypeEthernet, gopacket.WithNoCopy(true))
 	packetCh := packetSource.PacketsCtx(ctx)
 	// Drain the channel

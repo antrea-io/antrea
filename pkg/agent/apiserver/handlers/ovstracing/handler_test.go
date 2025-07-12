@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ovstracing
-
 import (
 	"encoding/json"
 	"errors"
@@ -23,11 +21,8 @@ import (
 	"os"
 	"os/exec"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
@@ -37,34 +32,28 @@ import (
 	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/agent/querier"
-	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/agent/querier"
+	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 )
-
 var (
 	testTraceResult = "tracing result"
 	testResponse    = apis.OVSTracingResponse{Result: testTraceResult}
-
 	tunnelVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	gatewayMAC, _       = net.ParseMAC("00:00:00:00:00:01")
 	podMAC, _           = net.ParseMAC("00:00:00:00:00:11")
-
 	testNodeConfig = &config.NodeConfig{
 		GatewayConfig: &config.GatewayConfig{
 			Name: "antrea-gw0",
 			IPv4: net.ParseIP("10.1.1.1"),
 			MAC:  gatewayMAC},
 	}
-
 	gatewayInterface = &interfacestore.InterfaceConfig{Type: interfacestore.GatewayInterface, InterfaceName: "antrea-gw0"}
 	tunnelInterface  = &interfacestore.InterfaceConfig{Type: interfacestore.TunnelInterface, InterfaceName: "antrea-tun0"}
 	inPodInterface   = &interfacestore.InterfaceConfig{
@@ -86,7 +75,6 @@ var (
 		MAC:           podMAC,
 	}
 )
-
 type testCase struct {
 	test           string
 	port           string
@@ -95,7 +83,6 @@ type testCase struct {
 	expectedStatus int
 	execErr        *ovsctl.ExecError
 }
-
 func TestPodFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testcases := []testCase{
@@ -241,7 +228,6 @@ func TestPodFlows(t *testing.T) {
 		ofc := oftest.NewMockClient(ctrl)
 		ctl := ovsctltest.NewMockOVSCtlClient(ctrl)
 		q.EXPECT().GetNodeConfig().Return(testNodeConfig).MaxTimes(1)
-
 		if tc.expectedStatus == http.StatusNotFound {
 			q.EXPECT().GetInterfaceStore().Return(i).Times(1)
 			switch tc.port {
@@ -255,7 +241,6 @@ func TestPodFlows(t *testing.T) {
 		}
 		if tc.calledTrace {
 			assert.False(t, tc.expectedStatus == http.StatusNotFound)
-
 			q.EXPECT().GetInterfaceStore().Return(i).MaxTimes(3)
 			if tc.port == "antrea-gw0" {
 				i.EXPECT().GetInterfaceByName(tc.port).Return(gatewayInterface, true).Times(1)
@@ -270,7 +255,6 @@ func TestPodFlows(t *testing.T) {
 			}
 			i.EXPECT().GetContainerInterfacesByPod("srcPod", "srcNS").Return([]*interfacestore.InterfaceConfig{srcPodInterface}).MaxTimes(1)
 			i.EXPECT().GetContainerInterfacesByPod("dstPod", "dstNS").Return([]*interfacestore.InterfaceConfig{dstPodInterface}).MaxTimes(1)
-
 			if tc.expectedStatus == http.StatusBadRequest {
 				// "ovs-appctl" won't be executed. OVSCtlClient.Trace() will just
 				// validate the TracingRequest and return.
@@ -286,20 +270,16 @@ func TestPodFlows(t *testing.T) {
 		} else {
 			assert.True(t, tc.expectedStatus == http.StatusNotFound || tc.expectedStatus == http.StatusBadRequest)
 		}
-
 		runHTTPTest(t, &tc, q)
 	}
 }
-
 func runHTTPTest(t *testing.T, tc *testCase, aq querier.AgentQuerier) {
 	handler := HandleFunc(aq)
 	req, err := http.NewRequest(http.MethodGet, tc.query, nil)
 	assert.Nil(t, err)
-
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)
 	assert.Equal(t, tc.expectedStatus, recorder.Code, tc.test)
-
 	if tc.expectedStatus == http.StatusOK {
 		var received apis.OVSTracingResponse
 		err = json.Unmarshal(recorder.Body.Bytes(), &received)

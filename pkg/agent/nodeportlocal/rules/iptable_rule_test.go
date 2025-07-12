@@ -1,5 +1,4 @@
 //go:build !windows
-
 // Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,24 +12,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package rules
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
 	iptablestest "antrea.io/antrea/v2/pkg/agent/util/iptables/testing"
-=======
-	"antrea.io/antrea/pkg/agent/util/iptables"
-	iptablestest "antrea.io/antrea/pkg/agent/util/iptables/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
+	iptablestest "antrea.io/antrea/v2/pkg/agent/util/iptables/testing"
 )
-
 func TestAddAndDeleteRule(t *testing.T) {
 	tests := []struct {
 		nodePort      int
@@ -66,7 +57,6 @@ func TestAddAndDeleteRule(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.podIP, func(t *testing.T) {
@@ -76,21 +66,16 @@ func TestAddAndDeleteRule(t *testing.T) {
 				name:  "test-rules",
 				table: mockIPTables,
 			}
-
 			tt.expectedCalls(mockIPTables.EXPECT())
-
 			err := rules.Init()
 			require.NoError(t, err)
-
 			err = rules.AddRule(tt.nodePort, tt.podIP, tt.nodePort, tt.protocol)
 			require.NoError(t, err)
-
 			err = rules.DeleteRule(tt.nodePort, tt.podIP, tt.nodePort, tt.protocol)
 			require.NoError(t, err)
 		})
 	}
 }
-
 func TestAddAndDeleteAllRules(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -171,7 +156,6 @@ COMMIT
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -181,15 +165,11 @@ COMMIT
 				name:  "test-rules",
 				table: mockIPTables,
 			}
-
 			tt.expectedCalls(mockIPTables.EXPECT())
-
 			err := rules.Init()
 			require.NoError(t, err)
-
 			err = rules.AddAllRules(tt.rules)
 			require.NoError(t, err)
-
 			err = rules.DeleteAllRules()
 			require.NoError(t, err)
 		})

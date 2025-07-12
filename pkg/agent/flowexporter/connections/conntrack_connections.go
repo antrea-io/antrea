@@ -11,20 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"time"
-
 	"github.com/vmware/go-ipfix/pkg/registry"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
@@ -32,23 +27,19 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/util/podstore"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	"antrea.io/antrea/pkg/agent/metrics"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/proxy"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/util/podstore"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/proxy"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/util/podstore"
 )
-
 var serviceProtocolMap = map[uint8]corev1.Protocol{
 	6:   corev1.ProtocolTCP,
 	17:  corev1.ProtocolUDP,
 	132: corev1.ProtocolSCTP,
 }
-
 type ConntrackConnectionStore struct {
 	connDumper            ConnTrackDumper
 	v4Enabled             bool
@@ -59,11 +50,9 @@ type ConntrackConnectionStore struct {
 	l7EventMapGetter      L7EventMapGetter
 	connectionStore
 }
-
 type L7EventMapGetter interface {
 	ConsumeL7EventMap() map[flowexporter.ConnectionKey]L7ProtocolFields
 }
-
 func NewConntrackConnectionStore(
 	connTrackDumper ConnTrackDumper,
 	v4Enabled bool,
@@ -85,14 +74,11 @@ func NewConntrackConnectionStore(
 		l7EventMapGetter:      l7EventMapGetterFunc,
 	}
 }
-
 // Run enables the periodical polling of conntrack connections at a given flowPollInterval.
 func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting conntrack polling")
-
 	pollTicker := time.NewTicker(cs.pollInterval)
 	defer pollTicker.Stop()
-
 	for {
 		select {
 		case <-stopCh:
@@ -107,7 +93,6 @@ func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 // Poll calls into conntrackDumper interface to dump conntrack flows. It returns the number of connections for each
 // address family, as a slice. In dual-stack clusters, the slice will contain 2 values (number of IPv4 connections first,
 // then number of IPv6 connections).
@@ -120,7 +105,6 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	if cs.l7EventMapGetter != nil {
 		l7EventMap = cs.l7EventMapGetter.ConsumeL7EventMap()
 	}
-
 	var zones []uint16
 	var connsLens []int
 	if cs.v4Enabled {
@@ -148,7 +132,6 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 		filteredConnsList = append(filteredConnsList, filteredConnsListPerZone...)
 		connsLens = append(connsLens, len(filteredConnsList))
 	}
-
 	// Reset IsPresent flag for all connections in connection map before updating
 	// the dumped flows information in connection map. If the connection does not
 	// exist in conntrack table and has been exported, then we will delete it from
@@ -173,16 +156,13 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 		}
 		return nil
 	}
-
 	// Hold the lock until we verify whether the connection exist in conntrack table,
 	// and finish updating the connection store.
 	cs.AcquireConnStoreLock()
-
 	if err := cs.ForAllConnectionsDoWithoutLock(deleteIfStaleOrResetConn); err != nil {
 		cs.ReleaseConnStoreLock()
 		return []int{}, err
 	}
-
 	// Update only the Connection store. IPFIX records are generated based on Connection store.
 	for _, conn := range filteredConnsList {
 		cs.AddOrUpdateConn(conn)
@@ -190,9 +170,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	if len(l7EventMap) != 0 {
 		cs.fillL7EventInfo(l7EventMap)
 	}
-
 	cs.ReleaseConnStoreLock()
-
 	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
 	maxConns, err := cs.connDumper.GetMaxConnections()
 	if err != nil {
@@ -200,10 +178,8 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	}
 	metrics.MaxConnectionsInConnTrackTable.Set(float64(maxConns))
 	klog.V(2).Infof("Conntrack polling successful")
-
 	return connsLens, nil
 }
-
 func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *flowexporter.Connection) {
 	// Retrieve NetworkPolicy Name and Namespace by using the ingress and egress
 	// IDs stored in the connection label.
@@ -243,13 +219,11 @@ func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *flowexporter.
 		}
 	}
 }
-
 // AddOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
 // or adds a new connection with the resolved K8s metadata.
 func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection) {
 	conn.IsPresent = true
 	connKey := flowexporter.NewConnectionKey(conn)
-
 	existingConn, exists := cs.connections[connKey]
 	if exists {
 		existingConn.IsPresent = conn.IsPresent
@@ -311,7 +285,6 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 		klog.V(4).InfoS("New Antrea flow added", "connection", conn)
 	}
 }
-
 func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []flowexporter.Connection, currTime time.Time, maxSize int) ([]flowexporter.Connection, time.Duration) {
 	cs.AcquireConnStoreLock()
 	defer cs.ReleaseConnStoreLock()
@@ -336,7 +309,6 @@ func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []flowexporter.
 	}
 	return expiredConns, cs.connectionStore.expirePriorityQueue.GetExpiryFromExpirePriorityQueue()
 }
-
 // deleteConnWithoutLock deletes the connection from the connection map given
 // the connection key without grabbing the lock. Caller is expected to grab lock.
 func (cs *ConntrackConnectionStore) deleteConnWithoutLock(connKey flowexporter.ConnectionKey) error {
@@ -348,11 +320,9 @@ func (cs *ConntrackConnectionStore) deleteConnWithoutLock(connKey flowexporter.C
 	metrics.TotalAntreaConnectionsInConnTrackTable.Dec()
 	return nil
 }
-
 func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
 	return cs.connectionStore.expirePriorityQueue
 }
-
 func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[flowexporter.Tuple]L7ProtocolFields) {
 	// In case the L7 event is received after the connection is removed from the cs.connections store
 	// we will discard such event

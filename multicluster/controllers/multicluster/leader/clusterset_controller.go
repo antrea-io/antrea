@@ -1,27 +1,21 @@
 /*
 Copyright 2021 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package leader
-
 import (
 	"context"
 	"fmt"
 	"sync"
 	"time"
-
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,20 +25,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
-<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-=======
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
->>>>>>> origin/main
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
-
 var (
 	NoReadyCluster = "NoReadyCluster"
 )
-
 // LeaderClusterSetReconciler reconciles a ClusterSet object in the leader cluster deployment.
 // Each ClusterSet should have one Multi-cluster Controller running in the ClusterSet' leader
 // Namespace, so a MC Controller will be handling only a single ClusterSet in the given Namespace.
@@ -53,12 +41,10 @@ type LeaderClusterSetReconciler struct {
 	namespace                string
 	clusterCalimCRDAvailable bool
 	statusManager            MemberClusterStatusManager
-
 	clusterSetID common.ClusterSetID
 	clusterID    common.ClusterID
 	mutex        sync.Mutex
 }
-
 func NewLeaderClusterSetReconciler(client client.Client, namespace string,
 	clusterCalimCRDAvailable bool,
 	statusManager MemberClusterStatusManager) *LeaderClusterSetReconciler {
@@ -71,11 +57,9 @@ func NewLeaderClusterSetReconciler(client client.Client, namespace string,
 		clusterSetID:             common.InvalidClusterSetID,
 	}
 }
-
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clustersets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clustersets/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clustersets/finalizers,verbs=update
-
 // Reconcile ClusterSet changes
 func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	clusterSet := &mcv1alpha2.ClusterSet{}
@@ -95,9 +79,7 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		r.clusterSetID = common.InvalidClusterSetID
 		return ctrl.Result{}, nil
 	}
-
 	klog.InfoS("Received ClusterSet add/update", "clusterset", klog.KObj(clusterSet))
-
 	// Handle create or update
 	if r.clusterID == common.InvalidClusterID {
 		r.clusterID, err = common.GetClusterID(r.clusterCalimCRDAvailable, req, r.Client, clusterSet)
@@ -109,7 +91,6 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", r.clusterID)
 			return ctrl.Result{}, err
 		}
-
 		if clusterSet.Spec.ClusterID == "" {
 			// ClusterID is a required field, and the empty value case should only happen
 			// when Antrea Multi-cluster is upgraded from an old version prior to v1.13.
@@ -123,10 +104,8 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			}
 		}
 	}
-
 	return ctrl.Result{}, nil
 }
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *LeaderClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.runBackgroundTasks()
@@ -141,7 +120,6 @@ func (r *LeaderClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Complete(r)
 }
-
 func (r *LeaderClusterSetReconciler) runBackgroundTasks() {
 	// Update status periodically
 	go func() {
@@ -151,7 +129,6 @@ func (r *LeaderClusterSetReconciler) runBackgroundTasks() {
 		}
 	}()
 }
-
 // updateStatus updates ClusterSet Status as follows:
 //  1. TotalClusters is the number of member clusters in the
 //     ClusterSet resource last processed.
@@ -172,12 +149,10 @@ func (r *LeaderClusterSetReconciler) runBackgroundTasks() {
 func (r *LeaderClusterSetReconciler) updateStatus() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-
 	if r.clusterID == common.InvalidClusterID {
 		// Nothing to do.
 		return
 	}
-
 	namespacedName := types.NamespacedName{
 		Namespace: r.namespace,
 		Name:      string(r.clusterSetID),
@@ -190,7 +165,6 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		}
 		return
 	}
-
 	status := mcv1alpha2.ClusterSetStatus{}
 	status.ObservedGeneration = clusterSet.Generation
 	clusterStatuses := r.statusManager.GetMemberClusterStatuses()
@@ -226,7 +200,6 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		overallCondition.Status = v1.ConditionUnknown
 		overallCondition.Message = "All clusters have an unknown status"
 	}
-
 	status.Conditions = clusterSet.Status.Conditions
 	if (len(clusterSet.Status.Conditions) == 1 && clusterSet.Status.Conditions[0].Status != overallCondition.Status) ||
 		len(clusterSet.Status.Conditions) == 0 {
@@ -238,7 +211,6 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		klog.ErrorS(err, "Failed to update Status of ClusterSet", "name", namespacedName)
 	}
 }
-
 func validateMemberClusterExists(clusterID common.ClusterID, clusters []mcv1alpha2.LeaderClusterInfo) (err error) {
 	configExists := false
 	for _, cluster := range clusters {

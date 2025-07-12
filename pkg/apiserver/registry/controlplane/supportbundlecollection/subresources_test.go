@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundlecollection
-
 import (
 	"context"
 	"fmt"
 	"strings"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 )
-
 func TestCreate(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -98,11 +90,9 @@ func TestCreate(t *testing.T) {
 		}
 	}
 }
-
 type fakeStatusCollector struct {
 	bundleCollectionStatuses map[string]*controlplane.SupportBundleCollectionStatus
 }
-
 func (c *fakeStatusCollector) UpdateStatus(status *controlplane.SupportBundleCollectionStatus) error {
 	bundleCollectionName := status.Name
 	if len(status.Nodes) == 0 {

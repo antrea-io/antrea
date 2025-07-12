@@ -11,36 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"github.com/google/uuid"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	"antrea.io/antrea/v2/pkg/flowaggregator/s3uploader"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	"antrea.io/antrea/pkg/flowaggregator/s3uploader"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	"antrea.io/antrea/v2/pkg/flowaggregator/s3uploader"
 )
-
 type S3Exporter struct {
 	s3Input         *s3uploader.S3Input
 	s3UploadProcess *s3uploader.S3UploadProcess
 }
-
 func buildS3Input(opt *options.Options) s3uploader.S3Input {
 	return s3uploader.S3Input{
 		Config:         opt.Config.S3Uploader,
 		UploadInterval: opt.S3UploadInterval,
 	}
 }
-
 func NewS3Exporter(clusterUUID uuid.UUID, opt *options.Options) (*S3Exporter, error) {
 	s3Input := buildS3Input(opt)
 	klog.InfoS("S3Uploader configuration", "bucketName", s3Input.Config.BucketName, "bucketPrefix", s3Input.Config.BucketPrefix, "region", s3Input.Config.Region, "recordFormat", s3Input.Config.RecordFormat, "compress", *s3Input.Config.Compress, "maxRecordsPerFile", s3Input.Config.MaxRecordsPerFile, "uploadInterval", s3Input.UploadInterval)
@@ -53,19 +44,15 @@ func NewS3Exporter(clusterUUID uuid.UUID, opt *options.Options) (*S3Exporter, er
 		s3UploadProcess: s3UploadProcess,
 	}, nil
 }
-
 func (e *S3Exporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
 	return e.s3UploadProcess.CacheRecord(record)
 }
-
 func (e *S3Exporter) Start() {
 	e.s3UploadProcess.Start()
 }
-
 func (e *S3Exporter) Stop() {
 	e.s3UploadProcess.Stop()
 }
-
 func (e *S3Exporter) UpdateOptions(opt *options.Options) {
 	s3Input := buildS3Input(opt)
 	config := s3Input.Config
@@ -90,7 +77,6 @@ func (e *S3Exporter) UpdateOptions(opt *options.Options) {
 	}
 	klog.InfoS("New S3Uploader configuration", "bucketName", s3Input.Config.BucketName, "bucketPrefix", s3Input.Config.BucketPrefix, "region", s3Input.Config.Region, "recordFormat", s3Input.Config.RecordFormat, "compress", *s3Input.Config.Compress, "maxRecordsPerFile", s3Input.Config.MaxRecordsPerFile, "uploadInterval", s3Input.Config.UploadInterval)
 }
-
 func (e *S3Exporter) Flush() error {
 	return nil
 }

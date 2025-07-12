@@ -1,6 +1,5 @@
 //go:build !race
 // +build !race
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"context"
 	"flag"
@@ -25,7 +22,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -37,32 +33,24 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 /*
 TestInitXLargeScaleWithSmallNamespaces tests the execution time and the memory usage of computing a scale
 of 25k Namespaces, 75k NetworkPolicies, 100k Pods. The reference value is:
-
 NAMESPACES   PODS    NETWORK-POLICIES    TIME(s)    MEMORY(M)    EXECUTIONS    EVENTS(ag, atg, np)
 25000        100000  75000               6.10       1626         519853        208503 166707 208503
 25000        100000  75000               5.84       1522         585696        225480 182641 225480
 25000        100000  75000               6.42       1708         507003        206149 163293 206149
-
 The metrics are not accurate under the race detector, and will be skipped when testing with "-race".
 */
 func TestInitXLargeScaleWithSmallNamespaces(t *testing.T) {
 	namespaces, networkPolicies, pods := getXLargeScaleWithSmallNamespaces()
 	testComputeNetworkPolicy(t, 10*time.Second, namespaces, networkPolicies, pods)
 }
-
 func getXLargeScaleWithSmallNamespaces() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 	getObjects := func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 		namespace := rand.String(8)
@@ -83,12 +71,10 @@ func getXLargeScaleWithSmallNamespaces() (namespaces []*corev1.Namespace, networ
 	namespaces, networkPolicies, pods = getXObjects(25000, getObjects)
 	return namespaces, networkPolicies, pods
 }
-
 func TestInitXLargeScaleWithLargeNamespaces(t *testing.T) {
 	namespaces, networkPolicies, pods := getXLargeScaleWithLargeNamespaces()
 	testComputeNetworkPolicy(t, 10*time.Second, namespaces, networkPolicies, pods)
 }
-
 func getXLargeScaleWithLargeNamespaces() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 	getObjects := func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 		namespace := rand.String(8)
@@ -110,21 +96,17 @@ func getXLargeScaleWithLargeNamespaces() (namespaces []*corev1.Namespace, networ
 	namespaces, networkPolicies, pods = getXObjects(100, getObjects)
 	return namespaces, networkPolicies, pods
 }
-
 /*
 TestInitXLargeScaleWithOneNamespaces tests the execution time and the memory usage of computing a scale
 of 1 Namespaces, 10k NetworkPolicies, 10k Pods where each network policy selects each pod (applied + ingress).
-
 NAMESPACES   PODS    NETWORK-POLICIES    TIME(s)    MEMORY(M)    EXECUTIONS    EVENTS(ag, atg, np)
 1            10000   10000               10.66       1157         30380         20368 5 20368
-
 The metrics are not accurate under the race detector, and will be skipped when testing with "-race".
 */
 func TestInitXLargeScaleWithOneNamespace(t *testing.T) {
 	namespace, networkPolicies, pods := getXLargeScaleWithOneNamespace()
 	testComputeNetworkPolicy(t, 15*time.Second, namespace, networkPolicies, pods)
 }
-
 func getXLargeScaleWithOneNamespace() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 	namespace := rand.String(8)
 	getObjects := func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
@@ -136,12 +118,10 @@ func getXLargeScaleWithOneNamespace() (namespaces []*corev1.Namespace, networkPo
 	namespaces, networkPolicies, pods = getXObjects(10000, getObjects)
 	return namespaces[0:1], networkPolicies, pods
 }
-
 func TestInitXLargeScaleWithNetpolPerPod(t *testing.T) {
 	namespace, networkPolicies, pods := getXLargeScaleWithNetpolPerPod()
 	testComputeNetworkPolicy(t, 300*time.Second, namespace, networkPolicies, pods)
 }
-
 // getXLargeScaleWithNetpolPerPod returns 1 Namespace, 10k Pods, 10k NetworkPolicies.
 // 1 NP per Pod, with one ingress rule: each Pod can receive traffic from a single other Pod.
 func getXLargeScaleWithNetpolPerPod() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
@@ -165,12 +145,10 @@ func getXLargeScaleWithNetpolPerPod() (namespaces []*corev1.Namespace, networkPo
 	namespaces, networkPolicies, pods = getXObjects(5000, getObjects)
 	return namespaces[0:1], networkPolicies, pods
 }
-
 func TestInitXLargeScaleWithANNPPerExternalEntity(t *testing.T) {
 	namespace, annps, externalEntities := getXLargeScaleWithANNPPerExternalEntity()
 	testComputeNetworkPolicy(t, 10*time.Second, namespace, annps, externalEntities)
 }
-
 func getXLargeScaleWithANNPPerExternalEntity() (namespaces []*corev1.Namespace, annps []runtime.Object, externalEntities []runtime.Object) {
 	namespace := rand.String(8)
 	getObjects := func() (namespaces []*corev1.Namespace, annps []runtime.Object, externalEntities []runtime.Object) {
@@ -192,12 +170,10 @@ func getXLargeScaleWithANNPPerExternalEntity() (namespaces []*corev1.Namespace, 
 	namespaces, annps, externalEntities = getXObjects(5000, getObjects)
 	return namespaces[0:1], annps, externalEntities
 }
-
 func TestInitXLargeScaleWithClusterScopedNetpol(t *testing.T) {
 	namespaces, networkPolicies, pods := getXLargeScaleWithNetpolPerPod()
 	testComputeNetworkPolicy(t, 300*time.Second, namespaces[0:1], networkPolicies, pods)
 }
-
 // getXLargeScaleWithClusterScopedNetpol returns 1k Namespace, 100k Pods, 10k NetworkPolicies.
 // - 100 Pods, 10 NetworkPolicies per Namespace
 // - Each NetworkPolicy selects 100 Pods from 10 Namespaces as peers.
@@ -222,10 +198,8 @@ func getXLargeScaleWithClusterScopedNetpol() (namespaces []*corev1.Namespace, ne
 	namespaces, networkPolicies, pods = getXObjects(1000, getObjects)
 	return namespaces, networkPolicies, pods
 }
-
 func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, namespaces []*corev1.Namespace, networkPolicies []runtime.Object, entities []runtime.Object) {
 	disableLogToStderr()
-
 	var k8sObjs, crdObjs []runtime.Object
 	for _, obj := range networkPolicies {
 		switch policy := obj.(type) {
@@ -243,20 +217,16 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 			crdObjs = append(crdObjs, entity)
 		}
 	}
-
 	k8sObjs = append(k8sObjs, toRunTimeObjects(namespaces)...)
 	_, c := newController(k8sObjs, crdObjs)
 	c.heartbeatCh = make(chan heartbeat, 1000)
-
 	stopCh := make(chan struct{})
-
 	// executionMetric is used to count the executions of each routine and to record the last execution time.
 	type executionMetric struct {
 		executions    int
 		lastExecution time.Time
 	}
 	executionMetrics := map[string]*executionMetric{}
-
 	// If we don't receive any heartbeat from NetworkPolicyController for 3 seconds, it means all computation
 	// finished 3 seconds ago.
 	idleTimeout := 3 * time.Second
@@ -280,9 +250,7 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 			}
 		}
 	}()
-
 	var wg sync.WaitGroup
-
 	// Stat how many events we will get during the computation.
 	var addressGroupEvents, appliedToGroupEvents, networkPolicyEvents int32
 	wg.Add(1)
@@ -290,7 +258,6 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 		statEvents(c, &addressGroupEvents, &appliedToGroupEvents, &networkPolicyEvents, stopCh)
 		wg.Done()
 	}()
-
 	// Stat the maximum heap allocation.
 	var maxAlloc uint64
 	wg.Add(1)
@@ -298,7 +265,6 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 		statMaxMemAlloc(&maxAlloc, 500*time.Millisecond, stopCh)
 		wg.Done()
 	}()
-
 	// Everything is ready, now start timing.
 	start := time.Now()
 	c.informerFactory.Start(stopCh)
@@ -309,7 +275,6 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
 	cache.WaitForCacheSync(stopCh, c.groupingInterfaceSynced)
 	go c.Run(stopCh)
-
 	// Block until all computation is done.
 	<-stopCh
 	// Minus the idle time to get the actual execution time.
@@ -322,16 +287,13 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 		t.Logf("Execution metrics of %s, executions: %d, duration: %v", name, m.executions, m.lastExecution.Sub(start))
 		totalExecution += m.executions
 	}
-
 	// Block until all statistics are done.
 	wg.Wait()
-
 	t.Logf(`Summary metrics:
 NAMESPACES   ENTITIES    NETWORK-POLICIES    TIME(s)    MEMORY(M)    EXECUTIONS    EVENTS(ag, atg, np)
 %-12d %-11d %-19d %-10.2f %-12d %-13d %d %d %d
 `, len(namespaces), len(entities), len(networkPolicies), float64(executionTime)/float64(time.Second), maxAlloc/1024/1024, totalExecution, networkPolicyEvents, appliedToGroupEvents, networkPolicyEvents)
 }
-
 func statEvents(c *networkPolicyController, addressGroupEvents, appliedToGroupEvents, networkPolicyEvents *int32, stopCh chan struct{}) {
 	addressGroupWatcher, _ := c.addressGroupStore.Watch(context.Background(), "", labels.Everything(), fields.Everything())
 	appliedToGroupWatcher, _ := c.appliedToGroupStore.Watch(context.Background(), "", labels.Everything(), fields.Everything())
@@ -349,7 +311,6 @@ func statEvents(c *networkPolicyController, addressGroupEvents, appliedToGroupEv
 		}
 	}
 }
-
 func statMaxMemAlloc(maxAlloc *uint64, interval time.Duration, stopCh chan struct{}) {
 	var memStats goruntime.MemStats
 	ticker := time.NewTicker(interval)
@@ -366,15 +327,12 @@ func statMaxMemAlloc(maxAlloc *uint64, interval time.Duration, stopCh chan struc
 		}
 	}
 }
-
 func getRandomIP() string {
 	return fmt.Sprintf("%d.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
 }
-
 func getRandomNodeName() string {
 	return fmt.Sprintf("Node-%d", rand.Intn(1000))
 }
-
 // getXObjects calls the provided getObjectsFunc x times and aggregate the objects.
 func getXObjects(x int, getObjectsFunc func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, entities []runtime.Object)) (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, entities []runtime.Object) {
 	for i := 0; i < x; i++ {
@@ -385,7 +343,6 @@ func getXObjects(x int, getObjectsFunc func() (namespaces []*corev1.Namespace, n
 	}
 	return namespaces, networkPolicies, entities
 }
-
 func toRunTimeObjects(namespaces []*corev1.Namespace) []runtime.Object {
 	objs := make([]runtime.Object, 0, len(namespaces))
 	for i := range namespaces {
@@ -393,13 +350,11 @@ func toRunTimeObjects(namespaces []*corev1.Namespace) []runtime.Object {
 	}
 	return objs
 }
-
 func newNamespace(name string, labels map[string]string) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels},
 	}
 }
-
 func newPod(namespace, name string, labels map[string]string) *corev1.Pod {
 	if name == "" {
 		name = "pod-" + rand.String(8)
@@ -415,7 +370,6 @@ func newPod(namespace, name string, labels map[string]string) *corev1.Pod {
 	}
 	return pod
 }
-
 func newExternalEntity(namespace, name string, labels map[string]string) *v1alpha2.ExternalEntity {
 	if name == "" {
 		name = "ee-" + rand.String(8)
@@ -438,7 +392,6 @@ func newExternalEntity(namespace, name string, labels map[string]string) *v1alph
 	}
 	return externalEntity
 }
-
 func newNetworkPolicy(namespace, name string, podSelector, ingressPodSelector, ingressNamespaceSelector, egressPodSelector, egressNamespaceSelector map[string]string) *networkingv1.NetworkPolicy {
 	if name == "" {
 		name = "np-" + rand.String(8)
@@ -472,7 +425,6 @@ func newNetworkPolicy(namespace, name string, podSelector, ingressPodSelector, i
 	}
 	return policy
 }
-
 func newANNPAppliedToExternalEntity(namespace, name string, externalEntitySelector, ingressExternalEntitySelector, ingressNamespaceSelector, egressExternalEntitySelector, egressNamespaceSelector map[string]string) *v1beta1.NetworkPolicy {
 	if name == "" {
 		name = "annp-" + rand.String(8)
@@ -520,7 +472,6 @@ func newANNPAppliedToExternalEntity(namespace, name string, externalEntitySelect
 	}
 	return annp
 }
-
 func BenchmarkSyncAddressGroup(b *testing.B) {
 	disableLogToStderr()
 	namespace := "default"
@@ -548,7 +499,6 @@ func BenchmarkSyncAddressGroup(b *testing.B) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
 	cache.WaitForCacheSync(stopCh, c.groupingInterfaceSynced)
-
 	for c.appliedToGroupQueue.Len() > 0 {
 		key, _ := c.appliedToGroupQueue.Get()
 		c.syncAppliedToGroup(key)
@@ -566,40 +516,32 @@ func BenchmarkSyncAddressGroup(b *testing.B) {
 		c.syncAddressGroup(key)
 	}
 }
-
 func BenchmarkInitXLargeScaleWithSmallNamespaces(b *testing.B) {
 	namespaces, networkPolicies, pods := getXLargeScaleWithSmallNamespaces()
 	benchmarkInit(b, namespaces, networkPolicies, pods)
 }
-
 func BenchmarkInitXLargeScaleWithLargeNamespaces(b *testing.B) {
 	namespaces, networkPolicies, pods := getXLargeScaleWithLargeNamespaces()
 	benchmarkInit(b, namespaces, networkPolicies, pods)
 }
-
 func BenchmarkInitXLargeScaleWithOneNamespace(b *testing.B) {
 	namespace, networkPolicies, pods := getXLargeScaleWithOneNamespace()
 	benchmarkInit(b, namespace, networkPolicies, pods)
 }
-
 func BenchmarkInitXLargeScaleWithNetpolPerPod(b *testing.B) {
 	namespaces, networkPolicies, pods := getXLargeScaleWithNetpolPerPod()
 	benchmarkInit(b, namespaces, networkPolicies, pods)
 }
-
 func BenchmarkInitXLargeScaleWithANNPPerExternalEntity(b *testing.B) {
 	namespace, annps, externalEntities := getXLargeScaleWithANNPPerExternalEntity()
 	benchmarkInit(b, namespace, annps, externalEntities)
 }
-
 func BenchmarkInitXLargeScaleWithClusterScopedNetpol(b *testing.B) {
 	namespaces, networkPolicies, pods := getXLargeScaleWithClusterScopedNetpol()
 	benchmarkInit(b, namespaces, networkPolicies, pods)
 }
-
 func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies []runtime.Object, entities []runtime.Object) {
 	disableLogToStderr()
-
 	var k8sObjs, crdObjs []runtime.Object
 	for _, obj := range networkPolicies {
 		switch policy := obj.(type) {
@@ -618,10 +560,8 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 		}
 	}
 	k8sObjs = append(k8sObjs, toRunTimeObjects(namespaces)...)
-
 	b.ReportAllocs()
 	b.ResetTimer()
-
 	bench := func() {
 		b.StopTimer()
 		stopCh := make(chan struct{})
@@ -639,7 +579,6 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 		c.informerFactory.WaitForCacheSync(stopCh)
 		c.crdInformerFactory.WaitForCacheSync(stopCh)
 		b.StartTimer()
-
 		for _, namespace := range namespaces {
 			c.groupingInterface.AddNamespace(namespace)
 		}
@@ -680,12 +619,10 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 		// not restarted in-between.
 		b.StopTimer()
 	}
-
 	for i := 0; i < b.N; i++ {
 		bench()
 	}
 }
-
 func disableLogToStderr() {
 	klogFlagSet := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(klogFlagSet)

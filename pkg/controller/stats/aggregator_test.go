@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package stats
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -28,24 +25,19 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 var (
 	np1 = &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar", UID: "uid1"},
@@ -66,7 +58,6 @@ var (
 		ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "baz", UID: "uid6"},
 	}
 )
-
 // runWrapper wraps the Run method of the Aggregator and is used to avoid race conditions in tests.
 // It waits for the Aggregator to register all test policies (waits until Add event handlers have
 // been called for all test policies) before starting the Run method in a goroutine. It then
@@ -97,7 +88,6 @@ func runWrapper(t *testing.T, a *Aggregator, policyCount int, summaries []*contr
 	close(stopCh)
 	<-doneCh
 }
-
 func TestAggregatorCollectListGet(t *testing.T) {
 	tests := []struct {
 		name                                    string
@@ -524,7 +514,6 @@ func TestAggregatorCollectListGet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, true)
-
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			client := fake.NewSimpleClientset(tt.existingNetworkPolicies...)
@@ -536,7 +525,6 @@ func TestAggregatorCollectListGet(t *testing.T) {
 			crdInformerFactory.Start(stopCh)
 			expectedPolicyCount := len(tt.expectedNetworkPolicyStats) + len(tt.expectedAntreaClusterNetworkPolicyStats) + len(tt.expectedAntreaNetworkPolicyStats)
 			runWrapper(t, a, expectedPolicyCount, tt.summaries)
-
 			require.Equal(t, len(tt.expectedNetworkPolicyStats), len(a.ListNetworkPolicyStats("")))
 			for _, stats := range tt.expectedNetworkPolicyStats {
 				actualStats, exists := a.GetNetworkPolicyStats(stats.Namespace, stats.Name)
@@ -560,10 +548,8 @@ func TestAggregatorCollectListGet(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteNetworkPolicy(t *testing.T) {
 	featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, true)
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	client := fake.NewSimpleClientset(np1)
@@ -573,7 +559,6 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1beta1().NetworkPolicies())
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
-
 	summary := &controlplane.NodeStatsSummary{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node-1",
@@ -619,14 +604,11 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 			},
 		},
 	}
-
 	expectedPolicyCount := 3
 	runWrapper(t, a, expectedPolicyCount, []*controlplane.NodeStatsSummary{summary})
-
 	require.Equal(t, 1, len(a.ListNetworkPolicyStats("")))
 	require.Equal(t, 1, len(a.ListAntreaClusterNetworkPolicyStats()))
 	require.Equal(t, 1, len(a.ListAntreaNetworkPolicyStats("")))
-
 	client.NetworkingV1().NetworkPolicies(np1.Namespace).Delete(context.TODO(), np1.Name, metav1.DeleteOptions{})
 	crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp1.Name, metav1.DeleteOptions{})
 	crdClient.CrdV1beta1().NetworkPolicies(annp1.Namespace).Delete(context.TODO(), annp1.Name, metav1.DeleteOptions{})

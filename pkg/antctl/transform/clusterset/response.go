@@ -11,19 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package clusterset
-
 import (
-<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
-=======
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/pkg/antctl/transform/common"
->>>>>>> origin/main
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 )
-
 type Response struct {
 	ClusterID    string `json:"clusterID" yaml:"clusterID"`
 	Namespace    string `json:"namespace" yaml:"namespace"`
@@ -32,18 +26,15 @@ type Response struct {
 	Status       string `json:"status" yaml:"status"`
 	Reason       string `json:"reason" yaml:"reason"`
 }
-
 func Transform(r interface{}, single bool) (interface{}, error) {
 	if single {
 		return listTransform([]mcv1alpha2.ClusterSet{r.(mcv1alpha2.ClusterSet)})
 	}
 	return listTransform(r)
 }
-
 func listTransform(l interface{}) (interface{}, error) {
 	clusterSets := l.([]mcv1alpha2.ClusterSet)
 	var result []interface{}
-
 	for _, clusterSet := range clusterSets {
 		if len(clusterSet.Status.ClusterStatuses) > 0 {
 			for i := range clusterSet.Status.ClusterStatuses {
@@ -61,13 +52,10 @@ func listTransform(l interface{}) (interface{}, error) {
 			result = append(result, o.(Response))
 		}
 	}
-
 	return result, nil
 }
-
 func objectTransform(clusterSet mcv1alpha2.ClusterSet, status mcv1alpha2.ClusterStatus,
 	condition mcv1alpha2.ClusterCondition) (interface{}, error) {
-
 	return Response{
 		ClusterID:    status.ClusterID,
 		Namespace:    clusterSet.Namespace,
@@ -77,17 +65,13 @@ func objectTransform(clusterSet mcv1alpha2.ClusterSet, status mcv1alpha2.Cluster
 		Reason:       condition.Reason,
 	}, nil
 }
-
 var _ common.TableOutput = new(Response)
-
 func (r Response) GetTableHeader() []string {
 	return []string{"CLUSTER-ID", "NAMESPACE", "CLUSTERSET-ID", "TYPE", "STATUS", "REASON"}
 }
-
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{r.ClusterID, r.Namespace, r.ClusterSetID, r.Type, r.Status, r.Reason}
 }
-
 func (r Response) SortRows() bool {
 	return true
 }

@@ -11,34 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"fmt"
 	"sync"
 	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	"antrea.io/antrea/v2/pkg/util/podstore"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	"antrea.io/antrea/pkg/agent/proxy"
-	"antrea.io/antrea/pkg/util/podstore"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/v2/pkg/agent/proxy"
+	"antrea.io/antrea/v2/pkg/util/podstore"
 )
-
 const (
 	periodicDeleteInterval = time.Minute
 )
-
 type connectionStore struct {
 	connections            map[flowexporter.ConnectionKey]*flowexporter.Connection
 	podStore               podstore.Interface
@@ -47,7 +38,6 @@ type connectionStore struct {
 	staleConnectionTimeout time.Duration
 	mutex                  sync.Mutex
 }
-
 func NewConnectionStore(
 	podStore podstore.Interface,
 	proxier proxy.Proxier,
@@ -60,7 +50,6 @@ func NewConnectionStore(
 		staleConnectionTimeout: o.StaleConnectionTimeout,
 	}
 }
-
 // GetConnByKey gets the connection in connection map given the connection key.
 func (cs *connectionStore) GetConnByKey(connKey flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
 	cs.mutex.Lock()
@@ -68,7 +57,6 @@ func (cs *connectionStore) GetConnByKey(connKey flowexporter.ConnectionKey) (*fl
 	conn, found := cs.connections[connKey]
 	return conn, found
 }
-
 // ForAllConnectionsDo execute the callback for each connection in connection map.
 func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionMapCallBack) error {
 	cs.mutex.Lock()
@@ -82,7 +70,6 @@ func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 	}
 	return nil
 }
-
 // ForAllConnectionsDoWithoutLock execute the callback for each connection in connection
 // map, without grabbing the lock. Caller is expected to grab lock.
 func (cs *connectionStore) ForAllConnectionsDoWithoutLock(callback flowexporter.ConnectionMapCallBack) error {
@@ -95,7 +82,6 @@ func (cs *connectionStore) ForAllConnectionsDoWithoutLock(callback flowexporter.
 	}
 	return nil
 }
-
 // AddConnToMap adds the connection to connections map given connection key.
 // This is used only for unit tests.
 func (cs *connectionStore) AddConnToMap(connKey *flowexporter.ConnectionKey, conn *flowexporter.Connection) {
@@ -103,7 +89,6 @@ func (cs *connectionStore) AddConnToMap(connKey *flowexporter.ConnectionKey, con
 	defer cs.mutex.Unlock()
 	cs.connections[*connKey] = conn
 }
-
 func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {
 	if cs.podStore == nil {
 		klog.V(4).Info("Pod store is not available to retrieve local Pods information.")
@@ -112,7 +97,6 @@ func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {
 	// sourceIP/destinationIP are mapped only to local pods and not remote pods.
 	srcIP := conn.FlowKey.SourceAddress.String()
 	dstIP := conn.FlowKey.DestinationAddress.String()
-
 	srcPod, srcFound := cs.podStore.GetPodByIPAndTime(srcIP, conn.StartTime)
 	dstPod, dstFound := cs.podStore.GetPodByIPAndTime(dstIP, conn.StartTime)
 	if srcFound {
@@ -124,7 +108,6 @@ func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {
 		conn.DestinationPodNamespace = dstPod.Namespace
 	}
 }
-
 func (cs *connectionStore) fillServiceInfo(conn *flowexporter.Connection, serviceStr string) {
 	// resolve destination Service information
 	if cs.antreaProxier != nil {
@@ -136,7 +119,6 @@ func (cs *connectionStore) fillServiceInfo(conn *flowexporter.Connection, servic
 		}
 	}
 }
-
 // LookupServiceProtocol returns the corresponding Service protocol string for a given protocol identifier
 func lookupServiceProtocol(protoID uint8) (corev1.Protocol, error) {
 	serviceProto, found := serviceProtocolMap[protoID]
@@ -145,15 +127,12 @@ func lookupServiceProtocol(protoID uint8) (corev1.Protocol, error) {
 	}
 	return serviceProto, nil
 }
-
 func (cs *connectionStore) AcquireConnStoreLock() {
 	cs.mutex.Lock()
 }
-
 func (cs *connectionStore) ReleaseConnStoreLock() {
 	cs.mutex.Unlock()
 }
-
 // UpdateConnAndQueue deletes the inactive connection from keyToItem map,
 // without adding it back to the PQ. In this way, we can avoid to reset the
 // item's expire time every time we encounter it in the PQ. The method also

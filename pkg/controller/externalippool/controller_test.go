@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package externalippool
-
 import (
 	"context"
 	"net"
 	"sort"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -28,20 +25,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
-	antreacrds "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
-=======
-	antreacrds "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/client/clientset/versioned"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
->>>>>>> origin/main
+	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 )
-
 func newExternalIPPool(name, cidr, start, end string) *antreacrds.ExternalIPPool {
 	pool := &antreacrds.ExternalIPPool{
 		ObjectMeta: metav1.ObjectMeta{
@@ -56,13 +48,11 @@ func newExternalIPPool(name, cidr, start, end string) *antreacrds.ExternalIPPool
 	}
 	return pool
 }
-
 type controller struct {
 	*ExternalIPPoolController
 	crdClient          versioned.Interface
 	crdInformerFactory crdinformers.SharedInformerFactory
 }
-
 // objects is an initial set of K8s objects that is exposed through the client.
 func newController(crdObjects []runtime.Object) *controller {
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
@@ -74,7 +64,6 @@ func newController(crdObjects []runtime.Object) *controller {
 		crdInformerFactory,
 	}
 }
-
 func TestAllocateIPFromPool(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -159,7 +148,6 @@ func TestAllocateIPFromPool(t *testing.T) {
 		})
 	}
 }
-
 func TestReleaseIP(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -236,14 +224,12 @@ func TestReleaseIP(t *testing.T) {
 		})
 	}
 }
-
 func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	controller := newController(nil)
 	controller.crdInformerFactory.Start(stopCh)
 	controller.crdInformerFactory.WaitForCacheSync(stopCh)
-
 	ipPool := newExternalIPPool("ipPoolA", "1.1.1.0/30", "", "")
 	changed := controller.createOrUpdateIPAllocator(ipPool)
 	assert.True(t, changed)
@@ -251,7 +237,6 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	require.True(t, exists)
 	assert.Equal(t, 1, len(allocator))
 	assert.Equal(t, 2, allocator.Total())
-
 	// Append a non-strict CIDR, it should handle it correctly.
 	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, antreacrds.IPRange{CIDR: "1.1.2.1/30"})
 	changed = controller.createOrUpdateIPAllocator(ipPool)
@@ -260,7 +245,6 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	require.True(t, exists)
 	assert.Equal(t, 2, len(allocator))
 	assert.Equal(t, 4, allocator.Total())
-
 	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, antreacrds.IPRange{Start: "1.1.3.1", End: "1.1.3.10"})
 	changed = controller.createOrUpdateIPAllocator(ipPool)
 	assert.True(t, changed)
@@ -268,7 +252,6 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	require.True(t, exists)
 	assert.Equal(t, 3, len(allocator))
 	assert.Equal(t, 14, allocator.Total())
-
 	// IPv6 CIDR shouldn't exclude broadcast address, so total should be increased by 15.
 	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, antreacrds.IPRange{CIDR: "2021:3::aaa1/124"})
 	changed = controller.createOrUpdateIPAllocator(ipPool)
@@ -277,7 +260,6 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	require.True(t, exists)
 	assert.Equal(t, 4, len(allocator))
 	assert.Equal(t, 29, allocator.Total())
-
 	// When there is no change, the method should do nothing and the return value should be false.
 	changed = controller.createOrUpdateIPAllocator(ipPool)
 	assert.False(t, changed)
@@ -286,7 +268,6 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	assert.Equal(t, 4, len(allocator))
 	assert.Equal(t, 29, allocator.Total())
 }
-
 func TestIPPoolEvents(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -325,7 +306,6 @@ func TestIPPoolEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "eip1", <-consumerCh)
 }
-
 func TestConsumersRestoreIPAllocation(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -372,7 +352,6 @@ func TestConsumersRestoreIPAllocation(t *testing.T) {
 	assert.Equal(t, "10.10.10.4", allocated[0])
 	assert.Equal(t, "10.10.10.5", allocated[1])
 }
-
 func TestIPPoolExists(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -415,7 +394,6 @@ func TestIPPoolExists(t *testing.T) {
 		})
 	}
 }
-
 func TestIPPoolHasIP(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -461,7 +439,6 @@ func TestIPPoolHasIP(t *testing.T) {
 		})
 	}
 }
-
 func checkExternalIPPoolStatus(t *testing.T, controller *controller, poolName string, expectedStatus antreacrds.IPPoolUsage) {
 	exists := controller.IPPoolExists(poolName)
 	require.True(t, exists)
@@ -474,7 +451,6 @@ func checkExternalIPPoolStatus(t *testing.T, controller *controller, poolName st
 	})
 	assert.NoError(t, err)
 }
-
 func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 	tests := []struct {
 		name                 string

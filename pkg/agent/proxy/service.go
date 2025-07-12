@@ -11,53 +11,38 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package proxy
-
 import (
 	"sync"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/proxy/types"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
-=======
-	"antrea.io/antrea/pkg/agent/proxy/types"
+	"antrea.io/antrea/v2/pkg/agent/proxy/types"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 type serviceChangesTracker struct {
 	tracker *k8sproxy.ServiceChangeTracker
-
 	sync.Mutex
 	initialized bool
 }
-
 func newServiceChangesTracker(recorder record.EventRecorder, ipFamily v1.IPFamily, serviceLabelSelector labels.Selector, skipServices []string) *serviceChangesTracker {
 	return &serviceChangesTracker{tracker: k8sproxy.NewServiceChangeTracker(types.NewServiceInfo, ipFamily, recorder, nil, serviceLabelSelector, skipServices)}
 }
-
 func (sh *serviceChangesTracker) OnServiceSynced() {
 	sh.Lock()
 	defer sh.Unlock()
-
 	sh.initialized = true
 }
-
 func (sh *serviceChangesTracker) OnServiceUpdate(previous, current *v1.Service) bool {
 	return sh.tracker.Update(previous, current)
 }
-
 func (sh *serviceChangesTracker) Synced() bool {
 	sh.Lock()
 	defer sh.Unlock()
 	return sh.initialized
 }
-
 func (sh *serviceChangesTracker) Update(serviceMap k8sproxy.ServiceMap) k8sproxy.UpdateServiceMapResult {
 	return serviceMap.Update(sh.tracker)
 }

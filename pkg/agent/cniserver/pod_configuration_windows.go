@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,12 +13,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cniserver
-
 import (
 	"time"
-
 	"antrea.io/libOpenflow/openflow15"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	corev1 "k8s.io/api/core/v1"
@@ -31,25 +27,18 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	"antrea.io/antrea/pkg/agent/interfacestore"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 )
-
 var (
 	workerName = "podConfigurator"
 )
-
 const (
 	podNotReadyTime        = 30 * time.Second
 	ovsInterfaceTypeForPod = "internal"
 )
-
 // connectInterfaceToOVSAsync waits for an interface to be created and connects it to OVS br-int asynchronously
 // in another goroutine. The function is for containerd runtime. The host interface is created after
 // CNI call completes.
@@ -68,7 +57,6 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 		return nil
 	})
 }
-
 // connectInterfaceToOVS connects an existing interface to the OVS bridge.
 func (pc *podConfigurator) connectInterfaceToOVS(
 	podName, podNamespace, containerID, netNS string,
@@ -95,7 +83,6 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	pc.ifaceStore.AddInterface(containerConfig)
 	return containerConfig, pc.connectInterfaceToOVSAsync(containerConfig, containerAccess)
 }
-
 func (pc *podConfigurator) configureInterfaces(
 	podName, podNamespace, containerID, containerNetNS string,
 	containerIFDev string, mtu int, sriovVFDeviceID string,
@@ -129,11 +116,9 @@ func (pc *podConfigurator) configureInterfaces(
 		result.Interfaces = []*current.Interface{hostIface, containerIface}
 		return nil
 	}
-
 	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
 		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess)
 }
-
 // isInterfaceInvalid returns false because we now don't support detecting the disconnected host interface on Windows
 // due to the OVS issue (https://github.com/openvswitch/ovs-issues/issues/353), by which we can't differentiate from
 // the case that a Pod's host interface is created during agent downtime and is expected to re-connect after agent
@@ -141,7 +126,6 @@ func (pc *podConfigurator) configureInterfaces(
 func (pc *podConfigurator) isInterfaceInvalid(ifaceConfig *interfacestore.InterfaceConfig) bool {
 	return false
 }
-
 func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) {
 	for i := range ifConfigs {
 		ifaceConfig := ifConfigs[i]
@@ -150,7 +134,6 @@ func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.Inte
 		}
 	}
 }
-
 // initPortStatusMonitor has subscribed a channel to listen for the OpenFlow PortStatus message, and it also
 // initiates the Pod recorder.
 func (pc *podConfigurator) initPortStatusMonitor(podInformer cache.SharedIndexInformer) {
@@ -170,13 +153,10 @@ func (pc *podConfigurator) initPortStatusMonitor(podInformer cache.SharedIndexIn
 	pc.statusCh = make(chan *openflow15.PortStatus, 100)
 	pc.ofClient.SubscribeOFPortStatusMessage(pc.statusCh)
 }
-
 func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
 	defer pc.unreadyPortQueue.ShutDown()
-
 	klog.Infof("Starting %s", workerName)
 	defer klog.Infof("Shutting down %s", workerName)
-
 	if !cache.WaitForNamedCacheSync("podConfigurator", stopCh, pc.podListerSynced) {
 		return
 	}
@@ -185,9 +165,7 @@ func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
 		Interface: pc.kubeClient.CoreV1().Events(""),
 	})
 	defer pc.eventBroadcaster.Shutdown()
-
 	go wait.Until(pc.worker, time.Second, stopCh)
-
 	for {
 		select {
 		case status := <-pc.statusCh:
@@ -199,7 +177,6 @@ func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 // worker is a long-running function that will continually call the processNextWorkItem function in
 // order to read and process a message on the workqueue.
 func (pc *podConfigurator) worker() {

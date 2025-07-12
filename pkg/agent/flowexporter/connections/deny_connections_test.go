@@ -11,21 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"fmt"
 	"net/netip"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
@@ -33,17 +28,14 @@ import (
 	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/metrics"
-	"antrea.io/antrea/pkg/agent/openflow"
-	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	proxytest "antrea.io/antrea/v2/pkg/agent/proxy/testing"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// Create flow for testing adding and updating of same connection.
@@ -141,9 +133,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				mockPodStore.EXPECT().GetPodByIPAndTime(tuple.SourceAddress.String(), gomock.Any()).Return(pod1, true)
 				mockPodStore.EXPECT().GetPodByIPAndTime(tuple.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 			}
-
 			denyConnStore := NewDenyConnectionStore(mockPodStore, mockProxier, testFlowExporterOptions, filter.NewProtocolFilter(c.protocolFilter))
-
 			denyConnStore.AddOrUpdateConn(&c.testFlow, refTime.Add(-(time.Second * 20)), uint64(60))
 			expConn := c.testFlow
 			if c.isSvc {
@@ -154,13 +144,11 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				assert.Equal(t, ok, false, "deny connection should not be there in deny connection store")
 				return // The connection was filtered out, nothing to compare
 			}
-
 			assert.Equal(t, ok, true, "deny connection should be there in deny connection store")
 			assert.Equal(t, expConn, *actualConn, "deny connections should be equal")
 			assert.Equal(t, 1, denyConnStore.connectionStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
 			assert.Equal(t, refTime.Add(-(time.Second * 20)), actualConn.LastExportTime, "LastExportTime should be set to StartTime during Add")
 			checkDenyConnectionMetrics(t, len(denyConnStore.connections))
-
 			denyConnStore.AddOrUpdateConn(&c.testFlow, refTime.Add(-(time.Second * 10)), uint64(60))
 			expConn.OriginalBytes = uint64(120)
 			expConn.OriginalPackets = uint64(2)

@@ -1,12 +1,9 @@
 /*
 Copyright 2014 The Kubernetes Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,25 +24,18 @@ limitations under the License.
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 Modifies:
 - Replace k8s.io/kubernetes/pkg/controller/nodeipam/ipam import with
-<<<<<<< HEAD
  antrea.io/antrea/v2/third_party/nodeipam/ipam
-=======
  antrea.io/antrea/third_party/nodeipam/ipam
->>>>>>> origin/main
 - Comment out startLegacyIPAM() call as legacy IPAM support is redundant
 - Remove cloud argument from NewNodeIpamController()
 - Remove cloud member from Controler struct
 - Remove unused constants
 */
-
 package nodeipam
-
 import (
 	"net"
-
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -54,31 +44,22 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/third_party/ipam/nodeipam/ipam"
-=======
 	"antrea.io/antrea/third_party/ipam/nodeipam/ipam"
->>>>>>> origin/main
 )
-
 // Controller is the controller that manages node ipam state.
 type Controller struct {
 	allocatorType ipam.CIDRAllocatorType
-
 	clusterCIDRs         []*net.IPNet
 	serviceCIDR          *net.IPNet
 	secondaryServiceCIDR *net.IPNet
 	kubeClient           clientset.Interface
 	// Method for easy mocking in unittest.
 	lookupIP func(host string) ([]net.IP, error)
-
 	nodeLister         corelisters.NodeLister
 	nodeInformerSynced cache.InformerSynced
-
 	cidrAllocator ipam.CIDRAllocator
 }
-
 // NewNodeIpamController returns a new node IP Address Management controller to
 // sync instances from cloudprovider.
 // This method returns an error if it is unable to initialize the CIDR bitmap with
@@ -92,26 +73,21 @@ func NewNodeIpamController(
 	secondaryServiceCIDR *net.IPNet,
 	nodeCIDRMaskSizes []int,
 	allocatorType ipam.CIDRAllocatorType) (*Controller, error) {
-
 	if kubeClient == nil {
 		klog.Fatalf("kubeClient is nil when starting Controller")
 	}
-
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
-
 	klog.Infof("Sending events to api server.")
 	eventBroadcaster.StartRecordingToSink(
 		&v1core.EventSinkImpl{
 			Interface: kubeClient.CoreV1().Events(""),
 		})
-
 	// Cloud CIDR allocator does not rely on clusterCIDR or nodeCIDRMaskSize for allocation.
 	if allocatorType != ipam.CloudAllocatorType {
 		if len(clusterCIDRs) == 0 {
 			klog.Fatal("Controller: Must specify --cluster-cidr if --allocate-node-cidrs is set")
 		}
-
 		for idx, cidr := range clusterCIDRs {
 			mask := cidr.Mask
 			if maskSize, _ := mask.Size(); maskSize > nodeCIDRMaskSizes[idx] {
@@ -119,7 +95,6 @@ func NewNodeIpamController(
 			}
 		}
 	}
-
 	ic := &Controller{
 		kubeClient:           kubeClient,
 		lookupIP:             net.LookupIP,
@@ -128,46 +103,36 @@ func NewNodeIpamController(
 		secondaryServiceCIDR: secondaryServiceCIDR,
 		allocatorType:        allocatorType,
 	}
-
 	// TODO: Abstract this check into a generic controller manager should run method.
 	if ic.allocatorType == ipam.IPAMFromClusterAllocatorType || ic.allocatorType == ipam.IPAMFromCloudAllocatorType {
 		//startLegacyIPAM(ic, nodeInformer, cloud, kubeClient, clusterCIDRs, serviceCIDR, nodeCIDRMaskSizes)
 	} else {
 		var err error
-
 		allocatorParams := ipam.CIDRAllocatorParams{
 			ClusterCIDRs:         clusterCIDRs,
 			ServiceCIDR:          ic.serviceCIDR,
 			SecondaryServiceCIDR: ic.secondaryServiceCIDR,
 			NodeCIDRMaskSizes:    nodeCIDRMaskSizes,
 		}
-
 		ic.cidrAllocator, err = ipam.New(kubeClient, nodeInformer, ic.allocatorType, allocatorParams)
 		if err != nil {
 			return nil, err
 		}
 	}
-
 	ic.nodeLister = nodeInformer.Lister()
 	ic.nodeInformerSynced = nodeInformer.Informer().HasSynced
-
 	return ic, nil
 }
-
 // Run starts an asynchronous loop that monitors the status of cluster nodes.
 func (nc *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
-
 	klog.Infof("Starting ipam controller")
 	defer klog.Infof("Shutting down ipam controller")
-
 	if !cache.WaitForNamedCacheSync("node", stopCh, nc.nodeInformerSynced) {
 		return
 	}
-
 	if nc.allocatorType != ipam.IPAMFromClusterAllocatorType && nc.allocatorType != ipam.IPAMFromCloudAllocatorType {
 		go nc.cidrAllocator.Run(stopCh)
 	}
-
 	<-stopCh
 }

@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package winnet
-
 import (
 	"bufio"
 	"errors"
@@ -28,58 +25,44 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
-
 	"github.com/Microsoft/hcsshim"
 	"golang.org/x/sys/windows"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	ps "antrea.io/antrea/v2/pkg/agent/util/powershell"
 	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
 	iputil "antrea.io/antrea/v2/pkg/util/ip"
-=======
-	ps "antrea.io/antrea/pkg/agent/util/powershell"
-	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
-	iputil "antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	ps "antrea.io/antrea/v2/pkg/agent/util/powershell"
+	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
+	iputil "antrea.io/antrea/v2/pkg/util/ip"
 )
-
 const (
 	ContainerVNICPrefix = "vEthernet"
 	OVSExtensionID      = "583CC151-73EC-4A6A-8B47-578297AD7623"
 	ovsExtensionName    = "Open vSwitch Extension"
-
 	MetricDefault = 256
 	MetricHigh    = 50
-
 	// Filter masks are used to indicate the attributes used for route filtering.
 	RT_FILTER_IF uint64 = 1 << (1 + iota)
 	RT_FILTER_METRIC
 	RT_FILTER_DST
 	RT_FILTER_GW
-
 	// IP_ADAPTER_DHCP_ENABLED is defined in the Win32 API document.
 	// https://learn.microsoft.com/en-us/windows/win32/api/iptypes/ns-iptypes-ip_adapter_addresses_lh
 	IP_ADAPTER_DHCP_ENABLED = 0x00000004
-
 	// GAA_FLAG_INCLUDE_ALL_COMPARTMENTS is used in windows.GetAdapterAddresses parameter
 	// flags to return addresses in all routing compartments.
 	GAA_FLAG_INCLUDE_ALL_COMPARTMENTS = 0x00000200
-
 	// GAA_FLAG_INCLUDE_ALL_INTERFACES is used in windows.GetAdapterAddresses parameter
 	// flags to return addresses for all NDIS interfaces.
 	GAA_FLAG_INCLUDE_ALL_INTERFACES = 0x00000100
 )
-
 type Handle struct{}
-
 var (
 	// Declared variables which are meant to be overridden for testing.
 	antreaNetIO          = antreasyscall.NewNetIO()
 	getAdaptersAddresses = windows.GetAdaptersAddresses
 	runCommand           = ps.RunCommand
 )
-
 func routeFromIPForwardRow(row *antreasyscall.MibIPForwardRow) *Route {
 	destination := row.DestinationPrefix.IPNet()
 	gatewayAddr := row.NextHop.IP()
@@ -90,7 +73,6 @@ func routeFromIPForwardRow(row *antreasyscall.MibIPForwardRow) *Route {
 		RouteMetric:       int(row.Metric),
 	}
 }
-
 // IsVirtualNetAdapter checks if the provided network adapter is virtual.
 func (h *Handle) IsVirtualNetAdapter(adapterName string) (bool, error) {
 	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s" | Select-Object -Property Virtual | Format-Table -HideTableHeaders`, adapterName)
@@ -104,7 +86,6 @@ func (h *Handle) IsVirtualNetAdapter(adapterName string) (bool, error) {
 	}
 	return isVirtual, nil
 }
-
 // IsNetAdapterStatusUp checks if the status of the provided network adapter is UP.
 func (h *Handle) IsNetAdapterStatusUp(adapterName string) (bool, error) {
 	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s" | Select-Object -Property Status | Format-Table -HideTableHeaders`, adapterName)
@@ -118,7 +99,6 @@ func (h *Handle) IsNetAdapterStatusUp(adapterName string) (bool, error) {
 	}
 	return true, nil
 }
-
 // EnableNetAdapter sets the specified network adapter status as UP.
 func (h *Handle) EnableNetAdapter(adapterName string) error {
 	cmd := fmt.Sprintf(`Enable-NetAdapter -InterfaceAlias "%s"`, adapterName)
@@ -127,7 +107,6 @@ func (h *Handle) EnableNetAdapter(adapterName string) error {
 	}
 	return nil
 }
-
 // AddNetAdapterIPAddress adds the specified IP address on the specified network adapter.
 func (h *Handle) AddNetAdapterIPAddress(adapterName string, ipConfig *net.IPNet, gateway string) error {
 	ipStr := strings.Split(ipConfig.String(), "/")
@@ -142,7 +121,6 @@ func (h *Handle) AddNetAdapterIPAddress(adapterName string, ipConfig *net.IPNet,
 	}
 	return nil
 }
-
 // RemoveNetAdapterIPAddress removes the specified IP address from the specified network adapter.
 func (h *Handle) RemoveNetAdapterIPAddress(adapterName string, ipAddr net.IP) error {
 	cmd := fmt.Sprintf(`Remove-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -Confirm:$false`, adapterName, ipAddr.String())
@@ -153,7 +131,6 @@ func (h *Handle) RemoveNetAdapterIPAddress(adapterName string, ipAddr net.IP) er
 	}
 	return nil
 }
-
 // EnableIPForwarding enables the network adapter to forward IP packets that arrive at this network adapter to other ones.
 func (h *Handle) EnableIPForwarding(adapterName string) error {
 	adapter, err := getAdapterInAllCompartmentsByName(adapterName)
@@ -162,7 +139,6 @@ func (h *Handle) EnableIPForwarding(adapterName string) error {
 	}
 	return adapter.setForwarding(true, antreasyscall.AF_INET)
 }
-
 func (h *Handle) RenameVMNetworkAdapter(networkName, macStr, newName string, renameNetAdapter bool) error {
 	cmd := fmt.Sprintf(`Get-VMNetworkAdapter -ManagementOS -ComputerName localhost -SwitchName "%s" | ? MacAddress -EQ "%s" | Select-Object -Property Name | Format-Table -HideTableHeaders`, networkName, macStr)
 	stdout, err := runCommand(cmd)
@@ -186,7 +162,6 @@ func (h *Handle) RenameVMNetworkAdapter(networkName, macStr, newName string, ren
 	}
 	return nil
 }
-
 // EnableRSCOnVSwitch enables RSC in the vSwitch to reduce host CPU utilization and increase throughput for virtual
 // workloads by coalescing multiple TCP segments into fewer, but larger segments.
 func (h *Handle) EnableRSCOnVSwitch(vSwitch string) error {
@@ -216,7 +191,6 @@ func (h *Handle) EnableRSCOnVSwitch(vSwitch string) error {
 	klog.Infof("Enabled Receive Segment Coalescing (RSC) for vSwitch %s", vSwitch)
 	return nil
 }
-
 // GetDefaultGatewayByNetAdapterIndex returns the default gateway configured on the specified network adapter.
 func (h *Handle) GetDefaultGatewayByNetAdapterIndex(adapterIndex int) (string, error) {
 	ip, defaultDestination, _ := net.ParseCIDR("0.0.0.0/0")
@@ -234,7 +208,6 @@ func (h *Handle) GetDefaultGatewayByNetAdapterIndex(adapterIndex int) (string, e
 	}
 	return routes[0].GatewayAddress.String(), nil
 }
-
 // GetDNServersByNetAdapterIndex returns the DNS servers configured on the specified network adapter.
 func (h *Handle) GetDNServersByNetAdapterIndex(adapterIndex int) (string, error) {
 	cmd := fmt.Sprintf("$(Get-DnsClientServerAddress -InterfaceIndex %d -AddressFamily IPv4).ServerAddresses", adapterIndex)
@@ -246,7 +219,6 @@ func (h *Handle) GetDNServersByNetAdapterIndex(adapterIndex int) (string, error)
 	dnsServers = strings.TrimRight(dnsServers, ",")
 	return dnsServers, nil
 }
-
 // SetNetAdapterDNSServers configures DNS servers on network adapter.
 func (h *Handle) SetNetAdapterDNSServers(adapterName, dnsServers string) error {
 	cmd := fmt.Sprintf(`Set-DnsClientServerAddress -InterfaceAlias "%s" -ServerAddresses "%s"`, adapterName, dnsServers)
@@ -255,12 +227,10 @@ func (h *Handle) SetNetAdapterDNSServers(adapterName, dnsServers string) error {
 	}
 	return nil
 }
-
 func (h *Handle) NetAdapterExists(adapterName string) bool {
 	_, err := getAdapterInAllCompartmentsByName(adapterName)
 	return err == nil
 }
-
 // IsNetAdapterIPv4DHCPEnabled returns the IPv4 DHCP status on the specified network adapter.
 func (h *Handle) IsNetAdapterIPv4DHCPEnabled(adapterName string) (bool, error) {
 	adapter, err := getAdapterInAllCompartmentsByName(adapterName)
@@ -270,7 +240,6 @@ func (h *Handle) IsNetAdapterIPv4DHCPEnabled(adapterName string) (bool, error) {
 	ipv4DHCP := adapter.flags&IP_ADAPTER_DHCP_ENABLED != 0
 	return ipv4DHCP, nil
 }
-
 // SetNetAdapterMTU configures network adapter MTU on host for Pods. MTU change cannot be realized with HNSEndpoint because
 // there's no MTU field in HNSEndpoint:
 // https://github.com/Microsoft/hcsshim/blob/4a468a6f7ae547974bc32911395c51fb1862b7df/internal/hns/hnsendpoint.go#L12
@@ -281,18 +250,15 @@ func (h *Handle) SetNetAdapterMTU(adapterName string, mtu int) error {
 	}
 	return adapter.setMTU(mtu, antreasyscall.AF_INET)
 }
-
 func AddressFamilyByIP(ip net.IP) uint16 {
 	if ip.To4() != nil {
 		return antreasyscall.AF_INET
 	}
 	return antreasyscall.AF_INET6
 }
-
 func VirtualAdapterName(name string) string {
 	return fmt.Sprintf("%s (%s)", ContainerVNICPrefix, name)
 }
-
 func toMibIPForwardRow(r *Route) *antreasyscall.MibIPForwardRow {
 	row := antreasyscall.NewIPForwardRow()
 	row.DestinationPrefix = *antreasyscall.NewAddressPrefixFromIPNet(r.DestinationSubnet)
@@ -301,7 +267,6 @@ func toMibIPForwardRow(r *Route) *antreasyscall.MibIPForwardRow {
 	row.Index = uint32(r.LinkIndex)
 	return row
 }
-
 func (h *Handle) AddNetRoute(route *Route) error {
 	if route == nil {
 		return nil
@@ -312,7 +277,6 @@ func (h *Handle) AddNetRoute(route *Route) error {
 	}
 	return nil
 }
-
 func (h *Handle) RemoveNetRoute(route *Route) error {
 	if route == nil || route.DestinationSubnet == nil {
 		return nil
@@ -332,7 +296,6 @@ func (h *Handle) RemoveNetRoute(route *Route) error {
 	}
 	return nil
 }
-
 func (h *Handle) ReplaceNetRoute(route *Route) error {
 	if route == nil || route.DestinationSubnet == nil {
 		return nil
@@ -356,7 +319,6 @@ func (h *Handle) ReplaceNetRoute(route *Route) error {
 	}
 	return h.AddNetRoute(route)
 }
-
 func (h *Handle) RouteListFiltered(family uint16, filter *Route, filterMask uint64) ([]Route, error) {
 	rows, err := antreaNetIO.ListIPForwardRows(family)
 	if err != nil {
@@ -383,7 +345,6 @@ func (h *Handle) RouteListFiltered(family uint16, filter *Route, filterMask uint
 	}
 	return rts, nil
 }
-
 func parseCmdResult(result string, columns int) [][]string {
 	scanner := bufio.NewScanner(strings.NewReader(result))
 	parsed := [][]string{}
@@ -397,7 +358,6 @@ func parseCmdResult(result string, columns int) [][]string {
 	}
 	return parsed
 }
-
 func (h *Handle) AddNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 	cmd := fmt.Sprintf("Get-NetNat -Name %s | Select-Object InternalIPInterfaceAddressPrefix | Format-Table -HideTableHeaders", netNatName)
 	if internalNet, err := runCommand(cmd); err != nil {
@@ -422,7 +382,6 @@ func (h *Handle) AddNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 	}
 	return nil
 }
-
 func (h *Handle) ReplaceNetNatStaticMapping(mapping *NetNatStaticMapping) error {
 	staticMappingStr, err := getNetNatStaticMapping(mapping)
 	if err != nil {
@@ -445,7 +404,6 @@ func (h *Handle) ReplaceNetNatStaticMapping(mapping *NetNatStaticMapping) error 
 	}
 	return h.AddNetNatStaticMapping(mapping)
 }
-
 // getNetNatStaticMapping checks if a NetNatStaticMapping exists.
 func getNetNatStaticMapping(mapping *NetNatStaticMapping) (string, error) {
 	cmd := fmt.Sprintf("Get-NetNatStaticMapping -NatName %s", mapping.Name) +
@@ -459,7 +417,6 @@ func getNetNatStaticMapping(mapping *NetNatStaticMapping) (string, error) {
 	}
 	return staticMappingStr, nil
 }
-
 // AddNetNatStaticMapping adds a static mapping to a NAT instance.
 func (h *Handle) AddNetNatStaticMapping(mapping *NetNatStaticMapping) error {
 	cmd := fmt.Sprintf("Add-NetNatStaticMapping -NatName %s -ExternalIPAddress %s -ExternalPort %d -InternalIPAddress %s -InternalPort %d -Protocol %s",
@@ -467,7 +424,6 @@ func (h *Handle) AddNetNatStaticMapping(mapping *NetNatStaticMapping) error {
 	_, err := runCommand(cmd)
 	return err
 }
-
 // RemoveNetNatStaticMapping removes a static mapping from a NetNat instance.
 func (h *Handle) RemoveNetNatStaticMapping(mapping *NetNatStaticMapping) error {
 	staticMappingStr, err := getNetNatStaticMapping(mapping)
@@ -478,7 +434,6 @@ func (h *Handle) RemoveNetNatStaticMapping(mapping *NetNatStaticMapping) error {
 	if len(parsed) == 0 {
 		return nil
 	}
-
 	firstCol := strings.Split(parsed[0][0], ";")
 	id, err := strconv.Atoi(firstCol[1])
 	if err != nil {
@@ -486,20 +441,17 @@ func (h *Handle) RemoveNetNatStaticMapping(mapping *NetNatStaticMapping) error {
 	}
 	return removeNetNatStaticMappingByID(mapping.Name, id)
 }
-
 func removeNetNatStaticMappingByID(netNatName string, id int) error {
 	cmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -StaticMappingID %d -Confirm:$false", netNatName, id)
 	_, err := runCommand(cmd)
 	return err
 }
-
 // RemoveNetNatStaticMappingsByNetNat removes all static mappings from a NetNat instance.
 func (h *Handle) RemoveNetNatStaticMappingsByNetNat(netNatName string) error {
 	cmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -Confirm:$false", netNatName)
 	_, err := runCommand(cmd)
 	return err
 }
-
 // getNetNeighbor gets neighbor cache entries with Get-NetNeighbor.
 func getNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
 	cmd := fmt.Sprintf("Get-NetNeighbor -InterfaceIndex %d -IPAddress %s | Format-Table -HideTableHeaders", neighbor.LinkIndex, neighbor.IPAddress.String())
@@ -507,7 +459,6 @@ func getNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
 	if err != nil && !strings.Contains(err.Error(), "No matching MSFT_NetNeighbor objects") {
 		return nil, err
 	}
-
 	parsed := parseCmdResult(neighborsStr, 5)
 	var neighbors []Neighbor
 	for _, items := range parsed {
@@ -534,7 +485,6 @@ func getNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
 	}
 	return neighbors, nil
 }
-
 // newNetNeighbor creates a new neighbor cache entry with New-NetNeighbor.
 func newNetNeighbor(neighbor *Neighbor) error {
 	cmd := fmt.Sprintf("New-NetNeighbor -InterfaceIndex %d -IPAddress %s -LinkLayerAddress %s -State Permanent",
@@ -542,20 +492,17 @@ func newNetNeighbor(neighbor *Neighbor) error {
 	_, err := runCommand(cmd)
 	return err
 }
-
 func removeNetNeighbor(neighbor *Neighbor) error {
 	cmd := fmt.Sprintf("Remove-NetNeighbor -InterfaceIndex %d -IPAddress %s -Confirm:$false",
 		neighbor.LinkIndex, neighbor.IPAddress)
 	_, err := runCommand(cmd)
 	return err
 }
-
 func (h *Handle) ReplaceNetNeighbor(neighbor *Neighbor) error {
 	neighbors, err := getNetNeighbor(neighbor)
 	if err != nil {
 		return err
 	}
-
 	if len(neighbors) == 0 {
 		if err := newNetNeighbor(neighbor); err != nil {
 			return err
@@ -572,7 +519,6 @@ func (h *Handle) ReplaceNetNeighbor(neighbor *Neighbor) error {
 	}
 	return newNetNeighbor(neighbor)
 }
-
 func (h *Handle) GetVMSwitchNetAdapterName(vmSwitch string) (string, error) {
 	cmd := fmt.Sprintf(`Get-VMSwitchTeam -Name "%s" -ComputerName localhost | select NetAdapterInterfaceDescription |  Format-Table -HideTableHeaders`, vmSwitch)
 	out, err := runCommand(cmd)
@@ -590,7 +536,6 @@ func (h *Handle) GetVMSwitchNetAdapterName(vmSwitch string) (string, error) {
 	out = strings.TrimSpace(out)
 	return out, err
 }
-
 func (h *Handle) VMSwitchExists(vmSwitch string) (bool, error) {
 	cmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName localhost`, vmSwitch)
 	_, err := runCommand(cmd)
@@ -602,7 +547,6 @@ func (h *Handle) VMSwitchExists(vmSwitch string) (bool, error) {
 	}
 	return false, err
 }
-
 // AddVMSwitch creates a VMSwitch and enables OVS extension. Connection to VMSwitch is lost for few seconds.
 // TODO: Handle for multiple interfaces
 func (h *Handle) AddVMSwitch(adapterName, vmSwitch string) error {
@@ -613,7 +557,6 @@ func (h *Handle) AddVMSwitch(adapterName, vmSwitch string) error {
 	}
 	return nil
 }
-
 func (h *Handle) RemoveVMSwitch(vmSwitch string) error {
 	exists, err := h.VMSwitchExists(vmSwitch)
 	if err != nil {
@@ -628,15 +571,12 @@ func (h *Handle) RemoveVMSwitch(vmSwitch string) error {
 	}
 	return nil
 }
-
 type updateIPInterfaceFunc func(entry *antreasyscall.MibIPInterfaceRow) *antreasyscall.MibIPInterfaceRow
-
 type adapter struct {
 	net.Interface
 	compartmentID uint32
 	flags         uint32
 }
-
 func (a *adapter) setMTU(mtu int, family uint16) error {
 	if err := a.setIPInterfaceEntry(family, func(entry *antreasyscall.MibIPInterfaceRow) *antreasyscall.MibIPInterfaceRow {
 		newEntry := *entry
@@ -647,7 +587,6 @@ func (a *adapter) setMTU(mtu int, family uint16) error {
 	}
 	return nil
 }
-
 func (a *adapter) setForwarding(enabledForwarding bool, family uint16) error {
 	if err := a.setIPInterfaceEntry(family, func(entry *antreasyscall.MibIPInterfaceRow) *antreasyscall.MibIPInterfaceRow {
 		newEntry := *entry
@@ -658,7 +597,6 @@ func (a *adapter) setForwarding(enabledForwarding bool, family uint16) error {
 	}
 	return nil
 }
-
 func (a *adapter) setIPInterfaceEntry(family uint16, updateFunc updateIPInterfaceFunc) error {
 	if a.compartmentID > 1 {
 		runtime.LockOSThread()
@@ -678,12 +616,10 @@ func (a *adapter) setIPInterfaceEntry(family uint16, updateFunc updateIPInterfac
 	updatedRow.SitePrefixLength = 0
 	return antreaNetIO.SetIPInterfaceEntry(updatedRow)
 }
-
 var (
 	errInvalidInterfaceName = errors.New("invalid network interface name")
 	errNoSuchInterface      = errors.New("no such network interface")
 )
-
 func getAdapterInAllCompartmentsByName(name string) (*adapter, error) {
 	if name == "" {
 		return nil, &net.OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: errInvalidInterfaceName}
@@ -697,7 +633,6 @@ func getAdapterInAllCompartmentsByName(name string) (*adapter, error) {
 	}
 	return &adapters[0], nil
 }
-
 func (h *Handle) EnableVMSwitchOVSExtension(vmSwitch string) error {
 	cmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName localhost| Enable-VMSwitchExtension "%s"`, vmSwitch, ovsExtensionName)
 	_, err := runCommand(cmd)
@@ -706,7 +641,6 @@ func (h *Handle) EnableVMSwitchOVSExtension(vmSwitch string) error {
 	}
 	return nil
 }
-
 // parseOVSExtensionOutput parses the VM extension output and returns the value of Enabled field.
 func parseOVSExtensionOutput(s string) bool {
 	scanner := bufio.NewScanner(strings.NewReader(s))
@@ -719,7 +653,6 @@ func parseOVSExtensionOutput(s string) bool {
 	}
 	return false
 }
-
 func (h *Handle) IsVMSwitchOVSExtensionEnabled(vmSwitch string) (bool, error) {
 	cmd := fmt.Sprintf(`Get-VMSwitchExtension -VMSwitchName "%s" -ComputerName localhost | ? Id -EQ "%s"`, vmSwitch, OVSExtensionID)
 	out, err := runCommand(cmd)
@@ -731,13 +664,11 @@ func (h *Handle) IsVMSwitchOVSExtensionEnabled(vmSwitch string) (bool, error) {
 	}
 	return parseOVSExtensionOutput(out), nil
 }
-
 func (h *Handle) RenameNetAdapter(oriName string, newName string) error {
 	cmd := fmt.Sprintf(`Get-NetAdapter -Name "%s" | Rename-NetAdapter -NewName "%s"`, oriName, newName)
 	_, err := runCommand(cmd)
 	return err
 }
-
 func getAdaptersByName(name string) ([]adapter, error) {
 	aas, err := adapterAddresses()
 	if err != nil {
@@ -790,7 +721,6 @@ func getAdaptersByName(name string) ([]adapter, error) {
 	}
 	return adapters, nil
 }
-
 // adapterAddresses returns a list of IpAdapterAddresses structures. The structure
 // contains an IP adapter and flattened multiple IP addresses including unicast, anycast
 // and multicast addresses.

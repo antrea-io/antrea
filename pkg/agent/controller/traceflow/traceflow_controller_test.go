@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package traceflow
-
 import (
 	"bytes"
 	"net"
 	"os"
 	"testing"
-
 	"antrea.io/libOpenflow/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,32 +30,27 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/agent/util"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 var (
 	pod1IPv4       = "192.168.10.10"
 	pod2IPv4       = "192.168.11.10"
@@ -69,7 +61,6 @@ var (
 	ofPortPod1     = uint32(1)
 	ofPortPod2     = uint32(2)
 	protocolICMPv6 = int32(58)
-
 	pod1 = v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pod-1",
@@ -94,7 +85,6 @@ var (
 			Namespace: "default",
 		},
 	}
-
 	svc1 = v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "svc-1",
@@ -112,7 +102,6 @@ var (
 		},
 	}
 )
-
 type fakeTraceflowController struct {
 	*Controller
 	kubeClient           kubernetes.Interface
@@ -124,7 +113,6 @@ type fakeTraceflowController struct {
 	networkPolicyQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier
 	egressQuerier        *queriertest.MockEgressQuerier
 }
-
 func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig) *fakeTraceflowController {
 	controller := gomock.NewController(t)
 	kubeClient := fake.NewSimpleClientset(&pod1, &pod2, &pod3, &svc1)
@@ -136,13 +124,10 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(controller)
 	egressQuerier := queriertest.NewMockEgressQuerier(controller)
-
 	ifaceStore := interfacestore.NewInterfaceStore()
 	addPodInterface(ifaceStore, pod1.Namespace, pod1.Name, pod1IPv4, pod1MAC.String(), int32(ofPortPod1))
 	addPodInterface(ifaceStore, pod2.Namespace, pod2.Name, pod2IPv4, pod2MAC.String(), int32(ofPortPod2))
-
 	_, serviceCIDRNet, _ := net.ParseCIDR("10.96.0.0/12")
-
 	tfController := &Controller{
 		kubeClient:            kubeClient,
 		serviceLister:         serviceInformer.Lister(),
@@ -166,7 +151,6 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		),
 		runningTraceflows: make(map[int8]*traceflowState),
 	}
-
 	return &fakeTraceflowController{
 		Controller:           tfController,
 		kubeClient:           kubeClient,
@@ -179,7 +163,6 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		egressQuerier:        egressQuerier,
 	}
 }
-
 func addPodInterface(ifaceStore interfacestore.InterfaceStore, podNamespace, podName, podIP, podMac string, ofPort int32) {
 	containerName := k8s.NamespacedName(podNamespace, podName)
 	ifIPs := []net.IP{net.ParseIP(podIP)}
@@ -192,7 +175,6 @@ func addPodInterface(ifaceStore interfacestore.InterfaceStore, podNamespace, pod
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: ofPort},
 	})
 }
-
 func TestPreparePacket(t *testing.T) {
 	tcs := []struct {
 		name           string
@@ -579,7 +561,6 @@ func TestPreparePacket(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil)
@@ -591,7 +572,6 @@ func TestPreparePacket(t *testing.T) {
 			if tt.intf != nil {
 				podInterfaces[0] = tt.intf
 			}
-
 			pkt, err := tfc.preparePacket(tt.tf, podInterfaces[0], tt.receiverOnly)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -603,7 +583,6 @@ func TestPreparePacket(t *testing.T) {
 		})
 	}
 }
-
 func TestErrTraceflowCRD(t *testing.T) {
 	tf := &crdv1beta1.Traceflow{
 		ObjectMeta: metav1.ObjectMeta{
@@ -629,14 +608,11 @@ func TestErrTraceflowCRD(t *testing.T) {
 	reason := "failed"
 	expectedTf.Status.Phase = crdv1beta1.Failed
 	expectedTf.Status.Reason = reason
-
 	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil)
-
 	gotTf, err := tfc.errorTraceflowCRD(tf, reason)
 	require.NoError(t, err)
 	assert.Equal(t, expectedTf, gotTf)
 }
-
 func TestStartTraceflow(t *testing.T) {
 	tcs := []struct {
 		name           string
@@ -729,14 +705,12 @@ func TestStartTraceflow(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, tt.nodeConfig)
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(tfc.mockOFClient)
 			}
-
 			bufWriter := bytes.NewBuffer(nil)
 			klog.SetOutput(bufWriter)
 			klog.LogToStderr(false)
@@ -744,7 +718,6 @@ func TestStartTraceflow(t *testing.T) {
 				klog.SetOutput(os.Stderr)
 				klog.LogToStderr(true)
 			}()
-
 			err := tfc.startTraceflow(tt.tf)
 			if tt.expectedErr != "" {
 				assert.ErrorContains(t, err, tt.expectedErr)
@@ -757,7 +730,6 @@ func TestStartTraceflow(t *testing.T) {
 		})
 	}
 }
-
 func TestSyncTraceflow(t *testing.T) {
 	tcs := []struct {
 		name          string
@@ -890,7 +862,6 @@ func TestSyncTraceflow(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil)
@@ -898,22 +869,18 @@ func TestSyncTraceflow(t *testing.T) {
 			defer close(stopCh)
 			tfc.crdInformerFactory.Start(stopCh)
 			tfc.crdInformerFactory.WaitForCacheSync(stopCh)
-
 			if tt.existingState != nil {
 				tfc.runningTraceflows[tt.tf.Status.DataplaneTag] = tt.existingState
 			}
-
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(tfc.mockOFClient)
 			}
-
 			err := tfc.syncTraceflow(tt.tf.Name)
 			require.NoError(t, err)
 			assert.Equal(t, tt.newState, tfc.runningTraceflows[tt.tf.Status.DataplaneTag])
 		})
 	}
 }
-
 func TestProcessTraceflowItem(t *testing.T) {
 	tc := struct {
 		tf           *crdv1beta1.Traceflow
@@ -951,20 +918,17 @@ func TestProcessTraceflowItem(t *testing.T) {
 		},
 		expected: true,
 	}
-
 	tfc := newFakeTraceflowController(t, []runtime.Object{tc.tf}, nil, nil)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	tfc.crdInformerFactory.Start(stopCh)
 	tfc.crdInformerFactory.WaitForCacheSync(stopCh)
-
 	tfc.mockOFClient.EXPECT().InstallTraceflowFlows(uint8(tc.tf.Status.DataplaneTag), tc.tf.Spec.LiveTraffic, tc.tf.Spec.DroppedOnly, tc.receiverOnly, nil, tc.ofPort, uint16(crdv1beta1.DefaultTraceflowTimeout))
 	tfc.mockOFClient.EXPECT().SendTraceflowPacket(uint8(tc.tf.Status.DataplaneTag), tc.packet, tc.ofPort, int32(-1))
 	tfc.enqueueTraceflow(tc.tf)
 	got := tfc.processTraceflowItem()
 	assert.Equal(t, tc.expected, got)
 }
-
 func TestValidateTraceflow(t *testing.T) {
 	tcs := []struct {
 		name               string
@@ -995,7 +959,6 @@ func TestValidateTraceflow(t *testing.T) {
 			expectedErr: "using ClusterIP destination requires AntreaProxy enabled",
 		},
 	}
-
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil)

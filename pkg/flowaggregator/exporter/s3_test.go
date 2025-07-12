@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	"antrea.io/antrea/v2/pkg/flowaggregator/s3uploader"
-=======
-	"antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	"antrea.io/antrea/pkg/flowaggregator/s3uploader"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	"antrea.io/antrea/v2/pkg/flowaggregator/s3uploader"
 )
-
 func TestS3_UpdateOptions(t *testing.T) {
 	GetS3BucketRegionSaved := s3uploader.GetS3BucketRegion
 	s3uploader.GetS3BucketRegion = func(ctx context.Context, bucket string, regionHint string) (string, error) {
@@ -65,7 +57,6 @@ func TestS3_UpdateOptions(t *testing.T) {
 	assert.Equal(t, s3Exporter.s3UploadProcess.GetBucketPrefix(), "defaultBucketPrefix")
 	assert.Equal(t, s3Exporter.s3UploadProcess.GetRegion(), "us-west-2")
 	assert.Equal(t, s3Exporter.s3UploadProcess.GetUploadInterval().String(), "8s")
-
 	compress = true
 	newOpt := &options.Options{
 		Config: &flowaggregator.FlowAggregatorConfig{

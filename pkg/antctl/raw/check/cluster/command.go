@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cluster
-
 import (
 	"context"
 	"errors"
 	"fmt"
 	"time"
-
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/check"
-=======
-	"antrea.io/antrea/pkg/antctl/raw/check"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw/check"
 )
-
 func Command() *cobra.Command {
 	o := newOptions()
 	command := &cobra.Command{
@@ -46,46 +38,36 @@ func Command() *cobra.Command {
 	command.Flags().StringVar(&o.testImage, "test-image", o.testImage, "Container image override for the cluster checker")
 	return command
 }
-
 const (
 	testNamespacePrefix = "antrea-test"
 	deploymentName      = "cluster-checker"
 	podReadyTimeout     = 1 * time.Minute
 )
-
 type options struct {
 	// Container image for the cluster checker.
 	testImage string
 }
-
 func newOptions() *options {
 	return &options{
 		testImage: check.DefaultTestImage,
 	}
 }
-
 type uncertainError struct {
 	reason string
 }
-
 func (e uncertainError) Error() string {
 	return e.reason
 }
-
 func newUncertainError(reason string, a ...interface{}) uncertainError {
 	return uncertainError{reason: fmt.Sprintf(reason, a...)}
 }
-
 type Test interface {
 	Run(ctx context.Context, testContext *testContext) error
 }
-
 var testsRegistry = make(map[string]Test)
-
 func RegisterTest(name string, test Test) {
 	testsRegistry[name] = test
 }
-
 type testContext struct {
 	check.Logger
 	client      kubernetes.Interface
@@ -96,7 +78,6 @@ type testContext struct {
 	// Container image for the cluster checker.
 	testImage string
 }
-
 func Run(o *options) error {
 	client, config, clusterName, err := check.NewClient()
 	if err != nil {
@@ -130,7 +111,6 @@ func Run(o *options) error {
 	}
 	return nil
 }
-
 func (t *testContext) setup(ctx context.Context) error {
 	t.Log("Creating Namespace %s for pre installation tests...", t.namespace)
 	_, err := t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace, Labels: map[string]string{"app": "antrea", "component": "cluster-checker"}}}, metav1.CreateOptions{})
@@ -194,13 +174,11 @@ func (t *testContext) setup(ctx context.Context) error {
 			},
 		},
 	})
-
 	t.Log("Creating Deployment")
 	_, err = t.client.AppsV1().Deployments(t.namespace).Create(ctx, deployment, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to create Deployment: %w", err)
 	}
-
 	t.Log("Waiting for Deployment to become ready")
 	err = check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.clusterName, t.namespace, deploymentName)
 	if err != nil {
@@ -213,7 +191,6 @@ func (t *testContext) setup(ctx context.Context) error {
 	t.testPod = &testPods.Items[0]
 	return nil
 }
-
 func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName, testImage string) *testContext {
 	return &testContext{
 		Logger:      check.NewLogger(fmt.Sprintf("[%s] ", clusterName)),
@@ -224,7 +201,6 @@ func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterNam
 		testImage:   testImage,
 	}
 }
-
 func (t *testContext) Header(format string, a ...interface{}) {
 	t.Log("-------------------------------------------------------------------------------------------")
 	t.Log(format, a...)

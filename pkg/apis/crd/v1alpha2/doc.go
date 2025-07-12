@@ -11,12 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // +k8s:deepcopy-gen=package
 // +groupName=crd.antrea.io
-
-<<<<<<< HEAD
-package v1alpha2 // import "antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
-=======
-package v1alpha2 // import "antrea.io/antrea/pkg/apis/crd/v1alpha2"
->>>>>>> origin/main
+package v1alpha2 // import "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+package v1alpha2 // import "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"

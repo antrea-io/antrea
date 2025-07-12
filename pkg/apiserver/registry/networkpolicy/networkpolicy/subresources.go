@@ -11,49 +11,35 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"context"
 	"fmt"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 )
-
 // StatusREST implements the REST endpoint for getting NetworkPolicy's status.
 type StatusREST struct {
 	collector statusCollector
 }
-
 // NewStatusREST returns a REST object that will work against API services.
 func NewStatusREST(collector statusCollector) *StatusREST {
 	return &StatusREST{collector}
 }
-
 // statusCollector is the interface required by the handler.
 type statusCollector interface {
 	UpdateStatus(status *controlplane.NetworkPolicyStatus) error
 }
-
 var _ rest.NamedCreater = &StatusREST{}
-
 func (s StatusREST) New() runtime.Object {
 	return &controlplane.NetworkPolicyStatus{}
 }
-
 func (s StatusREST) Destroy() {
 }
-
 func (s StatusREST) Create(ctx context.Context, name string, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	status, ok := obj.(*controlplane.NetworkPolicyStatus)
 	if !ok {

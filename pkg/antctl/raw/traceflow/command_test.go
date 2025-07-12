@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package traceflow
-
 import (
 	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"testing"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,24 +27,18 @@ import (
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 )
-
 const (
 	srcPod = "default/pod-1"
 	dstPod = "default/pod-2"
 	ipv4   = "192.168.10.10"
 )
-
 var (
 	pod1 = v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -64,7 +55,6 @@ var (
 	k8sClient   = k8sfake.NewSimpleClientset(&pod1, &pod2)
 	protocolTCP = int32(6)
 )
-
 func modifyCommandAndOption(src, dst, outputType, liveTraffic, droppedOnly, nowait string) {
 	Command.Flags().Set("source", src)
 	Command.Flags().Set("destination", dst)
@@ -73,7 +63,6 @@ func modifyCommandAndOption(src, dst, outputType, liveTraffic, droppedOnly, nowa
 	Command.Flags().Set("dropped-only", droppedOnly)
 	Command.Flags().Set("nowait", nowait)
 }
-
 // TestGetPortFields tests if a flow can be turned into a map.
 func TestGetPortFields(t *testing.T) {
 	tcs := []struct {
@@ -100,7 +89,6 @@ func TestGetPortFields(t *testing.T) {
 			expected: nil,
 		},
 	}
-
 	for _, tc := range tcs {
 		m, err := getPortFields(tc.flow)
 		if err != nil {
@@ -112,7 +100,6 @@ func TestGetPortFields(t *testing.T) {
 		}
 	}
 }
-
 // TestParseFlow tests if a flow can be parsed correctly.
 func TestParseFlow(t *testing.T) {
 	tcs := []struct {
@@ -190,7 +177,6 @@ func TestParseFlow(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range tcs {
 		option.flow = tc.flow
 		pkt, err := parseFlow()
@@ -203,7 +189,6 @@ func TestParseFlow(t *testing.T) {
 		}
 	}
 }
-
 func TestRunE(t *testing.T) {
 	tcs := []struct {
 		name        string
@@ -276,12 +261,10 @@ source: default/pod-1
 `,
 		},
 	}
-
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			modifyCommandAndOption(tt.src, tt.dst, tt.outputType, tt.liveTraffic, tt.droppedOnly, "")
 			defer modifyCommandAndOption("", "", "yaml", "", "", "")
-
 			client := antreafakeclient.NewSimpleClientset()
 			client.PrependReactor("create", "traceflows", func(action k8stesting.Action) (bool, runtime.Object, error) {
 				createAction := action.(k8stesting.CreateAction)
@@ -289,12 +272,10 @@ source: default/pod-1
 				obj.Status.Phase = v1beta1.Succeeded
 				return false, obj, nil
 			})
-
 			getClients = func(cmd *cobra.Command) (kubernetes.Interface, antrea.Interface, error) {
 				return k8sClient, client, nil
 			}
 			defer func() { getClients = getK8sClient }()
-
 			buf := new(bytes.Buffer)
 			Command.SetOut(buf)
 			Command.SetErr(buf)
@@ -304,7 +285,6 @@ source: default/pod-1
 		})
 	}
 }
-
 func TestGetK8sClient(t *testing.T) {
 	tcs := []struct {
 		name        string
@@ -349,7 +329,6 @@ kind: Config`),
 			expectedErr: "failed to create clientset: failed to create K8s clientset: unable to load root certificates: unable to parse bytes as PEM block",
 		},
 	}
-
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := &cobra.Command{
@@ -374,7 +353,6 @@ kind: Config`),
 		})
 	}
 }
-
 func TestNewTraceflow(t *testing.T) {
 	tcs := []struct {
 		name        string
@@ -515,19 +493,16 @@ func TestNewTraceflow(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			modifyCommandAndOption(tc.src, tc.dst, "yaml", tc.liveTraffic, tc.droppedOnly, "")
 			defer modifyCommandAndOption("", "", "yaml", "", "", "")
-
 			tf, err := newTraceflow(k8sClient)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedTf.Spec, tf.Spec)
 		})
 	}
 }
-
 func TestGetTFName(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -558,12 +533,10 @@ func TestGetTFName(t *testing.T) {
 			expected: "default-pod1-to-fc00-f853-ccd-e793-2",
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			modifyCommandAndOption("", "", "", "", "", tc.nowait)
 			defer modifyCommandAndOption("", "", "yaml", "", "", "")
-
 			got := getTFName(tc.prefix)
 			if tc.nowait != "" {
 				assert.Equal(t, tc.expected, got)

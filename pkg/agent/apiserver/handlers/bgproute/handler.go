@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package bgproute
-
 import (
 	"encoding/json"
 	"errors"
@@ -22,21 +20,15 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/controller/bgp"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/controller/bgp"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/controller/bgp"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 // HandleFunc returns the function which can handle queries issued by the bgproutes command.
 func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +37,6 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			http.Error(w, "bgp is not enabled", http.StatusServiceUnavailable)
 			return
 		}
-
 		values := r.URL.Query()
 		bgpRouteType := values.Get("type")
 		var ipv4Only, ipv6Only bool
@@ -67,7 +58,6 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			http.Error(w, "invalid query", http.StatusBadRequest)
 			return
 		}
-
 		bgpRoutes, err := bq.GetBGPRoutes(r.Context())
 		if err != nil {
 			if errors.Is(err, bgp.ErrBGPPolicyNotFound) {
@@ -77,7 +67,6 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
 		var bgpRoutesResp []apis.BGPRouteResponse
 		for bgpRoute, routeMetadata := range bgpRoutes {
 			if ipv4Only && !utilnet.IsIPv4CIDRString(bgpRoute.Prefix) {
@@ -117,7 +106,6 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			}
 			return pA.Addr().Compare(pB.Addr())
 		})
-
 		if err := json.NewEncoder(w).Encode(bgpRoutesResp); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			klog.ErrorS(err, "Error when encoding BGPRoutesResp to json")

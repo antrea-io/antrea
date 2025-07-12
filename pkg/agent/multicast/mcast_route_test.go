@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,42 +13,32 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicast
-
 import (
 	"fmt"
 	"net"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	multicasttest "antrea.io/antrea/v2/pkg/agent/multicast/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	multicasttest "antrea.io/antrea/pkg/agent/multicast/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	multicasttest "antrea.io/antrea/v2/pkg/agent/multicast/testing"
 )
-
 var (
 	externalInterfaceIP = net.ParseIP("192.168.50.23")
 	addrIf1             = &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
 	addrIf2             = &net.IPNet{IP: externalInterfaceIP, Mask: net.IPv4Mask(255, 255, 255, 0)}
 	nodeConfig          = &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addrIf1}
 )
-
 func TestParseIGMPMsg(t *testing.T) {
 	mRoute := newMockMulticastRouteClient(t)
 	err := mRoute.initialize(t)
 	require.NoError(t, err)
-
 	for _, m := range []struct {
 		name                  string
 		msg                   []byte
@@ -98,12 +87,10 @@ func TestParseIGMPMsg(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteInboundMrouteEntryByGroup(t *testing.T) {
 	mRoute := newMockMulticastRouteClient(t)
 	err := mRoute.initialize(t)
 	require.NoError(t, err)
-
 	for _, m := range []struct {
 		name                string
 		group               net.IP
@@ -143,7 +130,6 @@ func TestDeleteInboundMrouteEntryByGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestUpdateOutboundMrouteStats(t *testing.T) {
 	mRoute := newMockMulticastRouteClient(t)
 	err := mRoute.initialize(t)
@@ -202,7 +188,6 @@ func TestUpdateOutboundMrouteStats(t *testing.T) {
 	}
 	mRoute.updateMrouteStats()
 }
-
 func TestUpdateInboundMrouteStats(t *testing.T) {
 	mRoute := newMockMulticastRouteClient(t)
 	err := mRoute.initialize(t)
@@ -268,7 +253,6 @@ func TestUpdateInboundMrouteStats(t *testing.T) {
 	}
 	mRoute.updateMrouteStats()
 }
-
 func TestProcessIGMPNocacheMsg(t *testing.T) {
 	mRoute := newMockMulticastRouteClient(t)
 	err := mRoute.initialize(t)
@@ -359,7 +343,6 @@ func TestProcessIGMPNocacheMsg(t *testing.T) {
 		})
 	}
 }
-
 func newMockMulticastRouteClient(t *testing.T) *MRouteClient {
 	controller := gomock.NewController(t)
 	mockMulticastSocket = multicasttest.NewMockRouteInterface(controller)
@@ -368,7 +351,6 @@ func newMockMulticastRouteClient(t *testing.T) *MRouteClient {
 	})
 	return newRouteClient(nodeConfig, groupCache, mockMulticastSocket, sets.New[string](if1.InterfaceName), false)
 }
-
 func (c *MRouteClient) initialize(t *testing.T) error {
 	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(0)).Times(1).Return([]uint16{0}, nil)
 	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1)).Times(1).Return([]uint16{1, 2}, nil)

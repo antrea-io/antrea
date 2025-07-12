@@ -11,33 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package groupassociation
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/endpoints/request"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 type fakeQuerier struct {
 	groups map[string][]antreatypes.Group
 }
-
 func (q fakeQuerier) GetAssociatedGroups(name, namespace string) []antreatypes.Group {
 	memberKey := k8s.NamespacedName(namespace, name)
 	if refs, ok := q.groups[memberKey]; ok {
@@ -45,13 +36,11 @@ func (q fakeQuerier) GetAssociatedGroups(name, namespace string) []antreatypes.G
 	}
 	return []antreatypes.Group{}
 }
-
 func TestREST(t *testing.T) {
 	r := NewREST(nil)
 	assert.Equal(t, &controlplane.GroupAssociation{}, r.New())
 	assert.True(t, r.NamespaceScoped())
 }
-
 func TestRESTGet(t *testing.T) {
 	groups := map[string][]antreatypes.Group{
 		"default/podA": {

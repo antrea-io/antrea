@@ -1,52 +1,40 @@
 /*
 Copyright 2021 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package commonarea
-
 import (
 	"context"
 	"fmt"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/test/mocks"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/test/mocks"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/test/mocks"
 )
-
 func TestMemberAnnounce(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockManager := mocks.NewMockManager(mockCtrl)
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
-
 	remoteCommonAreaUnderTest := &remoteCommonArea{
 		Client:             fakeRemoteClient,
 		ClusterManager:     mockManager, // Ok to use a mock as long the remoteCommonArea.StartWatching is not tested
@@ -59,25 +47,19 @@ func TestMemberAnnounce(t *testing.T) {
 		connected:          false,
 		localClusterClient: nil, // Not used for this test
 	}
-
 	remoteCommonAreaUnderTest.Start()
-
 	done := make(chan bool)
-
 	go func() {
 		// Test that member announce is written to the fakeRemoteClient
 		ctx := context.Background()
 		memberAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
-
 		for i := 0; i < 10; i++ {
 			time.Sleep(1 * time.Second)
-
 			err := fakeRemoteClient.List(ctx, memberAnnounceList, client.InNamespace("cluster-a-ns"))
 			if err != nil {
 				t.Logf("member announce not written to remote cluster yet: %v", err)
 				continue
 			}
-
 			if !remoteCommonAreaUnderTest.IsConnected() {
 				t.Log("Remote cluster not marked as connected yet")
 				continue
@@ -85,16 +67,13 @@ func TestMemberAnnounce(t *testing.T) {
 			done <- true
 		}
 	}()
-
 	select {
 	case <-done:
 	case <-time.After(15 * time.Second):
 		panic("timeout")
 	}
-
 	remoteCommonAreaUnderTest.Stop()
 }
-
 func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockManager := mocks.NewMockManager(mockCtrl)
@@ -106,7 +85,6 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 		},
 	}
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingMemberClusterAnnounce).Build()
-
 	remoteCommonAreaUnderTest := &remoteCommonArea{
 		Client:             fakeRemoteClient,
 		ClusterManager:     mockManager, // Ok to use a mock as long the remoteCommonArea.StartWatching is not tested
@@ -124,25 +102,19 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 			Type:    mcv1alpha2.ClusterIsLeader,
 		},
 	}
-
 	remoteCommonAreaUnderTest.Start()
-
 	done := make(chan bool)
-
 	go func() {
 		// Test that member announce is written to the fakeRemoteClient
 		ctx := context.Background()
 		memberAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
-
 		for i := 0; i < 10; i++ {
 			time.Sleep(1 * time.Second)
-
 			err := fakeRemoteClient.List(ctx, memberAnnounceList, client.InNamespace("cluster-a-ns"))
 			if err != nil {
 				t.Logf("member announce not written to remote cluster yet: %v", err)
 				continue
 			}
-
 			if !remoteCommonAreaUnderTest.IsConnected() {
 				t.Log("Remote cluster not marked as connected yet")
 				continue
@@ -150,16 +122,13 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 			done <- true
 		}
 	}()
-
 	select {
 	case <-done:
 	case <-time.After(15 * time.Second):
 		panic("timeout")
 	}
-
 	defer remoteCommonAreaUnderTest.Stop()
 	status := remoteCommonAreaUnderTest.GetStatus()
-
 	assert.Equal(t, v1.ConditionTrue, status[0].Status)
 	assert.Equal(t, v1.ConditionTrue, status[1].Status)
 	assert.Equal(t, "", status[0].Reason)
@@ -169,12 +138,10 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 	assert.Equal(t, mcv1alpha2.ClusterConditionType(""), status[0].Type)
 	assert.Equal(t, mcv1alpha2.ClusterIsLeader, status[1].Type)
 }
-
 func TestMemberAnnounceNewRemoteCommonArea(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockManager := mocks.NewMockManager(mockCtrl)
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
-
 	expectedRemoteCommonArea := &remoteCommonArea{
 		Client:             fakeRemoteClient,
 		ClusterManager:     mockManager,
@@ -198,7 +165,6 @@ func TestMemberAnnounceNewRemoteCommonArea(t *testing.T) {
 			Message: "Leader cluster added",
 		},
 	}
-
 	actualRemoteCommonArea, err := NewRemoteCommonArea(expectedRemoteCommonArea.ClusterID, expectedRemoteCommonArea.ClusterSetID, expectedRemoteCommonArea.localClusterID, mockManager, fakeRemoteClient, common.TestScheme, nil,
 		"cluster-a-ns", "localnamespace", nil, false)
 	assert.Equal(t, nil, err)
@@ -208,7 +174,6 @@ func TestMemberAnnounceNewRemoteCommonArea(t *testing.T) {
 	expectedRemoteCommonArea.leaderStatus.LastTransitionTime = leaderStatus.LastTransitionTime
 	assert.Equal(t, expectedRemoteCommonArea, actualRemoteCommonArea)
 }
-
 func TestMemberAnnounceGetSecretCACrtAndToken(t *testing.T) {
 	secret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -236,7 +201,6 @@ func TestMemberAnnounceGetSecretCACrtAndToken(t *testing.T) {
 			"ca.crt": []byte(`12345`),
 		},
 	}
-
 	tests := []struct {
 		name          string
 		secret        *v1.Secret
@@ -265,7 +229,6 @@ func TestMemberAnnounceGetSecretCACrtAndToken(t *testing.T) {
 			expectedError: fmt.Errorf("token not found in Secret member-token"),
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			caData, token, err := getSecretCACrtAndToken(tt.secret)

@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package apiserver
-
 import (
 	"context"
 	"net"
@@ -24,35 +22,28 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/options"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 	"antrea.io/antrea/v2/pkg/version"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	"antrea.io/antrea/pkg/version"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	"antrea.io/antrea/v2/pkg/version"
 )
-
 type fakeAgentAPIServer struct {
 	*agentAPIServer
 	agentQuerier *aqtest.MockAgentQuerier
 	npQuerier    *queriertest.MockAgentNetworkPolicyInfoQuerier
 	ofClient     *oftest.MockClient
 }
-
 func newFakeAPIServer(t *testing.T) *fakeAgentAPIServer {
 	tempDir := t.TempDir()
 	kubeConfigPath := filepath.Join(tempDir, "kubeconfig")
@@ -80,7 +71,6 @@ current-context: cluster
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	ofClient := oftest.NewMockClient(ctrl)
 	agentQuerier.EXPECT().GetOpenflowClient().AnyTimes().Return(ofClient)
-
 	secureServing := options.NewSecureServingOptions().WithLoopback()
 	secureServing.BindAddress = net.ParseIP("127.0.0.1")
 	secureServing.BindPort = 10000
@@ -98,7 +88,6 @@ current-context: cluster
 	}
 	return fakeAPIServer
 }
-
 func TestAPIServerLivezCheck(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -130,7 +119,6 @@ livez check failed
 `,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			apiserver := newFakeAPIServer(t)
@@ -155,14 +143,12 @@ livez check failed
 				apiserver.Run(ctx)
 			}()
 			wg.Wait()
-
 			// Wait for APIServer to be healthy.
 			// After that, all built-in health checks will be guaranteed to return "ok".
 			assert.Eventuallyf(t, func() bool {
 				response := getResponse(apiserver, "/healthz")
 				return response.Body.String() == "ok"
 			}, 5*time.Second, 100*time.Millisecond, "APIServer didn't become healthy within 5 seconds")
-
 			tt.registerExpectations(apiserver)
 			response := getResponse(apiserver, "/livez")
 			assert.Equal(t, tt.expectedBody, response.Body.String())
@@ -170,7 +156,6 @@ livez check failed
 		})
 	}
 }
-
 func getResponse(apiserver *fakeAgentAPIServer, query string) *httptest.ResponseRecorder {
 	req, _ := http.NewRequest(http.MethodGet, query, nil)
 	recorder := httptest.NewRecorder()

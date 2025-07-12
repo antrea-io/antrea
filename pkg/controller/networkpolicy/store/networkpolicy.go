@@ -11,35 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"fmt"
 	"reflect"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/apiserver/storage/ram"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 const (
 	AppliedToGroupIndex = "appliedToGroup"
 	AddressGroupIndex   = "addressGroup"
 )
-
 // networkPolicyEvent implements storage.InternalEvent.
 type networkPolicyEvent struct {
 	// The current version of the stored NetworkPolicy.
@@ -55,14 +46,12 @@ type networkPolicyEvent struct {
 	Key             string
 	ResourceVersion uint64
 }
-
 // ToWatchEvent converts the networkPolicyEvent to *watch.Event based on the provided Selectors. It has the following features:
 // 1. Added event will be generated if the Selectors was not interested in the object but is now.
 // 2. Modified event will be generated if the Selectors was and is interested in the object.
 // 3. Deleted event will be generated if the Selectors was interested in the object but is not now.
 func (event *networkPolicyEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	prevObjSelected, currObjSelected := isSelected(event.Key, event.PrevPolicy, event.CurrPolicy, selectors, isInitEvent)
-
 	switch {
 	case !currObjSelected && !prevObjSelected:
 		return nil
@@ -75,37 +64,29 @@ func (event *networkPolicyEvent) ToWatchEvent(selectors *storage.Selectors, isIn
 	}
 	return nil
 }
-
 func (event *networkPolicyEvent) GetResourceVersion() uint64 {
 	return event.ResourceVersion
 }
-
 var _ storage.GenEventFunc = genNetworkPolicyEvent
-
 // genNetworkPolicyEvent generates InternalEvent from the given versions of a NetworkPolicy.
 // It converts the stored NetworkPolicy to its message form.
 func genNetworkPolicyEvent(key string, prevObj, currObj interface{}, rv uint64) (storage.InternalEvent, error) {
 	if reflect.DeepEqual(prevObj, currObj) {
 		return nil, nil
 	}
-
 	event := &networkPolicyEvent{Key: key, ResourceVersion: rv}
-
 	if prevObj != nil {
 		event.PrevPolicy = prevObj.(*types.NetworkPolicy)
 		event.PrevObject = new(controlplane.NetworkPolicy)
 		ToNetworkPolicyMsg(event.PrevPolicy, event.PrevObject, false)
 	}
-
 	if currObj != nil {
 		event.CurrPolicy = currObj.(*types.NetworkPolicy)
 		event.CurrObject = new(controlplane.NetworkPolicy)
 		ToNetworkPolicyMsg(event.CurrPolicy, event.CurrObject, true)
 	}
-
 	return event, nil
 }
-
 // ToNetworkPolicyMsg converts the stored NetworkPolicy to its message form.
 // If includeBody is true, Rules and AppliedToGroups will be copied.
 func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *controlplane.NetworkPolicy, includeBody bool) {
@@ -128,7 +109,6 @@ func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *controlplane.NetworkPolicy
 	out.Priority = in.Priority
 	out.TierPriority = in.TierPriority
 }
-
 // NetworkPolicyKeyFunc knows how to get the key of a NetworkPolicy.
 func NetworkPolicyKeyFunc(obj interface{}) (string, error) {
 	policy, ok := obj.(*types.NetworkPolicy)
@@ -137,7 +117,6 @@ func NetworkPolicyKeyFunc(obj interface{}) (string, error) {
 	}
 	return policy.Name, nil
 }
-
 // NewNetworkPolicyStore creates a store of NetworkPolicy.
 func NewNetworkPolicyStore() storage.Interface {
 	// Build indices with the appliedToGroups and the addressGroups so that

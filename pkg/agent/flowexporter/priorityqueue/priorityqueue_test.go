@@ -12,23 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package priorityqueue
-
 import (
 	"container/heap"
 	"fmt"
 	"net/netip"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 )
-
 func testConnectionKey(x int) flowexporter.ConnectionKey {
 	if x < 0 || x > 255 {
 		panic("x must be >= 0 and <= 255")
@@ -41,7 +34,6 @@ func testConnectionKey(x int) flowexporter.ConnectionKey {
 		DestinationPort:    8080,
 	}
 }
-
 func TestExpirePriorityQueue(t *testing.T) {
 	startTime := time.Now()
 	testFlowsWithExpire := map[int][]time.Time{
@@ -63,7 +55,6 @@ func TestExpirePriorityQueue(t *testing.T) {
 		testPriorityQueue.KeyToItem[testConnectionKey(key)] = item
 	}
 	heap.Init(testPriorityQueue)
-
 	// Test WriteItemToQueue
 	connKey := testConnectionKey(3)
 	conn := flowexporter.Connection{}
@@ -82,7 +73,6 @@ func TestExpirePriorityQueue(t *testing.T) {
 		}
 	}
 	assert.False(t, hasOld && hasNew, "WriteItemToQueue shouldn't add two items with same key to heap")
-
 	// Test Remove
 	removedItem := testPriorityQueue.Remove(connKey)
 	assert.Equal(t, &newConn, removedItem.Conn, "Remove didn't return correct item")
@@ -93,7 +83,6 @@ func TestExpirePriorityQueue(t *testing.T) {
 			assert.Fail(t, "Remove didn't delete item from queue")
 		}
 	}
-
 	// Add new flow to the priority queue
 	testFlowsWithExpire[3] = []time.Time{startTime.Add(3 * time.Second), startTime.Add(500 * time.Millisecond)}
 	newFlowItem := &flowexporter.ItemToExpire{
@@ -101,18 +90,15 @@ func TestExpirePriorityQueue(t *testing.T) {
 		IdleExpireTime:   startTime.Add(500 * time.Millisecond),
 	}
 	heap.Push(testPriorityQueue, newFlowItem)
-
 	// Test the Peek function
 	flowReadyToExpire := testPriorityQueue.Peek()
 	assert.Equalf(t, testFlowsWithExpire[3][0], flowReadyToExpire.ActiveExpireTime, "Peek() method returns wrong value")
 	assert.Equalf(t, testFlowsWithExpire[3][1], flowReadyToExpire.IdleExpireTime, "Peek() method returns wrong value")
-
 	// Test the Update function
 	testPriorityQueue.Update(newFlowItem, startTime.Add(2*time.Second), startTime.Add(4*time.Second))
 	testFlowsWithExpire[3] = []time.Time{startTime.Add(2 * time.Second), startTime.Add(4 * time.Second)}
 	assert.Equalf(t, testFlowsWithExpire[3][0], newFlowItem.ActiveExpireTime, "Update method doesn't work")
 	assert.Equalf(t, testFlowsWithExpire[3][1], newFlowItem.IdleExpireTime, "Update method doesn't work")
-
 	// Test the Pop function
 	for testPriorityQueue.Len() > 0 {
 		queueLen := testPriorityQueue.Len()
@@ -135,7 +121,6 @@ func TestExpirePriorityQueue(t *testing.T) {
 		}
 	}
 }
-
 func TestExpirePriorityQueue_GetExpiryFromExpirePriorityQueue(t *testing.T) {
 	startTime := time.Now()
 	item1 := &flowexporter.ItemToExpire{
@@ -148,7 +133,6 @@ func TestExpirePriorityQueue_GetExpiryFromExpirePriorityQueue(t *testing.T) {
 		IdleExpireTime:   startTime,
 		Index:            0,
 	}
-
 	for _, tc := range []struct {
 		pqActiveTimeout time.Duration
 		pqIdleTimeout   time.Duration
@@ -177,10 +161,8 @@ func TestExpirePriorityQueue_GetExpiryFromExpirePriorityQueue(t *testing.T) {
 		} else {
 			assert.Equal(t, tc.expectedResult, result)
 		}
-
 	}
 }
-
 func TestExpirePriorityQueue_GetTopExpiredItem(t *testing.T) {
 	startTime := time.Now()
 	item := &flowexporter.ItemToExpire{

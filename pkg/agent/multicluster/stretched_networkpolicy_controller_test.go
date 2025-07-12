@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"context"
 	"net"
 	"reflect"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
@@ -33,8 +30,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcfake "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/fake"
 	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
@@ -45,25 +40,21 @@ import (
 	antreatypes "antrea.io/antrea/v2/pkg/agent/types"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcfake "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
-	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
-	"antrea.io/antrea/pkg/agent/openflow"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	antreatypes "antrea.io/antrea/pkg/agent/types"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	"antrea.io/antrea/pkg/util/channel"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcfake "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/fake"
+	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	antreatypes "antrea.io/antrea/v2/pkg/agent/types"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/v2/pkg/util/channel"
 )
-
 const (
 	interval = 10 * time.Millisecond
 	timeout  = 2 * time.Second
 )
-
 type fakeStretchedNetworkPolicyController struct {
 	*StretchedNetworkPolicyController
 	clientset         *fake.Clientset
@@ -75,7 +66,6 @@ type fakeStretchedNetworkPolicyController struct {
 	interfaceStore    *interfacestoretest.MockInterfaceStore
 	podUpdateChannel  *channel.SubscribableChannel
 }
-
 func newStretchedNetworkPolicyController(t *testing.T, clientset *fake.Clientset, mcClient *mcfake.Clientset) *fakeStretchedNetworkPolicyController {
 	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
 	listOptions := func(options *metav1.ListOptions) {
@@ -91,7 +81,6 @@ func newStretchedNetworkPolicyController(t *testing.T, clientset *fake.Clientset
 	nsInformer := informerFactory.Core().V1().Namespaces()
 	mcInformerFactory := mcinformers.NewSharedInformerFactory(mcClient, 60*time.Second)
 	labelIDInformer := mcInformerFactory.Multicluster().V1alpha1().LabelIdentities()
-
 	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
 	ctrl := gomock.NewController(t)
 	ofClient := oftest.NewMockClient(ctrl)
@@ -117,7 +106,6 @@ func newStretchedNetworkPolicyController(t *testing.T, clientset *fake.Clientset
 		podUpdateChannel:                 podUpdateChannel,
 	}
 }
-
 var (
 	interfaceConfig = interfacestore.InterfaceConfig{
 		InterfaceName: "foo",
@@ -128,7 +116,6 @@ var (
 	}
 	unknownLabelIdentity = openflow.UnknownLabelIdentity
 )
-
 func TestEnqueueAllPods(t *testing.T) {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -159,12 +146,10 @@ func TestEnqueueAllPods(t *testing.T) {
 			ID:    1,
 		},
 	}
-
 	clientset := fake.NewSimpleClientset(ns, pod)
 	mcClient := mcfake.NewSimpleClientset(labelIdentity)
 	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
@@ -179,7 +164,6 @@ func TestEnqueueAllPods(t *testing.T) {
 		t.Errorf("Error when waiting for LabelIdentity '%s' to be realized, err: %v", labelIdentity.Name, err)
 	}
 	c.enqueueAllPods()
-
 	finishCh := make(chan struct{})
 	go func() {
 		defer close(finishCh)
@@ -195,7 +179,6 @@ func TestEnqueueAllPods(t *testing.T) {
 	case <-finishCh:
 	}
 }
-
 func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -235,12 +218,10 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 			ID:    2,
 		},
 	}
-
 	clientset := fake.NewSimpleClientset()
 	mcClient := mcfake.NewSimpleClientset()
 	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
@@ -249,7 +230,6 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 	c.mcInformerFactory.WaitForCacheSync(stopCh)
 	go c.podInformer.Run(stopCh)
 	go c.podUpdateChannel.Run(stopCh)
-
 	finishCh := make(chan struct{})
 	go func() {
 		defer close(finishCh)
@@ -257,7 +237,6 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		if err := waitForNSRealized(c, ns); err != nil {
 			t.Errorf("Error when waiting for Namespace '%s' to be realized, err: %v", ns.Name, err)
 		}
-
 		// Create a Pod whose LabelIdentity doesn't exist.
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 		if err := waitForPodRealized(c.podLister, pod); err != nil {
@@ -269,10 +248,8 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		c.processNextWorkItem()
 		assert.Equal(t, map[types.NamespacedName]string{{Name: pod.Name, Namespace: pod.Namespace}: labelIdentity1.Spec.Label}, c.podToLabel)
 		assert.Equal(t, map[string]podSet{labelIdentity1.Spec.Label: {types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}: struct{}{}}}, c.labelToPods)
-
 		// Delete a Pod.
 		c.clientset.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
-
 		// Create a Pod whose LabelIdentity already exist.
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity1, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity1); err != nil {
@@ -288,7 +265,6 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		c.processNextWorkItem()
 		assert.Equal(t, map[types.NamespacedName]string{{Name: pod.Name, Namespace: pod.Namespace}: labelIdentity1.Spec.Label}, c.podToLabel)
 		assert.Equal(t, map[string]podSet{labelIdentity1.Spec.Label: {types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}: struct{}{}}}, c.labelToPods)
-
 		// Update Pod label.
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity2, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity2); err != nil {
@@ -311,7 +287,6 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 	case <-finishCh:
 	}
 }
-
 func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -381,12 +356,10 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 			ID:    4,
 		},
 	}
-
 	clientset := fake.NewSimpleClientset()
 	mcClient := mcfake.NewSimpleClientset()
 	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
@@ -395,11 +368,9 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 	c.mcInformerFactory.WaitForCacheSync(stopCh)
 	go c.podInformer.Run(stopCh)
 	go c.podUpdateChannel.Run(stopCh)
-
 	finishCh := make(chan struct{})
 	go func() {
 		defer close(finishCh)
-
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity1, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity1); err != nil {
 			t.Errorf("Error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity1.Name, err)
@@ -416,12 +387,10 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 		if err := waitForLabelIdentityRealized(c, labelIdentity4); err != nil {
 			t.Errorf("Error when waiting for LabelIdentity '%s' to be realized, err: %v", labelIdentity4.Name, err)
 		}
-
 		c.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 		if err := waitForNSRealized(c, ns); err != nil {
 			t.Errorf("Error when waiting for Namespace '%s' to be realized, err: %v", ns.Name, err)
 		}
-
 		c.clientset.CoreV1().Pods(pod1.Namespace).Create(context.TODO(), pod1, metav1.CreateOptions{})
 		if err := waitForPodRealized(c.podLister, pod1); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod1.Namespace, pod1.Name, err)
@@ -438,7 +407,6 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 		c.processNextWorkItem()
 		c.podUpdateChannel.Notify(toPodAddEvent(pod2))
 		c.processNextWorkItem()
-
 		// Update Namespace label.
 		ns.Labels["env"] = "prod"
 		c.clientset.CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
@@ -463,7 +431,6 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 	case <-finishCh:
 	}
 }
-
 func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -498,7 +465,6 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 	mcClient := mcfake.NewSimpleClientset()
 	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
@@ -507,7 +473,6 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 	c.mcInformerFactory.WaitForCacheSync(stopCh)
 	go c.podInformer.Run(stopCh)
 	go c.podUpdateChannel.Run(stopCh)
-
 	finishCh := make(chan struct{})
 	go func() {
 		defer close(finishCh)
@@ -515,7 +480,6 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 		if err := waitForNSRealized(c, ns); err != nil {
 			t.Errorf("Error when waiting for Namespace '%s' to be realized, err: %v", ns.Name, err)
 		}
-
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 		if err := waitForPodRealized(c.podLister, pod); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod.Namespace, pod.Name, err)
@@ -526,7 +490,6 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 		c.processNextWorkItem()
 		assert.Equal(t, map[types.NamespacedName]string{{Name: pod.Name, Namespace: pod.Namespace}: labelIdentity.Spec.Label}, c.podToLabel)
 		assert.Equal(t, map[string]podSet{labelIdentity.Spec.Label: {types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}: struct{}{}}}, c.labelToPods)
-
 		// Create LabelIdentity
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity); err != nil {
@@ -537,7 +500,6 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 		c.processNextWorkItem()
 		assert.Equal(t, map[types.NamespacedName]string{{Name: pod.Name, Namespace: pod.Namespace}: labelIdentity.Spec.Label}, c.podToLabel)
 		assert.Equal(t, map[string]podSet{labelIdentity.Spec.Label: {types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}: struct{}{}}}, c.labelToPods)
-
 		// Update LabelIdentity
 		labelIdentity.Spec.ID = 2
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Update(context.TODO(), labelIdentity, metav1.UpdateOptions{})
@@ -546,7 +508,6 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 		c.processNextWorkItem()
 		assert.Equal(t, map[types.NamespacedName]string{{Name: pod.Name, Namespace: pod.Namespace}: labelIdentity.Spec.Label}, c.podToLabel)
 		assert.Equal(t, map[string]podSet{labelIdentity.Spec.Label: {types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}: struct{}{}}}, c.labelToPods)
-
 		// Delete LabelIdentity
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Delete(context.TODO(), labelIdentity.Name, metav1.DeleteOptions{})
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
@@ -561,7 +522,6 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 	case <-finishCh:
 	}
 }
-
 func toPodAddEvent(pod *corev1.Pod) antreatypes.PodUpdate {
 	return antreatypes.PodUpdate{
 		PodNamespace: pod.Namespace,
@@ -569,7 +529,6 @@ func toPodAddEvent(pod *corev1.Pod) antreatypes.PodUpdate {
 		IsAdd:        true,
 	}
 }
-
 func waitForPodRealized(podLister v1.PodLister, pod *corev1.Pod) error {
 	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		_, err := podLister.Pods(pod.Namespace).Get(pod.Name)
@@ -579,7 +538,6 @@ func waitForPodRealized(podLister v1.PodLister, pod *corev1.Pod) error {
 		return true, err
 	})
 }
-
 func waitForPodLabelUpdate(podLister v1.PodLister, pod *corev1.Pod) error {
 	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		getPod, err := podLister.Pods(pod.Namespace).Get(pod.Name)
@@ -589,7 +547,6 @@ func waitForPodLabelUpdate(podLister v1.PodLister, pod *corev1.Pod) error {
 		return true, err
 	})
 }
-
 func waitForNSRealized(c *fakeStretchedNetworkPolicyController, ns *corev1.Namespace) error {
 	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		_, err := c.namespaceLister.Get(ns.Name)
@@ -599,7 +556,6 @@ func waitForNSRealized(c *fakeStretchedNetworkPolicyController, ns *corev1.Names
 		return true, err
 	})
 }
-
 func waitForLabelIdentityRealized(c *fakeStretchedNetworkPolicyController, labelIdentity *v1alpha1.LabelIdentity) error {
 	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		_, err := c.labelIdentityLister.Get(labelIdentity.Name)

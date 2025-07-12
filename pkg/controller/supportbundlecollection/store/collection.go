@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"fmt"
 	"reflect"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/apiserver/storage/ram"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 // supportBundleCollectionEvent implements storage.InternalEvent.
 type supportBundleCollectionEvent struct {
 	// The current version of the stored SupportBundleCollection.
@@ -44,13 +36,11 @@ type supportBundleCollectionEvent struct {
 	Key             string
 	ResourceVersion uint64
 }
-
 // ToWatchEvent converts the supportBundleCollectionEvent to *watch.Event based on the provided Selectors. It has the following features:
 // 1. Added event will be generated if the Selectors was not interested in the object but is now.
 // 2. Deleted event will be generated if the Selectors was interested in the object but is not now.
 func (event *supportBundleCollectionEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	prevObjSelected, currObjSelected := isSelected(event.Key, event.prevBundleCollection, event.currBundleCollection, selectors, isInitEvent)
-
 	switch {
 	case !currObjSelected && !prevObjSelected:
 		// Watcher is not interested in that object.
@@ -68,31 +58,24 @@ func (event *supportBundleCollectionEvent) ToWatchEvent(selectors *storage.Selec
 	}
 	return nil
 }
-
 func (event *supportBundleCollectionEvent) GetResourceVersion() uint64 {
 	return event.ResourceVersion
 }
-
 var _ storage.GenEventFunc = genSupportBundleEvent
-
 // genSupportBundleEvent generates InternalEvent from the given versions of an SupportBundleCollection.
 func genSupportBundleEvent(key string, prevObj, currObj interface{}, rv uint64) (storage.InternalEvent, error) {
 	if reflect.DeepEqual(prevObj, currObj) {
 		return nil, nil
 	}
-
 	event := &supportBundleCollectionEvent{Key: key, ResourceVersion: rv}
-
 	if prevObj != nil {
 		event.prevBundleCollection = prevObj.(*types.SupportBundleCollection)
 	}
 	if currObj != nil {
 		event.currBundleCollection = currObj.(*types.SupportBundleCollection)
 	}
-
 	return event, nil
 }
-
 // ToSupportBundleCollectionMsg converts the stored SupportBundleCollection to its message form.
 // If includeBody is true, the detailed configurations are copied.
 func ToSupportBundleCollectionMsg(in *types.SupportBundleCollection, out *controlplane.SupportBundleCollection, includeBody bool) {
@@ -109,7 +92,6 @@ func ToSupportBundleCollectionMsg(in *types.SupportBundleCollection, out *contro
 	}
 	out.Authentication = in.Authentication
 }
-
 // SupportBundleCollectionKeyFunc knows how to get the key of a SupportBundleCollection.
 func SupportBundleCollectionKeyFunc(obj interface{}) (string, error) {
 	bundle, ok := obj.(*types.SupportBundleCollection)
@@ -118,12 +100,10 @@ func SupportBundleCollectionKeyFunc(obj interface{}) (string, error) {
 	}
 	return bundle.Name, nil
 }
-
 // NewSupportBundleCollectionStore creates a store of SupportBundleCollection.
 func NewSupportBundleCollectionStore() storage.Interface {
 	return ram.NewStore(SupportBundleCollectionKeyFunc, nil, genSupportBundleEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.SupportBundleCollection) })
 }
-
 // keyAndSpanSelectFunc returns whether the provided selectors match the key and/or the nodeNames.
 func keyAndSpanSelectFunc(selectors *storage.Selectors, key string, obj interface{}) bool {
 	// If Key is present in selectors, the provided key must match it.
@@ -138,7 +118,6 @@ func keyAndSpanSelectFunc(selectors *storage.Selectors, key string, obj interfac
 	}
 	return true
 }
-
 // isSelected determines if the previous and the current version of an object should be selected by the given selectors.
 func isSelected(key string, prevObj, currObj interface{}, selectors *storage.Selectors, isInitEvent bool) (bool, bool) {
 	// We have filtered out init events that we are not interested in, so the current object must be selected.

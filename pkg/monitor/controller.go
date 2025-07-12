@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package monitor
-
 import (
 	"context"
 	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,24 +26,19 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	externalnodeinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	externalnodelisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
 	controllerquerier "antrea.io/antrea/v2/pkg/controller/querier"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	externalnodeinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	externalnodelisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	controllerquerier "antrea.io/antrea/pkg/controller/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	externalnodeinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
+	externalnodelisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
+	controllerquerier "antrea.io/antrea/v2/pkg/controller/querier"
 )
-
 const (
 	controllerName = "AntreaControllerMonitor"
 	// How long to wait before retrying the processing of a Node/ExternalNode change.
@@ -56,33 +48,26 @@ const (
 	defaultWorkers        = 4
 	agentInfoResourceKind = "AntreaAgentInfo"
 )
-
 var (
 	keyFunc      = cache.DeletionHandlingMetaNamespaceKeyFunc
 	splitKeyFunc = cache.SplitMetaNamespaceKey
 )
-
 type controllerMonitor struct {
 	client       clientset.Interface
 	nodeInformer coreinformers.NodeInformer
 	nodeLister   corelisters.NodeLister
 	// nodeListerSynced is a function which returns true if the node shared informer has been synced at least once.
 	nodeListerSynced cache.InformerSynced
-
 	externalNodeInformer     externalnodeinformers.ExternalNodeInformer
 	externalNodeLister       externalnodelisters.ExternalNodeLister
 	externalNodeListerSynced cache.InformerSynced
-
 	externalNodeEnabled bool
-
 	nodeQueue         workqueue.TypedRateLimitingInterface[string]
 	externalNodeQueue workqueue.TypedRateLimitingInterface[string]
-
 	querier controllerquerier.ControllerQuerier
 	// controllerCRD is the desired state of controller monitoring CRD which controllerMonitor expects.
 	controllerCRD *v1beta1.AntreaControllerInfo
 }
-
 // NewControllerMonitor creates a new controller monitor.
 func NewControllerMonitor(
 	client clientset.Interface,
@@ -128,16 +113,13 @@ func NewControllerMonitor(
 			DeleteFunc: m.enqueueExternalNode,
 		})
 	}
-
 	return m
 }
-
 // Run creates AntreaControllerInfo CRD first after controller is running.
 // Then updates AntreaControllerInfo CRD every 60 seconds if there is any change.
 func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting", "controllerName", controllerName)
 	defer klog.InfoS("Shutting down", "controllerName", controllerName)
-
 	cacheSyncs := []cache.InformerSynced{monitor.nodeListerSynced}
 	// Only wait for externalNodeListerSynced when ExternalNode feature is enabled.
 	if monitor.externalNodeEnabled {
@@ -146,10 +128,8 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
 	}
-
 	// Sync controller monitoring CRD every minute util stopCh is closed.
 	go wait.Until(monitor.syncControllerCRD, time.Minute, stopCh)
-
 	if !monitor.antreaAgentInfoAPIAvailable(stopCh) {
 		klog.InfoS("The AntreaAgentInfo API is unavailable, will not run node workers")
 		return
@@ -161,10 +141,8 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 			go wait.Until(monitor.externalNodeWorker, time.Second, stopCh)
 		}
 	}
-
 	<-stopCh
 }
-
 func (monitor *controllerMonitor) syncControllerCRD() {
 	var err error
 	if monitor.controllerCRD != nil {
@@ -174,9 +152,7 @@ func (monitor *controllerMonitor) syncControllerCRD() {
 		klog.ErrorS(err, "Failed to partially update controller monitoring CRD")
 		monitor.controllerCRD = nil
 	}
-
 	monitor.controllerCRD, err = monitor.getControllerCRD(v1beta1.AntreaControllerInfoResourceName)
-
 	if errors.IsNotFound(err) {
 		monitor.controllerCRD, err = monitor.createControllerCRD(v1beta1.AntreaControllerInfoResourceName)
 		if err != nil {
@@ -185,26 +161,22 @@ func (monitor *controllerMonitor) syncControllerCRD() {
 		}
 		return
 	}
-
 	if err != nil {
 		klog.ErrorS(err, "Failed to get controller monitoring CRD")
 		monitor.controllerCRD = nil
 		return
 	}
-
 	monitor.controllerCRD, err = monitor.updateControllerCRD(false)
 	if err != nil {
 		klog.ErrorS(err, "Failed to entirely update controller monitoring CRD")
 		monitor.controllerCRD = nil
 	}
 }
-
 // getControllerCRD is used to check the existence of controller monitoring CRD.
 // So when the Pod restarts, it will update this monitoring CRD instead of creating a new one.
 func (monitor *controllerMonitor) getControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
 	return monitor.client.CrdV1beta1().AntreaControllerInfos().Get(context.TODO(), crdName, metav1.GetOptions{})
 }
-
 func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
 	controllerCRD := new(v1beta1.AntreaControllerInfo)
 	controllerCRD.Name = crdName
@@ -212,14 +184,12 @@ func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.
 	klog.V(2).InfoS("Creating controller monitoring CRD", "name", klog.KObj(controllerCRD))
 	return monitor.client.CrdV1beta1().AntreaControllerInfos().Create(context.TODO(), controllerCRD, metav1.CreateOptions{})
 }
-
 // updateControllerCRD updates the monitoring CRD.
 func (monitor *controllerMonitor) updateControllerCRD(partial bool) (*v1beta1.AntreaControllerInfo, error) {
 	monitor.querier.GetControllerInfo(monitor.controllerCRD, partial)
 	klog.V(2).InfoS("Updating controller monitoring CRD", "name", klog.KObj(monitor.controllerCRD), "partial", partial)
 	return monitor.client.CrdV1beta1().AntreaControllerInfos().Update(context.TODO(), monitor.controllerCRD, metav1.UpdateOptions{})
 }
-
 func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
 	crds, err := monitor.client.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{
 		ResourceVersion: "0",
@@ -257,36 +227,30 @@ func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
 		monitor.deleteAgentCRD(name)
 	}
 }
-
 func (monitor *controllerMonitor) enqueueNode(obj interface{}) {
 	node := obj.(*corev1.Node)
 	key, _ := keyFunc(node)
 	monitor.nodeQueue.Add(key)
 }
-
 func (monitor *controllerMonitor) enqueueExternalNode(obj interface{}) {
 	en := obj.(*v1alpha1.ExternalNode)
 	key, _ := keyFunc(en)
 	monitor.externalNodeQueue.Add(key)
 }
-
 func (n *controllerMonitor) nodeWorker() {
 	for n.processNextNodeWorkItem() {
 	}
 }
-
 func (n *controllerMonitor) externalNodeWorker() {
 	for n.processNextExternalNodeWorkItem() {
 	}
 }
-
 func (c *controllerMonitor) processNextNodeWorkItem() bool {
 	key, quit := c.nodeQueue.Get()
 	if quit {
 		return false
 	}
 	defer c.nodeQueue.Done(key)
-
 	if err := c.syncNode(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
@@ -298,14 +262,12 @@ func (c *controllerMonitor) processNextNodeWorkItem() bool {
 	}
 	return true
 }
-
 func (c *controllerMonitor) processNextExternalNodeWorkItem() bool {
 	key, quit := c.externalNodeQueue.Get()
 	if quit {
 		return false
 	}
 	defer c.externalNodeQueue.Done(key)
-
 	if err := c.syncExternalNode(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
@@ -317,7 +279,6 @@ func (c *controllerMonitor) processNextExternalNodeWorkItem() bool {
 	}
 	return true
 }
-
 func (c *controllerMonitor) syncNode(key string) error {
 	_, name, err := splitKeyFunc(key)
 	if err != nil {
@@ -333,9 +294,7 @@ func (c *controllerMonitor) syncNode(key string) error {
 		}
 	}
 	return c.createAgentCRD(name)
-
 }
-
 func (c *controllerMonitor) syncExternalNode(key string) error {
 	namespace, name, err := splitKeyFunc(key)
 	if err != nil {
@@ -351,9 +310,7 @@ func (c *controllerMonitor) syncExternalNode(key string) error {
 		}
 	}
 	return c.createAgentCRD(name)
-
 }
-
 func (monitor *controllerMonitor) createAgentCRD(name string) error {
 	klog.InfoS("Creating agent monitoring CRD", "name", name)
 	agentCRD := new(v1beta1.AntreaAgentInfo)
@@ -368,7 +325,6 @@ func (monitor *controllerMonitor) createAgentCRD(name string) error {
 	}
 	return nil
 }
-
 func (monitor *controllerMonitor) deleteAgentCRD(name string) error {
 	klog.InfoS("Deleting agent monitoring CRD", "name", name)
 	err := monitor.client.CrdV1beta1().AntreaAgentInfos().Delete(context.TODO(), name, metav1.DeleteOptions{})
@@ -381,7 +337,6 @@ func (monitor *controllerMonitor) deleteAgentCRD(name string) error {
 	}
 	return nil
 }
-
 func (monitor *controllerMonitor) antreaAgentInfoAPIAvailable(stopCh <-chan struct{}) bool {
 	groupVersion := v1beta1.SchemeGroupVersion.String()
 	checkFunc := func() (done bool, err error) {
@@ -400,7 +355,6 @@ func (monitor *controllerMonitor) antreaAgentInfoAPIAvailable(stopCh <-chan stru
 		}
 		return false, nil
 	}
-
 	found := false
 	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), time.Second*10, true, func(ctx context.Context) (done bool, err error) {
 		var checkErr error

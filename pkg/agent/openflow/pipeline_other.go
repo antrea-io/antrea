@@ -1,8 +1,6 @@
 //go:build !windows
 // +build !windows
-
 // package openflow is needed by antctl which is compiled for macOS too.
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,23 +14,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
-
-<<<<<<< HEAD
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 func (f *featurePodConnectivity) matchUplinkInPortInClassifierTable(flowBuilder binding.FlowBuilder) binding.FlowBuilder {
 	return flowBuilder.MatchInPort(f.uplinkPort)
 }
-
 // hostBridgeUplinkFlows generates the flows that forward traffic between the bridge local port and the uplink port to
 // support the host traffic.
 // TODO(gran): sync latest changes from pipeline_windows.go
@@ -90,7 +80,6 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
 			Done())
 	return flows
 }
-
 func (f *featurePodConnectivity) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr,
 	remoteGatewayMAC net.HardwareAddr,
 	peerIP net.IP,

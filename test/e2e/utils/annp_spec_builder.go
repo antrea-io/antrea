@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package utils
-
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 type AntreaNetworkPolicySpecBuilder struct {
 	Spec      crdv1beta1.NetworkPolicySpec
 	Name      string
 	Namespace string
 }
-
 type ANNPAppliedToSpec struct {
 	ExternalEntitySelector         map[string]string
 	ExternalEntitySelectorMatchExp []metav1.LabelSelectorRequirement
@@ -37,7 +29,6 @@ type ANNPAppliedToSpec struct {
 	PodSelectorMatchExp            []metav1.LabelSelectorRequirement
 	Group                          string
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) Get() *crdv1beta1.NetworkPolicy {
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []crdv1beta1.Rule{}
@@ -53,23 +44,19 @@ func (b *AntreaNetworkPolicySpecBuilder) Get() *crdv1beta1.NetworkPolicy {
 		Spec: b.Spec,
 	}
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) SetName(namespace string, name string) *AntreaNetworkPolicySpecBuilder {
 	b.Name = name
 	b.Namespace = namespace
 	return b
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) SetPriority(p float64) *AntreaNetworkPolicySpecBuilder {
 	b.Spec.Priority = p
 	return b
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) SetTier(tier string) *AntreaNetworkPolicySpecBuilder {
 	b.Spec.Tier = tier
 	return b
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ANNPAppliedToSpec) *AntreaNetworkPolicySpecBuilder {
 	for _, spec := range specs {
 		appliedToPeer := ANNPGetAppliedToPeer(spec.PodSelector, spec.PodSelectorMatchExp, spec.ExternalEntitySelector, spec.ExternalEntitySelectorMatchExp, spec.Group)
@@ -77,7 +64,6 @@ func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ANNPAppliedTo
 	}
 	return b
 }
-
 func ANNPGetAppliedToPeer(podSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement,
 	entitySelector map[string]string,
@@ -105,17 +91,14 @@ func ANNPGetAppliedToPeer(podSelector map[string]string,
 	}
 	return peer
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) AddIngress(rb RuleBuilder) *AntreaNetworkPolicySpecBuilder {
 	b.Spec.Ingress = append(b.Spec.Ingress, rb.GetIngress())
 	return b
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) AddEgress(rb RuleBuilder) *AntreaNetworkPolicySpecBuilder {
 	b.Spec.Egress = append(b.Spec.Egress, rb.GetEgress())
 	return b
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1beta1.PeerService,
 	name string, ruleAppliedToSpecs []ANNPAppliedToSpec, action crdv1beta1.RuleAction) *AntreaNetworkPolicySpecBuilder {
 	var appliedTos []crdv1beta1.AppliedTo
@@ -132,7 +115,6 @@ func (b *AntreaNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1beta1.
 	b.Spec.Egress = append(b.Spec.Egress, newRule)
 	return b
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) AddEgressLogging(logLabel string) *AntreaNetworkPolicySpecBuilder {
 	for i, e := range b.Spec.Egress {
 		e.EnableLogging = true
@@ -141,12 +123,10 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgressLogging(logLabel string) *Antr
 	}
 	return b
 }
-
 func (b *AntreaNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	protoc AntreaPolicyProtocol, port *int32, portName *string, endPort *int32, name string,
 	specs []ANNPAppliedToSpec, action crdv1beta1.RuleAction) *AntreaNetworkPolicySpecBuilder {
 	var appliedTos []crdv1beta1.AppliedTo
-
 	for _, at := range specs {
 		appliedTos = append(appliedTos, ANNPGetAppliedToPeer(at.PodSelector,
 			at.PodSelectorMatchExp,
@@ -154,7 +134,6 @@ func (b *AntreaNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 			at.ExternalEntitySelectorMatchExp,
 			at.Group))
 	}
-
 	policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
 	ports, _ := GenPortsOrProtocols(BaseRuleBuilder{
 		Protoc:   protoc,

@@ -11,26 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicast
-
 import (
 	"encoding/json"
 	"net/http"
 	"reflect"
 	"strconv"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/multicast"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/multicast"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/multicast"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 func generateResponse(podName string, podNamespace string, trafficStats *multicast.PodTrafficStats) apis.MulticastResponse {
 	return apis.MulticastResponse{
 		PodName:      podName,
@@ -39,7 +32,6 @@ func generateResponse(podName string, podNamespace string, trafficStats *multica
 		Outbound:     strconv.FormatUint(trafficStats.Outbound, 10),
 	}
 }
-
 // HandleFunc returns the function which can handle queries issued by 'antctl get podmulticaststats' command.
 // It will return Pod multicast traffic statistics for the local Node.
 func HandleFunc(mq querier.AgentMulticastInfoQuerier) http.HandlerFunc {
@@ -50,7 +42,6 @@ func HandleFunc(mq querier.AgentMulticastInfoQuerier) http.HandlerFunc {
 		}
 		name := r.URL.Query().Get("name")
 		ns := r.URL.Query().Get("namespace")
-
 		responses := []apis.MulticastResponse{}
 		if name != "" && ns != "" {
 			podStats := mq.GetPodStats(name, ns)
@@ -70,7 +61,6 @@ func HandleFunc(mq querier.AgentMulticastInfoQuerier) http.HandlerFunc {
 				}
 			}
 		}
-
 		err := json.NewEncoder(w).Encode(responses)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

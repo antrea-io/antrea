@@ -11,19 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package common
-
 import (
 	"net"
-
-<<<<<<< HEAD
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 type GroupMember struct {
 	Pod  *cpv1beta.PodReference  `json:"pod,omitempty"`
 	Node *cpv1beta.NodeReference `json:"node,omitempty"`
@@ -32,7 +25,6 @@ type GroupMember struct {
 	// Ports maintain the named port mapping of this Pod.
 	Ports []cpv1beta.NamedPort `json:"ports,omitempty"`
 }
-
 func GroupMemberTransform(member cpv1beta.GroupMember) GroupMember {
 	var ipStr string
 	for i, ip := range member.IPs {
@@ -43,7 +35,6 @@ func GroupMemberTransform(member cpv1beta.GroupMember) GroupMember {
 	}
 	return GroupMember{Pod: member.Pod, IP: ipStr, Ports: member.Ports, Node: member.Node}
 }
-
 type TableOutput interface {
 	GetTableHeader() []string
 	GetTableRow(maxColumnLength int) []string

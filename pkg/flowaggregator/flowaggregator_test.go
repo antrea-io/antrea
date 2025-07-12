@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowaggregator
-
 import (
 	"bytes"
 	"net/netip"
@@ -22,7 +20,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -38,9 +35,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	exportertesting "antrea.io/antrea/v2/pkg/flowaggregator/exporter/testing"
@@ -51,31 +46,26 @@ import (
 	"antrea.io/antrea/v2/pkg/ipfix"
 	ipfixtesting "antrea.io/antrea/v2/pkg/ipfix/testing"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/exporter"
-	exportertesting "antrea.io/antrea/pkg/flowaggregator/exporter/testing"
-	"antrea.io/antrea/pkg/flowaggregator/intermediate"
-	intermediatetesting "antrea.io/antrea/pkg/flowaggregator/intermediate/testing"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	"antrea.io/antrea/pkg/flowaggregator/querier"
-	"antrea.io/antrea/pkg/ipfix"
-	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
+	exportertesting "antrea.io/antrea/v2/pkg/flowaggregator/exporter/testing"
+	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
+	intermediatetesting "antrea.io/antrea/v2/pkg/flowaggregator/intermediate/testing"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
+	"antrea.io/antrea/v2/pkg/ipfix"
+	ipfixtesting "antrea.io/antrea/v2/pkg/ipfix/testing"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 )
-
 const (
 	testActiveTimeout     = 60 * time.Second
 	testInactiveTimeout   = 180 * time.Second
 	informerDefaultResync = 12 * time.Hour
 )
-
 func init() {
 	ipfixregistry.LoadRegistry()
 }
-
 func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 	ipv4Key := intermediate.FlowKey{
 		SourceAddress:      "10.0.0.1",
@@ -91,7 +81,6 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 		SourcePort:         1234,
 		DestinationPort:    5678,
 	}
-
 	podA := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -104,7 +93,6 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 			Name:      "podB",
 		},
 	}
-
 	testcases := []struct {
 		name             string
 		isIPv6           bool
@@ -136,7 +124,6 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 			false,
 		},
 	}
-
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -145,7 +132,6 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 			mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 			mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
-
 			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
 				return &flowAggregator{
 					aggregatorTransportProtocol: "tcp",
@@ -160,9 +146,7 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 					podStore:                    mockPodStore,
 				}
 			}
-
 			mockExporters := []*exportertesting.MockInterface{mockIPFIXExporter, mockClickHouseExporter}
-
 			startTime := time.Now().UTC().Truncate(time.Second)
 			record := &flowpb.Flow{
 				StartTs:   timestamppb.New(startTime),
@@ -183,12 +167,10 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 				Record:      record,
 				ReadyToSend: true,
 			}
-
 			fa := newFlowAggregator(tc.includePodLabels)
 			for _, exporter := range mockExporters {
 				exporter.EXPECT().AddRecord(record, tc.isIPv6)
 			}
-
 			mockAggregationProcess.EXPECT().ResetStatAndThroughputElementsInRecord(record).Return(nil)
 			mockAggregationProcess.EXPECT().AreCorrelatedFieldsFilled(*flowRecord).Return(false)
 			mockAggregationProcess.EXPECT().SetCorrelatedFieldsFilled(flowRecord, true)
@@ -199,7 +181,6 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 			}
 			mockAggregationProcess.EXPECT().SetExternalFieldsFilled(flowRecord, true)
 			mockAggregationProcess.EXPECT().IsAggregatedRecordIPv4(*flowRecord).Return(!tc.isIPv6)
-
 			err := fa.sendAggregatedRecord(tc.flowKey, flowRecord)
 			assert.NoError(t, err, "Error when sending flow key record, key: %v, record: %v", tc.flowKey, flowRecord)
 			if tc.includePodLabels {
@@ -209,7 +190,6 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 		})
 	}
 }
-
 func TestFlowAggregator_proxyRecord(t *testing.T) {
 	podA := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -223,12 +203,10 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 			Name:      "podB",
 		},
 	}
-
 	const sourceAddressIPv4 = "10.0.0.1"
 	const destinationAddressIPv4 = "10.0.0.2"
 	const sourceAddressIPv6 = "2001:0:3238:dfe1:63::fefb"
 	const destinationAddressIPv6 = "2001:0:3238:dfe1:63::fefc"
-
 	testcases := []struct {
 		name             string
 		isIPv6           bool
@@ -255,14 +233,12 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 			false,
 		},
 	}
-
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockPodStore := podstoretest.NewMockInterface(ctrl)
 			mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
-
 			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
 				return &flowAggregator{
 					aggregatorMode:              flowaggregatorconfig.AggregatorModeProxy,
@@ -276,9 +252,7 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 					podStore:                    mockPodStore,
 				}
 			}
-
 			fa := newFlowAggregator(tc.includePodLabels)
-
 			startTime := time.Now().UTC().Truncate(time.Second)
 			record := &flowpb.Flow{
 				StartTs:   timestamppb.New(startTime),
@@ -296,9 +270,7 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 				ReverseStats: &flowpb.Stats{},
 				App:          &flowpb.App{},
 			}
-
 			mockIPFIXExporter.EXPECT().AddRecord(record, tc.isIPv6)
-
 			var sourceAddress, destinationAddress string
 			if tc.isIPv6 {
 				record.Ip.Version = flowpb.IPVersion_IP_VERSION_6
@@ -311,12 +283,10 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 			}
 			record.Ip.Source = netip.MustParseAddr(sourceAddress).AsSlice()
 			record.Ip.Destination = netip.MustParseAddr(destinationAddress).AsSlice()
-
 			if tc.includePodLabels {
 				mockPodStore.EXPECT().GetPodByIPAndTime(sourceAddress, startTime).Return(podA, true)
 				mockPodStore.EXPECT().GetPodByIPAndTime(destinationAddress, startTime).Return(podB, true)
 			}
-
 			err := fa.proxyRecord(record)
 			assert.NoError(t, err, "Error when proxying flow record")
 			if tc.includePodLabels {
@@ -326,7 +296,6 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 		})
 	}
 }
-
 func TestFlowAggregator_watchConfiguration(t *testing.T) {
 	opt := options.Options{
 		Config: &flowaggregatorconfig.FlowAggregatorConfig{
@@ -389,7 +358,6 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 		defer wg.Done()
 		flowAggregator.watchConfiguration(stopCh)
 	}()
-
 	select {
 	case msg := <-flowAggregator.updateCh:
 		assert.Equal(t, opt.Config.FlowCollector.Enable, msg.Config.FlowCollector.Enable)
@@ -405,7 +373,6 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 	close(stopCh)
 	wg.Wait()
 }
-
 // mockExporters creates mocks for all supported exporters and returns them. It also modifies the
 // global functions used by the FlowAggregator to instantiate the exporters, so that the mocks are
 // returned. The functions will be automatically restored at the end of the test. If
@@ -422,7 +389,6 @@ func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *u
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
 	mockLogExporter := exportertesting.NewMockInterface(ctrl)
-
 	newIPFIXExporterSaved := newIPFIXExporter
 	newClickHouseExporterSaved := newClickHouseExporter
 	newS3ExporterSaved := newS3Exporter
@@ -457,15 +423,11 @@ func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *u
 	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
 		return mockLogExporter, nil
 	}
-
 	return mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter
 }
-
 func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
 	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
-
 	t.Run("updateIPFIX", func(t *testing.T) {
 		flowAggregator := &flowAggregator{
 			ipfixExporter: mockIPFIXExporter,
@@ -649,7 +611,6 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 		assert.Contains(t, b.String(), "Ignoring unsupported configuration updates, please restart FlowAggregator\" keys=[\"activeFlowRecordTimeout\"]")
 	})
 }
-
 func TestFlowAggregator_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
@@ -657,14 +618,11 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
 	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
 	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
-
 	// create dummy watcher: we will not add any files or directory to it.
 	configWatcher, err := fsnotify.NewWatcher()
 	require.NoError(t, err)
 	defer configWatcher.Close()
-
 	updateCh := make(chan *options.Options)
-
 	updateOptions := func(opt *options.Options) {
 		// this is somewhat hacky: we use a non-buffered channel and
 		// every update is sent twice. This way, we can guarantee that by
@@ -673,7 +631,6 @@ func TestFlowAggregator_Run(t *testing.T) {
 		updateCh <- opt
 		updateCh <- opt
 	}
-
 	flowAggregator := &flowAggregator{
 		aggregatorMode: flowaggregatorconfig.AggregatorModeAggregate,
 		// must be large enough to avoid a call to ForAllExpiredFlowRecordsDo
@@ -687,13 +644,11 @@ func TestFlowAggregator_Run(t *testing.T) {
 		updateCh:                updateCh,
 		podStore:                mockPodStore,
 	}
-
 	mockCollectingProcess.EXPECT().Start()
 	mockCollectingProcess.EXPECT().Stop()
 	mockAggregationProcess.EXPECT().Start()
 	mockAggregationProcess.EXPECT().Stop()
 	mockPodStore.EXPECT().Run(gomock.Any())
-
 	// Mock expectations determined by sequence of updateOptions operations below.
 	mockIPFIXExporter.EXPECT().Start().Times(2)
 	mockIPFIXExporter.EXPECT().Stop().Times(2)
@@ -703,7 +658,6 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockS3Exporter.EXPECT().Stop()
 	mockLogExporter.EXPECT().Start()
 	mockLogExporter.EXPECT().Stop()
-
 	// this is not really relevant; but in practice there will be one call
 	// to mockClickHouseExporter.UpdateOptions because of the hack used to
 	// implement updateOptions above.
@@ -711,7 +665,6 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockClickHouseExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
 	mockS3Exporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
 	mockLogExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
-
 	stopCh := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -719,7 +672,6 @@ func TestFlowAggregator_Run(t *testing.T) {
 		defer wg.Done()
 		flowAggregator.Run(stopCh)
 	}()
-
 	makeOptions := func(config *flowaggregatorconfig.FlowAggregatorConfig) *options.Options {
 		return &options.Options{
 			AggregatorMode:          flowAggregator.aggregatorMode,
@@ -727,7 +679,6 @@ func TestFlowAggregator_Run(t *testing.T) {
 			Config:                  config,
 		}
 	}
-
 	disableIPFIXOptions := makeOptions(&flowaggregatorconfig.FlowAggregatorConfig{
 		FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
 			Enable: false,
@@ -768,7 +719,6 @@ func TestFlowAggregator_Run(t *testing.T) {
 			Enable: false,
 		},
 	})
-
 	// we do a few operations: the main purpose is to ensure that cleanup
 	// (i.e., stopping the exporters) is done properly.
 	// 1. The IPFIXExporter is enabled on start, so we expect a call to mockIPFIXExporter.Start()
@@ -789,11 +739,9 @@ func TestFlowAggregator_Run(t *testing.T) {
 	updateOptions(enableFlowLoggerOptions)
 	updateOptions(disableFlowLoggerOptions)
 	updateOptions(enableIPFIXOptions)
-
 	close(stopCh)
 	wg.Wait()
 }
-
 // When the FlowAggregator is stopped (stopCh is closed), watchConfiguration and
 // flowExportLoop are stopped asynchronosuly. If watchConfiguration is stopped
 // "first" and the updateCh is closed, we need to make sure that flowExportLoop
@@ -818,7 +766,6 @@ func TestFlowAggregator_closeUpdateChBeforeFlowExportLoopReturns(t *testing.T) {
 		activeFlowRecordTimeout: 1 * time.Hour,
 		logTickerDuration:       1 * time.Hour,
 	}
-
 	stopCh1 := make(chan struct{})
 	var wg1 sync.WaitGroup
 	wg1.Add(1)
@@ -826,7 +773,6 @@ func TestFlowAggregator_closeUpdateChBeforeFlowExportLoopReturns(t *testing.T) {
 		defer wg1.Done()
 		flowAggregator.watchConfiguration(stopCh1)
 	}()
-
 	stopCh2 := make(chan struct{})
 	var wg2 sync.WaitGroup
 	wg2.Add(1)
@@ -834,7 +780,6 @@ func TestFlowAggregator_closeUpdateChBeforeFlowExportLoopReturns(t *testing.T) {
 		defer wg2.Done()
 		flowAggregator.flowExportLoop(stopCh2)
 	}()
-
 	// stop watchConfiguration, wait, then stop flowExportLoop.
 	// the test is essentially successful if it doesn't panic.
 	close(stopCh1)
@@ -842,7 +787,6 @@ func TestFlowAggregator_closeUpdateChBeforeFlowExportLoopReturns(t *testing.T) {
 	close(stopCh2)
 	wg2.Wait()
 }
-
 func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 	tests := []struct {
 		name string
@@ -899,7 +843,6 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 			want: &flowpb.Labels{},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -916,7 +859,6 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 		})
 	}
 }
-
 func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
@@ -936,7 +878,6 @@ func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 		WithLogExporter:        true,
 		WithIPFIXExporter:      true,
 	}
-
 	fa := &flowAggregator{
 		collectingProcess:  mockCollectingProcess,
 		aggregationProcess: mockAggregationProcess,
@@ -947,15 +888,12 @@ func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	}
 	fa.numRecordsExported.Store(10)
 	fa.numRecordsDropped.Store(1)
-
 	mockCollectingProcess.EXPECT().GetNumRecordsReceived().Return(int64(1))
 	mockAggregationProcess.EXPECT().GetNumFlows().Return(int64(1))
 	mockCollectingProcess.EXPECT().GetNumConnToCollector().Return(int64(1))
-
 	got := fa.GetRecordMetrics()
 	assert.Equal(t, want, got)
 }
-
 func TestFlowAggregator_InitCollectingProcess(t *testing.T) {
 	tests := []struct {
 		name                        string
@@ -979,7 +917,6 @@ func TestFlowAggregator_InitCollectingProcess(t *testing.T) {
 			k8sClient: fake.NewSimpleClientset(),
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fa := &flowAggregator{
@@ -992,7 +929,6 @@ func TestFlowAggregator_InitCollectingProcess(t *testing.T) {
 		})
 	}
 }
-
 func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
 	fa := &flowAggregator{
 		activeFlowRecordTimeout:     testActiveTimeout,
@@ -1005,7 +941,6 @@ func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
 	require.NoError(t, fa.InitPreprocessor())
 	require.NoError(t, fa.InitAggregationProcess())
 }
-
 func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 	srcPod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1041,24 +976,18 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 			},
 		},
 	}
-
 	ctrl := gomock.NewController(t)
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
-
 	sourceAdress := "192.168.1.2"
 	destinationAddress := "192.168.1.3"
-
 	fa := &flowAggregator{
 		podStore: mockPodStore,
 	}
-
 	record := &flowpb.Flow{
 		K8S: &flowpb.Kubernetes{},
 	}
-
 	mockPodStore.EXPECT().GetPodByIPAndTime("192.168.1.2", gomock.Any()).Return(srcPod, true)
 	mockPodStore.EXPECT().GetPodByIPAndTime("192.168.1.3", gomock.Any()).Return(dstPod, true)
-
 	fa.fillK8sMetadata(sourceAdress, destinationAddress, record, time.Now())
 	assert.Equal(t, "sourcePod", record.K8S.SourcePodName)
 	assert.Equal(t, "default", record.K8S.SourcePodNamespace)
@@ -1067,7 +996,6 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 	assert.Equal(t, "default", record.K8S.DestinationPodNamespace)
 	assert.Equal(t, "destinationNode", record.K8S.DestinationNodeName)
 }
-
 func TestNewFlowAggregator(t *testing.T) {
 	wd, err := os.Getwd()
 	require.NoError(t, err)
@@ -1077,7 +1005,6 @@ func TestNewFlowAggregator(t *testing.T) {
 	require.NoError(t, err, "Failed to create test config file")
 	fileName := f.Name()
 	defer os.Remove(fileName)
-
 	newFlowAggregatorConfig := func(clusterID string) *flowaggregatorconfig.FlowAggregatorConfig {
 		return &flowaggregatorconfig.FlowAggregatorConfig{
 			FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
@@ -1098,7 +1025,6 @@ func TestNewFlowAggregator(t *testing.T) {
 			ClusterID: clusterID,
 		}
 	}
-
 	testcases := []struct {
 		name   string
 		config *flowaggregatorconfig.FlowAggregatorConfig

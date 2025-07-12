@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package agent
-
 import (
 	"context"
 	"fmt"
@@ -26,7 +23,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,8 +30,6 @@ import (
 	"golang.org/x/net/nettest"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/route"
 	"antrea.io/antrea/v2/pkg/agent/util"
@@ -44,18 +38,15 @@ import (
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/route"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/agent/util/ipset"
-	"antrea.io/antrea/pkg/agent/util/iptables"
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	utilip "antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/route"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util/ipset"
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
-
 func ExecOutputTrim(cmd string) (string, error) {
 	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
@@ -63,7 +54,6 @@ func ExecOutputTrim(cmd string) (string, error) {
 	}
 	return strings.Join(strings.Fields(string(out)), ""), nil
 }
-
 var (
 	_, podCIDR, _            = net.ParseCIDR("10.10.10.0/24")
 	nodeIPv4, _, nodeIntf, _ = util.GetIPNetDeviceFromIP(func() *utilip.DualStackIPs {
@@ -86,7 +76,6 @@ var (
 		GatewayConfig:         gwConfig,
 	}
 )
-
 func createDummyGW(t *testing.T) netlink.Link {
 	// create dummy gw interface
 	gwLink := &netlink.Dummy{}
@@ -98,29 +87,23 @@ func createDummyGW(t *testing.T) netlink.Link {
 	nodeConfig.GatewayConfig.Name = gwLink.Attrs().Name
 	return link
 }
-
 func skipIfNotInContainer(t *testing.T) {
 	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
 		// test changes file system, routing table. Run in container only
 		t.Skipf("Skipping test which is run only in container")
 	}
 }
-
 type routeClientOptions struct {
 	noSNAT              bool
 	nodeSNATRandomFully bool
 }
-
 func newTestRouteClient(networkConfig *config.NetworkConfig, options routeClientOptions) (*route.Client, error) {
 	return route.NewClient(networkConfig, options.noSNAT, false, false, false, false, false, options.nodeSNATRandomFully, false, nil, apis.WireGuardListenPort)
 }
-
 func TestInitialize(t *testing.T) {
 	skipIfNotInContainer(t)
-
 	link := createDummyGW(t)
 	defer netlink.LinkDel(link)
-
 	tcs := []struct {
 		name                 string
 		networkConfig        *config.NetworkConfig
@@ -180,13 +163,11 @@ func TestInitialize(t *testing.T) {
 			expectUDPPortInRules: 6081,
 		},
 	}
-
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Running Initialize test with mode %s node config %s", tc.networkConfig.TrafficEncapMode, nodeConfig)
 			routeClient, err := newTestRouteClient(tc.networkConfig, routeClientOptions{noSNAT: tc.noSNAT, nodeSNATRandomFully: tc.nodeSNATRandomFully})
 			require.NoError(t, err)
-
 			var xtablesReleasedTime, initializedTime time.Time
 			if tc.xtablesHoldDuration > 0 {
 				closeFn, err := iptables.Lock(iptables.XtablesLockFilePath, 1*time.Second)
@@ -203,13 +184,11 @@ func TestInitialize(t *testing.T) {
 				close(inited1)
 			})
 			assert.NoError(t, err)
-
 			select {
 			case <-time.After(tc.xtablesHoldDuration + 3*time.Second):
 				t.Errorf("Initialize didn't finish in time when the xtables was held by others for %v", tc.xtablesHoldDuration)
 			case <-inited1:
 			}
-
 			if tc.xtablesHoldDuration > 0 {
 				assert.True(t, initializedTime.After(xtablesReleasedTime), "Initialize shouldn't finish before xtables lock was released")
 			}
@@ -219,13 +198,11 @@ func TestInitialize(t *testing.T) {
 				close(inited2)
 			})
 			assert.NoError(t, err)
-
 			select {
 			case <-time.After(3 * time.Second):
 				t.Errorf("Initialize didn't finish in time when the xtables was not held by others")
 			case <-inited2:
 			}
-
 			ipset := ipset.NewClient()
 			// verify ipset
 			err = exec.Command("ipset", "list", "ANTREA-POD-IP").Run()
@@ -233,7 +210,6 @@ func TestInitialize(t *testing.T) {
 			entries, err := ipset.ListEntries("ANTREA-POD-IP")
 			assert.NoError(t, err, "list ipset entries failed")
 			assert.Contains(t, entries, podCIDR.String(), "entry should be in ipset")
-
 			// verify iptables
 			expectedIPTables := map[string]string{
 				"raw": `:ANTREA-OUTPUT - [0:0]
@@ -269,7 +245,6 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-POSTROUTING -o antrea-gw0 -m comment --comment "Antrea: masquerade LOCAL traffic" -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
 `
 			}
-
 			if tc.expectNoTrackRules {
 				expectedIPTables["raw"] = fmt.Sprintf(`:ANTREA-OUTPUT - [0:0]
 :ANTREA-PREROUTING - [0:0]
@@ -279,7 +254,6 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-PREROUTING -p udp -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp --dport %d -m addrtype --dst-type LOCAL -j NOTRACK
 `, tc.expectUDPPortInRules, tc.expectUDPPortInRules)
 			}
-
 			for table, expectedData := range expectedIPTables {
 				// #nosec G204: ignore in test code
 				actualData, err := exec.Command(
@@ -291,26 +265,21 @@ func TestInitialize(t *testing.T) {
 		})
 	}
 }
-
 func TestIpTablesSync(t *testing.T) {
 	skipIfNotInContainer(t)
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
-
 	routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, IPv4Enabled: true}, routeClientOptions{})
 	require.NoError(t, err)
-
 	inited := make(chan struct{})
 	err = routeClient.Initialize(nodeConfig, func() {
 		close(inited)
 	})
 	assert.NoError(t, err)
 	<-inited // Node network initialized
-
 	snatIP := net.ParseIP("1.1.1.1")
 	mark := uint32(1)
 	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
-
 	tcs := []struct {
 		RuleSpec, Cmd, Table, Chain string
 	}{
@@ -340,46 +309,37 @@ func TestIpTablesSync(t *testing.T) {
 	}
 	close(stopCh)
 }
-
 func TestAddAndDeleteSNATRule(t *testing.T) {
 	skipIfNotInContainer(t)
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
-
 	routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, IPv4Enabled: true}, routeClientOptions{})
 	require.NoError(t, err)
-
 	inited := make(chan struct{})
 	err = routeClient.Initialize(nodeConfig, func() {
 		close(inited)
 	})
 	assert.NoError(t, err)
 	<-inited // Node network initialized
-
 	snatIP := net.ParseIP("1.1.1.1")
 	mark := uint32(1)
 	expectedRule := fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)
-
 	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
 	saveCmd := "iptables-save -t nat | grep ANTREA-POSTROUTING"
 	// #nosec G204: ignore in test code
 	actualData, err := exec.Command("bash", "-c", saveCmd).Output()
 	assert.NoError(t, err, "error executing iptables-save cmd")
 	assert.Contains(t, string(actualData), expectedRule)
-
 	assert.NoError(t, routeClient.DeleteSNATRule(mark))
 	// #nosec G204: ignore in test code
 	actualData, err = exec.Command("bash", "-c", saveCmd).Output()
 	assert.NoError(t, err, "error executing iptables-save cmd")
 	assert.NotContains(t, string(actualData), expectedRule)
 }
-
 func TestAddAndDeleteRoutes(t *testing.T) {
 	skipIfNotInContainer(t)
-
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
-
 	tcs := []struct {
 		// variations
 		mode     config.TrafficEncapModeType
@@ -395,18 +355,15 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		{mode: config.TrafficEncapModeHybrid, nodeName: "node3", peerCIDR: "10.10.50.0/24", peerIP: localPeerIP, uplink: nodeLink},
 		{mode: config.TrafficEncapModeHybrid, nodeName: "node4", peerCIDR: "10.10.60.0/24", peerIP: remotePeerIP, uplink: gwLink},
 	}
-
 	for _, tc := range tcs {
 		t.Logf("Running test with mode %s peer cidr %s peer ip %s node config %s", tc.mode, tc.peerCIDR, tc.peerIP, nodeConfig)
 		routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: tc.mode, IPv4Enabled: true}, routeClientOptions{})
 		require.NoError(t, err)
 		err = routeClient.Initialize(nodeConfig, func() {})
 		assert.NoError(t, err)
-
 		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
 		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.nodeName, tc.peerIP, nhCIDRIP), "adding routes failed")
-
 		expRouteStr := ""
 		if tc.uplink != nil {
 			nhIP := nhCIDRIP
@@ -423,13 +380,10 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 			ipRoute = ipRoute[:len(expRouteStr)]
 		}
 		assert.Equal(t, expRouteStr, ipRoute, "route mismatch")
-
 		ipset := ipset.NewClient()
-
 		entries, err := ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.Contains(t, entries, tc.peerCIDR, "entry should be in ipset")
-
 		assert.NoError(t, routeClient.DeleteRoutes(peerCIDR), "deleting routes failed")
 		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))
 		assert.NoError(t, err)
@@ -439,12 +393,10 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		assert.NotContains(t, entries, tc.peerCIDR, "entry should not be in ipset")
 	}
 }
-
 func TestSyncRoutes(t *testing.T) {
 	skipIfNotInContainer(t)
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
-
 	tcs := []struct {
 		// variations
 		mode     config.TrafficEncapModeType
@@ -460,40 +412,33 @@ func TestSyncRoutes(t *testing.T) {
 		{mode: config.TrafficEncapModeHybrid, nodeName: "node3", peerCIDR: "10.10.50.0/24", peerIP: localPeerIP, uplink: nodeLink},
 		{mode: config.TrafficEncapModeHybrid, nodeName: "node4", peerCIDR: "10.10.60.0/24", peerIP: remotePeerIP, uplink: gwLink},
 	}
-
 	for _, tc := range tcs {
 		t.Logf("Running test with mode %s peer cidr %s peer ip %s node config %s", tc.mode, tc.peerCIDR, tc.peerIP, nodeConfig)
 		routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: tc.mode, IPv4Enabled: true}, routeClientOptions{})
 		require.NoError(t, err)
 		err = routeClient.Initialize(nodeConfig, func() {})
 		assert.NoError(t, err)
-
 		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
 		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.nodeName, tc.peerIP, nhCIDRIP), "adding routes failed")
-
 		listCmd := fmt.Sprintf("ip route show table 0 exact %s", peerCIDR)
 		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
 		assert.NoError(t, err, "error executing ip route command: %s", listCmd)
-
 		if len(expOutput) > 0 {
 			delCmd := fmt.Sprintf("ip route del %s", peerCIDR.String())
 			_, err = exec.Command("bash", "-c", delCmd).Output()
 			assert.NoError(t, err, "error executing ip route command: %s", delCmd)
 		}
-
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 		route.SyncInterval = 2 * time.Second
 		go routeClient.Run(stopCh)
 		time.Sleep(route.SyncInterval) // wait for one iteration of sync operation.
-
 		output, err := exec.Command("bash", "-c", listCmd).Output()
 		assert.NoError(t, err, "error executing ip route command: %s", listCmd)
 		assert.Equal(t, expOutput, output, "error syncing route")
 	}
 }
-
 // TestSyncGatewayKernelRoute verifies that the route auto-configured by the kernel when an IP
 // address is assigned to the gateway is periodically sync'ed and restored if missing.
 func TestSyncGatewayKernelRoute(t *testing.T) {
@@ -505,14 +450,11 @@ func TestSyncGatewayKernelRoute(t *testing.T) {
 		Mask: net.CIDRMask(24, 32), // /24
 	}
 	require.NoError(t, netlink.AddrAdd(gwLink, &netlink.Addr{IPNet: gwNet}), "configuring gw IP failed")
-
 	routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}, routeClientOptions{})
 	require.NoError(t, err)
 	err = routeClient.Initialize(nodeConfig, func() {})
 	assert.NoError(t, err)
-
 	listCmd := fmt.Sprintf("ip route show table 0 exact %s", podCIDR)
-
 	err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (done bool, err error) {
 		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
 		if err != nil {
@@ -521,16 +463,13 @@ func TestSyncGatewayKernelRoute(t *testing.T) {
 		return len(expOutput) > 0, nil
 	})
 	require.NoError(t, err, "error when waiting for autoconf'd route")
-
 	delCmd := fmt.Sprintf("ip route del %s", podCIDR)
 	_, err = exec.Command("bash", "-c", delCmd).Output()
 	require.NoError(t, err, "error executing ip route command: %s", delCmd)
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	route.SyncInterval = 2 * time.Second
 	go routeClient.Run(stopCh)
-
 	err = wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 2*route.SyncInterval, false, func(ctx context.Context) (done bool, err error) {
 		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
 		if err != nil {
@@ -540,13 +479,10 @@ func TestSyncGatewayKernelRoute(t *testing.T) {
 	})
 	assert.NoError(t, err, "error when waiting for route to be restored")
 }
-
 func TestReconcile(t *testing.T) {
 	skipIfNotInContainer(t)
-
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
-
 	type peer struct {
 		peerCIDR string
 		peerIP   net.IP
@@ -597,22 +533,18 @@ func TestReconcile(t *testing.T) {
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": nodeLink, "10.10.30.0/24": nil, "10.10.40.0/24": gwLink, "10.10.50.0/24": nil},
 		},
 	}
-
 	for _, tc := range tcs {
 		t.Logf("Running test with mode %s added routes %v desired routes %v", tc.mode, tc.addedRoutes, tc.desiredPeerCIDRs)
 		routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: tc.mode, IPv4Enabled: true}, routeClientOptions{})
 		require.NoError(t, err)
 		err = routeClient.Initialize(nodeConfig, func() {})
 		assert.NoError(t, err)
-
 		for _, route := range tc.addedRoutes {
 			_, peerNet, _ := net.ParseCIDR(route.peerCIDR)
 			peerGwIP := ip.NextIP(peerNet.IP)
 			assert.NoError(t, routeClient.AddRoutes(peerNet, tc.nodeName, route.peerIP, peerGwIP), "adding routes failed")
 		}
-
 		assert.NoError(t, routeClient.Reconcile(tc.desiredPeerCIDRs), "reconcile failed")
-
 		for dst, uplink := range tc.expRoutes {
 			expNum := 0
 			if uplink != nil {
@@ -625,20 +557,16 @@ func TestReconcile(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, fmt.Sprint(expNum), output, "mismatch number of routes to %s", dst)
 		}
-
 		ipset := ipset.NewClient()
 		entries, err := ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.ElementsMatch(t, entries, tc.desiredPeerCIDRs, "mismatch ipset entries")
 	}
 }
-
 func TestRouteTablePolicyOnly(t *testing.T) {
 	skipIfNotInContainer(t)
-
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
-
 	routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly, IPv4Enabled: true}, routeClientOptions{})
 	require.NoError(t, err)
 	err = routeClient.Initialize(nodeConfig, func() {})
@@ -649,12 +577,10 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	assert.NoError(t, err)
 	gwIP := util.NewIPNet(nodeConfig.NodeIPv4Addr.IP)
 	assert.Contains(t, gwIPOut, gwIP.String())
-
 	cLink := &netlink.Dummy{}
 	cLink.Name = "containerLink"
 	assert.NoError(t, netlink.LinkAdd(cLink), "creating linked failed")
 	assert.NoError(t, netlink.LinkSetUp(cLink), "setting-up link failed")
-
 	_, ipAddr, _ := net.ParseCIDR("10.10.1.1/32")
 	_, hostRt, _ := net.ParseCIDR("10.10.1.2/32")
 	assert.NoError(t, netlink.AddrAdd(cLink, &netlink.Addr{IPNet: ipAddr}), "configuring IP on link failed")
@@ -666,7 +592,6 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	if assert.NoError(t, netlink.RouteAdd(rt)) {
 		t.Logf("route added: %v - output interface index: %d - input interface index: %d", rt, rt.LinkIndex, rt.ILinkIndex)
 	}
-
 	// verify route is migrated.
 	assert.NoError(t, routeClient.MigrateRoutesToGw(cLink.Name))
 	expRoute := strings.Join(strings.Fields(
@@ -675,7 +600,6 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	assert.Containsf(t, output, expRoute, output)
 	output, _ = ExecOutputTrim(fmt.Sprintf("ip add show %s", gwName))
 	assert.Containsf(t, output, ipAddr.String(), output)
-
 	// verify route being removed after unmigrate
 	assert.NoError(t, routeClient.UnMigrateRoutesFromGw(hostRt, ""))
 	output, _ = ExecOutputTrim("ip route show")
@@ -685,16 +609,13 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	assert.Containsf(t, output, ipAddr.String(), output)
 	_ = netlink.LinkDel(gwLink)
 }
-
 func TestIPv6RoutesAndNeighbors(t *testing.T) {
 	skipIfNotInContainer(t)
 	if !nettest.SupportsIPv6() {
 		t.Skipf("Skipping test as IPv6 is not supported")
 	}
-
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
-
 	routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true}, routeClientOptions{})
 	require.NoError(t, err)
 	_, ipv6Subnet, _ := net.ParseCIDR("fd74:ca9b:172:19::/64")
@@ -709,7 +630,6 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 	}
 	err = routeClient.Initialize(dualNodeConfig, func() {})
 	assert.Nil(t, err)
-
 	tcs := []struct {
 		// variations
 		nodeName string
@@ -720,12 +640,10 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 		{peerCIDR: "10.10.20.0/24", nodeName: "node0", uplink: gwLink},
 		{peerCIDR: "fd74:ca9b:172:18::/64", nodeName: "node1", uplink: gwLink},
 	}
-
 	for _, tc := range tcs {
 		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
 		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.nodeName, localPeerIP, nhCIDRIP), "adding routes failed")
-
 		link := tc.uplink
 		nhIP := nhCIDRIP
 		var expRouteStr, ipRoute, expNeighStr, ipNeigh string

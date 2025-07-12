@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package raw
-
 import (
 	"bytes"
 	"context"
@@ -22,7 +20,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
@@ -32,34 +29,28 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
 	"antrea.io/antrea/apis/pkg/apis"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	antreascheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/v2/pkg/util/compress"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
-	"antrea.io/antrea/pkg/util/compress"
-	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	antreascheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/v2/pkg/util/compress"
+	"antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 func GetNodeAddrs(node *corev1.Node) (*ip.DualStackIPs, error) {
 	// We prioritize the external Node IP to support cases where antctl is run outside of the
 	// cluster, and the internal Node IP may not be reachable.
 	return k8s.GetNodeAddrsWithType(node, []corev1.NodeAddressType{corev1.NodeExternalIP, corev1.NodeInternalIP})
 }
-
 func SetupClients(kubeconfig *rest.Config) (*kubernetes.Clientset, *antrea.Clientset, error) {
 	k8sClientset, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
@@ -71,7 +62,6 @@ func SetupClients(kubeconfig *rest.Config) (*kubernetes.Clientset, *antrea.Clien
 	}
 	return k8sClientset, antreaClientset, nil
 }
-
 func ResolveKubeconfig(cmd *cobra.Command) (*rest.Config, error) {
 	kubeconfigPath, err := cmd.Flags().GetString("kubeconfig")
 	if err != nil {
@@ -83,7 +73,6 @@ func ResolveKubeconfig(cmd *cobra.Command) (*rest.Config, error) {
 	}
 	return kubeconfig, nil
 }
-
 func SetupLocalKubeconfig(kubeconfig *rest.Config) {
 	if !runtime.InPod {
 		// We want to avoid accidental uses of this function
@@ -101,7 +90,6 @@ func SetupLocalKubeconfig(kubeconfig *rest.Config) {
 		kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaControllerAPIPort))
 	}
 }
-
 func GetControllerCACert(ctx context.Context, client kubernetes.Interface, controllerInfo *v1beta1.AntreaControllerInfo) ([]byte, error) {
 	cm, err := client.CoreV1().ConfigMaps(controllerInfo.PodRef.Namespace).Get(ctx, apis.AntreaCAConfigMapName, metav1.GetOptions{})
 	if err != nil {
@@ -113,7 +101,6 @@ func GetControllerCACert(ctx context.Context, client kubernetes.Interface, contr
 	}
 	return []byte(ca), nil
 }
-
 func CreateAgentClientCfgFromObjects(
 	ctx context.Context,
 	k8sClientset kubernetes.Interface,
@@ -126,7 +113,6 @@ func CreateAgentClientCfgFromObjects(
 	if err != nil {
 		return nil, fmt.Errorf("error when getting IP of Node %s", node.Name)
 	}
-
 	cfg := rest.CopyConfig(kubeconfig)
 	cfg.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	if insecure {
@@ -149,7 +135,6 @@ func CreateAgentClientCfgFromObjects(
 		cfg.ServerName = "localhost"
 		cfg.CAData = cert
 	}
-
 	var nodeIP string
 	if nodeIPs.IPv4 != nil {
 		nodeIP = nodeIPs.IPv4.String()
@@ -161,7 +146,6 @@ func CreateAgentClientCfgFromObjects(
 	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP, fmt.Sprint(agentInfo.APIPort)))
 	return cfg, nil
 }
-
 func CreateAgentClientCfg(
 	ctx context.Context,
 	k8sClientset kubernetes.Interface,
@@ -181,10 +165,8 @@ func CreateAgentClientCfg(
 	if agentInfo.NodeRef.Name == "" {
 		return nil, fmt.Errorf("AntreaAgentInfo is not ready for Node %s", nodeName)
 	}
-
 	return CreateAgentClientCfgFromObjects(ctx, k8sClientset, kubeconfig, node, agentInfo, insecure)
 }
-
 func CreateControllerClientCfg(
 	ctx context.Context,
 	k8sClientset kubernetes.Interface,
@@ -196,7 +178,6 @@ func CreateControllerClientCfg(
 	if err != nil {
 		return nil, err
 	}
-
 	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(ctx, controllerInfo.NodeRef.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
@@ -206,7 +187,6 @@ func CreateControllerClientCfg(
 	if err != nil {
 		return nil, fmt.Errorf("error when getting controller IP: %w", err)
 	}
-
 	cfg := rest.CopyConfig(kubeconfig)
 	cfg.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	if insecure {
@@ -224,7 +204,6 @@ func CreateControllerClientCfg(
 		cfg.ServerName = k8s.GetServiceDNSNames(controllerInfo.PodRef.Namespace, apis.AntreaServiceName)[0]
 		cfg.CAData = caCert
 	}
-
 	var nodeIP string
 	if controllerNodeIPs.IPv4 != nil {
 		nodeIP = controllerNodeIPs.IPv4.String()
@@ -233,11 +212,9 @@ func CreateControllerClientCfg(
 	} else {
 		return nil, fmt.Errorf("there is no NodeIP on controller Node")
 	}
-
 	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP, fmt.Sprint(controllerInfo.APIPort)))
 	return cfg, nil
 }
-
 func ExecInPod(ctx context.Context, client kubernetes.Interface, config *rest.Config, namespace, pod, container string, command []string) (string, string, error) {
 	req := client.CoreV1().RESTClient().Post().Resource("pods").Name(pod).Namespace(namespace).SubResource("exec")
 	req.VersionedParams(&corev1.PodExecOptions{
@@ -261,23 +238,19 @@ func ExecInPod(ctx context.Context, client kubernetes.Interface, config *rest.Co
 	})
 	return stdout.String(), stderr.String(), err
 }
-
 type PodFileCopier interface {
 	CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name, containerName, srcPath, dstDir string) error
 }
-
 type podFile struct {
 	RestConfig *rest.Config
 	Client     kubernetes.Interface
 }
-
 func NewPodFileCopier(restConfig *rest.Config, client kubernetes.Interface) *podFile {
 	return &podFile{
 		RestConfig: restConfig,
 		Client:     client,
 	}
 }
-
 func (p *podFile) CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name, containerName, srcPath, dstDir string) error {
 	dir, fileName := path.Split(srcPath)
 	cmd := []string{"tar"}
@@ -285,7 +258,6 @@ func (p *podFile) CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name,
 		cmd = append(cmd, "-C", dir)
 	}
 	cmd = append(cmd, "-cf", "-", fileName)
-
 	output, _, err := ExecInPod(ctx, p.Client, p.RestConfig, namespace, name, containerName, cmd)
 	if err != nil {
 		return err

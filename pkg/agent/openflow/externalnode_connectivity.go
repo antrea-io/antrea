@@ -11,40 +11,28 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
-
 	"antrea.io/libOpenflow/openflow15"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 const (
 	policyBypassFlowsKey = "policyBypassFlows"
 )
-
 type featureExternalNodeConnectivity struct {
 	cookieAllocator cookie.Allocator
 	ipProtocols     []binding.Protocol
 	ctZones         map[binding.Protocol]int
 	category        cookie.Category
-
 	uplinkFlowCache *flowCategoryCache
 }
-
 func (f *featureExternalNodeConnectivity) getFeatureName() string {
 	return "ExternalNodeConnectivity"
 }
-
 func newFeatureExternalNodeConnectivity(
 	cookieAllocator cookie.Allocator,
 	ipProtocols []binding.Protocol) *featureExternalNodeConnectivity {
@@ -57,7 +45,6 @@ func newFeatureExternalNodeConnectivity(
 			ctZones[ipProtocol] = CtZoneV6
 		}
 	}
-
 	return &featureExternalNodeConnectivity{
 		cookieAllocator: cookieAllocator,
 		ipProtocols:     ipProtocols,
@@ -66,7 +53,6 @@ func newFeatureExternalNodeConnectivity(
 		category:        cookie.ExternalNodeConnectivity,
 	}
 }
-
 func (f *featureExternalNodeConnectivity) vmUplinkFlows(hostOFPort, uplinkOFPort uint32) []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	return []binding.Flow{
@@ -106,7 +92,6 @@ func (f *featureExternalNodeConnectivity) vmUplinkFlows(hostOFPort, uplinkOFPort
 			Done(),
 	}
 }
-
 func (f *featureExternalNodeConnectivity) initFlows() []*openflow15.FlowMod {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := []binding.Flow{
@@ -142,10 +127,8 @@ func (f *featureExternalNodeConnectivity) initFlows() []*openflow15.FlowMod {
 				Done(),
 		)
 	}
-
 	return GetFlowModMessages(flows, binding.AddMessage)
 }
-
 func (f *featureExternalNodeConnectivity) replayFlows() []*openflow15.FlowMod {
 	var flows []*openflow15.FlowMod
 	rangeFunc := func(key, value interface{}) bool {
@@ -156,19 +139,15 @@ func (f *featureExternalNodeConnectivity) replayFlows() []*openflow15.FlowMod {
 	f.uplinkFlowCache.Range(rangeFunc)
 	return flows
 }
-
 func (f *featureExternalNodeConnectivity) initGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureExternalNodeConnectivity) replayGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureExternalNodeConnectivity) replayMeters() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureExternalNodeConnectivity) policyBypassFlow(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flowBuilder binding.FlowBuilder
@@ -194,7 +173,6 @@ func (f *featureExternalNodeConnectivity) policyBypassFlow(protocol binding.Prot
 		Action().GotoTable(nextTable.ofTable.GetID()).
 		Done()
 }
-
 func (f *featureExternalNodeConnectivity) addPolicyBypassFlows(flow binding.Flow) error {
 	var allFlows []binding.Flow
 	obj, ok := f.uplinkFlowCache.Load(policyBypassFlowsKey)
@@ -207,16 +185,13 @@ func (f *featureExternalNodeConnectivity) addPolicyBypassFlows(flow binding.Flow
 	f.uplinkFlowCache.Store(policyBypassFlowsKey, allFlows)
 	return nil
 }
-
 func (c *client) InstallVMUplinkFlows(hostIFName string, hostPort int32, uplinkPort int32) error {
 	flows := c.featureExternalNodeConnectivity.vmUplinkFlows(uint32(hostPort), uint32(uplinkPort))
 	return c.addFlows(c.featureExternalNodeConnectivity.uplinkFlowCache, hostIFName, flows)
 }
-
 func (c *client) UninstallVMUplinkFlows(hostIFName string) error {
 	return c.deleteFlows(c.featureExternalNodeConnectivity.uplinkFlowCache, hostIFName)
 }
-
 func (c *client) InstallPolicyBypassFlows(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) error {
 	flow := c.featureExternalNodeConnectivity.policyBypassFlow(protocol, ipNet, port, isIngress)
 	flowMessages := GetFlowModMessages([]binding.Flow{flow}, binding.AddMessage)
@@ -225,7 +200,6 @@ func (c *client) InstallPolicyBypassFlows(protocol binding.Protocol, ipNet *net.
 	}
 	return c.featureExternalNodeConnectivity.addPolicyBypassFlows(flow)
 }
-
 // nonIPPipelineClassifyFlow generates a flow in PipelineClassifierTable to resubmit packets not using IP protocols to
 // pipelineNonIP.
 func nonIPPipelineClassifyFlow(cookieID uint64, pipeline binding.Pipeline) binding.Flow {

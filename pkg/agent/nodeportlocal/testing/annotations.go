@@ -11,28 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package testing
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
-=======
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
 )
-
 type ExpectedNPLAnnotations struct {
 	nodeIP       *string
 	nplStartPort int
 	nplEndPort   int
 	annotations  []types.NPLAnnotation
 }
-
 func NewExpectedNPLAnnotations(nodeIP *string, nplStartPort, nplEndPort int) *ExpectedNPLAnnotations {
 	return &ExpectedNPLAnnotations{
 		nodeIP:       nodeIP,
@@ -40,7 +31,6 @@ func NewExpectedNPLAnnotations(nodeIP *string, nplStartPort, nplEndPort int) *Ex
 		nplEndPort:   nplEndPort,
 	}
 }
-
 func (a *ExpectedNPLAnnotations) find(podPort int, protocol string) *types.NPLAnnotation {
 	for idx := range a.annotations {
 		annotation := &a.annotations[idx]
@@ -50,7 +40,6 @@ func (a *ExpectedNPLAnnotations) find(podPort int, protocol string) *types.NPLAn
 	}
 	return nil
 }
-
 func (a *ExpectedNPLAnnotations) Add(nodePort *int, podPort int, protocol string) *ExpectedNPLAnnotations {
 	annotation := types.NPLAnnotation{PodPort: podPort, Protocol: protocol}
 	if nodePort != nil {
@@ -62,7 +51,6 @@ func (a *ExpectedNPLAnnotations) Add(nodePort *int, podPort int, protocol string
 	a.annotations = append(a.annotations, annotation)
 	return a
 }
-
 func (a *ExpectedNPLAnnotations) Check(t *testing.T, nplValue []types.NPLAnnotation) {
 	assert.Equal(t, len(a.annotations), len(nplValue), "Invalid number of NPL annotations")
 	for _, nplAnnotation := range nplValue {

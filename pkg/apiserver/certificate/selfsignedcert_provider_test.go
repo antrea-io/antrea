@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package certificate
-
 import (
 	"context"
 	"net"
 	"os"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -31,28 +28,21 @@ import (
 	"k8s.io/client-go/tools/cache"
 	certutil "k8s.io/client-go/util/cert"
 	clocktesting "k8s.io/utils/clock/testing"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/env"
-=======
-	"antrea.io/antrea/pkg/util/env"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/util/env"
 )
-
 const (
 	testServiceName     = "svc-foo"
 	testPairName        = "foo"
 	testSecretName      = "secret-foo"
 	testSecretNamespace = "ns-foo"
 )
-
 var (
 	// self-signed certs valid for one year.
 	testOneYearCert, testOneYearKey, _   = certutil.GenerateSelfSignedCertKeyWithFixtures("localhost", loopbackAddresses, nil, "")
 	testOneYearCert2, testOneYearKey2, _ = certutil.GenerateSelfSignedCertKeyWithFixtures("localhost", loopbackAddresses, nil, "")
 	testOneYearCert3, testOneYearKey3, _ = certutil.GenerateSelfSignedCertKeyWithFixtures("localhost", loopbackAddresses, nil, "")
 )
-
 func newTestSelfSignedCertProvider(t *testing.T, client *fakeclientset.Clientset, tlsSecretName string, minValidDuration time.Duration, options ...providerOption) *selfSignedCertProvider {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	caConfig := &CAConfig{
@@ -66,7 +56,6 @@ func newTestSelfSignedCertProvider(t *testing.T, client *fakeclientset.Clientset
 	require.NoError(t, err)
 	return p
 }
-
 func TestSelfSignedCertProviderShouldRotateCertificate(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -105,7 +94,6 @@ func TestSelfSignedCertProviderShouldRotateCertificate(t *testing.T) {
 		})
 	}
 }
-
 func TestSelfSignedCertProviderRotate(t *testing.T) {
 	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -127,12 +115,10 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 			corev1.TLSPrivateKeyKey: keyInFile,
 		},
 	}, gotSecret, "Secret doesn't match")
-
 	go p.Run(ctx, 1)
 	// Wait for cache to have synced to make sure that no event is lost in case the Secret
 	// update happens between the List and Watch operations in the informer.
 	cache.WaitForCacheSync(ctx.Done(), p.secretInformer.HasSynced)
-
 	// Update the Secret, it should update the serving one.
 	gotSecret.Data[corev1.TLSCertKey] = testOneYearCert
 	gotSecret.Data[corev1.TLSPrivateKeyKey] = testOneYearKey
@@ -144,7 +130,6 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 		assert.Equal(c, testOneYearCert, certInFile)
 		assert.Equal(c, testOneYearKey, keyInFile)
 	}, 5*time.Second, 100*time.Millisecond)
-
 	// Trigger a resync, nothing should change.
 	p.enqueue()
 	time.Sleep(50 * time.Millisecond)
@@ -153,7 +138,6 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 	keyInFile, _ = os.ReadFile(p.secureServing.ServerCert.CertKey.KeyFile)
 	assert.Equal(t, testOneYearCert, certInFile)
 	assert.Equal(t, testOneYearKey, keyInFile)
-
 	// Step 280 days, the cert should be rotated.
 	fakeClock.Step(time.Hour * 24 * 280)
 	p.enqueue()
@@ -171,13 +155,11 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 		}, gotSecret.Data, "Secret should not match")
 	}, 5*time.Second, 100*time.Millisecond)
 }
-
 func copyAndMutateSecret(secret *corev1.Secret, mutator func(_ *corev1.Secret)) *corev1.Secret {
 	s := secret.DeepCopy()
 	mutator(s)
 	return s
 }
-
 func TestSelfSignedCertProviderRun(t *testing.T) {
 	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
 	testSecret := &corev1.Secret{
@@ -204,7 +186,6 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 			corev1.TLSPrivateKeyKey: testOneYearKey3,
 		},
 	}
-
 	tests := []struct {
 		name             string
 		tlsSecretName    string

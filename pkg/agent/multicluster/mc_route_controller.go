@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"time"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -31,8 +28,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcclientset "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned"
 	mcinformersv1alpha1 "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
@@ -42,38 +37,30 @@ import (
 	antrearoute "antrea.io/antrea/v2/pkg/agent/route"
 	"antrea.io/antrea/v2/pkg/agent/wireguard"
 	"antrea.io/antrea/v2/pkg/config/agent"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
-	mcinformersv1alpha1 "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
-	mclisters "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow"
-	antrearoute "antrea.io/antrea/pkg/agent/route"
-	"antrea.io/antrea/pkg/agent/wireguard"
-	"antrea.io/antrea/pkg/config/agent"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcclientset "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned"
+	mcinformersv1alpha1 "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
+	mclisters "antrea.io/antrea/v2/multicluster/pkg/client/listers/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	antrearoute "antrea.io/antrea/v2/pkg/agent/route"
+	"antrea.io/antrea/v2/pkg/agent/wireguard"
+	"antrea.io/antrea/v2/pkg/config/agent"
 )
-
 const (
 	controllerName = "MCDefaultRouteController"
-
 	// Set resyncPeriod to 0 to disable resyncing
 	resyncPeriod = 0 * time.Second
 	// How long to wait before retrying the processing of a resource change
 	minRetryDelay = 2 * time.Second
 	maxRetryDelay = 120 * time.Second
-
 	workerItemKey = "key"
-
 	multiclusterWireGuardInterface = "antrea-mc-wg0"
 	multiclusterWireGuardPublicKey = "publicKey"
 )
-
 var (
 	wireGuardNewFunc = wireguard.New
 )
-
 // MCDefaultRouteController watches Gateway and ClusterInfoImport events.
 // It is responsible for setting up necessary Openflow entries for multi-cluster
 // traffic on a Gateway or a regular Node.
@@ -106,7 +93,6 @@ type MCDefaultRouteController struct {
 	enablePodToPodConnectivity   bool
 	wireGuardInitialized         bool
 }
-
 func NewMCDefaultRouteController(
 	mcClient mcclientset.Interface,
 	gwInformer mcinformersv1alpha1.GatewayInformer,
@@ -181,7 +167,6 @@ func NewMCDefaultRouteController(
 	)
 	return controller
 }
-
 func (c *MCDefaultRouteController) enqueueGateway(obj interface{}, isDelete bool) {
 	gw, isGW := obj.(*mcv1alpha1.Gateway)
 	if !isGW {
@@ -196,7 +181,6 @@ func (c *MCDefaultRouteController) enqueueGateway(obj interface{}, isDelete bool
 			return
 		}
 	}
-
 	if !isDelete {
 		if net.ParseIP(gw.InternalIP) == nil || net.ParseIP(gw.GatewayIP) == nil {
 			klog.ErrorS(nil, "No valid Internal IP or Gateway IP is found in Gateway", "gateway", gw.Namespace+"/"+gw.Name)
@@ -205,7 +189,6 @@ func (c *MCDefaultRouteController) enqueueGateway(obj interface{}, isDelete bool
 	}
 	c.queue.Add(workerItemKey)
 }
-
 func (c *MCDefaultRouteController) enqueueClusterInfoImport(obj interface{}, isDelete bool) {
 	ciImp, isciImp := obj.(*mcv1alpha1.ClusterInfoImport)
 	if !isciImp {
@@ -220,7 +203,6 @@ func (c *MCDefaultRouteController) enqueueClusterInfoImport(obj interface{}, isD
 			return
 		}
 	}
-
 	if !isDelete {
 		if len(ciImp.Spec.GatewayInfos) == 0 {
 			klog.ErrorS(nil, "Received invalid ClusterInfoImport", "object", obj)
@@ -231,10 +213,8 @@ func (c *MCDefaultRouteController) enqueueClusterInfoImport(obj interface{}, isD
 			return
 		}
 	}
-
 	c.queue.Add(workerItemKey)
 }
-
 // Run will create a worker (go routines) which will process
 // the Gateway events from the workqueue.
 func (c *MCDefaultRouteController) Run(stopCh <-chan struct{}) {
@@ -245,25 +225,21 @@ func (c *MCDefaultRouteController) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
 	}
-
 	go wait.Until(c.worker, time.Second, stopCh)
 	<-stopCh
 }
-
 // worker is a long-running function that will continually call the processNextWorkItem
 // function in order to read and process a message on the workqueue.
 func (c *MCDefaultRouteController) worker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 func (c *MCDefaultRouteController) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(key)
-
 	syncFn := func() error {
 		if c.wireGuardConfig != nil {
 			if err := c.syncWireGuard(); err != nil {
@@ -281,7 +257,6 @@ func (c *MCDefaultRouteController) processNextWorkItem() bool {
 	}
 	return true
 }
-
 // syncWireGuard reconciles WireGuard configurations in following way:
 //  1. If the current Node is the Multi-cluster Gateway Node, controller will try to initialize corresponding WireGuard
 //     configuration and route on the host, then add all existing Gateway Nodes in other member clusters as WireGuard peers.
@@ -294,7 +269,6 @@ func (c *MCDefaultRouteController) syncWireGuard() error {
 	if err != nil {
 		return err
 	}
-
 	amIGateway := gateway != nil && gateway.Name == c.nodeConfig.Name
 	if c.wireGuardClient != nil && (!amIGateway || !c.wireGuardInitialized) {
 		if err := c.cleanUpWireGuard(); err != nil {
@@ -318,7 +292,6 @@ func (c *MCDefaultRouteController) syncWireGuard() error {
 	if err != nil {
 		return err
 	}
-
 	desiredCIImports := sets.New[string]()
 	var updateErr []error
 	for _, ciImport := range ciImports {
@@ -335,7 +308,6 @@ func (c *MCDefaultRouteController) syncWireGuard() error {
 	if len(updateErr) > 0 {
 		return utilerrors.NewAggregate(updateErr)
 	}
-
 	// Check cache and existing ClusterInfoImports, clean up routes and WireGuard peers of the
 	// removed ClusterInfoImports.
 	for ciName, ciImport := range c.installedWireGuardPeers {
@@ -347,10 +319,8 @@ func (c *MCDefaultRouteController) syncWireGuard() error {
 		}
 		delete(c.installedWireGuardPeers, ciName)
 	}
-
 	return nil
 }
-
 func (c *MCDefaultRouteController) removeWireGuardRouteAndPeer(ciImport *mcv1alpha1.ClusterInfoImport) error {
 	remoteGatewayIP, _, _ := net.ParseCIDR(ciImport.Spec.ServiceCIDR)
 	dstCIDR := net.IPNet{IP: remoteGatewayIP, Mask: net.CIDRMask(32, 32)}
@@ -359,7 +329,6 @@ func (c *MCDefaultRouteController) removeWireGuardRouteAndPeer(ciImport *mcv1alp
 	}
 	return c.wireGuardClient.DeletePeer(ciImport.Name)
 }
-
 // addWireGuardRouteAndPeer tries to update a WireGuard peer with ClusterInfoImport. If updating successfully,
 // it will also create host route to WireGuard peer.
 func (c *MCDefaultRouteController) addWireGuardRouteAndPeer(ciImport *mcv1alpha1.ClusterInfoImport) error {
@@ -367,7 +336,6 @@ func (c *MCDefaultRouteController) addWireGuardRouteAndPeer(ciImport *mcv1alpha1
 		klog.V(2).InfoS("ClusterInfoImport's WireGuard field has not been initialized, skip it", "ClusterInfoImport", klog.KObj(ciImport))
 		return nil
 	}
-
 	klog.V(2).InfoS("Updating WireGuard peer with ClusterInfoImport", "ClusterInfoImport", klog.KObj(ciImport))
 	// The cross-cluster traffic will be both encapsulated and encrypted. To avoid routing loop, we use a tunnel endpoint
 	// IP different from the WireGuard endpoint IP. Since the ServiceCIDR is guaranteed to be unique across member clusters,
@@ -378,17 +346,14 @@ func (c *MCDefaultRouteController) addWireGuardRouteAndPeer(ciImport *mcv1alpha1
 		return err
 	}
 	remoteWireGuardNet := &net.IPNet{IP: remoteWireGuardIP, Mask: net.CIDRMask(32, 32)}
-
 	gatewayIP := net.ParseIP(ciImport.Spec.GatewayInfos[0].GatewayIP)
 	allowedIPs := []*net.IPNet{remoteWireGuardNet}
 	if err := c.wireGuardClient.UpdatePeer(ciImport.Name, ciImport.Spec.WireGuard.PublicKey, gatewayIP, allowedIPs); err != nil {
 		return err
 	}
-
 	klog.V(2).InfoS("Adding route on the host", "CIDR", remoteWireGuardNet, "device", c.wireGuardConfig.Name)
 	return c.routeClient.AddRouteForLink(remoteWireGuardNet, c.wireGuardConfig.LinkIndex)
 }
-
 // initializeWireGuard initializes the WireGuard interface and client.
 // It will also update Gateway's WireGuard field.
 func (c *MCDefaultRouteController) initializeWireGuard(gateway *mcv1alpha1.Gateway) error {
@@ -397,7 +362,6 @@ func (c *MCDefaultRouteController) initializeWireGuard(gateway *mcv1alpha1.Gatew
 		return err
 	}
 	c.wireGuardClient = wgClient
-
 	wireGuardInterfaceIP, _, err := net.ParseCIDR(gateway.ServiceCIDR)
 	if err != nil {
 		return err
@@ -406,7 +370,6 @@ func (c *MCDefaultRouteController) initializeWireGuard(gateway *mcv1alpha1.Gatew
 	if err != nil {
 		return err
 	}
-
 	patch, _ := json.Marshal(map[string]interface{}{
 		"wireGuard": map[string]interface{}{
 			multiclusterWireGuardPublicKey: publicKey,
@@ -419,10 +382,8 @@ func (c *MCDefaultRouteController) initializeWireGuard(gateway *mcv1alpha1.Gatew
 	}); err != nil {
 		return fmt.Errorf("error when patching the Gateway with WireGuard information, error: %s", err)
 	}
-
 	return nil
 }
-
 // cleanUpWireGuard deletes the WireGuard interface on the host.
 // The WireGuard route will also be deleted automatically when the interface is deleted.
 func (c *MCDefaultRouteController) cleanUpWireGuard() error {
@@ -432,7 +393,6 @@ func (c *MCDefaultRouteController) cleanUpWireGuard() error {
 	c.wireGuardClient = nil
 	return nil
 }
-
 func (c *MCDefaultRouteController) syncMCFlows() error {
 	startTime := time.Now()
 	defer func() {
@@ -446,7 +406,6 @@ func (c *MCDefaultRouteController) syncMCFlows() error {
 		klog.V(2).InfoS("No active Gateway is found")
 		return nil
 	}
-
 	klog.V(2).InfoS("Installed Gateway", "gateway", klog.KObj(c.installedActiveGW))
 	if activeGW != nil && c.installedActiveGW != nil && activeGW.Name == c.installedActiveGW.Name {
 		// Active Gateway name doesn't change but still do a full flow sync
@@ -457,7 +416,6 @@ func (c *MCDefaultRouteController) syncMCFlows() error {
 		c.installedActiveGW = activeGW
 		return nil
 	}
-
 	if c.installedActiveGW != nil {
 		if err := c.deleteMCFlowsForAllCIImps(); err != nil {
 			return err
@@ -465,7 +423,6 @@ func (c *MCDefaultRouteController) syncMCFlows() error {
 		klog.V(2).InfoS("Deleted flows for installed Gateway", "gateway", klog.KObj(c.installedActiveGW))
 		c.installedActiveGW = nil
 	}
-
 	if activeGW != nil {
 		if err := c.ofClient.InstallMulticlusterClassifierFlows(c.nodeConfig.TunnelOFPort, activeGW.Name == c.nodeConfig.Name); err != nil {
 			return err
@@ -475,13 +432,11 @@ func (c *MCDefaultRouteController) syncMCFlows() error {
 	}
 	return nil
 }
-
 func (c *MCDefaultRouteController) syncMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway) error {
 	desiredCIImports, err := c.ciImportLister.List(labels.Everything())
 	if err != nil {
 		return err
 	}
-
 	activeGWChanged := c.checkGatewayIPChange(activeGW)
 	installedCIImportNames := sets.KeySet(c.installedCIImports)
 	for _, ciImp := range desiredCIImports {
@@ -490,7 +445,6 @@ func (c *MCDefaultRouteController) syncMCFlowsForAllCIImps(activeGW *mcv1alpha1.
 		}
 		installedCIImportNames.Delete(ciImp.Name)
 	}
-
 	for name := range installedCIImportNames {
 		if err := c.deleteMCFlowsForSingleCIImp(name); err != nil {
 			return err
@@ -498,7 +452,6 @@ func (c *MCDefaultRouteController) syncMCFlowsForAllCIImps(activeGW *mcv1alpha1.
 	}
 	return nil
 }
-
 func (c *MCDefaultRouteController) checkGatewayIPChange(activeGW *mcv1alpha1.Gateway) bool {
 	var activeGWChanged bool
 	if activeGW.Name == c.nodeConfig.Name {
@@ -510,7 +463,6 @@ func (c *MCDefaultRouteController) checkGatewayIPChange(activeGW *mcv1alpha1.Gat
 	}
 	return activeGWChanged
 }
-
 func (c *MCDefaultRouteController) addMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway) error {
 	allCIImports, err := c.ciImportLister.List(labels.Everything())
 	if err != nil {
@@ -525,10 +477,8 @@ func (c *MCDefaultRouteController) addMCFlowsForAllCIImps(activeGW *mcv1alpha1.G
 			return err
 		}
 	}
-
 	return nil
 }
-
 func (c *MCDefaultRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gateway, ciImport *mcv1alpha1.ClusterInfoImport,
 	installedCIImp *mcv1alpha1.ClusterInfoImport, activeGWChanged bool) error {
 	tunnelPeerIPToRemoteGW := getPeerGatewayTunnelIP(ciImport.Spec, c.wireGuardConfig != nil)
@@ -536,7 +486,6 @@ func (c *MCDefaultRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1
 		klog.ErrorS(nil, "The ClusterInfoImport has no valid Gateway IP, skip it", "clusterinfoimport", klog.KObj(ciImport))
 		return nil
 	}
-
 	var ciImportNoChange bool
 	if installedCIImp != nil {
 		oldTunnelPeerIPToRemoteGW := getPeerGatewayTunnelIP(installedCIImp.Spec, c.wireGuardConfig != nil)
@@ -545,12 +494,10 @@ func (c *MCDefaultRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1
 			ciImportNoChange = ciImportNoChange && sets.New[string](installedCIImp.Spec.PodCIDRs...).Equal(sets.New[string](ciImport.Spec.PodCIDRs...))
 		}
 	}
-
 	if ciImportNoChange && !activeGWChanged {
 		klog.V(2).InfoS("ClusterInfoImport and the active Gateway have no change, skip updating", "clusterinfoimport", klog.KObj(ciImport), "gateway", klog.KObj(activeGW))
 		return nil
 	}
-
 	klog.InfoS("Adding/updating remote Gateway Node flows for Multi-cluster", "gateway", klog.KObj(activeGW),
 		"node", c.nodeConfig.Name, "peer", tunnelPeerIPToRemoteGW)
 	allCIDRs := []string{ciImport.Spec.ServiceCIDR}
@@ -588,11 +535,9 @@ func (c *MCDefaultRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1
 			return fmt.Errorf("failed to install flows to Gateway %s: %v", activeGW.Name, err)
 		}
 	}
-
 	c.installedCIImports[ciImport.Name] = ciImport
 	return nil
 }
-
 func (c *MCDefaultRouteController) deleteMCFlowsForSingleCIImp(ciImpName string) error {
 	if err := c.ofClient.UninstallMulticlusterFlows(ciImpName); err != nil {
 		return fmt.Errorf("failed to uninstall multi-cluster flows to remote Gateway Node %s: %v", ciImpName, err)
@@ -600,14 +545,12 @@ func (c *MCDefaultRouteController) deleteMCFlowsForSingleCIImp(ciImpName string)
 	delete(c.installedCIImports, ciImpName)
 	return nil
 }
-
 func (c *MCDefaultRouteController) deleteMCFlowsForAllCIImps() error {
 	for _, ciImp := range c.installedCIImports {
 		c.deleteMCFlowsForSingleCIImp(ciImp.Name)
 	}
 	return nil
 }
-
 func (c *MCDefaultRouteController) getActiveGateway() (*mcv1alpha1.Gateway, error) {
 	activeGW, err := getActiveGateway(c.gwLister)
 	if err != nil {
@@ -621,7 +564,6 @@ func (c *MCDefaultRouteController) getActiveGateway() (*mcv1alpha1.Gateway, erro
 	}
 	return activeGW, nil
 }
-
 func getActiveGateway(gwLister mclisters.GatewayLister) (*mcv1alpha1.Gateway, error) {
 	gws, err := gwLister.List(labels.Everything())
 	if err != nil {
@@ -633,7 +575,6 @@ func getActiveGateway(gwLister mclisters.GatewayLister) (*mcv1alpha1.Gateway, er
 	// The Gateway webhook guarantees there will be at most one Gateway in a cluster.
 	return gws[0], nil
 }
-
 func generatePeerConfigs(subnets []string, gatewayIP net.IP) (map[*net.IPNet]net.IP, error) {
 	peerConfigs := make(map[*net.IPNet]net.IP, len(subnets))
 	for _, subnet := range subnets {
@@ -645,7 +586,6 @@ func generatePeerConfigs(subnets []string, gatewayIP net.IP) (map[*net.IPNet]net
 	}
 	return peerConfigs, nil
 }
-
 // If WireGuard is disabled, getPeerGatewayTunnelIP will return Gateway's GatewayIP.
 // If WireGuard is enabled, the WireGuard interfaces use the first IP address of ServiceCIDR
 // as its IP address. So getPeerGatewayTunnelIP will return the first IP of the ServiceCIDR
@@ -664,7 +604,6 @@ func getPeerGatewayTunnelIP(spec mcv1alpha1.ClusterInfo, enableWireGuard bool) n
 	}
 	return net.ParseIP(spec.GatewayInfos[0].GatewayIP)
 }
-
 func getLocalGatewayIP(gateway *mcv1alpha1.Gateway, enableWireGuard bool) net.IP {
 	if enableWireGuard {
 		if gateway.ServiceCIDR == "" {
@@ -676,7 +615,6 @@ func getLocalGatewayIP(gateway *mcv1alpha1.Gateway, enableWireGuard bool) net.IP
 	}
 	return net.ParseIP(gateway.GatewayIP)
 }
-
 // isWireGuardInfoChanged checks the information in ClusterInfoImport needed by WireGuard change or not.
 func isWireGuardInfoChanged(cache, cur *mcv1alpha1.ClusterInfoImport) bool {
 	if cache.Spec.ServiceCIDR != cur.Spec.ServiceCIDR {

@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package installation
-
 import (
 	"context"
 	"errors"
@@ -21,23 +19,17 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/raw/check"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/raw/check"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/raw/check"
 )
-
 func Command() *cobra.Command {
 	o := newOptions()
 	command := &cobra.Command{
@@ -52,21 +44,18 @@ func Command() *cobra.Command {
 	command.Flags().StringVar(&o.testImage, "test-image", o.testImage, "Container image override for the installation checker")
 	return command
 }
-
 type options struct {
 	antreaNamespace string
 	runFilter       string
 	// Container image for the installation checker.
 	testImage string
 }
-
 func newOptions() *options {
 	return &options{
 		antreaNamespace: "kube-system",
 		testImage:       check.DefaultTestImage,
 	}
 }
-
 const (
 	testNamespacePrefix         = "antrea-test"
 	clientDeploymentName        = "test-client"
@@ -77,31 +66,24 @@ const (
 	agentDaemonSetName          = "antrea-agent"
 	podReadyTimeout             = 1 * time.Minute
 )
-
 type notRunnableError struct {
 	reason string
 }
-
 func (e notRunnableError) Error() string {
 	return fmt.Sprintf("test is not runnable: %s", e.reason)
 }
-
 func newNotRunnableError(reason string) notRunnableError {
 	return notRunnableError{reason: reason}
 }
-
 type Test interface {
 	// Run executes the test using the provided testContext. It returns a non-nil error when the test doesn't succeed.
 	// If a test is not runnable, notRunnableError should be wrapped in the returned error.
 	Run(ctx context.Context, testContext *testContext) error
 }
-
 var testsRegistry = make(map[string]Test)
-
 func RegisterTest(name string, test Test) {
 	testsRegistry[name] = test
 }
-
 type testContext struct {
 	check.Logger
 	client               kubernetes.Interface
@@ -119,17 +101,14 @@ type testContext struct {
 	// Container image for the installation checker.
 	testImage string
 }
-
 type testStats struct {
 	numSuccess int
 	numFailure int
 	numSkipped int
 }
-
 func (s *testStats) numTotal() int {
 	return s.numSuccess + s.numSkipped + s.numFailure
 }
-
 func compileRunFilter(runFilter string) (*regexp.Regexp, error) {
 	if runFilter == "" {
 		return nil, nil
@@ -140,13 +119,11 @@ func compileRunFilter(runFilter string) (*regexp.Regexp, error) {
 	}
 	return re, nil
 }
-
 func Run(o *options) error {
 	runFilterRegex, err := compileRunFilter(o.runFilter)
 	if err != nil {
 		return err
 	}
-
 	client, config, clusterName, err := check.NewClient()
 	if err != nil {
 		return fmt.Errorf("unable to create Kubernetes client: %w", err)
@@ -158,22 +135,18 @@ func Run(o *options) error {
 		return err
 	}
 	stats := testContext.runTests(ctx)
-
 	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were skipped", stats.numSuccess, stats.numFailure, stats.numSkipped)
 	if stats.numFailure > 0 {
 		return fmt.Errorf("%v/%v tests failed", stats.numFailure, stats.numTotal())
 	}
 	return nil
 }
-
 func tcpProbeCommand(ip string, port int) []string {
 	return []string{"nc", ip, fmt.Sprint(port), "--wait=3s", "-vz"}
 }
-
 func tcpServerCommand(port int) []string {
 	return []string{"nc", "-l", fmt.Sprint(port), "-k"}
 }
-
 func newService(name string, selector map[string]string, port int32) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -189,7 +162,6 @@ func newService(name string, selector map[string]string, port int32) *corev1.Ser
 		},
 	}
 }
-
 func NewTestContext(
 	client kubernetes.Interface,
 	config *rest.Config,
@@ -209,7 +181,6 @@ func NewTestContext(
 		testImage:       testImage,
 	}
 }
-
 func (t *testContext) setup(ctx context.Context) error {
 	t.Log("Test starting....")
 	_, err := t.client.AppsV1().DaemonSets(t.antreaNamespace).Get(ctx, agentDaemonSetName, metav1.GetOptions{})
@@ -347,7 +318,6 @@ func (t *testContext) setup(ctx context.Context) error {
 	t.Log("Deployment is validated successfully")
 	return nil
 }
-
 func (t *testContext) runTests(ctx context.Context) testStats {
 	var stats testStats
 	for name, test := range testsRegistry {
@@ -370,7 +340,6 @@ func (t *testContext) runTests(ctx context.Context) testStats {
 	}
 	return stats
 }
-
 func (t *testContext) tcpProbe(ctx context.Context, clientPodName string, container string, target string, targetPort int) error {
 	cmd := tcpProbeCommand(target, targetPort)
 	_, stderr, err := raw.ExecInPod(ctx, t.client, t.config, t.namespace, clientPodName, container, cmd)
@@ -383,7 +352,6 @@ func (t *testContext) tcpProbe(ctx context.Context, clientPodName string, contai
 	}
 	return err
 }
-
 func (t *testContext) Header(format string, a ...interface{}) {
 	t.Log("-------------------------------------------------------------------------------------------")
 	t.Log(format, a...)

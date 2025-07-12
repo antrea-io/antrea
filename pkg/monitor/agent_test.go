@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package monitor
-
 import (
 	"context"
 	"errors"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -26,34 +23,27 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	cgtesting "k8s.io/client-go/testing"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	"antrea.io/antrea/v2/pkg/agent/querier"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/agent/querier"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/agent/querier"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 const ovsVersion = "2.10.0"
-
 var fakeCertData = []byte("foobar")
-
 func TestSyncAgentCRD(t *testing.T) {
 	ctx := context.Background()
 	crdName := "antrea-agent-foo"
@@ -133,18 +123,14 @@ func TestSyncAgentCRD(t *testing.T) {
 		assert.Nil(t, monitor.agentCRD)
 	})
 }
-
 func newAgentMonitor(crdClient *fakeclientset.Clientset, t *testing.T) *agentMonitor {
 	client := fake.NewSimpleClientset()
 	ctrl := gomock.NewController(t)
-
 	nodeConfig := &config.NodeConfig{
 		Name: "testAgentCRD",
 	}
-
 	interfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	interfaceStore.EXPECT().GetContainerInterfaceNum().Return(2).AnyTimes()
-
 	ofClient := openflowtest.NewMockClient(ctrl)
 	ofClient.EXPECT().GetFlowTableStatus().Return([]binding.TableStatus{
 		{
@@ -154,17 +140,13 @@ func newAgentMonitor(crdClient *fakeclientset.Clientset, t *testing.T) *agentMon
 		},
 	}).AnyTimes()
 	ofClient.EXPECT().IsConnected().Return(true).AnyTimes()
-
 	ovsBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 	ovsBridgeClient.EXPECT().GetOVSVersion().Return(ovsVersion, nil).AnyTimes()
-
 	networkPolicyInfoQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	networkPolicyInfoQuerier.EXPECT().GetNetworkPolicyNum().Return(10).AnyTimes()
 	networkPolicyInfoQuerier.EXPECT().GetAppliedToGroupNum().Return(20).AnyTimes()
 	networkPolicyInfoQuerier.EXPECT().GetAddressGroupNum().Return(30).AnyTimes()
 	networkPolicyInfoQuerier.EXPECT().GetControllerConnectionStatus().Return(true).AnyTimes()
-
 	querier := querier.NewAgentQuerier(nodeConfig, nil, interfaceStore, client, ofClient, ovsBridgeClient, nil, networkPolicyInfoQuerier, 10349, "", nil, nil, nil)
-
 	return NewAgentMonitor(crdClient, querier, fakeCertData)
 }

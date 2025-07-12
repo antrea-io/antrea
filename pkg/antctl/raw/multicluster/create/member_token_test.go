@@ -11,28 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package create
-
 import (
 	"bytes"
 	"os"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 func TestCreateAccessToken(t *testing.T) {
 	existingSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -41,7 +33,6 @@ func TestCreateAccessToken(t *testing.T) {
 		},
 		Data: map[string][]byte{"token": []byte("12345")},
 	}
-
 	secretContent := []byte(`# Manifest to create a Secret for an Antrea Multi-cluster member token.
 ---
 apiVersion: v1
@@ -53,7 +44,6 @@ metadata:
   name: default-member-token
 type: Opaque
 `)
-
 	tests := []struct {
 		name           string
 		namespace      string
@@ -99,7 +89,6 @@ type: Opaque
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
-
 			memberTokenOpts.namespace = tt.namespace
 			memberTokenOpts.k8sClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(existingSecret).Build()
 			if tt.failureType == "create" {
@@ -111,7 +100,6 @@ type: Opaque
 			if tt.secretFile != "" {
 				memberTokenOpts.output = tt.secretFile
 			}
-
 			if tt.tokenName != "" {
 				cmd.SetArgs([]string{tt.tokenName})
 			}
@@ -119,7 +107,6 @@ type: Opaque
 			if tt.secretFile != "" {
 				defer os.Remove(tt.secretFile)
 				yamlFile, _ := os.ReadFile(tt.secretFile)
-
 				assert.Equal(t, string(yamlFile), string(secretContent))
 			}
 			if err != nil {

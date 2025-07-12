@@ -11,41 +11,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"context"
 	"fmt"
 	"strings"
-
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 	"antrea.io/antrea/v2/pkg/antctl/transform/clusterset"
-=======
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/pkg/antctl/raw"
-	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
-	"antrea.io/antrea/pkg/antctl/transform/clusterset"
->>>>>>> origin/main
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
+	"antrea.io/antrea/v2/pkg/antctl/transform/clusterset"
 )
-
 type clusterSetOptions struct {
 	namespace     string
 	outputFormat  string
 	allNamespaces bool
 	k8sClient     client.Client
 }
-
 var optionsClusterSet *clusterSetOptions
-
 var clusterSetExamples = strings.Trim(`
 Gel all ClusterSets in the default Namesapce
 $ antctl mc get clusterset
@@ -58,7 +48,6 @@ $ antctl mc get clusterset -o json
 Get the specified ClusterSet
 $ antctl mc get clusterset <CLUSTERSET_ID>
 `, "\n")
-
 func (o *clusterSetOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.allNamespaces {
 		o.namespace = metav1.NamespaceAll
@@ -77,7 +66,6 @@ func (o *clusterSetOptions) validateAndComplete(cmd *cobra.Command) error {
 	}
 	return nil
 }
-
 func NewClusterSetCommand() *cobra.Command {
 	cmdClusterSet := &cobra.Command{
 		Use: "clusterset",
@@ -94,10 +82,8 @@ func NewClusterSetCommand() *cobra.Command {
 	cmdClusterSet.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace of ClusterSets")
 	cmdClusterSet.Flags().StringVarP(&o.outputFormat, "output", "o", "", "Output format. Supported formats: json|yaml")
 	cmdClusterSet.Flags().BoolVarP(&o.allNamespaces, "all-namespaces", "A", false, "If present, list ClusterSets across all Namespaces")
-
 	return cmdClusterSet
 }
-
 func runEClusterSet(cmd *cobra.Command, args []string) error {
 	err := optionsClusterSet.validateAndComplete(cmd)
 	if err != nil {
@@ -130,7 +116,6 @@ func runEClusterSet(cmd *cobra.Command, args []string) error {
 		}
 		clusterSets = clusterSetList.Items
 	}
-
 	if len(clusterSets) == 0 {
 		if optionsClusterSet.namespace != "" {
 			fmt.Fprintf(cmd.OutOrStdout(), "No ClusterSet found in Namespace %s\n", optionsClusterSet.namespace)
@@ -139,7 +124,6 @@ func runEClusterSet(cmd *cobra.Command, args []string) error {
 		}
 		return nil
 	}
-
 	err = output(clusterSets, false, optionsClusterSet.outputFormat, cmd.OutOrStdout(), clusterset.Transform)
 	if err != nil {
 		return err

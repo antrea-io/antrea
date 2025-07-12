@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ram
-
 import (
 	"context"
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,14 +28,9 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 	clocktesting "k8s.io/utils/clock/testing"
-
-<<<<<<< HEAD
 	antreastorage "antrea.io/antrea/v2/pkg/apiserver/storage"
-=======
-	antreastorage "antrea.io/antrea/pkg/apiserver/storage"
->>>>>>> origin/main
+	antreastorage "antrea.io/antrea/v2/pkg/apiserver/storage"
 )
-
 // testEvent implements InternalEvent.
 type testEvent struct {
 	Type            watch.EventType
@@ -51,7 +43,6 @@ type testEvent struct {
 	Key             string
 	ResourceVersion uint64
 }
-
 func testFilter(s *antreastorage.Selectors, key string, labels labels.Set, fields fields.Set) bool {
 	if s.Key != "" && key != s.Key {
 		return false
@@ -64,7 +55,6 @@ func testFilter(s *antreastorage.Selectors, key string, labels labels.Set, field
 	}
 	return s.Field.Matches(fields)
 }
-
 func (event *testEvent) ToWatchEvent(selectors *antreastorage.Selectors, isInitEvent bool) *watch.Event {
 	curObjPasses := event.Type != watch.Deleted && testFilter(selectors, event.Key, event.ObjLabels, event.ObjFields)
 	oldObjPasses := false
@@ -75,7 +65,6 @@ func (event *testEvent) ToWatchEvent(selectors *antreastorage.Selectors, isInitE
 		// Watcher is not interested in that object.
 		return nil
 	}
-
 	switch {
 	case curObjPasses && !oldObjPasses:
 		return &watch.Event{Type: watch.Added, Object: event.Object.DeepCopyObject()}
@@ -87,11 +76,9 @@ func (event *testEvent) ToWatchEvent(selectors *antreastorage.Selectors, isInitE
 	}
 	return nil
 }
-
 func (event *testEvent) GetResourceVersion() uint64 {
 	return event.ResourceVersion
 }
-
 // testGenEvent generates *testEvent
 func testGenEvent(key string, prevObj, obj interface{}, resourceVersion uint64) (antreastorage.InternalEvent, error) {
 	if reflect.DeepEqual(prevObj, obj) {
@@ -125,12 +112,10 @@ func testGenEvent(key string, prevObj, obj interface{}, resourceVersion uint64) 
 	}
 	return event, nil
 }
-
 func testSelectFunc(selectors *antreastorage.Selectors, key string, obj interface{}) bool {
 	objLabels, objFields, _ := storage.DefaultClusterScopedAttr(obj.(runtime.Object))
 	return testFilter(selectors, key, objLabels, objFields)
 }
-
 func TestRamStoreCRUD(t *testing.T) {
 	key := "pod1"
 	testCases := []struct {
@@ -163,7 +148,6 @@ func TestRamStoreCRUD(t *testing.T) {
 	}
 	for i, testCase := range testCases {
 		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, nil, nil, func() runtime.Object { return new(v1.Pod) })
-
 		testCase.operations(store)
 		obj, _, err := store.Get(key)
 		if err != nil {
@@ -174,7 +158,6 @@ func TestRamStoreCRUD(t *testing.T) {
 		}
 	}
 }
-
 func TestRamStoreGetByIndex(t *testing.T) {
 	indexName := "nodeName"
 	indexKey := "node1"
@@ -229,7 +212,6 @@ func TestRamStoreGetByIndex(t *testing.T) {
 	}
 	for i, testCase := range testCases {
 		store := NewStore(cache.MetaNamespaceKeyFunc, indexers, testGenEvent, nil, func() runtime.Object { return new(v1.Pod) })
-
 		testCase.operations(store)
 		objs, err := store.GetByIndex(indexName, indexKey)
 		if err != nil {
@@ -240,7 +222,6 @@ func TestRamStoreGetByIndex(t *testing.T) {
 		}
 	}
 }
-
 func TestRamStoreList(t *testing.T) {
 	testCases := []struct {
 		// The operations that will be executed on the storage
@@ -273,7 +254,6 @@ func TestRamStoreList(t *testing.T) {
 	}
 	for i, testCase := range testCases {
 		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, nil, func() runtime.Object { return new(v1.Pod) })
-
 		testCase.operations(store)
 		objs := store.List()
 		if len(objs) != len(testCase.expected) {
@@ -284,7 +264,6 @@ func TestRamStoreList(t *testing.T) {
 		}
 	}
 }
-
 func TestRamStoreWatchAll(t *testing.T) {
 	testCases := []struct {
 		// The operations that will be executed on the storage
@@ -336,7 +315,6 @@ func TestRamStoreWatchAll(t *testing.T) {
 		}
 	}
 }
-
 func TestRamStoreWatchWithInitOperations(t *testing.T) {
 	testCases := []struct {
 		// The operations that will be executed on the storage before watching
@@ -403,7 +381,6 @@ func TestRamStoreWatchWithInitOperations(t *testing.T) {
 		}
 	}
 }
-
 func TestRamStoreWatchWithSelector(t *testing.T) {
 	testCases := []struct {
 		// The operations that will be executed on the storage before watching
@@ -472,19 +449,16 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 		}
 	}
 }
-
 func TestRamStoreWatchTimeout(t *testing.T) {
 	clock := clocktesting.NewFakeClock(time.Now())
 	store := newStoreWithClock(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc, func() runtime.Object { return new(v1.Pod) }, clock)
 	// watcherChanSize*2+1 events can fill a watcher's buffer: input channel buffer + result channel buffer + 1 in-flight.
 	maxBuffered := watcherChanSize*2 + 1
-
 	// w1 has consumer for its result chan.
 	w1, err := store.Watch(context.Background(), "", labels.SelectorFromSet(labels.Set{"app": "nginx"}), fields.Everything())
 	if err != nil {
 		t.Errorf("Failed to watch object: %v", err)
 	}
-
 	w1Done := make(chan struct{})
 	go func() {
 		defer close(w1Done)
@@ -504,7 +478,6 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 		default:
 		}
 	}()
-
 	// w2 has no consumer for its result chan.
 	w2, err := store.Watch(context.Background(), "", labels.SelectorFromSet(labels.Set{"app": "nginx"}), fields.Everything())
 	if err != nil {
@@ -513,13 +486,11 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 	// Skip the bookmark event.
 	<-w2.ResultChan()
 	assert.Equal(t, 2, store.GetWatchersNum(), "Unexpected watchers number")
-
 	// Generate all events at once: w1 can take all events (eventually) as it has a consumer. w2
 	// will not be able to take the last event as it has no consumer.
 	for i := 0; i < maxBuffered+1; i++ {
 		store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}})
 	}
-
 	// Give 1s for the consumer for w1 to receive all events. During that time, we do not
 	// advance the fake clock.
 	select {
@@ -527,23 +498,19 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		t.Fatal("w1 consumer has not received all events")
 	}
-
 	// Make sure that w2 is not stopped yet.
 	select {
 	case <-w2.(*storeWatcher).done:
 		t.Fatal("w2 was stopped, expected not stopped")
 	default:
 	}
-
 	// After advancing the fake clock, w2 should be stopped. Because terminating watchers is
 	// asynchronous, we leave 500ms of reaction time.
 	clock.Step(watcherAddTimeout)
-
 	select {
 	case <-w2.(*storeWatcher).done:
 	case <-time.After(500 * time.Millisecond):
 		t.Error("w2 was not stopped, expected stopped")
 	}
-
 	assert.Equal(t, 1, store.GetWatchersNum(), "Unexpected watchers number")
 }

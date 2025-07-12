@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
 	"sync"
-
 	"antrea.io/libOpenflow/openflow15"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	"antrea.io/antrea/pkg/agent/types"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 type featureMulticast struct {
 	cookieAllocator     cookie.Allocator
 	ipProtocols         []binding.Protocol
@@ -41,18 +33,14 @@ type featureMulticast struct {
 	tunnelPort          uint32
 	uplinkPort          uint32
 	hostOFPort          uint32
-
 	cachedFlows        *flowCategoryCache
 	groupCache         sync.Map
 	enableAntreaPolicy bool
-
 	category cookie.Category
 }
-
 func (f *featureMulticast) getFeatureName() string {
 	return "Multicast"
 }
-
 func newFeatureMulticast(
 	cookieAllocator cookie.Allocator,
 	ipProtocols []binding.Protocol,
@@ -81,7 +69,6 @@ func newFeatureMulticast(
 		flexibleIPAMEnabled: flexibleIPAMEnabled,
 	}
 }
-
 func multicastPipelineClassifyFlow(cookieID uint64, pipeline binding.Pipeline) binding.Flow {
 	targetTable := pipeline.GetFirstTable()
 	return PipelineIPClassifierTable.ofTable.BuildFlow(priorityHigh).
@@ -91,7 +78,6 @@ func multicastPipelineClassifyFlow(cookieID uint64, pipeline binding.Pipeline) b
 		Action().ResubmitToTables(targetTable.GetID()).
 		Done()
 }
-
 func (f *featureMulticast) initFlows() []*openflow15.FlowMod {
 	// Install flows to send the IGMP report messages to Antrea Agent.
 	flows := f.igmpPktInFlows()
@@ -107,12 +93,10 @@ func (f *featureMulticast) initFlows() []*openflow15.FlowMod {
 	flows = append(flows, f.multicastOutputFlows()...)
 	return GetFlowModMessages(flows, binding.AddMessage)
 }
-
 func (f *featureMulticast) replayFlows() []*openflow15.FlowMod {
 	// Get cached flows.
 	return getCachedFlowMessages(f.cachedFlows)
 }
-
 // IMPORTANT: Ensure any changes to this function are tested in TestMulticastReceiversGroupMaxBuckets.
 func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports []uint32, remoteIPs []net.IP) binding.Group {
 	group := f.bridge.NewGroupTypeAll(groupID)
@@ -133,7 +117,6 @@ func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, 
 	}
 	return group
 }
-
 func (f *featureMulticast) multicastOutputFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := []binding.Flow{
@@ -168,7 +151,6 @@ func (f *featureMulticast) multicastOutputFlows() []binding.Flow {
 	}
 	return flows
 }
-
 func (f *featureMulticast) multicastSkipIGMPMetricFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := make([]binding.Flow, 0, 2)
@@ -181,7 +163,6 @@ func (f *featureMulticast) multicastSkipIGMPMetricFlows() []binding.Flow {
 	}
 	return flows
 }
-
 func (f *featureMulticast) multicastPodMetricFlows(podIP net.IP, podOFPort uint32) []binding.Flow {
 	ipProtocol := getIPProtocol(podIP)
 	return []binding.Flow{
@@ -203,7 +184,6 @@ func (f *featureMulticast) multicastPodMetricFlows(podIP net.IP, podOFPort uint3
 			Done(),
 	}
 }
-
 func (f *featureMulticast) replayGroups() []binding.OFEntry {
 	var groups []binding.OFEntry
 	f.groupCache.Range(func(id, value interface{}) bool {
@@ -214,15 +194,12 @@ func (f *featureMulticast) replayGroups() []binding.OFEntry {
 	})
 	return groups
 }
-
 func (f *featureMulticast) initGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureMulticast) replayMeters() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureMulticast) multicastForwardFlexibleIPAMFlows(table binding.Table) []binding.Flow {
 	ports := []uint32{f.uplinkPort, f.hostOFPort}
 	flows := make([]binding.Flow, 0, len(ports))
@@ -237,7 +214,6 @@ func (f *featureMulticast) multicastForwardFlexibleIPAMFlows(table binding.Table
 	}
 	return flows
 }
-
 func (f *featureMulticast) multicastRemoteReportFlows(groupID binding.GroupIDType, firstMulticastTable binding.Table) []binding.Flow {
 	return []binding.Flow{
 		// This flow outputs the IGMP report message sent from Antrea Agent to an OpenFlow group which is expected to

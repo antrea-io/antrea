@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundlecollection
-
 import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-
 	"golang.org/x/crypto/ssh"
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-=======
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
->>>>>>> origin/main
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
-
 func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	klog.V(2).Info("Validating SupportBundleCollection", "request", review.Request)
 	var newObj, oldObj crdv1alpha1.SupportBundleCollection
@@ -46,7 +38,6 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 			return newAdmissionResponseForErr(err)
 		}
 	}
-
 	validate := func(bundle *crdv1alpha1.SupportBundleCollection) error {
 		if bundle.Spec.FileServer.HostPublicKey != nil {
 			if _, err := ssh.ParsePublicKey(bundle.Spec.FileServer.HostPublicKey); err != nil {
@@ -55,7 +46,6 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 		}
 		return nil
 	}
-
 	validateProcessingCollection := func() *admv1.AdmissionResponse {
 		var msg string
 		allowed := true
@@ -68,7 +58,6 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 		}
 		return validationResult(allowed, msg)
 	}
-
 	switch review.Request.Operation {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for SupportBundleCollection")
@@ -85,10 +74,8 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 		}
 		return validateProcessingCollection()
 	}
-
 	return &admv1.AdmissionResponse{Allowed: true}
 }
-
 func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 	return &admv1.AdmissionResponse{
 		Result: &metav1.Status{
@@ -96,10 +83,8 @@ func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 		},
 	}
 }
-
 func validationResult(allowed bool, msg string) *admv1.AdmissionResponse {
 	var result *metav1.Status
-
 	if msg != "" {
 		result = &metav1.Status{
 			Message: msg,

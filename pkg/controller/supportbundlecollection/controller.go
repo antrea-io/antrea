@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundlecollection
-
 import (
 	"context"
 	"fmt"
@@ -22,7 +20,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
@@ -36,10 +33,8 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
@@ -47,19 +42,16 @@ import (
 	"antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/auth"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	"antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/auth"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/auth"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	controllerName = "SupportBundleCollectionController"
 	// How long to wait before retrying the processing of an ExternalNode change.
@@ -71,13 +63,11 @@ const (
 	// request if it conflicts with a processing request.
 	supportBundleCollectionRetryPeriod = time.Second * 10
 )
-
 const (
 	processingNodesIndex         = "processingNodes"
 	processingExternalNodesIndex = "processingExternalNodes"
 	processingNodesIndexValue    = "processingNodes"
 )
-
 // supportBundleCollectionAppliedTo is defined to maintain a SupportBundleCollection's required Nodes and ExternalNodes.
 type supportBundleCollectionAppliedTo struct {
 	// The name of a SupportBundleCollection
@@ -85,12 +75,10 @@ type supportBundleCollectionAppliedTo struct {
 	processNodes bool
 	enNamespace  string
 }
-
 func getSupportBundleCollectionKey(obj interface{}) (string, error) {
 	appliedTo := obj.(*supportBundleCollectionAppliedTo)
 	return appliedTo.name, nil
 }
-
 func processingNodesIndexFunc(obj interface{}) ([]string, error) {
 	appliedTo := obj.(*supportBundleCollectionAppliedTo)
 	if !appliedTo.processNodes {
@@ -98,7 +86,6 @@ func processingNodesIndexFunc(obj interface{}) ([]string, error) {
 	}
 	return []string{processingNodesIndexValue}, nil
 }
-
 func processingExternalNodesIndexFunc(obj interface{}) ([]string, error) {
 	appliedTo := obj.(*supportBundleCollectionAppliedTo)
 	if appliedTo.enNamespace == "" {
@@ -106,11 +93,9 @@ func processingExternalNodesIndexFunc(obj interface{}) ([]string, error) {
 	}
 	return []string{appliedTo.enNamespace}, nil
 }
-
 type Controller struct {
 	kubeClient kubernetes.Interface
 	crdClient  clientset.Interface
-
 	supportBundleCollectionInformer     crdinformers.SupportBundleCollectionInformer
 	supportBundleCollectionLister       crdlisters.SupportBundleCollectionLister
 	supportBundleCollectionListerSynced cache.InformerSynced
@@ -118,23 +103,19 @@ type Controller struct {
 	nodeListerSynced                    cache.InformerSynced
 	externalNodeLister                  crdlisters.ExternalNodeLister
 	externalNodeListerSynced            cache.InformerSynced
-
 	// queue maintains the ExternalNode objects that need to be synced.
 	queue workqueue.TypedRateLimitingInterface[string]
-
 	// supportBundleCollectionStore is the storage where the populated internal support bundle collections are stored.
 	supportBundleCollectionStore storage.Interface
 	// supportBundleCollectionAppliedToStore is the storage where the required Nodes or ExternalNodes of a
 	// SupportBundleCollection are stored.
 	supportBundleCollectionAppliedToStore cache.Indexer
-
 	// statuses is a nested map that keeps the realization statuses reported by antrea-agents.
 	// The outer map's keys are the SupportBundleCollection names. The inner map's keys are the Node names. The inner
 	// map's values are statuses reported by each Node for a SupportBundleCollection.
 	statuses     map[string]map[string]*controlplane.SupportBundleCollectionNodeStatus
 	statusesLock sync.RWMutex
 }
-
 func NewSupportBundleCollectionController(
 	kubeClient kubernetes.Interface,
 	crdClient clientset.Interface,
@@ -145,7 +126,6 @@ func NewSupportBundleCollectionController(
 	c := &Controller{
 		kubeClient: kubeClient,
 		crdClient:  crdClient,
-
 		supportBundleCollectionInformer:     supportBundleInformer,
 		supportBundleCollectionLister:       supportBundleInformer.Lister(),
 		supportBundleCollectionListerSynced: supportBundleInformer.Informer().HasSynced,
@@ -175,14 +155,11 @@ func NewSupportBundleCollectionController(
 		resyncPeriod)
 	return c
 }
-
 // Run will create defaultWorkers workers (goroutines) which will process the SupportBundle events from the work queue.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.InfoS("Starting", "controllerName", controllerName)
 	defer klog.InfoS("Shutting down", "controllerName", controllerName)
-
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.supportBundleCollectionListerSynced, c.nodeListerSynced, c.externalNodeListerSynced) {
 		return
 	}
@@ -190,12 +167,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to reconcile SupportBundleCollection")
 		return
 	}
-
 	go wait.Until(c.worker, time.Second, stopCh)
-
 	<-stopCh
 }
-
 // UpdateStatus is called when Agent reports status to the internal SupportBundleCollection resource.
 func (c *Controller) UpdateStatus(status *controlplane.SupportBundleCollectionStatus) error {
 	key := status.Name
@@ -221,7 +195,6 @@ func (c *Controller) UpdateStatus(status *controlplane.SupportBundleCollectionSt
 	c.queue.Add(key)
 	return nil
 }
-
 func (c *Controller) addSupportBundleCollection(obj interface{}) {
 	bundleCollection := obj.(*v1alpha1.SupportBundleCollection)
 	if isCollectionCompleted(bundleCollection) {
@@ -231,7 +204,6 @@ func (c *Controller) addSupportBundleCollection(obj interface{}) {
 	c.queue.Add(bundleCollection.Name)
 	klog.InfoS("Enqueued SupportBundleCollection ADD event", "name", bundleCollection.Name)
 }
-
 // updateSupportBundleCollection adds the SupportBundleCollection name into queue if the conditions are updated. The
 // changes in SupportBundleCollection.Spec is ignored, as we do not support Spec changes after the collection is started.
 func (c *Controller) updateSupportBundleCollection(oldObj, newObj interface{}) {
@@ -245,7 +217,6 @@ func (c *Controller) updateSupportBundleCollection(oldObj, newObj interface{}) {
 	c.queue.Add(bundleCollection.Name)
 	klog.InfoS("Enqueued SupportBundleCollection UPDATE event", "name", bundleCollection.Name)
 }
-
 func (c *Controller) deleteSupportBundleCollection(obj interface{}) {
 	bundleCollection, ok := obj.(*v1alpha1.SupportBundleCollection)
 	if !ok {
@@ -263,7 +234,6 @@ func (c *Controller) deleteSupportBundleCollection(obj interface{}) {
 	c.queue.Add(bundleCollection.Name)
 	klog.InfoS("Enqueued SupportBundleCollection DELETE event", "name", bundleCollection.Name)
 }
-
 // reconcileExternalNodes reconciles all the existing support bundles which are in BundleProcessing phase.
 func (c *Controller) reconcileSupportBundleCollections() error {
 	bundleList, err := c.supportBundleCollectionLister.List(labels.Everything())
@@ -278,24 +248,20 @@ func (c *Controller) reconcileSupportBundleCollections() error {
 			}
 		}
 	}
-
 	return nil
 }
-
 // worker is a long-running function that will continually call the processNextWorkItem function in
 // order to read and process a message on the work queue.
 func (c *Controller) worker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 func (c *Controller) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(key)
-
 	if err := c.syncSupportBundleCollection(key); err == nil {
 		// If no error occurs we Forget this item, so it does not get queued again until
 		// another change happens.
@@ -307,7 +273,6 @@ func (c *Controller) processNextWorkItem() bool {
 	}
 	return true
 }
-
 func (c *Controller) syncSupportBundleCollection(key string) error {
 	bundle, err := c.supportBundleCollectionLister.Get(key)
 	if k8serrors.IsNotFound(err) {
@@ -335,7 +300,6 @@ func (c *Controller) syncSupportBundleCollection(key string) error {
 	}
 	return nil
 }
-
 // createInternalSupportBundleCollection creates internal SupportBundle object and saves it into the storage.
 func (c *Controller) createInternalSupportBundleCollection(bundle *v1alpha1.SupportBundleCollection) (*types.SupportBundleCollection, error) {
 	// Calculate the expiration time with ExpirationMinutes and the created time of the resource.
@@ -349,7 +313,6 @@ func (c *Controller) createInternalSupportBundleCollection(bundle *v1alpha1.Supp
 	expiredAt := bundle.ObjectMeta.CreationTimestamp.Add(expiredDuration)
 	now := time.Now()
 	transitionTime := metav1.Now()
-
 	// Create a CollectionStarted failure condition on the CRD if time is expired. Return nil to avoid the event
 	// to be re-enqueued.
 	if !now.Before(expiredAt) {
@@ -421,13 +384,11 @@ func (c *Controller) createInternalSupportBundleCollection(bundle *v1alpha1.Supp
 	klog.InfoS("Created internal SupportBundleCollection", "name", bundle.Name)
 	return internalBundleCollection, nil
 }
-
 // getBundleNodes returns the names of the Nodes configured in the SupportBundleCollection.
 func (c *Controller) getBundleNodes(nodes *v1alpha1.BundleNodes) (sets.Set[string], error) {
 	if nodes == nil {
 		return sets.New[string](), nil
 	}
-
 	// Return all Kubernetes Nodes if NodeNames is empty and NodeSelector is not specified.
 	if len(nodes.NodeNames) == 0 && nodes.NodeSelector == nil {
 		allNodes, err := c.nodeLister.List(labels.Everything())
@@ -440,7 +401,6 @@ func (c *Controller) getBundleNodes(nodes *v1alpha1.BundleNodes) (sets.Set[strin
 		}
 		return nodeNames, nil
 	}
-
 	// Add the Nodes which are configured with the names defined in the resource.
 	nodeNames := sets.New[string]()
 	for _, name := range nodes.NodeNames {
@@ -466,7 +426,6 @@ func (c *Controller) getBundleNodes(nodes *v1alpha1.BundleNodes) (sets.Set[strin
 	}
 	return nodeNames, nil
 }
-
 // getBundleExternalNodes returns the names of the ExternalNodes configured in the SupportBundleCollection.
 func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (sets.Set[string], error) {
 	if en == nil {
@@ -485,7 +444,6 @@ func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (s
 		}
 		return enNames, nil
 	}
-
 	enNames := sets.New[string]()
 	for _, name := range en.NodeNames {
 		_, err := c.externalNodeLister.ExternalNodes(en.Namespace).Get(name)
@@ -509,7 +467,6 @@ func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (s
 	}
 	return enNames, nil
 }
-
 func (c *Controller) deleteInternalSupportBundleCollection(key string) error {
 	_, exists, _ := c.supportBundleCollectionStore.Get(key)
 	if !exists {
@@ -528,7 +485,6 @@ func (c *Controller) deleteInternalSupportBundleCollection(key string) error {
 	klog.InfoS("Deleted internal SupportBundleCollection", "name", key)
 	return nil
 }
-
 // addInternalSupportBundleCollection adds internalBundle into supportBundleCollectionStore, and creates a
 // supportBundleCollectionAppliedTo resource to maintain the SupportBundleCollection's required Nodes or ExternalNodes.
 func (c *Controller) addInternalSupportBundleCollection(
@@ -548,7 +504,6 @@ func (c *Controller) addInternalSupportBundleCollection(
 	} else {
 		enNamespace = bundleCollection.Spec.ExternalNodes.Namespace
 	}
-
 	appliedTo := &supportBundleCollectionAppliedTo{
 		name:         bundleCollection.Name,
 		processNodes: processNodes,
@@ -570,7 +525,6 @@ func (c *Controller) addInternalSupportBundleCollection(
 	_ = c.supportBundleCollectionStore.Create(internalBundleCollection)
 	return internalBundleCollection
 }
-
 // processConflictedCollection adds a Started failure condition on the conflicted the SupportBundleCollection request,
 // and re-enqueue the request after 10s.
 func (c *Controller) processConflictedCollection(bundle *v1alpha1.SupportBundleCollection) error {
@@ -607,7 +561,6 @@ func (c *Controller) processConflictedCollection(bundle *v1alpha1.SupportBundleC
 	c.queue.AddAfter(bundle.Name, supportBundleCollectionRetryPeriod)
 	return nil
 }
-
 func (c *Controller) addConditions(bundleCollectionName string, conditions []v1alpha1.SupportBundleCollectionCondition) error {
 	if len(conditions) == 0 {
 		return nil
@@ -634,7 +587,6 @@ func (c *Controller) addConditions(bundleCollectionName string, conditions []v1a
 	}
 	return nil
 }
-
 // isCollectionAvailable checks if the bundleCollection can be processed at once. It returns true with these conditions:
 //  1. the bundleCollection is started processing;
 //  2. there are no processing SupportBundleCollections requiring to collect bundle files on any Nodes, if this one requires
@@ -661,7 +613,6 @@ func (c *Controller) isCollectionAvailable(bundleCollection *v1alpha1.SupportBun
 	}
 	return true
 }
-
 func (c *Controller) updateStatus(internalBundleCollection *types.SupportBundleCollection) error {
 	now := metav1.Now()
 	desiredNodes := len(internalBundleCollection.SpanMeta.NodeNames)
@@ -691,7 +642,6 @@ func (c *Controller) updateStatus(internalBundleCollection *types.SupportBundleC
 			failedNodeReasons[failedReason] = append(failedNodeReasons[failedReason], nodeKey)
 		}
 	}
-
 	newConditions := []v1alpha1.SupportBundleCollectionCondition{
 		// Mark the support bundle collection as started since the internal resource successfully created.
 		// It will not be added as a duplication if it already exists.
@@ -752,7 +702,6 @@ func (c *Controller) updateStatus(internalBundleCollection *types.SupportBundleC
 	klog.V(2).InfoS("Updating SupportBundleCollection status", "supportBundleCollection", internalBundleCollection.Name, "status", status)
 	return c.updateSupportBundleCollectionStatus(internalBundleCollection.Name, status)
 }
-
 func (c *Controller) getNodeStatuses(key string) []*controlplane.SupportBundleCollectionNodeStatus {
 	c.statusesLock.RLock()
 	defer c.statusesLock.RUnlock()
@@ -766,7 +715,6 @@ func (c *Controller) getNodeStatuses(key string) []*controlplane.SupportBundleCo
 	}
 	return statuses
 }
-
 func (c *Controller) deleteNodeStatus(key string, nodeName string) {
 	c.statusesLock.Lock()
 	defer c.statusesLock.Unlock()
@@ -776,13 +724,11 @@ func (c *Controller) deleteNodeStatus(key string, nodeName string) {
 	}
 	delete(statusPerNode, nodeName)
 }
-
 func (c *Controller) clearStatuses(key string) {
 	c.statusesLock.Lock()
 	defer c.statusesLock.Unlock()
 	delete(c.statuses, key)
 }
-
 func (c *Controller) updateSupportBundleCollectionStatus(name string, updatedStatus *v1alpha1.SupportBundleCollectionStatus) error {
 	bundleCollection, err := c.supportBundleCollectionLister.Get(name)
 	if err != nil {
@@ -814,7 +760,6 @@ func (c *Controller) updateSupportBundleCollectionStatus(name string, updatedSta
 	klog.V(2).InfoS("Updated SupportBundleCollection", "supportBundleCollection", name)
 	return nil
 }
-
 // isCollectionCompleted check if CollectionCompleted condition with status ConditionTrue is added in the bundleCollection or not.
 func isCollectionCompleted(bundleCollection *v1alpha1.SupportBundleCollection) bool {
 	for _, condition := range bundleCollection.Status.Conditions {
@@ -824,7 +769,6 @@ func isCollectionCompleted(bundleCollection *v1alpha1.SupportBundleCollection) b
 	}
 	return false
 }
-
 // isCollectionProcessing check if CollectionStarted condition with status ConditionTrue is added in the bundleCollection or not.
 func isCollectionProcessing(bundleCollection *v1alpha1.SupportBundleCollection) bool {
 	if isCollectionCompleted(bundleCollection) {
@@ -837,7 +781,6 @@ func isCollectionProcessing(bundleCollection *v1alpha1.SupportBundleCollection) 
 	}
 	return false
 }
-
 func conditionEqualsIgnoreLastTransitionTime(a, b v1alpha1.SupportBundleCollectionCondition) bool {
 	a1 := a
 	a1.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -845,7 +788,6 @@ func conditionEqualsIgnoreLastTransitionTime(a, b v1alpha1.SupportBundleCollecti
 	b1.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	return a1 == b1
 }
-
 func conditionExistsIgnoreLastTransitionTime(conditions []v1alpha1.SupportBundleCollectionCondition, condition v1alpha1.SupportBundleCollectionCondition) bool {
 	for _, c := range conditions {
 		if conditionEqualsIgnoreLastTransitionTime(c, condition) {
@@ -854,7 +796,6 @@ func conditionExistsIgnoreLastTransitionTime(conditions []v1alpha1.SupportBundle
 	}
 	return false
 }
-
 func mergeConditions(oldConditions, newConditions []v1alpha1.SupportBundleCollectionCondition) []v1alpha1.SupportBundleCollectionCondition {
 	finalConditions := make([]v1alpha1.SupportBundleCollectionCondition, 0)
 	newConditionMap := make(map[v1alpha1.SupportBundleCollectionConditionType]v1alpha1.SupportBundleCollectionCondition)
@@ -884,24 +825,20 @@ func mergeConditions(oldConditions, newConditions []v1alpha1.SupportBundleCollec
 	}
 	return finalConditions
 }
-
 func getNodeKey(status *controlplane.SupportBundleCollectionNodeStatus) string {
 	if status.NodeType == controlplane.SupportBundleCollectionNodeTypeExternalNode {
 		return k8s.NamespacedName(status.NodeNamespace, status.NodeName)
 	}
 	return status.NodeName
 }
-
 var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
 	conditionSliceEqualsIgnoreLastTransitionTime,
 )
-
 // supportBundleCollectionStatusEqual compares two SupportBundleCollectionStatus objects. It disregards
 // the LastTransitionTime field in the status Conditions.
 func supportBundleCollectionStatusEqual(oldStatus, newStatus v1alpha1.SupportBundleCollectionStatus) bool {
 	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
 }
-
 func conditionSliceEqualsIgnoreLastTransitionTime(as, bs []v1alpha1.SupportBundleCollectionCondition) bool {
 	if len(as) != len(bs) {
 		return false

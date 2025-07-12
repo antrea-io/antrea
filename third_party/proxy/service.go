@@ -1,12 +1,9 @@
 /*
 Copyright 2017 The Kubernetes Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,45 +24,32 @@ limitations under the License.
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 Modifies:
-<<<<<<< HEAD
 - Replace import from "k8s.io/kubernetes/pkg/api/v1/service" to  "antrea.io/antrea/v2/pkg/agent/proxy/upstream/util"
-=======
-- Replace import from "k8s.io/kubernetes/pkg/api/v1/service" to  "antrea.io/antrea/pkg/agent/proxy/upstream/util"
->>>>>>> origin/main
+- Replace import from "k8s.io/kubernetes/pkg/api/v1/service" to  "antrea.io/antrea/v2/pkg/agent/proxy/upstream/util"
 - Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and related invokes
 - Remove check for feature gate ServiceInternalTrafficPolicy
-
 Adds:
 - Add NewBaseServiceInfo for testing
 */
-
 package proxy
-
 import (
 	"fmt"
 	"net"
 	"reflect"
 	"strings"
 	"sync"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/features"
 	utilproxy "antrea.io/antrea/v2/third_party/proxy/util"
-=======
-	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/v2/pkg/features"
 	utilproxy "antrea.io/antrea/third_party/proxy/util"
->>>>>>> origin/main
 )
-
 // BaseServiceInfo contains base information that defines a service.
 // This could be used directly by proxier while processing services,
 // or can be used for constructing a more specific ServiceInfo struct
@@ -86,89 +70,71 @@ type BaseServiceInfo struct {
 	internalTrafficPolicy    *v1.ServiceInternalTrafficPolicyType
 	hintsAnnotation          string
 }
-
 var _ ServicePort = &BaseServiceInfo{}
-
 // String is part of ServicePort interface.
 func (info *BaseServiceInfo) String() string {
 	return fmt.Sprintf("%s:%d/%s", info.clusterIP, info.port, info.protocol)
 }
-
 // ClusterIP is part of ServicePort interface.
 func (info *BaseServiceInfo) ClusterIP() net.IP {
 	return info.clusterIP
 }
-
 // Port is part of ServicePort interface.
 func (info *BaseServiceInfo) Port() int {
 	return info.port
 }
-
 // SessionAffinityType is part of the ServicePort interface.
 func (info *BaseServiceInfo) SessionAffinityType() v1.ServiceAffinity {
 	return info.sessionAffinityType
 }
-
 // StickyMaxAgeSeconds is part of the ServicePort interface
 func (info *BaseServiceInfo) StickyMaxAgeSeconds() int {
 	return info.stickyMaxAgeSeconds
 }
-
 // Protocol is part of ServicePort interface.
 func (info *BaseServiceInfo) Protocol() v1.Protocol {
 	return info.protocol
 }
-
 // LoadBalancerSourceRanges is part of ServicePort interface
 func (info *BaseServiceInfo) LoadBalancerSourceRanges() []string {
 	return info.loadBalancerSourceRanges
 }
-
 // HealthCheckNodePort is part of ServicePort interface.
 func (info *BaseServiceInfo) HealthCheckNodePort() int {
 	return info.healthCheckNodePort
 }
-
 // NodePort is part of the ServicePort interface.
 func (info *BaseServiceInfo) NodePort() int {
 	return info.nodePort
 }
-
 // ExternalIPStrings is part of ServicePort interface.
 func (info *BaseServiceInfo) ExternalIPStrings() []string {
 	return info.externalIPs
 }
-
 // LoadBalancerIPStrings is part of ServicePort interface.
 func (info *BaseServiceInfo) LoadBalancerIPStrings() []string {
 	return info.loadBalancerVIPs
 }
-
 // ExternalPolicyLocal is part of ServicePort interface.
 func (info *BaseServiceInfo) ExternalPolicyLocal() bool {
 	return info.externalPolicyLocal
 }
-
 // InternalPolicyLocal is part of ServicePort interface
 func (info *BaseServiceInfo) InternalPolicyLocal() bool {
 	return info.internalPolicyLocal
 }
-
 // InternalTrafficPolicy is part of ServicePort interface
 func (info *BaseServiceInfo) InternalTrafficPolicy() *v1.ServiceInternalTrafficPolicyType {
 	return info.internalTrafficPolicy
 }
-
 // HintsAnnotation is part of ServicePort interface.
 func (info *BaseServiceInfo) HintsAnnotation() string {
 	return info.hintsAnnotation
 }
-
 // ExternallyAccessible is part of ServicePort interface.
 func (info *BaseServiceInfo) ExternallyAccessible() bool {
 	return info.nodePort != 0 || len(info.loadBalancerVIPs) != 0 || len(info.externalIPs) != 0
 }
-
 // UsesClusterEndpoints is part of ServicePort interface.
 func (info *BaseServiceInfo) UsesClusterEndpoints() bool {
 	// The service port uses Cluster endpoints if the internal traffic policy is "Cluster",
@@ -176,7 +142,6 @@ func (info *BaseServiceInfo) UsesClusterEndpoints() bool {
 	// external traffic policy is "Local", we need Cluster endpoints to implement short-circuiting.)
 	return !info.internalPolicyLocal || info.ExternallyAccessible()
 }
-
 // UsesLocalEndpoints is part of ServicePort interface.
 func (info *BaseServiceInfo) UsesLocalEndpoints() bool {
 	if info.internalPolicyLocal {
@@ -193,7 +158,6 @@ func (info *BaseServiceInfo) UsesLocalEndpoints() bool {
 	}
 	return false
 }
-
 // NewBaseServiceInfo is for testing purposes only.
 func NewBaseServiceInfo(clusterIP net.IP,
 	port int,
@@ -226,17 +190,14 @@ func NewBaseServiceInfo(clusterIP net.IP,
 		hintsAnnotation:          hintsAnnotation,
 	}
 }
-
 func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, service *v1.Service) *BaseServiceInfo {
 	externalPolicyLocal := utilproxy.ExternalPolicyLocal(service)
 	internalPolicyLocal := utilproxy.InternalPolicyLocal(service)
-
 	var stickyMaxAgeSeconds int
 	if service.Spec.SessionAffinity == v1.ServiceAffinityClientIP {
 		// Kube-apiserver side guarantees SessionAffinityConfig won't be nil when session affinity type is ClientIP
 		stickyMaxAgeSeconds = int(*service.Spec.SessionAffinityConfig.ClientIP.TimeoutSeconds)
 	}
-
 	clusterIP := utilproxy.GetClusterIPByFamily(sct.ipFamily, service)
 	info := &BaseServiceInfo{
 		clusterIP:             net.ParseIP(clusterIP),
@@ -249,13 +210,11 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 		internalPolicyLocal:   internalPolicyLocal,
 		internalTrafficPolicy: service.Spec.InternalTrafficPolicy,
 	}
-
 	var ok bool
 	info.hintsAnnotation, ok = service.Annotations[v1.DeprecatedAnnotationTopologyAwareHints]
 	if !ok {
 		info.hintsAnnotation = service.Annotations[v1.AnnotationTopologyMode]
 	}
-
 	loadBalancerSourceRanges := make([]string, len(service.Spec.LoadBalancerSourceRanges))
 	for i, sourceRange := range service.Spec.LoadBalancerSourceRanges {
 		loadBalancerSourceRanges[i] = strings.TrimSpace(sourceRange)
@@ -264,22 +223,18 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 	// prior to dual stack services, this was considered an error, but with dual stack
 	// services, this is actually expected. Hence we downgraded from reporting by events
 	// to just log lines with high verbosity
-
 	ipFamilyMap := utilproxy.MapIPsByIPFamily(service.Spec.ExternalIPs)
 	info.externalIPs = ipFamilyMap[sct.ipFamily]
-
 	// Log the IPs not matching the ipFamily
 	if ips, ok := ipFamilyMap[utilproxy.OtherIPFamily(sct.ipFamily)]; ok && len(ips) > 0 {
 		klog.V(4).Infof("service change tracker(%v) ignored the following external IPs(%s) for service %v/%v as they don't match IPFamily", sct.ipFamily, strings.Join(ips, ","), service.Namespace, service.Name)
 	}
-
 	ipFamilyMap = utilproxy.MapCIDRsByIPFamily(loadBalancerSourceRanges)
 	info.loadBalancerSourceRanges = ipFamilyMap[sct.ipFamily]
 	// Log the CIDRs not matching the ipFamily
 	if cidrs, ok := ipFamilyMap[utilproxy.OtherIPFamily(sct.ipFamily)]; ok && len(cidrs) > 0 {
 		klog.V(4).Infof("service change tracker(%v) ignored the following load balancer source ranges(%s) for service %v/%v as they don't match IPFamily", sct.ipFamily, strings.Join(cidrs, ","), service.Namespace, service.Name)
 	}
-
 	// Obtain Load Balancer Ingress IPs
 	var invalidIPs []string
 	for _, ing := range service.Status.LoadBalancer.Ingress {
@@ -294,7 +249,6 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 				"ipFamily", sct.ipFamily, "loadBalancerIngressIP", ing.IP, "service", klog.KObj(service))
 			continue
 		}
-
 		// kube-proxy does not implement IP family translation, skip addresses with
 		// different IP family
 		if ipFamily := utilproxy.GetIPFamilyFromIP(ing.IP); ipFamily == sct.ipFamily {
@@ -303,12 +257,10 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 			invalidIPs = append(invalidIPs, ing.IP)
 		}
 	}
-
 	if len(invalidIPs) > 0 {
 		klog.V(4).InfoS("Service change tracker ignored the following load balancer ingress IPs for given Service as they don't match the IP Family",
 			"ipFamily", sct.ipFamily, "loadBalancerIngressIPs", strings.Join(invalidIPs, ", "), "service", klog.KObj(service))
 	}
-
 	if utilproxy.NeedsHealthCheck(service) {
 		p := service.Spec.HealthCheckNodePort
 		if p == 0 {
@@ -317,16 +269,12 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 			info.healthCheckNodePort = int(p)
 		}
 	}
-
 	return info
 }
-
 type makeServicePortFunc func(*v1.ServicePort, *v1.Service, *BaseServiceInfo) ServicePort
-
 // This handler is invoked by the apply function on every change. This function should not modify the
 // ServiceMap's but just use the changes for any Proxier specific cleanup.
 type processServiceMapChangeFunc func(previous, current ServiceMap)
-
 // serviceChange contains all changes to services that happened since proxy rules were synced.  For a single object,
 // changes are accumulated, i.e. previous is state from before applying the changes,
 // current is state after applying all of the changes.
@@ -334,7 +282,6 @@ type serviceChange struct {
 	previous ServiceMap
 	current  ServiceMap
 }
-
 // ServiceChangeTracker carries state about uncommitted changes to an arbitrary number of
 // Services, keyed by their namespace and name.
 type ServiceChangeTracker struct {
@@ -352,7 +299,6 @@ type ServiceChangeTracker struct {
 	// it will be initialized from antrea-agent.conf
 	skipServices sets.Set[string]
 }
-
 // NewServiceChangeTracker initializes a ServiceChangeTracker
 func NewServiceChangeTracker(makeServiceInfo makeServicePortFunc,
 	ipFamily v1.IPFamily,
@@ -370,7 +316,6 @@ func NewServiceChangeTracker(makeServiceInfo makeServicePortFunc,
 		skipServices:            sets.New[string](skipServices...),
 	}
 }
-
 // Update updates given service's change map based on the <previous, current> service pair.  It returns true if items changed,
 // otherwise return false.  Update can be used to add/update/delete items of ServiceChangeMap.  For example,
 // Add item
@@ -391,10 +336,8 @@ func (sct *ServiceChangeTracker) Update(previous, current *v1.Service) bool {
 		return false
 	}
 	namespacedName := types.NamespacedName{Namespace: svc.Namespace, Name: svc.Name}
-
 	sct.lock.Lock()
 	defer sct.lock.Unlock()
-
 	change, exists := sct.items[namespacedName]
 	if !exists {
 		change = &serviceChange{}
@@ -410,7 +353,6 @@ func (sct *ServiceChangeTracker) Update(previous, current *v1.Service) bool {
 	}
 	return len(sct.items) > 0
 }
-
 // UpdateServiceMapResult is the updated results after applying service changes.
 type UpdateServiceMapResult struct {
 	// HCServiceNodePorts is a map of Service names to node port numbers which indicate the health of that Service on this Node.
@@ -420,12 +362,10 @@ type UpdateServiceMapResult struct {
 	// Callers can use this to abort timeout-waits or clear connection-tracking information.
 	UDPStaleClusterIP sets.Set[string]
 }
-
 // Update updates ServiceMap base on the given changes.
 func (sm ServiceMap) Update(changes *ServiceChangeTracker) (result UpdateServiceMapResult) {
 	result.UDPStaleClusterIP = sets.New[string]()
 	sm.apply(changes, result.UDPStaleClusterIP)
-
 	// TODO: If this will appear to be computationally expensive, consider
 	// computing this incrementally similarly to serviceMap.
 	result.HCServiceNodePorts = make(map[types.NamespacedName]uint16)
@@ -434,13 +374,10 @@ func (sm ServiceMap) Update(changes *ServiceChangeTracker) (result UpdateService
 			result.HCServiceNodePorts[svcPortName.NamespacedName] = uint16(info.HealthCheckNodePort())
 		}
 	}
-
 	return result
 }
-
 // ServiceMap maps a service to its ServicePort.
 type ServiceMap map[ServicePortName]ServicePort
-
 // serviceToServiceMap translates a single Service object to a ServiceMap.
 //
 // NOTE: service object should NOT be modified.
@@ -448,16 +385,13 @@ func (sct *ServiceChangeTracker) serviceToServiceMap(service *v1.Service) Servic
 	if service == nil {
 		return nil
 	}
-
 	if utilproxy.ShouldSkipService(service, sct.skipServices, sct.serviceLabelSelector) {
 		return nil
 	}
-
 	clusterIP := utilproxy.GetClusterIPByFamily(sct.ipFamily, service)
 	if clusterIP == "" {
 		return nil
 	}
-
 	serviceMap := make(ServiceMap)
 	svcName := types.NamespacedName{Namespace: service.Namespace, Name: service.Name}
 	for i := range service.Spec.Ports {
@@ -472,7 +406,6 @@ func (sct *ServiceChangeTracker) serviceToServiceMap(service *v1.Service) Servic
 	}
 	return serviceMap
 }
-
 // apply the changes to ServiceMap and update the stale udp cluster IP set. The UDPStaleClusterIP argument is passed in to store the
 // udp protocol service cluster ip when service is deleted from the ServiceMap.
 // apply triggers processServiceMapChange on every change.
@@ -492,7 +425,6 @@ func (sm *ServiceMap) apply(changes *ServiceChangeTracker, UDPStaleClusterIP set
 	// clear changes after applying them to ServiceMap.
 	changes.items = make(map[types.NamespacedName]*serviceChange)
 }
-
 // merge adds other ServiceMap's elements to current ServiceMap.
 // If collision, other ALWAYS win. Otherwise add the other to current.
 // In other words, if some elements in current collisions with other, update the current by other.
@@ -528,7 +460,6 @@ func (sm *ServiceMap) merge(other ServiceMap) sets.Set[string] {
 	}
 	return existingPorts
 }
-
 // filter filters out elements from ServiceMap base on given ports string sets.
 func (sm *ServiceMap) filter(other ServiceMap) {
 	for svcPortName := range *sm {
@@ -538,7 +469,6 @@ func (sm *ServiceMap) filter(other ServiceMap) {
 		}
 	}
 }
-
 // unmerge deletes all other ServiceMap's elements from current ServiceMap.  We pass in the UDPStaleClusterIP strings sets
 // for storing the stale udp service cluster IPs. We will clear stale udp connection base on UDPStaleClusterIP later
 func (sm *ServiceMap) unmerge(other ServiceMap, UDPStaleClusterIP sets.Set[string]) {

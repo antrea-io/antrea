@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package podwatch
-
 import (
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/types"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver/types"
 )
-
 type networkType string
-
 const (
 	sriovNetworkType networkType = "sriov"
 	vlanNetworkType  networkType = "vlan"
 )
-
 type SecondaryNetworkConfig struct {
 	types.NetworkConfig
 	NetworkType networkType `json:"networkType,omitempty"`

@@ -1,21 +1,16 @@
 /*
 Copyright 2021 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package member
-
 import (
 	"context"
 	"fmt"
@@ -23,7 +18,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -35,26 +29,20 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
 )
-
 var (
 	localClusterID   = "cluster-a"
 	leaderNamespace  = "default"
 	svcResImportName = leaderNamespace + "-" + "nginx-service"
 	epResImportName  = leaderNamespace + "-" + "nginx-endpoints"
-
 	svcImportReq = ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: leaderNamespace,
 		Name:      svcResImportName,
@@ -63,9 +51,7 @@ var (
 		Namespace: leaderNamespace,
 		Name:      epResImportName,
 	}}
-
 	ctx = context.Background()
-
 	svcResImport = &mcv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: leaderNamespace,
@@ -119,12 +105,10 @@ var (
 		},
 	}
 )
-
 func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(svcResImport, epResImport).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
-
 	tests := []struct {
 		name    string
 		objType string
@@ -141,7 +125,6 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 			req:     epImportReq,
 		},
 	}
-
 	r := newResourceImportReconciler(fakeClient, localClusterID, "default", remoteCluster)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -166,11 +149,9 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 					t.Errorf("ResourceImport Reconciler should import an Endpoint successfully but got error = %v", err)
 				}
 			}
-
 		})
 	}
 }
-
 func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 	existSvc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -190,11 +171,9 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 			Name:      "antrea-mc-nginx",
 		},
 	}
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existSvc, existEp, existSvcImp).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
-
 	tests := []struct {
 		name    string
 		objType string
@@ -211,11 +190,9 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 			req:     epImportReq,
 		},
 	}
-
 	r := newResourceImportReconciler(fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*svcResImport)
 	r.installedResImports.Add(*epResImport)
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(ctx, tt.req); err != nil {
@@ -247,7 +224,6 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 		})
 	}
 }
-
 func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	nginxPorts := []corev1.ServicePort{
 		{
@@ -306,7 +282,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 		Subsets: epSubset,
 	}
-
 	subSetA := corev1.EndpointSubset{
 		Addresses: []corev1.EndpointAddress{
 			{
@@ -336,7 +311,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 	}
 	newSubsets := []corev1.EndpointSubset{subSetA, subSetB}
-
 	existSvc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -354,7 +328,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			ClusterIPs: []string{"10.10.11.13"},
 		},
 	}
-
 	svcWithoutAutoAnnotation := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "kube-system",
@@ -364,7 +337,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			Ports: nginxPorts,
 		},
 	}
-
 	epWithoutAutoAnnotation := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "kube-system",
@@ -395,13 +367,11 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	epResImportWithConflicts := epResImport.DeepCopy()
 	epResImportWithConflicts.Name = "kube-system-nginx-endpoints"
 	epResImportWithConflicts.Spec.Namespace = "kube-system"
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existMCSvc, existMCEp, existSvcImp,
 		existSvc, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(updatedEpResImport, updatedSvcResImport,
 		svcResImportWithConflicts, epResImportWithConflicts).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
-
 	tests := []struct {
 		name             string
 		objType          string
@@ -452,11 +422,9 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			expectedErr:      true,
 		},
 	}
-
 	r := newResourceImportReconciler(fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*svcResImport)
 	r.installedResImports.Add(*epResImport)
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(ctx, tt.req); err != nil {
@@ -502,7 +470,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		})
 	}
 }
-
 // fakeManager is a fake K8s controller manager which simulates a burst of ResourceImport events
 // from the leader's apiServer and triggers the LabelIdentityResourceImportReconciler's main
 // Reconcile loop. Once the fakeManager is run, all ResourceImports in the queue will be added
@@ -511,7 +478,6 @@ type fakeManager struct {
 	reconciler *LabelIdentityResourceImportReconciler
 	queue      workqueue.TypedRateLimitingInterface[types.NamespacedName]
 }
-
 func (fm *fakeManager) Run(stopCh <-chan struct{}) {
 	defer fm.queue.ShutDown()
 	for i := 0; i < common.DefaultWorkerCount; i++ {
@@ -519,12 +485,10 @@ func (fm *fakeManager) Run(stopCh <-chan struct{}) {
 	}
 	<-stopCh
 }
-
 func (fm *fakeManager) worker() {
 	for fm.syncNextItemInQueue() {
 	}
 }
-
 func (fm *fakeManager) syncNextItemInQueue() bool {
 	key, quit := fm.queue.Get()
 	if quit {
@@ -540,7 +504,6 @@ func (fm *fakeManager) syncNextItemInQueue() bool {
 	fm.queue.Forget(key)
 	return true
 }
-
 func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(&mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -550,7 +513,6 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 	}).WithLists().Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists().Build()
 	ca := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
-
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", true, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(ca)
 	c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
@@ -558,7 +520,6 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 		c.commonAreaCreationCh <- struct{}{}
 	}()
 	r := newLabelIdentityResourceImportReconciler(fakeClient, localClusterID, "default", ca)
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	q := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedItemBasedRateLimiter[types.NamespacedName]())

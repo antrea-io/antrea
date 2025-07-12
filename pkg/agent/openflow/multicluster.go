@@ -11,32 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
-
 	"antrea.io/libOpenflow/openflow15"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 // GlobalVirtualMACForMulticluster is a vritual MAC which will be used only
 // for cross-cluster traffic to distinguish from in-cluster traffic.
 var GlobalVirtualMACForMulticluster, _ = net.ParseMAC("aa:bb:cc:dd:ee:f0")
-
 // UnknownLabelIdentity represents an unknown label identity.
 // 24 bits in VNI are used for label identity. The max value is reserved for
 // UnknownLabelIdentity.
 const UnknownLabelIdentity = uint32(0xffffff)
-
 type featureMulticluster struct {
 	cookieAllocator cookie.Allocator
 	cachedFlows     *flowCategoryCache
@@ -46,11 +36,9 @@ type featureMulticluster struct {
 	dnatCtZones     map[binding.Protocol]int
 	snatCtZones     map[binding.Protocol]int
 }
-
 func (f *featureMulticluster) getFeatureName() string {
 	return "Multicluster"
 }
-
 func newFeatureMulticluster(cookieAllocator cookie.Allocator, ipProtocols []binding.Protocol) *featureMulticluster {
 	snatCtZones := make(map[binding.Protocol]int)
 	dnatCtZones := make(map[binding.Protocol]int)
@@ -66,27 +54,21 @@ func newFeatureMulticluster(cookieAllocator cookie.Allocator, ipProtocols []bind
 		dnatCtZones:     dnatCtZones,
 	}
 }
-
 func (f *featureMulticluster) initFlows() []*openflow15.FlowMod {
 	return []*openflow15.FlowMod{}
 }
-
 func (f *featureMulticluster) replayFlows() []*openflow15.FlowMod {
 	return getCachedFlowMessages(f.cachedFlows)
 }
-
 func (f *featureMulticluster) initGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureMulticluster) replayGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureMulticluster) replayMeters() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureMulticluster) l3FwdFlowToRemoteGateway(
 	localGatewayMAC net.HardwareAddr,
 	peerServiceCIDR net.IPNet,
@@ -143,7 +125,6 @@ func (f *featureMulticluster) l3FwdFlowToRemoteGateway(
 	}
 	return flows
 }
-
 func (f *featureMulticluster) tunnelClassifierFlow(tunnelOFPort uint32) binding.Flow {
 	return ClassifierTable.ofTable.BuildFlow(priorityHigh).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
@@ -154,7 +135,6 @@ func (f *featureMulticluster) tunnelClassifierFlow(tunnelOFPort uint32) binding.
 		Action().GotoStage(stageConntrackState).
 		Done()
 }
-
 func (f *featureMulticluster) outputHairpinTunnelFlow(tunnelOFPort uint32) binding.Flow {
 	return OutputTable.ofTable.BuildFlow(priorityHigh).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
@@ -163,7 +143,6 @@ func (f *featureMulticluster) outputHairpinTunnelFlow(tunnelOFPort uint32) bindi
 		Action().OutputInPort().
 		Done()
 }
-
 // snatConntrackFlows generates flows on a multi-cluster Gateway Node to perform SNAT for cross-cluster connections.
 func (f *featureMulticluster) snatConntrackFlows(serviceCIDR net.IPNet, localGatewayIP net.IP) []binding.Flow {
 	var flows []binding.Flow
@@ -205,7 +184,6 @@ func (f *featureMulticluster) snatConntrackFlows(serviceCIDR net.IPNet, localGat
 	)
 	return flows
 }
-
 func (f *featureMulticluster) l3FwdFlowToPodViaTun(
 	localGatewayMAC net.HardwareAddr,
 	podIP net.IP,

@@ -1,26 +1,20 @@
 /*
 Copyright 2022 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package main
-
 import (
 	"context"
 	j "encoding/json"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,20 +22,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
-
 var clusterSetWebhookUnderTest *clusterSetValidator
-
 func TestWebhookClusterSetEvents(t *testing.T) {
 	newClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -57,23 +45,18 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 			Namespace: "mcs-A",
 		},
 	}
-
 	existingClusterSet1 := newClusterSet.DeepCopy()
-
 	existingClusterSet2 := newClusterSet.DeepCopy()
 	existingClusterSet2.Name = "clusterset2"
 	leaderUpdatedClusterSet := newClusterSet.DeepCopy()
 	leaderUpdatedClusterSet.Spec.Leaders = []mcv1alpha2.LeaderClusterInfo{
 		{ClusterID: "leader1-1"},
 	}
-
 	clusterIDUpdatedClusterSet := newClusterSet.DeepCopy()
 	clusterIDUpdatedClusterSet.Spec.ClusterID = "newclusterid"
-
 	newCS, _ := j.Marshal(newClusterSet)
 	leaderUpdatedCS, _ := j.Marshal(leaderUpdatedClusterSet)
 	clusterIDUpdatedCS, _ := j.Marshal(clusterIDUpdatedClusterSet)
-
 	newReq := admission.Request{
 		AdmissionRequest: v1.AdmissionRequest{
 			UID: "07e52e8d-4513-11e9-a716-42010a800270",
@@ -105,7 +88,6 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 	leaderUpdatedReq := admission.Request{
 		AdmissionRequest: *leaderNewReqCopy,
 	}
-
 	deleteReq := admission.Request{
 		AdmissionRequest: v1.AdmissionRequest{
 			Name:      "clusterset1",
@@ -113,7 +95,6 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 			Operation: v1.Delete,
 		},
 	}
-
 	clusterIDNewReqCopy := newReq.DeepCopy()
 	clusterIDNewReqCopy.Object = runtime.RawExtension{
 		Raw: clusterIDUpdatedCS,
@@ -124,7 +105,6 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 	clusterIDUpdatedReq := admission.Request{
 		AdmissionRequest: *clusterIDNewReqCopy,
 	}
-
 	tests := []struct {
 		name                          string
 		req                           admission.Request
@@ -185,7 +165,6 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 			isAllowed: true,
 		},
 	}
-
 	decoder := admission.NewDecoder(common.TestScheme)
 	for _, tt := range tests {
 		objects := []client.Object{}
@@ -202,7 +181,6 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 			namespace: "mcs1",
 			role:      tt.role,
 		}
-
 		t.Run(tt.name, func(t *testing.T) {
 			response := clusterSetWebhookUnderTest.Handle(context.Background(), tt.req)
 			assert.Equal(t, tt.isAllowed, response.Allowed)

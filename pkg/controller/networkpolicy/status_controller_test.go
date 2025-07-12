@@ -11,81 +11,67 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	antreaclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	antreafakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	antreainformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	antreaclientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	antreafakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	antreainformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/controller/networkpolicy/store"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	antreaclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	antreafakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	antreainformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 type fakeNetworkPolicyControl struct {
 	sync.Mutex
 	annpStatus *crdv1beta1.NetworkPolicyStatus
 	acnpStatus *crdv1beta1.NetworkPolicyStatus
 }
-
 func (c *fakeNetworkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name string, status *crdv1beta1.NetworkPolicyStatus) error {
 	c.Lock()
 	defer c.Unlock()
 	c.annpStatus = status
 	return nil
 }
-
 func (c *fakeNetworkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1beta1.NetworkPolicyStatus) error {
 	c.Lock()
 	defer c.Unlock()
 	c.acnpStatus = status
 	return nil
 }
-
 func (c *fakeNetworkPolicyControl) getAntreaNetworkPolicyStatus() *crdv1beta1.NetworkPolicyStatus {
 	c.Lock()
 	defer c.Unlock()
 	return c.annpStatus
 }
-
 func (c *fakeNetworkPolicyControl) getAntreaClusterNetworkPolicyStatus() *crdv1beta1.NetworkPolicyStatus {
 	c.Lock()
 	defer c.Unlock()
 	return c.acnpStatus
 }
-
 func newTestStatusController(initialObjects ...runtime.Object) (*StatusController, antreaclientset.Interface, antreainformers.SharedInformerFactory, storage.Interface, *fakeNetworkPolicyControl) {
 	// clientset := fake.NewSimpleClientset(initialObjects...)
 	networkPolicyStore := store.NewNetworkPolicyStore()
 	antreaClientset := antreafakeclientset.NewSimpleClientset(initialObjects...)
 	antreaInformerFactory := antreainformers.NewSharedInformerFactory(antreaClientset, 0)
 	networkPolicyControl := &fakeNetworkPolicyControl{}
-
 	acnpInformer := antreaInformerFactory.Crd().V1beta1().ClusterNetworkPolicies()
 	annpInformer := antreaInformerFactory.Crd().V1beta1().NetworkPolicies()
 	statusController := &StatusController{
@@ -103,7 +89,6 @@ func newTestStatusController(initialObjects ...runtime.Object) (*StatusControlle
 	}
 	return statusController, antreaClientset, antreaInformerFactory, networkPolicyStore, networkPolicyControl
 }
-
 func newInternalNetworkPolicy(name string, generation int64, nodes []string, ref *controlplane.NetworkPolicyReference) *types.NetworkPolicy {
 	return &types.NetworkPolicy{
 		SpanMeta:   types.SpanMeta{NodeNames: sets.New[string](nodes...)},
@@ -112,10 +97,8 @@ func newInternalNetworkPolicy(name string, generation int64, nodes []string, ref
 		SourceRef:  ref,
 	}
 }
-
 func newNetworkPolicyStatus(name string, nodeName string, generation int64, errorMessage string) *controlplane.NetworkPolicyStatus {
 	failed := errorMessage != ""
-
 	return &controlplane.NetworkPolicyStatus{
 		ObjectMeta: v1.ObjectMeta{
 			Name: name,
@@ -130,7 +113,6 @@ func newNetworkPolicyStatus(name string, nodeName string, generation int64, erro
 		},
 	}
 }
-
 func toAntreaNetworkPolicy(inp *types.NetworkPolicy) runtime.Object {
 	if inp.SourceRef.Type == controlplane.AntreaNetworkPolicy {
 		return &crdv1beta1.NetworkPolicy{
@@ -148,7 +130,6 @@ func toAntreaNetworkPolicy(inp *types.NetworkPolicy) runtime.Object {
 		},
 	}
 }
-
 func newAntreaNetworkPolicyReference(namespace, name string) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
 		Type:      controlplane.AntreaNetworkPolicy,
@@ -156,14 +137,12 @@ func newAntreaNetworkPolicyReference(namespace, name string) *controlplane.Netwo
 		Name:      name,
 	}
 }
-
 func newAntreaClusterNetworkPolicyReference(name string) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
 		Type: controlplane.AntreaClusterNetworkPolicy,
 		Name: name,
 	}
 }
-
 func generateRealizationFailureConditions(failedNodeCount int, failedNodeDetails string) []crdv1beta1.NetworkPolicyCondition {
 	conditions := GenerateNetworkPolicyCondition(nil)
 	failureMessage := fmt.Sprintf("Failed Nodes count %d: %s", failedNodeCount, failedNodeDetails)
@@ -176,7 +155,6 @@ func generateRealizationFailureConditions(failedNodeCount int, failedNodeDetails
 	})
 	return conditions
 }
-
 func TestCreateAntreaNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name                         string
@@ -307,14 +285,12 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 			defer close(stopCh)
 			antreaInformerFactory.Start(stopCh)
 			go statusController.Run(stopCh)
-
 			for _, policy := range tt.networkPolicy {
 				networkPolicyStore.Create(policy)
 			}
 			for _, status := range tt.collectedNetworkPolicyStatus {
 				statusController.UpdateStatus(status)
 			}
-
 			// TODO: Use a determinate mechanism.
 			time.Sleep(500 * time.Millisecond)
 			assert.True(t, NetworkPolicyStatusEqual(*tt.expectedANNPStatus, *networkPolicyControl.getAntreaNetworkPolicyStatus()))
@@ -322,7 +298,6 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 		})
 	}
 }
-
 func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 	annp1 := newInternalNetworkPolicy("annp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "annp1"))
 	acnp1 := newInternalNetworkPolicy("acnp1", 2, []string{"node3", "node4", "node5"}, newAntreaClusterNetworkPolicyReference("acnp1"))
@@ -331,7 +306,6 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 	defer close(stopCh)
 	antreaInformerFactory.Start(stopCh)
 	go statusController.Run(stopCh)
-
 	networkPolicyStore.Create(annp1)
 	networkPolicyStore.Create(acnp1)
 	statusController.UpdateStatus(newNetworkPolicyStatus("annp1", "node1", 1, ""))
@@ -355,7 +329,6 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 		DesiredNodesRealized: 3,
 		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}, *networkPolicyControl.getAntreaClusterNetworkPolicyStatus()))
-
 	annp1Updated := newInternalNetworkPolicy("annp1", 2, []string{"node1", "node2", "node3"}, newAntreaNetworkPolicyReference("ns1", "annp1"))
 	acnp1Updated := newInternalNetworkPolicy("acnp1", 3, []string{"node4", "node5"}, newAntreaClusterNetworkPolicyReference("acnp1"))
 	networkPolicyStore.Update(annp1Updated)
@@ -377,7 +350,6 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}, *networkPolicyControl.getAntreaClusterNetworkPolicyStatus()))
 }
-
 func TestDeleteAntreaNetworkPolicy(t *testing.T) {
 	initialNetworkPolicy := newInternalNetworkPolicy("annp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "annp1"))
 	initialANNP := toAntreaNetworkPolicy(initialNetworkPolicy)
@@ -386,7 +358,6 @@ func TestDeleteAntreaNetworkPolicy(t *testing.T) {
 	defer close(stopCh)
 	antreaInformerFactory.Start(stopCh)
 	go statusController.Run(stopCh)
-
 	networkPolicyStore.Create(initialNetworkPolicy)
 	statuses := []*controlplane.NetworkPolicyStatus{
 		newNetworkPolicyStatus("annp1", "node1", 1, ""),
@@ -396,13 +367,11 @@ func TestDeleteAntreaNetworkPolicy(t *testing.T) {
 		statusController.UpdateStatus(status)
 	}
 	assert.Equal(t, 2, len(statusController.getNodeStatuses(initialNetworkPolicy.Name)))
-
 	networkPolicyStore.Delete(initialNetworkPolicy.Name)
 	// TODO: Use a determinate mechanism.
 	time.Sleep(500 * time.Millisecond)
 	assert.Empty(t, statusController.getNodeStatuses(initialNetworkPolicy.Name))
 }
-
 // BenchmarkSyncHandler benchmarks syncHandler when the policy spans 1000 Nodes. Its current result is:
 // 70024 ns/op            8338 B/op          8 allocs/op
 func BenchmarkSyncHandler(b *testing.B) {
@@ -413,12 +382,10 @@ func BenchmarkSyncHandler(b *testing.B) {
 	}
 	networkPolicy := newInternalNetworkPolicy("annp1", 1, nodes, newAntreaNetworkPolicyReference("ns1", "annp1"))
 	statusController, _, _, networkPolicyStore, _ := newTestStatusController()
-
 	networkPolicyStore.Create(networkPolicy)
 	for _, node := range nodes {
 		statusController.UpdateStatus(newNetworkPolicyStatus("annp1", node, 1, ""))
 	}
-
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

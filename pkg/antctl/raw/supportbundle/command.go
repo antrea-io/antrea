@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundle
-
 import (
 	"bufio"
 	"context"
@@ -26,14 +24,12 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"github.com/cheggaaa/pb/v3"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v2"
-
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -44,39 +40,31 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	systemclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/compress"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	systemclientset "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
-	"antrea.io/antrea/pkg/util/compress"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	systemclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/util/compress"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	barTmpl pb.ProgressBarTemplate = `{{string . "prefix"}}{{bar . }} {{percent . }} {{rtime . "ETA %s"}}` // Example: 'Prefix[-->______] 20%'
-
 	requestRate  = 50
 	requestBurst = 100
 	timeFormat   = "20060102T150405Z0700"
 )
-
 // Command is the support bundle command implementation.
 var Command *cobra.Command
-
 var option = &struct {
 	dir            string
 	labelSelector  string
@@ -85,13 +73,10 @@ var option = &struct {
 	since          string
 	insecure       bool
 }{}
-
 var defaultFS = afero.NewOsFs()
-
 var remoteControllerLongDescription = strings.TrimSpace(`
 Generate support bundles for the cluster, which include: information about each Antrea agent, information about the Antrea controller and general information about the cluster.
 `)
-
 var remoteControllerExample = strings.Trim(`
   Generate support bundles of the controller and agents on all Nodes and save them to current working dir
   $ antctl supportbundle
@@ -110,13 +95,11 @@ var remoteControllerExample = strings.Trim(`
   Generate support bundles of the controller and agents on all Nodes and save them to specific dir
   $ antctl supportbundle -d ~/Downloads
 `, "\n")
-
 func init() {
 	Command = &cobra.Command{
 		Use:   "supportbundle",
 		Short: "Generate support bundle",
 	}
-
 	if runtime.Mode == runtime.ModeAgent {
 		Command.RunE = agentRunE
 		Command.Long = "Generate the support bundle of current Antrea agent."
@@ -136,16 +119,13 @@ func init() {
 		Command.RunE = controllerRemoteRunE
 	}
 }
-
 var getSupportBundleClient func() (systemclientset.SupportBundleInterface, error) = setupSupportBundleClient
-
 func setupSupportBundleClient() (systemclientset.SupportBundleInterface, error) {
 	kubeconfig := &rest.Config{}
 	raw.SetupLocalKubeconfig(kubeconfig)
 	client, err := systemclientset.NewForConfig(kubeconfig)
 	return client.SupportBundles(), err
 }
-
 func localSupportBundleRequest(cmd *cobra.Command, mode string, writer io.Writer) error {
 	ctx := cmd.Context()
 	client, err := getSupportBundleClient()
@@ -179,17 +159,13 @@ func localSupportBundleRequest(cmd *cobra.Command, mode string, writer io.Writer
 			timer.Reset(500 * time.Millisecond)
 		}
 	}
-
 }
-
 func agentRunE(cmd *cobra.Command, _ []string) error {
 	return localSupportBundleRequest(cmd, runtime.ModeAgent, os.Stdout)
 }
-
 func controllerLocalRunE(cmd *cobra.Command, _ []string) error {
 	return localSupportBundleRequest(cmd, runtime.ModeController, os.Stdout)
 }
-
 func request(ctx context.Context, component string, client systemclientset.SupportBundleInterface) error {
 	_, err := client.Create(ctx, &systemv1beta1.SupportBundle{
 		ObjectMeta: metav1.ObjectMeta{
@@ -199,12 +175,10 @@ func request(ctx context.Context, component string, client systemclientset.Suppo
 	}, metav1.CreateOptions{})
 	return err
 }
-
 type result struct {
 	nodeName string
 	err      error
 }
-
 func mapClients(
 	ctx context.Context,
 	prefix string,
@@ -215,7 +189,6 @@ func mapClients(
 ) map[string]error {
 	bar.Set("prefix", prefix)
 	results := make(map[string]error, len(agentClients)+1)
-
 	func() {
 		rateLimiter := rate.NewLimiter(requestRate, requestBurst)
 		ch := make(chan result)
@@ -230,22 +203,18 @@ func mapClients(
 				return err
 			})
 		}
-
 		for i := 0; i < len(agentClients); i++ {
 			result := <-ch
 			results[result.nodeName] = result.err
 		}
-
 		g.Wait()
 	}()
-
 	if controllerClient != nil {
 		defer bar.Increment()
 		results[""] = cf(ctx, "", controllerClient)
 	}
 	return results
 }
-
 func requestAll(
 	ctx context.Context,
 	agentClients map[string]systemclientset.SupportBundleInterface,
@@ -266,7 +235,6 @@ func requestAll(
 		},
 	)
 }
-
 func download(
 	ctx context.Context,
 	suffix,
@@ -315,26 +283,22 @@ func download(
 		}
 	}
 }
-
 func writeFailedNodes(downloadPath string, nodes []string) error {
 	file, err := defaultFS.OpenFile(filepath.Join(downloadPath, "failed_nodes"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("err create file for failed nodes: %w", err)
 	}
 	defer file.Close()
-
 	dataWriter := bufio.NewWriter(file)
 	for _, node := range nodes {
 		_, _ = dataWriter.WriteString(node + "\n")
 	}
-
 	err = dataWriter.Flush()
 	if err != nil {
 		return err
 	}
 	return nil
 }
-
 // downloadAll will download all supportBundles. preResults is the request results of node/controller supportBundle.
 // if err happens for some nodes or controller, the download step will be skipped for the failed nodes or the controller.
 func downloadAll(
@@ -356,7 +320,6 @@ func downloadAll(
 				return download(ctx, nodeName, downloadPath, c, runtime.ModeAgent)
 			}
 			return preResults[nodeName]
-
 		},
 		func(ctx context.Context, nodeName string, c systemclientset.SupportBundleInterface) error {
 			if preResults[""] == nil {
@@ -372,7 +335,6 @@ func downloadAll(
 	}
 	return preResults
 }
-
 // createAgentClients creates clients for agents on specified nodes. If nameList is set, then nameFilter will be ignored.
 func createAgentClients(
 	ctx context.Context,
@@ -436,7 +398,6 @@ func createAgentClients(
 	}
 	return clients, nil
 }
-
 func createControllerClient(
 	ctx context.Context,
 	k8sClientset kubernetes.Interface,
@@ -454,11 +415,9 @@ func createControllerClient(
 	}
 	return controllerClient.SupportBundles(), nil
 }
-
 func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 	g := new(errgroup.Group)
 	var writeLock sync.Mutex
-
 	outputObjects := func(objects []k8sruntime.Object, comment string) error {
 		writeLock.Lock()
 		defer writeLock.Unlock()
@@ -495,7 +454,6 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 		}
 		return outputObjects(objects, comment)
 	}
-
 	g.Go(func() error {
 		pods, err := k8sClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
@@ -571,7 +529,6 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 	})
 	return g.Wait()
 }
-
 func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	if option.dir == "" {
@@ -582,7 +539,6 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("error when resolving path '%s': %w", option.dir, err)
 	}
-
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
 		return err
@@ -592,16 +548,13 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	if server, _ := Command.Flags().GetString("server"); server != "" {
 		kubeconfig.Host = server
 	}
-
 	k8sClientset, antreaClientset, err := raw.SetupClients(kubeconfig)
 	if err != nil {
 		return fmt.Errorf("failed to create clientset: %w", err)
 	}
-
 	if err := os.MkdirAll(option.dir, 0700); err != nil {
 		return fmt.Errorf("error when creating output dir: %w", err)
 	}
-
 	f, err := os.Create(filepath.Join(option.dir, "clusterinfo"))
 	if err != nil {
 		return err
@@ -611,10 +564,8 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
 	var controllerClient systemclientset.SupportBundleInterface
 	var agentClients map[string]systemclientset.SupportBundleInterface
-
 	// Collect controller bundle when no Node name or label filter is specified, or
 	// when --controller-only is set.
 	if (len(args) == 0 && len(option.nodeListFile) == 0 && option.labelSelector == "") || option.controllerOnly {
@@ -651,11 +602,9 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("error when creating agent clients: %w", err)
 		}
 	}
-
 	if controllerClient == nil && len(agentClients) == 0 {
 		return fmt.Errorf("no matched Nodes found to collect agent bundles")
 	}
-
 	amount := len(agentClients) * 2
 	if controllerClient != nil {
 		amount += 2
@@ -663,12 +612,10 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	bar := barTmpl.Start(amount)
 	defer bar.Finish()
 	defer bar.Set("prefix", "Finish ")
-
 	results := requestAll(ctx, agentClients, controllerClient, bar)
 	results = downloadAll(ctx, agentClients, controllerClient, dir, bar, results)
 	return processResults(ctx, antreaClientset, k8sClientset, results, dir)
 }
-
 func genErrorMsg(resultMap map[string]error) string {
 	msg := ""
 	for _, v := range resultMap {
@@ -676,7 +623,6 @@ func genErrorMsg(resultMap map[string]error) string {
 	}
 	return msg
 }
-
 // processResults will output the failed nodes and their reasons if any. If no data was collected,
 // error is returned, otherwise will return nil. For failed nodes and controller, will also trying to get logs from
 // kubernetes api.
@@ -685,7 +631,6 @@ func processResults(ctx context.Context, antreaClientset antrea.Interface, k8sCl
 	var failedNodes []string
 	allFailed := true
 	var err error
-
 	for k, v := range resultMap {
 		if k != "" && v != nil {
 			resultStr += fmt.Sprintf("- %s: %s\n", k, v.Error())
@@ -695,21 +640,17 @@ func processResults(ctx context.Context, antreaClientset antrea.Interface, k8sCl
 			allFailed = false
 		}
 	}
-
 	controllerFailed := resultMap[""] != nil
 	if controllerFailed {
 		fmt.Println("Controller Info Failed Reason: " + resultMap[""].Error())
 	}
-
 	if resultStr != "" {
 		fmt.Println("Failed nodes: ")
 		fmt.Print(resultStr)
 	}
-
 	if failedNodes != nil {
 		err = writeFailedNodes(dir, failedNodes)
 	}
-
 	// download logs from kubernetes api
 	if failedNodes != nil {
 		if err = downloadFallbackAgentBundleFromKubernetes(ctx, antreaClientset, k8sClient, failedNodes, dir); err != nil {
@@ -725,21 +666,18 @@ func processResults(ctx context.Context, antreaClientset antrea.Interface, k8sCl
 			allFailed = false
 		}
 	}
-
 	if allFailed {
 		return fmt.Errorf("no data was collected: %s", genErrorMsg(resultMap))
 	} else {
 		return err
 	}
 }
-
 func downloadFallbackControllerBundleFromKubernetes(ctx context.Context, antreaClientset antrea.Interface, k8sClient kubernetes.Interface, dir string) error {
 	tmpDir, err := afero.TempDir(defaultFS, "", "bundle_tmp_")
 	if err != nil {
 		return err
 	}
 	defer defaultFS.RemoveAll(tmpDir)
-
 	var podRef *corev1.ObjectReference
 	if err := func() error {
 		controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(ctx, v1beta1.AntreaControllerInfoResourceName, metav1.GetOptions{})
@@ -770,13 +708,11 @@ func downloadFallbackControllerBundleFromKubernetes(ctx context.Context, antreaC
 	}
 	return packPodBundle(pod, dir, tmpDir)
 }
-
 func downloadFallbackAgentBundleFromKubernetes(ctx context.Context, antreaClientset antrea.Interface, k8sClient kubernetes.Interface, failedNodes []string, dir string) error {
 	agentInfoList, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().List(ctx, metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		return err
 	}
-
 	agentInfoMap := map[string]v1beta1.AntreaAgentInfo{}
 	for _, agentInfo := range agentInfoList.Items {
 		agentInfoMap[agentInfo.Name] = agentInfo
@@ -820,7 +756,6 @@ func downloadFallbackAgentBundleFromKubernetes(ctx context.Context, antreaClient
 	}
 	return utilerror.NewAggregate(errors)
 }
-
 func packPodBundle(pod *corev1.Pod, dir string, bundleDir string) error {
 	prefix := "agent_"
 	if strings.Contains(pod.Name, "controller") {
@@ -835,7 +770,6 @@ func packPodBundle(pod *corev1.Pod, dir string, bundleDir string) error {
 	_, err = compress.PackDir(defaultFS, bundleDir, f)
 	return err
 }
-
 func downloadPodLogs(ctx context.Context, k8sClient kubernetes.Interface, namespace string, podName string, containers []string, dir string) error {
 	downloadContainerLogs := func(containerName string) error {
 		containerDirName, _ := strings.CutPrefix(containerName, "antrea-")
@@ -858,7 +792,6 @@ func downloadPodLogs(ctx context.Context, k8sClient kubernetes.Interface, namesp
 		if err != nil {
 			return err
 		}
-
 		if _, err = io.Copy(f, logStream); err != nil {
 			return err
 		}

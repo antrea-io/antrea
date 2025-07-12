@@ -11,33 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package bgppeer
-
 import (
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	bgpcontroller "antrea.io/antrea/v2/pkg/agent/controller/bgp"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/bgp"
-	bgpcontroller "antrea.io/antrea/pkg/agent/controller/bgp"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/bgp"
+	bgpcontroller "antrea.io/antrea/v2/pkg/agent/controller/bgp"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 var (
 	bgpPeerStatus = []bgp.PeerStatus{
 		{
@@ -66,7 +58,6 @@ var (
 		},
 	}
 )
-
 func TestBGPPeerQuery(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
@@ -163,7 +154,6 @@ func TestBGPPeerQuery(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -172,14 +162,11 @@ func TestBGPPeerQuery(t *testing.T) {
 				tt.expectedCalls(q)
 			}
 			handler := HandleFunc(q)
-
 			req, err := http.NewRequest(http.MethodGet, tt.url, nil)
 			require.NoError(t, err)
-
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, req)
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
-
 			if tt.expectedStatus == http.StatusOK {
 				var received []apis.BGPPeerResponse
 				err = json.Unmarshal(recorder.Body.Bytes(), &received)

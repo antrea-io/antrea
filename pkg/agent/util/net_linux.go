@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package util
-
 import (
 	"context"
 	"fmt"
@@ -26,27 +23,20 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	utilnetlink "antrea.io/antrea/v2/pkg/agent/util/netlink"
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
-	"antrea.io/antrea/pkg/agent/util/sysctl"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	utilnetlink "antrea.io/antrea/v2/pkg/agent/util/netlink"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 var (
 	netlinkUtil utilnetlink.Interface = &netlink.Handle{}
-
 	// Declared variables which are meant to be overridden for testing.
 	getNS              = ns.GetNS
 	netNSDo            = ns.NetNS.Do
@@ -55,7 +45,6 @@ var (
 	getVethPeerIfindex = ip.GetVethPeerIfindex
 	netlinkAttrs       = netlink.Link.Attrs
 )
-
 // GetNSPeerDevBridge returns peer device and its attached bridge (if applicable)
 // for device dev in network space indicated by nsPath
 func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
@@ -73,7 +62,6 @@ func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
 	}); err != nil {
 		return nil, "", err
 	}
-
 	peerIntf, err := netInterfaceByIndex(peerIdx)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get interface for idx %d: %w", peerIdx, err)
@@ -82,12 +70,10 @@ func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get link for idx %d: %w", peerIdx, err)
 	}
-
 	// not attached to a bridge.
 	if peerLink.Attrs().MasterIndex <= 0 {
 		return peerIntf, "", nil
 	}
-
 	bridgeLink, err := netlinkUtil.LinkByIndex(peerLink.Attrs().MasterIndex)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get master link for dev %s: %w", peerLink.Attrs().Name, err)
@@ -99,7 +85,6 @@ func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
 	}
 	return peerIntf, bridge.Name, nil
 }
-
 // GetNSDevInterface returns interface of dev in namespace nsPath.
 func GetNSDevInterface(nsPath, dev string) (*net.Interface, error) {
 	netNS, err := getNS(nsPath)
@@ -118,7 +103,6 @@ func GetNSDevInterface(nsPath, dev string) (*net.Interface, error) {
 	}
 	return intf, nil
 }
-
 // GetNSPath returns the path of the specified netns.
 func GetNSPath(netnsName string) (string, error) {
 	netNS, err := getNS(netnsName)
@@ -128,7 +112,6 @@ func GetNSPath(netnsName string) (string, error) {
 	defer netNSClose(netNS)
 	return netNSPath(netNS), nil
 }
-
 func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	link, err := netlinkUtil.LinkByName(name)
 	if err != nil {
@@ -146,11 +129,9 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	index := netlinkAttrs(link).Index
 	return mac, index, nil
 }
-
 // addrSliceDifference returns elements in s1 but not in s2.
 func addrSliceDifference(s1, s2 []netlink.Addr) []*netlink.Addr {
 	var diff []*netlink.Addr
-
 	for i, e1 := range s1 {
 		found := false
 		for _, e2 := range s2 {
@@ -163,10 +144,8 @@ func addrSliceDifference(s1, s2 []netlink.Addr) []*netlink.Addr {
 			diff = append(diff, &s1[i])
 		}
 	}
-
 	return diff
 }
-
 // ConfigureLinkAddresses adds the provided addresses to the interface identified by index idx, if
 // they are missing from the interface. Any other existing address already configured for the
 // interface will be removed, unless it is a link-local address.
@@ -180,7 +159,6 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 	for _, ipNet := range ipNets {
 		newAddrs = append(newAddrs, netlink.Addr{IPNet: ipNet, Label: ""})
 	}
-
 	allAddrs, err := netlinkUtil.AddrList(link, netlink.FAMILY_ALL)
 	if err != nil {
 		return fmt.Errorf("failed to query address list for interface %s: %v", ifaceName, err)
@@ -192,37 +170,30 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 			addrs = append(addrs, addr)
 		}
 	}
-
 	addrsToAdd := addrSliceDifference(newAddrs, addrs)
 	addrsToRemove := addrSliceDifference(addrs, newAddrs)
-
 	if len(addrsToAdd) == 0 && len(addrsToRemove) == 0 {
 		klog.V(2).Infof("IP configuration for interface %s does not need to change", ifaceName)
 		return nil
 	}
-
 	for _, addr := range addrsToRemove {
 		klog.V(2).Infof("Removing address %v from interface %s", addr, ifaceName)
 		if err := netlinkUtil.AddrDel(link, addr); err != nil {
 			return fmt.Errorf("failed to remove address %v from interface %s: %v", addr, ifaceName, err)
 		}
 	}
-
 	for _, addr := range addrsToAdd {
 		klog.V(2).Infof("Adding address %v to interface %s", addr, ifaceName)
 		if err := netlinkUtil.AddrAdd(link, addr); err != nil && !strings.Contains(err.Error(), "file exists") {
 			return fmt.Errorf("failed to add address %v to interface %s: %v", addr, ifaceName, err)
 		}
 	}
-
 	return nil
 }
-
 // ListenLocalSocket creates a listener on a Unix domain socket.
 func ListenLocalSocket(address string) (net.Listener, error) {
 	// remove before bind to avoid "address already in use" errors
 	_ = os.Remove(address)
-
 	if err := os.MkdirAll(filepath.Dir(address), 0750); err != nil {
 		klog.Fatalf("Failed to create directory %s: %v", filepath.Dir(address), err)
 	}
@@ -236,7 +207,6 @@ func ListenLocalSocket(address string) (net.Listener, error) {
 	}
 	return listener, nil
 }
-
 // SetAdapterMACAddress set specified MAC address on interface.
 func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error {
 	link, err := netlinkUtil.LinkByName(adapterName)
@@ -245,14 +215,12 @@ func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error
 	}
 	return netlinkUtil.LinkSetHardwareAddr(link, *macConfig)
 }
-
 // deleteOVSPort deletes specific OVS port. This function calls ovs-vsctl command to bypass
 // OVS bridge client to work when agent exiting.
 func deleteOVSPort(brName, portName string) error {
 	cmd := exec.Command("ovs-vsctl", "--if-exists", "del-port", brName, portName)
 	return cmd.Run()
 }
-
 func HostInterfaceExists(ifName string) bool {
 	_, err := netlinkUtil.LinkByName(ifName)
 	if err == nil {
@@ -264,7 +232,6 @@ func HostInterfaceExists(ifName string) bool {
 	klog.ErrorS(err, "Failed to find host interface", "name", ifName)
 	return false
 }
-
 func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interface{}, error) {
 	iface, err := netInterfaceByName(ifName)
 	if err != nil {
@@ -280,7 +247,6 @@ func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interfac
 	}
 	return iface, addrs, routes, nil
 }
-
 func RenameInterface(from, to string) error {
 	klog.InfoS("Renaming interface", "oldName", from, "newName", to)
 	var renameErr error
@@ -296,11 +262,8 @@ func RenameInterface(from, to string) error {
 	if pollErr != nil {
 		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
 	}
-<<<<<<< HEAD
 	// Fix for the issue https://github.com/antrea.io/antrea/v2/issues/6301.
-=======
 	// Fix for the issue https://github.com/antrea-io/antrea/issues/6301.
->>>>>>> origin/main
 	// In some new Linux versions which support AltName, if the only valid altname of the interface is the same as the
 	// interface name, it would be left empty when the name is occupied by the interface name; after we rename the
 	// interface name to another value, the altname of the interface would be set to the original interface name by the
@@ -311,7 +274,6 @@ func RenameInterface(from, to string) error {
 	}
 	return nil
 }
-
 func RemoveLinkIPs(link netlink.Link) error {
 	addrs, err := netlinkUtil.AddrList(link, netlink.FAMILY_ALL)
 	if err != nil {
@@ -324,7 +286,6 @@ func RemoveLinkIPs(link netlink.Link) error {
 	}
 	return nil
 }
-
 func RemoveLinkRoutes(link netlink.Link) error {
 	routes, err := netlinkUtil.RouteList(link, netlink.FAMILY_ALL)
 	if err != nil {
@@ -337,7 +298,6 @@ func RemoveLinkRoutes(link netlink.Link) error {
 	}
 	return nil
 }
-
 func ConfigureLinkRoutes(link netlink.Link, routes []interface{}) error {
 	for _, r := range routes {
 		rt := r.(netlink.Route)
@@ -353,27 +313,22 @@ func ConfigureLinkRoutes(link netlink.Link, routes []interface{}) error {
 	}
 	return nil
 }
-
 func EnsureIPv6EnabledOnInterface(ifaceName string) error {
 	path := fmt.Sprintf("ipv6/conf/%s/disable_ipv6", ifaceName)
 	return sysctl.EnsureSysctlNetValue(path, 0)
 }
-
 func EnsureARPAnnounceOnInterface(ifaceName string, value int) error {
 	path := fmt.Sprintf("ipv4/conf/%s/arp_announce", ifaceName)
 	return sysctl.EnsureSysctlNetValue(path, value)
 }
-
 func EnsureRPFilterOnInterface(ifaceName string, value int) error {
 	path := fmt.Sprintf("ipv4/conf/%s/rp_filter", ifaceName)
 	return sysctl.EnsureSysctlNetValue(path, value)
 }
-
 func EnsurePromoteSecondariesOnInterface(ifaceName string) error {
 	path := fmt.Sprintf("ipv4/conf/%s/promote_secondaries", ifaceName)
 	return sysctl.EnsureSysctlNetValue(path, 1)
 }
-
 func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
 	link, err := netlinkUtil.LinkByIndex(linkIndex)
 	if err != nil {
@@ -389,7 +344,6 @@ func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
 	}
 	return routes, nil
 }
-
 func renameHostInterface(oriName string, newName string) error {
 	link, err := netlinkUtil.LinkByName(oriName)
 	if err != nil {
@@ -406,7 +360,6 @@ func renameHostInterface(oriName string, newName string) error {
 	}
 	return nil
 }
-
 // removeInterfaceAltName removes altName on interface with provided name. altName not found will return nil.
 func removeInterfaceAltName(name string, altName string) error {
 	link, err := netlinkUtil.LinkByName(name)
@@ -420,7 +373,6 @@ func removeInterfaceAltName(name string, altName string) error {
 	}
 	return nil
 }
-
 // PrepareHostInterfaceConnection prepares host interface connection to the OVS bridge client by:
 // 1. Renaming the host interface (a bridged suffix will be added to it).
 // 2. Creating an internal port (original name of the host interface will be used here).
@@ -441,19 +393,16 @@ func PrepareHostInterfaceConnection(
 		klog.InfoS("Port already exists, skip the configuration", "port", bridgedName, "ofPort", ofPort)
 		return bridgedName, true, nil
 	}
-
 	iface, ifaceIPs, ifaceRoutes, err := GetInterfaceConfig(ifaceName)
 	if err != nil {
 		return "", false, err
 	}
-
 	if err = RenameInterface(ifaceName, bridgedName); err != nil {
 		return "", false, err
 	}
 	if _, err = bridge.CreateInternalPort(ifaceName, ifaceOFPort, iface.HardwareAddr.String(), externalIDs); err != nil {
 		return "", false, fmt.Errorf("failed to create internal port: %v", err)
 	}
-
 	// Wait a few seconds for OVS bridge local port.
 	if err = wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
 		link, err := netlink.LinkByName(ifaceName)
@@ -466,7 +415,6 @@ func PrepareHostInterfaceConnection(
 	}); err != nil {
 		return "", false, fmt.Errorf("failed waiting for internal port to show up: %v", err)
 	}
-
 	localLink, err := netlink.LinkByName(ifaceName)
 	if err != nil {
 		return "", false, err
@@ -474,13 +422,11 @@ func PrepareHostInterfaceConnection(
 	if _, _, err = SetLinkUp(ifaceName); err != nil {
 		return "", false, fmt.Errorf("failed to set link up: %v", err)
 	}
-
 	if mtu > 0 {
 		if err := bridge.SetInterfaceMTU(ifaceName, mtu); err != nil {
 			return "", false, fmt.Errorf("failed to set bridge interface MTU: %w", err)
 		}
 	}
-
 	// Check if interface is configured with an IPv6 address: if it is, we need to ensure that IPv6
 	// is enabled on the OVS internal port as we need to move all IP addresses over.
 	for _, ip := range ifaceIPs {
@@ -492,7 +438,6 @@ func PrepareHostInterfaceConnection(
 			break
 		}
 	}
-
 	if err = ConfigureLinkAddresses(localLink.Attrs().Index, ifaceIPs); err != nil {
 		return "", false, err
 	}
@@ -506,7 +451,6 @@ func PrepareHostInterfaceConnection(
 	}
 	return bridgedName, false, nil
 }
-
 // RestoreHostInterfaceConfiguration restore the configuration from bridge back to host interface, reverting the
 // actions taken in PrepareHostInterfaceConnection.
 func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
@@ -516,7 +460,6 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
 	if !HostInterfaceExists(bridgedName) {
 		return
 	}
-
 	// get interface config
 	var err error
 	var interfaceIPs []*net.IPNet
@@ -526,7 +469,6 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
 		if err != nil {
 			klog.ErrorS(err, "Failed to get interface config", "interface", interfaceName)
 		}
-
 		// delete internal port (eth0)
 		if err = deleteOVSPort(brName, interfaceName); err != nil {
 			klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
@@ -537,7 +479,6 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
 		klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
 		return
 	}
-
 	// rename host interface(eth0~ -> eth0)
 	if err = RenameInterface(bridgedName, interfaceName); err != nil {
 		klog.ErrorS(err, "Restore host interface name failed", "from", bridgedName, "to", interfaceName)

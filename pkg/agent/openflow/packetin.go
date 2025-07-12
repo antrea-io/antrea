@@ -11,37 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 type ofpPacketInCategory uint8
-
 type PacketInHandler interface {
 	// HandlePacketIn should not modify the input pktIn and should not
 	// assume that the pktIn contents(e.g. NWSrc/NWDst) will not be
 	// modified at a later time.
 	HandlePacketIn(pktIn *ofctrl.PacketIn) error
 }
-
 const (
 	// PacketIn categories below are used to distribute packetIn to specific handlers.
 	// PacketIn category should be loaded in the first byte of packetIn2 userData.
@@ -57,7 +47,6 @@ const (
 	// PacketInCategorySvcReject is used to process the Service packets not matching any
 	// Endpoints within packetIn message.
 	PacketInCategorySvcReject
-
 	// PacketIn operations below are used to decide which operation(s) should be
 	// executed by a handler. It(they) should be loaded in the second byte of the
 	// packetIn2 userData. Operations for different handlers could share the value.
@@ -79,7 +68,6 @@ const (
 	// can be consumed by the Flow Exporter to export flow records for connections
 	// denied by network policy rules.
 	PacketInNPStoreDenyOperation = 0b100
-
 	// We use OpenFlow Meter for packetIn rate limiting on OVS side.
 	// Meter Entry ID.
 	// 1-255 are reserved for Egress QoS. The Egress QoS meterID leverage the same
@@ -89,26 +77,21 @@ const (
 	PacketInMeterIDTF  = 257
 	PacketInMeterIDDNS = 258
 )
-
 // RegisterPacketInHandler stores controller handler in a map with category as keys.
 func (c *client) RegisterPacketInHandler(packetHandlerCategory uint8, packetInHandler PacketInHandler) {
 	c.packetInHandlers[packetHandlerCategory] = packetInHandler
 }
-
 // featureStartPacketIn contains packetIn resources specifically for each feature that uses packetIn.
 type featureStartPacketIn struct {
 	category      uint8
 	stopCh        <-chan struct{}
 	packetInQueue *openflow.PacketInQueue
 }
-
 func newFeatureStartPacketIn(category uint8, stopCh <-chan struct{}, queueSize, queueRate int) *featureStartPacketIn {
 	featurePacketIn := featureStartPacketIn{category: category, stopCh: stopCh}
 	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(category, queueSize, rate.Limit(queueRate))
-
 	return &featurePacketIn
 }
-
 // StartPacketInHandler is the starting point for processing feature packetIn requests.
 func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
 	if len(c.packetInHandlers) == 0 {
@@ -123,7 +106,6 @@ func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 func (c *client) subscribeFeaturePacketIn(featurePacketIn *featureStartPacketIn) error {
 	err := c.SubscribePacketIn(featurePacketIn.category, featurePacketIn.packetInQueue)
 	if err != nil {
@@ -132,7 +114,6 @@ func (c *client) subscribeFeaturePacketIn(featurePacketIn *featureStartPacketIn)
 	go c.parsePacketIn(featurePacketIn)
 	return nil
 }
-
 func (c *client) parsePacketIn(featurePacketIn *featureStartPacketIn) {
 	for {
 		pktIn := featurePacketIn.packetInQueue.GetRateLimited(featurePacketIn.stopCh)
@@ -148,7 +129,6 @@ func (c *client) parsePacketIn(featurePacketIn *featureStartPacketIn) {
 		}
 	}
 }
-
 func GetMatchFieldByRegID(matchers *ofctrl.Matchers, regID int) *ofctrl.MatchField {
 	xregID := uint8(regID / 2)
 	startBit := 4 * (regID % 2)
@@ -168,7 +148,6 @@ func GetMatchFieldByRegID(matchers *ofctrl.Matchers, regID int) *ofctrl.MatchFie
 	}
 	return &ofctrl.MatchField{MatchField: openflow15.NewRegMatchFieldWithMask(regID, data, mask)}
 }
-
 func GetInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32, error) {
 	regValue, ok := regMatch.GetValue().(*ofctrl.NXRegister)
 	if !ok {
@@ -179,7 +158,6 @@ func GetInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32,
 	}
 	return regValue.Data, nil
 }
-
 func GetEthernetPacket(pktIn *ofctrl.PacketIn) (*protocol.Ethernet, error) {
 	ethernetPkt := new(protocol.Ethernet)
 	if err := ethernetPkt.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {

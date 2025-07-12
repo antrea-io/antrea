@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowlogger
-
 import (
 	"bufio"
 	"fmt"
@@ -21,25 +19,17 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"gopkg.in/natefinch/lumberjack.v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
-=======
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 )
-
 const MaxLatency = 5 * time.Second
-
 type FlowLogger struct {
 	sync.Mutex
 	logger     io.Closer
 	maxLatency time.Duration
 	writer     *bufio.Writer
 }
-
 func NewFlowLogger(path string, maxSize int, maxBackups int, maxAge int, compress bool) *FlowLogger {
 	logger := &lumberjack.Logger{
 		Filename:   path,
@@ -54,7 +44,6 @@ func NewFlowLogger(path string, maxSize int, maxBackups int, maxAge int, compres
 		writer:     bufio.NewWriter(logger),
 	}
 }
-
 func (fl *FlowLogger) FlushLoop(stopCh <-chan struct{}) {
 	t := time.NewTicker(fl.maxLatency)
 	defer t.Stop()
@@ -68,11 +57,9 @@ func (fl *FlowLogger) FlushLoop(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 func (fl *FlowLogger) Close() {
 	fl.logger.Close()
 }
-
 func (fl *FlowLogger) WriteRecord(r *flowrecord.FlowRecord, prettyPrint bool) error {
 	var protocolID string
 	var ingressNetworkPolicyRuleAction, ingressNetworkPolicyType string
@@ -90,7 +77,6 @@ func (fl *FlowLogger) WriteRecord(r *flowrecord.FlowRecord, prettyPrint bool) er
 		egressNetworkPolicyRuleAction = fmt.Sprintf("%d", r.EgressNetworkPolicyRuleAction)
 		egressNetworkPolicyType = fmt.Sprintf("%d", r.EgressNetworkPolicyType)
 	}
-
 	fields := []string{
 		fmt.Sprintf("%d", r.FlowStartSeconds.Unix()),
 		fmt.Sprintf("%d", r.FlowEndSeconds.Unix()),
@@ -124,9 +110,7 @@ func (fl *FlowLogger) WriteRecord(r *flowrecord.FlowRecord, prettyPrint bool) er
 		r.HttpVals,
 		r.EgressNodeName,
 	}
-
 	str := strings.Join(fields, ",")
-
 	fl.Lock()
 	defer fl.Unlock()
 	if _, err := io.WriteString(fl.writer, str); err != nil {
@@ -137,7 +121,6 @@ func (fl *FlowLogger) WriteRecord(r *flowrecord.FlowRecord, prettyPrint bool) er
 	}
 	return nil
 }
-
 func (fl *FlowLogger) Flush() error {
 	fl.Lock()
 	defer fl.Unlock()

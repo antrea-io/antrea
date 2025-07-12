@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package egress
-
 import (
 	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -27,59 +24,46 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/memberlist"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
-=======
-	"antrea.io/antrea/pkg/agent/memberlist"
-	"antrea.io/antrea/pkg/agent/types"
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/memberlist"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 )
-
 const (
 	// workItem is the only item that will be enqueued, used to trigger Egress IP scheduling.
 	workItem = "key"
 )
-
 // scheduleEventHandler is a callback when an Egress is rescheduled.
 type scheduleEventHandler func(egress string)
-
 // scheduleResult is the schedule result of an Egress, including the effective Egress IP and Node.
 type scheduleResult struct {
 	ip   string
 	node string
 	err  error
 }
-
 // egressIPScheduler is responsible for scheduling Egress IPs to appropriate Nodes according to the Node selector of the
 // IP pool, taking Node's capacity into consideration.
 type egressIPScheduler struct {
 	// cluster is responsible for selecting a Node for a given IP and pool.
 	cluster memberlist.Interface
-
 	egressLister       crdlisters.EgressLister
 	egressListerSynced cache.InformerSynced
-
 	// queue is used to trigger scheduling. Triggering multiple times before the item is consumed will only cause one
 	// execution of scheduling.
 	queue workqueue.TypedInterface[string]
-
 	// mutex is used to protect scheduleResults.
 	mutex           sync.RWMutex
 	scheduleResults map[string]*scheduleResult
 	// scheduledOnce indicates whether scheduling has been executed at lease once.
 	scheduledOnce *atomic.Bool
-
 	// eventHandlers is the registered callbacks.
 	eventHandlers []scheduleEventHandler
-
 	// The default maximum number of Egress IPs a Node can accommodate.
 	maxEgressIPsPerNode int
 	// nodeToMaxEgressIPs caches the maximum number of Egress IPs of each Node gotten from Node annotation.
@@ -87,7 +71,6 @@ type egressIPScheduler struct {
 	nodeToMaxEgressIPs      map[string]int
 	nodeToMaxEgressIPsMutex sync.RWMutex
 }
-
 func NewEgressIPScheduler(cluster memberlist.Interface, egressInformer crdinformers.EgressInformer, nodeInformer corev1informers.NodeInformer, maxEgressIPsPerNode int) *egressIPScheduler {
 	s := &egressIPScheduler{
 		cluster:             cluster,
@@ -117,14 +100,12 @@ func NewEgressIPScheduler(cluster memberlist.Interface, egressInformer crdinform
 		},
 		resyncPeriod,
 	)
-
 	s.cluster.AddClusterEventHandler(func(poolName string) {
 		// Trigger scheduling regardless of which pool is changed.
 		s.queue.Add(workItem)
 	})
 	return s
 }
-
 func getMaxEgressIPsFromAnnotation(node *corev1.Node) (int, bool, error) {
 	maxEgressIPsStr, exists := node.Annotations[types.NodeMaxEgressIPsAnnotationKey]
 	if !exists {
@@ -136,7 +117,6 @@ func getMaxEgressIPsFromAnnotation(node *corev1.Node) (int, bool, error) {
 	}
 	return maxEgressIPs, true, nil
 }
-
 // updateNode processes Node ADD and UPDATE events.
 func (s *egressIPScheduler) updateNode(obj interface{}) {
 	node := obj.(*corev1.Node)
@@ -158,7 +138,6 @@ func (s *egressIPScheduler) updateNode(obj interface{}) {
 		s.queue.Add(workItem)
 	}
 }
-
 // deleteNode processes Node DELETE events.
 func (s *egressIPScheduler) deleteNode(obj interface{}) {
 	node, ok := obj.(*corev1.Node)
@@ -176,7 +155,6 @@ func (s *egressIPScheduler) deleteNode(obj interface{}) {
 	}
 	s.deleteMaxEgressIPsByNode(node.Name)
 }
-
 // addEgress processes Egress ADD events.
 func (s *egressIPScheduler) addEgress(obj interface{}) {
 	egress := obj.(*crdv1b1.Egress)
@@ -186,7 +164,6 @@ func (s *egressIPScheduler) addEgress(obj interface{}) {
 	s.queue.Add(workItem)
 	klog.V(2).InfoS("Egress ADD event triggered Egress IP scheduling", "egress", klog.KObj(egress))
 }
-
 // updateEgress processes Egress UPDATE events.
 func (s *egressIPScheduler) updateEgress(old, cur interface{}) {
 	oldEgress := old.(*crdv1b1.Egress)
@@ -200,7 +177,6 @@ func (s *egressIPScheduler) updateEgress(old, cur interface{}) {
 	s.queue.Add(workItem)
 	klog.V(2).InfoS("Egress UPDATE event triggered Egress IP scheduling", "egress", klog.KObj(curEgress))
 }
-
 // deleteEgress processes Egress DELETE events.
 func (s *egressIPScheduler) deleteEgress(obj interface{}) {
 	egress, ok := obj.(*crdv1b1.Egress)
@@ -222,19 +198,15 @@ func (s *egressIPScheduler) deleteEgress(obj interface{}) {
 	s.queue.Add(workItem)
 	klog.V(2).InfoS("Egress DELETE event triggered Egress IP scheduling", "egress", klog.KObj(egress))
 }
-
 func (s *egressIPScheduler) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting Egress IP scheduler")
 	defer klog.InfoS("Shutting down Egress IP scheduler")
 	defer s.queue.ShutDown()
-
 	if !cache.WaitForCacheSync(stopCh, s.egressListerSynced) {
 		return
 	}
-
 	// Schedule at least once even if there is no Egress to unblock clients waiting for HasScheduled to return true.
 	s.queue.Add(workItem)
-
 	go func() {
 		for {
 			obj, quit := s.queue.Get()
@@ -245,22 +217,17 @@ func (s *egressIPScheduler) Run(stopCh <-chan struct{}) {
 			s.queue.Done(obj)
 		}
 	}()
-
 	<-stopCh
 }
-
 func (s *egressIPScheduler) HasScheduled() bool {
 	return s.scheduledOnce.Load()
 }
-
 func (s *egressIPScheduler) AddEventHandler(handler scheduleEventHandler) {
 	s.eventHandlers = append(s.eventHandlers, handler)
 }
-
 func (s *egressIPScheduler) GetEgressIPAndNode(egress string) (string, string, error, bool) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-
 	result, exists := s.scheduleResults[egress]
 	if !exists {
 		return "", "", nil, false
@@ -270,10 +237,8 @@ func (s *egressIPScheduler) GetEgressIPAndNode(egress string) (string, string, e
 	}
 	return result.ip, result.node, nil, true
 }
-
 // EgressesByCreationTimestamp sorts a list of Egresses by creation timestamp.
 type EgressesByCreationTimestamp []*crdv1b1.Egress
-
 func (o EgressesByCreationTimestamp) Len() int      { return len(o) }
 func (o EgressesByCreationTimestamp) Swap(i, j int) { o[i], o[j] = o[j], o[i] }
 func (o EgressesByCreationTimestamp) Less(i, j int) bool {
@@ -282,13 +247,11 @@ func (o EgressesByCreationTimestamp) Less(i, j int) bool {
 	}
 	return o[i].CreationTimestamp.Before(&o[j].CreationTimestamp)
 }
-
 // updateMaxEgressIPsByNode updates the maxEgressIPs for a given Node in the cache.
 // It returns whether there is a real change, which indicates if rescheduling is required.
 func (s *egressIPScheduler) updateMaxEgressIPsByNode(nodeName string, maxEgressIPs int) bool {
 	s.nodeToMaxEgressIPsMutex.Lock()
 	defer s.nodeToMaxEgressIPsMutex.Unlock()
-
 	oldMaxEgressIPs, exists := s.nodeToMaxEgressIPs[nodeName]
 	if exists && oldMaxEgressIPs == maxEgressIPs {
 		return false
@@ -300,13 +263,11 @@ func (s *egressIPScheduler) updateMaxEgressIPsByNode(nodeName string, maxEgressI
 	s.nodeToMaxEgressIPs[nodeName] = maxEgressIPs
 	return true
 }
-
 // deleteMaxEgressIPsByNode deletes the maxEgressIPs for a given Node in the cache.
 // It returns whether there is a real change, which indicates if rescheduling is required.
 func (s *egressIPScheduler) deleteMaxEgressIPsByNode(nodeName string) bool {
 	s.nodeToMaxEgressIPsMutex.Lock()
 	defer s.nodeToMaxEgressIPsMutex.Unlock()
-
 	_, exists := s.nodeToMaxEgressIPs[nodeName]
 	if !exists {
 		return false
@@ -314,20 +275,17 @@ func (s *egressIPScheduler) deleteMaxEgressIPsByNode(nodeName string) bool {
 	delete(s.nodeToMaxEgressIPs, nodeName)
 	return true
 }
-
 // getMaxEgressIPsByNode gets the maxEgressIPs for a given Node.
 // If there isn't a value for the Node, the default value will be returned.
 func (s *egressIPScheduler) getMaxEgressIPsByNode(nodeName string) int {
 	s.nodeToMaxEgressIPsMutex.RLock()
 	defer s.nodeToMaxEgressIPsMutex.RUnlock()
-
 	maxEgressIPs, exists := s.nodeToMaxEgressIPs[nodeName]
 	if exists {
 		return maxEgressIPs
 	}
 	return s.maxEgressIPsPerNode
 }
-
 // schedule takes the spec of Egress and ExternalIPPool and the state of memberlist cluster as inputs, generates
 // scheduling results deterministically. When every Node's capacity is sufficient, each Egress's schedule is independent
 // and is only determined by the consistent hash map. When any Node's capacity is insufficient, one Egress's schedule
@@ -350,7 +308,6 @@ func (s *egressIPScheduler) schedule() {
 		if !isEgressSchedulable(egress) {
 			continue
 		}
-
 		maxEgressIPsFilter := func(node string) bool {
 			// Count the Egress IPs that are already assigned to this Node.
 			ipsOnNode := nodeToIPs[node]
@@ -377,7 +334,6 @@ func (s *egressIPScheduler) schedule() {
 			node: node,
 		}
 		newResults[egress.Name] = result
-
 		ips, exists := nodeToIPs[node]
 		if !exists {
 			ips = sets.New[string]()
@@ -385,11 +341,9 @@ func (s *egressIPScheduler) schedule() {
 		}
 		ips.Insert(egress.Spec.EgressIP)
 	}
-
 	func() {
 		s.mutex.Lock()
 		defer s.mutex.Unlock()
-
 		// Identify Egresses whose schedule results are updated.
 		prevResults := s.scheduleResults
 		for egress, result := range newResults {
@@ -402,16 +356,13 @@ func (s *egressIPScheduler) schedule() {
 		for egress := range prevResults {
 			egressesToUpdate = append(egressesToUpdate, egress)
 		}
-
 		// Record the new results.
 		s.scheduleResults = newResults
 	}()
-
 	for _, egress := range egressesToUpdate {
 		for _, handler := range s.eventHandlers {
 			handler(egress)
 		}
 	}
-
 	s.scheduledOnce.Store(true)
 }

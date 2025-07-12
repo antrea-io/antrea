@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"fmt"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	cniversion "github.com/containernetworking/cni/pkg/version"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/cni"
 	"antrea.io/antrea/v2/pkg/version"
-=======
-	"antrea.io/antrea/pkg/cni"
-	"antrea.io/antrea/pkg/version"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/cni"
+	"antrea.io/antrea/v2/pkg/version"
 )
-
 func main() {
 	funcs := skel.CNIFuncs{
 		Add:   cni.ActionAdd.Request,

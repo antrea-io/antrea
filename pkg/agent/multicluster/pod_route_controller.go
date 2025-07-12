@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -31,31 +28,24 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
 	mclisters "antrea.io/antrea/v2/multicluster/pkg/client/listers/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
-	mclisters "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
+	mclisters "antrea.io/antrea/v2/multicluster/pkg/client/listers/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
 )
-
 const (
 	// The number of workers processing a Pod change
 	podWorkerNum = 5
-
 	dummyKey               = "key"
 	podIndexKey            = "podIP"
 	podRouteControllerName = "MCPodRouteController"
 )
-
 // MCPodRouteController generates L3 forwarding flows to forward cross-cluster
 // traffic from MC Gateway to Pods on other Nodes inside a member cluster. It is
 // required when networkPolicyOnly, noEncap or hybrid mode are configured, to forward
@@ -76,7 +66,6 @@ type MCPodRouteController struct {
 	podWorkersStartedMutex sync.RWMutex
 	podWorkerStopCh        chan struct{}
 }
-
 func NewMCPodRouteController(
 	k8sClient kubernetes.Interface,
 	gwInformer v1alpha1.GatewayInformer,
@@ -103,7 +92,6 @@ func NewMCPodRouteController(
 		gwLister:        gwInformer.Lister(),
 		podWorkerStopCh: make(chan struct{}),
 	}
-
 	controller.gwInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(cur interface{}) {
@@ -118,7 +106,6 @@ func NewMCPodRouteController(
 	)
 	return controller
 }
-
 func podIPIndexFunc(obj interface{}) ([]string, error) {
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
@@ -129,7 +116,6 @@ func podIPIndexFunc(obj interface{}) ([]string, error) {
 	}
 	return []string{}, nil
 }
-
 func (c *MCPodRouteController) createPodInformer() {
 	listOptions := func(options *metav1.ListOptions) {
 		options.FieldSelector = fields.OneTermNotEqualSelector("spec.nodeName", c.nodeConfig.Name).String()
@@ -157,7 +143,6 @@ func (c *MCPodRouteController) createPodInformer() {
 	)
 	c.podLister = corelisters.NewPodLister(c.podInformer.GetIndexer())
 }
-
 func (c *MCPodRouteController) enqueueGateway(obj interface{}) {
 	_, isGW := obj.(*mcv1alpha1.Gateway)
 	if !isGW {
@@ -174,7 +159,6 @@ func (c *MCPodRouteController) enqueueGateway(obj interface{}) {
 	}
 	c.gwQueue.Add(dummyKey)
 }
-
 func (c *MCPodRouteController) createPod(obj interface{}) {
 	pod := obj.(*corev1.Pod)
 	if !isValidPod(pod) {
@@ -182,38 +166,31 @@ func (c *MCPodRouteController) createPod(obj interface{}) {
 	}
 	c.podQueue.Add(pod.Status.PodIP)
 }
-
 func (c *MCPodRouteController) updatePod(old, cur interface{}) {
 	oldPod := old.(*corev1.Pod)
 	curPod := cur.(*corev1.Pod)
-
 	isOldPodValid := isValidPod(oldPod)
 	isCurPodValid := isValidPod(curPod)
 	if !isCurPodValid && !isOldPodValid {
 		return
 	}
-
 	if !isOldPodValid {
 		c.podQueue.Add(curPod.Status.PodIP)
 		return
 	}
-
 	if !isCurPodValid {
 		c.podQueue.Add(oldPod.Status.PodIP)
 		return
 	}
-
 	if oldPod.Status.PodIP != curPod.Status.PodIP {
 		c.podQueue.Add(oldPod.Status.PodIP)
 		c.podQueue.Add(curPod.Status.PodIP)
 		return
 	}
-
 	if oldPod.Status.HostIP != curPod.Status.HostIP {
 		c.podQueue.Add(curPod.Status.PodIP)
 	}
 }
-
 func (c *MCPodRouteController) deletePod(obj interface{}) {
 	pod, isPod := obj.(*corev1.Pod)
 	if !isPod {
@@ -228,23 +205,19 @@ func (c *MCPodRouteController) deletePod(obj interface{}) {
 			return
 		}
 	}
-
 	if isValidPod(pod) {
 		c.podQueue.Add(pod.Status.PodIP)
 	}
 }
-
 func isValidPod(pod *corev1.Pod) bool {
 	if pod.Status.PodIP != "" && pod.Status.HostIP != "" && !pod.Spec.HostNetwork {
 		return true
 	}
 	return false
 }
-
 func (c *MCPodRouteController) Run(stopCh <-chan struct{}) {
 	defer c.gwQueue.ShutDown()
 	defer c.podQueue.ShutDown()
-
 	klog.InfoS("Starting controller", "controller", podRouteControllerName)
 	defer klog.InfoS("Shutting down controller", "controller", podRouteControllerName)
 	if !cache.WaitForNamedCacheSync(podRouteControllerName, stopCh, c.gwInformer.HasSynced) {
@@ -254,19 +227,16 @@ func (c *MCPodRouteController) Run(stopCh <-chan struct{}) {
 	go wait.Until(c.gatewayWorker, time.Second, stopCh)
 	<-stopCh
 }
-
 func (c *MCPodRouteController) gatewayWorker() {
 	for c.processGatewayNextWorkItem() {
 	}
 }
-
 func (c *MCPodRouteController) processGatewayNextWorkItem() bool {
 	key, quit := c.gwQueue.Get()
 	if quit {
 		return false
 	}
 	defer c.gwQueue.Done(key)
-
 	if err := c.syncGateway(); err == nil {
 		c.gwQueue.Forget(key)
 	} else {
@@ -275,17 +245,14 @@ func (c *MCPodRouteController) processGatewayNextWorkItem() bool {
 	}
 	return true
 }
-
 func (c *MCPodRouteController) syncGateway() error {
 	activeGW, err := getActiveGateway(c.gwLister)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get an active Gateway")
 		return err
 	}
-
 	c.podWorkersStartedMutex.Lock()
 	defer c.podWorkersStartedMutex.Unlock()
-
 	amIGateway := activeGW != nil && c.nodeConfig.Name == activeGW.Name
 	// Stop Pod flow controller and clean up all installed Multi-cluster Pod flows,
 	// if the Node was a Gateway before.
@@ -299,14 +266,12 @@ func (c *MCPodRouteController) syncGateway() error {
 			c.podWorkersStarted = false
 		}
 	}
-
 	if !amIGateway || (amIGateway && !c.podWorkersStarted) {
 		err := c.ofClient.UninstallMulticlusterPodFlows("")
 		if err != nil {
 			return err
 		}
 	}
-
 	if amIGateway {
 		if !c.podWorkersStarted {
 			klog.InfoS("Starting Multi-cluster PodFlowController")
@@ -319,7 +284,6 @@ func (c *MCPodRouteController) syncGateway() error {
 				c.podLister = nil
 				return errors.New("failed to sync Pod cache")
 			}
-
 			for i := 0; i < podWorkerNum; i++ {
 				go wait.Until(c.podWorker, time.Second, c.podWorkerStopCh)
 			}
@@ -331,19 +295,16 @@ func (c *MCPodRouteController) syncGateway() error {
 	}
 	return nil
 }
-
 func (c *MCPodRouteController) podWorker() {
 	for c.processPodNextWorkItem() {
 	}
 }
-
 func (c *MCPodRouteController) processPodNextWorkItem() bool {
 	key, quit := c.podQueue.Get()
 	if quit {
 		return false
 	}
 	defer c.podQueue.Done(key)
-
 	if err := c.syncPod(key); err == nil {
 		c.podQueue.Forget(key)
 	} else {
@@ -352,14 +313,12 @@ func (c *MCPodRouteController) processPodNextWorkItem() bool {
 	}
 	return true
 }
-
 func (c *MCPodRouteController) syncPod(podIP string) error {
 	c.podWorkersStartedMutex.RLock()
 	defer c.podWorkersStartedMutex.RUnlock()
 	if !c.podWorkersStarted {
 		return nil
 	}
-
 	pods, _ := c.podInformer.GetIndexer().ByIndex(podIndexKey, podIP)
 	if len(pods) == 0 {
 		klog.V(2).InfoS("Deleting Multi-cluster flows for Pod", "podIP", podIP)
@@ -369,7 +328,6 @@ func (c *MCPodRouteController) syncPod(podIP string) error {
 		}
 		return nil
 	}
-
 	latestPod := c.getLatestPod(pods)
 	nodeIP := latestPod.Status.HostIP
 	klog.V(2).InfoS("Adding Multi-cluster flows for Pod", "podIP", podIP, "nodeIP", nodeIP)
@@ -379,7 +337,6 @@ func (c *MCPodRouteController) syncPod(podIP string) error {
 	}
 	return nil
 }
-
 func (c *MCPodRouteController) getLatestPod(pods []interface{}) *corev1.Pod {
 	lastCreatedPod := pods[0].(*corev1.Pod)
 	for _, podObj := range pods {

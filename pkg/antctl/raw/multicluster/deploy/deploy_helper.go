@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package deploy
-
 import (
 	"bytes"
 	"context"
@@ -22,7 +20,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-
 	"github.com/spf13/cobra"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -34,34 +31,23 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/restmapper"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 )
-
 const (
 	leaderRole = "leader"
 	memberRole = "member"
-
-<<<<<<< HEAD
 	latestVersionURL = "https://raw.githubusercontent.com/antrea.io/antrea/v2/main/multicluster/build/yamls"
 	downloadURL      = "https://github.com/antrea.io/antrea/v2/releases/download"
-=======
 	latestVersionURL = "https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls"
 	downloadURL      = "https://github.com/antrea-io/antrea/releases/download"
->>>>>>> origin/main
 	leaderYAML       = "antrea-multicluster-leader.yml"
 	memberYAML       = "antrea-multicluster-member.yml"
 )
-
 var httpGet = http.Get
 var getAPIGroupResources = getAPIGroupResourcesWrapper
-
 func generateManifests(role string, version string) ([]string, error) {
 	var manifests []string
 	if version != "latest" && !strings.HasPrefix(version, "v") {
@@ -91,7 +77,6 @@ func generateManifests(role string, version string) ([]string, error) {
 	}
 	return manifests, nil
 }
-
 func createResources(cmd *cobra.Command, apiGroupResources []*restmapper.APIGroupResources, dynamicClient dynamic.Interface, content []byte) error {
 	var err error
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(content)), 100)
@@ -101,7 +86,6 @@ func createResources(cmd *cobra.Command, apiGroupResources []*restmapper.APIGrou
 		if err = decoder.Decode(&rawObj); err != nil {
 			break
 		}
-
 		obj, gvk, err := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme).Decode(rawObj.Raw, nil, nil)
 		if err != nil {
 			return err
@@ -110,7 +94,6 @@ func createResources(cmd *cobra.Command, apiGroupResources []*restmapper.APIGrou
 		if err != nil {
 			return err
 		}
-
 		unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
 		mapper := restmapper.NewDiscoveryRESTMapper(apiGroupResources)
 		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -125,7 +108,6 @@ func createResources(cmd *cobra.Command, apiGroupResources []*restmapper.APIGrou
 		}
 		unstructuredObjs[dri] = unstructuredObj
 	}
-
 	for dri, unstructuredObj := range unstructuredObjs {
 		if _, err := dri.Create(context.TODO(), unstructuredObj, metav1.CreateOptions{}); err != nil {
 			if !kerrors.IsAlreadyExists(err) {
@@ -152,13 +134,11 @@ func createResources(cmd *cobra.Command, apiGroupResources []*restmapper.APIGrou
 	}
 	return nil
 }
-
 func deploy(cmd *cobra.Command, role string, version string, namespace string, filename string) error {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
 		return err
 	}
-
 	k8sClient, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
 		return err
@@ -167,12 +147,10 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 	if err != nil {
 		return err
 	}
-
 	apiGroupResources, err := getAPIGroupResources(k8sClient)
 	if err != nil {
 		return err
 	}
-
 	if filename != "" {
 		content, err := os.ReadFile(filename)
 		if err != nil {
@@ -199,7 +177,6 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 			if err != nil {
 				return err
 			}
-
 			content := string(b)
 			if role == leaderRole && strings.Contains(manifest, "namespaced") && namespace != common.DefaultLeaderNamespace {
 				content = strings.ReplaceAll(content, common.DefaultLeaderNamespace, namespace)
@@ -215,7 +192,6 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 	fmt.Fprintf(cmd.OutOrStdout(), "Antrea Multi-cluster successfully deployed\n")
 	return nil
 }
-
 func getAPIGroupResourcesWrapper(k8sClient kubernetes.Interface) ([]*restmapper.APIGroupResources, error) {
 	return restmapper.GetAPIGroupResources(k8sClient.Discovery())
 }

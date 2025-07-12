@@ -11,49 +11,35 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"antrea.io/libOpenflow/openflow15"
-
-<<<<<<< HEAD
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 type featureTraceflow struct {
 	cachedFlows *flowCategoryCache
 }
-
 func (f *featureTraceflow) getFeatureName() string {
 	return "Traceflow"
 }
-
 func newFeatureTraceflow() *featureTraceflow {
 	return &featureTraceflow{
 		cachedFlows: newFlowCategoryCache(),
 	}
 }
-
 func (f *featureTraceflow) initFlows() []*openflow15.FlowMod {
 	return []*openflow15.FlowMod{}
 }
-
 func (f *featureTraceflow) replayFlows() []*openflow15.FlowMod {
 	return []*openflow15.FlowMod{}
 }
-
 func (f *featureTraceflow) initGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureTraceflow) replayGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureTraceflow) replayMeters() []binding.OFEntry {
 	return nil
 }

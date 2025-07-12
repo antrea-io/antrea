@@ -1,27 +1,21 @@
 /*
 Copyright 2022 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package member
-
 import (
 	"context"
 	"reflect"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,28 +25,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
 )
-
 var (
 	serviceCIDR = "10.96.0.0/12"
 	clusterID   = "cluster-a"
-
 	gw1CreationTime = metav1.NewTime(time.Now())
-
 	gwNode1 = mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "node-1",
@@ -62,7 +49,6 @@ var (
 		GatewayIP:  "10.10.10.10",
 		InternalIP: "172.11.10.1",
 	}
-
 	existingResExport = &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "cluster-a-clusterinfo",
@@ -84,7 +70,6 @@ var (
 		},
 	}
 )
-
 func TestGatewayReconciler(t *testing.T) {
 	gwNode1New := gwNode1
 	gwNode1New.GatewayIP = "10.10.10.12"
@@ -151,7 +136,6 @@ func TestGatewayReconciler(t *testing.T) {
 			resExport: existingResExport,
 		},
 	}
-
 	for _, tt := range tests {
 		var obj []client.Object
 		for _, n := range tt.gateway {
@@ -197,7 +181,6 @@ func TestGatewayReconciler(t *testing.T) {
 		})
 	}
 }
-
 func TestGetClusterInfo(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
 	r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", []string{"10.200.1.1/16"}, nil)
@@ -224,10 +207,8 @@ func TestGetClusterInfo(t *testing.T) {
 			PublicKey: "key",
 		},
 	}
-
 	assert.Equal(t, expectedClusterInfo, r.getClusterInfo(gw))
 }
-
 func TestClusterSetMapFunc_Gateway(t *testing.T) {
 	clusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -243,7 +224,6 @@ func TestClusterSetMapFunc_Gateway(t *testing.T) {
 			},
 		},
 	}
-
 	deletedClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -265,15 +245,12 @@ func TestClusterSetMapFunc_Gateway(t *testing.T) {
 		},
 	}
 	ctx := context.Background()
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet, gw1).Build()
 	r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", []string{"10.200.1.1/16"}, nil)
 	requests := r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, expectedReqs, requests)
-
 	requests = r.clusterSetMapFunc(ctx, deletedClusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
-
 	r = NewGatewayReconciler(fakeClient, common.TestScheme, "mismatch_ns", []string{"10.200.1.1/16"}, nil)
 	requests = r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)

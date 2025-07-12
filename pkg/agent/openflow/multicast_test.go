@@ -11,30 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"fmt"
 	"net"
 	"testing"
-
 	"antrea.io/libOpenflow/openflow15"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	openflowtest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	openflowtest "antrea.io/antrea/pkg/ovs/openflow/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	openflowtest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
 )
-
 func multicastInitFlows(isEncap bool) []string {
 	if isEncap {
 		return []string{
@@ -58,7 +50,6 @@ func multicastInitFlows(isEncap bool) []string {
 		"cookie=0x1050000000000, table=MulticastOutput, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 	}
 }
-
 func Test_featureMulticast_initFlows(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -87,19 +78,16 @@ func Test_featureMulticast_initFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fc := newFakeClient(nil, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
 			defer resetPipelines()
-
 			flows := getFlowStrings(fc.featureMulticast.initFlows())
 			assert.ElementsMatch(t, tc.expectedFlows, flows)
 		})
 	}
 }
-
 // If any test case fails, please consider setting binding.MaxBucketsPerMessage to a smaller value.
 func TestMulticastReceiversGroupMaxBuckets(t *testing.T) {
 	fm := &featureMulticast{
 		bridge: binding.NewOFBridge(bridgeName, ""),
 	}
-
 	testCases := []struct {
 		name         string
 		ports        []uint32
@@ -132,7 +120,6 @@ func TestMulticastReceiversGroupMaxBuckets(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -141,7 +128,6 @@ func TestMulticastReceiversGroupMaxBuckets(t *testing.T) {
 			defer func() {
 				MulticastOutputTable.ofTable = nil
 			}()
-
 			tc.expectedCall(fakeOfTable)
 			group := fm.multicastReceiversGroup(binding.GroupIDType(100), 0, tc.ports, tc.remoteIPs)
 			messages, err := group.GetBundleMessages(binding.AddMessage)

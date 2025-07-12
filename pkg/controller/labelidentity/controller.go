@@ -11,33 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package labelidentity
-
 import (
 	"context"
 	"sync/atomic"
 	"time"
-
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
 )
-
 const (
 	controllerName = "LabelIdentityController"
 	// Set resyncPeriod to 0 to disable resyncing.
 	resyncPeriod time.Duration = 0
 )
-
 // eventsCounter is used to keep track of the number of occurrences of an event type. It uses the
 // low-level atomic memory primitives from the sync/atomic package to provide atomic operations
 // (Increment and Load).
@@ -50,15 +41,12 @@ const (
 type eventsCounter struct {
 	count uint64
 }
-
 func (c *eventsCounter) Increment() {
 	atomic.AddUint64(&c.count, 1)
 }
-
 func (c *eventsCounter) Load() uint64 {
 	return atomic.LoadUint64(&c.count)
 }
-
 type Controller struct {
 	labelInformer mcinformers.LabelIdentityInformer
 	// labelListerSynced is a function which returns true if the LabelIdentity shared informer
@@ -70,7 +58,6 @@ type Controller struct {
 	// that matches these LabelIdentities.
 	labelIdentityIndex *LabelIdentityIndex
 }
-
 func NewLabelIdentityController(index *LabelIdentityIndex,
 	labelInformer mcinformers.LabelIdentityInformer) *Controller {
 	c := &Controller{
@@ -91,11 +78,9 @@ func NewLabelIdentityController(index *LabelIdentityIndex,
 	)
 	return c
 }
-
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting controller", "controller", controllerName)
 	defer klog.InfoS("Shutting down controller", "controller", controllerName)
-
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.labelListerSynced) {
 		klog.Error("Failed to wait for label lister sync")
 		return
@@ -112,14 +97,12 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	}
 	<-stopCh
 }
-
 func (c *Controller) addLabelIdentity(obj interface{}) {
 	labelIdentity := obj.(*mcv1alpha1.LabelIdentity)
 	klog.InfoS("Processing LabelIdentity ADD event", "label", labelIdentity.Spec.Label, "id", labelIdentity.Spec.ID)
 	c.labelIdentityIndex.AddLabelIdentity(labelIdentity.Spec.Label, labelIdentity.Spec.ID)
 	c.labelAddEvents.Increment()
 }
-
 func (c *Controller) deleteLabelIdentity(obj interface{}) {
 	labelIdentity := obj.(*mcv1alpha1.LabelIdentity)
 	klog.InfoS("Processing LabelIdentity DELETE event", "label", labelIdentity.Spec.Label)

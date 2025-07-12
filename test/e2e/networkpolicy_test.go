@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"encoding/json"
@@ -22,7 +20,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -30,35 +27,27 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 func skipIfNetworkPolicyStatsDisabled(tb testing.TB) {
 	skipIfFeatureDisabled(tb, features.NetworkPolicyStats, true, true)
 }
-
 // TestNetworkPolicy is the top-level test which contains all subtests for
 // NetworkPolicy related test cases so they can share setup, teardown.
 func TestNetworkPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	t.Run("testNetworkPolicyStats", func(t *testing.T) {
 		t.Cleanup(exportLogsForSubtest(t, data))
 		skipIfNotIPv4Cluster(t)
@@ -109,14 +98,11 @@ func TestNetworkPolicy(t *testing.T) {
 		testNetworkPolicyAfterAgentRestart(t, data)
 	})
 }
-
 func testNetworkPolicyStats(t *testing.T, data *TestData) {
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", data.testNamespace, false)
 	defer cleanupFunc()
-
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", "", data.testNamespace, false)
 	defer cleanupFunc()
-
 	// When using the userspace OVS datapath and tunneling,
 	// the first IP packet sent on a tunnel is always dropped because of a missing ARP entry.
 	// So we need to  "warm-up" the tunnel.
@@ -128,7 +114,6 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv6.String())}
 		data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd)
 	}
-
 	np1, err := data.createNetworkPolicy("test-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
@@ -171,10 +156,8 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	// Wait for a few seconds in case that connections are established before policies are enforced.
 	time.Sleep(2 * time.Second)
-
 	sessionsPerAddressFamily := 10
 	var wg sync.WaitGroup
 	for i := 0; i < sessionsPerAddressFamily; i++ {
@@ -192,7 +175,6 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 		}()
 	}
 	wg.Wait()
-
 	totalSessions := 0
 	if clusterInfo.podV4NetworkCIDR != "" {
 		totalSessions += sessionsPerAddressFamily
@@ -200,7 +182,6 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 	if clusterInfo.podV6NetworkCIDR != "" {
 		totalSessions += sessionsPerAddressFamily
 	}
-
 	if err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		var ingressStats *v1alpha1.NetworkPolicyStats
 		for _, np := range []string{"test-networkpolicy-ingress", "test-networkpolicy-egress"} {
@@ -231,13 +212,11 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 		t.Fatalf("Error when waiting for NetworkPolicy stats: %v", err)
 	}
 }
-
 func testDifferentNamedPorts(t *testing.T, data *TestData) {
 	checkFn, cleanupFn := data.setupDifferentNamedPorts(t)
 	defer cleanupFn()
 	checkFn()
 }
-
 func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cleanupFn func()) {
 	var success bool
 	var cleanupFuncs []func()
@@ -252,25 +231,20 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 			cleanupFn()
 		}
 	}()
-
 	server0Port := int32(80)
 	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string, hostNetwork bool) error {
 		return data.createServerPod(name, data.testNamespace, "http", server0Port, false, false)
 	}, "test-server-", "", data.testNamespace, false)
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
-
 	server1Port := int32(8080)
 	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string, hostNetwork bool) error {
 		return data.createServerPod(name, data.testNamespace, "http", server1Port, false, false)
 	}, "test-server-", "", data.testNamespace, false)
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
-
 	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", "", data.testNamespace, false)
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
-
 	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", "", data.testNamespace, false)
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
-
 	preCheckFunc := func(server0IP, server1IP string) {
 		// Both clients can connect to both servers.
 		for _, clientName := range []string{client0Name, client1Name} {
@@ -286,11 +260,9 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	if clusterInfo.podV4NetworkCIDR != "" {
 		preCheckFunc(server0IPs.IPv4.String(), server1IPs.IPv4.String())
 	}
-
 	if clusterInfo.podV6NetworkCIDR != "" {
 		preCheckFunc(server0IPs.IPv6.String(), server1IPs.IPv6.String())
 	}
-
 	// Create NetworkPolicy rule.
 	spec := &networkingv1.NetworkPolicySpec{
 		// Apply to two server Pods.
@@ -324,7 +296,6 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	})
-
 	npCheck := func(server0IP, server1IP string) {
 		server0Address := net.JoinHostPort(server0IP, fmt.Sprint(server0Port))
 		server1Address := net.JoinHostPort(server1IP, fmt.Sprint(server1Port))
@@ -343,13 +314,11 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server1Address)
 		}
 	}
-
 	checkFn = func() {
 		// NetworkPolicy check.
 		if clusterInfo.podV4NetworkCIDR != "" {
 			npCheck(server0IPs.IPv4.String(), server1IPs.IPv4.String())
 		}
-
 		if clusterInfo.podV6NetworkCIDR != "" {
 			npCheck(server0IPs.IPv6.String(), server1IPs.IPv6.String())
 		}
@@ -357,7 +326,6 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	success = true
 	return
 }
-
 // testDefaultDenyIngressPolicy performs additional validation to the upstream test for deny-all policy:
 // 1. The traffic initiated from the host network namespace cannot be dropped.
 // 2. The traffic initiated externally that access the Pod via NodePort service can be dropped.
@@ -367,21 +335,17 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode, data.testNamespace, false)
 	defer cleanupFunc()
-
 	service, err := data.CreateService("nginx", data.testNamespace, serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil)
 	if err != nil {
 		t.Fatalf("Error when creating nginx NodePort service: %v", err)
 	}
 	defer data.deleteService(service.Namespace, service.Name)
-
 	// client1 is a host network Pod and is on the same node as the server Pod, simulating kubelet probe traffic.
 	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-hostnetwork-client-can-connect-", serverNode, data.testNamespace, true)
 	defer cleanupFunc()
-
 	// client2 is a host network Pod and is on a different node from the server Pod, accessing the server Pod via the NodePort service.
 	client2Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-hostnetwork-client-cannot-connect-", controlPlaneNodeName(), data.testNamespace, true)
 	defer cleanupFunc()
-
 	spec := &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
@@ -396,7 +360,6 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	npCheck := func(clientName, serverIP string, serverPort int32, wantErr bool) {
 		if err = data.runNetcatCommandFromTestPod(clientName, data.testNamespace, serverIP, serverPort); wantErr && err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
@@ -404,7 +367,6 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
-
 	// Locally generated traffic can always access the Pods regardless of NetworkPolicy configuration.
 	if clusterInfo.podV4NetworkCIDR != "" {
 		npCheck(client1Name, serverIPs.IPv4.String(), serverPort, false)
@@ -412,7 +374,6 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	if clusterInfo.podV6NetworkCIDR != "" {
 		npCheck(client1Name, serverIPs.IPv6.String(), serverPort, false)
 	}
-
 	if clusterInfo.podV4NetworkCIDR != "" {
 		npCheck(client2Name, serverIPs.IPv4.String(), serverPort, true)
 	}
@@ -421,15 +382,12 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	}
 	npCheck(client2Name, serverNodeIP, service.Spec.Ports[0].NodePort, true)
 }
-
 func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", data.testNamespace, false)
 	defer cleanupFunc()
-
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", "", data.testNamespace, false)
 	defer cleanupFunc()
-
 	preCheckFunc := func(serverIP string) {
 		if err := data.runNetcatCommandFromTestPod(clientName, data.testNamespace, serverIP, serverPort); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
@@ -441,7 +399,6 @@ func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 	if clusterInfo.podV6NetworkCIDR != "" {
 		preCheckFunc(serverIPs.IPv6.String())
 	}
-
 	spec := &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
@@ -456,13 +413,11 @@ func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	npCheck := func(serverIP string) {
 		if err = data.runNetcatCommandFromTestPod(clientName, data.testNamespace, serverIP, serverPort); err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
-
 	if clusterInfo.podV4NetworkCIDR != "" {
 		npCheck(serverIPs.IPv4.String())
 	}
@@ -470,7 +425,6 @@ func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 		npCheck(serverIPs.IPv6.String())
 	}
 }
-
 // testEgressToServerInCIDRBlock is a duplicate of upstream test case "should allow egress access to server in CIDR block
 // [Feature:NetworkPolicy]", which is currently buggy in v1.19 release for clusters which use IPv6.
 // This should be deleted when upstream is updated.
@@ -482,7 +436,6 @@ func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
 	defer cleanupFunc()
 	serverBName, serverBIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, data.testNamespace, false)
 	defer cleanupFunc()
-
 	clientA, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", workerNode, data.testNamespace, false)
 	defer cleanupFunc()
 	var serverCIDR string
@@ -493,14 +446,12 @@ func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
 	serverCIDR = fmt.Sprintf("%s/128", serverAIPs.IPv6.String())
 	serverAIP = serverAIPs.IPv6.String()
 	serverBIP = serverBIPs.IPv6.String()
-
 	if err := data.runNetcatCommandFromTestPod(clientA, data.testNamespace, serverAIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
 	}
 	if err := data.runNetcatCommandFromTestPod(clientA, data.testNamespace, serverBIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverBName)
 	}
-
 	np, err := data.createNetworkPolicy("allow-client-a-via-cidr-egress-rule", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -529,7 +480,6 @@ func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
 		}
 	}
 	defer cleanupNP()
-
 	if err := data.runNetcatCommandFromTestPod(clientA, data.testNamespace, serverAIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
 	}
@@ -537,7 +487,6 @@ func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
 		t.Fatalf("%s should not be able to netcat %s", clientA, serverBName)
 	}
 }
-
 // testEgressToServerInCIDRBlockWithException is a duplicate of upstream test case "should allow egress access to server
 // in CIDR block [Feature:NetworkPolicy]", which is currently buggy in v1.19 release for clusters which use IPv6.
 // This should be deleted when upstream is updated.
@@ -547,7 +496,6 @@ func testEgressToServerInCIDRBlockWithException(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
 	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, data.testNamespace, false)
 	defer cleanupFunc()
-
 	clientA, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", workerNode, data.testNamespace, false)
 	defer cleanupFunc()
 	var serverAAllowCIDR string
@@ -563,11 +511,9 @@ func testEgressToServerInCIDRBlockWithException(t *testing.T, data *TestData) {
 	serverAAllowCIDR = serverAAllowSubnet.String()
 	serverAExceptList = []string{fmt.Sprintf("%s/%d", serverAIPs.IPv6.String(), 128)}
 	serverAIP = serverAIPs.IPv6.String()
-
 	if err := data.runNetcatCommandFromTestPod(clientA, data.testNamespace, serverAIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
 	}
-
 	np, err := data.createNetworkPolicy("deny-client-a-via-except-cidr-egress-rule", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -597,31 +543,24 @@ func testEgressToServerInCIDRBlockWithException(t *testing.T, data *TestData) {
 		}
 	}
 	defer cleanupNP()
-
 	if err := data.runNetcatCommandFromTestPod(clientA, data.testNamespace, serverAIP, 80); err == nil {
 		t.Fatalf("%s should not be able to netcat %s", clientA, serverAName)
 	}
 }
-
 func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
 	antreaPod, err := data.getAntreaPodOnNode(workerNode)
 	if err != nil {
 		t.Fatalf("Error when getting antrea-agent pod name: %v", err)
 	}
-
 	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, data.testNamespace, false)
 	defer cleanupFunc()
-
 	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, data.testNamespace, false)
 	defer cleanupFunc()
-
 	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", workerNode, data.testNamespace, false)
 	defer cleanupFunc()
-
 	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", workerNode, data.testNamespace, false)
 	defer cleanupFunc()
-
 	netpol0, err := data.createNetworkPolicy("test-isolate-server0", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -642,7 +581,6 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 		netpol0 = nil
 	}
 	defer cleanupNetpol0()
-
 	preCheckFunc := func(server0IP, server1IP string) {
 		if err = data.runNetcatCommandFromTestPod(client0Name, data.testNamespace, server0IP, 80); err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client0Name, server0Name)
@@ -657,7 +595,6 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	if clusterInfo.podV6NetworkCIDR != "" {
 		preCheckFunc(server0IPs.IPv6.String(), server1IPs.IPv6.String())
 	}
-
 	scaleFunc := func(replicas int32) {
 		scale, err := data.clientset.AppsV1().Deployments(antreaNamespace).GetScale(context.TODO(), antreaDeployment, metav1.GetOptions{})
 		if err != nil {
@@ -668,13 +605,11 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 			t.Fatalf("error when scaling Antrea Deployment to %d: %v", replicas, err)
 		}
 	}
-
 	// Scale antrea-controller to 0 so antrea-agent will lose connection with antrea-controller.
 	scaleFunc(0)
 	defer scaleFunc(1)
 	// Make sure antrea-agent disconnects from antrea-controller.
 	waitForAgentCondition(t, data, antreaPod, v1beta1.ControllerConnectionUp, corev1.ConditionFalse)
-
 	// Remove netpol0, we expect client0 can connect server0 after antrea-controller is up.
 	cleanupNetpol0()
 	// Create netpol1, we expect client1 cannot connect server1 after antrea-controller is up.
@@ -693,12 +628,10 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	// Scale antrea-controller to 1 so antrea-agent will connect to antrea-controller.
 	scaleFunc(1)
 	// Make sure antrea-agent connects to antrea-controller.
 	waitForAgentCondition(t, data, antreaPod, v1beta1.ControllerConnectionUp, corev1.ConditionTrue)
-
 	npCheck := func(server0IP, server1IP string) {
 		if err = data.runNetcatCommandFromTestPod(client0Name, data.testNamespace, server0IP, 80); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server0Name)
@@ -707,7 +640,6 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server1Name)
 		}
 	}
-
 	if clusterInfo.podV4NetworkCIDR != "" {
 		npCheck(server0IPs.IPv4.String(), server1IPs.IPv4.String())
 	}
@@ -715,7 +647,6 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 		npCheck(server0IPs.IPv6.String(), server1IPs.IPv6.String())
 	}
 }
-
 // The test validates that Pods can't bypass NetworkPolicy when antrea-agent restarts.
 func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
@@ -739,7 +670,6 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 		allowedPod, allowedPodIPs = createTestPod("test-allowed")
 	}()
 	wg.Wait()
-
 	allowedPeer := networkingv1.NetworkPolicyPeer{
 		PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": allowedPod}},
 	}
@@ -750,7 +680,6 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { data.deleteNetworkpolicy(netpol) })
-
 	checkFunc := func(t assert.TestingT, testPod string, testPodIPs *PodIPs, expectErr bool) {
 		var wg sync.WaitGroup
 		checkOne := func(clientPod, serverPod string, serverIP *net.IP) {
@@ -772,7 +701,6 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 		go checkOne(testPod, isolatedPod, isolatedPodIPs.IPv6)
 		wg.Wait()
 	}
-
 	scaleFunc := func(replicas int32) {
 		scale, err := data.clientset.AppsV1().Deployments(antreaNamespace).GetScale(context.TODO(), antreaDeployment, metav1.GetOptions{})
 		require.NoError(t, err)
@@ -780,20 +708,16 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 		_, err = data.clientset.AppsV1().Deployments(antreaNamespace).UpdateScale(context.TODO(), antreaDeployment, scale, metav1.UpdateOptions{})
 		require.NoError(t, err)
 	}
-
 	// Scale antrea-controller to 0 so antrea-agent will lose connection with antrea-controller.
 	scaleFunc(0)
 	t.Cleanup(func() { scaleFunc(1) })
-
 	// Restart the antrea-agent.
 	_, err = data.deleteAntreaAgentOnNode(workerNode, 30, defaultTimeout)
 	require.NoError(t, err)
-
 	// While the new antrea-agent starts, the denied Pod should never connect to the isolated Pod successfully.
 	for i := 0; i < 5; i++ {
 		checkFunc(t, deniedPod, deniedPodIPs, true)
 	}
-
 	antreaPod, err := data.getAntreaPodOnNode(workerNode)
 	require.NoError(t, err)
 	// Make sure the new antrea-agent disconnects from antrea-controller but connects to OVS.
@@ -808,7 +732,6 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		checkFunc(t, allowedPod, allowedPodIPs, false)
 	}, 10*time.Second, 1*time.Second)
-
 	// Scale antrea-controller to 1 so antrea-agent will connect to antrea-controller.
 	scaleFunc(1)
 	// Make sure antrea-agent connects to antrea-controller.
@@ -816,18 +739,14 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 	checkFunc(t, deniedPod, deniedPodIPs, true)
 	checkFunc(t, allowedPod, allowedPodIPs, false)
 }
-
 func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", data.testNamespace, false)
 	defer cleanupFunc()
-
 	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", "", data.testNamespace, false)
 	defer cleanupFunc()
-
 	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", "", data.testNamespace, false)
 	defer cleanupFunc()
-
 	preCheckFunc := func(serverIP string) {
 		// Both clients can connect to server.
 		for _, clientName := range []string{client0Name, client1Name} {
@@ -836,14 +755,12 @@ func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 			}
 		}
 	}
-
 	if clusterInfo.podV4NetworkCIDR != "" {
 		preCheckFunc(serverIPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
 		preCheckFunc(serverIPs.IPv6.String())
 	}
-
 	protocol := corev1.ProtocolTCP
 	spec := &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
@@ -874,7 +791,6 @@ func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	npCheck := func(serverIP string) {
 		serverAddress := net.JoinHostPort(serverIP, fmt.Sprint(serverPort))
 		// Client0 can access server.
@@ -886,7 +802,6 @@ func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, serverAddress)
 		}
 	}
-
 	if clusterInfo.podV4NetworkCIDR != "" {
 		npCheck(serverIPs.IPv4.String())
 	}
@@ -894,18 +809,15 @@ func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 		npCheck(serverIPs.IPv6.String())
 	}
 }
-
 func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 	serverPort := int32(80)
 	serverEndPort := int32(84)
 	policyPort := int32(81)
 	policyEndPort := int32(83)
-
 	var serverPorts []int32
 	for i := serverPort; i <= serverEndPort; i++ {
 		serverPorts = append(serverPorts, i)
 	}
-
 	// makeContainerSpec creates a Container listening on a specific port.
 	makeContainerSpec := func(port int32) corev1.Container {
 		return corev1.Container{
@@ -923,7 +835,6 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 			},
 		}
 	}
-
 	// createAgnhostPodOnNodeWithMultiPort creates a Pod in the test namespace with
 	// multiple agnhost containers listening on multiple ports.
 	// The Pod will be scheduled on the specified Node (if nodeName is not empty).
@@ -961,13 +872,10 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 		}
 		return nil
 	}
-
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, createAgnhostPodOnNodeWithMultiPort, "test-server-", "", data.testNamespace, false)
 	defer cleanupFunc()
-
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", "", data.testNamespace, false)
 	defer cleanupFunc()
-
 	preCheck := func(serverIP string) {
 		// The client can connect to server on all ports.
 		for _, port := range serverPorts {
@@ -976,14 +884,12 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 			}
 		}
 	}
-
 	if clusterInfo.podV4NetworkCIDR != "" {
 		preCheck(serverIPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
 		preCheck(serverIPs.IPv6.String())
 	}
-
 	protocol := corev1.ProtocolTCP
 	spec := &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
@@ -1020,12 +926,10 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 			t.Errorf("Error when deleting NetworkPolicy: %v", err)
 		}
 	}()
-
 	if np.Spec.Ingress[0].Ports[0].EndPort == nil {
 		t.Skipf("Skipping test as the kube-apiserver doesn't support `endPort` " +
 			"or `NetworkPolicyEndPort` feature-gate is not enabled.")
 	}
-
 	npCheck := func(serverIP string) {
 		for _, port := range serverPorts {
 			err = data.runNetcatCommandFromTestPod(clientName, data.testNamespace, serverIP, port)
@@ -1038,7 +942,6 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 			}
 		}
 	}
-
 	if clusterInfo.podV4NetworkCIDR != "" {
 		npCheck(serverIPs.IPv4.String())
 	}
@@ -1046,22 +949,18 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 		npCheck(serverIPs.IPv6.String())
 	}
 }
-
 func testAllowHairpinService(t *testing.T, data *TestData) {
 	serverNode := workerNodeName(1)
 	serverPort := int32(80)
 	serverName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode, data.testNamespace, false)
 	defer cleanupFunc()
-
 	service, err := data.CreateService("nginx", data.testNamespace, serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeClusterIP, nil)
 	if err != nil {
 		t.Fatalf("Error when creating nginx service: %v", err)
 	}
 	defer data.deleteService(service.Namespace, service.Name)
-
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", serverNode, data.testNamespace, false)
 	defer cleanupFunc()
-
 	spec := &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
@@ -1075,7 +974,6 @@ func testAllowHairpinService(t *testing.T, data *TestData) {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	}()
-
 	npCheck := func(clientName, serverIP, containerName string, serverPort int32, wantErr bool) {
 		if err = data.runNetcatCommandFromTestPodWithProtocol(clientName, data.testNamespace, containerName, serverIP, serverPort, "tcp"); wantErr && err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
@@ -1083,18 +981,15 @@ func testAllowHairpinService(t *testing.T, data *TestData) {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
-
 	for _, clusterIP := range service.Spec.ClusterIPs {
 		npCheck(serverName, clusterIP, nginxContainerName, serverPort, false)
 		npCheck(clientName, clusterIP, toolboxContainerName, serverPort, true)
 	}
 }
-
 func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool) error, namePrefix string, nodeName string, ns string, hostNetwork bool) (string, *PodIPs, func()) {
 	name := randName(namePrefix)
 	return createAndWaitForPodWithExactName(t, data, createFunc, name, nodeName, ns, hostNetwork)
 }
-
 func createAndWaitForPodWithExactName(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool) error, name string, nodeName string, ns string, hostNetwork bool) (string, *PodIPs, func()) {
 	if err := createFunc(name, ns, nodeName, hostNetwork); err != nil {
 		t.Fatalf("Error when creating test Pod: %v", err)
@@ -1110,7 +1005,6 @@ func createAndWaitForPodWithExactName(t *testing.T, data *TestData, createFunc f
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, ns))
 	return name, podIP, cleanupFunc
 }
-
 func createAndWaitForPodWithServiceAccount(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool, serviceAccountName string) error, namePrefix string, nodeName string, ns string, hostNetwork bool, serviceAccountName string) (string, *PodIPs, func()) {
 	name := randName(namePrefix)
 	if err := createFunc(name, ns, nodeName, hostNetwork, serviceAccountName); err != nil {
@@ -1127,7 +1021,6 @@ func createAndWaitForPodWithServiceAccount(t *testing.T, data *TestData, createF
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, ns))
 	return name, podIP, cleanupFunc
 }
-
 func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int32, labels map[string]string) error, name, ns string, portNum int32, labels map[string]string) (string, *PodIPs, func() error) {
 	if err := createFunc(name, ns, portNum, labels); err != nil {
 		t.Fatalf("Error when creating toolbox test Pod: %v", err)
@@ -1145,12 +1038,10 @@ func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func
 	}
 	return name, podIP, cleanupFunc
 }
-
 func waitForAgentCondition(t *testing.T, data *TestData, podName string, conditionType v1beta1.AgentConditionType, expectedStatus corev1.ConditionStatus) {
 	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		cmds := []string{"antctl", "get", "agentinfo", "-o", "json"}
 		t.Logf("cmds: %s", cmds)
-
 		stdout, _, err := runAntctl(podName, cmds, data)
 		// The server may not be available yet.
 		if err != nil {

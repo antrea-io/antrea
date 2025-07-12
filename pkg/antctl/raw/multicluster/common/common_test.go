@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package common
-
 import (
 	"bytes"
 	"context"
 	"testing"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -26,16 +23,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 func TestCreateClusterSet(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -57,7 +49,6 @@ func TestCreateClusterSet(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := &cobra.Command{}
@@ -66,15 +57,12 @@ func TestCreateClusterSet(t *testing.T) {
 			if tt.existingClusterSet != nil {
 				fakeClient = fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(tt.existingClusterSet).Build()
 			}
-
 			_ = CreateClusterSet(cmd, fakeClient, "default", "clusterset", "http://localhost", "token",
 				"member-id", "leader-id", "leader-ns", &createdRes)
-
 			assert.Equal(t, len(createdRes), tt.expectedResLen)
 		})
 	}
 }
-
 func TestDeleteClusterSet(t *testing.T) {
 	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -107,14 +95,11 @@ func TestDeleteClusterSet(t *testing.T) {
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
-
 			deleteClusterSet(cmd, fakeClient, "default", "clusterset")
-
 			assert.Equal(t, tt.expectedOutput, buf.String())
 		})
 	}
 }
-
 func TestDeleteSecrets(t *testing.T) {
 	secret1 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -131,21 +116,17 @@ func TestDeleteSecrets(t *testing.T) {
 			Name:      "othertoken2",
 		},
 	}
-
 	cmd := &cobra.Command{}
 	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(secret1, secret2).Build()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-
 	deleteSecrets(cmd, fakeClient, "default")
-
 	assert.Equal(t, "Secret \"membertoken\" deleted in Namespace default\n", buf.String())
 	remainSecrets := &corev1.SecretList{}
 	fakeClient.List(context.Background(), remainSecrets, &client.ListOptions{})
 	assert.Equal(t, 1, len(remainSecrets.Items))
 }
-
 func TestDeleteRoleBindings(t *testing.T) {
 	rb1 := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -167,15 +148,12 @@ func TestDeleteRoleBindings(t *testing.T) {
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-
 	deleteRoleBindings(cmd, fakeClient, "default")
-
 	assert.Equal(t, "RoleBinding \"rb1\" deleted in Namespace default\n", buf.String())
 	remainRBs := &rbacv1.RoleBindingList{}
 	fakeClient.List(context.Background(), remainRBs, &client.ListOptions{})
 	assert.Equal(t, 1, len(remainRBs.Items))
 }
-
 func TestDeleteServiceAccounts(t *testing.T) {
 	sa1 := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -197,15 +175,12 @@ func TestDeleteServiceAccounts(t *testing.T) {
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-
 	deleteServiceAccounts(cmd, fakeClient, "default")
-
 	assert.Equal(t, "ServiceAccount \"sa1\" deleted in Namespace default\n", buf.String())
 	remainSAs := &corev1.ServiceAccountList{}
 	fakeClient.List(context.Background(), remainSAs, &client.ListOptions{})
 	assert.Equal(t, 1, len(remainSAs.Items))
 }
-
 func TestCreateMemberToken(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -267,7 +242,6 @@ func TestCreateMemberToken(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := &cobra.Command{}
@@ -288,7 +262,6 @@ func TestCreateMemberToken(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteMemberToken(t *testing.T) {
 	secretContent := []byte(`apiVersion: v1
 kind: Secret
@@ -299,7 +272,6 @@ data:
   namespace: ZGVmYXVsdAo=
   token: YWJjZAo=
 type: Opaque`)
-
 	existingSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -310,7 +282,6 @@ type: Opaque`)
 		},
 		Data: map[string][]byte{"token": secretContent},
 	}
-
 	existingSecretNoAnnotation := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -318,7 +289,6 @@ type: Opaque`)
 		},
 		Data: map[string][]byte{"token": secretContent},
 	}
-
 	existingSecret1 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -329,7 +299,6 @@ type: Opaque`)
 		},
 		Data: map[string][]byte{"token": secretContent},
 	}
-
 	existingRolebinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -339,7 +308,6 @@ type: Opaque`)
 			},
 		},
 	}
-
 	existingRolebinding1 := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -349,7 +317,6 @@ type: Opaque`)
 			},
 		},
 	}
-
 	existingServiceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -359,7 +326,6 @@ type: Opaque`)
 			},
 		},
 	}
-
 	existingServiceAccount1 := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -369,7 +335,6 @@ type: Opaque`)
 			},
 		},
 	}
-
 	tests := []struct {
 		name                 string
 		namespace            string
@@ -443,7 +408,6 @@ type: Opaque`)
 			expectedOutput:       "",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := &cobra.Command{}
@@ -451,11 +415,8 @@ type: Opaque`)
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
-
 			DeleteMemberToken(cmd, fakeClient, tt.tokenName, tt.namespace)
-
 			assert.Contains(t, buf.String(), tt.expectedOutput)
-
 			remainSecrets := &corev1.SecretList{}
 			fakeClient.List(context.Background(), remainSecrets, &client.ListOptions{})
 			assert.Equal(t, tt.numsOfSecret, len(remainSecrets.Items))

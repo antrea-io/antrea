@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package packetcapture
-
 import (
 	"context"
 	"errors"
@@ -26,7 +24,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcapgo"
@@ -44,47 +41,37 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/util/auth"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/sftp"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/packetcapture/capture"
-	"antrea.io/antrea/pkg/agent/util"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	"antrea.io/antrea/pkg/util/auth"
-	"antrea.io/antrea/pkg/util/env"
-	"antrea.io/antrea/pkg/util/sftp"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/util/auth"
+	"antrea.io/antrea/v2/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/util/sftp"
 )
-
 type storageProtocolType string
-
 const (
 	sftpProtocol storageProtocolType = "sftp"
 )
-
 const (
 	controllerName               = "PacketCaptureController"
 	resyncPeriod   time.Duration = 0
-
 	minRetryDelay = 500 * time.Millisecond
 	maxRetryDelay = 30 * time.Second
-
 	defaultWorkers = 4
-
 	// defines how many capture request we can handle concurrently. waiting captures will be
 	// marked as Pending until they can be processed.
 	maxConcurrentCaptures     = 16
@@ -92,24 +79,19 @@ const (
 	// PacketCapture uses a dedicated Secret object to store authentication information for a file server.
 	// #nosec G101
 	fileServerAuthSecretName = "antrea-packetcapture-fileserver-auth"
-
 	// max packet size we can capture.
 	snapLen = 65536
 )
-
 type packetCapturePhase string
-
 const (
 	packetCapturePhasePending  packetCapturePhase = "Pending"
 	packetCapturePhaseStarted  packetCapturePhase = "Started"
 	packetCapturePhaseComplete packetCapturePhase = "Complete"
 )
-
 var (
 	packetDirectory = filepath.Join(os.TempDir(), "antrea", "packetcapture", "packets")
 	defaultFS       = afero.NewOsFs()
 )
-
 type packetCaptureState struct {
 	// capturedPacketsNum records how many packets have been captured. Due to the RateLimiter,
 	// this may not be the real-time data.
@@ -128,11 +110,9 @@ type packetCaptureState struct {
 	// cancel is the cancel function for capture context.
 	cancel context.CancelFunc
 }
-
 func (pcs *packetCaptureState) isCaptureSuccessful() bool {
 	return pcs.capturedPacketsNum == pcs.targetCapturedPacketsNum && pcs.targetCapturedPacketsNum > 0
 }
-
 type Controller struct {
 	kubeClient            clientset.Interface
 	crdClient             clientsetversioned.Interface
@@ -148,7 +128,6 @@ type Controller struct {
 	captures           map[string]*packetCaptureState
 	numRunningCaptures int
 }
-
 func NewPacketCaptureController(
 	kubeClient clientset.Interface,
 	crdClient clientsetversioned.Interface,
@@ -169,13 +148,11 @@ func NewPacketCaptureController(
 		sftpUploader: sftp.NewUploader(),
 		captures:     make(map[string]*packetCaptureState),
 	}
-
 	packetCaptureInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addPacketCapture,
 		UpdateFunc: c.updatePacketCapture,
 		DeleteFunc: c.deletePacketCapture,
 	}, resyncPeriod)
-
 	capture, err := capture.NewPcapCapture()
 	if err != nil {
 		return nil, err
@@ -183,42 +160,34 @@ func NewPacketCaptureController(
 	c.captureInterface = capture
 	return c, nil
 }
-
 func (c *Controller) enqueuePacketCapture(pc *crdv1alpha1.PacketCapture) {
 	c.queue.Add(pc.Name)
 }
-
 // Run will create defaultWorkers workers (go routines) which will process the PacketCapture events from the
 // workqueue.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.InfoS("Starting controller", "name", controllerName)
 	defer klog.InfoS("Shutting down controller", "name", controllerName)
-
 	cacheSynced := []cache.InformerSynced{c.packetCaptureSynced}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSynced...) {
 		return
 	}
-
 	err := defaultFS.MkdirAll(packetDirectory, 0700)
 	if err != nil {
 		klog.ErrorS(err, "Couldn't create the directory for storing captured packets", "directory", packetDirectory)
 		return
 	}
-
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
 	<-stopCh
 }
-
 func (c *Controller) addPacketCapture(obj interface{}) {
 	pc := obj.(*crdv1alpha1.PacketCapture)
 	klog.V(2).InfoS("Processing PacketCapture ADD event", "name", pc.Name)
 	c.enqueuePacketCapture(pc)
 }
-
 func (c *Controller) updatePacketCapture(oldObj, newObj interface{}) {
 	newPC := newObj.(*crdv1alpha1.PacketCapture)
 	oldPC := oldObj.(*crdv1alpha1.PacketCapture)
@@ -227,7 +196,6 @@ func (c *Controller) updatePacketCapture(oldObj, newObj interface{}) {
 		c.enqueuePacketCapture(newPC)
 	}
 }
-
 func (c *Controller) deletePacketCapture(obj interface{}) {
 	pc, ok := obj.(*crdv1alpha1.PacketCapture)
 	if !ok {
@@ -245,16 +213,13 @@ func (c *Controller) deletePacketCapture(obj interface{}) {
 	klog.V(2).InfoS("Processing PacketCapture DELETE event", "name", pc.Name)
 	c.enqueuePacketCapture(pc)
 }
-
 func nameToPath(name string) string {
 	return filepath.Join(packetDirectory, name+".pcapng")
 }
-
 func (c *Controller) worker() {
 	for c.processPacketCaptureItem() {
 	}
 }
-
 func (c *Controller) processPacketCaptureItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
@@ -269,7 +234,6 @@ func (c *Controller) processPacketCaptureItem() bool {
 	}
 	return true
 }
-
 func (c *Controller) syncPacketCapture(pcName string) error {
 	pc, err := c.packetCaptureLister.Get(pcName)
 	// Lister.Get only returns error when the resource is not found.
@@ -277,14 +241,12 @@ func (c *Controller) syncPacketCapture(pcName string) error {
 		c.cleanupPacketCapture(pcName)
 		return nil
 	}
-
 	// Capture will not occur on this Node if a corresponding Pod interface is not found.
 	device := c.getTargetCaptureDevice(pc)
 	if device == "" {
 		klog.V(4).InfoS("Skipping unrelated PacketCapture", "name", pcName)
 		return nil
 	}
-
 	state, err := func() (packetCaptureState, error) {
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
@@ -296,7 +258,6 @@ func (c *Controller) syncPacketCapture(pcName string) error {
 			}
 			c.captures[pcName] = state
 		}
-
 		klog.V(2).InfoS("Processing PacketCapture", "name", pcName, "phase", state.phase)
 		if state.phase != packetCapturePhasePending {
 			return *state, nil
@@ -311,7 +272,6 @@ func (c *Controller) syncPacketCapture(pcName string) error {
 			state.captureErr = fmt.Errorf("PacketCapture running count reach limit")
 			return *state, state.captureErr
 		}
-
 		// The OpenAPI schema for the CRD makes sure Spec.Timeout is not nil.
 		timeout := time.Duration(*pc.Spec.Timeout) * time.Second
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -322,13 +282,11 @@ func (c *Controller) syncPacketCapture(pcName string) error {
 		go c.startCapture(ctx, pc, state, device)
 		return *state, nil
 	}()
-
 	if updateErr := c.updateStatus(context.Background(), pc, state); updateErr != nil {
 		return fmt.Errorf("error when patching status: %w", updateErr)
 	}
 	return err
 }
-
 func (c *Controller) validatePacketCapture(spec *crdv1alpha1.PacketCaptureSpec) error {
 	if spec.Packet != nil {
 		protocol := spec.Packet.Protocol
@@ -357,7 +315,6 @@ func (c *Controller) validatePacketCapture(spec *crdv1alpha1.PacketCaptureSpec) 
 	}
 	return nil
 }
-
 func (c *Controller) cleanupPacketCapture(pcName string) {
 	path := nameToPath(pcName)
 	if err := defaultFS.RemoveAll(path); err == nil {
@@ -375,7 +332,6 @@ func (c *Controller) cleanupPacketCapture(pcName string) {
 		delete(c.captures, pcName)
 	}
 }
-
 func getPacketFile(filePath string) (afero.File, error) {
 	var file afero.File
 	if _, err := os.Stat(filePath); err == nil {
@@ -390,7 +346,6 @@ func getPacketFile(filePath string) (afero.File, error) {
 	}
 	return file, nil
 }
-
 // getTargetCaptureDevice is trying to locate the target device for packet capture. If the target
 // Pod does not exist on the current Node, the agent on this Node will not perform the capture.
 // In the PacketCapture spec, at least one of `.Spec.Source.Pod` or `.Spec.Destination.Pod`
@@ -404,20 +359,17 @@ func (c *Controller) getTargetCaptureDevice(pc *crdv1alpha1.PacketCapture) strin
 		pod = pc.Spec.Destination.Pod.Name
 		ns = pc.Spec.Destination.Pod.Namespace
 	}
-
 	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
 	if len(podInterfaces) == 0 {
 		return ""
 	}
 	return podInterfaces[0].InterfaceName
 }
-
 func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCapture, state *packetCaptureState, device string) {
 	klog.InfoS("Starting packet capture on the current Node", "name", pc.Name, "device", device)
 	defer klog.InfoS("Stopped packet capture on the current Node", "name", pc.Name, "device", device)
 	// Resync the PacketCapture on exit of the capture goroutine.
 	defer c.enqueuePacketCapture(pc)
-
 	var filePath string
 	var captureErr, uploadErr error
 	func() {
@@ -428,7 +380,6 @@ func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCap
 			return
 		}
 		defer file.Close()
-
 		var capturedAny bool
 		capturedAny, captureErr = c.performCapture(ctx, pc, state, file, device)
 		// If nothing is captured, no need to proceed.
@@ -437,7 +388,6 @@ func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCap
 		}
 		// If any is captured, upload it if required and update filePath in the status of the PacketCapture.
 		filePath = env.GetPodName() + ":" + localFilePath
-
 		if pc.Spec.FileServer == nil {
 			return
 		}
@@ -447,14 +397,12 @@ func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCap
 		}
 		filePath = fmt.Sprintf("%s/%s.pcapng", pc.Spec.FileServer.URL, pc.Name)
 	}()
-
 	if captureErr != nil {
 		klog.ErrorS(captureErr, "PacketCapture failed capturing packets", "name", pc.Name)
 	}
 	if uploadErr != nil {
 		klog.ErrorS(uploadErr, "PacketCapture failed uploading packets", "name", pc.Name)
 	}
-
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	state.phase = packetCapturePhaseComplete
@@ -463,7 +411,6 @@ func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCap
 	state.uploadErr = uploadErr
 	c.numRunningCaptures -= 1
 }
-
 // performCapture blocks until either the target number of packets have been captured, the context is canceled, or the
 // context reaches its deadline.
 // It returns a boolean indicating whether any packet is captured, and an error if the target number of packets are not
@@ -479,7 +426,6 @@ func (c *Controller) performCapture(
 	if err != nil {
 		return false, err
 	}
-
 	// set SnapLength here to make tcpdump on Mac OSX works. By default, its value is
 	// 0 and means unlimited, but tcpdump on Mac OSX will complain:
 	// 'tcpdump: pcap_loop: invalid packet capture length <len>, bigger than snaplen of 524288'
@@ -511,7 +457,6 @@ func (c *Controller) performCapture(
 				return capturedAny, fmt.Errorf("couldn't write packets: %w", err)
 			}
 			capturedAny = true
-
 			if success := func() bool {
 				c.mutex.Lock()
 				defer c.mutex.Unlock()
@@ -530,7 +475,6 @@ func (c *Controller) performCapture(
 		}
 	}
 }
-
 func (c *Controller) getPodIP(ctx context.Context, podRef *crdv1alpha1.PodReference) (net.IP, error) {
 	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(podRef.Name, podRef.Namespace)
 	var podIP net.IP
@@ -552,7 +496,6 @@ func (c *Controller) getPodIP(ctx context.Context, podRef *crdv1alpha1.PodRefere
 	}
 	return podIP, nil
 }
-
 func (c *Controller) parseIPs(ctx context.Context, pc *crdv1alpha1.PacketCapture) (srcIP, dstIP net.IP, err error) {
 	if pc.Spec.Source.Pod != nil {
 		srcIP, err = c.getPodIP(ctx, pc.Spec.Source.Pod)
@@ -579,18 +522,15 @@ func (c *Controller) parseIPs(ctx context.Context, pc *crdv1alpha1.PacketCapture
 	}
 	return
 }
-
 func (c *Controller) getUploaderByProtocol(protocol storageProtocolType) (sftp.Uploader, error) {
 	if protocol == sftpProtocol {
 		return c.sftpUploader, nil
 	}
 	return nil, fmt.Errorf("unsupported protocol %s", protocol)
 }
-
 func (c *Controller) generatePacketsPathForServer(name string) string {
 	return name + ".pcapng"
 }
-
 func (c *Controller) uploadPackets(ctx context.Context, pc *crdv1alpha1.PacketCapture, outputFile afero.File) error {
 	klog.V(2).InfoS("Uploading captured packets for PacketCapture", "name", pc.Name)
 	uploader, err := c.getUploaderByProtocol(sftpProtocol)
@@ -622,7 +562,6 @@ func (c *Controller) uploadPackets(ctx context.Context, pc *crdv1alpha1.PacketCa
 	}
 	return uploader.Upload(pc.Spec.FileServer.URL, c.generatePacketsPathForServer(pc.Name), cfg, outputFile)
 }
-
 func (c *Controller) updateStatus(ctx context.Context, pc *crdv1alpha1.PacketCapture, state packetCaptureState) error {
 	// Make a deepcopy as the object returned from lister must not be updated directly.
 	toUpdate := pc.DeepCopy()
@@ -632,7 +571,6 @@ func (c *Controller) updateStatus(ctx context.Context, pc *crdv1alpha1.PacketCap
 		NumberCaptured: state.capturedPacketsNum,
 		FilePath:       state.filePath,
 	}
-
 	var conditionStarted, conditionComplete, conditionUploaded crdv1alpha1.PacketCaptureCondition
 	switch state.phase {
 	case packetCapturePhasePending:
@@ -713,14 +651,11 @@ func (c *Controller) updateStatus(ctx context.Context, pc *crdv1alpha1.PacketCap
 			conditions = append(conditions, conditionUploaded)
 		}
 	}
-
 	desiredStatus.Conditions = conditions
-
 	if retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if packetCaptureStatusEqual(toUpdate.Status, desiredStatus) {
 			return nil
 		}
-
 		desiredStatus.Conditions = mergeConditions(toUpdate.Status.Conditions, desiredStatus.Conditions)
 		toUpdate.Status = desiredStatus
 		klog.V(2).InfoS("Updating PacketCapture", "name", pc.Name, "status", toUpdate.Status)
@@ -739,7 +674,6 @@ func (c *Controller) updateStatus(ctx context.Context, pc *crdv1alpha1.PacketCap
 	klog.V(2).InfoS("Updated PacketCapture", "name", pc.Name)
 	return nil
 }
-
 func conditionEqualsIgnoreLastTransitionTime(a, b crdv1alpha1.PacketCaptureCondition) bool {
 	a1 := a
 	a1.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -747,15 +681,12 @@ func conditionEqualsIgnoreLastTransitionTime(a, b crdv1alpha1.PacketCaptureCondi
 	b1.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	return a1 == b1
 }
-
 var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
 	conditionSliceEqualsIgnoreLastTransitionTime,
 )
-
 func packetCaptureStatusEqual(oldStatus, newStatus crdv1alpha1.PacketCaptureStatus) bool {
 	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
 }
-
 func conditionSliceEqualsIgnoreLastTransitionTime(as, bs []crdv1alpha1.PacketCaptureCondition) bool {
 	if len(as) != len(bs) {
 		return false
@@ -769,7 +700,6 @@ func conditionSliceEqualsIgnoreLastTransitionTime(as, bs []crdv1alpha1.PacketCap
 	}
 	return true
 }
-
 func mergeConditions(oldConditions, newConditions []crdv1alpha1.PacketCaptureCondition) []crdv1alpha1.PacketCaptureCondition {
 	finalConditions := make([]crdv1alpha1.PacketCaptureCondition, 0)
 	newConditionMap := make(map[crdv1alpha1.PacketCaptureConditionType]crdv1alpha1.PacketCaptureCondition)

@@ -11,23 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package externalnode
-
 import (
 	"fmt"
-
 	"github.com/vishvananda/netlink"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/util"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/util"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/util"
 )
-
 var (
 	linkByName             = netlink.LinkByName
 	linkSetMTU             = netlink.LinkSetMTU
@@ -37,7 +29,6 @@ var (
 	configureLinkAddresses = util.ConfigureLinkAddresses
 	configureLinkRoutes    = util.ConfigureLinkRoutes
 )
-
 func (c *ExternalNodeController) moveIFConfigurations(adapterConfig *config.AdapterNetConfig, src string, dst string) error {
 	dstLink, err := linkByName(dst)
 	if err != nil {
@@ -72,7 +63,6 @@ func (c *ExternalNodeController) moveIFConfigurations(adapterConfig *config.Adap
 	}
 	return nil
 }
-
 func (c *ExternalNodeController) removeExternalNodeConfig() error {
 	return nil
 }

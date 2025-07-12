@@ -11,38 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ram
-
 import (
 	"context"
 	"sync"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
-=======
-	"antrea.io/antrea/pkg/apiserver/storage"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
 )
-
 type bookmarkEvent struct {
 	resourceVersion uint64
 	object          runtime.Object
 }
-
 func (b *bookmarkEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	return &watch.Event{Type: watch.Bookmark, Object: b.object}
 }
-
 func (b *bookmarkEvent) GetResourceVersion() uint64 {
 	return b.resourceVersion
 }
-
 // storeWatcher implements watch.Interface
 type storeWatcher struct {
 	// input represents the channel for incoming internal events that should be processed.
@@ -59,7 +48,6 @@ type storeWatcher struct {
 	// newFunc is a function that creates new empty object of this type.
 	newFunc func() runtime.Object
 }
-
 func newStoreWatcher(chanSize int, selectors *storage.Selectors, forget func(), newFunc func() runtime.Object) *storeWatcher {
 	return &storeWatcher{
 		input:     make(chan storage.InternalEvent, chanSize),
@@ -70,7 +58,6 @@ func newStoreWatcher(chanSize int, selectors *storage.Selectors, forget func(), 
 		newFunc:   newFunc,
 	}
 }
-
 // nonBlockingAdd tries to send event to channel input without blocking.
 // It returns true if successful, otherwise false.
 func (w *storeWatcher) nonBlockingAdd(event storage.InternalEvent) bool {
@@ -81,7 +68,6 @@ func (w *storeWatcher) nonBlockingAdd(event storage.InternalEvent) bool {
 		return false
 	}
 }
-
 // add tries to send event to channel input. It will first use non blocking
 // way, then block until the provided timer fires, if the timer is not nil.
 // It returns true if successful, otherwise false.
@@ -91,11 +77,9 @@ func (w *storeWatcher) add(event storage.InternalEvent, timer clock.Timer) bool 
 	if w.nonBlockingAdd(event) {
 		return true
 	}
-
 	if timer == nil {
 		return false
 	}
-
 	select {
 	case w.input <- event:
 		return true
@@ -103,7 +87,6 @@ func (w *storeWatcher) add(event storage.InternalEvent, timer clock.Timer) bool 
 		return false
 	}
 }
-
 // process first sends initEvents and then keeps sending events got from channel input
 // if they are newer than the specified resourceVersion.
 func (w *storeWatcher) process(ctx context.Context, initEvents []storage.InternalEvent, resourceVersion uint64) {
@@ -135,7 +118,6 @@ func (w *storeWatcher) process(ctx context.Context, initEvents []storage.Interna
 		}
 	}
 }
-
 // sendWatchEvent converts an InternalEvent to watch.Event based on the watcher's selectors.
 // It sends the converted event to result channel, if not nil.
 func (w *storeWatcher) sendWatchEvent(event storage.InternalEvent, isInitEvent bool) {
@@ -144,24 +126,20 @@ func (w *storeWatcher) sendWatchEvent(event storage.InternalEvent, isInitEvent b
 		// Watcher is not interested in that object.
 		return
 	}
-
 	select {
 	case <-w.done:
 		return
 	default:
 	}
-
 	select {
 	case w.result <- *watchEvent:
 	case <-w.done:
 	}
 }
-
 // ResultChan returns the channel for outgoing events to the client.
 func (w *storeWatcher) ResultChan() <-chan watch.Event {
 	return w.result
 }
-
 // Stop stops this watcher.
 // It must be idempotent and thread safe as it could be called by apiserver endpoint handler
 // and dispatchEvent concurrently.

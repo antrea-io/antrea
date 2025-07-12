@@ -11,36 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package portcache
-
 import (
 	"fmt"
 	"io"
 	"net"
 	"sync"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
-=======
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
->>>>>>> origin/main
-
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 )
-
 const (
 	NodePortIndex    = "nodePortIndex"
 	PodEndpointIndex = "podEndpointIndex"
 	PodKeyIndex      = "podKeyIndex"
 )
-
 type ProtocolSocketData struct {
 	Protocol string
 	socket   io.Closer
 }
-
 type NodePortData struct {
 	// PodKey is the namespaced name of the Pod.
 	PodKey   string
@@ -52,17 +42,13 @@ type NodePortData struct {
 	// usable and deletion needs to be re-attempted.
 	defunct bool
 }
-
 func (d *NodePortData) Defunct() bool {
 	return d.defunct
 }
-
 type LocalPortOpener interface {
 	OpenLocalPort(port int, protocol string) (io.Closer, error)
 }
-
 type localPortOpener struct{}
-
 type PortTable struct {
 	PortTableCache  cache.Indexer
 	StartPort       int
@@ -72,27 +58,23 @@ type PortTable struct {
 	LocalPortOpener LocalPortOpener
 	tableLock       sync.RWMutex
 }
-
 func GetPortTableKey(obj interface{}) (string, error) {
 	npData := obj.(*NodePortData)
 	key := fmt.Sprintf("%d:%s:%d:%s", npData.NodePort, npData.PodKey, npData.PodPort, npData.Protocol.Protocol)
 	return key, nil
 }
-
 func (pt *PortTable) addPortTableCache(npData *NodePortData) error {
 	if err := pt.PortTableCache.Add(npData); err != nil {
 		return err
 	}
 	return nil
 }
-
 func (pt *PortTable) deletePortTableCache(npData *NodePortData) error {
 	if err := pt.PortTableCache.Delete(npData); err != nil {
 		return err
 	}
 	return nil
 }
-
 func (pt *PortTable) getPortTableCacheFromNodePortIndex(index string) (*NodePortData, bool) {
 	objs, _ := pt.PortTableCache.ByIndex(NodePortIndex, index)
 	if len(objs) == 0 {
@@ -100,7 +82,6 @@ func (pt *PortTable) getPortTableCacheFromNodePortIndex(index string) (*NodePort
 	}
 	return objs[0].(*NodePortData), true
 }
-
 func (pt *PortTable) getPortTableCacheFromPodEndpointIndex(index string) (*NodePortData, bool) {
 	objs, _ := pt.PortTableCache.ByIndex(PodEndpointIndex, index)
 	if len(objs) == 0 {
@@ -108,7 +89,6 @@ func (pt *PortTable) getPortTableCacheFromPodEndpointIndex(index string) (*NodeP
 	}
 	return objs[0].(*NodePortData), true
 }
-
 func (pt *PortTable) getPortTableCacheFromPodKeyIndex(index string) ([]*NodePortData, bool) {
 	var npData []*NodePortData
 	objs, _ := pt.PortTableCache.ByIndex(PodKeyIndex, index)
@@ -120,7 +100,6 @@ func (pt *PortTable) getPortTableCacheFromPodKeyIndex(index string) ([]*NodePort
 	}
 	return npData, true
 }
-
 func (pt *PortTable) releaseDataFromPortTableCache() error {
 	for _, obj := range pt.PortTableCache.List() {
 		data := obj.(*NodePortData)
@@ -130,24 +109,20 @@ func (pt *PortTable) releaseDataFromPortTableCache() error {
 	}
 	return nil
 }
-
 func NodePortIndexFunc(obj interface{}) ([]string, error) {
 	npData := obj.(*NodePortData)
 	nodePortTuple := NodePortProtoFormat(npData.NodePort, npData.Protocol.Protocol)
 	return []string{nodePortTuple}, nil
 }
-
 func PodEndpointIndexFunc(obj interface{}) ([]string, error) {
 	npData := obj.(*NodePortData)
 	podEndpointTuple := podKeyPortProtoFormat(npData.PodKey, npData.PodPort, npData.Protocol.Protocol)
 	return []string{podEndpointTuple}, nil
 }
-
 func PodKeyIndexFunc(obj interface{}) ([]string, error) {
 	npData := obj.(*NodePortData)
 	return []string{npData.PodKey}, nil
 }
-
 func NewPortTable(start, end int) (*PortTable, error) {
 	ptable := PortTable{
 		PortTableCache: cache.NewIndexer(GetPortTableKey, cache.Indexers{
@@ -166,19 +141,16 @@ func NewPortTable(start, end int) (*PortTable, error) {
 	}
 	return &ptable, nil
 }
-
 func (pt *PortTable) CleanupAllEntries() {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	pt.releaseDataFromPortTableCache()
 }
-
 func (pt *PortTable) GetDataForPod(podKey string) []*NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
 	return pt.getDataForPod(podKey)
 }
-
 func (pt *PortTable) getDataForPod(podKey string) []*NodePortData {
 	allData, exist := pt.getPortTableCacheFromPodKeyIndex(podKey)
 	if !exist {
@@ -186,7 +158,6 @@ func (pt *PortTable) getDataForPod(podKey string) []*NodePortData {
 	}
 	return allData
 }
-
 func (pt *PortTable) GetEntry(podKey string, port int, protocol string) *NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
@@ -197,12 +168,10 @@ func (pt *PortTable) GetEntry(podKey string, port int, protocol string) *NodePor
 	}
 	return nil
 }
-
 // podKeyPortProtoFormat formats the podKey, port and protocol to string key:port:protocol.
 func podKeyPortProtoFormat(podKey string, port int, protocol string) string {
 	return fmt.Sprintf("%s:%d:%s", podKey, port, protocol)
 }
-
 func (pt *PortTable) getEntryByPodKeyPortProto(podKey string, port int, protocol string) *NodePortData {
 	data, ok := pt.getPortTableCacheFromPodEndpointIndex(podKeyPortProtoFormat(podKey, port, protocol))
 	if !ok {
@@ -210,19 +179,16 @@ func (pt *PortTable) getEntryByPodKeyPortProto(podKey string, port int, protocol
 	}
 	return data
 }
-
 func (pt *PortTable) RuleExists(podKey string, podPort int, protocol string) bool {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
 	data := pt.getEntryByPodKeyPortProto(podKey, podPort, protocol)
 	return data != nil
 }
-
 // nodePortProtoFormat formats the nodeport, protocol to string port:protocol.
 func NodePortProtoFormat(nodeport int, protocol string) string {
 	return fmt.Sprintf("%d:%s", nodeport, protocol)
 }
-
 // openLocalPort binds to the provided port.
 // This is inspired by the openLocalPort function in kube-proxy:
 // https://github.com/kubernetes/kubernetes/blob/86f8c3ee91b6faec437f97e3991107747d7fc5e8/pkg/proxy/iptables/proxier.go#L1664

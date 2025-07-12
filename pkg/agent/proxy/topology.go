@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package proxy
-
 import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
-=======
 	k8sproxy "antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint, svcInfo k8sproxy.ServicePort) ([]k8sproxy.Endpoint, []k8sproxy.Endpoint, []k8sproxy.Endpoint) {
 	var useTopology, useServingTerminatingEndpoints bool
 	var clusterEndpoints, localEndpoints, allReachableEndpoints []k8sproxy.Endpoint
-
 	// If cluster Endpoints is to be used for the Service, generate a list of cluster Endpoints.
 	if svcInfo.UsesClusterEndpoints() {
 		useTopology = p.canUseTopology(endpoints, svcInfo)
@@ -41,7 +33,6 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint, sv
 			}
 			return true
 		})
-
 		// If there is no cluster Endpoint, fallback to any terminating Endpoints that are serving. When falling back to
 		// terminating Endpoints, and topology aware routing is NOT considered since this is the best effort attempt to
 		// avoid dropping connections.
@@ -54,14 +45,12 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint, sv
 			})
 		}
 	}
-
 	// If local Endpoints is not to be used, clusterEndpoints is just allReachableEndpoints, then only return clusterEndpoints
 	// and allReachableEndpoints.
 	if !svcInfo.UsesLocalEndpoints() {
 		allReachableEndpoints = clusterEndpoints
 		return clusterEndpoints, nil, allReachableEndpoints
 	}
-
 	localEndpoints = filterEndpoints(endpoints, func(ep k8sproxy.Endpoint) bool {
 		if !ep.IsReady() {
 			return false
@@ -71,7 +60,6 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint, sv
 		}
 		return true
 	})
-
 	// If there is no local Endpoint, fallback to terminating local Endpoints that are serving. When falling back to
 	// terminating Endpoints, and topology aware routing is NOT considered since this is the best effort attempt to
 	// avoid dropping connections.
@@ -84,21 +72,18 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint, sv
 			return false
 		})
 	}
-
 	// If cluster Endpoints is not to be used, localEndpoints is just allReachableEndpoints, then only return localEndpoints
 	// and allReachableEndpoints.
 	if !svcInfo.UsesClusterEndpoints() {
 		allReachableEndpoints = localEndpoints
 		return nil, localEndpoints, allReachableEndpoints
 	}
-
 	if !useTopology && !useServingTerminatingEndpoints {
 		// !useServingTerminatingEndpoints means that localEndpoints contains only Ready Endpoints. !useTopology means
 		// that clusterEndpoints contains *every* Ready Endpoint. So clusterEndpoints must be a superset of localEndpoints.
 		allReachableEndpoints = clusterEndpoints
 		return clusterEndpoints, localEndpoints, allReachableEndpoints
 	}
-
 	// clusterEndpoints may contain remote Endpoints that aren't in localEndpoints, while localEndpoints may contain
 	// terminating or topologically-unavailable local endpoints that aren't in clusterEndpoints. So we have to merge
 	// the two lists.
@@ -113,10 +98,8 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint, sv
 	for _, ep := range endpointsMap {
 		allReachableEndpoints = append(allReachableEndpoints, ep)
 	}
-
 	return clusterEndpoints, localEndpoints, allReachableEndpoints
 }
-
 // canUseTopology returns true if topology aware routing is enabled and properly configured in this cluster. That is,
 // it checks that:
 //   - The TopologyAwareHints or ServiceTrafficDistribution feature is enabled.
@@ -136,7 +119,6 @@ func (p *proxier) canUseTopology(endpoints map[string]k8sproxy.Endpoint, svcInfo
 			return false
 		}
 	}
-
 	zone, foundZone := p.nodeLabels[v1.LabelTopologyZone]
 	hasEndpointForZone := false
 	for _, endpoint := range endpoints {
@@ -158,31 +140,25 @@ func (p *proxier) canUseTopology(endpoints map[string]k8sproxy.Endpoint, svcInfo
 			hasEndpointForZone = true
 		}
 	}
-
 	if !hasEndpointForZone {
 		klog.V(7).InfoS("Skipping topology aware Endpoint filtering since no hints were provided for zone", "zone", zone)
 		return false
 	}
-
 	return true
 }
-
 // availableForTopology checks if this endpoint is available for use on this node, given
 // topology constraints. (It assumes that canUseTopology() returned true.)
 func availableForTopology(endpoint k8sproxy.Endpoint, nodeLabels map[string]string) bool {
 	zone := nodeLabels[v1.LabelTopologyZone]
 	return endpoint.GetZoneHints().Has(zone)
 }
-
 // filterEndpoints filters endpoints according to predicate
 func filterEndpoints(endpoints map[string]k8sproxy.Endpoint, predicate func(k8sproxy.Endpoint) bool) []k8sproxy.Endpoint {
 	filteredEndpoints := make([]k8sproxy.Endpoint, 0, len(endpoints))
-
 	for _, ep := range endpoints {
 		if predicate(ep) {
 			filteredEndpoints = append(filteredEndpoints, ep)
 		}
 	}
-
 	return filteredEndpoints
 }

@@ -11,35 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"fmt"
 	"reflect"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/apiserver/storage/ram"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/apiserver/storage/ram"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 const (
 	IsAppliedToServiceIndex = "isAppliedToService"
 	SourceGroupIndex        = "sourceGroup"
 )
-
 // appliedToGroupEvent implements storage.InternalEvent.
 type appliedToGroupEvent struct {
 	// The current version of the stored AppliedToGroup.
@@ -50,7 +41,6 @@ type appliedToGroupEvent struct {
 	Key             string
 	ResourceVersion uint64
 }
-
 // ToWatchEvent converts the appliedToGroupEvent to *watch.Event based on the provided Selectors. It has the following features:
 // 1. Added event will be generated if the Selectors was not interested in the object but is now.
 // 2. Modified event will be generated if the Selectors was and is interested in the object.
@@ -58,10 +48,8 @@ type appliedToGroupEvent struct {
 // 4. If nodeName is specified, only GroupMembers that hosted by the Node will be in the event.
 func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	prevObjSelected, currObjSelected := isSelected(event.Key, event.PrevGroup, event.CurrGroup, selectors, isInitEvent)
-
 	// If nodeName is specified in selectors, only GroupMembers that hosted by the Node should be in the event.
 	nodeName, nodeSpecified := selectors.Field.RequiresExactMatch("nodeName")
-
 	switch {
 	case !currObjSelected && !prevObjSelected:
 		// Watcher is not interested in that object.
@@ -80,7 +68,6 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 		obj := new(controlplane.AppliedToGroupPatch)
 		obj.UID = event.CurrGroup.UID
 		obj.Name = event.CurrGroup.Name
-
 		var currMembers, prevMembers controlplane.GroupMemberSet
 		if nodeSpecified {
 			currMembers = event.CurrGroup.GroupMemberByNode[nodeName]
@@ -101,7 +88,6 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 		for _, member := range prevMembers.Difference(currMembers) {
 			obj.RemovedGroupMembers = append(obj.RemovedGroupMembers, *member)
 		}
-
 		if len(obj.AddedGroupMembers)+len(obj.RemovedGroupMembers) == 0 {
 			// No change for the watcher.
 			return nil
@@ -119,31 +105,24 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 	}
 	return nil
 }
-
 func (event *appliedToGroupEvent) GetResourceVersion() uint64 {
 	return event.ResourceVersion
 }
-
 var _ storage.GenEventFunc = genAppliedToGroupEvent
-
 // genAppliedToGroupEvent generates InternalEvent from the given versions of an AppliedToGroup.
 func genAppliedToGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (storage.InternalEvent, error) {
 	if reflect.DeepEqual(prevObj, currObj) {
 		return nil, nil
 	}
-
 	event := &appliedToGroupEvent{Key: key, ResourceVersion: rv}
-
 	if prevObj != nil {
 		event.PrevGroup = prevObj.(*types.AppliedToGroup)
 	}
 	if currObj != nil {
 		event.CurrGroup = currObj.(*types.AppliedToGroup)
 	}
-
 	return event, nil
 }
-
 // ToAppliedToGroupMsg converts the stored AppliedToGroup to its message form.
 // If includeBody is true, GroupMembers will be copied.
 // If nodeName is provided, only GroupMembers that hosted by the Node will be copied.
@@ -167,7 +146,6 @@ func ToAppliedToGroupMsg(in *types.AppliedToGroup, out *controlplane.AppliedToGr
 		}
 	}
 }
-
 // AppliedToGroupKeyFunc knows how to get the key of an AppliedToGroup.
 func AppliedToGroupKeyFunc(obj interface{}) (string, error) {
 	group, ok := obj.(*types.AppliedToGroup)
@@ -176,7 +154,6 @@ func AppliedToGroupKeyFunc(obj interface{}) (string, error) {
 	}
 	return group.Name, nil
 }
-
 // NewAppliedToGroupStore creates a store of AppliedToGroup.
 func NewAppliedToGroupStore() storage.Interface {
 	indexers := cache.Indexers{

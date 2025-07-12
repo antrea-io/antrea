@@ -11,24 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package utils
-
 import (
 	"fmt"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 type AntreaPolicyProtocol string
-
 const (
 	ProtocolTCP  AntreaPolicyProtocol = "TCP"
 	ProtocolUDP  AntreaPolicyProtocol = "UDP"
@@ -36,7 +27,6 @@ const (
 	ProtocolICMP AntreaPolicyProtocol = "ICMP"
 	ProtocolIGMP AntreaPolicyProtocol = "IGMP"
 )
-
 func AntreaPolicyProtocolToK8sProtocol(antreaProtocol AntreaPolicyProtocol) (v1.Protocol, error) {
 	switch antreaProtocol {
 	case ProtocolTCP:
@@ -49,7 +39,6 @@ func AntreaPolicyProtocolToK8sProtocol(antreaProtocol AntreaPolicyProtocol) (v1.
 		return "", fmt.Errorf("k8s doesn't support protocol %s", antreaProtocol)
 	}
 }
-
 func GenPortsOrProtocols(ruleBuilder BaseRuleBuilder) ([]crdv1beta1.NetworkPolicyPort, []crdv1beta1.NetworkPolicyProtocol) {
 	if ruleBuilder.Protoc == ProtocolICMP {
 		return nil, []crdv1beta1.NetworkPolicyProtocol{

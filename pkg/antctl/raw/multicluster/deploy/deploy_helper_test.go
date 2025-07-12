@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package deploy
-
 import (
 	"bytes"
 	"errors"
@@ -25,7 +23,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -40,14 +37,9 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/restmapper"
 	coretesting "k8s.io/client-go/testing"
-
-<<<<<<< HEAD
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 func TestGenerateManifests(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -61,11 +53,8 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "leader",
 			version: "latest",
 			expectedManifests: []string{
-<<<<<<< HEAD
 				"https://raw.githubusercontent.com/antrea.io/antrea/v2/main/multicluster/build/yamls/antrea-multicluster-leader.yml",
-=======
 				"https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls/antrea-multicluster-leader.yml",
->>>>>>> origin/main
 			},
 		},
 		{
@@ -73,11 +62,8 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "member",
 			version: "latest",
 			expectedManifests: []string{
-<<<<<<< HEAD
 				"https://raw.githubusercontent.com/antrea.io/antrea/v2/main/multicluster/build/yamls/antrea-multicluster-member.yml",
-=======
 				"https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls/antrea-multicluster-member.yml",
->>>>>>> origin/main
 			},
 		},
 		{
@@ -85,11 +71,8 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "leader",
 			version: "v1.14.0",
 			expectedManifests: []string{
-<<<<<<< HEAD
 				"https://github.com/antrea.io/antrea/v2/releases/download/v1.14.0/antrea-multicluster-leader.yml",
-=======
 				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-leader.yml",
->>>>>>> origin/main
 			},
 		},
 		{
@@ -97,11 +80,8 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "member",
 			version: "v1.14.0",
 			expectedManifests: []string{
-<<<<<<< HEAD
 				"https://github.com/antrea.io/antrea/v2/releases/download/v1.14.0/antrea-multicluster-member.yml",
-=======
 				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-member.yml",
->>>>>>> origin/main
 			},
 		},
 		{
@@ -109,11 +89,8 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "leader",
 			version: "1.14.0",
 			expectedManifests: []string{
-<<<<<<< HEAD
 				"https://github.com/antrea.io/antrea/v2/releases/download/v1.14.0/antrea-multicluster-leader.yml",
-=======
 				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-leader.yml",
->>>>>>> origin/main
 			},
 		},
 		{
@@ -121,11 +98,8 @@ func TestGenerateManifests(t *testing.T) {
 			role:    "member",
 			version: "1.14.0",
 			expectedManifests: []string{
-<<<<<<< HEAD
 				"https://github.com/antrea.io/antrea/v2/releases/download/v1.14.0/antrea-multicluster-member.yml",
-=======
 				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-member.yml",
->>>>>>> origin/main
 			},
 		},
 		{
@@ -135,7 +109,6 @@ func TestGenerateManifests(t *testing.T) {
 			expectedErr: "invalid role: member1",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualManifests, err := generateManifests(tt.role, tt.version)
@@ -147,7 +120,6 @@ func TestGenerateManifests(t *testing.T) {
 		})
 	}
 }
-
 func TestCreateResources(t *testing.T) {
 	fakeDynamicClient := dynamicfake.NewSimpleDynamicClient(mcscheme.Scheme)
 	fakeDynamicClient.PrependReactor("create", "customresourcedefinitions", func(action coretesting.Action) (bool, runtime.Object, error) {
@@ -212,7 +184,6 @@ func TestCreateResources(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, buf.String(), "CustomResourceDefinition/clustersets.multicluster.crd.antrea.io configured\n")
 }
-
 func TestDeploy(t *testing.T) {
 	fakeConfigs := []byte(`apiVersion: v1
 clusters:
@@ -227,7 +198,6 @@ contexts:
   name:  fake-cluster
 current-context:  fake-cluster
 kind: Config`)
-
 	var err error
 	fakeKubeconfig, err := os.CreateTemp("", "fakeKubeconfig")
 	if err != nil {
@@ -239,7 +209,6 @@ kind: Config`)
 	cmd := &cobra.Command{}
 	cmd.Flags().StringVarP(&kubeconfig, "kubeconfig", "k", fakeKubeconfig.Name(), "path of kubeconfig")
 	fakeClient := fake.NewSimpleClientset()
-
 	tests := []struct {
 		name        string
 		body        string

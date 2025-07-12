@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package podstore
-
 import (
 	"context"
 	"fmt"
 	"testing"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,14 +30,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	clock "k8s.io/utils/clock/testing"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 var (
 	refTime  = time.Now()
 	refTime2 = refTime.Add(-5 * time.Minute)
@@ -134,7 +126,6 @@ var (
 	}
 	node = &v1.Node{}
 )
-
 func Test_onPodUpdate(t *testing.T) {
 	fakeClock := clock.NewFakeClock(time.Now())
 	oldPod := &v1.Pod{
@@ -203,7 +194,6 @@ func Test_onPodUpdate(t *testing.T) {
 		})
 	}
 }
-
 func Test_onPodCreate(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -238,7 +228,6 @@ func Test_onPodCreate(t *testing.T) {
 		})
 	}
 }
-
 func getPodInformer(k8sClient kubernetes.Interface) cache.SharedIndexInformer {
 	podInformer := coreinformers.NewPodInformer(
 		k8sClient,
@@ -250,7 +239,6 @@ func getPodInformer(k8sClient kubernetes.Interface) cache.SharedIndexInformer {
 	podInformer.SetTransform(k8s.NewTrimmer(k8s.TrimPod))
 	return podInformer
 }
-
 func Test_onPodDelete(t *testing.T) {
 	t.Run("object is neither Pod nor DeletedFinalStateUnknown", func(t *testing.T) {
 		k8sClient := fake.NewSimpleClientset()
@@ -279,7 +267,6 @@ func Test_onPodDelete(t *testing.T) {
 		}, 1*time.Second, 10*time.Millisecond, "Pod is not added to PodsToDelete")
 	})
 }
-
 func Test_checkDeletedPod(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -315,7 +302,6 @@ func Test_checkDeletedPod(t *testing.T) {
 		})
 	}
 }
-
 func Test_GetPodByIPAndTime(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -385,7 +371,6 @@ func Test_GetPodByIPAndTime(t *testing.T) {
 		})
 	}
 }
-
 func Test_processDeleteQueueItem(t *testing.T) {
 	fakeClock := clock.NewFakeClock(time.Now())
 	podStore := &PodStore{
@@ -405,7 +390,6 @@ func Test_processDeleteQueueItem(t *testing.T) {
 	assert.Len(t, podStore.pods.List(), 0)
 	assert.Len(t, podStore.timestampMap, 0)
 }
-
 func Test_podKeyFunc(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -436,7 +420,6 @@ func Test_podKeyFunc(t *testing.T) {
 		})
 	}
 }
-
 func Test_podIPIndexFunc(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -467,7 +450,6 @@ func Test_podIPIndexFunc(t *testing.T) {
 		})
 	}
 }
-
 func Test_noHostNetworkPod(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset(hostNetworkPod, pod1)
 	podInformer := getPodInformer(k8sClient)
@@ -488,16 +470,12 @@ func Test_noHostNetworkPod(t *testing.T) {
 		return len(podStore.timestampMap) != 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "host-network Pods should be filtered out by informer")
 }
-
 /*
 Sample output:
 goos: darwin
 goarch: amd64
-<<<<<<< HEAD
 pkg: antrea.io/antrea/v2/pkg/util/podstore
-=======
-pkg: antrea.io/antrea/pkg/util/podstore
->>>>>>> origin/main
+pkg: antrea.io/antrea/v2/pkg/util/podstore
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 BenchmarkGetPodByIPAndTime
 BenchmarkGetPodByIPAndTime/input_size_100
@@ -523,7 +501,6 @@ BenchmarkGetPodByIPAndTime/input_size_10000-12       	 1000000	      1043 ns/op
         Total times of successfully finding Pod in podStore: 1010101
 PASS
 */
-
 func BenchmarkGetPodByIPAndTime(b *testing.B) {
 	var PodNumber = []struct {
 		input int
@@ -577,7 +554,6 @@ func BenchmarkGetPodByIPAndTime(b *testing.B) {
 		b.Logf("\nSummary:\nNumber of initial Pods: %d\nTotal times of calling GetPodByIPAndTime: %d\nTotal times of successfully finding Pod in podStore: %d\n", v.input, total, success)
 	}
 }
-
 func deletePodsK8s(pods []*v1.Pod, k8sClient kubernetes.Interface) error {
 	for _, pod := range pods {
 		err := k8sClient.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
@@ -589,7 +565,6 @@ func deletePodsK8s(pods []*v1.Pod, k8sClient kubernetes.Interface) error {
 	}
 	return nil
 }
-
 func addPods(number int, k8sClient kubernetes.Interface) ([]*v1.Pod, error) {
 	var podArray []*v1.Pod
 	for i := 0; i < number; i++ {
@@ -604,7 +579,6 @@ func addPods(number int, k8sClient kubernetes.Interface) ([]*v1.Pod, error) {
 	}
 	return podArray, nil
 }
-
 func generatePod() *v1.Pod {
 	ip := getRandomIP()
 	uid := uuid.New().String()
@@ -629,7 +603,6 @@ func generatePod() *v1.Pod {
 	}
 	return pod
 }
-
 func getRandomIP() string {
 	return fmt.Sprintf("%d.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
 }

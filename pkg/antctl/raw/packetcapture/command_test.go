@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package packetcapture
-
 import (
 	"bytes"
 	"context"
 	"fmt"
 	"testing"
 	"time"
-
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,25 +30,19 @@ import (
 	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 )
-
 const (
 	srcPod        = "default/pod-1"
 	dstPod        = "pod-2"
 	ipv4          = "192.168.10.10"
 	testNum int32 = 10
 )
-
 var (
 	antreaAgentPod = v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -73,13 +64,10 @@ var (
 	}
 	k8sClient = k8sfake.NewSimpleClientset(&pod1, &pod2, &antreaAgentPod)
 )
-
 type testPodFile struct{}
-
 func (p *testPodFile) CopyFromPod(ctx context.Context, fs afero.Fs, namespace, name, containerName, srcPath, dstDir string) error {
 	return nil
 }
-
 func TestPacketCaptureRun(t *testing.T) {
 	tcs := []struct {
 		name      string
@@ -134,7 +122,6 @@ func TestPacketCaptureRun(t *testing.T) {
 			expectErr: "packet number should be larger than 0",
 		},
 	}
-
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			client := antreafakeclient.NewSimpleClientset()
@@ -167,14 +154,12 @@ func TestPacketCaptureRun(t *testing.T) {
 				} else {
 					assert.Contains(t, buf.String(), fmt.Sprintf("%s.pcapng", antreaAgentPod.Name))
 				}
-
 			} else {
 				assert.ErrorContains(t, err, tt.expectErr)
 			}
 		})
 	}
 }
-
 func TestTokenizeTCPFlags(t *testing.T) {
 	tcs := []struct {
 		name        string
@@ -216,7 +201,6 @@ func TestTokenizeTCPFlags(t *testing.T) {
 			expectErr: "missing TCP flag after '-' at 1",
 		},
 	}
-
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			set, unset, err := tokenizeTCPFlags(tt.tcp_flags)
@@ -230,7 +214,6 @@ func TestTokenizeTCPFlags(t *testing.T) {
 		})
 	}
 }
-
 func TestNewPacketCapture(t *testing.T) {
 	tcs := []struct {
 		name      string
@@ -324,7 +307,6 @@ func TestNewPacketCapture(t *testing.T) {
 			expectErr: "failed to parse flow: icmp_type must be specified when icmp_code is provided",
 		},
 	}
-
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			pc, err := newPacketCapture(&tt.option)

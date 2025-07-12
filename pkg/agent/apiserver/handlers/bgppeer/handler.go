@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package bgppeer
-
 import (
 	"encoding/json"
 	"errors"
@@ -23,21 +21,15 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
-
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/controller/bgp"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/controller/bgp"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/controller/bgp"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 // HandleFunc returns the function which can handle queries issued by the bgppeers command.
 func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +38,6 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			http.Error(w, "bgp is not enabled", http.StatusServiceUnavailable)
 			return
 		}
-
 		values := r.URL.Query()
 		var ipv4Only, ipv6Only bool
 		if values.Has("ipv4-only") {
@@ -67,7 +58,6 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			http.Error(w, "invalid query", http.StatusBadRequest)
 			return
 		}
-
 		peers, err := bq.GetBGPPeerStatus(r.Context())
 		if err != nil {
 			if errors.Is(err, bgp.ErrBGPPolicyNotFound) {
@@ -78,7 +68,6 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 				return
 			}
 		}
-
 		var bgpPeersResp []apis.BGPPeerResponse
 		for _, peer := range peers {
 			if ipv4Only && !utilnet.IsIPv4String(peer.Address) {
@@ -106,7 +95,6 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			}
 			return addrPortA.Compare(addrPortB)
 		})
-
 		if err := json.NewEncoder(w).Encode(bgpPeersResp); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			klog.ErrorS(err, "Error when encoding BGPPeersResp to json")

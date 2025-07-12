@@ -11,13 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package antctl
-
 import (
 	"reflect"
-
-<<<<<<< HEAD
 	agentapis "antrea.io/antrea/v2/pkg/agent/apis"
 	fallbackversion "antrea.io/antrea/v2/pkg/antctl/fallback/version"
 	checkcluster "antrea.io/antrea/v2/pkg/antctl/raw/check/cluster"
@@ -36,40 +32,37 @@ import (
 	"antrea.io/antrea/v2/pkg/antctl/transform/networkpolicy"
 	"antrea.io/antrea/v2/pkg/antctl/transform/ovstracing"
 	"antrea.io/antrea/v2/pkg/antctl/transform/version"
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	controllerapis "antrea.io/antrea/v2/pkg/apiserver/apis"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	aggregatorapis "antrea.io/antrea/v2/pkg/flowaggregator/apis"
-=======
-	agentapis "antrea.io/antrea/pkg/agent/apis"
-	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
-	checkcluster "antrea.io/antrea/pkg/antctl/raw/check/cluster"
-	checkinstallation "antrea.io/antrea/pkg/antctl/raw/check/installation"
-	"antrea.io/antrea/pkg/antctl/raw/featuregates"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster"
-	"antrea.io/antrea/pkg/antctl/raw/packetcapture"
-	"antrea.io/antrea/pkg/antctl/raw/proxy"
-	"antrea.io/antrea/pkg/antctl/raw/set"
-	"antrea.io/antrea/pkg/antctl/raw/supportbundle"
-	"antrea.io/antrea/pkg/antctl/raw/traceflow"
-	"antrea.io/antrea/pkg/antctl/raw/upgrade/apistorage"
-	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
-	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
-	"antrea.io/antrea/pkg/antctl/transform/controllerinfo"
-	"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
-	"antrea.io/antrea/pkg/antctl/transform/ovstracing"
-	"antrea.io/antrea/pkg/antctl/transform/version"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	controllerapis "antrea.io/antrea/pkg/apiserver/apis"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
-	aggregatorapis "antrea.io/antrea/pkg/flowaggregator/apis"
->>>>>>> origin/main
+	agentapis "antrea.io/antrea/v2/pkg/agent/apis"
+	fallbackversion "antrea.io/antrea/v2/pkg/antctl/fallback/version"
+	checkcluster "antrea.io/antrea/v2/pkg/antctl/raw/check/cluster"
+	checkinstallation "antrea.io/antrea/v2/pkg/antctl/raw/check/installation"
+	"antrea.io/antrea/v2/pkg/antctl/raw/featuregates"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster"
+	"antrea.io/antrea/v2/pkg/antctl/raw/packetcapture"
+	"antrea.io/antrea/v2/pkg/antctl/raw/proxy"
+	"antrea.io/antrea/v2/pkg/antctl/raw/set"
+	"antrea.io/antrea/v2/pkg/antctl/raw/supportbundle"
+	"antrea.io/antrea/v2/pkg/antctl/raw/traceflow"
+	"antrea.io/antrea/v2/pkg/antctl/raw/upgrade/apistorage"
+	"antrea.io/antrea/v2/pkg/antctl/transform/addressgroup"
+	"antrea.io/antrea/v2/pkg/antctl/transform/appliedtogroup"
+	"antrea.io/antrea/v2/pkg/antctl/transform/controllerinfo"
+	"antrea.io/antrea/v2/pkg/antctl/transform/networkpolicy"
+	"antrea.io/antrea/v2/pkg/antctl/transform/ovstracing"
+	"antrea.io/antrea/v2/pkg/antctl/transform/version"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	controllerapis "antrea.io/antrea/v2/pkg/apiserver/apis"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
+	aggregatorapis "antrea.io/antrea/v2/pkg/flowaggregator/apis"
 )
-
 // CommandList defines all commands that could be used in the antctl for agents，
 // controller or flow-aggregator. The unit test "TestCommandListValidation"
 // ensures it to be valid.
@@ -134,7 +127,6 @@ $ antctl get podmulticaststats pod -n namespace`,
 					},
 				},
 			},
-
 			transformedResponse: reflect.TypeOf(agentapis.MulticastResponse{}),
 		},
 		{

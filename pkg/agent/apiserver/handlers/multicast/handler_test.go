@@ -11,39 +11,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicast
-
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/multicast"
 	"antrea.io/antrea/v2/pkg/features"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/multicast"
-	"antrea.io/antrea/pkg/features"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/multicast"
+	"antrea.io/antrea/v2/pkg/features"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 func TestPodMulticastStatsQuery(t *testing.T) {
 	features.DefaultMutableFeatureGate.Set("Multicast=true")
 	defer features.DefaultMutableFeatureGate.Set("Multicast=false")
 	ctrl := gomock.NewController(t)
-
 	testcases := map[string]struct {
 		name                   string
 		namespace              string
@@ -118,7 +109,6 @@ func TestPodMulticastStatsQuery(t *testing.T) {
 			},
 		},
 	}
-
 	for k, tc := range testcases {
 		q := queriertest.NewMockAgentMulticastInfoQuerier(ctrl)
 		q.EXPECT().GetPodStats(tc.name, tc.namespace).Return(tc.getPodStatsResult).AnyTimes()
@@ -127,11 +117,9 @@ func TestPodMulticastStatsQuery(t *testing.T) {
 		query := fmt.Sprintf("?name=%s&&namespace=%s", tc.name, tc.namespace)
 		req, err := http.NewRequest(http.MethodGet, query, nil)
 		assert.Nil(t, err)
-
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, req)
 		assert.Equal(t, tc.expectedStatus, recorder.Code, k)
-
 		if tc.expectedStatus == http.StatusOK {
 			var received []apis.MulticastResponse
 			err = json.Unmarshal(recorder.Body.Bytes(), &received)

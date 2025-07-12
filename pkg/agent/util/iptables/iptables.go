@@ -1,6 +1,5 @@
 //go:build !windows
 // +build !windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,34 +13,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package iptables
-
 import (
 	"bytes"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"time"
-
 	"github.com/blang/semver"
 	"github.com/coreos/go-iptables/iptables"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/ipset"
-=======
-	"antrea.io/antrea/pkg/agent/util/ipset"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util/ipset"
 )
-
 const (
 	NATTable    = "nat"
 	FilterTable = "filter"
 	MangleTable = "mangle"
 	RawTable    = "raw"
-
 	AcceptTarget     = "ACCEPT"
 	DropTarget       = "DROP"
 	MasqueradeTarget = "MASQUERADE"
@@ -54,34 +44,27 @@ const (
 	RejectTarget     = "REJECT"
 	NotrackTarget    = "NOTRACK"
 	LOGTarget        = "LOG"
-
 	PreRoutingChain  = "PREROUTING"
 	InputChain       = "INPUT"
 	ForwardChain     = "FORWARD"
 	PostRoutingChain = "POSTROUTING"
 	OutputChain      = "OUTPUT"
-
 	waitSeconds              = 10
 	waitIntervalMicroSeconds = 200000
 )
-
 type Protocol byte
-
 var protocolStrMap = map[Protocol]string{
 	ProtocolIPv4: "IPv4",
 	ProtocolIPv6: "IPv6",
 }
-
 func (p Protocol) String() string {
 	return protocolStrMap[p]
 }
-
 const (
 	ProtocolDual Protocol = iota
 	ProtocolIPv4
 	ProtocolIPv6
 )
-
 const (
 	ProtocolTCP    = "tcp"
 	ProtocolUDP    = "udp"
@@ -89,12 +72,10 @@ const (
 	ProtocolICMP   = "icmp"
 	ProtocolICMPv6 = "icmp6"
 )
-
 var (
 	// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.2.txt:
 	// iptables-restore: support acquiring the lock.
 	restoreWaitSupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
-
 	// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.0.txt:
 	// iptables: snat: add randomize-full support
 	// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.2.txt:
@@ -103,29 +84,18 @@ var (
 	// and we use 1.6.2 as the common minimum version number.
 	randomFullySupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
 )
-
 type Interface interface {
 	EnsureChain(protocol Protocol, table string, chain string) error
-
 	ChainExists(protocol Protocol, table string, chain string) (bool, error)
-
 	AppendRule(protocol Protocol, table string, chain string, ruleSpec []string) error
-
 	InsertRule(protocol Protocol, table string, chain string, ruleSpec []string) error
-
 	DeleteRule(protocol Protocol, table string, chain string, ruleSpec []string) error
-
 	DeleteChain(protocol Protocol, table string, chain string) error
-
 	ListRules(protocol Protocol, table string, chain string) (map[Protocol][]string, error)
-
 	Restore(data string, flush bool, useIPv6 bool) error
-
 	Save() ([]byte, error)
-
 	HasRandomFully() bool
 }
-
 type IPTablesRuleBuilder interface {
 	MatchCIDRSrc(cidr string) IPTablesRuleBuilder
 	MatchCIDRDst(cidr string) IPTablesRuleBuilder
@@ -145,11 +115,9 @@ type IPTablesRuleBuilder interface {
 	CopyBuilder() IPTablesRuleBuilder
 	Done() IPTablesRule
 }
-
 type IPTablesRule interface {
 	GetRule() string
 }
-
 type Client struct {
 	ipts map[Protocol]*iptables.IPTables
 	// restoreWaitSupported indicates whether iptables-restore (or ip6tables-restore) supports --wait flag.
@@ -157,7 +125,6 @@ type Client struct {
 	// randomFullySupported indicates whether --random-fully is supported for SNAT and MASQUERADE rules.
 	randomFullySupported bool
 }
-
 func New(enableIPV4, enableIPV6 bool) (*Client, error) {
 	ipts := make(map[Protocol]*iptables.IPTables)
 	var restoreWaitSupported, randomFullySupported bool
@@ -185,13 +152,11 @@ func New(enableIPV4, enableIPV6 bool) (*Client, error) {
 	}
 	return &Client{ipts: ipts, restoreWaitSupported: restoreWaitSupported, randomFullySupported: randomFullySupported}, nil
 }
-
 func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
 	major, minor, patch := ipt.GetIptablesVersion()
 	version := semver.Version{Major: uint64(major), Minor: uint64(minor), Patch: uint64(patch)}
 	return version.GE(restoreWaitSupportedMinVersion)
 }
-
 func isRandomFullySupported(ipt *iptables.IPTables) bool {
 	// Note that even if the iptables version supports it, the kernel version may not.
 	// For SNAT rules, kernel >= 3.14 is required. For MASQUERADE rules, kernel >= 3.13 is required.
@@ -202,7 +167,6 @@ func isRandomFullySupported(ipt *iptables.IPTables) bool {
 	version := semver.Version{Major: uint64(major), Minor: uint64(minor), Patch: uint64(patch)}
 	return version.GE(randomFullySupportedMinVersion)
 }
-
 // EnsureChain checks if target chain already exists, creates it if not.
 func (c *Client) EnsureChain(protocol Protocol, table string, chain string) error {
 	for p := range c.ipts {
@@ -224,7 +188,6 @@ func (c *Client) EnsureChain(protocol Protocol, table string, chain string) erro
 	}
 	return nil
 }
-
 // ChainExists checks if target chain already exists in a table
 func (c *Client) ChainExists(protocol Protocol, table string, chain string) (bool, error) {
 	for p := range c.ipts {
@@ -243,7 +206,6 @@ func (c *Client) ChainExists(protocol Protocol, table string, chain string) (boo
 	}
 	return true, nil
 }
-
 // AppendRule checks if target rule already exists with the protocol, appends it if not.
 func (c *Client) AppendRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
 	for p := range c.ipts {
@@ -265,7 +227,6 @@ func (c *Client) AppendRule(protocol Protocol, table string, chain string, ruleS
 	}
 	return nil
 }
-
 // InsertRule checks if target rule already exists, inserts it at the beginning of the chain if not.
 func (c *Client) InsertRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
 	for p := range c.ipts {
@@ -287,7 +248,6 @@ func (c *Client) InsertRule(protocol Protocol, table string, chain string, ruleS
 	}
 	return nil
 }
-
 func matchProtocol(ipt *iptables.IPTables, protocol Protocol) bool {
 	switch protocol {
 	case ProtocolDual:
@@ -299,7 +259,6 @@ func matchProtocol(ipt *iptables.IPTables, protocol Protocol) bool {
 	}
 	return false
 }
-
 // DeleteRule checks if target rule already exists, deletes the rule if found.
 func (c *Client) DeleteRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
 	for p := range c.ipts {
@@ -321,7 +280,6 @@ func (c *Client) DeleteRule(protocol Protocol, table string, chain string, ruleS
 	}
 	return nil
 }
-
 // DeleteChain deletes all rules from a chain in a table and then delete the chain.
 func (c *Client) DeleteChain(protocol Protocol, table string, chain string) error {
 	for p := range c.ipts {
@@ -346,7 +304,6 @@ func (c *Client) DeleteChain(protocol Protocol, table string, chain string) erro
 	}
 	return nil
 }
-
 // ListRules lists all rules from a chain in a table.
 func (c *Client) ListRules(protocol Protocol, table string, chain string) (map[Protocol][]string, error) {
 	allRules := make(map[Protocol][]string)
@@ -363,7 +320,6 @@ func (c *Client) ListRules(protocol Protocol, table string, chain string) (map[P
 	}
 	return allRules, nil
 }
-
 // Restore calls iptable-restore to restore iptables with the provided content.
 // If flush is true, all previous contents of the respective tables will be flushed.
 // Otherwise only involved chains will be flushed. Restore supports "ip6tables-restore" for IPv6.
@@ -403,7 +359,6 @@ func (c *Client) Restore(data string, flush bool, useIPv6 bool) error {
 	}
 	return nil
 }
-
 // Save calls iptables-saves to dump chains and tables in iptables.
 func (c *Client) Save() ([]byte, error) {
 	var output []byte
@@ -424,17 +379,14 @@ func (c *Client) Save() ([]byte, error) {
 	}
 	return output, nil
 }
-
 // HasRandomFully returns true if the iptables version supports --random-fully for SNAT and
 // MASQUERADE rules.
 func (c *Client) HasRandomFully() bool {
 	return c.randomFullySupported
 }
-
 func MakeChainLine(chain string) string {
 	return fmt.Sprintf(":%s - [0:0]", chain)
 }
-
 func IsIPv6Protocol(protocol Protocol) bool {
 	return protocol == ProtocolIPv6
 }

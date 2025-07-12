@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package leader
-
 import (
 	"context"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -26,23 +23,17 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
-
 var (
 	mcaTestFakeRemoteClient                  client.Client
 	memberClusterAnnounceReconcilerUnderTest *MemberClusterAnnounceReconciler
 )
-
 func setup() {
 	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -58,20 +49,15 @@ func setup() {
 			Namespace: "mcs1",
 		},
 	}
-
 	mcaTestFakeRemoteClient = fake.NewClientBuilder().WithScheme(common.TestScheme).
 		WithObjects(existingClusterSet).
 		Build()
-
 	memberClusterAnnounceReconcilerUnderTest = NewMemberClusterAnnounceReconciler(
 		mcaTestFakeRemoteClient, common.TestScheme)
 }
-
 func TestStatusAfterAdd(t *testing.T) {
 	setup()
-
 	memberClusterAnnounceReconcilerUnderTest.addOrUpdateMemberStatus("east")
-
 	expectedStatus := mcv1alpha2.ClusterStatus{
 		ClusterID: "east",
 		Conditions: []mcv1alpha2.ClusterCondition{
@@ -83,24 +69,19 @@ func TestStatusAfterAdd(t *testing.T) {
 			},
 		},
 	}
-
 	actualStatus := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
 	assert.Equal(t, 1, len(actualStatus))
 	verifyStatus(t, expectedStatus, actualStatus[0])
 }
-
 func TestStatusAfterDelete(t *testing.T) {
 	setup()
 	memberClusterAnnounceReconcilerUnderTest.addOrUpdateMemberStatus("east")
 	memberClusterAnnounceReconcilerUnderTest.removeMemberStatus("east")
-
 	actualStatus := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
 	assert.Equal(t, 0, len(actualStatus))
 }
-
 func TestStatusAfterReconcile(t *testing.T) {
 	TestStatusAfterAdd(t)
-
 	mca := mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "memberclusterannounce-east",
@@ -112,7 +93,6 @@ func TestStatusAfterReconcile(t *testing.T) {
 	}
 	err := mcaTestFakeRemoteClient.Create(context.TODO(), &mca, &client.CreateOptions{})
 	assert.Equal(t, nil, err)
-
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Namespace: "mcs1",
@@ -120,7 +100,6 @@ func TestStatusAfterReconcile(t *testing.T) {
 		},
 	}
 	memberClusterAnnounceReconcilerUnderTest.Reconcile(context.Background(), req)
-
 	expectedStatus := mcv1alpha2.ClusterStatus{
 		ClusterID: "east",
 		Conditions: []mcv1alpha2.ClusterCondition{
@@ -131,17 +110,14 @@ func TestStatusAfterReconcile(t *testing.T) {
 			},
 		},
 	}
-
 	memberClusterAnnounceReconcilerUnderTest.processMCSStatus()
 	actualStatus := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
 	klog.V(2).InfoS("Received", "actual", actualStatus, "expected", expectedStatus)
 	assert.Equal(t, 1, len(actualStatus))
 	verifyStatus(t, expectedStatus, actualStatus[0])
 }
-
 func TestStatusAfterReconcileAndTimeout(t *testing.T) {
 	TestStatusAfterAdd(t)
-
 	mca := mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "member-announce-from-east",
@@ -153,7 +129,6 @@ func TestStatusAfterReconcileAndTimeout(t *testing.T) {
 	}
 	err := mcaTestFakeRemoteClient.Create(context.TODO(), &mca, &client.CreateOptions{})
 	assert.Equal(t, nil, err)
-
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Namespace: "mcs1",
@@ -161,7 +136,6 @@ func TestStatusAfterReconcileAndTimeout(t *testing.T) {
 		},
 	}
 	memberClusterAnnounceReconcilerUnderTest.Reconcile(context.Background(), req)
-
 	expectedStatus := mcv1alpha2.ClusterStatus{
 		ClusterID: "east",
 		Conditions: []mcv1alpha2.ClusterCondition{
@@ -173,7 +147,6 @@ func TestStatusAfterReconcileAndTimeout(t *testing.T) {
 			},
 		},
 	}
-
 	ConnectionTimeout = 1 * time.Second
 	time.Sleep(2 * time.Second)
 	memberClusterAnnounceReconcilerUnderTest.processMCSStatus()
@@ -183,7 +156,6 @@ func TestStatusAfterReconcileAndTimeout(t *testing.T) {
 	verifyStatus(t, expectedStatus, actualStatus[0])
 	ConnectionTimeout = 3 * TimerInterval
 }
-
 func verifyStatus(t *testing.T, expected mcv1alpha2.ClusterStatus, actual mcv1alpha2.ClusterStatus) {
 	assert.Equal(t, expected.ClusterID, actual.ClusterID)
 	assert.Equal(t, len(expected.Conditions), len(actual.Conditions))

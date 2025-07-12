@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"log"
@@ -23,35 +21,28 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"antrea.io/ofnet/ofctrl"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/logdir"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/logdir"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/logdir"
 )
-
 const (
 	logfileSubdir   string = "networkpolicy"
 	logfileName     string = "np.log"
 	nullPlaceholder        = "<nil>"
 )
-
 // AuditLogger is used for network policy audit logging.
 // Includes a lumberjack logger and a map used for log deduplication.
 type AuditLogger struct {
@@ -60,14 +51,12 @@ type AuditLogger struct {
 	npLogger         *log.Logger
 	logDeduplication logRecordDedupMap
 }
-
 type AuditLoggerOptions struct {
 	MaxSize    int
 	MaxBackups int
 	MaxAge     int
 	Compress   bool
 }
-
 // logInfo will be set by retrieving info from packetin and register.
 type logInfo struct {
 	tableName    string // name of the table sending packetin
@@ -85,34 +74,29 @@ type logInfo struct {
 	pktLength    string // packet length of packetin
 	protocolStr  string // protocol of the traffic logged
 }
-
 // logDedupRecord will be used as 1 sec buffer for log deduplication.
 type logDedupRecord struct {
 	count         int64            // record count of duplicate log
 	initTime      time.Time        // initial time upon receiving packet log
 	bufferTimerCh <-chan time.Time // 1 sec buffer for each log
 }
-
 // logRecordDedupMap includes a map of log buffers and a r/w mutex for accessing the map.
 type logRecordDedupMap struct {
 	logMutex sync.Mutex
 	logMap   map[string]*logDedupRecord
 }
-
 // getLogKey returns the log record in logDeduplication map by logMsg.
 func (l *AuditLogger) getLogKey(logMsg string) *logDedupRecord {
 	l.logDeduplication.logMutex.Lock()
 	defer l.logDeduplication.logMutex.Unlock()
 	return l.logDeduplication.logMap[logMsg]
 }
-
 // logAfterTimer runs concurrently until buffer timer stops, then call terminateLogKey.
 func (l *AuditLogger) logAfterTimer(logMsg string) {
 	ch := l.getLogKey(logMsg).bufferTimerCh
 	<-ch
 	l.terminateLogKey(logMsg)
 }
-
 // terminateLogKey logs and deletes the log record in logDeduplication map by logMsg.
 func (l *AuditLogger) terminateLogKey(logMsg string) {
 	l.logDeduplication.logMutex.Lock()
@@ -125,7 +109,6 @@ func (l *AuditLogger) terminateLogKey(logMsg string) {
 	}
 	delete(l.logDeduplication.logMap, logMsg)
 }
-
 // updateLogKey initiates record or increases the count in logDeduplication corresponding to given logMsg.
 func (l *AuditLogger) updateLogKey(logMsg string, bufferLength time.Duration) bool {
 	l.logDeduplication.logMutex.Lock()
@@ -139,7 +122,6 @@ func (l *AuditLogger) updateLogKey(logMsg string, bufferLength time.Duration) bo
 	}
 	return exists
 }
-
 func buildLogMsg(ob *logInfo) string {
 	return strings.Join([]string{
 		ob.tableName,
@@ -158,7 +140,6 @@ func buildLogMsg(ob *logInfo) string {
 		ob.logLabel,
 	}, " ")
 }
-
 // LogDedupPacket logs information in ob based on disposition and duplication conditions.
 func (l *AuditLogger) LogDedupPacket(ob *logInfo) {
 	// Deduplicate non-Allow packet log.
@@ -174,7 +155,6 @@ func (l *AuditLogger) LogDedupPacket(ob *logInfo) {
 		}
 	}
 }
-
 // newAuditLogger is called while newing network policy agent controller.
 // Customize AuditLogger specifically for audit logging through agent configuration.
 func newAuditLogger(options *AuditLoggerOptions) (*AuditLogger, error) {
@@ -186,7 +166,6 @@ func newAuditLogger(options *AuditLoggerOptions) (*AuditLogger, error) {
 	} else if err != nil {
 		return nil, fmt.Errorf("received error while accessing network policy log directory: %v", err)
 	}
-
 	// Use lumberjack log file rotation.
 	logOutput := &lumberjack.Logger{
 		Filename:   logFile,
@@ -195,7 +174,6 @@ func newAuditLogger(options *AuditLoggerOptions) (*AuditLogger, error) {
 		MaxAge:     options.MaxAge,
 		Compress:   options.Compress,
 	}
-
 	auditLogger := &AuditLogger{
 		bufferLength:     time.Second,
 		clock:            clock.RealClock{},
@@ -205,7 +183,6 @@ func newAuditLogger(options *AuditLoggerOptions) (*AuditLogger, error) {
 	klog.InfoS("Initialized Antrea-native Policy Logger for audit logging", "logFile", logFile, "options", options)
 	return auditLogger, nil
 }
-
 // getNetworkPolicyInfo fills in tableName, npName, ofPriority, disposition of logInfo ob.
 func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Controller, ob *logInfo) error {
 	matchers := pktIn.GetMatches()
@@ -213,7 +190,6 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 	// Get table name.
 	tableID := getPacketInTableID(pktIn)
 	ob.tableName = openflow.GetFlowTableName(tableID)
-
 	var localIP string
 	// We use the tableID to determine the direction of the NP rule.
 	// The advantage of this method is that it should work for all NP types.
@@ -228,7 +204,6 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 		klog.InfoS("Cannot determine direction of NetworkPolicy rule")
 		ob.direction = nullPlaceholder
 	}
-
 	if localIP != "" {
 		iface, ok := c.ifaceStore.GetInterfaceByIP(localIP)
 		if ok && iface.Type == interfacestore.ContainerInterface {
@@ -239,7 +214,6 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 		klog.InfoS("Cannot determine namespace/name of appliedTo Pod", "ip", localIP)
 		ob.appliedToRef = nullPlaceholder
 	}
-
 	// Get disposition Allow or Drop.
 	match = getMatchRegField(matchers, openflow.APDispositionField)
 	disposition, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
@@ -247,7 +221,6 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 		return fmt.Errorf("received error while unloading disposition from reg: %v", err)
 	}
 	ob.disposition = openflow.DispositionToString[disposition]
-
 	// Get layer 7 NetworkPolicy redirect action, if traffic is redirected, disposition log should be overwritten.
 	if match = getMatchRegField(matchers, openflow.L7NPRegField); match != nil {
 		l7NPRegVal, err := getInfoInReg(match, openflow.L7NPRegField.GetRange().ToNXRange())
@@ -258,7 +231,6 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 			ob.disposition = "Redirect"
 		}
 	}
-
 	// Get K8s default deny action, if traffic is default deny, no conjunction could be matched.
 	if match = getMatchRegField(matchers, openflow.APDenyRegMark.GetField()); match != nil {
 		apDenyRegVal, err := getInfoInReg(match, openflow.APDenyRegMark.GetField().GetRange().ToNXRange())
@@ -273,10 +245,8 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 			return nil
 		}
 	}
-
 	// Set match to corresponding conjunction ID field according to disposition.
 	match = getMatch(matchers, tableID, disposition)
-
 	// Get NetworkPolicy full name and OF priority of the conjunction.
 	conjID, err := getInfoInReg(match, nil)
 	if err != nil {
@@ -295,7 +265,6 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 	fillLogInfoPlaceholders([]*string{&ob.ruleName, &ob.logLabel, &ob.ofPriority})
 	return nil
 }
-
 // getPacketInfo fills in IP, packet length, protocol, port number of logInfo ob.
 func getPacketInfo(packet *binding.Packet, ob *logInfo) {
 	ob.srcIP = packet.SourceIP.String()
@@ -310,7 +279,6 @@ func getPacketInfo(packet *binding.Packet, ob *logInfo) {
 		fillLogInfoPlaceholders([]*string{&ob.srcPort, &ob.destPort})
 	}
 }
-
 func fillLogInfoPlaceholders(logItems []*string) {
 	for i, v := range logItems {
 		if *v == "" {
@@ -318,7 +286,6 @@ func fillLogInfoPlaceholders(logItems []*string) {
 		}
 	}
 }
-
 // logPacket retrieves information from openflow reg, controller cache, packet-in
 // packet to log. Log is deduplicated for non-Allow packets from record in logDeduplication.
 // Deduplication is safe guarded by logRecordDedupMap mutex.
@@ -328,14 +295,12 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	if err != nil {
 		return fmt.Errorf("received error while parsing packetin: %v", err)
 	}
-
 	// Set Network Policy and packet info to log.
 	err = getNetworkPolicyInfo(pktIn, packet, c, ob)
 	if err != nil {
 		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
 	}
 	getPacketInfo(packet, ob)
-
 	// Log the ob info to corresponding file w/ deduplication.
 	c.auditLogger.LogDedupPacket(ob)
 	return nil

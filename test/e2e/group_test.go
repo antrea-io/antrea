@@ -11,22 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"fmt"
 	"testing"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 func testInvalidGroupIPBlockWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with ipblock and podSelector")
 	gName := "ipb-pod"
@@ -48,7 +40,6 @@ func testInvalidGroupIPBlockWithPodSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidGroupIPBlockWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with ipblock and namespaceSelector")
 	gName := "ipb-ns"
@@ -70,7 +61,6 @@ func testInvalidGroupIPBlockWithNSSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidGroupServiceRefWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with serviceReference and podSelector")
 	gName := "svcref-pod-selector"
@@ -94,7 +84,6 @@ func testInvalidGroupServiceRefWithPodSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidGroupServiceRefWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with serviceReference and namespaceSelector")
 	gName := "svcref-ns-selector"
@@ -118,7 +107,6 @@ func testInvalidGroupServiceRefWithNSSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidGroupServiceRefWithIPBlock(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with ipblock and namespaceSelector")
 	gName := "ipb-svcref"
@@ -143,12 +131,10 @@ func testInvalidGroupServiceRefWithIPBlock(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 var (
 	testChildGroupName      = "test-child-grp"
 	testChildGroupNamespace = "x"
 )
-
 func createChildGroupForTest(t *testing.T) {
 	g := &crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{
@@ -163,13 +149,11 @@ func createChildGroupForTest(t *testing.T) {
 		failOnError(err, t)
 	}
 }
-
 func cleanupChildGroupForTest(t *testing.T) {
 	if err := k8sUtils.DeleteGroup(getNS(testChildGroupNamespace), testChildGroupName); err != nil {
 		failOnError(err, t)
 	}
 }
-
 func testInvalidGroupChildGroupWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with childGroups and podSelector")
 	gName := "child-group-pod-selector"
@@ -189,7 +173,6 @@ func testInvalidGroupChildGroupWithPodSelector(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidGroupChildGroupWithServiceReference(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with childGroups and ServiceReference")
 	gName := "child-group-svcref"
@@ -212,7 +195,6 @@ func testInvalidGroupChildGroupWithServiceReference(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 }
-
 func testInvalidGroupMaxNestedLevel(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with childGroup which has childGroups itself")
 	gName1, gName2 := "g-nested-1", "g-nested-2"
@@ -257,18 +239,15 @@ func testInvalidGroupMaxNestedLevel(t *testing.T) {
 		failOnError(err, t)
 	}
 }
-
 func TestGroup(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 	initialize(t, data, nil)
-
 	t.Run("TestGroupNamespacedGroupValidate", func(t *testing.T) {
 		t.Run("Case=IPBlockWithPodSelectorDenied", func(t *testing.T) { testInvalidGroupIPBlockWithPodSelector(t) })
 		t.Run("Case=IPBlockWithNamespaceSelectorDenied", func(t *testing.T) { testInvalidGroupIPBlockWithNSSelector(t) })

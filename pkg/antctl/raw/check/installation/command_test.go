@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package installation
-
 import (
 	"context"
 	"fmt"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/check"
-=======
-	"antrea.io/antrea/pkg/antctl/raw/check"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw/check"
 )
-
 func overrideTestsRegistry(t *testing.T, registry map[string]Test) {
 	oldRegistry := testsRegistry
 	testsRegistry = registry
@@ -36,34 +28,25 @@ func overrideTestsRegistry(t *testing.T, registry map[string]Test) {
 		testsRegistry = oldRegistry
 	})
 }
-
 type notRunnableTest struct{}
-
 func (t *notRunnableTest) Run(ctx context.Context, testContext *testContext) error {
 	return newNotRunnableError("not runnable")
 }
-
 type failedTest struct{}
-
 func (t *failedTest) Run(ctx context.Context, testContext *testContext) error {
 	return fmt.Errorf("failed")
 }
-
 type successfulTest struct{}
-
 func (t *successfulTest) Run(ctx context.Context, testContext *testContext) error {
 	return nil
 }
-
 func TestRun(t *testing.T) {
 	ctx := context.Background()
-
 	registry := map[string]Test{
 		"not-runnable": &notRunnableTest{},
 		"failure":      &failedTest{},
 		"success":      &successfulTest{},
 	}
-
 	testCases := []struct {
 		name             string
 		registry         map[string]Test
@@ -103,7 +86,6 @@ func TestRun(t *testing.T) {
 			expectedNumTotal: 0,
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			overrideTestsRegistry(t, tc.registry)

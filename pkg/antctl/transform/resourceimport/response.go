@@ -11,65 +11,49 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package resourceimport
-
 import (
-<<<<<<< HEAD
 	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
-=======
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/pkg/antctl/transform/common"
->>>>>>> origin/main
+	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 )
-
 type Response struct {
 	Namespace string `json:"namespace" yaml:"namespace"`
 	Name      string `json:"name" yaml:"name"`
 	Kind      string `json:"kind" yaml:"kind"`
 }
-
 func Transform(r interface{}, single bool) (interface{}, error) {
 	if single {
 		return objectTransform(r)
 	}
 	return listTransform(r)
 }
-
 func listTransform(l interface{}) (interface{}, error) {
 	resourceImports := l.([]multiclusterv1alpha1.ResourceImport)
 	var result []interface{}
-
 	for i := range resourceImports {
 		item := resourceImports[i]
 		o, _ := objectTransform(item)
 		result = append(result, o.(Response))
 	}
-
 	return result, nil
 }
-
 func objectTransform(o interface{}) (interface{}, error) {
 	resourceImport := o.(multiclusterv1alpha1.ResourceImport)
-
 	return Response{
 		Namespace: resourceImport.Namespace,
 		Name:      resourceImport.Name,
 		Kind:      resourceImport.Spec.Kind,
 	}, nil
 }
-
 var _ common.TableOutput = new(Response)
-
 func (r Response) GetTableHeader() []string {
 	return []string{"NAMESPACE", "NAME", "KIND"}
 }
-
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{r.Namespace, r.Name, r.Kind}
 }
-
 func (r Response) SortRows() bool {
 	return true
 }

@@ -11,28 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package bgppolicy
-
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 func TestBGPPolicyQuery(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -54,7 +46,6 @@ func TestBGPPolicyQuery(t *testing.T) {
 			expectedStatus: http.StatusNotFound,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -62,14 +53,11 @@ func TestBGPPolicyQuery(t *testing.T) {
 			q.EXPECT().GetBGPPolicyInfo().Return(tt.expectedResponse.BGPPolicyName, tt.expectedResponse.RouterID,
 				tt.expectedResponse.LocalASN, tt.expectedResponse.ListenPort)
 			handler := HandleFunc(q)
-
 			req, err := http.NewRequest(http.MethodGet, "", nil)
 			require.NoError(t, err)
-
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, req)
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
-
 			if tt.expectedStatus == http.StatusOK {
 				var received apis.BGPPolicyResponse
 				err = json.Unmarshal(recorder.Body.Bytes(), &received)

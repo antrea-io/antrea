@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipam
-
 import (
 	"context"
 	"fmt"
@@ -21,7 +19,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
@@ -37,46 +34,36 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
 	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
 	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
-	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	annotations "antrea.io/antrea/v2/pkg/ipam"
 	fakepoolclient "antrea.io/antrea/v2/pkg/ipam/poolallocator/testing"
-=======
-	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
-	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	annotations "antrea.io/antrea/pkg/ipam"
-	fakepoolclient "antrea.io/antrea/pkg/ipam/poolallocator/testing"
->>>>>>> origin/main
+	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
+	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	annotations "antrea.io/antrea/v2/pkg/ipam"
+	fakepoolclient "antrea.io/antrea/v2/pkg/ipam/poolallocator/testing"
 )
-
 var (
 	testApple          = "apple"
 	testOrange         = "orange"
 	testPear           = "pear"
 	testNoAnnotation   = "empty"
 	testJunkAnnotation = "junk"
-
 	testCNIVersion = current.ImplementedSpecVersion
 )
-
 func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
-
 	ipRangeApple := crdv1b1.IPRange{
 		Start: "10.2.2.100",
 		End:   "10.2.2.200",
 	}
-
 	subnetInfoApple := crdv1b1.SubnetInfo{
 		Gateway:      "10.2.2.1",
 		PrefixLength: 24,
 	}
-
 	crdClient.InitPool(&crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: testApple,
 			UID: k8suuid.NewUUID()},
@@ -85,17 +72,14 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 			SubnetInfo: subnetInfoApple,
 		},
 	})
-
 	ipRangeOrange := crdv1b1.IPRange{
 		Start: "20::2",
 		End:   "20::20",
 	}
-
 	subnetInfoOrange := crdv1b1.SubnetInfo{
 		Gateway:      "20::1",
 		PrefixLength: 64,
 	}
-
 	crdClient.InitPool(&crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: testOrange,
 			UID: k8suuid.NewUUID()},
@@ -104,7 +88,6 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 			SubnetInfo: subnetInfoOrange,
 		},
 	})
-
 	ipRangePear := crdv1b1.IPRange{
 		Start: "10.2.3.100",
 		End:   "10.2.3.200",
@@ -154,10 +137,8 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 		}}},
 	})
 }
-
 func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 	crdClient := fakepoolclient.NewIPPoolClient()
-
 	bTrue := true
 	k8sClient := fake.NewSimpleClientset(
 		&corev1.Namespace{
@@ -308,15 +289,11 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
 		})
-
 	return k8sClient, crdClient
 }
-
 func TestAntreaIPAMDriver(t *testing.T) {
 	stopCh := make(chan struct{})
-
 	k8sClient, crdClient := initTestClients()
-
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	listOptions := func(options *metav1.ListOptions) {
@@ -329,25 +306,18 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
 		listOptions,
 	)
-
 	antreaIPAMController, err := InitializeAntreaIPAMController(crdClient, informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1beta1().IPPools(), localPodInformer, true)
 	require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
 	informerFactory.Start(stopCh)
 	go localPodInformer.Run(stopCh)
-
 	createIPPools(crdClient)
-
 	informerFactory.WaitForCacheSync(stopCh)
-
 	go antreaIPAMController.Run(stopCh)
 	crdInformerFactory.Start(stopCh)
 	crdInformerFactory.WaitForCacheSync(stopCh)
-
 	// Test the driver singleton that was assigned to global variable
 	testDriver := antreaIPAMDriver
-
 	networkConfig := []byte("'name': 'testCfg', 'cniVersion': '0.4.0', 'type': 'antrea', 'ipam': {'type': 'antrea'}}")
-
 	cniArgsMap := make(map[string]*invoke.Args)
 	k8sArgsMap := make(map[string]*argtypes.K8sArgs)
 	vlanArgsMap := map[string]uint16{"pear1": 100, "pear2": 100, "pear3": 100, "pear-sts-8": 100}
@@ -362,7 +332,6 @@ func TestAntreaIPAMDriver(t *testing.T) {
 			ContainerID: fmt.Sprintf("%s-container", test),
 		}
 	}
-
 	testAdd := func(test string, expectedIP string, expectedGW string, expectedMask string, isReserved bool) {
 		owns, result, err := testDriver.Add(cniArgsMap[test], k8sArgsMap[test], networkConfig)
 		require.NoError(t, err, "expected no error in Add call")
@@ -377,7 +346,6 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		} else {
 			assert.Equal(t, uint16(0), result.VLANID)
 		}
-
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
 		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*200, time.Second, false, func(ctx context.Context) (bool, error) {
@@ -400,18 +368,15 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		})
 		assert.Nil(t, err)
 	}
-
 	testAddError := func(test string) {
 		owns, _, err := testDriver.Add(cniArgsMap[test], k8sArgsMap[test], networkConfig)
 		assert.True(t, owns)
 		require.Error(t, err, "expected error in Add call")
 	}
-
 	testDel := func(test string, isReserved bool) {
 		owns, err := testDriver.Del(cniArgsMap[test], k8sArgsMap[test], networkConfig)
 		assert.True(t, owns)
 		require.NoError(t, err, "expected no error in Del call")
-
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
 		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*200, time.Second, false, func(ctx context.Context) (bool, error) {
@@ -431,7 +396,6 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		})
 		assert.Nil(t, err)
 	}
-
 	testCheck := func(test string, shouldExist bool) {
 		owns, err := testDriver.Check(cniArgsMap[test], k8sArgsMap[test], networkConfig)
 		assert.True(t, owns)
@@ -441,11 +405,9 @@ func TestAntreaIPAMDriver(t *testing.T) {
 			require.Error(t, err, "expected an error on Check call")
 		}
 	}
-
 	// Run several adds from two Namespaces that have pool annotations
 	ipv6Mask := "ffffffffffffffff0000000000000000"
 	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00", false)
-
 	// introduce new IP Pool in mid-action
 	testAdd("orange1", "20::2", "20::1", ipv6Mask, false)
 	testAdd("orange2", "20::3", "20::1", ipv6Mask, false)
@@ -455,37 +417,30 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	testAdd("pear2", "10.2.3.101", "10.2.3.1", "ffffff00", false)
 	testAdd("pear3", "10.2.3.199", "10.2.3.1", "ffffff00", false)
 	testAdd("pear-sts-8", "10.2.3.198", "10.2.3.1", "ffffff00", true)
-
 	// Make sure the driver does not own request without pool annotation
 	owns, _, err := testDriver.Add(cniArgsMap[testNoAnnotation], k8sArgsMap[testNoAnnotation], networkConfig)
 	require.NoError(t, err, "expected no error in Add call without pool annotation")
 	assert.False(t, owns)
-
 	// Verify that annotation for non existent pool errors out
 	owns, _, err = testDriver.Add(cniArgsMap[testJunkAnnotation], k8sArgsMap[testJunkAnnotation], networkConfig)
 	require.NotNil(t, err, "expected error in Add call due to non-existent pool")
 	assert.True(t, owns)
-
 	// Verify that annotation for conflict ip errors
 	owns, _, err = testDriver.Add(cniArgsMap["pear4"], k8sArgsMap["pear4"], networkConfig)
 	require.NotNil(t, err, "expected error in Add call due to conflict ip")
 	assert.True(t, owns)
-
 	// Verify that annotation for ip out of range errors
 	owns, _, err = testDriver.Add(cniArgsMap["pear5"], k8sArgsMap["pear5"], networkConfig)
 	require.NotNil(t, err, "expected error in Add call due to ip out of range")
 	assert.True(t, owns)
-
 	// Verify that annotation for invalid ip errors
 	owns, _, err = testDriver.Add(cniArgsMap["pear6"], k8sArgsMap["pear6"], networkConfig)
 	require.NotNil(t, err, "expected error in Add call due to invalid ip")
 	assert.True(t, owns)
-
 	// Verify that annotation for non existent pool errors out
 	owns, _, err = testDriver.Add(cniArgsMap["pear7"], k8sArgsMap["pear7"], networkConfig)
 	require.NotNil(t, err, "expected error in Add call due to non-existent pool")
 	assert.True(t, owns)
-
 	// Del two of the Pods
 	testDel("apple1", false)
 	testDel("orange2", false)
@@ -494,7 +449,6 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	testDel("pear-sts-8", true)
 	testDel("pear-sts-9", true)
 	testDel("pear10", false)
-
 	// Verify last update was propagated to informer
 	err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 1*time.Second, true,
 		func(ctx context.Context) (bool, error) {
@@ -505,9 +459,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 			}
 			return !owns, nil
 		})
-
 	require.NoError(t, err, "orange2 pod was not released")
-
 	// Verify Check call according to the status
 	testCheck("apple1", false)
 	testCheck("apple2", true)
@@ -518,30 +470,23 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	testCheck("pear3", false)
 	testCheck("apple-sts-0", false)
 	testCheck("pear-sts-8", false)
-
 	// Make sure Del call with irrelevant container ID is ignored
 	cniArgsBadContainer := &invoke.Args{
 		ContainerID: uuid.New().String(),
 	}
-
 	owns, err = testDriver.Del(cniArgsBadContainer, k8sArgsMap["orange1"], networkConfig)
 	assert.False(t, owns)
 	require.NoError(t, err, "expected no error in Del call")
-
 	// Make sure repeated Add works for Pod that was previously released
 	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00", false)
 	testAdd("apple-sts-0", "10.2.2.102", "10.2.2.1", "ffffff00", true)
-
 	// Make sure repeated call for previous container gets identical result
 	testAdd("apple2", "10.2.2.101", "10.2.2.1", "ffffff00", false)
-
 	// Make sure repeated Add works for pod that was previously released
 	testAdd("pear3", "10.2.3.199", "10.2.3.1", "ffffff00", false)
-
 	// Make sure repeated call without previous container results in error
 	testAddError("pear3")
 }
-
 func TestSecondaryNetworkAdd(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -595,7 +540,6 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 			expectedRes: nil,
 			initFunc: func(stopCh chan struct{}) *AntreaIPAM {
 				k8sClient, crdClient := initTestClients()
-
 				informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 				crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 				listOptions := func(options *metav1.ListOptions) {
@@ -608,7 +552,6 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
 					listOptions,
 				)
-
 				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient,
 					informerFactory.Core().V1().Namespaces(),
 					crdInformerFactory.Crd().V1beta1().IPPools(),
@@ -617,11 +560,9 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 				)
 				require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
 				createIPPools(crdClient)
-
 				go antreaIPAMController.Run(stopCh)
 				crdInformerFactory.Start(stopCh)
 				crdInformerFactory.WaitForCacheSync(stopCh)
-
 				return &AntreaIPAM{
 					controller:      antreaIPAMController,
 					controllerMutex: sync.RWMutex{},
@@ -629,7 +570,6 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			var d *AntreaIPAM
@@ -640,7 +580,6 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 				d = tt.initFunc(stopCh)
 				defer close(stopCh)
 			}
-
 			args := &invoke.Args{
 				ContainerID: "container-id",
 			}
@@ -649,7 +588,6 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 				K8S_POD_NAME:      "test-pod",
 				K8S_POD_NAMESPACE: "test-ns",
 			}
-
 			_, err := d.secondaryNetworkAdd(args, k8sArgs, tt.networkConf)
 			assert.Equal(t, tt.expectedRes, err)
 		})

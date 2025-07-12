@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package traceflow
-
 import (
 	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,53 +28,40 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/grouping"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/client/clientset/versioned"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	"antrea.io/antrea/pkg/controller/grouping"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
 )
-
 const (
 	controllerName = "TraceflowController"
-
 	// Set resyncPeriod to 0 to disable resyncing.
 	resyncPeriod time.Duration = 0
-
 	// How long to wait before retrying the processing of a traceflow.
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
-
 	// Default number of workers processing traceflow request.
 	defaultWorkers = 4
-
 	// Min and max data plane tag for traceflow. minTagNum is 7 (0b000111), maxTagNum is 59 (0b111011).
 	// As per RFC2474, 16 different DSCP values are we reserved for Experimental or Local Use, which we use as the 16 possible data plane tag values.
 	// tagStep is 4 (0b100) to keep last 2 bits at 0b11.
 	tagStep   uint8 = 0b100
 	minTagNum uint8 = 0b1*tagStep + 0b11
 	maxTagNum uint8 = 0b1110*tagStep + 0b11
-
 	// String set to TraceflowStatus.Reason.
 	traceflowTimeout = "Traceflow timeout"
-
 	// Traceflow timeout period.
 	defaultTimeoutDuration = time.Second * time.Duration(crdv1beta1.DefaultTraceflowTimeout)
 )
-
 var (
 	timeoutCheckInterval = 10 * time.Second
 )
-
 // Controller is for traceflow.
 type Controller struct {
 	client                 versioned.Interface
@@ -90,7 +74,6 @@ type Controller struct {
 	runningTraceflowsMutex sync.Mutex
 	runningTraceflows      map[uint8]string // tag->traceflowName if tf.Status.Phase is Running.
 }
-
 // NewTraceflowController creates a new traceflow controller and adds podIP indexer to podInformer.
 func NewTraceflowController(client versioned.Interface, podInformer coreinformers.PodInformer, traceflowInformer crdinformers.TraceflowInformer) *Controller {
 	c := &Controller{
@@ -118,22 +101,17 @@ func NewTraceflowController(client versioned.Interface, podInformer coreinformer
 	)
 	return c
 }
-
 // enqueueTraceflow adds an object to the controller work queue.
 func (c *Controller) enqueueTraceflow(tf *crdv1beta1.Traceflow) {
 	c.queue.Add(tf.Name)
 }
-
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
-
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.traceflowListerSynced) {
 		return
 	}
-
 	// Load all data plane tags from CRD into controller's cache.
 	tfs, err := c.traceflowLister.List(labels.Everything())
 	if err != nil {
@@ -146,42 +124,35 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 			}
 		}
 	}
-
 	go func() {
 		wait.Until(c.checkTraceflowTimeout, timeoutCheckInterval, stopCh)
 	}()
-
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
 	<-stopCh
 }
-
 func (c *Controller) addTraceflow(obj interface{}) {
 	tf := obj.(*crdv1beta1.Traceflow)
 	klog.Infof("Processing Traceflow %s ADD event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
-
 func (c *Controller) updateTraceflow(_, curObj interface{}) {
 	tf := curObj.(*crdv1beta1.Traceflow)
 	klog.Infof("Processing Traceflow %s UPDATE event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
-
 func (c *Controller) deleteTraceflow(old interface{}) {
 	tf := old.(*crdv1beta1.Traceflow)
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
 	c.deallocateTagForTF(tf)
 }
-
 // worker is a long-running function that will continually call the processTraceflowItem function
 // in order to read and process a message on the workqueue.
 func (c *Controller) worker() {
 	for c.processTraceflowItem() {
 	}
 }
-
 func (c *Controller) checkTraceflowTimeout() {
 	c.runningTraceflowsMutex.Lock()
 	tfs := make([]string, 0, len(c.runningTraceflows))
@@ -189,14 +160,12 @@ func (c *Controller) checkTraceflowTimeout() {
 		tfs = append(tfs, tfName)
 	}
 	c.runningTraceflowsMutex.Unlock()
-
 	for _, tfName := range tfs {
 		// Re-post all running Traceflow requests to the work queue to
 		// be processed and checked for timeout.
 		c.queue.Add(tfName)
 	}
 }
-
 // processTraceflowItem processes an item in the "traceflow" work queue, by calling syncTraceflow
 // after casting the item to a string (Traceflow name). If syncTraceflow returns an error, this
 // function logs the error and adds the Traceflow request back to the queue with a rate limit. If
@@ -213,7 +182,6 @@ func (c *Controller) processTraceflowItem() bool {
 	// example, we do not call Forget if a transient error occurs, instead the item is put back
 	// on the workqueue and attempted again after a back-off period.
 	defer c.queue.Done(key)
-
 	if err := c.syncTraceflow(key); err != nil {
 		klog.Errorf("Error syncing Traceflow %s, exiting. Error: %v", key, err)
 		c.queue.AddRateLimited(key)
@@ -222,13 +190,11 @@ func (c *Controller) processTraceflowItem() bool {
 	}
 	return true
 }
-
 func (c *Controller) syncTraceflow(traceflowName string) error {
 	startTime := time.Now()
 	defer func() {
 		klog.V(4).Infof("Finished syncing Traceflow for %s. (%v)", traceflowName, time.Since(startTime))
 	}()
-
 	tf, err := c.traceflowLister.Get(traceflowName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -248,7 +214,6 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 	}
 	return err
 }
-
 func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	// Allocate data plane tag.
 	tag, err := c.allocateTag(tf.Name)
@@ -258,14 +223,12 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	if tag == 0 {
 		return nil
 	}
-
 	err = c.updateTraceflowStatus(tf, crdv1beta1.Running, "", tag)
 	if err != nil {
 		c.deallocateTag(tf.Name, tag)
 	}
 	return err
 }
-
 // checkTraceflowStatus is only called for Traceflows in the Running phase
 func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 	succeeded := false
@@ -315,7 +278,6 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 		c.deallocateTagForTF(tf)
 		return c.updateTraceflowStatus(tf, crdv1beta1.Succeeded, "", 0)
 	}
-
 	var timeout time.Duration
 	if tf.Spec.Timeout != 0 {
 		timeout = time.Duration(tf.Spec.Timeout) * time.Second
@@ -337,7 +299,6 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 	}
 	return nil
 }
-
 func (c *Controller) updateTraceflowStatus(tf *crdv1beta1.Traceflow, phase crdv1beta1.TraceflowPhase, reason string, dataPlaneTag uint8) error {
 	update := tf.DeepCopy()
 	update.Status.Phase = phase
@@ -352,13 +313,11 @@ func (c *Controller) updateTraceflowStatus(tf *crdv1beta1.Traceflow, phase crdv1
 	_, err := c.client.CrdV1beta1().Traceflows().UpdateStatus(context.TODO(), update, metav1.UpdateOptions{})
 	return err
 }
-
 func (c *Controller) occupyTag(tf *crdv1beta1.Traceflow) error {
 	tag := uint8(tf.Status.DataplaneTag)
 	if tag < minTagNum || tag > maxTagNum {
 		return errors.New("this Traceflow CRD's data plane tag is out of range")
 	}
-
 	c.runningTraceflowsMutex.Lock()
 	defer c.runningTraceflowsMutex.Unlock()
 	if existingTraceflowName, ok := c.runningTraceflows[tag]; ok {
@@ -367,18 +326,15 @@ func (c *Controller) occupyTag(tf *crdv1beta1.Traceflow) error {
 		}
 		return errors.New("this Traceflow's CRD data plane tag is already taken")
 	}
-
 	c.runningTraceflows[tag] = tf.Name
 	return nil
 }
-
 // Allocates a tag. If the Traceflow request has been allocated with a tag
 // already, 0 is returned. If number of existing Traceflow requests reaches
 // the upper limit, an error is returned.
 func (c *Controller) allocateTag(name string) (uint8, error) {
 	c.runningTraceflowsMutex.Lock()
 	defer c.runningTraceflowsMutex.Unlock()
-
 	for _, n := range c.runningTraceflows {
 		if n == name {
 			// The Traceflow request has been processed already.
@@ -393,14 +349,12 @@ func (c *Controller) allocateTag(name string) (uint8, error) {
 	}
 	return 0, fmt.Errorf("number of on-going Traceflow operations already reached the upper limit: %d", maxTagNum)
 }
-
 // Deallocates tag from cache. Ignore DataplaneTag == 0 which is an invalid case.
 func (c *Controller) deallocateTagForTF(tf *crdv1beta1.Traceflow) {
 	if tf.Status.DataplaneTag != 0 {
 		c.deallocateTag(tf.Name, uint8(tf.Status.DataplaneTag))
 	}
 }
-
 func (c *Controller) deallocateTag(name string, tag uint8) {
 	c.runningTraceflowsMutex.Lock()
 	defer c.runningTraceflowsMutex.Unlock()

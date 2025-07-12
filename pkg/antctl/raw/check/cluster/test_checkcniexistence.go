@@ -11,28 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cluster
-
 import (
 	"context"
 	"fmt"
 	"sort"
 	"strings"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
 )
-
 type checkCNIExistence struct{}
-
 func init() {
 	RegisterTest("check-cni-existence", &checkCNIExistence{})
 }
-
 func (t *checkCNIExistence) Run(ctx context.Context, testContext *testContext) error {
 	command := []string{"ls", "-1", "/etc/cni/net.d"}
 	output, _, err := raw.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", command)

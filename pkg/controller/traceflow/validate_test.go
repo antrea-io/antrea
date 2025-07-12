@@ -11,37 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package traceflow
-
 import (
 	"encoding/json"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	admv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 func TestControllerValidate(t *testing.T) {
 	tests := []struct {
 		name string
-
 		// environment
 		pods []*v1.Pod
-
 		// input
 		oldSpec *crdv1beta1.TraceflowSpec
 		newSpec *crdv1beta1.TraceflowSpec
-
 		// expected output
 		allowed      bool
 		deniedReason string
@@ -119,7 +108,6 @@ func TestControllerValidate(t *testing.T) {
 			controller.informerFactory.WaitForCacheSync(stopCh)
 			controller.crdInformerFactory.WaitForCacheSync(stopCh)
 			go controller.Run(stopCh)
-
 			var request *admv1.AdmissionRequest
 			if tc.oldSpec != nil && tc.newSpec != nil {
 				request = &admv1.AdmissionRequest{
@@ -136,7 +124,6 @@ func TestControllerValidate(t *testing.T) {
 			review := &admv1.AdmissionReview{
 				Request: request,
 			}
-
 			expectedResponse := &admv1.AdmissionResponse{
 				Allowed: tc.allowed,
 			}
@@ -145,13 +132,11 @@ func TestControllerValidate(t *testing.T) {
 					Message: tc.deniedReason,
 				}
 			}
-
 			response := controller.Validate(review)
 			assert.Equal(t, expectedResponse, response)
 		})
 	}
 }
-
 func toRawExtension(spec *crdv1beta1.TraceflowSpec) runtime.RawExtension {
 	tf := &crdv1beta1.Traceflow{Spec: *spec}
 	tf.Name = "tf"

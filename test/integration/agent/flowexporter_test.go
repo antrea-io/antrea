@@ -1,6 +1,5 @@
 //go:build !windows
 // +build !windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,23 +13,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package agent
-
 import (
 	"fmt"
 	"net/netip"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	mock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
@@ -38,35 +32,28 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/util/sysctl"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
+	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	podstoretest "antrea.io/antrea/v2/pkg/util/podstore/testing"
 )
-
 const (
 	testPollInterval           = 0 // Not used in the test, hence 0.
 	testActiveFlowTimeout      = 2 * time.Second
 	testIdleFlowTimeout        = 1 * time.Second
 	testStaleConnectionTimeout = 5 * time.Minute
 )
-
 type fakel7EventMapGetter struct{}
-
 func (fll *fakel7EventMapGetter) ConsumeL7EventMap() map[flowexporter.ConnectionKey]connections.L7ProtocolFields {
 	l7EventsMap := make(map[flowexporter.ConnectionKey]connections.L7ProtocolFields)
 	return l7EventsMap
 }
-
 func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.ConnectionKey) {
 	// Reference for flow timestamp
 	refTime := time.Now()
-
 	testConns := make([]*flowexporter.Connection, 2)
 	testConnKeys := make([]*flowexporter.ConnectionKey, 2)
 	// Flow-1
@@ -97,10 +84,8 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 	testConnKey2 := flowexporter.NewConnectionKey(testConn2)
 	testConns[1] = testConn2
 	testConnKeys[1] = &testConnKey2
-
 	return testConns, testConnKeys
 }
-
 func preparePodInformation(podName string, podNS string, ip netip.Addr) *v1.Pod {
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -119,19 +104,16 @@ func preparePodInformation(podName string, podNS string, ip netip.Addr) *v1.Pod 
 	}
 	return pod
 }
-
 // TestConnectionStoreAndFlowRecords covers two scenarios: (i.) Add connections to connection store through connectionStore.Poll
 // execution and build flow records. (ii.) Flush the connections and check records are sti:w
 func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Test setup
 	ctrl := mock.NewController(t)
-
 	// Prepare connections and pod store for test
 	testConns, testConnKeys := createConnsForTest()
 	testPods := make([]*v1.Pod, 2)
 	testPods[0] = preparePodInformation("pod1", "ns1", testConns[0].FlowKey.SourceAddress)
 	testPods[1] = preparePodInformation("pod2", "ns2", testConns[1].FlowKey.DestinationAddress)
-
 	// Create connectionStore, FlowRecords and associated mocks
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
@@ -160,7 +142,6 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
 	assert.Len(t, connsLens, 1, "length of connsLens is expected to be 1")
 	assert.Len(t, testConns, connsLens[0], "expected connections should be equal to number of testConns")
-
 	// Check if connections in connectionStore are same as testConns or not
 	for i, expConn := range testConns {
 		if i == 0 {
@@ -175,7 +156,6 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		assert.Equal(t, expConn, actualConn, "testConn and connection in connection store should be equal")
 	}
 }
-
 func TestSetupConnTrackParameters(t *testing.T) {
 	err := connections.SetupConntrackParameters()
 	require.NoError(t, err, "Cannot Setup conntrack parameters")

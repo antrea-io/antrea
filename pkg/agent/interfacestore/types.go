@@ -11,22 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package interfacestore
-
 import (
 	"net"
 	"strconv"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 const (
 	// ContainerInterface is used to mark current interface is for container
 	ContainerInterface InterfaceType = iota
@@ -42,7 +35,6 @@ const (
 	ExternalEntityInterface
 	// IPSecTunnelInterface is used to mark current interface is for IPSec tunnel port
 	IPSecTunnelInterface
-
 	AntreaInterfaceTypeKey = "antrea-type"
 	AntreaGateway          = "gateway"
 	AntreaContainer        = "container"
@@ -53,19 +45,15 @@ const (
 	AntreaIPsecTunnel      = "ipsec-tunnel"
 	AntreaUnset            = ""
 )
-
 type InterfaceType uint8
-
 func (t InterfaceType) String() string {
 	return strconv.Itoa(int(t))
 }
-
 // +k8s:deepcopy-gen=true
 type OVSPortConfig struct {
 	PortUUID string
 	OFPort   int32
 }
-
 // +k8s:deepcopy-gen=true
 type ContainerInterfaceConfig struct {
 	ContainerID  string
@@ -75,7 +63,6 @@ type ContainerInterfaceConfig struct {
 	IFDev string
 	NetNS string
 }
-
 // +k8s:deepcopy-gen=true
 type TunnelInterfaceConfig struct {
 	Type ovsconfig.TunnelType
@@ -95,7 +82,6 @@ type TunnelInterfaceConfig struct {
 	// If true, encapsulation header UDP checksums will be computed on outgoing packets.
 	Csum bool
 }
-
 // +k8s:deepcopy-gen=true
 type EntityInterfaceConfig struct {
 	EntityName      string
@@ -103,7 +89,6 @@ type EntityInterfaceConfig struct {
 	// UplinkPort is the OVS port configuration for the uplink, which is a pair port of this interface on OVS.
 	UplinkPort *OVSPortConfig
 }
-
 // +k8s:deepcopy-gen=true
 type InterfaceConfig struct {
 	Type InterfaceType
@@ -118,7 +103,6 @@ type InterfaceConfig struct {
 	*TunnelInterfaceConfig
 	*EntityInterfaceConfig
 }
-
 // InterfaceStore is a service interface to create local interfaces for container, host gateway, and tunnel port.
 // Support add/delete/get operations
 type InterfaceStore interface {
@@ -140,7 +124,6 @@ type InterfaceStore interface {
 	Len() int
 	GetInterfaceKeysByType(interfaceType InterfaceType) []string
 }
-
 // NewContainerInterface creates InterfaceConfig for a Pod.
 func NewContainerInterface(
 	interfaceName string,
@@ -166,43 +149,36 @@ func NewContainerInterface(
 		VLANID:                   vlanID,
 		ContainerInterfaceConfig: containerConfig}
 }
-
 // NewGatewayInterface creates InterfaceConfig for the host gateway interface.
 func NewGatewayInterface(gatewayName string, gatewayMAC net.HardwareAddr) *InterfaceConfig {
 	gatewayConfig := &InterfaceConfig{InterfaceName: gatewayName, Type: GatewayInterface, MAC: gatewayMAC}
 	return gatewayConfig
 }
-
 // NewTunnelInterface creates InterfaceConfig for the default tunnel port
 // interface.
 func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, destinationPort int32, localIP net.IP, csum bool, ovsPortConfig *OVSPortConfig) *InterfaceConfig {
 	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, DestinationPort: destinationPort, LocalIP: localIP, Csum: csum}
 	return &InterfaceConfig{InterfaceName: tunnelName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig, OVSPortConfig: ovsPortConfig}
 }
-
 // NewIPSecTunnelInterface creates InterfaceConfig for the IPsec tunnel to the
 // Node.
 func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk, remoteName string, ovsPortConfig *OVSPortConfig) *InterfaceConfig {
 	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk, RemoteName: remoteName}
 	return &InterfaceConfig{InterfaceName: interfaceName, Type: IPSecTunnelInterface, TunnelInterfaceConfig: tunnelConfig, OVSPortConfig: ovsPortConfig}
 }
-
 // NewUplinkInterface creates InterfaceConfig for the uplink interface.
 func NewUplinkInterface(uplinkName string) *InterfaceConfig {
 	uplinkConfig := &InterfaceConfig{InterfaceName: uplinkName, Type: UplinkInterface}
 	return uplinkConfig
 }
-
 func NewTrafficControlInterface(interfaceName string, ovsPortConfig *OVSPortConfig) *InterfaceConfig {
 	trafficControlConfig := &InterfaceConfig{InterfaceName: interfaceName, Type: TrafficControlInterface, OVSPortConfig: ovsPortConfig}
 	return trafficControlConfig
 }
-
 // TODO: remove this method after IPv4/IPv6 dual-stack is supported completely.
 func (c *InterfaceConfig) GetIPv4Addr() net.IP {
 	return util.GetIPv4Addr(c.IPs)
 }
-
 func (c *InterfaceConfig) GetIPv6Addr() net.IP {
 	ipv6, _ := util.GetIPWithFamily(c.IPs, util.FamilyIPv6)
 	return ipv6

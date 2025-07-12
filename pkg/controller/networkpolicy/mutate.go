@@ -11,38 +11,28 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
-
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 type NetworkPolicyMutator struct {
 	networkPolicyController *NetworkPolicyController
 }
-
 // NewNetworkPolicyMutator returns a new *NetworkPolicyMutator.
 func NewNetworkPolicyMutator(networkPolicyController *NetworkPolicyController) *NetworkPolicyMutator {
 	return &NetworkPolicyMutator{
 		networkPolicyController: networkPolicyController,
 	}
 }
-
 // Mutate function mutates an Antrea-native policy object
 func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
@@ -50,11 +40,9 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 	var patch []byte
 	allowed := false
 	patchType := admv1.PatchTypeJSONPatch
-
 	op := ar.Request.Operation
 	curRaw := ar.Request.Object.Raw
 	oldRaw := ar.Request.OldObject.Raw
-
 	switch ar.Request.Kind.Kind {
 	case "ClusterNetworkPolicy":
 		klog.V(2).Info("Mutating Antrea ClusterNetworkPolicy CRD")
@@ -89,7 +77,6 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 		}
 		msg, allowed, patch = m.mutateAntreaPolicy(op, curANNP.Spec.Ingress, curANNP.Spec.Egress, curANNP.Spec.Tier)
 	}
-
 	if msg != "" {
 		result = &metav1.Status{
 			Message: msg,
@@ -106,7 +93,6 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 	}
 	return response
 }
-
 // mutateAntreaPolicy mutates names of rules of an Antrea NetworkPolicy CRD.
 // If users didn't specify the name of an ingress or egress rule,
 // mutateAntreaPolicy will auto-generate a name for this rule. In
@@ -135,14 +121,12 @@ func (m *NetworkPolicyMutator) mutateAntreaPolicy(op admv1.Operation, ingress, e
 			break
 		}
 		patch = genPatch
-
 	case admv1.Delete:
 		// Delete of Antrea Policies have no mutation
 		allowed = true
 	}
 	return reason, allowed, patch
 }
-
 // generateRuleNames generates unique rule names and returns a list of json paths and the corresponding list of generated names
 func generateRuleNames(prefix string, rules []crdv1beta1.Rule) ([]string, []string) {
 	var paths []string
@@ -156,13 +140,10 @@ func generateRuleNames(prefix string, rules []crdv1beta1.Rule) ([]string, []stri
 	}
 	return paths, values
 }
-
 type jsonPatchOperation string
-
 const (
 	jsonPatchReplaceOp jsonPatchOperation = "replace"
 )
-
 // jsonPatch contains necessary info that MutatingWebhook required
 type jsonPatch struct {
 	// Op represent the operation of this mutation
@@ -172,15 +153,12 @@ type jsonPatch struct {
 	// Value represent the value which is used in mutation
 	Value interface{} `json:"value,omitempty"`
 }
-
 // createReplacePatch use paths and values that need to be replace to generate a serialized patch
 func createReplacePatch(paths []string, values []string) ([]byte, error) {
 	var patch []jsonPatch
-
 	if len(paths) != len(values) {
 		return nil, fmt.Errorf("the number of paths is not equal to the number of values that need to be added")
 	}
-
 	for i := range paths {
 		patch = append(patch, jsonPatch{
 			Op:    jsonPatchReplaceOp,
@@ -188,12 +166,9 @@ func createReplacePatch(paths []string, values []string) ([]byte, error) {
 			Value: values[i],
 		})
 	}
-
 	return json.Marshal(patch)
 }
-
 const ruleNameSuffixLen = 7
-
 // hashRule calculates a string based on the rule's content.
 func hashRule(r crdv1beta1.Rule) string {
 	hash := sha1.New() // #nosec G401: not used for security purposes

@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package gobgp
-
 import (
 	"testing"
 	"time"
-
 	gobgpapi "github.com/osrg/gobgp/v3/api"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/bgp"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-=======
-	"antrea.io/antrea/pkg/agent/bgp"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/agent/bgp"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
-
 func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -92,7 +84,6 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 					SessionState: gobgpapi.PeerState_IDLE,
 				},
 			},
-
 			expected: &bgp.PeerStatus{
 				Address:      "192.168.1.1",
 				ASN:          65001,
@@ -101,7 +92,6 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actual := convertGoBGPPeerToPeerStatus(tt.peer)
@@ -109,7 +99,6 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 		})
 	}
 }
-
 func TestConvertGoBGPDestinationToRoute(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -131,7 +120,6 @@ func TestConvertGoBGPDestinationToRoute(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actual := convertGoBGPDestinationToRoute(tt.destination)
@@ -139,35 +127,28 @@ func TestConvertGoBGPDestinationToRoute(t *testing.T) {
 		})
 	}
 }
-
 func TestConvertRouteTypeToGoBGPTableType(t *testing.T) {
 	tableType := convertRouteTypeToGoBGPTableType(bgp.RouteAdvertised)
 	assert.Equal(t, gobgpapi.TableType_ADJ_OUT, tableType)
-
 	tableType = convertRouteTypeToGoBGPTableType(bgp.RouteReceived)
 	assert.Equal(t, gobgpapi.TableType_ADJ_IN, tableType)
 }
-
 func TestConvertRouteToGoBGPPath(t *testing.T) {
 	route4 := &bgp.Route{Prefix: "192.168.0.0/24"}
 	path4 := convertRouteToGoBGPPath(route4)
-
 	ipAddressPrefix4 := &gobgpapi.IPAddressPrefix{}
 	assert.NoError(t, path4.GetNlri().UnmarshalTo(ipAddressPrefix4))
 	assert.Equal(t, "192.168.0.0", ipAddressPrefix4.Prefix)
 	assert.Equal(t, uint32(24), ipAddressPrefix4.PrefixLen)
 	assert.Equal(t, gobgpapi.Family_AFI_IP, path4.GetFamily().Afi)
-
 	route6 := &bgp.Route{Prefix: "2001:db8::/64"}
 	path6 := convertRouteToGoBGPPath(route6)
-
 	ipAddressPrefix6 := &gobgpapi.IPAddressPrefix{}
 	assert.NoError(t, path6.GetNlri().UnmarshalTo(ipAddressPrefix6))
 	assert.Equal(t, "2001:db8::", ipAddressPrefix6.Prefix)
 	assert.Equal(t, uint32(64), ipAddressPrefix6.PrefixLen)
 	assert.Equal(t, gobgpapi.Family_AFI_IP6, path6.GetFamily().Afi)
 }
-
 func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 	peerConfig := bgp.PeerConfig{
 		BGPPeer: &v1alpha1.BGPPeer{
@@ -179,7 +160,6 @@ func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 		},
 		Password: "password",
 	}
-
 	peer, err := convertPeerConfigToGoBGPPeer(peerConfig)
 	assert.NoError(t, err)
 	assert.Equal(t, "192.168.0.1", peer.GetConf().GetNeighborAddress())
@@ -188,9 +168,7 @@ func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 	assert.Equal(t, uint32(179), peer.GetTransport().GetRemotePort())
 	assert.Equal(t, uint32(2), peer.GetEbgpMultihop().GetMultihopTtl())
 	assert.Equal(t, uint32(120), peer.GetGracefulRestart().GetRestartTime())
-
 }
-
 func TestConvertGoBGPSessionStateToSessionState(t *testing.T) {
 	tests := []struct {
 		input    gobgpapi.PeerState_SessionState
@@ -205,7 +183,6 @@ func TestConvertGoBGPSessionStateToSessionState(t *testing.T) {
 		{gobgpapi.PeerState_ESTABLISHED, bgp.SessionEstablished},
 		{gobgpapi.PeerState_SessionState(999), bgp.SessionUnknown},
 	}
-
 	for _, test := range tests {
 		output := convertGoBGPSessionStateToSessionState(test.input)
 		assert.Equal(t, test.expected, output)

@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package featuregates
-
 import (
 	"bytes"
 	"context"
@@ -21,7 +19,6 @@ import (
 	"net/http"
 	"os"
 	"testing"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,20 +29,15 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
-
-<<<<<<< HEAD
-	v1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
-=======
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
->>>>>>> origin/main
+	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 )
-
 var (
 	clientConfig = &rest.Config{
 		APIPath: "/featuregates",
@@ -77,7 +69,6 @@ var (
 		},
 	}
 )
-
 func TestGetFeatureGates(t *testing.T) {
 	controllerRemoteResponse := []byte(`[
 		{
@@ -285,7 +276,6 @@ func TestGetFeatureGates(t *testing.T) {
 			"version": "BETA"
 		}
 	]`)
-
 	agentResponse := []byte(`[
 		{
 			"component": "agent",
@@ -414,7 +404,6 @@ func TestGetFeatureGates(t *testing.T) {
 			"version": "ALPHA"
 		}
 	]`)
-
 	controllerRemoteWithWindowsAgentResponse := []byte(`[
 		{
 			"component": "agent",
@@ -687,10 +676,8 @@ func TestGetFeatureGates(t *testing.T) {
 			"version": "BETA"
 		}
 	]`)
-
 	k8sClient := k8sfake.NewSimpleClientset(node1.DeepCopyObject())
 	antreaClientset := antreafakeclient.NewSimpleClientset(controllerInfo.DeepCopyObject())
-
 	tests := []struct {
 		name           string
 		runE           func(cmd *cobra.Command, _ []string) error
@@ -723,7 +710,6 @@ SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
 Traceflow                       Enabled      BETA
 TrafficControl                  Disabled     ALPHA
-
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
 AdminNetworkPolicy          Disabled     ALPHA
@@ -797,7 +783,6 @@ SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
 Traceflow                       Enabled      BETA
 TrafficControl                  Disabled     ALPHA
-
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
 AdminNetworkPolicy          Disabled     ALPHA
@@ -842,7 +827,6 @@ SupportBundleCollection         Disabled     ALPHA
 TopologyAwareHints              Enabled      BETA
 Traceflow                       Enabled      BETA
 TrafficControl                  Disabled     ALPHA
-
 Antrea Agent Feature Gates (Windows)
 FEATUREGATE                 STATUS       VERSION
 AntreaPolicy                Enabled      BETA
@@ -856,7 +840,6 @@ SupportBundleCollection     Disabled     ALPHA
 TopologyAwareHints          Enabled      BETA
 Traceflow                   Enabled      BETA
 TrafficControl              Disabled     ALPHA
-
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
 AdminNetworkPolicy          Disabled     ALPHA
@@ -876,25 +859,21 @@ Traceflow                   Enabled      BETA
 			response: controllerRemoteWithWindowsAgentResponse,
 		},
 	}
-
 	getClients = func(cmd *cobra.Command) (*rest.Config, kubernetes.Interface, antrea.Interface, error) {
 		return clientConfig, k8sClient, antreaClientset, nil
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			getRestClient = getFakeFunc(tt.response)
 			buf := new(bytes.Buffer)
 			Command.SetOut(buf)
 			Command.SetErr(buf)
-
 			err := tt.runE(Command, nil)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedOutput, buf.String())
 		})
 	}
 }
-
 func getFakeFunc(response []byte) func(ctx context.Context, kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
 	restClient, _ := rest.RESTClientFor(clientConfig)
 	return func(ctx context.Context, kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
@@ -905,7 +884,6 @@ func getFakeFunc(response []byte) func(ctx context.Context, kubeconfig *rest.Con
 		return restClient, nil
 	}
 }
-
 func TestGetConfigAndClients(t *testing.T) {
 	fakeConfigs := []byte(`apiVersion: v1
 clusters:
@@ -920,7 +898,6 @@ contexts:
   name:  fake-cluster
 current-context:  fake-cluster
 kind: Config`)
-
 	var err error
 	fakeKubeconfig, err := os.CreateTemp("", "fakeKubeconfig")
 	require.NoError(t, err)
@@ -932,7 +909,6 @@ kind: Config`)
 	config, _, _, err := getConfigAndClients(Command)
 	require.NoError(t, err)
 	assert.Equal(t, "https://localhost", config.Host)
-
 	// Get kubeconfig with new server option.
 	server := ""
 	Command.Flags().StringVarP(&server, "server", "", "http://192.168.1.10", "address and port of the API server")

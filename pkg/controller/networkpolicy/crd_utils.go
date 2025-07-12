@@ -11,38 +11,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"net"
 	"strings"
 	"time"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 var (
 	// matchAllPodsPeerCrd is a crdv1beta1.NetworkPolicyPeer matching all
 	// Pods from all Namespaces.
@@ -50,7 +42,6 @@ var (
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
 )
-
 // semanticIgnoreLastTransitionTime does semantic deep equality checks for
 // NetworkPolicyCondition but excludes LastTransitionTime. They are used when
 // comparing NetworkPolicyCondition in NetworkPolicyStatus objects to avoid
@@ -62,13 +53,11 @@ var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
 		return a == b
 	},
 )
-
 // NetworkPolicyStatusEqual compares two NetworkPolicyStatus objects. It disregards
 // the LastTransitionTime field in the status Conditions.
 func NetworkPolicyStatusEqual(oldStatus, newStatus crdv1beta1.NetworkPolicyStatus) bool {
 	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
 }
-
 // groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
 // is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
 func groupMembersComputedConditionEqual(conds []crdv1beta1.GroupCondition, condition crdv1beta1.GroupCondition) bool {
@@ -81,7 +70,6 @@ func groupMembersComputedConditionEqual(conds []crdv1beta1.GroupCondition, condi
 	}
 	return false
 }
-
 // toAntreaServicesForCRD converts a slice of crdv1beta1.NetworkPolicyPort objects
 // and a slice of v1beta1.NetworkPolicyProtocol objects to a slice of Antrea
 // Service objects. A bool is returned along with the Service objects to indicate
@@ -121,7 +109,6 @@ func toAntreaServicesForCRD(npPorts []crdv1beta1.NetworkPolicyPort, npProtocols 
 	}
 	return antreaServices, namedPortExists
 }
-
 // toAntreaL7ProtocolsForCRD converts a slice of v1beta1.L7Protocol objects to
 // a slice of Antrea L7Protocol objects.
 func toAntreaL7ProtocolsForCRD(l7Protocols []crdv1beta1.L7Protocol) []controlplane.L7Protocol {
@@ -134,7 +121,6 @@ func toAntreaL7ProtocolsForCRD(l7Protocols []crdv1beta1.L7Protocol) []controlpla
 	}
 	return antreaL7Protocols
 }
-
 // toAntreaIPBlockForCRD converts a crdv1beta1.IPBlock to an Antrea IPBlock.
 func toAntreaIPBlockForCRD(ipBlock *crdv1beta1.IPBlock) (*controlplane.IPBlock, error) {
 	// Convert the allowed IPBlock to networkpolicy.IPNet.
@@ -157,7 +143,6 @@ func toAntreaIPBlockForCRD(ipBlock *crdv1beta1.IPBlock) (*controlplane.IPBlock, 
 	}
 	return antreaIPBlock, nil
 }
-
 // computeEffectiveIPNetForIPBlocks calculates the list of net.IPNet CIDRs after the
 // "except" CIDRs are subtracted from each corresponding ipBlock.
 func computeEffectiveIPNetForIPBlocks(ipBlocks []crdv1beta1.IPBlock) []*net.IPNet {
@@ -181,7 +166,6 @@ func computeEffectiveIPNetForIPBlocks(ipBlocks []crdv1beta1.IPBlock) []*net.IPNe
 	}
 	return ip.MergeCIDRs(ipNets)
 }
-
 // toAntreaPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1beta1 NetworkPolicyPeer.
 // It is used when peer's Namespaces are not matched by NamespaceMatchTypes, for which the controlplane
 // NetworkPolicyPeers will need to be created on a per-Namespace basis.
@@ -265,7 +249,6 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []crdv1beta1.NetworkP
 		LabelIdentities: labelIdentities,
 	}, addressGroups, clusterSetScopeSelectorKeys
 }
-
 // toNamespacedPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1beta1 NetworkPolicyPeer
 // for a particular Namespace. It is used when a single crdv1beta1 NetworkPolicyPeer maps to multiple
 // controlplane NetworkPolicyPeers because the appliedTo workloads reside in different Namespaces.
@@ -296,7 +279,6 @@ func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []crdv1beta1.Netw
 		AddressGroups: getAddressGroupNames(addressGroups), LabelIdentities: labelIdentities,
 	}, addressGroups, clusterSetScopeSelectorKeys
 }
-
 // svcRefToPeerForCRD creates an Antrea controlplane NetworkPolicyPeer from ServiceReferences in ToServices
 // or ToMulticlusterServices field of a crdv1beta1 NetworkPolicyPeer. For ANNP NetworkPolicyPeers, if
 // Namespace is not provided in the ServiceReference, the policy's Namespace will be assumed.
@@ -322,11 +304,9 @@ func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []crdv1beta1.PeerSe
 	}
 	return &controlplane.NetworkPolicyPeer{ToServices: controlplaneSvcRefs}
 }
-
 // createAppliedToGroupForService creates an AppliedToGroup object corresponding to a Service.
 func (n *NetworkPolicyController) createAppliedToGroupForService(service *crdv1beta1.NamespacedName) *antreatypes.AppliedToGroup {
 	key := getNormalizedUID(k8s.NamespacedName(service.Namespace, service.Name))
-
 	// Create an AppliedToGroup object for this Service.
 	appliedToGroup := &antreatypes.AppliedToGroup{
 		UID:  types.UID(key),
@@ -338,7 +318,6 @@ func (n *NetworkPolicyController) createAppliedToGroupForService(service *crdv1b
 	}
 	return appliedToGroup
 }
-
 // createAppliedToGroupForGroup creates an AppliedToGroup object corresponding to a ClusterGroup or a Group.
 // The namespace parameter is only provided when the group is namespace scoped.
 func (n *NetworkPolicyController) createAppliedToGroupForGroup(namespace, group string) *antreatypes.AppliedToGroup {
@@ -367,7 +346,6 @@ func (n *NetworkPolicyController) createAppliedToGroupForGroup(namespace, group 
 	}
 	return &antreatypes.AppliedToGroup{UID: intGrp.UID, Name: key, SourceGroup: key}
 }
-
 // getTierPriority retrieves the priority associated with the input Tier name.
 // If the Tier name is empty, by default, the lowest priority Application Tier
 // is returned.
@@ -392,7 +370,6 @@ func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 	}
 	return t.Spec.Priority
 }
-
 // getNormalizedNameForSelector retrieves the normalized name for GroupSelector.
 // If the GroupSelector is nil, an empty string is returned.
 func getNormalizedNameForSelector(sel *antreatypes.GroupSelector) string {
@@ -401,7 +378,6 @@ func getNormalizedNameForSelector(sel *antreatypes.GroupSelector) string {
 	}
 	return ""
 }
-
 func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	defer n.triggerANNPUpdates(key)
 	defer n.triggerCNPUpdates(key)

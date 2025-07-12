@@ -11,18 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package podwatch
-
 import (
 	"context"
 	"fmt"
 	"path"
 	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
-
 	// Version v1 of the kubelet API was introduced in K8s v1.20.
 	// Using version v1alpha1 instead to support older K8s versions.
 	current "github.com/containernetworking/cni/pkg/types/100"
@@ -30,33 +26,25 @@ import (
 	"google.golang.org/grpc"
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	podresourcesv1alpha1 "k8s.io/kubelet/pkg/apis/podresources/v1alpha1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 )
-
 const (
 	kubeletPodResourcesPath = "/var/lib/kubelet/pod-resources"
 	kubeletSocket           = "kubelet.sock"
 	listTimeout             = 10 * time.Second
 )
-
 var (
 	// getPodContainerDeviceIDsFn is used to retrieve SRIOV device IDs
 	// assigned to a specific Pod. It can be overridden by unit tests.
 	getPodContainerDeviceIDsFn = getPodContainerDeviceIDs
 )
-
 // Structure to associate a unique VF's PCI Address to the Linux ethernet interface.
 type podSriovVFDeviceIDInfo struct {
 	resourceName string
 	vfDeviceID   string
 	ifName       string
 }
-
 // getPodContainerDeviceIDs returns the device IDs assigned to a Pod's containers.
 func getPodContainerDeviceIDs(podName string, podNamespace string) (map[string][]string, error) {
 	conn, err := grpc.NewClient(
@@ -67,20 +55,16 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) (map[string][
 		return nil, fmt.Errorf("error getting the gRPC client for Pod resources: %v", err)
 	}
 	defer conn.Close()
-
 	client := podresourcesv1alpha1.NewPodResourcesListerClient(conn)
 	if client == nil {
 		return nil, fmt.Errorf("error getting the lister client for Pod resources")
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
 	defer cancel()
-
 	podResources, err := client.List(ctx, &podresourcesv1alpha1.ListPodResourcesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("error getting the Pod resources: %v %v", podResources, err)
 	}
-
 	podDeviceIDs := make(map[string][]string)
 	resources := podResources.GetPodResources()
 	for _, pr := range resources {
@@ -95,7 +79,6 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) (map[string][
 	klog.V(2).InfoS("Retrieved Pod container device IDs", "pod", klog.KRef(podNamespace, podName), "deviceIDs", podDeviceIDs)
 	return podDeviceIDs, nil
 }
-
 // buildVFDeviceIDListPerPod is a helper function to build a cache structure with the
 // list of all the PCI addresses allocated per Pod based on their resource requests (in Pod spec).
 // When there is a request for a VF resource (to associate it for a secondary network interface),
@@ -127,7 +110,6 @@ func (pc *PodController) buildVFDeviceIDListPerPod(podName, podNamespace string)
 	klog.V(2).InfoS("Pod specific SRIOV VF cache created", "Key", podKey)
 	return vfDeviceIDInfoCache, nil
 }
-
 func (pc *PodController) deleteVFDeviceIDListPerPod(podName, podNamespace string) {
 	podKey := podKeyGet(podName, podNamespace)
 	_, cacheFound := pc.vfDeviceIDUsageMap.Load(podKey)
@@ -136,7 +118,6 @@ func (pc *PodController) deleteVFDeviceIDListPerPod(podName, podNamespace string
 		klog.V(2).InfoS("Pod specific SRIOV VF cache cleared", "Key", podKey)
 	}
 }
-
 func (pc *PodController) releaseSriovVFDeviceID(podName, podNamespace, interfaceName string) {
 	podKey := podKeyGet(podName, podNamespace)
 	obj, cacheFound := pc.vfDeviceIDUsageMap.Load(podKey)
@@ -150,7 +131,6 @@ func (pc *PodController) releaseSriovVFDeviceID(podName, podNamespace, interface
 		}
 	}
 }
-
 func (pc *PodController) assignUnusedSriovVFDeviceID(podName, podNamespace, resourceName, interfaceName string) (string, error) {
 	var cache []podSriovVFDeviceIDInfo
 	cache, err := pc.buildVFDeviceIDListPerPod(podName, podNamespace)
@@ -166,7 +146,6 @@ func (pc *PodController) assignUnusedSriovVFDeviceID(podName, podNamespace, reso
 	}
 	return "", fmt.Errorf("no available device")
 }
-
 // Configure SRIOV VF as a Secondary Network Interface.
 func (pc *PodController) configureSriovAsSecondaryInterface(
 	pod *corev1.Pod,
@@ -187,7 +166,6 @@ func (pc *PodController) configureSriovAsSecondaryInterface(
 	}
 	return nil
 }
-
 func (pc *PodController) deleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
 	// NOTE: SR-IOV VF interface clean-up will be handled by SR-IOV device plugin. The interface
 	// is not deleted here.

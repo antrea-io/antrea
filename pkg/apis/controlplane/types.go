@@ -11,28 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package controlplane
-
 import (
 	"fmt"
 	"net"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 )
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AppliedToGroup is the message format of antrea/pkg/controller/types.AppliedToGroup in an API response.
 type AppliedToGroup struct {
 	metav1.TypeMeta
@@ -40,7 +31,6 @@ type AppliedToGroup struct {
 	// GroupMembers is a list of resources selected by this group.
 	GroupMembers []GroupMember
 }
-
 // PodReference represents a Pod Reference.
 type PodReference struct {
 	// The name of this Pod.
@@ -48,13 +38,11 @@ type PodReference struct {
 	// The Namespace of this Pod.
 	Namespace string
 }
-
 // NodeReference represents a Node Reference.
 type NodeReference struct {
 	// The name of this Node.
 	Name string
 }
-
 // ServiceReference represents reference to a v1.Service.
 type ServiceReference struct {
 	// The name of this Service.
@@ -62,7 +50,6 @@ type ServiceReference struct {
 	// The Namespace of this Service.
 	Namespace string
 }
-
 // NamedPort represents a Port with a name on Pod.
 type NamedPort struct {
 	// Port represents the Port number.
@@ -72,7 +59,6 @@ type NamedPort struct {
 	// Protocol for port. Must be UDP, TCP, or SCTP.
 	Protocol Protocol
 }
-
 // ExternalEntityReference represents a ExternalEntity Reference.
 type ExternalEntityReference struct {
 	// The name of this ExternalEntity.
@@ -80,7 +66,6 @@ type ExternalEntityReference struct {
 	// The Namespace of this ExternalEntity.
 	Namespace string
 }
-
 // GroupMember represents a resource member to be populated in Groups.
 type GroupMember struct {
 	// Pod maintains the reference to the Pod.
@@ -97,9 +82,7 @@ type GroupMember struct {
 	// Group and only a NodePort type Service can be referred by this field.
 	Service *ServiceReference
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // ClusterGroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a ClusterGroup.
 type ClusterGroupMembers struct {
 	metav1.TypeMeta
@@ -110,9 +93,7 @@ type ClusterGroupMembers struct {
 	TotalPages        int64
 	CurrentPage       int64
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // GroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a Group.
 type GroupMembers struct {
 	metav1.TypeMeta
@@ -123,19 +104,15 @@ type GroupMembers struct {
 	TotalPages        int64
 	CurrentPage       int64
 }
-
 // +k8s:conversion-gen:explicit-from=net/url.Values
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // PaginationGetOptions is used to retrieve page number and page limit info from the request.
 type PaginationGetOptions struct {
 	metav1.TypeMeta
 	Page  int64
 	Limit int64
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta
@@ -143,18 +120,14 @@ type AppliedToGroupPatch struct {
 	AddedGroupMembers   []GroupMember
 	RemovedGroupMembers []GroupMember
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AppliedToGroupList is a list of AppliedToGroup objects.
 type AppliedToGroupList struct {
 	metav1.TypeMeta
 	metav1.ListMeta
 	Items []AppliedToGroup
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AddressGroup is the message format of antrea/pkg/controller/types.AddressGroup in an API response.
 type AddressGroup struct {
 	metav1.TypeMeta
@@ -162,26 +135,20 @@ type AddressGroup struct {
 	// GroupMembers is a list of GroupMember selected by this group.
 	GroupMembers []GroupMember
 }
-
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
 type IPAddress []byte
-
 func (ip IPAddress) String() string {
 	return net.IP(ip).String()
 }
-
 // IPNet describes an IP network.
 type IPNet struct {
 	IP           IPAddress
 	PrefixLength int32
 }
-
 func (ipn IPNet) String() string {
 	return fmt.Sprintf("%s/%d", ipn.IP.String(), ipn.PrefixLength)
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AddressGroupPatch describes the incremental update of an AddressGroup.
 type AddressGroupPatch struct {
 	metav1.TypeMeta
@@ -189,18 +156,14 @@ type AddressGroupPatch struct {
 	AddedGroupMembers   []GroupMember
 	RemovedGroupMembers []GroupMember
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AddressGroupList is a list of AddressGroup objects.
 type AddressGroupList struct {
 	metav1.TypeMeta
 	metav1.ListMeta
 	Items []AddressGroup
 }
-
 type NetworkPolicyType string
-
 const (
 	K8sNetworkPolicy           NetworkPolicyType = "K8sNetworkPolicy"
 	AntreaClusterNetworkPolicy NetworkPolicyType = "AntreaClusterNetworkPolicy"
@@ -208,7 +171,6 @@ const (
 	AdminNetworkPolicy         NetworkPolicyType = "AdminNetworkPolicy"
 	BaselineAdminNetworkPolicy NetworkPolicyType = "BaselineAdminNetworkPolicy"
 )
-
 type NetworkPolicyReference struct {
 	// Type of the NetworkPolicy.
 	Type NetworkPolicyType
@@ -219,9 +181,7 @@ type NetworkPolicyReference struct {
 	// UID of the NetworkPolicy.
 	UID types.UID
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.
 type NetworkPolicy struct {
 	metav1.TypeMeta
@@ -240,15 +200,12 @@ type NetworkPolicy struct {
 	// Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
 	SourceRef *NetworkPolicyReference
 }
-
 // Direction defines traffic direction of NetworkPolicyRule.
 type Direction string
-
 const (
 	DirectionIn  Direction = "In"
 	DirectionOut Direction = "Out"
 )
-
 // NetworkPolicyRule describes a particular set of traffic that is allowed.
 type NetworkPolicyRule struct {
 	// The direction of this rule.
@@ -283,10 +240,8 @@ type NetworkPolicyRule struct {
 	// LogLabel is a user-defined arbitrary string which will be printed in the NetworkPolicy logs.
 	LogLabel string
 }
-
 // Protocol defines network protocols supported for things like container ports.
 type Protocol string
-
 const (
 	// ProtocolTCP is the TCP protocol.
 	ProtocolTCP Protocol = "TCP"
@@ -296,10 +251,8 @@ const (
 	ProtocolSCTP Protocol = "SCTP"
 	// ProtocolICMP is the ICMP protocol.
 	ProtocolICMP Protocol = "ICMP"
-
 	ProtocolIGMP Protocol = "IGMP"
 )
-
 // Service describes a port to allow traffic on.
 type Service struct {
 	// The protocol (TCP, UDP, SCTP, or ICMP) which traffic must match. If not specified, this
@@ -325,18 +278,15 @@ type Service struct {
 	// both are not specified and the Protocol is ICMP, this matches all ICMP traffic.
 	ICMPType *int32
 	ICMPCode *int32
-
 	// IGMPType and GroupAddress can only be specified when the Protocol is IGMP.
 	IGMPType     *int32
 	GroupAddress string
 }
-
 // L7Protocol defines application layer protocol to match.
 type L7Protocol struct {
 	HTTP *HTTPProtocol
 	TLS  *TLSProtocol
 }
-
 // HTTPProtocol matches HTTP requests with specific host, method, and path. All
 // fields could be used alone or together. If all fields are not provided, this
 // matches all HTTP requests.
@@ -350,14 +300,12 @@ type HTTPProtocol struct {
 	// Path represents the URI path to match (Ex. "/index.html", "/admin").
 	Path string
 }
-
 // TLSProtocol matches TLS handshake packets with specific SNI. If the field is not provided, this
 // matches all TLS handshake packets.
 type TLSProtocol struct {
 	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
 	SNI string
 }
-
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
 // It could contain one of the subfields or a combination of them.
 type NetworkPolicyPeer struct {
@@ -375,7 +323,6 @@ type NetworkPolicyPeer struct {
 	// This field can only be possibly set for NetworkPolicyPeer of ingress rules.
 	LabelIdentities []uint32
 }
-
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should
 // not be included within this rule.
 type IPBlock struct {
@@ -386,23 +333,18 @@ type IPBlock struct {
 	// +optional
 	Except []IPNet
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NetworkPolicyList is a list of NetworkPolicy objects.
 type NetworkPolicyList struct {
 	metav1.TypeMeta
 	metav1.ListMeta
 	Items []NetworkPolicy
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.
 type NodeStatsSummary struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-
 	// The TrafficStats of K8s NetworkPolicies collected from the Node.
 	NetworkPolicies []NetworkPolicyStats
 	// The TrafficStats of Antrea ClusterNetworkPolicies collected from the Node.
@@ -412,7 +354,6 @@ type NodeStatsSummary struct {
 	// Multicast group information from the Node.
 	Multicast []MulticastGroupInfo
 }
-
 // MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.
 type MulticastGroupInfo struct {
 	// Group is the IP of the multicast group.
@@ -420,7 +361,6 @@ type MulticastGroupInfo struct {
 	// Pods is the list of Pods that have joined the multicast group.
 	Pods []PodReference
 }
-
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
 type NetworkPolicyStats struct {
 	// The reference of the NetworkPolicy.
@@ -430,9 +370,7 @@ type NetworkPolicyStats struct {
 	// The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
 	RuleTrafficStats []statsv1alpha1.RuleTrafficStats
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NetworkPolicyStatus is the status of a NetworkPolicy.
 type NetworkPolicyStatus struct {
 	metav1.TypeMeta
@@ -440,7 +378,6 @@ type NetworkPolicyStatus struct {
 	// Nodes contains statuses produced on a list of Nodes.
 	Nodes []NetworkPolicyNodeStatus
 }
-
 // NetworkPolicyNodeStatus is the status of a NetworkPolicy on a Node.
 type NetworkPolicyNodeStatus struct {
 	// The name of the Node that produces the status.
@@ -452,9 +389,7 @@ type NetworkPolicyNodeStatus struct {
 	// The error message to describe why the NetworkPolicy realization is failed on the Node.
 	Message string
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NetworkPolicyEvaluation contains the request and response for a NetworkPolicy evaluation.
 type NetworkPolicyEvaluation struct {
 	metav1.TypeMeta
@@ -462,25 +397,21 @@ type NetworkPolicyEvaluation struct {
 	Request  *NetworkPolicyEvaluationRequest
 	Response *NetworkPolicyEvaluationResponse
 }
-
 // Entity contains Namespace and Pod name as a request parameter.
 type Entity struct {
 	Pod *PodReference
 }
-
 // NetworkPolicyEvaluationRequest is the request body of NetworkPolicy evaluation.
 type NetworkPolicyEvaluationRequest struct {
 	Source      Entity
 	Destination Entity
 }
-
 // RuleRef contains basic information for the rule.
 type RuleRef struct {
 	Direction Direction
 	Name      string
 	Action    *crdv1beta1.RuleAction
 }
-
 // NetworkPolicyEvaluationResponse is the response of NetworkPolicy evaluation.
 type NetworkPolicyEvaluationResponse struct {
 	// The reference of the effective NetworkPolicy.
@@ -489,7 +420,6 @@ type NetworkPolicyEvaluationResponse struct {
 	// The content of the effective rule.
 	Rule RuleRef
 }
-
 type GroupReference struct {
 	// Namespace of the Group. Empty for ClusterGroup.
 	Namespace string
@@ -498,9 +428,7 @@ type GroupReference struct {
 	// UID of the Group.
 	UID types.UID
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // GroupAssociation is a list of GroupReferences for responses to groupassociation queries.
 type GroupAssociation struct {
 	metav1.TypeMeta
@@ -509,9 +437,7 @@ type GroupAssociation struct {
 	// Pod/ExternalEntity being queried.
 	AssociatedGroups []GroupReference
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // IPGroupAssociation is a list of GroupReferences for responses to IP association queries.
 type IPGroupAssociation struct {
 	metav1.TypeMeta
@@ -520,18 +446,14 @@ type IPGroupAssociation struct {
 	// IP address being queried.
 	AssociatedGroups []GroupReference
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type EgressGroup struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
 	// GroupMembers is a list of GroupMember selected by this group.
 	GroupMembers []GroupMember
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // EgressGroupPatch describes the incremental update of an EgressGroup.
 type EgressGroupPatch struct {
 	metav1.TypeMeta
@@ -539,18 +461,14 @@ type EgressGroupPatch struct {
 	AddedGroupMembers   []GroupMember
 	RemovedGroupMembers []GroupMember
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // EgressGroupList is a list of EgressGroup objects.
 type EgressGroupList struct {
 	metav1.TypeMeta
 	metav1.ListMeta
 	Items []EgressGroup
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type SupportBundleCollection struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
@@ -559,7 +477,6 @@ type SupportBundleCollection struct {
 	FileServer     BundleFileServer
 	Authentication BundleServerAuthConfiguration
 }
-
 // BundleFileServer specifies the bundle file server information.
 type BundleFileServer struct {
 	// The URL of the bundle file server. It is set with format: scheme://host[:port][/path],
@@ -569,29 +486,23 @@ type BundleFileServer struct {
 	// the file server. If omitted, any host key will be accepted, which is not recommended.
 	HostPublicKey []byte
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // SupportBundleCollectionList is a list of SupportBundleCollection objects.
 type SupportBundleCollectionList struct {
 	metav1.TypeMeta
 	metav1.ListMeta
 	Items []SupportBundleCollection
 }
-
 type BasicAuthentication struct {
 	Username string
 	Password string
 }
-
 type BundleServerAuthConfiguration struct {
 	BearerToken         string
 	APIKey              string
 	BasicAuthentication *BasicAuthentication
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // SupportBundleCollectionStatus is the status of a SupportBundleCollection.
 type SupportBundleCollectionStatus struct {
 	metav1.TypeMeta
@@ -599,14 +510,11 @@ type SupportBundleCollectionStatus struct {
 	// Nodes contains statuses produced on a list of Nodes.
 	Nodes []SupportBundleCollectionNodeStatus
 }
-
 type SupportBundleCollectionNodeType string
-
 const (
 	SupportBundleCollectionNodeTypeNode         SupportBundleCollectionNodeType = "Node"
 	SupportBundleCollectionNodeTypeExternalNode SupportBundleCollectionNodeType = "ExternalNode"
 )
-
 // SupportBundleCollectionNodeStatus is the status of a SupportBundleCollection on a Node.
 type SupportBundleCollectionNodeStatus struct {
 	// The name of the Node that produces the status.

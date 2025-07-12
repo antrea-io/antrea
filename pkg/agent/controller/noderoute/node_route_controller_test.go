@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package noderoute
-
 import (
 	"context"
 	"net"
 	"net/netip"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -29,8 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
@@ -44,7 +39,6 @@ import (
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 	utilwait "antrea.io/antrea/v2/pkg/util/wait"
 )
-
 var (
 	gatewayMAC, _ = net.ParseMAC("00:00:00:00:00:01")
 	// podCIDRs of "local" Node
@@ -59,7 +53,6 @@ var (
 	dsIPs1            = utilip.DualStackIPs{IPv4: nodeIP1}
 	nodeIP2           = net.ParseIP("10.10.10.11")
 	dsIPs2            = utilip.DualStackIPs{IPv4: nodeIP2}
-
 	node1 = &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node1",
@@ -77,7 +70,6 @@ var (
 			},
 		},
 	}
-
 	nodeConfig = &config.NodeConfig{
 		PodIPv4CIDR: podCIDR,
 		PodIPv6CIDR: podCIDRv6,
@@ -87,7 +79,6 @@ var (
 		},
 	}
 )
-
 type fakeController struct {
 	*Controller
 	clientset       *fake.Clientset
@@ -99,13 +90,10 @@ type fakeController struct {
 	ovsCtlClient    *ovsctltest.MockOVSCtlClient
 	wireguardClient *wgtest.MockInterface
 }
-
 type fakeIPsecCertificateManager struct{}
-
 func (f *fakeIPsecCertificateManager) HasSynced() bool {
 	return true
 }
-
 func newController(t testing.TB, networkConfig *config.NetworkConfig, objects ...runtime.Object) *fakeController {
 	clientset := fake.NewSimpleClientset(objects...)
 	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
@@ -134,11 +122,9 @@ func newController(t testing.TB, networkConfig *config.NetworkConfig, objects ..
 		wireguardClient: wireguardClient,
 	}
 }
-
 func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 	c := newController(t, &config.NetworkConfig{})
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
@@ -146,7 +132,6 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
 	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
 	c.informerFactory.WaitForCacheSync(stopCh)
-
 	otherNode := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "otherNode",
@@ -164,45 +149,37 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 			},
 		},
 	}
-
 	finishCh := make(chan struct{})
 	go func() {
 		defer close(finishCh)
-
 		c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
 		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 		c.processNextWorkItem()
-
 		// Since node1 is not deleted yet, routes and flows for otherNode shouldn't be installed as its PodCIDR is duplicate.
 		c.clientset.CoreV1().Nodes().Create(context.TODO(), otherNode, metav1.CreateOptions{})
 		c.processNextWorkItem()
-
 		// node1 is deleted, its routes and flows should be deleted.
 		c.clientset.CoreV1().Nodes().Delete(context.TODO(), node1.Name, metav1.DeleteOptions{})
 		c.ofClient.EXPECT().UninstallNodeFlows("node1").Times(1)
 		c.routeClient.EXPECT().DeleteRoutes(podCIDR1).Times(1)
 		c.routeClient.EXPECT().DeleteRoutes(podCIDR1v6).Times(1)
 		c.processNextWorkItem()
-
 		// After node1 is deleted, routes and flows should be installed for otherNode successfully.
 		c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1, "otherNode", nodeIP2, podCIDR1Gateway).Times(1)
 		c.processNextWorkItem()
 	}()
-
 	select {
 	case <-time.After(5 * time.Second):
 		t.Errorf("Test didn't finish in time")
 	case <-finishCh:
 	}
 }
-
 func TestLookupIPInPodSubnets(t *testing.T) {
 	c := newController(t, &config.NetworkConfig{})
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
@@ -210,13 +187,11 @@ func TestLookupIPInPodSubnets(t *testing.T) {
 	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
 	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
 	c.informerFactory.WaitForCacheSync(stopCh)
-
 	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 	c.processNextWorkItem()
-
 	testCases := []struct {
 		name           string
 		ips            []string
@@ -254,7 +229,6 @@ func TestLookupIPInPodSubnets(t *testing.T) {
 			isGwIP:         false,
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, ip := range tc.ips {
@@ -265,11 +239,9 @@ func TestLookupIPInPodSubnets(t *testing.T) {
 		})
 	}
 }
-
 func BenchmarkLookupIPInPodSubnets(b *testing.B) {
 	c := newController(b, &config.NetworkConfig{})
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
@@ -277,18 +249,15 @@ func BenchmarkLookupIPInPodSubnets(b *testing.B) {
 	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
 	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
 	c.informerFactory.WaitForCacheSync(stopCh)
-
 	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 	c.processNextWorkItem()
-
 	localPodIP := netip.MustParseAddr("1.1.0.99")
 	remotePodIP := netip.MustParseAddr("1.1.1.99")
 	remoteGatewayIP := netip.MustParseAddr("1.1.1.1")
 	unknownIP := netip.MustParseAddr("1.1.2.99")
-
 	b.ResetTimer()
 	for range b.N {
 		c.Controller.findPodSubnetForIP(localPodIP)
@@ -297,7 +266,6 @@ func BenchmarkLookupIPInPodSubnets(b *testing.B) {
 		c.Controller.findPodSubnetForIP(unknownIP)
 	}
 }
-
 func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig, authenticationMode config.IPsecAuthenticationMode) *fakeController {
 	c := newController(t, &config.NetworkConfig{
 		TrafficEncapMode:      0,
@@ -313,7 +281,6 @@ func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig, authenticatio
 	}
 	return c
 }
-
 func TestRemoveStaleTunnelPorts(t *testing.T) {
 	c := setup(t, []*interfacestore.InterfaceConfig{
 		{
@@ -330,7 +297,6 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 			},
 		},
 	}, config.IPsecAuthenticationModePSK)
-
 	defer c.queue.ShutDown()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -353,14 +319,11 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 			},
 		},
 	}
-
 	c.clientset.CoreV1().Nodes().Create(context.TODO(), nodeWithTunnel, metav1.CreateOptions{})
 	c.ovsClient.EXPECT().DeletePort("123").Times(1)
-
 	err := c.removeStaleTunnelPorts()
 	assert.NoError(t, err)
 }
-
 func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 	c := setup(t, []*interfacestore.InterfaceConfig{
 		{
@@ -391,13 +354,11 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 			},
 		},
 	}, config.IPsecAuthenticationModePSK)
-
 	defer c.queue.ShutDown()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
-
 	node1PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-1")
 	node2PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-2")
 	node3PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-3")
@@ -420,7 +381,6 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 	c.ovsClient.EXPECT().GetOFPort(node3PortName, false).Return(int32(5), nil)
 	c.ovsCtlClient.EXPECT().SetPortNoFlood(5)
 	c.ovsClient.EXPECT().DeletePort("123").Times(1)
-
 	tests := []struct {
 		name       string
 		nodeName   string
@@ -450,7 +410,6 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 			want:       5,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := c.createIPSecTunnelPort(tt.nodeName, tt.peerNodeIP)
@@ -460,16 +419,13 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 		})
 	}
 }
-
 func TestCreateIPSecTunnelPortCert(t *testing.T) {
 	c := setup(t, nil, config.IPsecAuthenticationModeCert)
-
 	defer c.queue.ShutDown()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
-
 	node1PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-1")
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
@@ -479,7 +435,6 @@ func TestCreateIPSecTunnelPortCert(t *testing.T) {
 		}).Times(1)
 	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
 	c.ovsCtlClient.EXPECT().SetPortNoFlood(1)
-
 	tests := []struct {
 		name       string
 		nodeName   string
@@ -495,7 +450,6 @@ func TestCreateIPSecTunnelPortCert(t *testing.T) {
 			want:       1,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := c.createIPSecTunnelPort(tt.nodeName, tt.peerNodeIP)
@@ -505,10 +459,8 @@ func TestCreateIPSecTunnelPortCert(t *testing.T) {
 		})
 	}
 }
-
 func TestGetNodeMAC(t *testing.T) {
 	validMac, _ := net.ParseMAC("00:1B:44:11:3A:B7")
-
 	tests := []struct {
 		name        string
 		mac         string
@@ -556,7 +508,6 @@ func TestGetNodeMAC(t *testing.T) {
 		})
 	}
 }
-
 func TestParseTunnelInterfaceConfig(t *testing.T) {
 	tests := []struct {
 		name                    string
@@ -624,7 +575,6 @@ func TestParseTunnelInterfaceConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestGetPodCIDRsOnNode(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -661,21 +611,17 @@ func TestGetPodCIDRsOnNode(t *testing.T) {
 		})
 	}
 }
-
 func TestRemoveStaleGatewayRoutes(t *testing.T) {
 	c := newController(t, &config.NetworkConfig{}, node1)
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
-
 	c.routeClient.EXPECT().Reconcile([]string{podCIDR1.String(), podCIDR1v6.String()})
 	err := c.removeStaleGatewayRoutes()
 	assert.NoError(t, err)
 }
-
 func TestRemoveStaleWireGuardPeers(t *testing.T) {
 	nodeWithWireGuard := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -687,22 +633,18 @@ func TestRemoveStaleWireGuardPeers(t *testing.T) {
 		TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard,
 	}, nodeWithWireGuard)
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
-
 	c.wireguardClient.EXPECT().RemoveStalePeers(map[string]string{nodeWithWireGuard.Name: "fakekey"})
 	err := c.removeStaleWireGuardPeers()
 	assert.NoError(t, err)
 }
-
 func TestDeleteNodeRoute(t *testing.T) {
 	nodeWithWireGuard := node1.DeepCopy()
 	nodeWithWireGuard.Name = "nodeWithWireGuard"
 	nodeWithWireGuard.Annotations = map[string]string{types.NodeWireGuardPublicAnnotationKey: "wgkey"}
-
 	tests := []struct {
 		name          string
 		node          *corev1.Node
@@ -747,7 +689,6 @@ func TestDeleteNodeRoute(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newController(t, &config.NetworkConfig{
@@ -757,73 +698,56 @@ func TestDeleteNodeRoute(t *testing.T) {
 				nodeName: tt.node.Name,
 				podCIDRs: []*net.IPNet{podCIDR1},
 			})
-
 			defer c.queue.ShutDown()
-
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			c.informerFactory.Start(stopCh)
 			c.informerFactory.WaitForCacheSync(stopCh)
-
 			if tt.intface != nil {
 				c.interfaceStore.AddInterface(tt.intface)
 			}
-
 			tt.expectedCalls(c.ovsClient, c.routeClient, c.ofClient, c.wireguardClient)
 			err := c.deleteNodeRoute(tt.node.Name)
 			assert.NoError(t, err)
 		})
 	}
 }
-
 func TestInitialListHasSynced(t *testing.T) {
 	c := newController(t, &config.NetworkConfig{}, node1)
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
-
 	require.Error(t, c.flowRestoreCompleteWait.WaitWithTimeout(100*time.Millisecond))
-
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway).Times(1)
 	c.processNextWorkItem()
-
 	assert.True(t, c.hasProcessedInitialList.HasSynced())
 }
-
 func TestInitialListHasSyncedStopChClosedEarly(t *testing.T) {
 	c := newController(t, &config.NetworkConfig{}, node1)
-
 	stopCh := make(chan struct{})
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
-
 	c.routeClient.EXPECT().Reconcile([]string{podCIDR1.String(), podCIDR1v6.String()})
-
 	// We close the stopCh right away, then call Run synchronously and wait for it to
 	// return. The workers will not even start, and the initial list of Nodes should never be
 	// reported as "synced".
 	close(stopCh)
 	c.Run(stopCh)
-
 	assert.Error(t, c.flowRestoreCompleteWait.WaitWithTimeout(500*time.Millisecond))
 	assert.False(t, c.hasProcessedInitialList.HasSynced())
 }
-
 func TestInitialListHasSyncedPolicyOnlyMode(t *testing.T) {
 	c := newController(t, &config.NetworkConfig{
 		TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
 	})
 	defer c.queue.ShutDown()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go c.Run(stopCh)
-
 	// In networkPolicyOnly mode, c.flowRestoreCompleteWait should be decremented immediately
 	// when calling Run, even though workers are never started and c.hasProcessedInitialList.HasSynced
 	// will remain false.

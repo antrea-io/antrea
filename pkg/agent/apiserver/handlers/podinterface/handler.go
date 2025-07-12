@@ -11,25 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package podinterface
-
 import (
 	"encoding/json"
 	"net"
 	"net/http"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/querier"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/querier"
 )
-
 func generateResponse(i *interfacestore.InterfaceConfig) apis.PodInterfaceResponse {
 	return apis.PodInterfaceResponse{
 		PodName:       i.ContainerInterfaceConfig.PodName,
@@ -42,7 +35,6 @@ func generateResponse(i *interfacestore.InterfaceConfig) apis.PodInterfaceRespon
 		ContainerID:   i.ContainerInterfaceConfig.ContainerID,
 	}
 }
-
 func getPodIPs(ips []net.IP) []string {
 	ipStrs := make([]string, len(ips))
 	for i := range ips {
@@ -50,13 +42,11 @@ func getPodIPs(ips []net.IP) []string {
 	}
 	return ipStrs
 }
-
 // HandleFunc returns the function which can handle queries issued by the pod-interface command.
 func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
 		ns := r.URL.Query().Get("namespace")
-
 		var pods []apis.PodInterfaceResponse
 		for _, v := range aq.GetInterfaceStore().GetInterfacesByType(interfacestore.ContainerInterface) {
 			podName := (*v.ContainerInterfaceConfig).PodName
@@ -65,7 +55,6 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 				pods = append(pods, generateResponse(v))
 			}
 		}
-
 		if len(name) > 0 && len(pods) == 0 {
 			w.WriteHeader(http.StatusNotFound)
 			return

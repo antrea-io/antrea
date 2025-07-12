@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"encoding/json"
 	"errors"
@@ -23,7 +21,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/spf13/afero"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
@@ -32,37 +29,28 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	"antrea.io/antrea/v2/pkg/ipfix"
 	"antrea.io/antrea/v2/pkg/util/env"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/infoelements"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	"antrea.io/antrea/pkg/ipfix"
-	"antrea.io/antrea/pkg/util/env"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/infoelements"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	"antrea.io/antrea/v2/pkg/ipfix"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
-
 var (
 	// this is used for unit testing
 	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
 		return exporter.initExportingProcessImpl()
 	}
-
 	defaultFS = afero.NewOsFs()
 )
-
 const flowCollectorCertDir = "/etc/flow-aggregator/certs/flow-collector"
-
 var ErrIPFIXExporterBackoff = errors.New("backoff needed")
-
 type IPFIXExporter struct {
 	config                     flowaggregatorconfig.FlowCollectorConfig
 	externalFlowCollectorAddr  string
@@ -88,7 +76,6 @@ type IPFIXExporter struct {
 	initNextAttempt time.Time
 	clock           clock.Clock
 }
-
 type ipfixExporterTLSConfig struct {
 	enable                          bool
 	minVersion                      uint16
@@ -97,7 +84,6 @@ type ipfixExporterTLSConfig struct {
 	exporterCertPath                string
 	exporterKeyPath                 string
 }
-
 func newIPFIXExporterTLSConfig(config flowaggregatorconfig.FlowCollectorTLSConfig) ipfixExporterTLSConfig {
 	var tlsConfig ipfixExporterTLSConfig
 	if !config.Enable {
@@ -116,7 +102,6 @@ func newIPFIXExporterTLSConfig(config flowaggregatorconfig.FlowCollectorTLSConfi
 	}
 	return tlsConfig
 }
-
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
 // user through the flow aggregator configuration. It is generated as a hash of the cluster UUID.
 func genObservationDomainID(clusterUUID uuid.UUID) uint32 {
@@ -125,7 +110,6 @@ func genObservationDomainID(clusterUUID uuid.UUID) uint32 {
 	observationDomainID := h.Sum32()
 	return observationDomainID
 }
-
 func newInitBackoff() wait.Backoff {
 	return wait.Backoff{
 		Duration: 1 * time.Second,
@@ -135,7 +119,6 @@ func newInitBackoff() wait.Backoff {
 		Cap:      30 * time.Second,
 	}
 }
-
 func NewIPFIXExporter(
 	clusterUUID uuid.UUID,
 	clusterID string,
@@ -144,7 +127,6 @@ func NewIPFIXExporter(
 ) *IPFIXExporter {
 	return newIPFIXExporterWithClock(clusterUUID, clusterID, opt, registry, clock.RealClock{})
 }
-
 func newIPFIXExporterWithClock(
 	clusterUUID uuid.UUID,
 	clusterID string,
@@ -158,7 +140,6 @@ func newIPFIXExporterWithClock(
 	} else {
 		sendJSONRecord = false
 	}
-
 	var observationDomainID uint32
 	if opt.Config.FlowCollector.ObservationDomainID != nil {
 		observationDomainID = *opt.Config.FlowCollector.ObservationDomainID
@@ -166,7 +147,6 @@ func newIPFIXExporterWithClock(
 		observationDomainID = genObservationDomainID(clusterUUID)
 	}
 	klog.InfoS("Flow aggregator Observation Domain ID", "domainID", observationDomainID)
-
 	exporter := &IPFIXExporter{
 		config:                     opt.Config.FlowCollector,
 		externalFlowCollectorAddr:  opt.ExternalFlowCollectorAddr,
@@ -184,20 +164,16 @@ func newIPFIXExporterWithClock(
 		initNextAttempt:            clock.Now(),
 		clock:                      clock,
 	}
-
 	return exporter
 }
-
 func (e *IPFIXExporter) reset() {
 	e.exportingProcess.CloseConnToCollector()
 	e.exportingProcess = nil
 }
-
 func (e *IPFIXExporter) Start() {
 	// no-op, initExportingProcessWithBackoff will be called whenever AddRecord is
 	// called as needed.
 }
-
 func (e *IPFIXExporter) Stop() {
 	if e.exportingProcess != nil {
 		if err := e.bufferedExporter.Flush(); err != nil {
@@ -206,7 +182,6 @@ func (e *IPFIXExporter) Stop() {
 		e.reset()
 	}
 }
-
 // AddRecord will send the record to the destination IPFIX collector.
 // If necessary, it will initialize the exporting process (i.e., the connection to the
 // connector). An exponential backoff mechanism is used to limit the number of initialization
@@ -224,13 +199,11 @@ func (e *IPFIXExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error 
 	}
 	return nil
 }
-
 func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	config := opt.Config.FlowCollector
 	if reflect.DeepEqual(config, e.config) {
 		return
 	}
-
 	e.config = config
 	e.externalFlowCollectorAddr = opt.ExternalFlowCollectorAddr
 	e.externalFlowCollectorProto = opt.ExternalFlowCollectorProto
@@ -244,7 +217,6 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	e.maxIPFIXMsgSize = int(config.MaxIPFIXMsgSize)
 	e.tls = newIPFIXExporterTLSConfig(config.TLS)
 	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "templateRefreshTimeout", e.templateRefreshTimeout, "maxIPFIXMsgSize", e.maxIPFIXMsgSize, "tls", e.tls.enable)
-
 	if e.exportingProcess != nil {
 		if err := e.bufferedExporter.Flush(); err != nil {
 			klog.ErrorS(err, "Error when flushing buffered IPFIX exporter")
@@ -252,7 +224,6 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 		e.reset()
 	}
 }
-
 func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixentities.Record {
 	var elements []ipfixentities.InfoElementWithValue
 	if isIPv6 {
@@ -270,7 +241,6 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 		idx += 1
 		return e
 	}
-
 	setIPAddress := func(bytes []byte) {
 		if len(bytes) > 0 {
 			next().SetIPAddressValue(bytes)
@@ -282,7 +252,6 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 			next().SetIPAddressValue(net.IPv4zero)
 		}
 	}
-
 	// IANA IEs
 	next().SetUnsigned32Value(uint32(flow.StartTs.Seconds))
 	next().SetUnsigned32Value(uint32(flow.EndTs.Seconds))
@@ -362,7 +331,6 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 		next().SetUnsigned64Value(flow.Aggregation.ThroughputFromDestination)
 		next().SetUnsigned64Value(flow.Aggregation.ReverseThroughputFromDestination)
 	}
-
 	// Add Pod label fields
 	var sourcePodLabels string
 	if flow.K8S.SourcePodLabels != nil {
@@ -394,9 +362,7 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 		}
 	}
 	next().SetStringValue(destinationPodLabels)
-
 	next().SetStringValue(e.clusterID)
-
 	// Proxy-mode specific IEs
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeProxy {
 		next().SetUnsigned32Value(flow.Ipfix.ObservationDomainId)
@@ -413,14 +379,12 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 		}
 		next().SetUnsigned8Value(uint8(flow.FlowDirection))
 	}
-
 	templateID := e.templateIDv4
 	if isIPv6 {
 		templateID = e.templateIDv6
 	}
 	return ipfixentities.NewDataRecordFromElements(templateID, elements)
 }
-
 func (e *IPFIXExporter) sendRecord(flow *flowpb.Flow, isRecordIPv6 bool) error {
 	if e.exportingProcess == nil {
 		if err := e.initExportingProcessWithBackoff(); err != nil {
@@ -437,11 +401,9 @@ func (e *IPFIXExporter) sendRecord(flow *flowpb.Flow, isRecordIPv6 bool) error {
 	klog.V(7).InfoS("Data record added successfully")
 	return nil
 }
-
 func inPod() bool {
 	return env.GetPodNamespace() != ""
 }
-
 func getMTU(ifaceName string) (int, error) {
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
@@ -449,7 +411,6 @@ func getMTU(ifaceName string) (int, error) {
 	}
 	return iface.MTU, nil
 }
-
 func (e *IPFIXExporter) prepareExportingProcessTLSClientConfig() (*exporter.ExporterTLSClientConfig, error) {
 	if !e.tls.enable {
 		return nil, nil
@@ -481,11 +442,9 @@ func (e *IPFIXExporter) prepareExportingProcessTLSClientConfig() (*exporter.Expo
 	}
 	return exporterConfig, nil
 }
-
 func (e *IPFIXExporter) initExportingProcess() error {
 	return initIPFIXExportingProcess(e)
 }
-
 func (e *IPFIXExporter) initExportingProcessWithBackoff() error {
 	now := e.clock.Now()
 	if e.initNextAttempt.After(now) {
@@ -500,7 +459,6 @@ func (e *IPFIXExporter) initExportingProcessWithBackoff() error {
 	e.initNextAttempt = now
 	return nil
 }
-
 func (e *IPFIXExporter) initExportingProcessImpl() error {
 	// We reload the certificate data every time, in case the files have been updated.
 	tlsClientConfig, err := e.prepareExportingProcessTLSClientConfig()
@@ -551,7 +509,6 @@ func (e *IPFIXExporter) initExportingProcessImpl() error {
 		}
 	}
 	expInput.MaxMsgSize = e.maxIPFIXMsgSize
-
 	ep, err := exporter.InitExportingProcess(expInput)
 	if err != nil {
 		return fmt.Errorf("got error when initializing IPFIX exporting process: %w", err)
@@ -565,10 +522,8 @@ func (e *IPFIXExporter) initExportingProcessImpl() error {
 	if err = e.createAndSendTemplate(true); err != nil {
 		return err
 	}
-
 	return nil
 }
-
 func (e *IPFIXExporter) createAndSendTemplate(isRecordIPv6 bool) error {
 	templateID := e.exportingProcess.NewTemplateID()
 	recordIPFamily := "IPv4"
@@ -598,7 +553,6 @@ func (e *IPFIXExporter) createAndSendTemplate(isRecordIPv6 bool) error {
 	klog.V(2).InfoS("Exporting process initialized", "templateSetIPFamily", recordIPFamily)
 	return nil
 }
-
 func (e *IPFIXExporter) prepareElements(isIPv6 bool) ([]ipfixentities.InfoElementWithValue, error) {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
 	ianaInfoElements := infoelements.IANAInfoElementsIPv4
@@ -607,7 +561,6 @@ func (e *IPFIXExporter) prepareElements(isIPv6 bool) ([]ipfixentities.InfoElemen
 		ianaInfoElements = infoelements.IANAInfoElementsIPv6
 		antreaInfoElements = infoelements.AntreaInfoElementsIPv6
 	}
-
 	for _, ieName := range ianaInfoElements {
 		ie, err := e.createInfoElement(ieName, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
@@ -698,10 +651,8 @@ func (e *IPFIXExporter) prepareElements(isIPv6 bool) ([]ipfixentities.InfoElemen
 			elements = append(elements, ie)
 		}
 	}
-
 	return elements, nil
 }
-
 func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) error {
 	elements := e.elementsV4
 	templateID := e.templateIDv4
@@ -714,7 +665,6 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) error {
 	record.PrepareRecord()
 	return e.bufferedExporter.AddRecord(record)
 }
-
 func (e *IPFIXExporter) createInfoElement(ieName string, enterpriseID uint32) (ipfixentities.InfoElementWithValue, error) {
 	element, err := e.registry.GetInfoElement(ieName, enterpriseID)
 	if err != nil {
@@ -726,7 +676,6 @@ func (e *IPFIXExporter) createInfoElement(ieName string, enterpriseID uint32) (i
 	}
 	return ie, nil
 }
-
 func (e *IPFIXExporter) Flush() error {
 	if e.exportingProcess == nil {
 		return nil

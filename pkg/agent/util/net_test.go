@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package util
-
 import (
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
-
 var (
 	ipv6Global      = net.ParseIP("2000::")
 	ipv4Public      = net.ParseIP("8.8.8.8")
@@ -43,12 +35,9 @@ var (
 		IP:   net.IPv4zero,
 		Mask: net.CIDRMask(32, 32),
 	}
-
 	testMACAddr, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
-
 	errTestInvalid = fmt.Errorf("invalid")
 )
-
 func TestGenerateContainerInterfaceName(t *testing.T) {
 	podNamespace := "namespace1"
 	podName0 := "pod0"
@@ -74,7 +63,6 @@ func TestGenerateContainerInterfaceName(t *testing.T) {
 		t.Errorf("failed to differentiate interfaces with pods that have the same pod namespace and name")
 	}
 }
-
 func TestGenerateContainerHostVethName(t *testing.T) {
 	podName0 := "pod0"
 	podNamespace0 := "ns0"
@@ -83,7 +71,6 @@ func TestGenerateContainerHostVethName(t *testing.T) {
 	ifaceName0 := GenerateContainerHostVethName(podName0, podNamespace0, containerID0, eth0)
 	require.LessOrEqual(t, len(ifaceName0), interfaceNameLength)
 	require.True(t, strings.HasPrefix(ifaceName0, podName0+"-"))
-
 	tests := []struct {
 		name          string
 		podName       string
@@ -165,7 +152,6 @@ func TestGenerateContainerHostVethName(t *testing.T) {
 		})
 	}
 }
-
 func TestGetIPNetDeviceFromIP(t *testing.T) {
 	testNetInterfaces := generateNetInterfaces()
 	tests := []struct {
@@ -217,7 +203,6 @@ func TestGetIPNetDeviceFromIP(t *testing.T) {
 			testNetInterfaceErr: errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockNetInterfaceGet(testNetInterfaces, tc.testNetInterfaceErr)()
@@ -229,7 +214,6 @@ func TestGetIPNetDeviceFromIP(t *testing.T) {
 		})
 	}
 }
-
 func TestGetIPNetDeviceByName(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -258,7 +242,6 @@ func TestGetIPNetDeviceByName(t *testing.T) {
 			testNetInterfaceErr:  errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.testNetInterface = generateNetInterface(tc.testNetInterfaceName)
@@ -276,7 +259,6 @@ func TestGetIPNetDeviceByName(t *testing.T) {
 		})
 	}
 }
-
 func TestGetIPNetDeviceByCIDRs(t *testing.T) {
 	testNetInterfaces := generateNetInterfacesDual()
 	tests := []struct {
@@ -310,7 +292,6 @@ func TestGetIPNetDeviceByCIDRs(t *testing.T) {
 			testNetInterfaceErr: errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockNetInterfaceGet(testNetInterfaces, tc.testNetInterfaceErr)()
@@ -322,16 +303,13 @@ func TestGetIPNetDeviceByCIDRs(t *testing.T) {
 		})
 	}
 }
-
 func TestGetIPv4Addr(t *testing.T) {
 	testIPs := []net.IP{net.IPv4zero, net.IPv6zero}
 	gotIP := GetIPv4Addr(testIPs)
 	assert.Equal(t, net.IPv4zero, gotIP)
-
 	gotIP = GetIPv4Addr([]net.IP{})
 	assert.Nil(t, gotIP)
 }
-
 func TestGetIPWithFamily(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -365,7 +343,6 @@ func TestGetIPWithFamily(t *testing.T) {
 			wantErr:    fmt.Errorf("no IP found with IPv4 AddressFamily"),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			gotIP, err := GetIPWithFamily(tc.testIPs, tc.testFamily)
@@ -374,7 +351,6 @@ func TestGetIPWithFamily(t *testing.T) {
 		})
 	}
 }
-
 func TestExtendCIDRWithIP(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -411,7 +387,6 @@ func TestExtendCIDRWithIP(t *testing.T) {
 		assert.Equal(t, expectedIPNet, gotIPNet)
 	}
 }
-
 func TestGenerateRandomMAC(t *testing.T) {
 	validateBits := func(mac net.HardwareAddr) (byte, byte) {
 		localBit := mac[0] & 0x2 >> 1
@@ -423,7 +398,6 @@ func TestGenerateRandomMAC(t *testing.T) {
 	assert.Equal(t, uint8(1), localBit)
 	assert.Equal(t, uint8(0), mcastBit)
 }
-
 func TestGetAllNodeAddresses(t *testing.T) {
 	testNetInterfaces := generateNetInterfaces()
 	tests := []struct {
@@ -449,7 +423,6 @@ func TestGetAllNodeAddresses(t *testing.T) {
 			testNetInterfaceErr: errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockNetInterfaceGet(testNetInterfaces, tc.testNetInterfaceErr)()
@@ -461,31 +434,25 @@ func TestGetAllNodeAddresses(t *testing.T) {
 		})
 	}
 }
-
 func TestNewIPNet(t *testing.T) {
 	gotIPNet := NewIPNet(net.IPv4allrouter)
 	assert.Equal(t, net.IPv4allrouter.To4(), gotIPNet.IP.To4())
 	assert.Equal(t, net.CIDRMask(32, 32), gotIPNet.Mask)
-
 	gotIPNet = NewIPNet(net.IPv6linklocalallrouters)
 	assert.Equal(t, net.IPv6linklocalallrouters, gotIPNet.IP)
 	assert.Equal(t, net.CIDRMask(128, 128), gotIPNet.Mask)
 }
-
 func TestPortToUint16(t *testing.T) {
 	gotUint16 := PortToUint16(1)
 	assert.Equal(t, uint16(1), gotUint16)
-
 	gotUint16 = PortToUint16(-1)
 	assert.Equal(t, uint16(0), gotUint16)
 }
-
 func TestGenerateUplinkInterfaceName(t *testing.T) {
 	testUplinkName := "t0"
 	gotName := GenerateUplinkInterfaceName(testUplinkName)
 	assert.Equal(t, testUplinkName+bridgedUplinkSuffix, gotName)
 }
-
 func TestGetIPNetsByLink(t *testing.T) {
 	testNetInterface := generateNetInterface("0")
 	tests := []struct {
@@ -502,7 +469,6 @@ func TestGetIPNetsByLink(t *testing.T) {
 			testNetInterfaceErr: errTestInvalid,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockNetInterfaceAddrs(testNetInterface, tc.testNetInterfaceErr)()
@@ -512,7 +478,6 @@ func TestGetIPNetsByLink(t *testing.T) {
 		})
 	}
 }
-
 func TestGenerateOVSDatapathID(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -540,7 +505,6 @@ func TestGenerateOVSDatapathID(t *testing.T) {
 		})
 	}
 }
-
 func generateNetInterfaceAddrs(idx int) []net.Addr {
 	netAddrsIPv4 := []net.Addr{&ipv4PublicIPNet}
 	netAddrsIPv6 := []net.Addr{
@@ -559,7 +523,6 @@ func generateNetInterfaceAddrs(idx int) []net.Addr {
 	mockNetAddrs := [][]net.Addr{netAddrsIPv4, netAddrsIPv6, netAddrsDualStack}
 	return mockNetAddrs[idx]
 }
-
 func generateNetInterface(name string) net.Interface {
 	testIdx, _ := strconv.Atoi(name)
 	testInterface := net.Interface{
@@ -569,15 +532,12 @@ func generateNetInterface(name string) net.Interface {
 	}
 	return testInterface
 }
-
 func generateNetInterfaces() []net.Interface {
 	return []net.Interface{generateNetInterface("0"), generateNetInterface("1")}
 }
-
 func generateNetInterfacesDual() []net.Interface {
 	return []net.Interface{generateNetInterface("2")}
 }
-
 func mockNetInterfaceGet(testNetInterfaces []net.Interface, err error) func() {
 	originalNetInterface := netInterfaces
 	netInterfaces = func() ([]net.Interface, error) {
@@ -587,7 +547,6 @@ func mockNetInterfaceGet(testNetInterfaces []net.Interface, err error) func() {
 		netInterfaces = originalNetInterface
 	}
 }
-
 func mockNetInterfaceByName(testNetInterface *net.Interface, err error) func() {
 	originalNetInterfaceByName := netInterfaceByName
 	netInterfaceByName = func(name string) (*net.Interface, error) {
@@ -597,7 +556,6 @@ func mockNetInterfaceByName(testNetInterface *net.Interface, err error) func() {
 		netInterfaceByName = originalNetInterfaceByName
 	}
 }
-
 func mockNetInterfaceByIndex(testNetInterface *net.Interface, err error) func() {
 	originalNetInterfaceByIndex := netInterfaceByIndex
 	netInterfaceByIndex = func(index int) (*net.Interface, error) {
@@ -607,7 +565,6 @@ func mockNetInterfaceByIndex(testNetInterface *net.Interface, err error) func() 
 		netInterfaceByIndex = originalNetInterfaceByIndex
 	}
 }
-
 func mockNetInterfaceAddrsMultiple(testNetInterfaces []net.Interface, valid bool, err error) func() {
 	originalNetInterfaceAddrs := netInterfaceAddrs
 	netInterfaceAddrs = func(i *net.Interface) ([]net.Addr, error) {
@@ -624,7 +581,6 @@ func mockNetInterfaceAddrsMultiple(testNetInterfaces []net.Interface, valid bool
 		netInterfaceAddrs = originalNetInterfaceAddrs
 	}
 }
-
 func mockNetInterfaceAddrs(testNetInterface net.Interface, err error) func() {
 	originalNetInterfaceAddrs := netInterfaceAddrs
 	netInterfaceAddrs = func(i *net.Interface) ([]net.Addr, error) {

@@ -12,32 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package main
-
 import (
 	"fmt"
-
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-<<<<<<< HEAD
 	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/leader"
 	"antrea.io/antrea/v2/pkg/log"
 	"antrea.io/antrea/v2/pkg/signals"
 	"antrea.io/antrea/v2/pkg/util/env"
-=======
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
-	"antrea.io/antrea/pkg/log"
-	"antrea.io/antrea/pkg/signals"
-	"antrea.io/antrea/pkg/util/env"
->>>>>>> origin/main
+	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/leader"
+	"antrea.io/antrea/v2/pkg/log"
+	"antrea.io/antrea/v2/pkg/signals"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
-
 func newLeaderCommand() *cobra.Command {
 	var leaderCmd = &cobra.Command{
 		Use:   "leader",
@@ -54,19 +47,15 @@ func newLeaderCommand() *cobra.Command {
 			}
 		},
 	}
-
 	return leaderCmd
 }
-
 func runLeader(o *Options) error {
 	podNamespace := env.GetPodNamespace()
 	stopCh := signals.RegisterSignalHandlers()
-
 	mgr, err := setupManagerAndCertControllerFunc(true, o)
 	if err != nil {
 		return err
 	}
-
 	mgrClient := mgr.GetClient()
 	mgrScheme := mgr.GetScheme()
 	memberClusterStatusManager := leader.NewMemberClusterAnnounceReconciler(
@@ -74,7 +63,6 @@ func runLeader(o *Options) error {
 	if err = memberClusterStatusManager.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating MemberClusterAnnounce controller: %v", err)
 	}
-
 	noCachedClient, err := client.New(mgr.GetConfig(), client.Options{Scheme: mgrScheme, Mapper: mgr.GetRESTMapper()})
 	if err != nil {
 		return err
@@ -87,7 +75,6 @@ func runLeader(o *Options) error {
 			namespace: podNamespace,
 		}},
 	)
-
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
 		&webhook.Admission{Handler: &clusterSetValidator{
 			Client:    mgr.GetClient(),
@@ -96,13 +83,11 @@ func runLeader(o *Options) error {
 			role:      leaderRole,
 		}},
 	)
-
 	clusterSetReconciler := leader.NewLeaderClusterSetReconciler(mgrClient, podNamespace,
 		o.ClusterCalimCRDAvailable, memberClusterStatusManager)
 	if err := clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)
 	}
-
 	resExportReconciler := &leader.ResourceExportReconciler{
 		Client: mgrClient,
 		Scheme: mgrScheme}
@@ -119,11 +104,9 @@ func runLeader(o *Options) error {
 		}
 		go labelExportReconciler.Run(stopCh)
 	}
-
 	if err = (&multiclusterv1alpha1.ResourceExport{}).SetupWebhookWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ResourceExport webhook: %v", err)
 	}
-
 	staleController := leader.NewStaleResCleanupController(
 		mgr.GetClient(),
 		mgr.GetScheme(),
@@ -132,7 +115,6 @@ func runLeader(o *Options) error {
 		return fmt.Errorf("error creating StaleResCleanupController: %v", err)
 	}
 	go staleController.Run(stopCh)
-
 	klog.InfoS("Leader MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("error running Manager: %v", err)

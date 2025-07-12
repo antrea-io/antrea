@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"fmt"
 	"reflect"
 	"sync"
 	"time"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,8 +26,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/member"
 	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
@@ -39,27 +34,21 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	antreatypes "antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/util/channel"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/member"
-	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
-	mclisters "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	antreatypes "antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/util/channel"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/member"
+	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
+	mclisters "antrea.io/antrea/v2/multicluster/pkg/client/listers/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	antreatypes "antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/util/channel"
 )
-
 const (
 	stretchedNetworkPolicyWorker         = 4
 	stretchedNetworkPolicyControllerName = "AntreaAgentStretchedNetworkPolicyController"
-
 	labelIndex = "Label"
 )
-
 type podSet map[types.NamespacedName]struct{}
-
 // StretchedNetworkPolicyController is used to update classifier flows of Pods.
 // It will make sure the latest LabelIdentity of the Pod, if available, will be
 // loaded into tun_id in the classifier flow of the Pod.
@@ -80,11 +69,9 @@ type StretchedNetworkPolicyController struct {
 	LabelIdentityListerSynced cache.InformerSynced
 	queue                     workqueue.TypedRateLimitingInterface[types.NamespacedName]
 	lock                      sync.RWMutex
-
 	labelToPods map[string]podSet
 	podToLabel  map[types.NamespacedName]string
 }
-
 func NewMCAgentStretchedNetworkPolicyController(
 	client openflow.Client,
 	interfaceStore interfacestore.InterfaceStore,
@@ -114,7 +101,6 @@ func NewMCAgentStretchedNetworkPolicyController(
 		labelToPods: map[string]podSet{},
 		podToLabel:  map[types.NamespacedName]string{},
 	}
-
 	controller.podInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			// Pod add event will be handled by processPodCNIAddEvent.
@@ -146,7 +132,6 @@ func NewMCAgentStretchedNetworkPolicyController(
 		resyncPeriod,
 	)
 	podUpdateSubscriber.Subscribe(controller.processPodCNIAddEvent)
-
 	controller.labelIdentityInformer.Informer().AddIndexers(cache.Indexers{
 		labelIndex: func(obj interface{}) ([]string, error) {
 			labelID, ok := obj.(*v1alpha1.LabelIdentity)
@@ -157,10 +142,8 @@ func NewMCAgentStretchedNetworkPolicyController(
 		}})
 	return controller
 }
-
 func (s *StretchedNetworkPolicyController) Run(stopCh <-chan struct{}) {
 	defer s.queue.ShutDown()
-
 	klog.InfoS("Starting controller", "controller", stretchedNetworkPolicyControllerName)
 	defer klog.InfoS("Shutting down controller", "controller", stretchedNetworkPolicyControllerName)
 	cacheSyncs := []cache.InformerSynced{s.podListerSynced, s.namespaceListerSynced, s.LabelIdentityListerSynced}
@@ -173,7 +156,6 @@ func (s *StretchedNetworkPolicyController) Run(stopCh <-chan struct{}) {
 	}
 	<-stopCh
 }
-
 func (s *StretchedNetworkPolicyController) enqueueAllPods() {
 	pods, _ := s.podLister.List(labels.Everything())
 	for _, pod := range pods {
@@ -183,21 +165,18 @@ func (s *StretchedNetworkPolicyController) enqueueAllPods() {
 		s.queue.Add(getPodReference(pod))
 	}
 }
-
 // worker is a long-running function that will continually call the processNextWorkItem
 // function in order to read and process a message on the workqueue.
 func (s *StretchedNetworkPolicyController) worker() {
 	for s.processNextWorkItem() {
 	}
 }
-
 func (s *StretchedNetworkPolicyController) processNextWorkItem() bool {
 	podRef, quit := s.queue.Get()
 	if quit {
 		return false
 	}
 	defer s.queue.Done(podRef)
-
 	if err := s.syncPodClassifierFlow(podRef); err == nil {
 		s.queue.Forget(podRef)
 	} else {
@@ -207,7 +186,6 @@ func (s *StretchedNetworkPolicyController) processNextWorkItem() bool {
 	}
 	return true
 }
-
 // syncPodClassifierFlow gets containerConfigs and labelIdentity according to a
 // Pod reference and updates this Pod's classifierFlow.
 func (s *StretchedNetworkPolicyController) syncPodClassifierFlow(podRef types.NamespacedName) error {
@@ -235,7 +213,6 @@ func (s *StretchedNetworkPolicyController) syncPodClassifierFlow(podRef types.Na
 		&labelID,
 	)
 }
-
 // getLabelIdentity updates labelToPods and podToLabel and returns the
 // LabelIdentity based on the normalizedLabel.
 func (s *StretchedNetworkPolicyController) getLabelIdentity(podRef types.NamespacedName, normalizedLabel string) uint32 {
@@ -249,7 +226,6 @@ func (s *StretchedNetworkPolicyController) getLabelIdentity(podRef types.Namespa
 		s.podToLabel[podRef] = normalizedLabel
 	}
 	s.lock.Unlock()
-
 	labelID := openflow.UnknownLabelIdentity
 	if objs, err := s.labelIdentityInformer.Informer().GetIndexer().ByIndex(labelIndex, normalizedLabel); err == nil && len(objs) == 1 {
 		labelIdentity := objs[0].(*v1alpha1.LabelIdentity)
@@ -257,7 +233,6 @@ func (s *StretchedNetworkPolicyController) getLabelIdentity(podRef types.Namespa
 	}
 	return labelID
 }
-
 func (s *StretchedNetworkPolicyController) processPodCNIAddEvent(e interface{}) {
 	podEvent := e.(antreatypes.PodUpdate)
 	if !podEvent.IsAdd {
@@ -269,7 +244,6 @@ func (s *StretchedNetworkPolicyController) processPodCNIAddEvent(e interface{}) 
 	}
 	s.queue.Add(podRef)
 }
-
 // processPodUpdate handles Pod update events. It only enqueues the Pod if the
 // Labels of this Pod have been updated.
 func (s *StretchedNetworkPolicyController) processPodUpdate(old, cur interface{}) {
@@ -286,7 +260,6 @@ func (s *StretchedNetworkPolicyController) processPodUpdate(old, cur interface{}
 	}
 	s.queue.Add(getPodReference(curPod))
 }
-
 // processPodDelete handles Pod delete events. It deletes the Pod from the
 // labelToPods and podToLabel. After Pod is deleted, its classifier flow will also
 // be deleted by podConfigurator. So no need to enqueue this Pod to update its
@@ -301,7 +274,6 @@ func (s *StretchedNetworkPolicyController) processPodDelete(old interface{}) {
 		delete(s.podToLabel, oldPodRef)
 	}
 }
-
 // processNamespaceUpdate handles Namespace update events. It only enqueues all
 // Pods in this Namespace if the Labels of this Namespace have been updated.
 func (s *StretchedNetworkPolicyController) processNamespaceUpdate(old, cur interface{}) {
@@ -319,7 +291,6 @@ func (s *StretchedNetworkPolicyController) processNamespaceUpdate(old, cur inter
 		s.queue.Add(getPodReference(pod))
 	}
 }
-
 // processLabelIdentityEvent handles labelIdentity add/update/delete event.
 // It will enqueue all Pods affected by this labelIdentity
 func (s *StretchedNetworkPolicyController) processLabelIdentityEvent(cur interface{}) {
@@ -332,7 +303,6 @@ func (s *StretchedNetworkPolicyController) processLabelIdentityEvent(cur interfa
 		}
 	}
 }
-
 func (s *StretchedNetworkPolicyController) addLabelToPod(normalizedLabel string, podRef types.NamespacedName) {
 	if _, ok := s.labelToPods[normalizedLabel]; ok {
 		s.labelToPods[normalizedLabel][podRef] = struct{}{}
@@ -340,7 +310,6 @@ func (s *StretchedNetworkPolicyController) addLabelToPod(normalizedLabel string,
 		s.labelToPods[normalizedLabel] = podSet{podRef: struct{}{}}
 	}
 }
-
 func (s *StretchedNetworkPolicyController) deleteLabelToPod(normalizedLabel string, podRef types.NamespacedName) {
 	if _, ok := s.labelToPods[normalizedLabel]; ok {
 		delete(s.labelToPods[normalizedLabel], podRef)
@@ -349,7 +318,6 @@ func (s *StretchedNetworkPolicyController) deleteLabelToPod(normalizedLabel stri
 		}
 	}
 }
-
 func getPodReference(pod *v1.Pod) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      pod.Name,

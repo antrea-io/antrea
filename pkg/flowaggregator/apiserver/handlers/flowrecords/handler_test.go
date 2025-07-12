@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowrecords
-
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
 	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
 	queriertest "antrea.io/antrea/v2/pkg/flowaggregator/querier/testing"
-=======
-	"antrea.io/antrea/pkg/flowaggregator/apis"
-	"antrea.io/antrea/pkg/flowaggregator/intermediate"
-	queriertest "antrea.io/antrea/pkg/flowaggregator/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
+	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
+	queriertest "antrea.io/antrea/v2/pkg/flowaggregator/querier/testing"
 )
-
 var (
 	record1 = map[string]interface{}{
 		"sourceIPv4Address":          "10.0.0.1",
@@ -81,7 +73,6 @@ var (
 		"2001:ce18:4d:1c5::3ac:2d1", "2001:ce18:4d:1c5::3ac:2d2", "8080", "3700", "6", "test-pod-c", "test-pod-d", "test-namespace-c", "test-namespace-d", "",
 	}
 )
-
 type testCase struct {
 	name              string
 	records           []map[string]interface{}
@@ -91,7 +82,6 @@ type testCase struct {
 	expectedResponse  []apis.FlowRecordsResponse
 	expectedTableRows [][]string
 }
-
 func TestGetFlowRecordsQuery(t *testing.T) {
 	testCases := []testCase{
 		{
@@ -150,20 +140,17 @@ func TestGetFlowRecordsQuery(t *testing.T) {
 			expectedStatus: http.StatusNotFound,
 		},
 	}
-
 	ctrl := gomock.NewController(t)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			faq := queriertest.NewMockFlowAggregatorQuerier(ctrl)
 			faq.EXPECT().GetFlowRecords(tc.flowKey).Return(tc.records).AnyTimes()
-
 			handler := HandleFunc(faq)
 			req, err := http.NewRequest(http.MethodGet, tc.query, nil)
 			assert.Nil(t, err)
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, req)
 			assert.Equal(t, tc.expectedStatus, recorder.Code)
-
 			if tc.expectedStatus == http.StatusOK {
 				var received []apis.FlowRecordsResponse
 				err = json.Unmarshal(recorder.Body.Bytes(), &received)
@@ -176,7 +163,5 @@ func TestGetFlowRecordsQuery(t *testing.T) {
 				assert.ElementsMatch(t, tc.expectedTableRows, receivedTableRows)
 			}
 		})
-
 	}
-
 }

@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cniserver
-
 import (
 	"fmt"
 	"net"
 	"testing"
 	"time"
-
 	"antrea.io/libOpenflow/openflow15"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,26 +31,20 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/util/channel"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/util/channel"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/util/channel"
 )
-
 var (
 	podIfName           = "test"
 	podIPs              = []net.IP{net.ParseIP("192.168.9.10")}
 	podMac, _           = net.ParseMAC("00:15:5D:B2:6F:38")
 	podInfraContainerID = "261a1970-5b6c-11ed-8caf-000c294e5d03"
-
 	pod = &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testPodNameA,
@@ -63,7 +54,6 @@ var (
 			NodeName: nodeName,
 		},
 	}
-
 	portStatusMsg = &openflow15.PortStatus{
 		Reason: openflow15.PR_MODIFY,
 		Desc: openflow15.Port{
@@ -74,7 +64,6 @@ var (
 		},
 	}
 )
-
 type mockClients struct {
 	kubeClient       *fakeclientset.Clientset
 	localPodInformer cache.SharedIndexInformer
@@ -83,10 +72,8 @@ type mockClients struct {
 	ofClient         *openflowtest.MockClient
 	recorder         *record.FakeRecorder
 }
-
 func newMockClients(ctrl *gomock.Controller, nodeName string, objects ...runtime.Object) *mockClients {
 	kubeClient := fakeclientset.NewClientset(objects...)
-
 	localPodInformer := coreinformers.NewFilteredPodInformer(
 		kubeClient,
 		metav1.NamespaceAll,
@@ -100,7 +87,6 @@ func newMockClients(ctrl *gomock.Controller, nodeName string, objects ...runtime
 	ofClient := openflowtest.NewMockClient(ctrl)
 	recorder := record.NewFakeRecorder(100)
 	recorder.IncludeObject = false
-
 	return &mockClients{
 		kubeClient:       kubeClient,
 		localPodInformer: localPodInformer,
@@ -110,26 +96,22 @@ func newMockClients(ctrl *gomock.Controller, nodeName string, objects ...runtime
 		recorder:         recorder,
 	}
 }
-
 func (c *mockClients) startInformers(stopCh chan struct{}) {
 	go c.localPodInformer.Run(stopCh)
 	cache.WaitForCacheSync(stopCh, c.localPodInformer.HasSynced)
 }
-
 type asyncWaiter struct {
 	podName     string
 	containerID string
 	waitCh      chan struct{}
 	notifier    *channel.SubscribableChannel
 }
-
 func (w *asyncWaiter) notify(e interface{}) {
 	podUpdate := e.(types.PodUpdate)
 	if podUpdate.PodName == w.podName && podUpdate.ContainerID == w.containerID {
 		w.waitCh <- struct{}{}
 	}
 }
-
 func (w *asyncWaiter) waitUntil(timeout time.Duration) bool {
 	select {
 	case <-w.waitCh:
@@ -138,7 +120,6 @@ func (w *asyncWaiter) waitUntil(timeout time.Duration) bool {
 		return false
 	}
 }
-
 func newAsyncWaiter(podName, containerID string, stopCh chan struct{}) *asyncWaiter {
 	waiter := &asyncWaiter{
 		podName:     podName,
@@ -150,7 +131,6 @@ func newAsyncWaiter(podName, containerID string, stopCh chan struct{}) *asyncWai
 	go waiter.notifier.Run(stopCh)
 	return waiter
 }
-
 func mockRetryInterval(t *testing.T) {
 	oriRetryInterval := retryInterval
 	retryInterval = -1
@@ -158,7 +138,6 @@ func mockRetryInterval(t *testing.T) {
 		retryInterval = oriRetryInterval
 	})
 }
-
 func newTestPodConfigurator(testClients *mockClients, waiter *asyncWaiter) *podConfigurator {
 	interfaceStore := interfacestore.NewInterfaceStore()
 	eventBroadcaster := record.NewBroadcaster()
@@ -183,10 +162,8 @@ func newTestPodConfigurator(testClients *mockClients, waiter *asyncWaiter) *podC
 	}
 	return podCfg
 }
-
 func TestUpdateUnreadyPod(t *testing.T) {
 	mockRetryInterval(t)
-
 	for _, tc := range []struct {
 		name               string
 		ofPortAssigned     bool
@@ -229,17 +206,12 @@ func TestUpdateUnreadyPod(t *testing.T) {
 			controller := gomock.NewController(t)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			waiter := newAsyncWaiter(testPodNameA, podInfraContainerID, stopCh)
-
 			testClients := newMockClients(controller, nodeName, pod)
 			testClients.startInformers(stopCh)
 			fakeOFClient := testClients.ofClient
-
 			configurator := newTestPodConfigurator(testClients, waiter)
-
 			flowInstalled := false
-
 			ifConfig := interfacestore.InterfaceConfig{
 				InterfaceName: podIfName,
 				ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
@@ -253,33 +225,27 @@ func TestUpdateUnreadyPod(t *testing.T) {
 				IPs: podIPs,
 				MAC: podMac,
 			}
-
 			if tc.ofPortAssigned {
 				ifConfig.OVSPortConfig.OFPort = int32(1)
 			}
-
 			if tc.podIfaceIsCached {
 				configurator.ifaceStore.AddInterface(&ifConfig)
 			}
-
 			if tc.installFlow {
 				fakeOFClient.EXPECT().InstallPodFlows(podIfName, podIPs, podMac, portStatusMsg.Desc.PortNo, uint16(0), nil).Times(1).Return(tc.installOpenFlowErr)
 				if tc.installOpenFlowErr == nil {
 					flowInstalled = true
 				}
 			}
-
 			err := configurator.updateUnreadyPod(podIfName)
 			if tc.expErr == "" {
 				require.NoError(t, err)
 			} else {
 				require.EqualError(t, err, tc.expErr)
 			}
-
 			if flowInstalled {
 				assert.True(t, waiter.waitUntil(5*time.Second))
 			}
-
 			var gotEvent string
 			select {
 			case gotEvent = <-testClients.recorder.Events:
@@ -289,10 +255,8 @@ func TestUpdateUnreadyPod(t *testing.T) {
 		})
 	}
 }
-
 func TestProcessNextWorkItem(t *testing.T) {
 	mockRetryInterval(t)
-
 	for _, tc := range []struct {
 		name               string
 		installOpenFlowErr error
@@ -313,16 +277,12 @@ func TestProcessNextWorkItem(t *testing.T) {
 			controller := gomock.NewController(t)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			waiter := newAsyncWaiter(testPodNameA, podInfraContainerID, stopCh)
-
 			testClients := newMockClients(controller, nodeName, pod)
 			testClients.startInformers(stopCh)
 			fakeOFClient := testClients.ofClient
-
 			configurator := newTestPodConfigurator(testClients, waiter)
 			defer configurator.unreadyPortQueue.ShutDown()
-
 			configurator.ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
 				InterfaceName: podIfName,
 				ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
@@ -337,12 +297,9 @@ func TestProcessNextWorkItem(t *testing.T) {
 				IPs: podIPs,
 				MAC: podMac,
 			})
-
 			fakeOFClient.EXPECT().InstallPodFlows(podIfName, podIPs, podMac, portStatusMsg.Desc.PortNo, uint16(0), nil).Times(1).Return(tc.installOpenFlowErr)
 			configurator.unreadyPortQueue.Add(podIfName)
-
 			configurator.processNextWorkItem()
-
 			if tc.installOpenFlowErr != nil {
 				require.Equal(t, 1, configurator.unreadyPortQueue.Len())
 				key, _ := configurator.unreadyPortQueue.Get()
@@ -353,7 +310,6 @@ func TestProcessNextWorkItem(t *testing.T) {
 		})
 	}
 }
-
 func TestProcessPortStatusMessage(t *testing.T) {
 	validOFPort := int32(1)
 	invalidOFPort := int32(0)
@@ -435,7 +391,6 @@ func TestProcessPortStatusMessage(t *testing.T) {
 				containerAccess:  newContainerAccessArbitrator(),
 			}
 			defer podCfg.unreadyPortQueue.ShutDown()
-
 			if tc.ifaceInStore {
 				podCfg.ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
 					InterfaceName: podIfName,
@@ -451,7 +406,6 @@ func TestProcessPortStatusMessage(t *testing.T) {
 					MAC: podMac,
 				})
 			}
-
 			podCfg.processPortStatusMessage(tc.status)
 			if tc.expEnqueue {
 				require.Equal(t, 1, queue.Len())
@@ -460,7 +414,6 @@ func TestProcessPortStatusMessage(t *testing.T) {
 			} else {
 				require.Equal(t, 0, queue.Len())
 			}
-
 			if tc.expOFportNumber != nil {
 				ifaceCfg, ok := podCfg.ifaceStore.GetInterfaceByName(podIfName)
 				require.True(t, ok)

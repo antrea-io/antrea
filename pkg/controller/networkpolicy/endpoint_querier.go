@@ -11,82 +11,64 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // Package networkpolicy provides NetworkPolicyController implementation to manage
 // and synchronize the Pods and Namespaces affected by Network Policies and enforce
 // their rules.
 package networkpolicy
-
 import (
 	"errors"
 	"math"
 	"sort"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/controller/networkpolicy/store"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 )
-
 // EndpointQuerier handles requests for querying NetworkPolicies of the endpoint.
 type EndpointQuerier interface {
 	// QueryNetworkPolicyRules returns the list of NetworkPolicies which apply to the provided Pod,
 	// along with the list of NetworkPolicy ingress/egress rules which select the provided Pod.
 	QueryNetworkPolicyRules(namespace, podName string) (*antreatypes.EndpointNetworkPolicyRules, error)
 }
-
 // EndpointQuerierImpl implements the EndpointQuerier interface
 type EndpointQuerierImpl struct {
 	networkPolicyController *NetworkPolicyController
 }
-
 // NewEndpointQuerier returns a new *EndpointQuerierImpl.
 func NewEndpointQuerier(networkPolicyController *NetworkPolicyController) *EndpointQuerierImpl {
 	return &EndpointQuerierImpl{
 		networkPolicyController: networkPolicyController,
 	}
 }
-
 // PolicyRuleQuerier handles requests for querying effective policy rule on entities.
 type PolicyRuleQuerier interface {
 	QueryNetworkPolicyEvaluation(entities *controlplane.NetworkPolicyEvaluationRequest) (*controlplane.NetworkPolicyEvaluationResponse, error)
 }
-
 // policyRuleQuerier implements the PolicyRuleQuerier interface
 type policyRuleQuerier struct {
 	endpointQuerier EndpointQuerier
 }
-
 // NewPolicyRuleQuerier returns a new *policyRuleQuerier
 func NewPolicyRuleQuerier(endpointQuerier EndpointQuerier) *policyRuleQuerier {
 	return &policyRuleQuerier{
 		endpointQuerier: endpointQuerier,
 	}
 }
-
 type lessFunc func(p1, p2 *antreatypes.RuleInfo) int
-
 // ByRulePriority implements the Sort interface, sorting the rules within.
 // Comparators should be ordered by their importance in terms of determining rule priority.
 type ByRulePriority struct {
 	rules       []*antreatypes.RuleInfo
 	comparators []lessFunc
 }
-
 func (s ByRulePriority) Len() int { return len(s.rules) }
-
 func (s ByRulePriority) Swap(i, j int) { s.rules[i], s.rules[j] = s.rules[j], s.rules[i] }
-
 func (s ByRulePriority) Less(i, j int) bool {
 	p, q := s.rules[i], s.rules[j]
 	for k := 0; k < len(s.comparators); k++ {
@@ -101,7 +83,6 @@ func (s ByRulePriority) Less(i, j int) bool {
 	}
 	return false
 }
-
 // QueryNetworkPolicyRules returns network policies and rules relevant to the selected
 // network endpoint. Relevant network policies fall into three categories: applied policies
 // are policies which directly apply to an endpoint, egress/ingress rules are rules which
@@ -114,7 +95,6 @@ func (eq *EndpointQuerierImpl) QueryNetworkPolicyRules(namespace, podName string
 	if !exists {
 		return nil, nil
 	}
-
 	// create network policies categories
 	var applied []*antreatypes.NetworkPolicy
 	var ingress, egress []*antreatypes.RuleInfo
@@ -184,7 +164,6 @@ func (eq *EndpointQuerierImpl) QueryNetworkPolicyRules(namespace, podName string
 	}
 	return &antreatypes.EndpointNetworkPolicyRules{Namespace: namespace, Name: podName, AppliedPolicies: applied, EndpointAsIngressSrcRules: ingress, EndpointAsEgressDstRules: egress}, nil
 }
-
 // processEndpointAppliedRules processes NetworkPolicy rules applied to an endpoint,
 // returns a set of the corresponding policy UIDs, and manually generates Kubernetes
 // NetworkPolicy default isolation rules if they exist. The default isolation rule's
@@ -209,7 +188,6 @@ func processEndpointAppliedRules(appliedPolicies []*antreatypes.NetworkPolicy, i
 	}
 	return policyUIDs, isolationRules
 }
-
 // predictEndpointsRules returns the predicted rules effective from srcEndpoints to dstEndpoints.
 // Rules returned satisfy a. in source applied policies and destination egress rules,
 // or b. in source ingress rules and destination applied policies or c. applied to KNP default isolation.
@@ -231,7 +209,6 @@ func predictEndpointsRules(srcEndpointRules, dstEndpointRules *antreatypes.Endpo
 		commonRules = append(commonRules, srcIsolated...)
 		commonRules = append(commonRules, dstIsolated...)
 	}
-
 	// sort the common rules based on multiple closures, the top rule has the highest precedence
 	tierPriority := func(r1, r2 *antreatypes.RuleInfo) int {
 		effectiveTierPriorityK8sNP := (crdv1beta1.DefaultTierPriority + crdv1beta1.BaselineTierPriority) / 2
@@ -294,7 +271,6 @@ func predictEndpointsRules(srcEndpointRules, dstEndpointRules *antreatypes.Endpo
 	}
 	return
 }
-
 // QueryNetworkPolicyEvaluation returns the effective NetworkPolicy rule on given
 // source and destination entities.
 func (eq *policyRuleQuerier) QueryNetworkPolicyEvaluation(entities *controlplane.NetworkPolicyEvaluationRequest) (*controlplane.NetworkPolicyEvaluationResponse, error) {

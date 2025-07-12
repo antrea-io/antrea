@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,31 +13,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package secondarynetwork
-
 import (
 	"fmt"
 	"net"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 var (
 	// Funcs which will be overridden with mock funcs in tests.
 	interfaceByNameFn = net.InterfaceByName
 )
-
 // Initialize sets up OVS bridges.
 func (c *Controller) Initialize() error {
 	// We only support moving and restoring of interface configuration to OVS Bridge for the single physical interface case.
@@ -66,21 +56,18 @@ func (c *Controller) Initialize() error {
 	}
 	return nil
 }
-
 // Restore restores interface configuration from secondary-bridge back to host-interface.
 func (c *Controller) Restore() {
 	if len(c.secNetConfig.OVSBridges) != 0 && len(c.secNetConfig.OVSBridges[0].PhysicalInterfaces) == 1 {
 		util.RestoreHostInterfaceConfiguration(c.secNetConfig.OVSBridges[0].BridgeName, c.secNetConfig.OVSBridges[0].PhysicalInterfaces[0])
 	}
 }
-
 func connectPhyInterfacesToOVSBridge(ovsBridgeClient ovsconfig.OVSBridgeClient, phyInterfaces []string) error {
 	for _, phyInterface := range phyInterfaces {
 		if _, err := interfaceByNameFn(phyInterface); err != nil {
 			return fmt.Errorf("failed to get interface %s: %v", phyInterface, err)
 		}
 	}
-
 	externalIDs := map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
 	}
@@ -89,7 +76,6 @@ func connectPhyInterfacesToOVSBridge(ovsBridgeClient ovsconfig.OVSBridgeClient, 
 			klog.V(2).InfoS("Physical interface already connected to secondary OVS bridge, skip the configuration", "device", phyInterface)
 			continue
 		}
-
 		if _, err := ovsBridgeClient.CreateUplinkPort(phyInterface, int32(i), externalIDs); err != nil {
 			return fmt.Errorf("failed to create OVS uplink port %s: %v", phyInterface, err)
 		}

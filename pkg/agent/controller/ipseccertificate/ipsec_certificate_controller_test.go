@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipseccertificate
-
 import (
 	"context"
 	"crypto"
@@ -28,7 +26,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -45,16 +42,10 @@ import (
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/utils/clock"
 	testingclock "k8s.io/utils/clock/testing"
-
-<<<<<<< HEAD
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
-=======
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
->>>>>>> origin/main
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 )
-
 const fakeNodeName = "fake-node-1"
-
 type fakeController struct {
 	*Controller
 	mockController   *gomock.Controller
@@ -63,13 +54,11 @@ type fakeController struct {
 	caCert           *x509.Certificate
 	caKey            crypto.Signer
 }
-
 func newFakeController(t *testing.T, clock clock.WithTicker) *fakeController {
 	mockController := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(mockController)
 	fakeClient := fake.NewSimpleClientset()
 	listCSRAction := k8stesting.NewRootListAction(certificatesv1.SchemeGroupVersion.WithResource("certificatesigningrequests"), certificatesv1.SchemeGroupVersion.WithKind("CertificateSigningRequest"), metav1.ListOptions{})
-
 	// add an reactor to fill the Name and UID in the Create request.
 	fakeClient.PrependReactor("create", "certificatesigningrequests", k8stesting.ReactionFunc(
 		func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -116,7 +105,6 @@ func newFakeController(t *testing.T, clock clock.WithTicker) *fakeController {
 			Items: filtered,
 		}, nil
 	})
-
 	originDefaultPath := defaultCertificatesPath
 	cfg := certutil.Config{
 		CommonName:   "antrea-ipsec-ca",
@@ -136,7 +124,6 @@ func newFakeController(t *testing.T, clock clock.WithTicker) *fakeController {
 	require.NoError(t, err)
 	err = certutil.WriteCert(filepath.Join(defaultCertificatesPath, "ca", "ca.crt"), caData)
 	require.NoError(t, err)
-
 	c := newIPSecCertificateControllerWithCustomClock(fakeClient, mockOVSBridgeClient, fakeNodeName, clock)
 	return &fakeController{
 		Controller:       c,
@@ -147,7 +134,6 @@ func newFakeController(t *testing.T, clock clock.WithTicker) *fakeController {
 		caKey:            key,
 	}
 }
-
 func TestController_syncConfigurations(t *testing.T) {
 	t.Run("rotate certificate if current certificates are empty", func(t *testing.T) {
 		fakeController := newFakeController(t, clock.RealClock{})
@@ -256,7 +242,6 @@ func TestController_syncConfigurations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, list.Items, 1)
 		assert.NotEmpty(t, fakeController.caPath)
-
 		rotationDeadline := fakeController.certificateKeyPair.nextRotationDeadline()
 		assert.False(t, rotationDeadline.IsZero())
 		fakeController.rotateCertificate = func() (*certificateKeyPair, error) {
@@ -271,7 +256,6 @@ func TestController_syncConfigurations(t *testing.T) {
 		assert.Equal(t, fakeController.certificateKeyPair.nextRotationDeadline(), rotationDeadline)
 	})
 }
-
 func TestController_RotateCertificates(t *testing.T) {
 	// It is important to truncate to the second, because the accuracy of notAfter in the
 	// certificate is at the second level. If we don't, the certificate may actually be rotated
@@ -336,7 +320,6 @@ func TestController_RotateCertificates(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, list.Items, 2)
 }
-
 func newIPsecCertTemplate(t *testing.T, nodeName string, notBefore, notAfter time.Time) *x509.Certificate {
 	return &x509.Certificate{
 		Subject: pkix.Name{
@@ -354,7 +337,6 @@ func newIPsecCertTemplate(t *testing.T, nodeName string, notBefore, notAfter tim
 		},
 	}
 }
-
 func createCertificate(
 	t *testing.T,
 	nodeName string,
@@ -374,7 +356,6 @@ func createCertificate(
 	require.NoError(t, err)
 	return encoded
 }
-
 func signCSR(
 	t *testing.T,
 	controller *fakeController,
@@ -386,12 +367,10 @@ func signCSR(
 	assert.Empty(t, remain)
 	req, err := x509.ParseCertificateRequest(block.Bytes)
 	assert.NoError(t, err)
-
 	// Wait one second as the fake clientset doesn't support watching with specific resourceVersion.
 	// Otherwise the update event would be missed by the watcher used in csrutil.WaitForCertificate()
 	// if it happens to be generated in-between the List and Watch calls.
 	time.Sleep(1 * time.Second)
-
 	newCert := createCertificate(t, req.Subject.CommonName, controller.caCert,
 		controller.caKey, req.PublicKey, controller.clock.Now(), expirationDuration)
 	toUpdate := csr.DeepCopy()
@@ -402,7 +381,6 @@ func signCSR(
 	toUpdate, err = controller.kubeClient.CertificatesV1().CertificateSigningRequests().
 		UpdateApproval(context.TODO(), csr.Name, toUpdate, metav1.UpdateOptions{})
 	assert.NoError(t, err)
-
 	toUpdate = toUpdate.DeepCopy()
 	toUpdate.Status.Certificate = newCert
 	_, err = controller.kubeClient.CertificatesV1().CertificateSigningRequests().
@@ -410,7 +388,6 @@ func signCSR(
 	assert.NoError(t, err)
 	t.Logf("Sign CSR %q successfully", csr.Name)
 }
-
 func Test_jitteryDuration(t *testing.T) {
 	tests := []struct {
 		name                                   string
@@ -455,7 +432,6 @@ func Test_jitteryDuration(t *testing.T) {
 		})
 	}
 }
-
 func Test_certificateKeyPair_nextRotationDeadline(t *testing.T) {
 	tests := []struct {
 		name                       string

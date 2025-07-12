@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"context"
 	"fmt"
 	"strings"
-
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-<<<<<<< HEAD
 	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 	"antrea.io/antrea/v2/pkg/antctl/transform/resourceexport"
-=======
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/pkg/antctl/raw"
-	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
-	"antrea.io/antrea/pkg/antctl/transform/resourceexport"
->>>>>>> origin/main
+	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
+	"antrea.io/antrea/v2/pkg/antctl/transform/resourceexport"
 )
-
 type resourceExportOptions struct {
 	namespace     string
 	outputFormat  string
@@ -44,9 +36,7 @@ type resourceExportOptions struct {
 	clusterID     string
 	k8sClient     client.Client
 }
-
 var optionsResourceExport *resourceExportOptions
-
 var resourceExportExamples = strings.Trim(`
 Get all ResourceExports of ClusterSet in default Namesapce
 $ antctl mc get resourceexport
@@ -59,7 +49,6 @@ $ antctl mc get resourceexport -o json
 Get the specified ResourceExport
 $ antctl mc get resourceexport <RESOURCEEXPORT> -n <NAMESPACE>
 `, "\n")
-
 func (o *resourceExportOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.allNamespaces {
 		o.namespace = metav1.NamespaceAll
@@ -71,7 +60,6 @@ func (o *resourceExportOptions) validateAndComplete(cmd *cobra.Command) error {
 		if err != nil {
 			return err
 		}
-
 		o.k8sClient, err = client.New(kubeconfig, client.Options{Scheme: multiclusterscheme.Scheme})
 		if err != nil {
 			return err
@@ -79,7 +67,6 @@ func (o *resourceExportOptions) validateAndComplete(cmd *cobra.Command) error {
 	}
 	return nil
 }
-
 func NewResourceExportCommand() *cobra.Command {
 	cmdResourceExport := &cobra.Command{
 		Use: "resourceexport",
@@ -98,23 +85,18 @@ func NewResourceExportCommand() *cobra.Command {
 	cmdResourceExport.Flags().StringVarP(&o.outputFormat, "output", "o", "", "Output format. Supported formats: json|yaml")
 	cmdResourceExport.Flags().BoolVarP(&o.allNamespaces, "all-namespaces", "A", false, "If present, list ResourceExport across all namespaces")
 	cmdResourceExport.Flags().StringVarP(&o.clusterID, "cluster-id", "", "", "List of the ResourceExport of specific clusterID")
-
 	return cmdResourceExport
 }
-
 func runEResourceExport(cmd *cobra.Command, args []string) error {
 	err := optionsResourceExport.validateAndComplete(cmd)
 	if err != nil {
 		return err
 	}
-
 	var resExports interface{}
 	singleResource := len(args) > 0
-
 	if optionsResourceExport.allNamespaces && singleResource {
 		return fmt.Errorf("a resource cannot be retrieved by name across all Namespaces")
 	}
-
 	if singleResource {
 		resourceExportName := args[0]
 		resourceExport := multiclusterv1alpha1.ResourceExport{}
@@ -158,6 +140,5 @@ func runEResourceExport(cmd *cobra.Command, args []string) error {
 		}
 		resExports = resourceExportList.Items
 	}
-
 	return output(resExports, singleResource, optionsResourceExport.outputFormat, cmd.OutOrStdout(), resourceexport.Transform)
 }

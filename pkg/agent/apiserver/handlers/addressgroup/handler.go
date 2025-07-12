@@ -11,22 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package addressgroup
-
 import (
 	"encoding/json"
 	"net/http"
-
-<<<<<<< HEAD
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query address groups in current agent. The HandlerFunc accepts `name` parameter
 // in URL and returns the specific address group.

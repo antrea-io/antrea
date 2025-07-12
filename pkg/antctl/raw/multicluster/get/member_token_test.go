@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"bytes"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 func TestGetAccessToken(t *testing.T) {
 	secretList := &corev1.SecretList{
 		Items: []corev1.Secret{
@@ -45,7 +37,6 @@ func TestGetAccessToken(t *testing.T) {
 			},
 		},
 	}
-
 	secretListNoAnnotations := &corev1.SecretList{
 		Items: []corev1.Secret{
 			{
@@ -57,7 +48,6 @@ func TestGetAccessToken(t *testing.T) {
 			},
 		},
 	}
-
 	tests := []struct {
 		name            string
 		existingSecrets *corev1.SecretList
@@ -139,7 +129,6 @@ func TestGetAccessToken(t *testing.T) {
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
-
 			fakeClient := fake.NewClientBuilder().WithScheme(mcscheme.Scheme).Build()
 			if tt.existingSecrets != nil {
 				fakeClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithLists(tt.existingSecrets).Build()

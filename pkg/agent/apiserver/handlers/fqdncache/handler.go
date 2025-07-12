@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package fqdncache
-
 import (
 	"encoding/json"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	agentapi "antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	agentapi "antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	agentapi "antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fqdnFilter, err := newFilterFromURLQuery(r.URL.Query())
@@ -56,7 +48,6 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 		}
 	}
 }
-
 func newFilterFromURLQuery(query url.Values) (*querier.FQDNCacheFilter, error) {
 	domain := query.Get("domain")
 	if domain == "" {
@@ -69,7 +60,6 @@ func newFilterFromURLQuery(query url.Values) (*querier.FQDNCacheFilter, error) {
 	pattern = strings.ReplaceAll(pattern, "*", ".*")
 	// Anchor the regex match expression.
 	pattern = "^" + pattern + "$"
-
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err

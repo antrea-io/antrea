@@ -11,30 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"bytes"
 	"log"
 	"os"
 	"testing"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 func TestInit(t *testing.T) {
 	existingSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -43,18 +35,15 @@ func TestInit(t *testing.T) {
 		},
 		Data: map[string][]byte{"token": []byte("12345")},
 	}
-
 	cmd := NewInitCommand()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.Flag("clusterset").Value.Set("test-clusterset")
-
 	initOpts.namespace = "default"
 	initOpts.clusterSet = "test-clusterset"
 	initOpts.clusterID = "cluster-id"
 	initOpts.createToken = true
-
 	fakeConfigs := []byte(`apiVersion: v1
 clusters:
 - cluster:
@@ -68,7 +57,6 @@ contexts:
   name:  fake-cluster
 current-context:  fake-cluster
 kind: Config`)
-
 	var err error
 	fakeKubeconfig, err := os.CreateTemp("", "fakeKubeconfig")
 	if err != nil {
@@ -78,7 +66,6 @@ kind: Config`)
 	fakeKubeconfig.Write(fakeConfigs)
 	kubeconfig := ""
 	cmd.Flags().StringVarP(&kubeconfig, "kubeconfig", "k", fakeKubeconfig.Name(), "path of kubeconfig")
-
 	tests := []struct {
 		name           string
 		namespace      string
@@ -142,7 +129,6 @@ Secret "default-member-token" already exists
 		})
 	}
 }
-
 func TestInitOptValidate(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -171,7 +157,6 @@ func TestInitOptValidate(t *testing.T) {
 			},
 		},
 	}
-
 	cmd := &cobra.Command{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

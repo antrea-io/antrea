@@ -11,31 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 func TestProcessGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -214,7 +206,6 @@ func TestProcessGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestAddGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -322,7 +313,6 @@ func TestAddGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestUpdateGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -479,7 +469,6 @@ func TestUpdateGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteG(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	testG := crdv1beta1.Group{
@@ -495,7 +484,6 @@ func TestDeleteG(t *testing.T) {
 	_, found, _ := npc.internalGroupStore.Get(key)
 	assert.False(t, found, "expected internal Group to be deleted")
 }
-
 func TestGroupMembersComputedConditionEqual(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -547,7 +535,6 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 		})
 	}
 }
-
 func TestGetGroupSourceRef(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -573,7 +560,6 @@ func TestGetGroupSourceRef(t *testing.T) {
 		})
 	}
 }
-
 func TestGetGroupMembers(t *testing.T) {
 	var namespacedGroups []antreatypes.Group
 	for _, group := range groups {

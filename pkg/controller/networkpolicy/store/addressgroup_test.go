@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"context"
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 func newAddressGroupMemberPod(podName, ip string) *controlplane.GroupMember {
 	return &controlplane.GroupMember{
 		Pod: &controlplane.PodReference{
@@ -45,7 +37,6 @@ func newAddressGroupMemberPod(podName, ip string) *controlplane.GroupMember {
 		IPs: []controlplane.IPAddress{controlplane.IPAddress(net.ParseIP(ip))},
 	}
 }
-
 func newAddressGroupMemberExternalEntity(eeName, ip string) *controlplane.GroupMember {
 	return &controlplane.GroupMember{
 		ExternalEntity: &controlplane.ExternalEntityReference{
@@ -54,7 +45,6 @@ func newAddressGroupMemberExternalEntity(eeName, ip string) *controlplane.GroupM
 		IPs: []controlplane.IPAddress{controlplane.IPAddress(net.ParseIP(ip))},
 	}
 }
-
 func TestWatchAddressGroupEvent(t *testing.T) {
 	testCases := map[string]struct {
 		fieldSelector fields.Selector

@@ -11,30 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"fmt"
 	"net"
 	"os"
-
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
-<<<<<<< HEAD
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-=======
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
->>>>>>> origin/main
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
-
 type Options struct {
 	// The path of configuration file.
 	configFile     string
@@ -62,13 +54,11 @@ type Options struct {
 	// WebhookConfig contains the controllers webhook configuration
 	WebhookConfig mcsv1alpha1.ControllerWebhook
 }
-
 func newOptions() *Options {
 	return &Options{
 		SelfSignedCert: true,
 	}
 }
-
 func (o *Options) complete(args []string) error {
 	var err error
 	o.setDefaults()
@@ -111,12 +101,10 @@ func (o *Options) complete(args []string) error {
 	}
 	return nil
 }
-
 // addFlags adds flags to fs and binds them to options.
 func (o *Options) addFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.configFile, "config", o.configFile, "The path to the configuration file")
 }
-
 func (o *Options) setDefaults() {
 	o.options = ctrl.Options{
 		Scheme: scheme,
@@ -126,7 +114,6 @@ func (o *Options) setDefaults() {
 		HealthProbeBindAddress: ":8080",
 	}
 }
-
 func (o *Options) loadConfig(data []byte, multiclusterConfig *mcsv1alpha1.MultiClusterConfig) error {
 	codecs := serializer.NewCodecFactory(scheme)
 	if err := runtime.DecodeInto(codecs.UniversalDecoder(), data, multiclusterConfig); err != nil {
@@ -140,7 +127,6 @@ func (o *Options) loadConfig(data []byte, multiclusterConfig *mcsv1alpha1.MultiC
 	}
 	return nil
 }
-
 func (o *Options) loadConfigFromFile(multiclusterConfig *mcsv1alpha1.MultiClusterConfig) error {
 	data, err := os.ReadFile(o.configFile)
 	if err != nil {

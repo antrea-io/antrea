@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ovsflows
-
 import (
 	"encoding/json"
 	"fmt"
@@ -21,35 +19,27 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/openflow"
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 var (
 	// Use function variables for tests.
 	getFlowTableName = openflow.GetFlowTableName
 	getFlowTableID   = openflow.GetFlowTableID
 	getFlowTableList = openflow.GetTableList
-
 	errAmbiguousQuery = fmt.Errorf("query is ambiguous and matches more than one policy")
 )
-
 func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]apis.OVSFlowResponse, error) {
 	var resps []apis.OVSFlowResponse
 	for _, f := range flowKeys {
@@ -64,7 +54,6 @@ func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]apis.O
 	}
 	return resps, nil
 }
-
 func dumpFlows(aq agentquerier.AgentQuerier, table uint8) ([]apis.OVSFlowResponse, error) {
 	var resps []apis.OVSFlowResponse
 	var flowStrs []string
@@ -82,7 +71,6 @@ func dumpFlows(aq agentquerier.AgentQuerier, table uint8) ([]apis.OVSFlowRespons
 	}
 	return resps, nil
 }
-
 func dumpMatchedGroups(aq agentquerier.AgentQuerier, groupIDs []binding.GroupIDType) ([]apis.OVSFlowResponse, error) {
 	resps := []apis.OVSFlowResponse{}
 	for _, g := range groupIDs {
@@ -97,7 +85,6 @@ func dumpMatchedGroups(aq agentquerier.AgentQuerier, groupIDs []binding.GroupIDT
 	}
 	return resps, nil
 }
-
 // nil is returned if the flow table can not be found (the passed table name or
 // number is invalid).
 func getTableFlows(aq agentquerier.AgentQuerier, tables string) ([]apis.OVSFlowResponse, error) {
@@ -126,7 +113,6 @@ func getTableFlows(aq agentquerier.AgentQuerier, tables string) ([]apis.OVSFlowR
 	}
 	return resps, nil
 }
-
 // nil is returned if the passed group IDs are invalid.
 func getGroups(aq agentquerier.AgentQuerier, groups string) ([]apis.OVSFlowResponse, error) {
 	if strings.EqualFold(groups, "all") {
@@ -140,7 +126,6 @@ func getGroups(aq agentquerier.AgentQuerier, groups string) ([]apis.OVSFlowRespo
 		}
 		return resps, nil
 	}
-
 	var groupIDs []binding.GroupIDType
 	for _, id := range strings.Split(groups, ",") {
 		id = strings.TrimSpace(id)
@@ -156,17 +141,14 @@ func getGroups(aq agentquerier.AgentQuerier, groups string) ([]apis.OVSFlowRespo
 	}
 	return dumpMatchedGroups(aq, groupIDs)
 }
-
 func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]apis.OVSFlowResponse, error) {
 	interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(podName, namespace)
 	if len(interfaces) == 0 {
 		return nil, nil
 	}
-
 	flowKeys := aq.GetOpenflowClient().GetPodFlowKeys(interfaces[0].InterfaceName)
 	return dumpMatchedFlows(aq, flowKeys)
 }
-
 func getServiceFlows(aq agentquerier.AgentQuerier, serviceName, namespace string) ([]apis.OVSFlowResponse, error) {
 	flowKeys, groupIDs, found := aq.GetProxier().GetServiceFlowKeys(serviceName, namespace)
 	if !found {
@@ -182,7 +164,6 @@ func getServiceFlows(aq agentquerier.AgentQuerier, serviceName, namespace string
 	}
 	return append(resps, groupResps...), nil
 }
-
 func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace string, policyType cpv1beta.NetworkPolicyType) ([]apis.OVSFlowResponse, error) {
 	npFilter := &querier.NetworkPolicyQueryFilter{
 		SourceName: npName,
@@ -200,7 +181,6 @@ func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace strin
 	flowKeys := aq.GetOpenflowClient().GetNetworkPolicyFlowKeys(npName, namespace, policyType)
 	return dumpMatchedFlows(aq, flowKeys)
 }
-
 func getTableNames() []apis.OVSFlowResponse {
 	var resps []apis.OVSFlowResponse
 	var names []string
@@ -213,7 +193,6 @@ func getTableNames() []apis.OVSFlowResponse {
 	}
 	return resps
 }
-
 // HandleFunc returns the function which can handle API requests to "/ovsflows".
 func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -227,20 +206,17 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		table := r.URL.Query().Get("table")
 		groups := r.URL.Query().Get("groups")
 		tableNamesOnly := r.URL.Query().Has("table-names-only")
-
 		encodeResp := func() {
 			err = json.NewEncoder(w).Encode(resps)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 		}
-
 		if tableNamesOnly {
 			resps = getTableNames()
 			encodeResp()
 			return
 		}
-
 		if (pod != "" || service != "") && namespace == "" {
 			http.Error(w, "namespace must be provided", http.StatusBadRequest)
 			return
@@ -299,7 +275,6 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			http.Error(w, "unsupported parameter combination", http.StatusBadRequest)
 			return
 		}
-
 		if err != nil {
 			klog.Errorf("Failed to dump flows: %v", err)
 			http.Error(w, "OVS flow dumping failed", http.StatusInternalServerError)
@@ -309,7 +284,6 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-
 		encodeResp()
 	}
 }

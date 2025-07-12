@@ -11,17 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package intermediate
-
 import (
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
-
 type FlowKey struct {
 	SourceAddress      string
 	DestinationAddress string
@@ -29,7 +23,6 @@ type FlowKey struct {
 	SourcePort         uint16
 	DestinationPort    uint16
 }
-
 type AggregationFlowRecord struct {
 	Record *flowpb.Flow
 	// Flow record contains mapping to its reference in priority queue.
@@ -55,7 +48,6 @@ type AggregationFlowRecord struct {
 	// IPv6 in the aggregated flow record.
 	isIPv4 bool
 }
-
 type AggregationElements struct {
 	NonStatsElements                   []string
 	StatsElements                      []string
@@ -66,5 +58,4 @@ type AggregationElements struct {
 	SourceThroughputElements           []string
 	DestinationThroughputElements      []string
 }
-
 type FlowKeyRecordMapCallBack func(key FlowKey, record *AggregationFlowRecord) error

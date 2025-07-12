@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // Package main under directory cmd parses and validates user input,
 // instantiates and initializes objects imported from pkg, and runs
 // the process
-
 package e2e
-
 import (
 	"flag"
 	"log"
@@ -25,22 +22,15 @@ import (
 	"path"
 	"testing"
 	"time"
-
 	"gopkg.in/yaml.v3"
-
-<<<<<<< HEAD
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
-=======
-	agentconfig "antrea.io/antrea/pkg/config/agent"
->>>>>>> origin/main
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
-
 const (
 	antreaAgentConfigName string = "antrea-config"
 	antreaAgentNamespace  string = "kube-system"
 	antreaAgentConfName   string = "antrea-agent.conf"
 )
-
 // setupLogging creates a temporary directory to export the test logs if necessary. If a directory
 // was provided by the user, it checks that the directory exists.
 func (tOptions *TestOptions) setupLogging() func() {
@@ -71,7 +61,6 @@ func (tOptions *TestOptions) setupLogging() func() {
 	// no-op cleanup function
 	return func() {}
 }
-
 func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.logsExportDir, "logs-export-dir", "", "Export directory for test logs")
 	flag.StringVar(&testOptions.leaderClusterKubeConfigPath, "leader-cluster-kubeconfig-path", path.Join(homedir, ".kube", "leader"), "Kubeconfig Path of the leader cluster")
@@ -80,10 +69,8 @@ func testMain(m *testing.M) int {
 	flag.BoolVar(&testOptions.enableGateway, "mc-gateway", false, "Run tests with Multicluster Gateway")
 	flag.StringVar(&testOptions.providerName, "provider", "", "K8s test cluster provider")
 	flag.Parse()
-
 	cleanupLogging := testOptions.setupLogging()
 	defer cleanupLogging()
-
 	testData = &MCTestData{}
 	log.Println("Creating K8s clientsets for ClusterSet")
 	if err := testData.createClients(); err != nil {
@@ -93,13 +80,11 @@ func testMain(m *testing.M) int {
 	if err := testData.initProviders(); err != nil {
 		log.Fatalf("Error when initializing providers for ClusterSet: %v", err)
 	}
-
 	ret := m.Run()
 	if ret != 0 {
 		log.Println("Failed to run default Multi-cluster E2E tests")
 		return ret
 	}
-
 	log.Println("Starting E2E test with WireGuard")
 	for _, clusterName := range testData.clusters {
 		if clusterName == leaderCluster {
@@ -109,11 +94,9 @@ func testMain(m *testing.M) int {
 			log.Fatalf("Error when enabling WireGuard encryption, error: %v", err)
 		}
 	}
-
 	ret = m.Run()
 	return ret
 }
-
 func enableWireGuard(clusterName string) error {
 	data := testData.clusterTestDataMap[clusterName]
 	configMap, err := data.GetConfigMap(antreaAgentNamespace, antreaAgentConfigName)
@@ -135,27 +118,22 @@ func enableWireGuard(clusterName string) error {
 	}
 	return data.RestartAntreaAgentPods(defaultTimeout)
 }
-
 func TestMain(m *testing.M) {
 	os.Exit(testMain(m))
 }
-
 func TestConnectivity(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	if testOptions.enableGateway {
 		initializeGateway(t, data)
 		defer teardownGateway(t, data)
-
 		// Sleep 5s to wait resource export/import process to finish resource
 		// exchange, and data path realization.
 		time.Sleep(5 * time.Second)
 	}
-
 	t.Run("TestMCService", func(t *testing.T) {
 		defer tearDownForServiceExportsTest(t, data)
 		initializeForServiceExportsTest(t, data)
@@ -168,7 +146,6 @@ func TestConnectivity(t *testing.T) {
 		t.Run("Case=StretchedNetworkPolicyUpdateNS", func(t *testing.T) { testStretchedNetworkPolicyUpdateNS(t, data) })
 		t.Run("Case=StretchedNetworkPolicyUpdatePolicy", func(t *testing.T) { testStretchedNetworkPolicyUpdatePolicy(t, data) })
 	})
-
 	t.Run("TestAntreaPolicy", func(t *testing.T) {
 		defer tearDownForPolicyTest()
 		initializeForPolicyTest(t, data)

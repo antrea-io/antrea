@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"encoding/json"
 	"io"
@@ -21,46 +19,35 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
-
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/kubectl/pkg/cmd/get"
 	"k8s.io/kubectl/pkg/scheme"
 	"k8s.io/utils/strings/slices"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/transform"
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/printers"
-=======
-	"antrea.io/antrea/pkg/antctl/transform"
-	"antrea.io/antrea/pkg/antctl/transform/common"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/util/printers"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/transform"
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/util/printers"
 )
-
 const sortByEffectivePriority = "effectivePriority"
-
 type Response struct {
 	*cpv1beta.NetworkPolicy
 }
-
 // Compute a tierPriority value in between the application tier and the baseline tier,
 // which can be used to sort all policies by tier.
 var effectiveTierPriorityK8sNP = (v1beta1.DefaultTierPriority + v1beta1.BaselineTierPriority) / 2
-
 type NPSorter struct {
 	networkPolicies []cpv1beta.NetworkPolicy
 	sortBy          string
 }
-
 func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 	return Response{o.(*cpv1beta.NetworkPolicy)}, nil
 }
-
 func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 	customSorters := []string{
 		sortByEffectivePriority,
@@ -87,12 +74,10 @@ func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 		}
 		return result, nil
 	}
-
 	policyRuntimeObjectList, _ := meta.ExtractList(policyList)
 	if _, err := get.SortObjects(scheme.Codecs.UniversalDecoder(), policyRuntimeObjectList, sortField); err != nil {
 		return "", err
 	}
-
 	result := make([]Response, 0, len(policyList.Items))
 	for i := range policyRuntimeObjectList {
 		o, _ := objectTransform(policyRuntimeObjectList[i], opts)
@@ -100,7 +85,6 @@ func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 	}
 	return result, nil
 }
-
 func Transform(reader io.Reader, single bool, opts map[string]string) (interface{}, error) {
 	return transform.GenericFactory(
 		reflect.TypeOf(cpv1beta.NetworkPolicy{}),
@@ -110,7 +94,6 @@ func Transform(reader io.Reader, single bool, opts map[string]string) (interface
 		opts,
 	)(reader, single)
 }
-
 func (nps *NPSorter) Len() int { return len(nps.networkPolicies) }
 func (nps *NPSorter) Swap(i, j int) {
 	nps.networkPolicies[i], nps.networkPolicies[j] = nps.networkPolicies[j], nps.networkPolicies[i]
@@ -143,7 +126,6 @@ func (nps *NPSorter) Less(i, j int) bool {
 		return nps.networkPolicies[i].Name < nps.networkPolicies[j].Name
 	}
 }
-
 func priorityToString(p interface{}) string {
 	if reflect.ValueOf(p).IsNil() {
 		return ""
@@ -154,13 +136,10 @@ func priorityToString(p interface{}) string {
 		return strconv.FormatFloat(*pFloat64, 'f', -1, 64)
 	}
 }
-
 var _ common.TableOutput = new(Response)
-
 func (r Response) GetTableHeader() []string {
 	return []string{"NAME", "APPLIED-TO", "RULES", "SOURCE", "TIER-PRIORITY", "PRIORITY"}
 }
-
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{
 		r.Name, printers.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength),
@@ -168,17 +147,14 @@ func (r Response) GetTableRow(maxColumnLength int) []string {
 		priorityToString(r.TierPriority), priorityToString(r.Priority),
 	}
 }
-
 func (r Response) SortRows() bool {
 	return false
 }
-
 // EvaluationResponse stores the response from NetworkPolicyEvaluation command,
 // and implements TableOutput.
 type EvaluationResponse struct {
 	*cpv1beta.NetworkPolicyEvaluation
 }
-
 func EvaluationTransform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
 	var eval cpv1beta.NetworkPolicyEvaluation
 	if err := json.NewDecoder(reader).Decode(&eval); err != nil {
@@ -186,13 +162,10 @@ func EvaluationTransform(reader io.Reader, _ bool, _ map[string]string) (interfa
 	}
 	return EvaluationResponse{&eval}, nil
 }
-
 var _ common.TableOutput = new(EvaluationResponse)
-
 func (r EvaluationResponse) GetTableHeader() []string {
 	return []string{"NAME", "NAMESPACE", "POLICY-TYPE", "RULE-INDEX", "DIRECTION", "ACTION"}
 }
-
 func (r EvaluationResponse) GetTableRow(_ int) []string {
 	if r.NetworkPolicyEvaluation != nil && r.Response != nil {
 		action := ""
@@ -219,7 +192,6 @@ func (r EvaluationResponse) GetTableRow(_ int) []string {
 	}
 	return make([]string, len(r.GetTableHeader()))
 }
-
 func (r EvaluationResponse) SortRows() bool {
 	return false
 }

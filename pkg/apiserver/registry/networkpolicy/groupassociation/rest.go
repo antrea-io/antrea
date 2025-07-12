@@ -11,55 +11,41 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package groupassociation
-
 import (
 	"context"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 type REST struct {
 	querier GroupAssociationQuerier
 }
-
 var (
 	_ rest.Storage              = &REST{}
 	_ rest.Scoper               = &REST{}
 	_ rest.Getter               = &REST{}
 	_ rest.SingularNameProvider = &REST{}
 )
-
 // NewREST returns a REST object that will work against API services.
 func NewREST(querier GroupAssociationQuerier) *REST {
 	return &REST{querier}
 }
-
 // groupAssociationQuerier is the interface required by the handler.
 type GroupAssociationQuerier interface {
 	GetAssociatedGroups(name, namespace string) []types.Group
 }
-
 func (r *REST) New() runtime.Object {
 	return &controlplane.GroupAssociation{}
 }
-
 func (r *REST) Destroy() {
 }
-
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	ns, ok := request.NamespaceFrom(ctx)
 	if !ok || len(ns) == 0 {
@@ -78,11 +64,9 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	members := &controlplane.GroupAssociation{AssociatedGroups: items}
 	return members, nil
 }
-
 func (r *REST) NamespaceScoped() bool {
 	return true
 }
-
 func (r *REST) GetSingularName() string {
 	return "groupassociation"
 }

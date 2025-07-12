@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package output
-
 import (
 	"bytes"
 	"encoding/json"
@@ -23,28 +21,20 @@ import (
 	"sort"
 	"strings"
 	"text/tabwriter"
-
 	"gopkg.in/yaml.v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
-=======
-	"antrea.io/antrea/pkg/antctl/transform/common"
-	"antrea.io/antrea/pkg/apiserver/apis"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
+	"antrea.io/antrea/v2/pkg/apiserver/apis"
 )
-
 const (
 	maxTableOutputColumnLength int = 50
 )
-
 func TableOutput(obj interface{}, writer io.Writer) error {
 	target, err := respTransformer(obj)
 	if err != nil {
 		return fmt.Errorf("error when transforming obj: %w", err)
 	}
-
 	list, multiple := target.([]interface{})
 	var args []string
 	if multiple {
@@ -63,14 +53,12 @@ func TableOutput(obj interface{}, writer io.Writer) error {
 			args = append(args, k)
 		}
 	}
-
 	var buffer bytes.Buffer
 	for _, arg := range args {
 		buffer.WriteString(arg)
 		buffer.WriteString("\t")
 	}
 	attrLine := buffer.String()
-
 	var valLines []string
 	if multiple {
 		for _, el := range list {
@@ -99,7 +87,6 @@ func TableOutput(obj interface{}, writer io.Writer) error {
 		}
 		valLines = append(valLines, buffer.String())
 	}
-
 	var b bytes.Buffer
 	w := tabwriter.NewWriter(&b, 15, 0, 1, ' ', 0)
 	fmt.Fprintln(w, attrLine)
@@ -107,20 +94,16 @@ func TableOutput(obj interface{}, writer io.Writer) error {
 		fmt.Fprintln(w, line)
 	}
 	w.Flush()
-
 	if _, err = io.Copy(writer, &b); err != nil {
 		return fmt.Errorf("error when copy output into writer: %w", err)
 	}
-
 	return nil
 }
-
 func JsonOutput(obj interface{}, writer io.Writer) error {
 	var output bytes.Buffer
 	if err := jsonEncode(obj, &output); err != nil {
 		return fmt.Errorf("error when encoding data in json: %w", err)
 	}
-
 	var prettifiedBuf bytes.Buffer
 	err := json.Indent(&prettifiedBuf, output.Bytes(), "", "  ")
 	if err != nil {
@@ -132,7 +115,6 @@ func JsonOutput(obj interface{}, writer io.Writer) error {
 	}
 	return nil
 }
-
 func YamlOutput(obj interface{}, writer io.Writer) error {
 	var jsonObj interface{}
 	var buf bytes.Buffer
@@ -153,7 +135,6 @@ func YamlOutput(obj interface{}, writer io.Writer) error {
 	}
 	return nil
 }
-
 // RawOutput is an output formatter whose output is similar to fmt.Print(responseString)
 // to better display multiple-line string responses.
 func RawOutput(obj interface{}, writer io.Writer) error {
@@ -163,7 +144,6 @@ func RawOutput(obj interface{}, writer io.Writer) error {
 	}
 	return nil
 }
-
 // TableOutputForGetCommands formats the table output for "get" commands.
 func TableOutputForGetCommands(obj interface{}, writer io.Writer) error {
 	var list []common.TableOutput
@@ -186,17 +166,14 @@ func TableOutputForGetCommands(obj interface{}, writer io.Writer) error {
 		}
 		list = []common.TableOutput{ele}
 	}
-
 	// Get the elements and headers of table.
 	rows := make([][]string, len(list)+1)
 	rows[0] = list[0].GetTableHeader()
 	for i, element := range list {
 		rows[i+1] = element.GetTableRow(maxTableOutputColumnLength)
 	}
-
 	return ConstructFormattedTable(rows, list[0].SortRows(), writer)
 }
-
 func GetColumnWidths(numRows int, numCols int, rows [][]string) []int {
 	widths := make([]int, numCols)
 	if numCols == 1 {
@@ -224,7 +201,6 @@ func GetColumnWidths(numRows int, numCols int, rows [][]string) []int {
 	}
 	return widths
 }
-
 func ConstructTable(numRows int, numCols int, widths []int, rows [][]string, writer io.Writer) error {
 	var buffer bytes.Buffer
 	for i := 0; i < numRows; i++ {
@@ -244,10 +220,8 @@ func ConstructTable(numRows int, numCols int, widths []int, rows [][]string, wri
 	if _, err := io.Copy(writer, &buffer); err != nil {
 		return fmt.Errorf("error when copy output into writer: %w", err)
 	}
-
 	return nil
 }
-
 // ConstructFormattedTable constructs a table with aligned column widths that displays
 // all the contents. rows always includes both header and body, and is never empty.
 func ConstructFormattedTable(rows [][]string, sortRows bool, writer io.Writer) error {
@@ -266,7 +240,6 @@ func ConstructFormattedTable(rows [][]string, sortRows bool, writer io.Writer) e
 	widths := GetColumnWidths(numRows, numCols, rows)
 	return ConstructTable(numRows, numCols, widths, rows, writer)
 }
-
 func writeSingleLine(body string, writer io.Writer) error {
 	var buffer bytes.Buffer
 	buffer.WriteString(body + "\n")
@@ -275,14 +248,12 @@ func writeSingleLine(body string, writer io.Writer) error {
 	}
 	return nil
 }
-
 func jsonEncode(obj interface{}, output *bytes.Buffer) error {
 	if err := json.NewEncoder(output).Encode(obj); err != nil {
 		return fmt.Errorf("error when encoding data in json: %w", err)
 	}
 	return nil
 }
-
 // respTransformer collects output fields in original transformedResponse
 // and flattens them. respTransformer realizes this by turning obj into
 // JSON and unmarshalling it.
@@ -294,14 +265,12 @@ func respTransformer(obj interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("error when encoding data in json: %w", err)
 	}
 	jsonStr := jsonObj.String()
-
 	var target interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &target); err != nil {
 		return nil, fmt.Errorf("error when unmarshalling data in json: %w", err)
 	}
 	return target, nil
 }
-
 // TableOutputForQueryEndpoint formats the table output for "query endpoint"
 // command, utilizing constructTable to implement printing sub tables.
 func TableOutputForQueryEndpoint(obj interface{}, writer io.Writer) error {
@@ -321,7 +290,6 @@ func TableOutputForQueryEndpoint(obj interface{}, writer io.Writer) error {
 		}
 		return writeSingleLine("", writer)
 	}
-
 	// transform egress and ingress rules to string representation
 	toStringRep := func(effectiveRules []apis.Rule) [][]string {
 		ruleStrings := make([][]string, 0)

@@ -11,38 +11,28 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"context"
 	"fmt"
 	"strings"
-
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 	"antrea.io/antrea/v2/pkg/antctl/transform/membertoken"
-=======
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
-	"antrea.io/antrea/pkg/antctl/transform/membertoken"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
+	"antrea.io/antrea/v2/pkg/antctl/transform/membertoken"
 )
-
 type tokenOptions struct {
 	namespace     string
 	outputFormat  string
 	allNamespaces bool
 	k8sClient     client.Client
 }
-
 var optionsToken *tokenOptions
-
 var tokenExamples = strings.Trim(`
 # Get all member tokens in the specified Namespace
   $ antctl mc get membertoken -n antrea-multicluster
@@ -55,7 +45,6 @@ var tokenExamples = strings.Trim(`
 # Save the token Secret manifest to a file (which can be used with "antctl mc join" command)
   $ antctl mc get membertoken cluster-east-token -n antrea-multicluster -o yaml > token.yml
 `, "\n")
-
 func (o *tokenOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.namespace == "" && !o.allNamespaces {
 		return fmt.Errorf("Namespace must be specified")
@@ -63,7 +52,6 @@ func (o *tokenOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.allNamespaces {
 		o.namespace = metav1.NamespaceAll
 	}
-
 	var err error
 	if o.k8sClient == nil {
 		o.k8sClient, err = common.NewClient(cmd)
@@ -73,7 +61,6 @@ func (o *tokenOptions) validateAndComplete(cmd *cobra.Command) error {
 	}
 	return nil
 }
-
 func NewMemberTokenCommand() *cobra.Command {
 	cmdToken := &cobra.Command{
 		Use: "membertoken",
@@ -92,13 +79,11 @@ func NewMemberTokenCommand() *cobra.Command {
 	cmdToken.Flags().BoolVarP(&o.allNamespaces, "all-namespaces", "A", false, "Get tokens across all Namespaces")
 	return cmdToken
 }
-
 func runEToken(cmd *cobra.Command, args []string) error {
 	err := optionsToken.validateAndComplete(cmd)
 	if err != nil {
 		return err
 	}
-
 	if len(args) > 0 {
 		memberTokenName := args[0]
 		memberToken := corev1.Secret{}
@@ -109,14 +94,12 @@ func runEToken(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-
 		outToken := &memberToken
 		if optionsToken.outputFormat != "" {
 			outToken = common.ConvertMemberTokenSecret(outToken)
 		}
 		return output(*outToken, true, optionsToken.outputFormat, cmd.OutOrStdout(), membertoken.Transform)
 	}
-
 	memberTokenList := &corev1.SecretList{}
 	err = optionsToken.k8sClient.List(context.TODO(), memberTokenList, &client.ListOptions{Namespace: optionsToken.namespace})
 	if err != nil {
@@ -138,7 +121,6 @@ func runEToken(cmd *cobra.Command, args []string) error {
 			opaqueMemberTokens = append(opaqueMemberTokens, *outToken)
 		}
 	}
-
 	if len(opaqueMemberTokens) == 0 {
 		if optionsToken.namespace != "" {
 			fmt.Fprintf(cmd.OutOrStdout(), "No token found in Namespace %s\n", optionsToken.namespace)

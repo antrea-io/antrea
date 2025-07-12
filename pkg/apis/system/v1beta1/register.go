@@ -11,48 +11,35 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package v1beta1
-
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 const GroupName = "system.antrea.io"
-
 var (
 	SchemeGroupVersion = schema.GroupVersion{
 		Group:   GroupName,
 		Version: "v1beta1"}
-
 	ControllerInfoVersionResource = schema.GroupVersionResource{
 		Group:    SchemeGroupVersion.Group,
 		Version:  SchemeGroupVersion.Version,
 		Resource: "controllerinfos"}
 )
-
 var (
 	SchemeBuilder      runtime.SchemeBuilder
 	localSchemeBuilder = &SchemeBuilder
 	AddToScheme        = localSchemeBuilder.AddToScheme
 )
-
 func init() {
 	localSchemeBuilder.Register(addKnownTypes)
 }
-
 func Resource(resource string) schema.GroupResource {
 	return SchemeGroupVersion.WithResource(resource).GroupResource()
 }
-
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(
 		SchemeGroupVersion,
@@ -60,7 +47,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&crdv1beta1.AntreaControllerInfoList{},
 		&SupportBundle{},
 	)
-
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
 }

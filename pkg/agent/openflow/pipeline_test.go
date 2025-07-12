@@ -11,35 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"fmt"
 	"testing"
-
 	"antrea.io/libOpenflow/openflow15"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
 	opstest "antrea.io/antrea/v2/pkg/agent/openflow/operations/testing"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	openflowtest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
 	"antrea.io/antrea/v2/third_party/proxy"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
-	opstest "antrea.io/antrea/pkg/agent/openflow/operations/testing"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	openflowtest "antrea.io/antrea/pkg/ovs/openflow/testing"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
+	opstest "antrea.io/antrea/v2/pkg/agent/openflow/operations/testing"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	openflowtest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
 	"antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 func pipelineDefaultFlows(egressTrafficShapingEnabled, externalNodeEnabled, isEncap, isIPv4 bool) []string {
 	if externalNodeEnabled {
 		return []string{
@@ -66,7 +58,6 @@ func pipelineDefaultFlows(egressTrafficShapingEnabled, externalNodeEnabled, isEn
 			"cookie=0x1000000000000, table=NonIP, priority=0 actions=drop",
 		}
 	}
-
 	var flows []string
 	if isEncap {
 		flows = []string{
@@ -180,7 +171,6 @@ func pipelineDefaultFlows(egressTrafficShapingEnabled, externalNodeEnabled, isEn
 	}
 	return flows
 }
-
 func Test_client_defaultFlows(t *testing.T) {
 	testCases := []struct {
 		name                string
@@ -239,19 +229,16 @@ func Test_client_defaultFlows(t *testing.T) {
 			options := append(tc.clientOptions, setEnableOVSMeters(tc.requireMeterSupport))
 			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, tc.nodeType, tc.trafficEncapMode, options...)
 			defer resetPipelines()
-
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fc.defaultFlows()))
 		})
 	}
 }
-
 // If any test case fails, please consider setting binding.MaxBucketsPerMessage to a smaller value.
 func TestServiceEndpointGroupMaxBuckets(t *testing.T) {
 	fs := &featureService{
 		bridge:        binding.NewOFBridge(bridgeName, ""),
 		nodeIPChecker: nodeiptest.NewFakeNodeIPChecker(),
 	}
-
 	// Test the Endpoint associated with a bucket containing all available actions.
 	testCases := []struct {
 		name           string
@@ -266,7 +253,6 @@ func TestServiceEndpointGroupMaxBuckets(t *testing.T) {
 			sampleEndpoint: proxy.NewBaseEndpointInfo("192.168.1.1", "node1", "", 80, false, true, false, false, nil),
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -275,12 +261,10 @@ func TestServiceEndpointGroupMaxBuckets(t *testing.T) {
 			defer func() {
 				ServiceLBTable.ofTable = nil
 			}()
-
 			var endpoints []proxy.Endpoint
 			for i := 0; i < binding.MaxBucketsPerMessage; i++ {
 				endpoints = append(endpoints, tc.sampleEndpoint)
 			}
-
 			fakeOfTable.EXPECT().GetID().Return(uint8(1)).Times(1)
 			group := fs.serviceEndpointGroup(binding.GroupIDType(100), true, endpoints...)
 			messages, err := group.GetBundleMessages(binding.AddMessage)
@@ -292,19 +276,15 @@ func TestServiceEndpointGroupMaxBuckets(t *testing.T) {
 		})
 	}
 }
-
 // For openflow15.GroupMod, it provides a built-in method for calculating the message length. However,considering that
 // the GroupMod size we test might exceed the maximum uint16 value, we use uint32 as the return value type.
 func getGroupModLen(g *openflow15.GroupMod) uint32 {
 	n := uint32(0)
-
 	n = uint32(g.Header.Len())
 	n += 16
-
 	for _, b := range g.Buckets {
 		n += uint32(b.Len())
 	}
-
 	for _, p := range g.Properties {
 		n += uint32(p.Len())
 	}

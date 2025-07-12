@@ -1,6 +1,5 @@
 //go:build !linux
 // +build !linux
-
 // Copyright 2024 Antrea Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,30 +13,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package capture
-
 import (
 	"context"
 	"errors"
 	"net"
-
 	"github.com/gopacket/gopacket"
-
-<<<<<<< HEAD
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-=======
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
->>>>>>> origin/main
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
-
 type pcapCapture struct {
 }
-
 func NewPcapCapture() (*pcapCapture, error) {
 	return nil, errors.New("PacketCapture is not implemented")
 }
-
 func (p *pcapCapture) Capture(ctx context.Context, device string, snapLen int, srcIP, dstIP net.IP, packet *crdv1alpha1.Packet, direction crdv1alpha1.CaptureDirection) (chan gopacket.Packet, error) {
 	return nil, errors.New("PacketCapture is not implemented")
 }

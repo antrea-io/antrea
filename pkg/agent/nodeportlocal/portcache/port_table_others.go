@@ -1,6 +1,5 @@
 //go:build !windows
 // +build !windows
-
 // Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,22 +13,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package portcache
-
 import (
 	"fmt"
 	"time"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
-=======
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
 )
-
 func openSocketsForPort(localPortOpener LocalPortOpener, port int, protocol string) (ProtocolSocketData, error) {
 	// Port only needs to be available for the protocol used by the NPL rule.
 	// We don't need to allocate the same nodePort for all protocols anymore.
@@ -44,7 +35,6 @@ func openSocketsForPort(localPortOpener LocalPortOpener, port int, protocol stri
 	}
 	return protocolData, nil
 }
-
 func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (int, ProtocolSocketData, error) {
 	klog.V(2).InfoS("Looking for free Node port", "podIP", podIP, "podPort", podPort)
 	numPorts := pt.EndPort - pt.StartPort + 1
@@ -58,13 +48,11 @@ func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (in
 			// port is already taken
 			continue
 		}
-
 		protocolData, err := openSocketsForPort(pt.LocalPortOpener, port, protocol)
 		if err != nil {
 			klog.V(4).InfoS("Port cannot be reserved, moving on to the next one", "port", port)
 			continue
 		}
-
 		pt.PortSearchStart = port + 1
 		if pt.PortSearchStart > pt.EndPort {
 			pt.PortSearchStart = pt.StartPort
@@ -73,7 +61,6 @@ func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (in
 	}
 	return 0, ProtocolSocketData{}, fmt.Errorf("no free port found")
 }
-
 func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP string) (int, error) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
@@ -102,11 +89,9 @@ func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP 
 	}
 	return npData.NodePort, nil
 }
-
 func (pt *PortTable) deleteRule(data *NodePortData) error {
 	protocolSocketData := &data.Protocol
 	protocol := protocolSocketData.Protocol
-
 	// In theory, we should not be modifying a cache item in-place. However, the field we are
 	// modifying (defunct) does NOT participate in indexing and the modification is thread-safe
 	// because of pt.tableLock.
@@ -115,7 +100,6 @@ func (pt *PortTable) deleteRule(data *NodePortData) error {
 	// should mean that the rule is still present and valid, but there is no harm in being more
 	// conservative.
 	data.defunct = true
-
 	// Calling DeleteRule is idempotent.
 	if err := pt.PodPortRules.DeleteRule(data.NodePort, data.PodIP, data.PodPort, protocol); err != nil {
 		return err
@@ -129,7 +113,6 @@ func (pt *PortTable) deleteRule(data *NodePortData) error {
 	pt.deletePortTableCache(data)
 	return nil
 }
-
 func (pt *PortTable) DeleteRule(podKey string, podPort int, protocol string) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
@@ -140,7 +123,6 @@ func (pt *PortTable) DeleteRule(podKey string, podPort int, protocol string) err
 	}
 	return pt.deleteRule(data)
 }
-
 // syncRules ensures that contents of the port table matches the iptables rules present on the Node.
 func (pt *PortTable) syncRules() error {
 	pt.tableLock.Lock()
@@ -162,7 +144,6 @@ func (pt *PortTable) syncRules() error {
 	}
 	return nil
 }
-
 // RestoreRules should be called at Antrea Agent startup to restore a set of NPL rules. It is non-blocking but
 // takes a channel parameter - synced, which will be closed when the necessary rules have been
 // restored successfully. No other operations should be performed on the PortTable until the channel
@@ -179,7 +160,6 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 			klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort)
 			continue
 		}
-
 		npData := &NodePortData{
 			PodKey:   nplPort.PodKey,
 			NodePort: nplPort.NodePort,

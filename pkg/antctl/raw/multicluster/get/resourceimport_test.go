@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"bytes"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 func TestGetResourceImport(t *testing.T) {
 	resourceImportList := &mcsv1alpha1.ResourceImportList{
 		Items: []mcsv1alpha1.ResourceImport{
@@ -121,7 +113,6 @@ func TestGetResourceImport(t *testing.T) {
 			donotFake:      true,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := NewResourceImportCommand()
@@ -129,11 +120,9 @@ func TestGetResourceImport(t *testing.T) {
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 			cmd.SetArgs(tt.args)
-
 			fakeClient := fake.NewClientBuilder().WithScheme(mcscheme.Scheme).Build()
 			if tt.existingResourceImports != nil {
 				fakeClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithLists(tt.existingResourceImports).Build()
-
 			}
 			if !tt.donotFake {
 				options.k8sClient = fakeClient

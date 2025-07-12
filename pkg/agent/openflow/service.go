@@ -11,37 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
 	"sync"
-
 	"antrea.io/libOpenflow/openflow15"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/nodeip"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/nodeip"
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/nodeip"
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 type featureService struct {
 	cookieAllocator cookie.Allocator
 	nodeIPChecker   nodeip.Checker
 	ipProtocols     []binding.Protocol
 	bridge          binding.Bridge
-
 	cachedFlows *flowCategoryCache
 	groupCache  sync.Map
-
 	gatewayIPs             map[binding.Protocol]net.IP
 	virtualIPs             map[binding.Protocol]net.IP
 	virtualNodePortDNATIPs map[binding.Protocol]net.IP
@@ -52,21 +42,17 @@ type featureService struct {
 	serviceCIDRs           map[binding.Protocol]net.IPNet
 	networkConfig          *config.NetworkConfig
 	gatewayPort            uint32
-
 	enableAntreaPolicy    bool
 	enableProxy           bool
 	proxyAll              bool
 	enableDSR             bool
 	connectUplinkToBridge bool
 	ctZoneSrcField        *binding.RegField
-
 	category cookie.Category
 }
-
 func (f *featureService) getFeatureName() string {
 	return "Service"
 }
-
 func newFeatureService(
 	cookieAllocator cookie.Allocator,
 	nodeIPChecker nodeip.Checker,
@@ -111,7 +97,6 @@ func newFeatureService(
 			}
 		}
 	}
-
 	return &featureService{
 		cookieAllocator:        cookieAllocator,
 		nodeIPChecker:          nodeIPChecker,
@@ -138,7 +123,6 @@ func newFeatureService(
 		category:               cookie.Service,
 	}
 }
-
 // serviceNoEndpointFlow generates the flow to match the packets to Service without Endpoint and send them to controller.
 func (f *featureService) serviceNoEndpointFlow() binding.Flow {
 	return EndpointDNATTable.ofTable.BuildFlow(priorityNormal).
@@ -147,7 +131,6 @@ func (f *featureService) serviceNoEndpointFlow() binding.Flow {
 		Action().SendToController([]byte{uint8(PacketInCategorySvcReject)}, false).
 		Done()
 }
-
 func (f *featureService) initFlows() []*openflow15.FlowMod {
 	var flows []binding.Flow
 	if f.enableProxy {
@@ -177,11 +160,9 @@ func (f *featureService) initFlows() []*openflow15.FlowMod {
 	}
 	return GetFlowModMessages(flows, binding.AddMessage)
 }
-
 func (f *featureService) replayFlows() []*openflow15.FlowMod {
 	return getCachedFlowMessages(f.cachedFlows)
 }
-
 func (f *featureService) replayGroups() []binding.OFEntry {
 	var groups []binding.OFEntry
 	f.groupCache.Range(func(id, value interface{}) bool {
@@ -192,11 +173,9 @@ func (f *featureService) replayGroups() []binding.OFEntry {
 	})
 	return groups
 }
-
 func (f *featureService) initGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featureService) replayMeters() []binding.OFEntry {
 	return nil
 }

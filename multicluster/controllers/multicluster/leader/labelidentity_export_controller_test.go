@@ -1,28 +1,22 @@
 /*
 Copyright 2022 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package leader
-
 import (
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,25 +24,18 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-=======
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
->>>>>>> origin/main
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
-
 var (
 	normalizedLabel = "ns:kubernetes.io/metadata.name=test-ns&pod:app=client"
 	labelHash       = common.HashLabelIdentity(normalizedLabel)
-
 	resExpNamespacedName = types.NamespacedName{
 		Namespace: common.LeaderNamespace,
 		Name:      common.LocalClusterID + "-" + labelHash,
 	}
-
 	labelIdentityResExp = &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: common.LeaderNamespace,
@@ -74,14 +61,12 @@ var (
 			},
 		},
 	}
-
 	clusterBID                   = "cluster-b"
 	resExpNamespacedNameClusterB = types.NamespacedName{
 		Namespace: "cluster-b-namespace",
 		Name:      clusterBID + "-" + labelHash,
 	}
 )
-
 func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 	tests := []struct {
 		name                     string
@@ -152,12 +137,10 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			expLabelResImpDeleted:    true,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResExp, tt.existingResImp).Build()
 			r := NewLabelIdentityExportReconciler(fakeClient, common.TestScheme, common.LeaderNamespace)
 			if len(tt.originalLabelsToClusters) > 0 {
@@ -169,14 +152,12 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			if _, err := r.Reconcile(common.TestCtx, resExpReq); err != nil {
 				t.Errorf("LabelIdentityExport Reconciler got error during reconciling. error = %v", err)
 			}
-
 			if !reflect.DeepEqual(r.labelsToClusters, tt.expLabelsToClusters) {
 				t.Errorf("LabelIdentityExport Reconciler yield incorrect labelsToClusters. Exp: %s, Act: %s", tt.expLabelsToClusters, r.labelsToClusters)
 			}
 			if !reflect.DeepEqual(r.clusterToLabels, tt.expClusterToLabels) {
 				t.Errorf("LabelIdentityExport Reconciler yield incorrect clusterToLabels. Exp: %s, Act: %s", tt.expClusterToLabels, r.clusterToLabels)
 			}
-
 			time.Sleep(100 * time.Millisecond)
 			actLabelIdentityResImp := &mcsv1alpha1.ResourceImport{}
 			lastIdx := strings.LastIndex(tt.resExpNamespacedName.Name, "-")
@@ -190,7 +171,6 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 		})
 	}
 }
-
 func TestConcurrentProcessLabelForResourceImport(t *testing.T) {
 	existingResImpList := &mcsv1alpha1.ResourceImportList{
 		Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp},
@@ -220,7 +200,6 @@ func TestConcurrentProcessLabelForResourceImport(t *testing.T) {
 	// Spin off more workers to bump up concurrency
 	r.numWorkers = common.DefaultWorkerCount * 2
 	go r.Run(stopCh)
-
 	// The ResourceImport corresponding to label 21-40 should be deleted as the mocked hashToLabels
 	// map indicates its ResourceExport has been deleted. ResourceImport for label1 should not change
 	// and ResourceImport for label 2-20 should be created.
@@ -238,7 +217,6 @@ func TestConcurrentProcessLabelForResourceImport(t *testing.T) {
 		return true
 	}, time.Millisecond*200, time.Millisecond*10, "Unexpected number of ResourceImport after test is executed")
 }
-
 func TestIDAllocatorBasic(t *testing.T) {
 	testSteps := []struct {
 		op                        string
@@ -315,7 +293,6 @@ func TestIDAllocatorBasic(t *testing.T) {
 		}
 	}
 }
-
 func TestIDAllocatorWithPreAllocation(t *testing.T) {
 	testSteps := []struct {
 		op                        string

@@ -11,21 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"context"
 	"fmt"
 	"sync"
 	"time"
-
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	aggregator "antrea.io/antrea/v2/pkg/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver"
 	"antrea.io/antrea/v2/pkg/log"
@@ -33,19 +28,15 @@ import (
 	"antrea.io/antrea/v2/pkg/util/cipher"
 	"antrea.io/antrea/v2/pkg/util/podstore"
 	"antrea.io/antrea/v2/pkg/version"
-=======
-	aggregator "antrea.io/antrea/pkg/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/apiserver"
-	"antrea.io/antrea/pkg/log"
-	"antrea.io/antrea/pkg/signals"
-	"antrea.io/antrea/pkg/util/cipher"
-	"antrea.io/antrea/pkg/util/podstore"
-	"antrea.io/antrea/pkg/version"
->>>>>>> origin/main
+	aggregator "antrea.io/antrea/v2/pkg/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver"
+	"antrea.io/antrea/v2/pkg/log"
+	"antrea.io/antrea/v2/pkg/signals"
+	"antrea.io/antrea/v2/pkg/util/cipher"
+	"antrea.io/antrea/v2/pkg/util/podstore"
+	"antrea.io/antrea/v2/pkg/version"
 )
-
 const informerDefaultResync = 12 * time.Hour
-
 func run(configFile string) error {
 	klog.InfoS("Starting Flow Aggregator", "version", version.GetFullVersion())
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
@@ -57,32 +48,26 @@ func run(configFile string) error {
 	// stopCh is closed.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	log.StartLogFileNumberMonitor(stopCh)
-
 	k8sClient, err := createK8sClient()
 	if err != nil {
 		return fmt.Errorf("error when creating K8s client: %v", err)
 	}
-
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	podStore := podstore.NewPodStore(podInformer.Informer())
-
 	klog.InfoS("Retrieving Antrea cluster UUID")
 	clusterUUID, err := aggregator.GetClusterUUID(ctx, k8sClient)
 	if err != nil {
 		return err
 	}
 	klog.InfoS("Retrieved Antrea cluster UUID", "clusterUUID", clusterUUID)
-
 	flowAggregator, err := aggregator.NewFlowAggregator(
 		k8sClient,
 		clusterUUID,
 		podStore,
 		configFile,
 	)
-
 	if err != nil {
 		return err
 	}
@@ -92,7 +77,6 @@ func run(configFile string) error {
 		defer wg.Done()
 		flowAggregator.Run(stopCh)
 	}()
-
 	cipherSuites, err := cipher.GenerateCipherSuitesList(flowAggregator.APIServer.TLSCipherSuites)
 	if err != nil {
 		return fmt.Errorf("error generating Cipher Suite list: %v", err)
@@ -106,15 +90,12 @@ func run(configFile string) error {
 		return fmt.Errorf("error when creating flow aggregator API server: %v", err)
 	}
 	go apiServer.Run(ctx)
-
 	informerFactory.Start(stopCh)
-
 	<-stopCh
 	klog.InfoS("Stopping Flow Aggregator")
 	wg.Wait()
 	return nil
 }
-
 func createK8sClient() (kubernetes.Interface, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {

@@ -11,40 +11,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package proxy
-
 import (
 	"fmt"
 	"net"
 	"strings"
 	"time"
-
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/proxy"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
 )
-
 const (
 	defaultPort         = 8001
 	defaultStaticPrefix = "/static/"
 	defaultAPIPrefix    = "/"
 	defaultAddress      = "127.0.0.1"
 )
-
 // Command is the proxy command implementation.
 var Command *cobra.Command
-
 type proxyOptions struct {
 	staticDir     string
 	staticPrefix  string
@@ -58,24 +48,19 @@ type proxyOptions struct {
 	disableFilter bool
 	unixSocket    string
 	keepalive     time.Duration
-
 	filter *proxy.FilterServer
-
 	controller    bool
 	agentNodeName string
 	insecure      bool
 }
-
 var options *proxyOptions
 var defaultFS = afero.NewOsFs()
-
 // validateAndComplete checks the proxyOptions to see if there is sufficient information to run the
 // command, and adds default values when needed.
 func (o *proxyOptions) validateAndComplete() error {
 	if o.port != defaultPort && o.unixSocket != "" {
 		return fmt.Errorf("cannot set --unix-socket and --port at the same time")
 	}
-
 	if o.controller && o.agentNodeName != "" {
 		return fmt.Errorf("cannot use --controller and --agent-node at the same time")
 	}
@@ -83,7 +68,6 @@ func (o *proxyOptions) validateAndComplete() error {
 		// default to controller
 		o.controller = true
 	}
-
 	if o.staticDir != "" {
 		fileInfo, err := defaultFS.Stat(o.staticDir)
 		if err != nil {
@@ -92,15 +76,12 @@ func (o *proxyOptions) validateAndComplete() error {
 			klog.InfoS("Static file directory is not a directory", "name", o.staticDir)
 		}
 	}
-
 	if !strings.HasSuffix(o.staticPrefix, "/") {
 		o.staticPrefix += "/"
 	}
-
 	if !strings.HasSuffix(o.apiPrefix, "/") {
 		o.apiPrefix += "/"
 	}
-
 	if o.disableFilter {
 		if o.unixSocket == "" {
 			klog.Warning("Request filter disabled, your proxy is vulnerable to XSRF attacks, please be cautious")
@@ -114,17 +95,14 @@ func (o *proxyOptions) validateAndComplete() error {
 			RejectMethods: proxy.MakeRegexpArrayOrDie(o.rejectMethods),
 		}
 	}
-
 	return nil
 }
-
 var proxyCommandExample = strings.Trim(`
   Start a reverse proxy for the Antrea Controller API
   $ antctl proxy --controller
   Start a reverse proxy for the API of an Antrea Agent running on a specific Node
   $ antctl proxy --agent-node <Node Name>
 `, "\n")
-
 func init() {
 	Command = &cobra.Command{
 		Use:     "proxy",
@@ -134,7 +112,6 @@ func init() {
 		RunE:    runE,
 		Args:    cobra.NoArgs,
 	}
-
 	o := &proxyOptions{}
 	options = o
 	// These options are the same as for "kubectl proxy".
@@ -151,23 +128,19 @@ func init() {
 	Command.Flags().BoolVar(&o.disableFilter, "disable-filter", false, "If true, disable request filtering in the proxy. This is dangerous, and can leave you vulnerable to XSRF attacks, when used with an accessible port.")
 	Command.Flags().StringVarP(&o.unixSocket, "unix-socket", "u", "", "Unix socket on which to run the proxy.")
 	Command.Flags().DurationVar(&o.keepalive, "keepalive", 0, "keepalive specifies the keep-alive period for an active network connection. Set to 0 to disable keepalive.")
-
 	// These options are specific to "antctl proxy".
 	Command.Flags().BoolVar(&o.controller, "controller", false, "Run proxy for Antrea Controller API. If both --controller and --agent-node are omitted, the proxy will run for the Controller API.")
 	Command.Flags().StringVar(&o.agentNodeName, "agent-node", "", "Run proxy for Antrea Agent API on the provided K8s Node.")
 	Command.Flags().BoolVar(&o.insecure, "insecure", false, "Skip TLS verification when connecting to Antrea API.")
 }
-
 func runE(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
 	if runtime.Mode != runtime.ModeController || runtime.InPod {
 		return fmt.Errorf("only remote mode is supported for this command")
 	}
-
 	if err := options.validateAndComplete(); err != nil {
 		return err
 	}
-
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
 		return err
@@ -175,12 +148,10 @@ func runE(cmd *cobra.Command, _ []string) error {
 	if server, _ := Command.Flags().GetString("server"); server != "" {
 		kubeconfig.Host = server
 	}
-
 	k8sClientset, antreaClientset, err := raw.SetupClients(kubeconfig)
 	if err != nil {
 		return fmt.Errorf("failed to create clientset: %w", err)
 	}
-
 	insecure, _ := Command.Flags().GetBool("insecure")
 	var clientCfg *rest.Config
 	if options.controller {
@@ -194,7 +165,6 @@ func runE(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("error when creating Agent client config: %w", err)
 		}
 	}
-
 	// The last argument is for "appendLocationPath", which for "kubectl proxy" is used as
 	// follows: if the Kubeconfig context provides a server URL which includes a Path comppnent
 	// (e.g., https://example.com/PATH), then this path is automatically added to all incoming
@@ -204,11 +174,9 @@ func runE(cmd *cobra.Command, _ []string) error {
 	// component, so we always set "appendLocationPath" to "false", and there is no need to
 	// expose a flag like --append-server-path for "antctl proxy".
 	server, err := proxy.NewServer(options.staticDir, options.apiPrefix, options.staticPrefix, options.filter, clientCfg, options.keepalive, false)
-
 	if err != nil {
 		return err
 	}
-
 	// Separate listening from serving so we can report the bound port when it is chosen by os
 	// (eg: port == 0).
 	var l net.Listener

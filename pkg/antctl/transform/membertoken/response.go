@@ -11,63 +11,46 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package membertoken
-
 import (
 	corev1 "k8s.io/api/core/v1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
-=======
-	"antrea.io/antrea/pkg/antctl/transform/common"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 )
-
 type Response struct {
 	Name      string `json:"name" yaml:"name"`
 	Namespace string `json:"namespace" yaml:"namespace"`
 }
-
 func Transform(r interface{}, single bool) (interface{}, error) {
 	if single {
 		return objectTransform(r)
 	}
 	return listTransform(r)
 }
-
 func listTransform(l interface{}) (interface{}, error) {
 	secrets := l.([]corev1.Secret)
 	var result []interface{}
-
 	for i := range secrets {
 		item := secrets[i]
 		o, _ := objectTransform(item)
 		result = append(result, o.(Response))
 	}
-
 	return result, nil
 }
-
 func objectTransform(o interface{}) (interface{}, error) {
 	secret := o.(corev1.Secret)
-
 	return Response{
 		Namespace: secret.Namespace,
 		Name:      secret.Name,
 	}, nil
 }
-
 var _ common.TableOutput = new(Response)
-
 func (r Response) GetTableHeader() []string {
 	return []string{"NAMESPACE", "NAME"}
 }
-
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{r.Namespace, r.Name}
 }
-
 func (r Response) SortRows() bool {
 	return true
 }

@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package l7flowexporter
-
 import (
 	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -33,24 +30,19 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 var (
 	annotationsEmpty          = map[string]string{}
 	annotationsDifferent      = map[string]string{"annotation.antrea.io": "mockVal1"}
@@ -58,7 +50,6 @@ var (
 	annotationsCorrectIngress = map[string]string{types.L7FlowExporterAnnotationKey: "ingress"}
 	annotationsCorrectEgress  = map[string]string{types.L7FlowExporterAnnotationKey: "egress"}
 	annotationsCorrectBoth    = map[string]string{types.L7FlowExporterAnnotationKey: "both"}
-
 	pod1NN        = k8s.NamespacedName("test-ns1", "test-pod1")
 	pod2NN        = k8s.NamespacedName("test-ns1", "test-pod2")
 	pod3NN        = k8s.NamespacedName("test-ns2", "test-pod3")
@@ -67,17 +58,14 @@ var (
 	podInterface2 = newPodInterface("test-pod2", "test-ns1", int32(pod2OFPort))
 	podInterface3 = newPodInterface("test-pod3", "test-ns2", int32(pod3OFPort))
 	podInterface4 = newPodInterface("test-pod4", "test-ns2", int32(pod4OFPort))
-
 	ctx = context.Background()
 )
-
 const (
 	pod1OFPort = uint32(1)
 	pod2OFPort = uint32(2)
 	pod3OFPort = uint32(3)
 	pod4OFPort = uint32(4)
 )
-
 type fakeController struct {
 	*L7FlowExporterController
 	mockOFClient     *openflowtest.MockClient
@@ -86,7 +74,6 @@ type fakeController struct {
 	localPodInformer cache.SharedIndexInformer
 	suricataStarted  *atomic.Bool
 }
-
 func (c *fakeController) startInformers(stopCh chan struct{}) {
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
@@ -94,15 +81,12 @@ func (c *fakeController) startInformers(stopCh chan struct{}) {
 	go c.namespaceInformer.Run(stopCh)
 	cache.WaitForCacheSync(stopCh, c.localPodInformer.HasSynced, c.namespaceInformer.HasSynced)
 }
-
 func newFakeControllerAndWatcher(t *testing.T, objects []runtime.Object, interfaces []*interfacestore.InterfaceConfig) *fakeController {
 	controller := gomock.NewController(t)
 	mockOFClient := openflowtest.NewMockClient(controller)
-
 	client := fake.NewSimpleClientset(objects...)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	nsInformer := informerFactory.Core().V1().Namespaces()
-
 	localPodInformer := coreinformers.NewFilteredPodInformer(
 		client,
 		metav1.NamespaceAll,
@@ -112,18 +96,15 @@ func newFakeControllerAndWatcher(t *testing.T, objects []runtime.Object, interfa
 			options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
 		},
 	)
-
 	ifaceStore := interfacestore.NewInterfaceStore()
 	for _, itf := range interfaces {
 		ifaceStore.AddInterface(itf)
 	}
-
 	var suricataStarted atomic.Bool
 	l7w := NewL7FlowExporterController(mockOFClient, ifaceStore, localPodInformer, nsInformer, func() error {
 		suricataStarted.Store(true)
 		return nil
 	})
-
 	return &fakeController{
 		L7FlowExporterController: l7w,
 		mockOFClient:             mockOFClient,
@@ -133,7 +114,6 @@ func newFakeControllerAndWatcher(t *testing.T, objects []runtime.Object, interfa
 		suricataStarted:          &suricataStarted,
 	}
 }
-
 func newPodObject(name, namespace string, annotations map[string]string) *v1.Pod {
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -149,7 +129,6 @@ func newPodObject(name, namespace string, annotations map[string]string) *v1.Pod
 		},
 	}
 }
-
 func newNamespaceObject(name string, annotations map[string]string) *v1.Namespace {
 	return &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -161,7 +140,6 @@ func newNamespaceObject(name string, annotations map[string]string) *v1.Namespac
 		},
 	}
 }
-
 func newPodInterface(podName, podNamespace string, ofPort int32) *interfacestore.InterfaceConfig {
 	containerName := k8s.NamespacedName(podNamespace, podName)
 	return &interfacestore.InterfaceConfig{
@@ -170,13 +148,11 @@ func newPodInterface(podName, podNamespace string, ofPort int32) *interfacestore
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: ofPort},
 	}
 }
-
 func waitEvents(t *testing.T, expectedEvents int, c *fakeController) {
 	require.Eventually(t, func() bool {
 		return c.queue.Len() == expectedEvents
 	}, 5*time.Second, 10*time.Millisecond)
 }
-
 func TestPodAdd(t *testing.T) {
 	var targetPort uint32
 	testNS1 := newNamespaceObject("test-ns1", annotationsEmpty)
@@ -217,7 +193,6 @@ func TestPodAdd(t *testing.T) {
 			c := newFakeControllerAndWatcher(t, []runtime.Object{tt.addedPod, testNS1}, interfaces)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			c.startInformers(stopCh)
 			assert.Eventuallyf(t, func() bool {
 				ns, _ := c.namespaceLister.List(labels.Everything())
@@ -237,7 +212,6 @@ func TestPodAdd(t *testing.T) {
 		})
 	}
 }
-
 func TestPodUpdate(t *testing.T) {
 	var targetPort uint32
 	testNS1 := newNamespaceObject("test-ns1", annotationsEmpty)
@@ -306,14 +280,11 @@ func TestPodUpdate(t *testing.T) {
 			c := newFakeControllerAndWatcher(t, []runtime.Object{pod1, pod2, pod3, pod4, testNS1, testNS2}, interfaces)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			c.startInformers(stopCh)
-
 			assert.Eventuallyf(t, func() bool {
 				ns, _ := c.namespaceLister.List(labels.Everything())
 				return len(c.localPodInformer.GetIndexer().List()) == 4 && len(ns) == 2
 			}, 1*time.Second, 10*time.Millisecond, "Pods should be added to Informers")
-
 			// Pod2 has the correction annotation key (but an invalid annotation value) and Pod4 has the correct
 			// annotation item, so they will be queued once for the ADD event. We ignore these events.
 			waitEvents(t, 2, c)
@@ -321,13 +292,10 @@ func TestPodUpdate(t *testing.T) {
 				item, _ := c.queue.Get()
 				c.queue.Done(item)
 			}
-
 			tt.expectedCalls(c.mockOFClient)
-
 			// Update Pods with new annotations
 			_, err := c.client.CoreV1().Pods(tt.updatedPod.Namespace).Update(ctx, tt.updatedPod, metav1.UpdateOptions{})
 			require.NoError(t, err)
-
 			waitEvents(t, 1, c)
 			item, _ := c.queue.Get()
 			require.NoError(t, c.syncPod(item))
@@ -337,7 +305,6 @@ func TestPodUpdate(t *testing.T) {
 		})
 	}
 }
-
 func TestPodUpdateRemoveFlows(t *testing.T) {
 	var targetPort uint32
 	testNS1 := newNamespaceObject("test-ns1", annotationsEmpty)
@@ -402,9 +369,7 @@ func TestPodUpdateRemoveFlows(t *testing.T) {
 				_, err := c.client.CoreV1().Pods(tt.pod.Namespace).Update(ctx, tt.pod, metav1.UpdateOptions{})
 				require.NoError(t, err)
 			}
-
 			tt.expectedUninstallCalls(c.mockOFClient)
-
 			waitEvents(t, 1, c)
 			item, _ := c.queue.Get()
 			require.NoError(t, c.syncPod(item))
@@ -413,7 +378,6 @@ func TestPodUpdateRemoveFlows(t *testing.T) {
 		})
 	}
 }
-
 func TestNamespaceUpdate(t *testing.T) {
 	var targetPort uint32
 	testNS1 := newNamespaceObject("test-ns1", annotationsEmpty)
@@ -467,7 +431,6 @@ func TestNamespaceUpdate(t *testing.T) {
 			c := newFakeControllerAndWatcher(t, []runtime.Object{testNS1, testNS2, pod1, pod2, pod3, pod4}, interfaces)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			c.startInformers(stopCh)
 			// Ignore Pod4 as that will be enqueued by addPod func
 			waitEvents(t, 1, c)
@@ -475,7 +438,6 @@ func TestNamespaceUpdate(t *testing.T) {
 				item, _ := c.queue.Get()
 				c.queue.Done(item)
 			}
-
 			// Update NS object
 			_, err := c.client.CoreV1().Namespaces().Update(ctx, tt.updatedNS, metav1.UpdateOptions{})
 			require.NoError(t, err)
@@ -491,7 +453,6 @@ func TestNamespaceUpdate(t *testing.T) {
 		})
 	}
 }
-
 func TestNSUpdateRemoveFlows(t *testing.T) {
 	var targetPort uint32
 	testNS1 := newNamespaceObject("test-ns1", annotationsCorrectIngress)
@@ -530,7 +491,6 @@ func TestNSUpdateRemoveFlows(t *testing.T) {
 			c := newFakeControllerAndWatcher(t, []runtime.Object{testNS1}, interfaces)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			c.startInformers(stopCh)
 			_, err := c.client.CoreV1().Pods(pod1.Namespace).Create(ctx, pod1, metav1.CreateOptions{})
 			require.NoError(t, err)
@@ -540,7 +500,6 @@ func TestNSUpdateRemoveFlows(t *testing.T) {
 				ns, _ := c.namespaceLister.List(labels.Everything())
 				return len(c.localPodInformer.GetIndexer().List()) == 2 && len(ns) == 1
 			}, 1*time.Second, 10*time.Millisecond, "Pods and Namespaces should be added to Informers")
-
 			tt.expectedInstallCalls(c.mockOFClient)
 			waitEvents(t, 2, c)
 			for i := 0; i < 2; i++ {
@@ -551,7 +510,6 @@ func TestNSUpdateRemoveFlows(t *testing.T) {
 			// Update Pods with no annotations
 			_, err = c.client.CoreV1().Namespaces().Update(ctx, tt.Namespace, metav1.UpdateOptions{})
 			require.NoError(t, err)
-
 			tt.expectedUninstallCalls(c.mockOFClient)
 			waitEvents(t, tt.expectedQueueLen, c)
 			for i := 0; i < tt.expectedQueueLen; i++ {

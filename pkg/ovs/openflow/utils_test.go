@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
 	"testing"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 var (
 	ipSrc, ipSrcNet, _ = net.ParseCIDR("192.168.10.2/24")
 	ipDst, ipDstNet, _ = net.ParseCIDR("192.168.20.3/24")
@@ -38,7 +30,6 @@ var (
 	ethSrc, _          = net.ParseMAC("10:1a:1b:1c:1d:1f")
 	ethDst, _          = net.ParseMAC("20:2a:2b:2c:2d:2f")
 )
-
 func TestFlowModToString(t *testing.T) {
 	b := NewOFBridge("test-br", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"))
 	sw := newFakeOFSwitch(b)
@@ -156,7 +147,6 @@ func TestFlowModToString(t *testing.T) {
 		})
 	}
 }
-
 func TestFlowModMatchString(t *testing.T) {
 	rm := &RegMark{field: NewRegField(0, 0, 3), value: 2}
 	ctm := NewOneBitCTMark(4)
@@ -316,7 +306,6 @@ func TestFlowModMatchString(t *testing.T) {
 		})
 	}
 }
-
 func TestFlowModStringForDumpCommand(t *testing.T) {
 	rm := &RegMark{field: NewRegField(0, 0, 3), value: 2}
 	table := &ofTable{Table: &ofctrl.Table{TableId: 1}}
@@ -391,7 +380,6 @@ func TestFlowModStringForDumpCommand(t *testing.T) {
 		})
 	}
 }
-
 func TestGroupModToString(t *testing.T) {
 	rf := NewRegField(1, 0, 31)
 	for _, tt := range []struct {

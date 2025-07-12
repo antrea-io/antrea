@@ -11,32 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package grouping
-
 import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 const (
 	groupType1 GroupType = "fakeGroup1"
 	groupType2 GroupType = "fakeGroup2"
 )
-
 var (
 	// Fake Pods
 	podFoo1                 = newPod("default", "podFoo1", map[string]string{"app": "foo"})
@@ -61,31 +52,26 @@ var (
 	groupPodAllNamespaceType1    = &group{groupType: groupType1, groupName: "groupPodAllNamespaceType1", groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{}, nil, nil)}
 	groupEEFooAllNamespaceType1  = &group{groupType: groupType1, groupName: "groupEEFooAllNamespaceType1", groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{}, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil)}
 )
-
 type group struct {
 	groupType     GroupType
 	groupName     string
 	groupSelector *types.GroupSelector
 }
-
 func copyAndMutatePod(pod *v1.Pod, mutateFunc func(*v1.Pod)) *v1.Pod {
 	newPod := pod.DeepCopy()
 	mutateFunc(newPod)
 	return newPod
 }
-
 func copyAndMutateExternalEntity(ee *v1alpha2.ExternalEntity, mutateFunc func(*v1alpha2.ExternalEntity)) *v1alpha2.ExternalEntity {
 	newEE := ee.DeepCopy()
 	mutateFunc(newEE)
 	return newEE
 }
-
 func copyAndMutateNamespace(ns *v1.Namespace, mutateFunc func(*v1.Namespace)) *v1.Namespace {
 	newNS := ns.DeepCopy()
 	mutateFunc(newNS)
 	return newNS
 }
-
 func newNamespace(name string, labels map[string]string) *v1.Namespace {
 	return &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -94,7 +80,6 @@ func newNamespace(name string, labels map[string]string) *v1.Namespace {
 		},
 	}
 }
-
 func newPod(namespace, name string, labels map[string]string) *v1.Pod {
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -104,7 +89,6 @@ func newPod(namespace, name string, labels map[string]string) *v1.Pod {
 		},
 	}
 }
-
 func newExternalEntity(namespace, name string, labels map[string]string) *v1alpha2.ExternalEntity {
 	return &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
@@ -114,7 +98,6 @@ func newExternalEntity(namespace, name string, labels map[string]string) *v1alph
 		},
 	}
 }
-
 func TestGroupEntityIndexGetEntities(t *testing.T) {
 	tests := []struct {
 		name                     string
@@ -172,7 +155,6 @@ func TestGroupEntityIndexGetEntities(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			index := NewGroupEntityIndex()
-
 			for _, pod := range tt.existingPods {
 				index.AddPod(pod)
 			}
@@ -183,14 +165,12 @@ func TestGroupEntityIndexGetEntities(t *testing.T) {
 				index.AddExternalEntity(ee)
 			}
 			index.AddGroup(groupType1, "group", tt.inputGroupSelector)
-
 			pods, ees := index.GetEntities(groupType1, "group")
 			assert.ElementsMatch(t, tt.expectedPods, pods)
 			assert.ElementsMatch(t, tt.expectedExternalEntities, ees)
 		})
 	}
 }
-
 func TestGroupEntityIndexGetGroups(t *testing.T) {
 	index := NewGroupEntityIndex()
 	pods := []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace}
@@ -279,7 +259,6 @@ func TestGroupEntityIndexGetGroups(t *testing.T) {
 		})
 	}
 }
-
 func TestGroupEntityIndexUpdateGroup(t *testing.T) {
 	index := NewGroupEntityIndex()
 	pods := []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace}
@@ -302,7 +281,6 @@ func TestGroupEntityIndexUpdateGroup(t *testing.T) {
 	actualPods, actualExternalEntities := index.GetEntities(groupType1, "group1")
 	assert.ElementsMatch(t, []*v1.Pod{podFoo1, podFoo2}, actualPods)
 	assert.ElementsMatch(t, []*v1alpha2.ExternalEntity{}, actualExternalEntities)
-
 	index.AddGroup(groupType1, "group1", types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil))
 	actualGroups, _ = index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
 	assert.Equal(t, map[GroupType][]string{}, actualGroups)
@@ -312,7 +290,6 @@ func TestGroupEntityIndexUpdateGroup(t *testing.T) {
 	assert.ElementsMatch(t, []*v1.Pod{}, actualPods)
 	assert.ElementsMatch(t, []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2}, actualExternalEntities)
 }
-
 func TestGroupEntityIndexDeleteGroup(t *testing.T) {
 	index := NewGroupEntityIndex()
 	pods := []*v1.Pod{podFoo1, podFoo2, podBar1}
@@ -331,7 +308,6 @@ func TestGroupEntityIndexDeleteGroup(t *testing.T) {
 	for _, group := range groups {
 		index.AddGroup(group.groupType, group.groupName, group.groupSelector)
 	}
-
 	actualGroups, _ := index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
 	assert.Equal(t, map[GroupType][]string{groupType1: {groupPodFooType1.groupName}, groupType2: {groupPodFooType2.groupName}}, actualGroups)
 	index.DeleteGroup(groupPodFooType1.groupType, groupPodFooType1.groupName)
@@ -340,7 +316,6 @@ func TestGroupEntityIndexDeleteGroup(t *testing.T) {
 	index.DeleteGroup(groupPodFooType2.groupType, groupPodFooType2.groupName)
 	actualGroups, _ = index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
 	assert.Equal(t, map[GroupType][]string{}, actualGroups)
-
 	actualGroups, _ = index.GetGroupsForExternalEntity(eeFoo1.Namespace, eeFoo1.Name)
 	assert.Equal(t, map[GroupType][]string{groupType1: {groupEEFooType1.groupName}, groupType2: {groupEEFooType2.groupName}}, actualGroups)
 	index.DeleteGroup(groupEEFooType1.groupType, groupEEFooType1.groupName)
@@ -349,7 +324,6 @@ func TestGroupEntityIndexDeleteGroup(t *testing.T) {
 	index.DeleteGroup(groupEEFooType2.groupType, groupEEFooType2.groupName)
 	actualGroups, _ = index.GetGroupsForExternalEntity(eeFoo1.Namespace, eeFoo1.Name)
 	assert.Equal(t, map[GroupType][]string{}, actualGroups)
-
 	// Ensure all relevant data are cleaned up.
 	assert.Empty(t, index.groupItems)
 	assert.Empty(t, index.selectorItems)
@@ -359,7 +333,6 @@ func TestGroupEntityIndexDeleteGroup(t *testing.T) {
 		assert.Empty(t, lItem.selectorItemKeys)
 	}
 }
-
 func TestGroupEntityIndexDeleteEntity(t *testing.T) {
 	index := NewGroupEntityIndex()
 	pods := []*v1.Pod{podFoo1, podFoo2}
@@ -378,7 +351,6 @@ func TestGroupEntityIndexDeleteEntity(t *testing.T) {
 	for _, group := range groups {
 		index.AddGroup(group.groupType, group.groupName, group.groupSelector)
 	}
-
 	actualPods, _ := index.GetEntities(groupPodFooType1.groupType, groupPodFooType1.groupName)
 	assert.ElementsMatch(t, []*v1.Pod{podFoo1, podFoo2}, actualPods)
 	index.DeletePod(podFoo1)
@@ -387,7 +359,6 @@ func TestGroupEntityIndexDeleteEntity(t *testing.T) {
 	index.DeletePod(podFoo2)
 	actualPods, _ = index.GetEntities(groupPodFooType1.groupType, groupPodFooType1.groupName)
 	assert.ElementsMatch(t, []*v1.Pod{}, actualPods)
-
 	_, actualExternalEntities := index.GetEntities(groupEEFooType1.groupType, groupEEFooType1.groupName)
 	assert.ElementsMatch(t, []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2}, actualExternalEntities)
 	index.DeleteExternalEntity(eeFoo1)
@@ -396,7 +367,6 @@ func TestGroupEntityIndexDeleteEntity(t *testing.T) {
 	index.DeleteExternalEntity(eeFoo2)
 	_, actualExternalEntities = index.GetEntities(groupEEFooType1.groupType, groupEEFooType1.groupName)
 	assert.ElementsMatch(t, []*v1alpha2.ExternalEntity{}, actualExternalEntities)
-
 	// Ensure all relevant data are cleaned up.
 	assert.Empty(t, index.entityItems)
 	assert.Empty(t, index.labelItems)
@@ -406,7 +376,6 @@ func TestGroupEntityIndexDeleteEntity(t *testing.T) {
 		assert.Empty(t, sItem.labelItemKeys)
 	}
 }
-
 func TestGroupEntityIndexEventHandlers(t *testing.T) {
 	tests := []struct {
 		name                     string
@@ -559,10 +528,8 @@ func TestGroupEntityIndexEventHandlers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			index := NewGroupEntityIndex()
 			go index.Run(stopCh)
-
 			var lock sync.Mutex
 			actualGroupsCalled := map[GroupType][]string{}
 			for groupType := range tt.expectedGroupsCalled {
@@ -587,7 +554,6 @@ func TestGroupEntityIndexEventHandlers(t *testing.T) {
 				index.AddGroup(group.groupType, group.groupName, group.groupSelector)
 			}
 			tt.inputEvent(index)
-
 			assert.EventuallyWithT(t, func(t *assert.CollectT) {
 				lock.Lock()
 				defer lock.Unlock()

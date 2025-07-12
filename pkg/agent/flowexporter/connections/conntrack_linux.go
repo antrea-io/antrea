@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,35 +13,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"fmt"
 	"net/netip"
 	"time"
-
 	"github.com/ti-mo/conntrack"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/util/sysctl"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 )
-
 // connTrackSystem implements ConnTrackDumper. This is for linux kernel datapath.
 var _ ConnTrackDumper = new(connTrackSystem)
-
 type connTrackSystem struct {
 	nodeConfig           *config.NodeConfig
 	serviceCIDRv4        netip.Prefix
@@ -51,7 +41,6 @@ type connTrackSystem struct {
 	connTrack            NetFilterConnTrack
 	protocolFilter       filter.ProtocolFilter
 }
-
 // TODO: detect the endianness of the system when initializing conntrack dumper to handle situations on big-endian platforms.
 // All connection labels are required to store in little endian format in conntrack dumper.
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) *connTrackSystem {
@@ -59,7 +48,6 @@ func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefi
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
 		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
 	}
-
 	return &connTrackSystem{
 		nodeConfig,
 		serviceCIDRv4,
@@ -69,7 +57,6 @@ func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefi
 		protocolFilter,
 	}
 }
-
 // DumpFlows opens netlink connection and dumps all the flows in Antrea ZoneID of conntrack table.
 func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
 	svcCIDR := ct.serviceCIDRv4
@@ -81,7 +68,6 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 	if err != nil {
 		return nil, 0, fmt.Errorf("error when getting netlink socket: %v", err)
 	}
-
 	// ZoneID filter is not supported currently in tl-mo/conntrack library.
 	// Link to issue: https://github.com/ti-mo/conntrack/issues/23
 	// Dump all flows in the conntrack table for now.
@@ -89,23 +75,18 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 	if err != nil {
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
-
 	filteredConns := filterAntreaConns(conns, ct.nodeConfig, svcCIDR, zoneFilter, ct.isAntreaProxyEnabled, ct.protocolFilter)
 	klog.V(2).Infof("No. of flow exporter considered flows in Antrea zoneID: %d", len(filteredConns))
-
 	return filteredConns, len(conns), nil
 }
-
 // NetFilterConnTrack interface helps for testing the code that contains the third party library functions ("github.com/ti-mo/conntrack")
 type NetFilterConnTrack interface {
 	Dial() error
 	DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error)
 }
-
 type netFilterConnTrack struct {
 	netlinkConn *conntrack.Conn
 }
-
 func (nfct *netFilterConnTrack) Dial() error {
 	// Get netlink client in current namespace
 	conn, err := conntrack.Dial(nil)
@@ -115,7 +96,6 @@ func (nfct *netFilterConnTrack) Dial() error {
 	nfct.netlinkConn = conn
 	return nil
 }
-
 func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error) {
 	conns, err := nfct.netlinkConn.DumpFilter(conntrack.Filter{}, nil)
 	if err != nil {
@@ -126,13 +106,10 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 		conn := conns[i]
 		antreaConns[i] = NetlinkFlowToAntreaConnection(&conn)
 	}
-
 	klog.V(2).Infof("Finished dumping -- total no. of flows in conntrack: %d", len(antreaConns))
-
 	nfct.netlinkConn.Close()
 	return antreaConns, nil
 }
-
 func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
 	newConn := flowexporter.Connection{
 		ID:         conn.ID,
@@ -166,17 +143,14 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 	if conn.ProtoInfo.TCP != nil {
 		newConn.TCPState = stateToString(conn.ProtoInfo.TCP.State)
 	}
-
 	// Get the stop time from dumped connection if the connection is terminated(dying state).
 	if conn.Status.Dying() {
 		newConn.StopTime = conn.Timestamp.Stop
 	} else {
 		newConn.StopTime = time.Now()
 	}
-
 	return &newConn
 }
-
 func SetupConntrackParameters() error {
 	parametersWithErrors := []string{}
 	if sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_acct", 1) != nil {
@@ -190,12 +164,10 @@ func SetupConntrackParameters() error {
 	}
 	return nil
 }
-
 func (ct *connTrackSystem) GetMaxConnections() (int, error) {
 	maxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
 	return maxConns, err
 }
-
 // reference: https://github.com/torvalds/linux/blob/master/net/netfilter/nf_conntrack_proto_tcp.c#L51-L62
 func stateToString(state uint8) string {
 	stateList := []string{

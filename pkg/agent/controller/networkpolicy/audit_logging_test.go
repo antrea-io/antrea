@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"encoding/binary"
 	"errors"
@@ -26,7 +24,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
@@ -34,30 +31,24 @@ import (
 	"go.uber.org/mock/gomock"
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	openflowtesting "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	openflowtesting "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	openflowtesting "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
-
 const (
 	testBufferLength time.Duration = 100 * time.Millisecond
 )
-
 var (
 	actionAllow    = openflow.DispositionToString[openflow.DispositionAllow]
 	actionDrop     = openflow.DispositionToString[openflow.DispositionDrop]
@@ -73,13 +64,11 @@ var (
 		Name:      "test",
 	}
 )
-
 // mockLogger implements io.Writer.
 type mockLogger struct {
 	mu     sync.Mutex
 	logged chan string
 }
-
 func (l *mockLogger) Write(p []byte) (n int, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -90,7 +79,6 @@ func (l *mockLogger) Write(p []byte) (n int, err error) {
 	l.logged <- msg
 	return len(msg), nil
 }
-
 func newTestAuditLogger(bufferLength time.Duration, clock clock.Clock) (*AuditLogger, *mockLogger) {
 	mockNPLogger := &mockLogger{logged: make(chan string, 100)}
 	auditLogger := &AuditLogger{
@@ -101,7 +89,6 @@ func newTestAuditLogger(bufferLength time.Duration, clock clock.Clock) (*AuditLo
 	}
 	return auditLogger, mockNPLogger
 }
-
 func newLogInfo(disposition string) (*logInfo, string) {
 	testLogInfo := &logInfo{
 		tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
@@ -119,36 +106,29 @@ func newLogInfo(disposition string) (*logInfo, string) {
 	}
 	return testLogInfo, buildLogMsg(testLogInfo)
 }
-
 func expectedLogWithCount(msg string, count int) string {
 	return fmt.Sprintf("%s [%d", msg, count)
 }
-
 func TestAllowPacketLog(t *testing.T) {
 	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock.RealClock{})
 	ob, expected := newLogInfo(actionAllow)
-
 	auditLogger.LogDedupPacket(ob)
 	actual := <-mockNPLogger.logged
 	assert.Contains(t, actual, expected)
 }
-
 func TestDropPacketLog(t *testing.T) {
 	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock.RealClock{})
 	ob, expected := newLogInfo(actionDrop)
-
 	auditLogger.LogDedupPacket(ob)
 	actual := <-mockNPLogger.logged
 	assert.Contains(t, actual, expected)
 }
-
 func TestDropPacketDedupLog(t *testing.T) {
 	clock := clocktesting.NewFakeClock(time.Now())
 	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock)
 	ob, expected := newLogInfo(actionDrop)
 	// Add the additional log info for duplicate packets.
 	expected = expectedLogWithCount(expected, 2)
-
 	auditLogger.LogDedupPacket(ob)
 	clock.Step(time.Millisecond)
 	auditLogger.LogDedupPacket(ob)
@@ -156,7 +136,6 @@ func TestDropPacketDedupLog(t *testing.T) {
 	actual := <-mockNPLogger.logged
 	assert.Contains(t, actual, expected)
 }
-
 // TestDropPacketMultiDedupLog sends 3 packets, with a 60ms interval. The test
 // is meant to verify that any given packet is never buffered for more than the
 // configured bufferLength (100ms for this test). To avoid flakiness issues
@@ -166,7 +145,6 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 	clock := clocktesting.NewFakeClock(time.Now())
 	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock)
 	ob, expected := newLogInfo(actionDrop)
-
 	consumeLog := func() (int, error) {
 		select {
 		case l := <-mockNPLogger.logged:
@@ -188,7 +166,6 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 		}
 		return 0, fmt.Errorf("did not receive log message in time")
 	}
-
 	// t=0ms
 	auditLogger.LogDedupPacket(ob)
 	clock.Step(60 * time.Millisecond)
@@ -208,16 +185,13 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, c2)
 }
-
 func TestRedirectPacketLog(t *testing.T) {
 	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock.RealClock{})
 	ob, expected := newLogInfo(actionRedirect)
-
 	auditLogger.LogDedupPacket(ob)
 	actual := <-mockNPLogger.logged
 	assert.Contains(t, actual, expected)
 }
-
 func TestGetNetworkPolicyInfo(t *testing.T) {
 	prepareMockOFTablesWithCache()
 	generateMatch := func(regID int, data []byte) openflow15.MatchField {
@@ -253,7 +227,6 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		SourceIP:      srcIP,
 		DestinationIP: destIP,
 	}
-
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
 		InterfaceName:            util.GenerateContainerInterfaceName("srcPod", "default", "c1"),
@@ -267,7 +240,6 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "destPod", PodNamespace: "default", ContainerID: "c2"},
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 2},
 	})
-
 	antreaIngressRuleTableID := openflow.AntreaPolicyIngressRuleTable.GetID()
 	tests := []struct {
 		name            string
@@ -430,7 +402,6 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableIDInReg: &antreaIngressRuleTableID,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Inject disposition and redirect match.
@@ -490,7 +461,6 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		})
 	}
 }
-
 func TestGetPacketInfo(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -535,19 +505,16 @@ func TestGetPacketInfo(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range tests {
 		tc.ob = new(logInfo)
 		getPacketInfo(tc.packet, tc.ob)
 		assert.Equal(t, tc.wantOb, tc.ob)
 	}
 }
-
 func prepareMockOFTablesWithCache() {
 	openflow.InitMockTables(mockOFTables)
 	openflow.InitOFTableCache(mockOFTables)
 }
-
 func BenchmarkLogDedupPacketAllow(b *testing.B) {
 	// In the allow case, there is actually no buffering.
 	auditLogger := &AuditLogger{

@@ -11,27 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowrecord
-
 import (
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
-=======
-	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
->>>>>>> origin/main
+	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
 )
-
 func TestGetFlowRecord(t *testing.T) {
 	runTest := func(t *testing.T, isIPv4 bool) {
 		record := flowaggregatortesting.PrepareTestFlowRecord(isIPv4)
-
 		flowRecord, err := GetFlowRecord(record)
 		require.NoError(t, err)
 		assert.Equal(t, time.Unix(int64(1637706961), 0).UTC(), flowRecord.FlowStartSeconds)
@@ -81,7 +72,6 @@ func TestGetFlowRecord(t *testing.T) {
 		assert.Equal(t, "test-egress", flowRecord.EgressName)
 		assert.Equal(t, "http", flowRecord.AppProtocolName)
 		assert.Equal(t, "mockHttpString", flowRecord.HttpVals)
-
 		if isIPv4 {
 			assert.Equal(t, "10.10.0.79", flowRecord.SourceIP)
 			assert.Equal(t, "10.10.0.80", flowRecord.DestinationIP)
@@ -94,7 +84,6 @@ func TestGetFlowRecord(t *testing.T) {
 			assert.Equal(t, "2001:0:3238:dfe1::ac12:1", flowRecord.EgressIP)
 		}
 	}
-
 	t.Run("ipv4", func(t *testing.T) { runTest(t, true) })
 	t.Run("ipv6", func(t *testing.T) { runTest(t, false) })
 }

@@ -11,25 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowrecords
-
 import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
 	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
 	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
-=======
-	"antrea.io/antrea/pkg/flowaggregator/apis"
-	"antrea.io/antrea/pkg/flowaggregator/intermediate"
-	"antrea.io/antrea/pkg/flowaggregator/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
+	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
+	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
 )
-
 // HandleFunc returns the function which can handle the /flowrecords API request.
 func HandleFunc(faq querier.FlowAggregatorQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +56,6 @@ func HandleFunc(faq querier.FlowAggregatorQuerier) http.HandlerFunc {
 					return
 				}
 			}
-
 			flowKey = &intermediate.FlowKey{
 				SourceAddress:      sourceAddress,
 				DestinationAddress: destinationAddress,

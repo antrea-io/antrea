@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"testing"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 var (
 	testIPPoolv4 = &crdv1beta1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
@@ -48,7 +40,6 @@ var (
 			},
 		},
 	}
-
 	testIPPoolv6 = &crdv1beta1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-ippool-ipv6",
@@ -66,16 +57,13 @@ var (
 			},
 		},
 	}
-
 	cniCmd = "/opt/cni/bin/antrea"
-
 	cniEnvs = map[string]string{
 		"CNI_CONTAINERID": "test-container-id",
 		"CNI_NETNS":       "/var/run/netns/test-netns",
 		"CNI_PATH":        "/opt/cni/bin",
 		"CNI_ARGS":        "K8S_POD_NAMESPACE=test-namespace;K8S_POD_NAME=test-pod",
 	}
-
 	cniNetworkConfig = `{
     "cniVersion": "0.3.0",
     "name": "test",
@@ -106,7 +94,6 @@ var (
         }
     }
 }`
-
 	testOutput1 = `{
     "cniVersion": "0.3.0",
     "ips": [
@@ -153,7 +140,6 @@ var (
         ]
     }
 }`
-
 	testOutput2 = `{
     "cniVersion": "0.3.0",
     "ips": [
@@ -201,16 +187,13 @@ var (
     }
 }`
 )
-
 func executeCNI(t *testing.T, data *TestData, add, del bool, ifName string, expectedExitCode int, expectedOutput string) {
 	var code int
 	var stdout, stderr string
 	var err error
-
 	t.Logf("Execute CNI for interface %s, ADD %v, DEL %v", ifName, add, del)
 	cniEnvs["CNI_IFNAME"] = ifName
 	defer delete(cniEnvs, "CNI_IFNAME")
-
 	if add {
 		cniEnvs["CNI_COMMAND"] = "ADD"
 		defer delete(cniEnvs, "ADD")
@@ -239,7 +222,6 @@ func executeCNI(t *testing.T, data *TestData, add, del bool, ifName string, expe
 		}
 	}
 }
-
 // Test secondary network IPAM by executing Antrea CNI with forged CNI arguments
 // and network configuration, and validating the CNI command output. Do not
 // really install Multus and create secondary networks.
@@ -251,7 +233,6 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	skipIfAntreaIPAMTest(t)
 	skipIfFeatureDisabled(t, features.AntreaIPAM, true, true)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -259,7 +240,6 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	defer teardownTest(t, data)
 	skipIfProxyDisabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
-
 	_, err = data.CRDClient.CrdV1beta1().IPPools().Create(context.TODO(), testIPPoolv4, metav1.CreateOptions{})
 	defer deleteIPPoolWrapper(t, data, testIPPoolv4.Name)
 	if err != nil {
@@ -270,7 +250,6 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create v6 IPPool CR: %v", err)
 	}
-
 	// DEL non-existing network. Should return no error.
 	executeCNI(t, data, false, true, "net1", 0, "")
 	// Allocate the first IP.

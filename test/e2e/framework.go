@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"bytes"
 	"context"
@@ -31,7 +29,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
@@ -58,8 +55,6 @@ import (
 	"k8s.io/kubectl/pkg/util/podutils"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	crdclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	"antrea.io/antrea/v2/pkg/clusteridentity"
@@ -68,28 +63,22 @@ import (
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/test/e2e/providers"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/clusteridentity"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	crdclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	"antrea.io/antrea/v2/pkg/clusteridentity"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/test/e2e/providers"
->>>>>>> origin/main
 )
-
 var AntreaConfigMap *corev1.ConfigMap
-
 var (
 	errConnectionLost = fmt.Errorf("http2: client connection lost")
 )
-
 const (
 	defaultTimeout  = 90 * time.Second
 	defaultInterval = 1 * time.Second
-
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
 	antreaNamespace             = "kube-system"
 	kubeNamespace               = "kube-system"
@@ -114,7 +103,6 @@ const (
 	ovsContainerName            = "antrea-ovs"
 	agentContainerName          = "antrea-agent"
 	flowAggregatorContainerName = "flow-aggregator"
-
 	antreaYML               = "antrea.yml"
 	antreaIPSecYML          = "antrea-ipsec.yml"
 	antreaCovYML            = "antrea-coverage.yml"
@@ -132,22 +120,17 @@ const (
 	flowAggregatorIPFIXClientTLSSecretName = "ipfix-client-cert"
 	// #nosec G101: not credentials
 	flowAggregatorIPFIXCASecretName = "ipfix-server-ca"
-
 	cpNodeCoverageDir = "/tmp/antrea-e2e-coverage"
-
 	antreaAgentConfName      = "antrea-agent.conf"
 	antreaControllerConfName = "antrea-controller.conf"
 	flowAggregatorConfName   = "flow-aggregator.conf"
-
 	agnhostImage        = "registry.k8s.io/e2e-test-images/agnhost:2.40"
 	ToolboxImage        = "antrea/toolbox:1.5-1"
 	mcjoinImage         = "antrea/mcjoin:v2.9"
 	nginxImage          = "antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
 	ipfixCollectorImage = "antrea/ipfix-collector:v0.15.0"
-
 	nginxLBService = "nginx-loadbalancer"
-
 	// Need a non-default (4739) port when testing the FA in hostNetwork mode.
 	// Otherwise we end up with 2 different hostNetwork Pods listening on the same port, with a
 	// conflict if they are scheduled on the same Node.
@@ -160,13 +143,10 @@ const (
 	aggregatorClickHouseCommitInterval  = 1 * time.Second
 	clickHouseHTTPPort                  = "8123"
 	defaultCHDatabaseURL                = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
-
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
-
 	iperfPort    = 5201
 	iperfSvcPort = 9999
 )
-
 type ClusterNode struct {
 	idx              int // 0 for control-plane Node
 	name             string
@@ -178,14 +158,12 @@ type ClusterNode struct {
 	gwV6Addr         string
 	os               string
 }
-
 func (n ClusterNode) ip() string {
 	if n.ipv4Addr != "" {
 		return n.ipv4Addr
 	}
 	return n.ipv6Addr
 }
-
 type ClusterInfo struct {
 	numNodes             int
 	podV4NetworkCIDR     string
@@ -202,25 +180,20 @@ type ClusterInfo struct {
 	k8sServiceHost       string
 	k8sServicePort       int32
 }
-
 type ExternalInfo struct {
 	externalServerIPv4 string
 	externalServerIPv6 string
-
 	vlanSubnetIPv4  string
 	vlanGatewayIPv4 string
 	vlanSubnetIPv6  string
 	vlanGatewayIPv6 string
 	vlanID          int
-
 	externalFRRIPv4 string
 	externalFRRIPv6 string
 	externalFRRCID  string
 }
-
 var clusterInfo ClusterInfo
 var externalInfo ExternalInfo
-
 type TestOptions struct {
 	providerName        string
 	providerConfigPath  string
@@ -238,10 +211,8 @@ type TestOptions struct {
 	// deployAntrea determines whether to deploy Antrea before running tests. It requires antrea.yml to be present in
 	// the home directory of the control-plane Node. Note it doesn't affect the tests that redeploy Antrea themselves.
 	deployAntrea bool
-
 	externalAgnhostIPs string
 	vlanSubnets        string
-
 	externalFRRIPs string
 	// FRR cannot currently be configured remotely over networking. As a result, the e2e tests for BGPPolicy can only
 	// be run in a Kind cluster, where the FRR container can be configured using Docker exec with the container ID.
@@ -249,12 +220,10 @@ type TestOptions struct {
 	// This would allow the e2e tests for BGPPolicy to be run in environments other than just a Kind cluster.
 	externalFRRCID string
 }
-
 type flowVisibilityIPFIXTestOptions struct {
 	tls        bool
 	clientAuth bool
 }
-
 type flowVisibilityTestOptions struct {
 	mode                     flowaggregatorconfig.AggregatorMode
 	databaseURL              string
@@ -262,9 +231,7 @@ type flowVisibilityTestOptions struct {
 	clusterID                string
 	ipfixCollector           flowVisibilityIPFIXTestOptions
 }
-
 var testOptions TestOptions
-
 // PodInfo combines OS info with a Pod name. It is useful when choosing commands and options on Pods of different OS (Windows, Linux).
 type PodInfo struct {
 	Name      string
@@ -272,7 +239,6 @@ type PodInfo struct {
 	NodeName  string
 	Namespace string
 }
-
 // TestData stores the state required for each test case.
 type TestData struct {
 	ClusterName        string
@@ -284,35 +250,27 @@ type TestData struct {
 	logsDirForTestCase string
 	testNamespace      string
 }
-
 var testData *TestData
-
 type PodIPs struct {
 	IPv4      *net.IP
 	IPv6      *net.IP
 	IPStrings []string
 }
-
 type deployAntreaOptions int
-
 const (
 	deployAntreaDefault deployAntreaOptions = iota
 	deployAntreaIPsec
 	deployAntreaCoverageOffset
 )
-
 func (o deployAntreaOptions) WithCoverage() deployAntreaOptions {
 	return o + deployAntreaCoverageOffset
 }
-
 func (o deployAntreaOptions) DeployYML() string {
 	return deployAntreaOptionsYML[o]
 }
-
 func (o deployAntreaOptions) String() string {
 	return deployAntreaOptionsString[o]
 }
-
 var (
 	deployAntreaOptionsString = [...]string{
 		"AntreaDefault",
@@ -325,7 +283,6 @@ var (
 		antreaIPSecCovYML,
 	}
 )
-
 func (p PodIPs) String() string {
 	res := ""
 	if p.IPv4 != nil {
@@ -336,7 +293,6 @@ func (p PodIPs) String() string {
 	}
 	return fmt.Sprintf("%sIPstrings(%s)", res, strings.Join(p.IPStrings, ","))
 }
-
 func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
 	if len(p.IPStrings) == 0 && len(p1.IPStrings) == 0 {
 		return true
@@ -349,7 +305,6 @@ func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
 	}
 	return false
 }
-
 func (p *PodIPs) AsSlice() []*net.IP {
 	var ips []*net.IP
 	if p.IPv4 != nil {
@@ -360,7 +315,6 @@ func (p *PodIPs) AsSlice() []*net.IP {
 	}
 	return ips
 }
-
 func (p *PodIPs) AsStrings() (ipv4, ipv6 string) {
 	if p.IPv4 != nil {
 		ipv4 = p.IPv4.String()
@@ -370,7 +324,6 @@ func (p *PodIPs) AsStrings() (ipv4, ipv6 string) {
 	}
 	return
 }
-
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
 // (including if idx is 0, which is reserved for the control-plane Node)
 func workerNodeName(idx int) string {
@@ -383,7 +336,6 @@ func workerNodeName(idx int) string {
 	}
 	return node.name
 }
-
 func workerNodeIPv4(idx int) string {
 	if idx == 0 { // control-plane Node
 		return ""
@@ -394,7 +346,6 @@ func workerNodeIPv4(idx int) string {
 	}
 	return node.ipv4Addr
 }
-
 func workerNodeIPv6(idx int) string {
 	if idx == 0 { // control-plane Node
 		return ""
@@ -405,7 +356,6 @@ func workerNodeIPv6(idx int) string {
 	}
 	return node.ipv6Addr
 }
-
 // workerNodeIP returns an empty string if there is no worker Node with the provided idx
 // (including if idx is 0, which is reserved for the control-plane Node)
 func workerNodeIP(idx int) string {
@@ -418,7 +368,6 @@ func workerNodeIP(idx int) string {
 	}
 	return node.ip()
 }
-
 // nodeGatewayIPs returns the Antrea gateway's IPv4 address and IPv6 address for the provided Node
 // (if applicable), in that order.
 func nodeGatewayIPs(idx int) (string, string) {
@@ -428,19 +377,15 @@ func nodeGatewayIPs(idx int) (string, string) {
 	}
 	return node.gwV4Addr, node.gwV6Addr
 }
-
 func controlPlaneNodeName() string {
 	return clusterInfo.controlPlaneNodeName
 }
-
 func controlPlaneNodeIPv4() string {
 	return clusterInfo.controlPlaneNodeIPv4
 }
-
 func controlPlaneNodeIPv6() string {
 	return clusterInfo.controlPlaneNodeIPv6
 }
-
 // nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the name
 // of the control-plane Node will be returned.
 func nodeName(idx int) string {
@@ -450,7 +395,6 @@ func nodeName(idx int) string {
 	}
 	return node.name
 }
-
 // nodeIPv4 returns an empty string if there is no Node with the provided idx. If idx is 0, the IPv4
 // Address of the control-plane Node will be returned.
 func nodeIPv4(idx int) string {
@@ -460,7 +404,6 @@ func nodeIPv4(idx int) string {
 	}
 	return node.ipv4Addr
 }
-
 // nodeIPv6 returns an empty string if there is no Node with the provided idx. If idx is 0, the IPv6
 // Address of the control-plane Node will be returned.
 func nodeIPv6(idx int) string {
@@ -470,7 +413,6 @@ func nodeIPv6(idx int) string {
 	}
 	return node.ipv6Addr
 }
-
 // nodeIP returns an empty string if there is no Node with the provided idx. If idx is 0, the IP
 // of the control-plane Node will be returned.
 func nodeIP(idx int) string {
@@ -480,17 +422,14 @@ func nodeIP(idx int) string {
 	}
 	return node.ip()
 }
-
 // isIPv4Enabled returns true if and only if IPv4 is enabled in the cluster.
 func isIPv4Enabled() bool {
 	return clusterInfo.podV4NetworkCIDR != ""
 }
-
 // isIPv6Enabled returns true if and only if IPv6 is enabled in the cluster.
 func isIPv6Enabled() bool {
 	return clusterInfo.podV6NetworkCIDR != ""
 }
-
 func labelNodeRoleControlPlane() string {
 	// TODO: return labelNodeRoleControlPlane unconditionally when the min K8s version
 	// requirement to run Antrea becomes K8s v1.20
@@ -502,7 +441,6 @@ func labelNodeRoleControlPlane() string {
 	}
 	return labelNodeRoleControlPlane
 }
-
 func controlPlaneNoScheduleTolerations() []corev1.Toleration {
 	// the Node taint still uses "master" in K8s v1.20
 	return []corev1.Toleration{
@@ -518,7 +456,6 @@ func controlPlaneNoScheduleTolerations() []corev1.Toleration {
 		},
 	}
 }
-
 func (data *TestData) getDefaultLoadBalancerMode() (config.LoadBalancerMode, error) {
 	featureGate, err := GetAgentFeatures()
 	if err != nil {
@@ -537,7 +474,6 @@ func (data *TestData) getDefaultLoadBalancerMode() (config.LoadBalancerMode, err
 	}
 	return mode, nil
 }
-
 func (data *TestData) InitProvider(providerName, providerConfigPath string) error {
 	providerFactory := map[string]func(string) (providers.ProviderInterface, error){
 		"vagrant": providers.NewVagrantProvider,
@@ -555,17 +491,14 @@ func (data *TestData) InitProvider(providerName, providerConfigPath string) erro
 	}
 	return nil
 }
-
 // RunCommandOnNode is a convenience wrapper around the Provider interface RunCommandOnNode method.
 func (data *TestData) RunCommandOnNode(nodeName string, cmd string) (code int, stdout string, stderr string, err error) {
 	return data.provider.RunCommandOnNode(nodeName, cmd)
 }
-
 func (data *TestData) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]string, stdin string, sudo bool) (
 	code int, stdout, stderr string, err error) {
 	return data.provider.RunCommandOnNodeExt(nodeName, cmd, envs, stdin, sudo)
 }
-
 func (data *TestData) collectExternalInfo() error {
 	ips := strings.Split(testOptions.externalAgnhostIPs, ",")
 	for _, ip := range ips {
@@ -582,7 +515,6 @@ func (data *TestData) collectExternalInfo() error {
 			externalInfo.externalServerIPv6 = ip
 		}
 	}
-
 	vlanSubnetsList := strings.Split(testOptions.vlanSubnets, "=")
 	vlanIDStr := vlanSubnetsList[0]
 	if vlanIDStr != "" {
@@ -609,7 +541,6 @@ func (data *TestData) collectExternalInfo() error {
 			}
 		}
 	}
-
 	frrIPs := strings.Split(testOptions.externalFRRIPs, ",")
 	for _, ip := range frrIPs {
 		if ip == "" {
@@ -625,12 +556,9 @@ func (data *TestData) collectExternalInfo() error {
 			externalInfo.externalFRRIPv6 = ip
 		}
 	}
-
 	externalInfo.externalFRRCID = testOptions.externalFRRCID
-
 	return nil
 }
-
 func (data *TestData) collectClusterInfo() error {
 	// retrieve K8s server version
 	// this needs to be done first, as there may be dependencies on the
@@ -640,7 +568,6 @@ func (data *TestData) collectClusterInfo() error {
 		return err
 	}
 	clusterInfo.k8sServerVersion = serverVersion.String()
-
 	// retrieve Node information
 	nodes, err := testData.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -655,7 +582,6 @@ func (data *TestData) collectClusterInfo() error {
 			_, ok := node.Labels[labelNodeRoleControlPlane()]
 			return ok
 		}()
-
 		var nodeIPv4 string
 		var nodeIPv6 string
 		for _, address := range node.Status.Addresses {
@@ -667,7 +593,6 @@ func (data *TestData) collectClusterInfo() error {
 				}
 			}
 		}
-
 		var nodeIdx int
 		// If multiple control-plane Nodes (HA), we will select the last one in the list
 		if isControlPlaneNode {
@@ -679,7 +604,6 @@ func (data *TestData) collectClusterInfo() error {
 			nodeIdx = workerIdx
 			workerIdx++
 		}
-
 		clusterInfo.nodes[nodeIdx] = &ClusterNode{
 			idx:      nodeIdx,
 			name:     node.Name,
@@ -696,7 +620,6 @@ func (data *TestData) collectClusterInfo() error {
 		return fmt.Errorf("error when listing cluster Nodes: control-plane Node not found")
 	}
 	clusterInfo.numNodes = workerIdx
-
 	retrieveCIDRs := func(cmd string, reg string) ([]string, error) {
 		res := make([]string, 2)
 		rc, stdout, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
@@ -736,7 +659,6 @@ func (data *TestData) collectClusterInfo() error {
 		}
 		return res, nil
 	}
-
 	// Retrieve cluster CIDRs
 	podCIDRs, err := retrieveCIDRs("kubectl cluster-info dump | grep cluster-cidr", `cluster-cidr=([^"]+)`)
 	if err != nil {
@@ -748,7 +670,6 @@ func (data *TestData) collectClusterInfo() error {
 	}
 	clusterInfo.podV4NetworkCIDR = podCIDRs[0]
 	clusterInfo.podV6NetworkCIDR = podCIDRs[1]
-
 	// Retrieve service CIDRs
 	svcCIDRs, err := retrieveCIDRs("kubectl cluster-info dump | grep service-cluster-ip-range", `service-cluster-ip-range=([^"]+)`)
 	if err != nil {
@@ -760,7 +681,6 @@ func (data *TestData) collectClusterInfo() error {
 	}
 	clusterInfo.svcV4NetworkCIDR = svcCIDRs[0]
 	clusterInfo.svcV6NetworkCIDR = svcCIDRs[1]
-
 	// Retrieve kubernetes Service host and Port
 	svc, err := testData.clientset.CoreV1().Services("default").Get(context.TODO(), "kubernetes", metav1.GetOptions{})
 	if err != nil {
@@ -768,10 +688,8 @@ func (data *TestData) collectClusterInfo() error {
 	}
 	clusterInfo.k8sServiceHost = svc.Spec.ClusterIP
 	clusterInfo.k8sServicePort = svc.Spec.Ports[0].Port
-
 	return nil
 }
-
 func getNodeByName(name string) *ClusterNode {
 	for _, node := range clusterInfo.nodes {
 		if node.name == name {
@@ -780,7 +698,6 @@ func getNodeByName(name string) *ClusterNode {
 	}
 	return nil
 }
-
 func (data *TestData) collectPodCIDRs() error {
 	nodes, err := testData.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -825,7 +742,6 @@ func (data *TestData) collectPodCIDRs() error {
 	}
 	return nil
 }
-
 // CreateNamespace creates the provided namespace.
 func (data *TestData) CreateNamespace(namespace string, mutateFunc func(*corev1.Namespace)) error {
 	ns := &corev1.Namespace{
@@ -848,7 +764,6 @@ func (data *TestData) CreateNamespace(namespace string, mutateFunc func(*corev1.
 	}
 	return nil
 }
-
 func (data *TestData) UpdateNamespace(namespace string, mutateFunc func(*corev1.Namespace)) error {
 	ns, _ := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
 	if mutateFunc != nil {
@@ -863,19 +778,16 @@ func (data *TestData) UpdateNamespace(namespace string, mutateFunc func(*corev1.
 	}
 	return nil
 }
-
 // createNamespaceWithAnnotations creates the Namespace with Annotations.
 func (data *TestData) createNamespaceWithAnnotations(namespace string, annotations map[string]string) error {
 	mutateFunc := data.generateNamespaceAnnotationsMutateFunc(annotations)
 	return data.CreateNamespace(namespace, mutateFunc)
 }
-
 // updateNamespaceWithAnnotations updates the given Namespace with Annotations.
 func (data *TestData) updateNamespaceWithAnnotations(namespace string, annotations map[string]string) error {
 	mutateFunc := data.generateNamespaceAnnotationsMutateFunc(annotations)
 	return data.UpdateNamespace(namespace, mutateFunc)
 }
-
 // generateAnnotationsMutateFunc generates a mutate function to add given Annotations to a Namespace.
 func (data *TestData) generateNamespaceAnnotationsMutateFunc(annotations map[string]string) func(*corev1.Namespace) {
 	var mutateFunc func(*corev1.Namespace)
@@ -891,7 +803,6 @@ func (data *TestData) generateNamespaceAnnotationsMutateFunc(annotations map[str
 	}
 	return mutateFunc
 }
-
 // DeleteNamespace deletes the provided Namespace, and waits for deletion to actually complete if timeout>=0
 func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) error {
 	var gracePeriodSeconds int64
@@ -900,13 +811,11 @@ func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) e
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-
 	// To log time statistics
 	startTime := time.Now()
 	defer func() {
 		log.Infof("Deleting Namespace %s took %v", namespace, time.Since(startTime))
 	}()
-
 	if err := data.clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
 			// namespace does not exist, we return right away
@@ -925,14 +834,12 @@ func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) e
 			} else if ns.Status.Phase != corev1.NamespaceTerminating {
 				return false, fmt.Errorf("deleted Namespace '%s' should be in 'Terminating' phase", namespace)
 			}
-
 			// Keep trying
 			return false, nil
 		})
 	}
 	return nil
 }
-
 // deployAntreaCommon deploys Antrea using kubectl on the control-plane Node.
 func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, waitForAgentRollout bool) error {
 	// TODO: use the K8s apiserver when server side apply is available?
@@ -951,10 +858,8 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, w
 			return fmt.Errorf("error when waiting for antrea-agent rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
 		}
 	}
-
 	return nil
 }
-
 // deployAntrea deploys Antrea with deploy options.
 func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 	if testOptions.enableCoverage {
@@ -962,19 +867,16 @@ func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 	}
 	return data.deployAntreaCommon(option.DeployYML(), "", true)
 }
-
 // deployFlowVisibilityClickHouse deploys ClickHouse operator and DB.
 func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions) (string, error) {
 	err := data.CreateNamespace(flowVisibilityNamespace, nil)
 	if err != nil {
 		return "", err
 	}
-
 	visibilityYML := flowVisibilityYML
 	if o.databaseSecureConnection {
 		visibilityYML = flowVisibilityTLSYML
 	}
-
 	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", chOperatorYML))
 	if err != nil || rc != 0 {
 		return "", fmt.Errorf("error when deploying the ClickHouse Operator YML; %s not available on the control-plane Node", chOperatorYML)
@@ -994,12 +896,10 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 	}); err != nil {
 		return "", err
 	}
-
 	// check for clickhouse pod Ready. Wait for 2x timeout as ch operator needs to be running first to handle chi
 	if err := data.podWaitForReady(2*defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace); err != nil {
 		return "", err
 	}
-
 	// check clickhouse service http port for service connectivity
 	var chSvc *corev1.Service
 	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (bool, error) {
@@ -1012,7 +912,6 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 	}); err != nil {
 		return "", fmt.Errorf("timeout waiting for ClickHouse Service: %w", err)
 	}
-
 	const probePodName = "ch-svc-probe"
 	if err := NewPodBuilder(probePodName, flowVisibilityNamespace, agnhostImage).Create(testData); err != nil {
 		return "", fmt.Errorf("failed to create ClickHouse Service probe Pod: %w", err)
@@ -1021,7 +920,6 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 	if err := data.podWaitForReady(defaultTimeout, probePodName, flowVisibilityNamespace); err != nil {
 		return "", err
 	}
-
 	cmd := []string{"/agnhost", "connect", net.JoinHostPort(chSvc.Spec.ClusterIP, clickHouseHTTPPort), "--timeout=5s"}
 	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (bool, error) {
 		_, stderr, err := testData.RunCommandFromPod(flowVisibilityNamespace, probePodName, agnhostContainerName, cmd)
@@ -1035,10 +933,8 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 	}); err != nil {
 		return "", fmt.Errorf("timeout checking http port connectivity of clickhouse service: %w", err)
 	}
-
 	return chSvc.Spec.ClusterIP, nil
 }
-
 func (data *TestData) deleteFlowVisibility() error {
 	startTime := time.Now()
 	defer func() {
@@ -1050,7 +946,6 @@ func (data *TestData) deleteFlowVisibility() error {
 	}
 	return nil
 }
-
 func (data *TestData) deleteClickHouseOperator() error {
 	startTime := time.Now()
 	defer func() {
@@ -1062,7 +957,6 @@ func (data *TestData) deleteClickHouseOperator() error {
 	}
 	return nil
 }
-
 func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, clientCA []byte) (string, error) {
 	args := []string{"--ipfix.port", ipfixCollectorPort}
 	if serverCert != nil {
@@ -1071,9 +965,7 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 			args = append(args, "--client-ca", "/certs/clients/ca.crt")
 		}
 	}
-
 	pb := NewPodBuilder("ipfix-collector", data.testNamespace, ipfixCollectorImage).WithArgs(args).InHostNetwork()
-
 	if serverCert != nil {
 		serverCertSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1089,7 +981,6 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 			return "", fmt.Errorf("failed to create Secret for ipfix-collector server certificate: %w", err)
 		}
 		pb = pb.MountSecret(serverCertSecret.Name, "/certs/server", serverCertSecret.Name)
-
 		if clientCA != nil {
 			clientCASecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1106,7 +997,6 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 			pb = pb.MountSecret(clientCASecret.Name, "/certs/clients", clientCASecret.Name)
 		}
 	}
-
 	if err := pb.Create(data); err != nil {
 		return "", fmt.Errorf("error when creating the ipfix collector Pod: %w", err)
 	}
@@ -1123,7 +1013,6 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 	return ipfixCollectorAddr, nil
 }
-
 // deployFlowAggregator deploys the Flow Aggregator.
 func (data *TestData) deployFlowAggregator(
 	ipfixCollector string,
@@ -1134,13 +1023,11 @@ func (data *TestData) deployFlowAggregator(
 	if testOptions.enableCoverage {
 		flowAggYaml = flowAggregatorCovYML
 	}
-
 	// Create flow-aggregator Namespace first, so that we can create the necessary Secrets prior
 	// to applying the Flow Aggregator manifest.
 	if err := data.CreateNamespace(flowAggregatorNamespace, nil); err != nil {
 		return fmt.Errorf("failed to create %q Namespace: %w", flowAggregatorNamespace, err)
 	}
-
 	if ipfixClientCert != nil {
 		clientCertSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1156,7 +1043,6 @@ func (data *TestData) deployFlowAggregator(
 			return fmt.Errorf("failed to create Secret for IPFIX client certificate: %w", err)
 		}
 	}
-
 	if ipfixServerCA != nil {
 		serverCASecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1171,7 +1057,6 @@ func (data *TestData) deployFlowAggregator(
 			return fmt.Errorf("failed to create Secret for IPFIX server CA certificate: %w", err)
 		}
 	}
-
 	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowAggYaml))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying the Flow Aggregator; %s not available on the control-plane Node", flowAggYaml)
@@ -1198,7 +1083,6 @@ func (data *TestData) deployFlowAggregator(
 			return fmt.Errorf("unable to copy ClickHouse CA secret '%s' from Namespace '%s' to Namespace '%s': %v", flowAggregatorCHSecret, flowVisibilityNamespace, flowAggregatorNamespace, err)
 		}
 	}
-
 	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, o); err != nil {
 		return err
 	}
@@ -1217,22 +1101,18 @@ func (data *TestData) deployFlowAggregator(
 	}
 	return nil
 }
-
 func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o flowVisibilityTestOptions) error {
 	if o.mode == flowaggregatorconfig.AggregatorModeProxy && o.databaseURL != "" {
 		return fmt.Errorf("cannot use Proxy mode with ClickHouse")
 	}
-
 	configMap, err := data.GetFlowAggregatorConfigMap()
 	if err != nil {
 		return err
 	}
-
 	var flowAggregatorConf flowaggregatorconfig.FlowAggregatorConfig
 	if err := yaml.Unmarshal([]byte(configMap.Data[flowAggregatorConfName]), &flowAggregatorConf); err != nil {
 		return fmt.Errorf("failed to unmarshal FlowAggregator config from ConfigMap: %v", err)
 	}
-
 	flowAggregatorConf.Mode = o.mode
 	flowAggregatorConf.FlowCollector = flowaggregatorconfig.FlowCollectorConfig{
 		Enable:  true,
@@ -1262,7 +1142,6 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 				CACert: o.databaseSecureConnection,
 			},
 		}
-
 	} else {
 		flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
 			Enable: false,
@@ -1272,7 +1151,6 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
 	flowAggregatorConf.ClusterID = o.clusterID
-
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {
 		return fmt.Errorf("failed to marshal FlowAggregator config")
@@ -1283,7 +1161,6 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	}
 	return nil
 }
-
 func (data *TestData) GetFlowAggregatorConfigMap() (*corev1.ConfigMap, error) {
 	deployment, err := data.clientset.AppsV1().Deployments(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
 	if err != nil {
@@ -1305,7 +1182,6 @@ func (data *TestData) GetFlowAggregatorConfigMap() (*corev1.ConfigMap, error) {
 	}
 	return configMap, nil
 }
-
 // getAgentContainersRestartCount reads the restart count for every container across all Antrea
 // Agent Pods and returns the sum of all the read values.
 func (data *TestData) getAgentContainersRestartCount() (int, error) {
@@ -1324,7 +1200,6 @@ func (data *TestData) getAgentContainersRestartCount() (int, error) {
 	}
 	return containerRestarts, nil
 }
-
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
@@ -1346,7 +1221,6 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 			return false, nil
 		}
 		desiredNum += dsLinux.Status.DesiredNumberScheduled
-
 		if len(clusterInfo.windowsNodes) != 0 {
 			var dsWindows *appsv1.DaemonSet
 			if dsWindows, err = getDS(antreaWindowsDaemonSet, "Windows"); err != nil {
@@ -1357,7 +1231,6 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 			}
 			desiredNum += dsWindows.Status.DesiredNumberScheduled
 		}
-
 		// Make sure that all antrea-agent Pods are not terminating. This is required because NumberAvailable of
 		// DaemonSet counts Pods even if they are terminating. Deleting antrea-agent Pods directly does not cause the
 		// number to decrease if the process doesn't quit immediately, e.g. when the signal is caught by bincover
@@ -1385,10 +1258,8 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 	} else if err != nil {
 		return err
 	}
-
 	return nil
 }
-
 // waitForCoreDNSPods waits for the K8s apiserver to report that all the CoreDNS Pods are available.
 func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
 	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, true, func(ctx context.Context) (bool, error) {
@@ -1409,7 +1280,6 @@ func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
 	}
 	return nil
 }
-
 // restartCoreDNSPods deletes all the CoreDNS Pods to force them to be re-scheduled. It then waits
 // for all the Pods to become available, by calling waitForCoreDNSPods.
 func (data *TestData) restartCoreDNSPods(timeout time.Duration) error {
@@ -1425,7 +1295,6 @@ func (data *TestData) restartCoreDNSPods(timeout time.Duration) error {
 	}
 	return retryOnConnectionLostError(retry.DefaultRetry, func() error { return data.waitForCoreDNSPods(timeout) })
 }
-
 // checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, it
 // deletes all the Pods to force them to restart and waits up to timeout for the Pods to become
 // ready.
@@ -1438,13 +1307,11 @@ func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
 	}
 	return data.restartCoreDNSPods(timeout)
 }
-
 // CreateClient initializes the K8s clientset in the TestData structure.
 func (data *TestData) CreateClient(kubeconfigPath string) error {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.ExplicitPath = kubeconfigPath
 	configOverrides := &clientcmd.ConfigOverrides{}
-
 	kubeConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides).ClientConfig()
 	if err != nil {
 		return fmt.Errorf("error when building kube config: %v", err)
@@ -1467,7 +1334,6 @@ func (data *TestData) CreateClient(kubeconfigPath string) error {
 	data.CRDClient = crdClient
 	return nil
 }
-
 // deleteAntrea deletes the Antrea DaemonSet; we use cascading deletion, which means all the Pods created
 // by Antrea will be deleted. After issuing the deletion request, we poll the K8s apiserver to ensure
 // that the DaemonSet does not exist any more. This function is a no-op if the Antrea DaemonSet does
@@ -1484,7 +1350,6 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-
 	deleteDS := func(ds string) error {
 		if err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Delete(context.TODO(), ds, deleteOptions); err != nil {
 			if errors.IsNotFound(err) {
@@ -1501,7 +1366,6 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 				}
 				return false, fmt.Errorf("error when trying to get Antrea DaemonSet after deletion: %v", err)
 			}
-
 			// Keep trying
 			return false, nil
 		})
@@ -1513,10 +1377,8 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 	if err := deleteDS(antreaWindowsDaemonSet); err != nil {
 		return err
 	}
-
 	return nil
 }
-
 // getImageName gets the image name from the fully qualified URI.
 // For example: "gcr.io/kubernetes-e2e-test-images/agnhost:2.8" gets "agnhost".
 func getImageName(uri string) string {
@@ -1524,7 +1386,6 @@ func getImageName(uri string) string {
 	paths := strings.Split(registryAndImage, "/")
 	return paths[len(paths)-1]
 }
-
 type PodBuilder struct {
 	Name               string
 	Namespace          string
@@ -1548,7 +1409,6 @@ type PodBuilder struct {
 	ReadinessProbe     *corev1.Probe
 	DnsConfig          *corev1.PodDNSConfig
 }
-
 func NewPodBuilder(name, ns, image string) *PodBuilder {
 	return &PodBuilder{
 		Name:      name,
@@ -1556,87 +1416,70 @@ func NewPodBuilder(name, ns, image string) *PodBuilder {
 		Image:     image,
 	}
 }
-
 func (b *PodBuilder) WithContainerName(ctrName string) *PodBuilder {
 	b.ContainerName = ctrName
 	return b
 }
-
 func (b *PodBuilder) WithCommand(command []string) *PodBuilder {
 	b.Command = command
 	return b
 }
-
 func (b *PodBuilder) WithArgs(args []string) *PodBuilder {
 	b.Args = args
 	return b
 }
-
 func (b *PodBuilder) WithEnv(env []corev1.EnvVar) *PodBuilder {
 	b.Env = env
 	return b
 }
-
 func (b *PodBuilder) WithPorts(ports []corev1.ContainerPort) *PodBuilder {
 	b.Ports = ports
 	return b
 }
-
 func (b *PodBuilder) WithHostNetwork(v bool) *PodBuilder {
 	b.HostNetwork = v
 	return b
 }
-
 func (b *PodBuilder) InHostNetwork() *PodBuilder {
 	return b.WithHostNetwork(true)
 }
-
 func (b *PodBuilder) Privileged() *PodBuilder {
 	b.IsPrivileged = true
 	return b
 }
-
 func (b *PodBuilder) WithServiceAccountName(name string) *PodBuilder {
 	b.ServiceAccountName = name
 	return b
 }
-
 func (b *PodBuilder) WithAnnotations(annotations map[string]string) *PodBuilder {
 	b.Annotations = annotations
 	return b
 }
-
 func (b *PodBuilder) WithLabels(labels map[string]string) *PodBuilder {
 	b.Labels = labels
 	return b
 }
-
 func (b *PodBuilder) OnNode(nodeName string) *PodBuilder {
 	b.NodeName = nodeName
 	return b
 }
-
 func (b *PodBuilder) WithMutateFunc(f func(*corev1.Pod)) *PodBuilder {
 	b.MutateFunc = f
 	return b
 }
-
 func (b *PodBuilder) WithResources(ResourceRequests, ResourceLimits corev1.ResourceList) *PodBuilder {
 	b.ResourceRequests = ResourceRequests
 	b.ResourceLimits = ResourceLimits
 	return b
 }
-
 func (b *PodBuilder) AddVolume(volume corev1.Volume) *PodBuilder {
 	b.Volumes = append(b.Volumes, volume)
 	return b
 }
-
 func (b *PodBuilder) AddVolumeMount(volumeMount corev1.VolumeMount) *PodBuilder {
 	b.VolumeMounts = append(b.VolumeMounts, volumeMount)
 	return b
 }
-
 func (b *PodBuilder) MountConfigMap(configMapName string, mountPath string, volumeName string) *PodBuilder {
 	volumeMount := corev1.VolumeMount{Name: volumeName, MountPath: mountPath}
 	volume := corev1.Volume{
@@ -1651,7 +1494,6 @@ func (b *PodBuilder) MountConfigMap(configMapName string, mountPath string, volu
 	}
 	return b.AddVolume(volume).AddVolumeMount(volumeMount)
 }
-
 func (b *PodBuilder) MountSecret(secretName string, mountPath string, volumeName string) *PodBuilder {
 	volumeMount := corev1.VolumeMount{Name: volumeName, MountPath: mountPath}
 	volume := corev1.Volume{
@@ -1664,7 +1506,6 @@ func (b *PodBuilder) MountSecret(secretName string, mountPath string, volumeName
 	}
 	return b.AddVolume(volume).AddVolumeMount(volumeMount)
 }
-
 func (b *PodBuilder) MountHostPath(hostPath string, hostPathType corev1.HostPathType, mountPath string, volumeName string) *PodBuilder {
 	volumeMount := corev1.VolumeMount{Name: volumeName, MountPath: mountPath}
 	volume := corev1.Volume{
@@ -1678,19 +1519,16 @@ func (b *PodBuilder) MountHostPath(hostPath string, hostPathType corev1.HostPath
 	}
 	return b.AddVolume(volume).AddVolumeMount(volumeMount)
 }
-
 func (b *PodBuilder) WithReadinessProbe(probe *corev1.Probe) *PodBuilder {
 	b.ReadinessProbe = probe
 	return b
 }
-
 // WithCustomDNSConfig adds a custom DNS Configuration to the Pod spec.
 // It ensures that the DNSPolicy is set to 'None' and assigns the provided DNSConfig.
 func (b *PodBuilder) WithCustomDNSConfig(dnsConfig *corev1.PodDNSConfig) *PodBuilder {
 	b.DnsConfig = dnsConfig
 	return b
 }
-
 func (b *PodBuilder) Create(data *TestData) error {
 	containerName := b.ContainerName
 	if containerName == "" {
@@ -1736,7 +1574,6 @@ func (b *PodBuilder) Create(data *TestData) error {
 	if b.DnsConfig != nil {
 		// Set DNSPolicy to None to allow custom DNSConfig
 		podSpec.DNSPolicy = corev1.DNSNone
-
 		// Assign the provided DNSConfig to the Pod's DNSConfig field
 		podSpec.DNSConfig = b.DnsConfig
 	}
@@ -1765,7 +1602,6 @@ func (b *PodBuilder) Create(data *TestData) error {
 	}
 	return nil
 }
-
 func (data *TestData) UpdatePod(namespace, name string, mutateFunc func(*corev1.Pod)) error {
 	pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
@@ -1779,19 +1615,16 @@ func (data *TestData) UpdatePod(namespace, name string, mutateFunc func(*corev1.
 	}
 	return nil
 }
-
 // createMcJoinPodOnNode creates a Pod in the test namespace with a single mcjoin container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createMcJoinPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
 	return NewPodBuilder(name, ns, mcjoinImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
 }
-
 // createToolboxPodOnNode creates a Pod in the test namespace with a single toolbox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createToolboxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
 	return NewPodBuilder(name, ns, ToolboxImage).OnNode(nodeName).WithHostNetwork(hostNetwork).Create(data)
 }
-
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
@@ -1807,7 +1640,6 @@ func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName stri
 		},
 	}).WithHostNetwork(hostNetwork).Create(data)
 }
-
 // createServerPod creates a Pod that can listen to specified port and have named port set.
 func (data *TestData) createServerPod(name string, ns string, portName string, portNum int32, setHostPort bool, hostNetwork bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
@@ -1820,7 +1652,6 @@ func (data *TestData) createServerPod(name string, ns string, portName string, p
 	}
 	return NewPodBuilder(name, ns, agnhostImage).WithArgs([]string{cmd}).WithEnv([]corev1.EnvVar{env}).WithPorts([]corev1.ContainerPort{port}).WithHostNetwork(hostNetwork).Create(data)
 }
-
 // createCustomPod creates a Pod in given Namespace with custom labels.
 func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, labels map[string]string) error {
 	cmd := []string{"/agnhost", "serve-hostname", "--tcp", "--http=false", "--port", fmt.Sprintf("%d", portNum)}
@@ -1829,7 +1660,6 @@ func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, 
 	containerName := fmt.Sprintf("c%v", portNum)
 	return NewPodBuilder(name, ns, agnhostImage).WithContainerName(containerName).WithCommand(cmd).WithEnv([]corev1.EnvVar{env}).WithPorts([]corev1.ContainerPort{port}).WithLabels(labels).Create(data)
 }
-
 func (data *TestData) PatchPod(namespace, name string, patch []byte) error {
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		_, err := data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), name, types.MergePatchType, patch, metav1.PatchOptions{})
@@ -1839,7 +1669,6 @@ func (data *TestData) PatchPod(namespace, name string, patch []byte) error {
 	}
 	return nil
 }
-
 // DeletePod deletes a Pod in the test namespace.
 func (data *TestData) DeletePod(namespace, name string) error {
 	var gracePeriodSeconds int64 = 5
@@ -1853,7 +1682,6 @@ func (data *TestData) DeletePod(namespace, name string) error {
 	}
 	return nil
 }
-
 // Deletes a Pod in the test namespace then waits us to timeout for the Pod not to be visible to the
 // client anymore.
 func (data *TestData) DeletePodAndWait(timeout time.Duration, name string, ns string) error {
@@ -1875,9 +1703,7 @@ func (data *TestData) DeletePodAndWait(timeout time.Duration, name string, ns st
 	}
 	return err
 }
-
 type PodCondition func(*corev1.Pod) (bool, error)
-
 // PodWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
 // the condition predicate is met (or until the provided timeout expires).
 func (data *TestData) PodWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*corev1.Pod, error) {
@@ -1901,7 +1727,6 @@ func (data *TestData) PodWaitFor(timeout time.Duration, name, namespace string, 
 	}
 	return pod, nil
 }
-
 // podWaitForRunning polls the k8s apiserver until the specified Pod is in the "running" state (or
 // until the provided timeout expires).
 func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace string) error {
@@ -1910,7 +1735,6 @@ func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace s
 	})
 	return err
 }
-
 // podWaitForReady polls the k8s apiserver until the specified Pod is in the "Ready" status (or
 // until the provided timeout expires).
 func (data *TestData) podWaitForReady(timeout time.Duration, name, namespace string) error {
@@ -1924,7 +1748,6 @@ func (data *TestData) podWaitForReady(timeout time.Duration, name, namespace str
 	})
 	return err
 }
-
 // podWaitForIPs polls the K8s apiserver until the specified Pod is in the "running" state (or until
 // the provided timeout expires). The function then returns the IP addresses assigned to the Pod. If the
 // Pod is not using "hostNetwork", the function also checks that an IP address exists in each required
@@ -1946,7 +1769,6 @@ func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace strin
 	if err != nil {
 		return nil, err
 	}
-
 	if !pod.Spec.HostNetwork {
 		if clusterInfo.podV4NetworkCIDR != "" && ips.IPv4 == nil {
 			return nil, fmt.Errorf("no IPv4 address is assigned while cluster was configured with IPv4 Pod CIDR %s", clusterInfo.podV4NetworkCIDR)
@@ -1957,7 +1779,6 @@ func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace strin
 	}
 	return ips, nil
 }
-
 func parsePodIPs(pod *corev1.Pod) (*PodIPs, error) {
 	podIPStrings := sets.New[string](pod.Status.PodIP)
 	for _, podIP := range pod.Status.PodIPs {
@@ -1993,7 +1814,6 @@ func parsePodIPs(pod *corev1.Pod) (*PodIPs, error) {
 	}
 	return ips, nil
 }
-
 // deleteAntreaAgentOnNode deletes the antrea-agent Pod on a specific Node and measure how long it
 // takes for the Pod not to be visible to the client any more. It also waits for a new antrea-agent
 // Pod to be running on the Node.
@@ -2018,12 +1838,10 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
-
 	start := time.Now()
 	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
 		return 0, fmt.Errorf("error when deleting antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
-
 	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		for _, pod := range pods.Items {
 			if _, err := data.clientset.CoreV1().Pods(antreaNamespace).Get(context.TODO(), pod.Name, metav1.GetOptions{}); err != nil {
@@ -2039,9 +1857,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	}); err != nil {
 		return 0, err
 	}
-
 	delay := time.Since(start)
-
 	// wait for new antrea-agent Pod
 	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
@@ -2061,10 +1877,8 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	}); err != nil {
 		return 0, err
 	}
-
 	return delay, nil
 }
-
 // getAntreaPodOnNode retrieves the name of the Antrea Pod (antrea-agent-*) running on a specific Node.
 func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err error) {
 	listOptions := metav1.ListOptions{
@@ -2080,7 +1894,6 @@ func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err e
 	}
 	return pods.Items[0].Name, nil
 }
-
 func (data *TestData) RunCommandFromAntreaPodOnNode(nodeName string, cmd []string) (string, string, error) {
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
@@ -2088,7 +1901,6 @@ func (data *TestData) RunCommandFromAntreaPodOnNode(nodeName string, cmd []strin
 	}
 	return data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
 }
-
 // getFlowAggregator retrieves the name of the Flow-Aggregator Pod (flow-aggregator-*) running on a specific Node.
 func (data *TestData) getFlowAggregator() (*corev1.Pod, error) {
 	listOptions := metav1.ListOptions{
@@ -2103,7 +1915,6 @@ func (data *TestData) getFlowAggregator() (*corev1.Pod, error) {
 	}
 	return &pods.Items[0], nil
 }
-
 // getAntreaController retrieves the name of the Antrea Controller (antrea-controller-*) running in the k8s cluster.
 func (data *TestData) getAntreaController() (*corev1.Pod, error) {
 	listOptions := metav1.ListOptions{
@@ -2118,7 +1929,6 @@ func (data *TestData) getAntreaController() (*corev1.Pod, error) {
 	}
 	return &pods.Items[0], nil
 }
-
 // restartAntreaControllerPod deletes the antrea-controller Pod to force it to be re-scheduled. It then waits
 // for the new Pod to become available, and returns it.
 func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1.Pod, error) {
@@ -2135,7 +1945,6 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1
 	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
 		return nil, fmt.Errorf("error when deleting antrea-controller Pod: %v", err)
 	}
-
 	var newPod *corev1.Pod
 	// wait for new antrea-controller Pod
 	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
@@ -2168,7 +1977,6 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1
 	}
 	return newPod, nil
 }
-
 // RestartAntreaAgentPods deletes all the antrea-agent Pods to force them to be re-scheduled. It
 // then waits for the new Pods to become available.
 func (data *TestData) RestartAntreaAgentPods(timeout time.Duration) error {
@@ -2185,10 +1993,8 @@ func (data *TestData) RestartAntreaAgentPods(timeout time.Duration) error {
 	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
 		return fmt.Errorf("error when deleting antrea-agent Pods: %v", err)
 	}
-
 	return data.waitForAntreaDaemonSetPods(timeout)
 }
-
 // validatePodIP checks that the provided IP address is in the Pod Network CIDR for the cluster.
 func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 	_, cidr, err := net.ParseCIDR(podNetworkCIDR)
@@ -2197,14 +2003,12 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 	}
 	return cidr.Contains(ip), nil
 }
-
 // CreateService creates a service with port and targetPort.
 func (data *TestData) CreateService(serviceName, namespace string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	annotation := make(map[string]string)
 	return data.CreateServiceWithAnnotations(serviceName, namespace, port, targetPort, corev1.ProtocolTCP, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
 }
-
 // CreateServiceWithAnnotations creates a service with Annotation
 func (data *TestData) CreateServiceWithAnnotations(serviceName, namespace string, port, targetPort int32, protocol corev1.Protocol, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string, mutators ...func(service *corev1.Service)) (*corev1.Service, error) {
@@ -2246,7 +2050,6 @@ func (data *TestData) CreateServiceWithAnnotations(serviceName, namespace string
 	}
 	return data.clientset.CoreV1().Services(namespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
-
 // createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
 func (data *TestData) createNginxClusterIPServiceWithAnnotations(nodeName string, affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
 	selectorLabel := "nginx"
@@ -2255,7 +2058,6 @@ func (data *TestData) createNginxClusterIPServiceWithAnnotations(nodeName string
 	}
 	return data.CreateServiceWithAnnotations("nginx", data.testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": selectorLabel}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
 }
-
 // createNginxClusterIPService creates a nginx service with the given name.
 func (data *TestData) createNginxClusterIPService(name, namespace string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	if name == "" {
@@ -2263,22 +2065,18 @@ func (data *TestData) createNginxClusterIPService(name, namespace string, affini
 	}
 	return data.CreateService(name, namespace, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily)
 }
-
 // createAgnhostClusterIPService creates a ClusterIP agnhost service with the given name.
 func (data *TestData) createAgnhostClusterIPService(serviceName string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	return data.CreateService(serviceName, data.testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily)
 }
-
 // createAgnhostNodePortService creates a NodePort agnhost service with the given name.
 func (data *TestData) createAgnhostNodePortService(serviceName string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	return data.CreateService(serviceName, data.testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
 }
-
 // createNginxNodePortService creates a NodePort nginx service with the given name.
 func (data *TestData) createNginxNodePortService(serviceName, namespace string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	return data.CreateService(serviceName, namespace, 80, 80, map[string]string{"app": "nginx"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
 }
-
 func (data *TestData) updateServiceExternalTrafficPolicy(serviceName string, nodeLocalExternal bool) (*corev1.Service, error) {
 	svc, err := data.clientset.CoreV1().Services(data.testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	if err != nil {
@@ -2289,10 +2087,8 @@ func (data *TestData) updateServiceExternalTrafficPolicy(serviceName string, nod
 	} else {
 		svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeCluster
 	}
-
 	return data.clientset.CoreV1().Services(data.testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{})
 }
-
 func (data *TestData) updateServiceInternalTrafficPolicy(serviceName string, nodeLocalInternal bool) (*corev1.Service, error) {
 	svc, err := data.clientset.CoreV1().Services(data.testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	if err != nil {
@@ -2303,10 +2099,8 @@ func (data *TestData) updateServiceInternalTrafficPolicy(serviceName string, nod
 	} else {
 		svc.Spec.InternalTrafficPolicy = ptr.To(corev1.ServiceInternalTrafficPolicyCluster)
 	}
-
 	return data.clientset.CoreV1().Services(data.testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{})
 }
-
 func (data *TestData) updateService(serviceName string, mutateFunc func(service *corev1.Service)) (*corev1.Service, error) {
 	svc, err := data.clientset.CoreV1().Services(data.testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	if err != nil {
@@ -2320,14 +2114,12 @@ func (data *TestData) updateService(serviceName string, mutateFunc func(service 
 	}
 	return svc, nil
 }
-
 // createAgnhostLoadBalancerService creates a LoadBalancer agnhost service with the given name.
 func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affinity, nodeLocalExternal bool, ingressIPs []string, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
 	svc, err := data.CreateServiceWithAnnotations(serviceName, data.testNamespace, 8080, 8080, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily, annotations)
 	if err != nil {
 		return svc, err
 	}
-
 	ingress := make([]corev1.LoadBalancerIngress, len(ingressIPs))
 	for idx, ingressIP := range ingressIPs {
 		ingress[idx].IP = ingressIP
@@ -2340,7 +2132,6 @@ func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affin
 	}
 	return data.clientset.CoreV1().Services(svc.Namespace).Patch(context.TODO(), svc.Name, types.MergePatchType, patchData, metav1.PatchOptions{}, "status")
 }
-
 func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	svc, err := data.CreateService(nginxLBService, data.testNamespace, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
@@ -2358,7 +2149,6 @@ func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs [
 	}
 	return data.clientset.CoreV1().Services(svc.Namespace).Patch(context.TODO(), svc.Name, types.MergePatchType, patchData, metav1.PatchOptions{}, "status")
 }
-
 // deleteService deletes the service.
 func (data *TestData) deleteService(namespace, name string) error {
 	if err := data.clientset.CoreV1().Services(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
@@ -2366,7 +2156,6 @@ func (data *TestData) deleteService(namespace, name string) error {
 	}
 	return nil
 }
-
 // Deletes a Service in the test namespace then waits us to timeout for the Service not to be visible to the
 // client anymore.
 func (data *TestData) deleteServiceAndWait(timeout time.Duration, name, namespace string) error {
@@ -2388,7 +2177,6 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name, namespac
 	}
 	return err
 }
-
 // createNetworkPolicy creates a network policy with spec.
 func (data *TestData) createNetworkPolicy(name string, spec *networkingv1.NetworkPolicySpec) (*networkingv1.NetworkPolicy, error) {
 	policy := &networkingv1.NetworkPolicy{
@@ -2402,7 +2190,6 @@ func (data *TestData) createNetworkPolicy(name string, spec *networkingv1.Networ
 	}
 	return data.clientset.NetworkingV1().NetworkPolicies(data.testNamespace).Create(context.TODO(), policy, metav1.CreateOptions{})
 }
-
 // deleteNetworkpolicy deletes the network policy.
 func (data *TestData) deleteNetworkpolicy(policy *networkingv1.NetworkPolicy) error {
 	if err := data.clientset.NetworkingV1().NetworkPolicies(policy.Namespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
@@ -2410,10 +2197,8 @@ func (data *TestData) deleteNetworkpolicy(policy *networkingv1.NetworkPolicy) er
 	}
 	return nil
 }
-
 // A DNS-1123 subdomain must consist of lower case alphanumeric characters
 var lettersAndDigits = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-
 func randSeq(n int) string {
 	b := make([]rune, n)
 	for i := range b {
@@ -2423,13 +2208,11 @@ func randSeq(n int) string {
 	}
 	return string(b)
 }
-
 // randName generates a DNS-1123 subdomain name
 func randName(prefix string) string {
 	nameSuffixLength := 8
 	return prefix + randSeq(nameSuffixLength)
 }
-
 // Run the provided command in the specified Container for the give Pod and returns the contents of
 // stdout and stderr as strings. An error either indicates that the command couldn't be run or that
 // the command returned a non-zero error code.
@@ -2462,7 +2245,6 @@ func (data *TestData) RunCommandFromPod(podNamespace string, podName string, con
 	}
 	return stdoutB.String(), stderrB.String(), nil
 }
-
 func forAllNodes(fn func(nodeName string) error) error {
 	for idx := 0; idx < clusterInfo.numNodes; idx++ {
 		name := nodeName(idx)
@@ -2475,7 +2257,6 @@ func forAllNodes(fn func(nodeName string) error) error {
 	}
 	return nil
 }
-
 // forAllMatchingPodsInNamespace invokes the provided function for every Pod currently running on every Node in a given
 // namespace and which matches labelSelector criteria.
 func (data *TestData) forAllMatchingPodsInNamespace(
@@ -2497,7 +2278,6 @@ func (data *TestData) forAllMatchingPodsInNamespace(
 	}
 	return nil
 }
-
 func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, err error) {
 	re := regexp.MustCompile(`(\d+)\s+packets\s+transmitted,\s+(\d+)\s+packets\s+received,\s+(\d+)%\s+unanswered`)
 	matches := re.FindStringSubmatch(out)
@@ -2509,7 +2289,6 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'packets transmitted' from arpping output: %v", err)
 	}
 	sent = uint32(v)
-
 	v, err = strconv.ParseUint(matches[2], 10, 32)
 	if err != nil {
 		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'packets received' from arpping output: %v", err)
@@ -2518,7 +2297,6 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	loss = 100. * float32(sent-received) / float32(sent)
 	return sent, received, loss, nil
 }
-
 // RunPingCommandFromTestPod uses ping to check connectivity between the Pod and the given target Pod IPs.
 // If dontFragment is true and size is 0, it will set the size to the maximum value allowed by the Pod's MTU.
 func (data *TestData) RunPingCommandFromTestPod(podInfo PodInfo, ns string, targetPodIPs *PodIPs, ctrName string, count int, size int, dontFragment bool) error {
@@ -2539,7 +2317,6 @@ func (data *TestData) RunPingCommandFromTestPod(podInfo PodInfo, ns string, targ
 		sizeIPv4 = size
 		sizeIPv6 = size
 	}
-
 	if targetPodIPs.IPv4 != nil {
 		cmdV4 := getPingCommand(count, sizeIPv4, podInfo.OS, targetPodIPs.IPv4, dontFragment)
 		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.Name, ctrName, cmdV4); err != nil {
@@ -2554,11 +2331,9 @@ func (data *TestData) RunPingCommandFromTestPod(podInfo PodInfo, ns string, targ
 	}
 	return nil
 }
-
 func (data *TestData) runNetcatCommandFromTestPod(podName string, ns string, server string, port int32) error {
 	return data.runNetcatCommandFromTestPodWithProtocol(podName, ns, toolboxContainerName, server, port, "tcp")
 }
-
 func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns string, containerName string, server string, port int32, protocol string) error {
 	// No parameter required for TCP connections.
 	protocolOption := ""
@@ -2572,18 +2347,15 @@ func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns
 		fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 %s %s %d && exit 0 || sleep 1; done; exit 1",
 			protocolOption, server, port),
 	}
-
 	stdout, stderr, err := data.RunCommandFromPod(ns, podName, containerName, cmd)
 	if err == nil {
 		return nil
 	}
 	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%v>", stdout, stderr, err)
 }
-
 func (data *TestData) runWgetCommandOnToolboxWithRetry(podName string, ns string, url string, maxAttempts int) (string, string, error) {
 	return data.runWgetCommandFromTestPodWithRetry(podName, ns, toolboxContainerName, url, maxAttempts)
 }
-
 func (data *TestData) runWgetCommandFromTestPodWithRetry(podName string, ns string, containerName string, url string, maxAttempts int) (string, string, error) {
 	var stdout, stderr string
 	var err error
@@ -2600,7 +2372,6 @@ func (data *TestData) runWgetCommandFromTestPodWithRetry(podName string, ns stri
 	}
 	return stdout, stderr, err
 }
-
 func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (bool, error) {
 	cmd := []string{"ovs-vsctl", "port-to-br", portName}
 	_, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
@@ -2611,7 +2382,6 @@ func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (b
 	}
 	return false, fmt.Errorf("error when running ovs-vsctl command on Pod '%s': %v", antreaPodName, err)
 }
-
 func (data *TestData) doesOVSPortExistOnWindows(nodeName, portName string) (bool, error) {
 	cmd := fmt.Sprintf("ovs-vsctl port-to-br %s", portName)
 	_, _, stderr, err := data.RunCommandOnNode(nodeName, cmd)
@@ -2622,7 +2392,6 @@ func (data *TestData) doesOVSPortExistOnWindows(nodeName, portName string) (bool
 	}
 	return false, fmt.Errorf("error when running ovs-vsctl command on Windows Node '%s': %v", nodeName, err)
 }
-
 func (data *TestData) GetAntreaAgentConf() (*agentconfig.AgentConfig, error) {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
@@ -2634,7 +2403,6 @@ func (data *TestData) GetAntreaAgentConf() (*agentconfig.AgentConfig, error) {
 	}
 	return &agentConf, nil
 }
-
 func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 	agentConf, err := data.GetAntreaAgentConf()
 	if err != nil {
@@ -2647,7 +2415,6 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 	_, encapMode := config.GetTrafficEncapModeFromStr(agentConf.TrafficEncapMode)
 	return encapMode, nil
 }
-
 func (data *TestData) isProxyAll() (bool, error) {
 	agentConf, err := data.GetAntreaAgentConf()
 	if err != nil {
@@ -2655,7 +2422,6 @@ func (data *TestData) isProxyAll() (bool, error) {
 	}
 	return agentConf.AntreaProxy.ProxyAll, nil
 }
-
 func GetAgentFeatures() (featuregate.FeatureGate, error) {
 	featureGate := features.DefaultMutableFeatureGate.DeepCopy()
 	var cfg agentconfig.AgentConfig
@@ -2668,7 +2434,6 @@ func GetAgentFeatures() (featuregate.FeatureGate, error) {
 	}
 	return featureGate, nil
 }
-
 func GetControllerFeatures() (featuregate.FeatureGate, error) {
 	featureGate := features.DefaultMutableFeatureGate.DeepCopy()
 	var cfg controllerconfig.ControllerConfig
@@ -2681,7 +2446,6 @@ func GetControllerFeatures() (featuregate.FeatureGate, error) {
 	}
 	return featureGate, nil
 }
-
 func (data *TestData) GetAntreaWindowsConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {
 	daemonset, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaWindowsDaemonSet, metav1.GetOptions{})
 	if err != nil {
@@ -2703,7 +2467,6 @@ func (data *TestData) GetAntreaWindowsConfigMap(antreaNamespace string) (*corev1
 	}
 	return configMap, nil
 }
-
 func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {
 	deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(context.TODO(), antreaDeployment, metav1.GetOptions{})
 	if err != nil {
@@ -2725,7 +2488,6 @@ func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.Config
 	}
 	return configMap, nil
 }
-
 func (data *TestData) getAgentConf(antreaNamespace string) (*agentconfig.AgentConfig, error) {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
@@ -2738,7 +2500,6 @@ func (data *TestData) getAgentConf(antreaNamespace string) (*agentconfig.AgentCo
 	}
 	return &agentConf, nil
 }
-
 func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, error) {
 	agentConf, err := data.getAgentConf(antreaNamespace)
 	if err != nil {
@@ -2749,7 +2510,6 @@ func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, e
 	}
 	return antreaDefaultGW, nil
 }
-
 func (data *TestData) GetMulticastInterfaces(antreaNamespace string) ([]string, error) {
 	agentConf, err := data.getAgentConf(antreaNamespace)
 	if err != nil {
@@ -2757,7 +2517,6 @@ func (data *TestData) GetMulticastInterfaces(antreaNamespace string) ([]string, 
 	}
 	return agentConf.Multicast.MulticastInterfaces, nil
 }
-
 func (data *TestData) GetTransportInterface() (string, error) {
 	// It assumes all Nodes have the same transport interface name.
 	nodeName := nodeName(0)
@@ -2784,21 +2543,18 @@ func (data *TestData) GetTransportInterface() (string, error) {
 	}
 	return "", fmt.Errorf("no interface was assigned with Node IP %s", nodeIP)
 }
-
 func (data *TestData) GetPodInterfaceMTU(namespace string, podName string, containerName string) (int, error) {
 	cmd := []string{"cat", "/sys/class/net/eth0/mtu"}
 	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, containerName, cmd)
 	if stdout == "" || stderr != "" || err != nil {
 		return 0, fmt.Errorf("failed to get interface MTU, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
 	}
-
 	mtu, err := strconv.Atoi(strings.TrimSpace(stdout))
 	if err != nil {
 		return 0, fmt.Errorf("failed to convert MTU to int: %v", err)
 	}
 	return mtu, nil
 }
-
 func (data *TestData) GetNodeMACAddress(node, device string) (string, error) {
 	antreaPod, err := data.getAntreaPodOnNode(node)
 	if err != nil {
@@ -2811,7 +2567,6 @@ func (data *TestData) GetNodeMACAddress(node, device string) (string, error) {
 	}
 	return strings.TrimSpace(stdout), nil
 }
-
 // mutateAntreaConfigMap will perform the specified updates on the antrea-agent config and the
 // antrea-controller config by updating the antrea-config ConfigMap. It will then restart Agents and
 // Controller if needed. Note that if the specified updates do not result in any actual change to
@@ -2836,11 +2591,9 @@ func (data *TestData) mutateAntreaConfigMap(
 	if err != nil {
 		return err
 	}
-
 	// for each config (Agent and Controller), we unmarshal twice and apply changes on one of
 	// the copy. We use the unchanged copy to detect whether any actual change was made to the
 	// config by the client-provided functions (controllerConfOut and agentChanges).
-
 	getControllerConf := func() (*controllerconfig.ControllerConfig, error) {
 		var controllerConf controllerconfig.ControllerConfig
 		if err := yaml.Unmarshal([]byte(configMap.Data["antrea-controller.conf"]), &controllerConf); err != nil {
@@ -2852,7 +2605,6 @@ func (data *TestData) mutateAntreaConfigMap(
 		}
 		return &controllerConf, nil
 	}
-
 	controllerConfChanged := false
 	if controllerChanges != nil {
 		controllerConfIn, err := getControllerConf()
@@ -2863,10 +2615,8 @@ func (data *TestData) mutateAntreaConfigMap(
 		if err != nil {
 			return err
 		}
-
 		controllerChanges(controllerConfOut)
 		controllerConfChanged = !reflect.DeepEqual(controllerConfIn, controllerConfOut)
-
 		b, err := yaml.Marshal(controllerConfOut)
 		if err != nil {
 			return fmt.Errorf("failed to marshal Controller config: %v", err)
@@ -2885,7 +2635,6 @@ func (data *TestData) mutateAntreaConfigMap(
 		}
 		return &agentConf, nil
 	}
-
 	agentConfChanged := false
 	agentConfigMaps := []*corev1.ConfigMap{configMap}
 	if agentChanges != nil {
@@ -2901,10 +2650,8 @@ func (data *TestData) mutateAntreaConfigMap(
 			if err != nil {
 				return err
 			}
-
 			agentChanges(agentConfOut)
 			agentConfChanged = !reflect.DeepEqual(agentConfIn, agentConfOut)
-
 			b, err := yaml.Marshal(agentConfOut)
 			if err != nil {
 				return fmt.Errorf("failed to marshal Agent config: %v", err)
@@ -2912,18 +2659,15 @@ func (data *TestData) mutateAntreaConfigMap(
 			cm.Data["antrea-agent.conf"] = string(b)
 		}
 	}
-
 	if !agentConfChanged && !controllerConfChanged {
 		// no config was changed, no need to call Update or restart anything
 		return nil
 	}
-
 	for _, cm := range agentConfigMaps {
 		if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), cm, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("failed to update ConfigMap %s: %v", cm.Name, err)
 		}
 	}
-
 	if restartAgent && agentConfChanged {
 		err = data.RestartAntreaAgentPods(defaultTimeout)
 		if err != nil {
@@ -2939,7 +2683,6 @@ func (data *TestData) mutateAntreaConfigMap(
 	}
 	return nil
 }
-
 func (data *TestData) killProcessAndCollectCovFiles(namespace, podName, containerName, processName, covDir string) error {
 	cmds := []string{"pgrep", "-f", processName, "-P", "1"}
 	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, containerName, cmds)
@@ -2952,15 +2695,12 @@ func (data *TestData) killProcessAndCollectCovFiles(namespace, podName, containe
 	if err != nil {
 		return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", processName, stderr, err)
 	}
-
 	log.Infof("Copying coverage files from Pod '%s'", podName)
 	if err := data.collectCovFiles(podName, containerName, namespace, covDir); err != nil {
 		return fmt.Errorf("error when copying coverage files: %v", err)
 	}
-
 	return nil
 }
-
 // gracefulExitAntreaController copies the Antrea controller binary coverage data file out before terminating the Pod
 func (data *TestData) gracefulExitAntreaController(covDir string) error {
 	antreaController, err := data.getAntreaController()
@@ -2968,14 +2708,11 @@ func (data *TestData) gracefulExitAntreaController(covDir string) error {
 		return fmt.Errorf("error when getting antrea-controller Pod: %w", err)
 	}
 	podName := antreaController.Name
-
 	if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-controller", "antrea-controller", covDir); err != nil {
 		return fmt.Errorf("error when gracefully exiting Antrea Controller: %w", err)
 	}
-
 	return nil
 }
-
 // gracefulExitAntreaAgent copies the Antrea agent binary coverage data file out before terminating the Pod
 func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) error {
 	listOptions := metav1.ListOptions{
@@ -2984,7 +2721,6 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	if nodeName != "all" {
 		listOptions.FieldSelector = fmt.Sprintf("spec.nodeName=%s", nodeName)
 	}
-
 	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 	if err != nil {
 		return fmt.Errorf("failed to list antrea-agent pods: %v", err)
@@ -2997,7 +2733,6 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	}
 	return nil
 }
-
 // gracefulExitFlowAggregator copies the Flow Aggregator binary coverage data file out before terminating the Pod.
 func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
 	flowAggPod, err := data.getFlowAggregator()
@@ -3005,14 +2740,11 @@ func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
 	}
 	podName := flowAggPod.Name
-
 	if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", "flow-aggregator", covDir); err != nil {
 		return fmt.Errorf("error when gracefully exiting Flow Aggregator: %w", err)
 	}
-
 	return nil
 }
-
 // collectCovFiles collects coverage files from the Pod and saves them to the coverage directory
 func (data *TestData) collectCovFiles(podName string, containerName string, nsName string, covDir string) error {
 	// copy antctl coverage files from Pod to the coverage directory
@@ -3043,7 +2775,6 @@ func (data *TestData) collectCovFiles(podName string, containerName string, nsNa
 	}
 	return nil
 }
-
 // collectAntctlCovFilesFromControlPlaneNode collects coverage files for the antctl binary from the control-plane Node and saves them to the coverage directory
 func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) error {
 	// copy antctl coverage files from node to the coverage directory
@@ -3069,9 +2800,7 @@ func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) e
 		}
 	}
 	return nil
-
 }
-
 // readPodFile reads a file from a Pod and returns the file contents as a string.
 func (data *TestData) readPodFile(podName string, containerName string, nsName string, fileName string) (string, error) {
 	cmd := []string{"cat", fileName}
@@ -3081,7 +2810,6 @@ func (data *TestData) readPodFile(podName string, containerName string, nsName s
 	}
 	return stdout, nil
 }
-
 // copyPodFile copies a file from a Pod and save it to specified directory.
 func (data *TestData) copyPodFile(podName string, containerName string, nsName string, fileName string, destDir string) error {
 	getWriter := func(fileName string) *os.File {
@@ -3108,7 +2836,6 @@ func (data *TestData) copyPodFile(podName string, containerName string, nsName s
 	w.WriteString(stdout)
 	return nil
 }
-
 // copyNodeFiles copies a file from a Node and save it to specified directory
 func (data *TestData) copyNodeFiles(fileName string, destDir string) error {
 	// getNodeWriter creates the file with name nodeName-suffix. It returns nil if the file
@@ -3122,7 +2849,6 @@ func (data *TestData) copyNodeFiles(fileName string, destDir string) error {
 		}
 		return f
 	}
-
 	// dump the file from Nodes to disk.
 	basename := path.Base(fileName)
 	w := getNodeWriter(basename)
@@ -3142,20 +2868,17 @@ func (data *TestData) copyNodeFiles(fileName string, destDir string) error {
 	w.WriteString(stdout)
 	return nil
 }
-
 // createAgnhostPodOnNode creates a Pod in the test namespace with a single agnhost container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createAgnhostPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
 	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithHostNetwork(hostNetwork).Create(data)
 }
-
 // createAgnhostPodWithSAOnNode creates a Pod in the test namespace with a single
 // agnhost container and a specific ServiceAccount. The Pod will be scheduled on
 // the specified Node (if nodeName is not empty).
 func (data *TestData) createAgnhostPodWithSAOnNode(name string, ns string, nodeName string, hostNetwork bool, serviceAccountName string) error {
 	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithHostNetwork(hostNetwork).WithServiceAccountName(serviceAccountName).Create(data)
 }
-
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {
 	podSpec := corev1.PodSpec{
 		Tolerations: controlPlaneNoScheduleTolerations(),
@@ -3209,10 +2932,8 @@ func (data *TestData) createDaemonSet(name string, ns string, ctrName string, im
 		}
 		return nil
 	}
-
 	return resDS, cleanup, nil
 }
-
 func (data *TestData) waitForDaemonSetPods(timeout time.Duration, dsName string, namespace string) error {
 	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		ds, err := data.clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), dsName, metav1.GetOptions{})
@@ -3229,7 +2950,6 @@ func (data *TestData) waitForDaemonSetPods(timeout time.Duration, dsName string,
 	}
 	return nil
 }
-
 func (data *TestData) createStatefulSet(name string, ns string, size int32, ctrName string, image string, cmd []string, args []string, mutateFunc func(*appsv1.StatefulSet)) (*appsv1.StatefulSet, func() error, error) {
 	podSpec := corev1.PodSpec{
 		Tolerations: controlPlaneNoScheduleTolerations(),
@@ -3281,10 +3001,8 @@ func (data *TestData) createStatefulSet(name string, ns string, size int32, ctrN
 	cleanup := func() error {
 		return data.clientset.AppsV1().StatefulSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	}
-
 	return resSTS, cleanup, nil
 }
-
 func (data *TestData) updateStatefulSetSize(name string, ns string, size int32) (*appsv1.StatefulSet, error) {
 	sts, err := data.clientset.AppsV1().StatefulSets(ns).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
@@ -3297,7 +3015,6 @@ func (data *TestData) updateStatefulSetSize(name string, ns string, size int32) 
 	}
 	return resSTS, nil
 }
-
 func (data *TestData) restartStatefulSet(name string, ns string) (*appsv1.StatefulSet, error) {
 	sts, err := data.clientset.AppsV1().StatefulSets(ns).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
@@ -3314,7 +3031,6 @@ func (data *TestData) restartStatefulSet(name string, ns string) (*appsv1.Statef
 	}
 	return resSTS, nil
 }
-
 func (data *TestData) waitForStatefulSetPods(timeout time.Duration, stsName string, namespace string) error {
 	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		sts, err := data.clientset.AppsV1().StatefulSets(namespace).Get(context.TODO(), stsName, metav1.GetOptions{})
@@ -3331,17 +3047,14 @@ func (data *TestData) waitForStatefulSetPods(timeout time.Duration, stsName stri
 	}
 	return nil
 }
-
 func isConnectionLostError(err error) bool {
 	return strings.Contains(err.Error(), errConnectionLost.Error())
 }
-
 // retryOnConnectionLostError allows the caller to retry fn in case the error is ConnectionLost.
 // e2e script might get ConnectionLost error when accessing k8s apiserver if AntreaIPAM is enabled and antrea-agent is restarted.
 func retryOnConnectionLostError(backoff wait.Backoff, fn func() error) error {
 	return retry.OnError(backoff, isConnectionLostError, fn)
 }
-
 func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.Duration, name string) error {
 	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, true, func(ctx context.Context) (bool, error) {
 		aai, err := data.CRDClient.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), name, metav1.GetOptions{})
@@ -3371,7 +3084,6 @@ func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.
 	})
 	return err
 }
-
 func getPingCommand(count int, size int, os string, ip *net.IP, dontFragment bool) []string {
 	countOption, sizeOption := "-c", "-s"
 	if os == "windows" {
@@ -3389,7 +3101,6 @@ func getPingCommand(count int, size int, os string, ip *net.IP, dontFragment boo
 			cmd = append(cmd, "-M", "do")
 		}
 	}
-
 	if ip.To4() != nil {
 		cmd = append(cmd, "-4", ip.String())
 	} else {
@@ -3397,7 +3108,6 @@ func getPingCommand(count int, size int, os string, ip *net.IP, dontFragment boo
 	}
 	return cmd
 }
-
 // getCommandInFakeExternalNetwork fakes executing a command from external network by creating a netns and link the netns
 // with the host network.
 func getCommandInFakeExternalNetwork(cmd string, prefixLength int, externalIP string, localIP string, otherLocalIPs ...string) (string, string) {
@@ -3422,7 +3132,6 @@ func getCommandInFakeExternalNetwork(cmd string, prefixLength int, externalIP st
 	cmds = append(cmds, fmt.Sprintf("ip netns exec %s %s", netns, cmd))
 	return strings.Join(cmds, " && "), netns
 }
-
 // GetPodLogs returns the current logs for the specified Pod container. If container is empty, it
 // defaults to only container when there is one container in the Pod.
 func (data *TestData) GetPodLogs(ctx context.Context, namespace, name, container string) (string, error) {
@@ -3434,14 +3143,12 @@ func (data *TestData) GetPodLogs(ctx context.Context, namespace, name, container
 		return "", fmt.Errorf("error when opening stream to retrieve logs for Pod '%s/%s': %w", namespace, name, err)
 	}
 	defer podLogs.Close()
-
 	var b bytes.Buffer
 	if _, err := io.Copy(&b, podLogs); err != nil {
 		return "", fmt.Errorf("error when copying logs for Pod '%s/%s': %w", namespace, name, err)
 	}
 	return b.String(), nil
 }
-
 func (data *TestData) runDNSQuery(
 	podName string,
 	containerName string,
@@ -3449,18 +3156,15 @@ func (data *TestData) runDNSQuery(
 	dstAddr string,
 	useTCP bool,
 	dnsServiceIP string) (net.IP, error) {
-
 	digCmdStr := fmt.Sprintf("dig "+"@"+dnsServiceIP+" +short %s", dstAddr)
 	if useTCP {
 		digCmdStr += " +tcp"
 	}
-
 	digCmd := strings.Fields(digCmdStr)
 	stdout, stderr, err := data.RunCommandFromPod(podNamespace, podName, containerName, digCmd)
 	if err != nil {
 		return nil, fmt.Errorf("error when running dig command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
 	}
-
 	ipAddress := net.ParseIP(strings.TrimSpace(stdout))
 	if ipAddress != nil {
 		return ipAddress, nil
@@ -3468,7 +3172,6 @@ func (data *TestData) runDNSQuery(
 		return nil, fmt.Errorf("invalid IP address found %v", stdout)
 	}
 }
-
 // setPodAnnotation Patches a pod by adding an annotation with a specified key and value.
 func (data *TestData) setPodAnnotation(namespace, podName, annotationKey string, annotationValue string) error {
 	annotations := map[string]string{
@@ -3479,20 +3182,16 @@ func (data *TestData) setPodAnnotation(namespace, podName, annotationKey string,
 			"annotations": annotations,
 		},
 	}
-
 	patchData, err := json.Marshal(annotationPatch)
 	if err != nil {
 		return err
 	}
-
 	if _, err := data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), podName, types.MergePatchType, patchData, metav1.PatchOptions{}); err != nil {
 		return err
 	}
-
 	log.Infof("Successfully patched Pod %s in Namespace %s", podName, namespace)
 	return nil
 }
-
 func (data *TestData) waitForDeploymentReady(t *testing.T, namespace string, name string, timeout time.Duration) error {
 	t.Logf("Waiting for Deployment '%s/%s' to be ready", namespace, name)
 	var labelSelector *metav1.LabelSelector
@@ -3520,14 +3219,12 @@ func (data *TestData) waitForDeploymentReady(t *testing.T, namespace string, nam
 	}
 	return nil
 }
-
 func (data *TestData) getAntreaClusterUUID(timeout time.Duration) (uuid.UUID, error) {
 	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
 		antreaNamespace,
 		clusteridentity.DefaultClusterIdentityConfigMapName,
 		data.clientset,
 	)
-
 	const retryInterval = 1 * time.Second
 	var clusterUUID uuid.UUID
 	err := wait.PollUntilContextTimeout(context.Background(), retryInterval, timeout, true, func(ctx context.Context) (bool, error) {

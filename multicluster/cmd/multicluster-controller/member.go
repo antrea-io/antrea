@@ -1,12 +1,9 @@
 /*
 Copyright 2021 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
 	http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,29 +11,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 package main
-
 import (
 	"fmt"
-
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/member"
 	"antrea.io/antrea/v2/pkg/log"
 	"antrea.io/antrea/v2/pkg/signals"
 	"antrea.io/antrea/v2/pkg/util/env"
-=======
-	"antrea.io/antrea/multicluster/controllers/multicluster/member"
-	"antrea.io/antrea/pkg/log"
-	"antrea.io/antrea/pkg/signals"
-	"antrea.io/antrea/pkg/util/env"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/member"
+	"antrea.io/antrea/v2/pkg/log"
+	"antrea.io/antrea/v2/pkg/signals"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
-
 func newMemberCommand() *cobra.Command {
 	var memberCmd = &cobra.Command{
 		Use:   "member",
@@ -53,10 +43,8 @@ func newMemberCommand() *cobra.Command {
 			}
 		},
 	}
-
 	return memberCmd
 }
-
 func runMember(o *Options) error {
 	mgr, err := setupManagerAndCertControllerFunc(false, o)
 	if err != nil {
@@ -74,7 +62,6 @@ func runMember(o *Options) error {
 			namespace: podNamespace,
 		}},
 	)
-
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
 		&webhook.Admission{Handler: &clusterSetValidator{
 			Client:    mgrClient,
@@ -83,7 +70,6 @@ func runMember(o *Options) error {
 			role:      memberRole,
 		}},
 	)
-
 	commonAreaCreationCh := make(chan struct{}, 1)
 	clusterSetReconciler := member.NewMemberClusterSetReconciler(mgr.GetClient(),
 		mgr.GetScheme(),
@@ -95,7 +81,6 @@ func runMember(o *Options) error {
 	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)
 	}
-
 	commonAreaGetter := clusterSetReconciler
 	svcExportReconciler := member.NewServiceExportReconciler(
 		mgrClient,
@@ -119,7 +104,6 @@ func runMember(o *Options) error {
 		}
 		go labelIdentityReconciler.Run(stopCh)
 	}
-
 	gwReconciler := member.NewGatewayReconciler(
 		mgrClient,
 		mgrScheme,
@@ -129,7 +113,6 @@ func runMember(o *Options) error {
 	if err = gwReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating Gateway controller: %v", err)
 	}
-
 	nodeReconciler := member.NewNodeReconciler(
 		mgrClient,
 		mgrScheme,
@@ -140,7 +123,6 @@ func runMember(o *Options) error {
 	if err = nodeReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating Node controller: %v", err)
 	}
-
 	staleController := member.NewStaleResCleanupController(
 		mgr.GetClient(),
 		mgr.GetScheme(),
@@ -148,11 +130,8 @@ func runMember(o *Options) error {
 		env.GetPodNamespace(),
 		commonAreaGetter,
 	)
-
 	go staleController.Run(stopCh)
-
 	// Member runs ResourceImportReconciler from RemoteCommonArea only
-
 	klog.InfoS("Member MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("error running Manager: %v", err)

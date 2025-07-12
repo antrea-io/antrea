@@ -11,52 +11,38 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package clustergroupmember
-
 import (
 	"context"
 	"fmt"
 	"sort"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 )
-
 type REST struct {
 	querier GroupMembershipQuerier
 }
-
 var (
 	_ rest.Storage              = &REST{}
 	_ rest.Scoper               = &REST{}
 	_ rest.GetterWithOptions    = &REST{}
 	_ rest.SingularNameProvider = &REST{}
 )
-
 // NewREST returns a REST object that will work against API services.
 func NewREST(querier GroupMembershipQuerier) *REST {
 	return &REST{querier}
 }
-
 type GroupMembershipQuerier interface {
 	GetGroupMembers(name string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error)
 }
-
 func (r *REST) New() runtime.Object {
 	return &controlplane.ClusterGroupMembers{}
 }
-
 func (r *REST) Destroy() {
 }
-
 func (r *REST) Get(ctx context.Context, name string, options runtime.Object) (runtime.Object, error) {
 	var err error
 	memberList := &controlplane.ClusterGroupMembers{}
@@ -64,20 +50,16 @@ func (r *REST) Get(ctx context.Context, name string, options runtime.Object) (ru
 	memberList.EffectiveMembers, memberList.EffectiveIPBlocks, memberList.TotalMembers, memberList.TotalPages, memberList.CurrentPage, err = GetPaginatedMembers(r.querier, name, options)
 	return memberList, err
 }
-
 // NewGetOptions returns the default options for Get, so options object is never nil.
 func (r *REST) NewGetOptions() (runtime.Object, bool, string) {
 	return &controlplane.PaginationGetOptions{}, false, ""
 }
-
 func (r *REST) NamespaceScoped() bool {
 	return false
 }
-
 func (r *REST) GetSingularName() string {
 	return "clustergroupmembers"
 }
-
 func GetPaginatedMembers(querier GroupMembershipQuerier, name string, options runtime.Object) (members []controlplane.GroupMember, ipNets []controlplane.IPNet, totalMembers, totalPages, currentPage int64, err error) {
 	groupMembers, ipBlocks, err := querier.GetGroupMembers(name)
 	if err != nil {
@@ -106,7 +88,6 @@ func GetPaginatedMembers(querier GroupMembershipQuerier, name string, options ru
 	totalPages, currentPage, err = PaginateMemberList(&members, getOptions)
 	return
 }
-
 // PaginateMemberList returns paginated results if meaningful options are provided. Options should never be nil.
 // Paginated results are continuous only when there is no member change across multiple calls.
 // Pagination is not enabled if either page number or limit = 0, in which the full member list is returned.

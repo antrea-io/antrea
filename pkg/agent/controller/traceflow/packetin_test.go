@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package traceflow
-
 import (
 	"encoding/binary"
 	"net"
 	"reflect"
 	"testing"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
@@ -29,30 +26,24 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 var (
 	egressName = "dummyEgress"
 	egressIP   = "192.168.100.100"
 	egressNode = "fakeEgressNode"
 )
-
 func prepareMockTables() {
 	openflow.InitMockTables(
 		map[*openflow.Table]uint8{
@@ -67,10 +58,8 @@ func prepareMockTables() {
 			openflow.OutputTable:                  uint8(17),
 		})
 }
-
 func Test_getNetworkPolicyObservation(t *testing.T) {
 	prepareMockTables()
-
 	type args struct {
 		tableID uint8
 		ingress bool
@@ -137,13 +126,11 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 		})
 	}
 }
-
 func TestParseCapturedPacket(t *testing.T) {
 	srcIPv4 := net.ParseIP("10.1.1.11")
 	dstIPv4 := net.ParseIP("10.1.1.12")
 	srcIPv6 := net.ParseIP("fd12:ab:34:a001::11")
 	dstIPv6 := net.ParseIP("fd12:ab:34:a001::12")
-
 	tcpPktIn := protocol.IPv4{Length: 1000, Flags: 1, TTL: 64, NWSrc: srcIPv4, NWDst: dstIPv4, Protocol: protocol.Type_TCP}
 	tcp := protocol.TCP{PortSrc: 1080, PortDst: 80, SeqNum: 1234, Code: 2}
 	bytes, _ := tcp.MarshalBinary()
@@ -157,7 +144,6 @@ func TestParseCapturedPacket(t *testing.T) {
 			TCP: &crdv1beta1.TCPHeader{SrcPort: int32(tcp.PortSrc), DstPort: int32(tcp.PortDst), Flags: ptr.To(int32(tcp.Code))},
 		},
 	}
-
 	udpPktIn := protocol.IPv4{Length: 50, Flags: 0, TTL: 128, NWSrc: srcIPv4, NWDst: dstIPv4, Protocol: protocol.Type_UDP}
 	udp := protocol.UDP{PortSrc: 1080, PortDst: 80}
 	udpPktIn.Data = &udp
@@ -168,7 +154,6 @@ func TestParseCapturedPacket(t *testing.T) {
 			UDP: &crdv1beta1.UDPHeader{SrcPort: int32(udp.PortSrc), DstPort: int32(udp.PortDst)},
 		},
 	}
-
 	icmpv6PktIn := protocol.IPv6{Length: 960, HopLimit: 8, NWSrc: srcIPv6, NWDst: dstIPv6, NextHeader: protocol.Type_IPv6ICMP}
 	icmpEchoReq := []uint8{0, 1, 0, 123}
 	icmp := protocol.ICMP{Type: 128, Code: 0, Data: icmpEchoReq}
@@ -179,7 +164,6 @@ func TestParseCapturedPacket(t *testing.T) {
 		IPv6Header:      &crdv1beta1.IPv6Header{NextHeader: &nextHdr, HopLimit: int32(icmpv6PktIn.HopLimit)},
 		TransportHeader: crdv1beta1.TransportHeader{ICMP: &crdv1beta1.ICMPEchoRequestHeader{ID: 1, Sequence: 123}},
 	}
-
 	tests := []struct {
 		name      string
 		pktInData util.Message
@@ -210,7 +194,6 @@ func TestParseCapturedPacket(t *testing.T) {
 		})
 	}
 }
-
 func getTestPacketBytes(dstIP string) []byte {
 	ipPacket := &protocol.IPv4{
 		Version:  0x4,
@@ -228,7 +211,6 @@ func getTestPacketBytes(dstIP string) []byte {
 	pktBytes, _ := ethernetPkt.MarshalBinary()
 	return pktBytes
 }
-
 func TestParsePacketIn(t *testing.T) {
 	xreg0 := make([]byte, 8)
 	binary.BigEndian.PutUint32(xreg0[0:4], openflow.RemoteSNATRegMark.GetValue()<<openflow.RemoteSNATRegMark.GetField().GetRange().Offset()) // RemoteSNATRegMark in 32bit reg0
@@ -255,7 +237,6 @@ func TestParsePacketIn(t *testing.T) {
 		},
 	}
 	matchTunDst := openflow15.NewTunnelIpv4DstField(net.ParseIP(egressIP), nil)
-
 	conjData := make([]byte, 8)
 	binary.BigEndian.PutUint32(conjData[0:4], uint32(1))
 	binary.BigEndian.PutUint32(conjData[4:8], uint32(2))
@@ -280,10 +261,8 @@ func TestParsePacketIn(t *testing.T) {
 			Data: conjData,
 		},
 	}
-
 	pktBytesPodToIP := getTestPacketBytes(dstIPv4)
 	pktBytesPodToPod := getTestPacketBytes(pod2IPv4)
-
 	tests := []struct {
 		name               string
 		networkConfig      *config.NetworkConfig
@@ -692,7 +671,6 @@ func TestParsePacketIn(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.expectedTf}, tt.networkConfig, tt.nodeConfig)
@@ -702,7 +680,6 @@ func TestParsePacketIn(t *testing.T) {
 			tfc.crdInformerFactory.WaitForCacheSync(stopCh)
 			tfc.runningTraceflows[tt.expectedTf.Status.DataplaneTag] = tt.tfState
 			tt.expectedCalls(tfc.networkPolicyQuerier, tfc.egressQuerier)
-
 			tf, nodeResult, _, err := tfc.parsePacketIn(tt.pktIn)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedNodeResult.Observations, nodeResult.Observations)
@@ -710,7 +687,6 @@ func TestParsePacketIn(t *testing.T) {
 		})
 	}
 }
-
 func TestParsePacketInLiveDuplicates(t *testing.T) {
 	networkConfig := &config.NetworkConfig{
 		TrafficEncapMode: 0,
@@ -734,10 +710,8 @@ func TestParsePacketInLiveDuplicates(t *testing.T) {
 			Data:    util.NewBuffer(getTestPacketBytes(dstIPv4)),
 		},
 	}
-
 	tfc := newFakeTraceflowController(t, nil, networkConfig, nodeConfig)
 	tfc.runningTraceflows[tfState.tag] = tfState
-
 	_, _, _, err := tfc.parsePacketIn(pktIn)
 	assert.ErrorIs(t, err, errSkipTraceflowUpdate)
 }

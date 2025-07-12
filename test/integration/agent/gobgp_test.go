@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package agent
-
 import (
 	"context"
 	"fmt"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	"antrea.io/antrea/v2/pkg/agent/bgp/gobgp"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-=======
-	"antrea.io/antrea/pkg/agent/bgp"
-	"antrea.io/antrea/pkg/agent/bgp/gobgp"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/agent/bgp"
+	"antrea.io/antrea/v2/pkg/agent/bgp/gobgp"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
-
 func TestGoBGPLifecycle(t *testing.T) {
 	asn1 := int32(61179)
 	asn2 := int32(62179)
@@ -54,21 +46,16 @@ func TestGoBGPLifecycle(t *testing.T) {
 		RouterID:   routerID2,
 		ListenPort: listenPort2,
 	}
-
 	var l klog.Level
 	require.NoError(t, l.Set("4"))
 	defer l.Set("0")
-
 	server1 := gobgp.NewGoBGPServer(server1GlobalConfig)
 	server2 := gobgp.NewGoBGPServer(server2GlobalConfig)
-
 	ctx := context.Background()
-
 	t.Log("Starting all BGP servers")
 	require.NoError(t, server1.Start(ctx))
 	require.NoError(t, server2.Start(ctx))
 	t.Log("Started all BGP servers")
-
 	server1Config := bgp.PeerConfig{
 		BGPPeer: &v1alpha1.BGPPeer{
 			Address:                    "127.0.0.1",
@@ -87,15 +74,12 @@ func TestGoBGPLifecycle(t *testing.T) {
 			GracefulRestartTimeSeconds: ptr.To[int32](130),
 		},
 	}
-
 	t.Log("Adding BGP peers for BGP server1")
 	require.NoError(t, server1.AddPeer(ctx, server2Config))
 	t.Log("Added BGP peers for BGP server1")
-
 	t.Log("Adding BGP peers for BGP server2")
 	require.NoError(t, server2.AddPeer(ctx, server1Config))
 	t.Log("Added BGP peers for BGP server2")
-
 	getPeersFn := func(server bgp.Interface) sets.Set[string] {
 		peerKeys := sets.New[string]()
 		peers, err := server.GetPeers(ctx)
@@ -110,7 +94,6 @@ func TestGoBGPLifecycle(t *testing.T) {
 		}
 		return peerKeys
 	}
-
 	t.Log("Getting peers of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		expected := sets.New[string]("127.0.0.1-62179")
@@ -118,7 +101,6 @@ func TestGoBGPLifecycle(t *testing.T) {
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
 	t.Log("Got peers of BGP server1 and verified them")
-
 	t.Log("Getting peers of BGP server2 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		expected := sets.New[string]("127.0.0.1-61179")
@@ -126,7 +108,6 @@ func TestGoBGPLifecycle(t *testing.T) {
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
 	t.Log("Got peers of BGP server2 and verified them")
-
 	server1Routes := []bgp.Route{
 		{Prefix: "1.1.0.0/24"},
 		{Prefix: "1.2.0.0/24"},
@@ -137,15 +118,12 @@ func TestGoBGPLifecycle(t *testing.T) {
 		{Prefix: "2.2.0.0/24"},
 		{Prefix: "2.3.0.0/24"},
 	}
-
 	t.Log("Advertising routes on BGP server1")
 	require.NoError(t, server1.AdvertiseRoutes(ctx, server1Routes))
 	t.Log("Advertised routes on BGP server1")
-
 	t.Log("Advertising routes on BGP server2")
 	require.NoError(t, server2.AdvertiseRoutes(ctx, server2Routes))
 	t.Log("Advertised routes on BGP server2")
-
 	getReceivedRoutesFn := func(server bgp.Interface, peerAddress string) []bgp.Route {
 		routes, err := server.GetRoutes(ctx, bgp.RouteReceived, peerAddress)
 		if err != nil {
@@ -153,7 +131,6 @@ func TestGoBGPLifecycle(t *testing.T) {
 		}
 		return routes
 	}
-
 	t.Log("Getting received routes of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		// Get the routes advertised by server2 and verify them.
@@ -161,7 +138,6 @@ func TestGoBGPLifecycle(t *testing.T) {
 		assert.ElementsMatch(t, server2Routes, gotServer2Routes)
 	}, 30*time.Second, time.Second)
 	t.Log("Got received routes of BGP server1 and verified them")
-
 	t.Log("Getting received routes of BGP server2 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		// Get the routes advertised by server1 and verify them.
@@ -169,7 +145,6 @@ func TestGoBGPLifecycle(t *testing.T) {
 		assert.ElementsMatch(t, server1Routes, gotServer1Routes)
 	}, 30*time.Second, time.Second)
 	t.Log("Got received routes of BGP server2 and verified them")
-
 	updatedServer1Routes := []bgp.Route{
 		{Prefix: "1.1.0.0/24"},
 		{Prefix: "1.2.0.0/24"},
@@ -184,22 +159,18 @@ func TestGoBGPLifecycle(t *testing.T) {
 	server2RoutesToWithdraw := []bgp.Route{
 		{Prefix: "2.3.0.0/24"},
 	}
-
 	t.Log("Withdrawing routes on BGP server1")
 	require.NoError(t, server1.WithdrawRoutes(ctx, server1RoutesToWithdraw))
 	t.Log("Withdrew routes on BGP server1")
-
 	t.Log("Withdrawing routes on BGP server2")
 	require.NoError(t, server2.WithdrawRoutes(ctx, server2RoutesToWithdraw))
 	t.Log("Withdrew routes on BGP server2")
-
 	t.Log("Getting received routes of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		// Get the routes advertised by server2 and verify them.
 		gotServer2Routes := getReceivedRoutesFn(server1, "127.0.0.1")
 		assert.ElementsMatch(t, updatedServer2Routes, gotServer2Routes)
 	}, 30*time.Second, time.Second)
-
 	t.Log("Getting received routes of BGP server2 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		// Get the routes advertised by server1 and verify them.
@@ -207,7 +178,6 @@ func TestGoBGPLifecycle(t *testing.T) {
 		assert.ElementsMatch(t, updatedServer1Routes, gotServer1Routes)
 	}, 30*time.Second, time.Second)
 	t.Log("Got received routes of BGP server2 and verified them")
-
 	updatedServer2Config := bgp.PeerConfig{
 		BGPPeer: &v1alpha1.BGPPeer{
 			Address:                    "127.0.0.1",
@@ -220,7 +190,6 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Updating peers of BGP server1")
 	require.NoError(t, server1.UpdatePeer(ctx, updatedServer2Config))
 	t.Log("Updated peers of server1")
-
 	t.Log("Getting peers of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		expected := sets.New[string]("127.0.0.1-62179")
@@ -228,11 +197,9 @@ func TestGoBGPLifecycle(t *testing.T) {
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
 	t.Log("Got peers of BGP server1 and verified them")
-
 	t.Log("Deleting peers of BGP server1")
 	require.NoError(t, server1.RemovePeer(ctx, updatedServer2Config))
 	t.Log("Deleted peers of BGP server1")
-
 	t.Log("Getting peers of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		expected := sets.New[string]()
@@ -240,7 +207,6 @@ func TestGoBGPLifecycle(t *testing.T) {
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
 	t.Log("Got peers of BGP server1 and verified them")
-
 	t.Log("Stopping all BGP servers")
 	require.NoError(t, server1.Stop(ctx))
 	require.NoError(t, server2.Stop(ctx))

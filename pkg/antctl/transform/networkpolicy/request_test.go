@@ -11,23 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
-
-<<<<<<< HEAD
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 func TestNewNetworkPolicyEvaluation(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -69,7 +61,6 @@ func TestNewNetworkPolicyEvaluation(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotObject, err := NewNetworkPolicyEvaluation(tt.args)

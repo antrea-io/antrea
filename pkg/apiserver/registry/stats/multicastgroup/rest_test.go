@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicastgroup
-
 import (
 	"context"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -25,16 +22,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
-
-<<<<<<< HEAD
-	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 var (
 	group1 = &statsv1alpha1.MulticastGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -65,11 +57,9 @@ var (
 		Group: "224.0.0.12",
 	}
 )
-
 type fakeStatsProvider struct {
 	groups map[string]*statsv1alpha1.MulticastGroup
 }
-
 func (p *fakeStatsProvider) ListMulticastGroups() []statsv1alpha1.MulticastGroup {
 	var list []statsv1alpha1.MulticastGroup
 	for _, g := range p.groups {
@@ -77,19 +67,16 @@ func (p *fakeStatsProvider) ListMulticastGroups() []statsv1alpha1.MulticastGroup
 	}
 	return list
 }
-
 func (p *fakeStatsProvider) GetMulticastGroup(name string) (*statsv1alpha1.MulticastGroup, bool) {
 	g, exists := p.groups[name]
 	return g, exists
 }
-
 func TestREST(t *testing.T) {
 	r := NewREST(nil)
 	assert.Equal(t, &statsv1alpha1.MulticastGroup{}, r.New())
 	assert.Equal(t, &statsv1alpha1.MulticastGroupList{}, r.NewList())
 	assert.False(t, r.NamespaceScoped())
 }
-
 func TestRESTList(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -126,7 +113,6 @@ func TestRESTList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, tt.multicastEnabled)
-
 			r := &REST{
 				statsProvider: &fakeStatsProvider{groups: tt.stats},
 			}
@@ -136,7 +122,6 @@ func TestRESTList(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTGet(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -184,7 +169,6 @@ func TestRESTGet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, tt.multicastEnabled)
-
 			r := &REST{
 				statsProvider: &fakeStatsProvider{groups: tt.groups},
 			}
@@ -194,7 +178,6 @@ func TestRESTGet(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTConvertToTable(t *testing.T) {
 	tests := []struct {
 		name          string

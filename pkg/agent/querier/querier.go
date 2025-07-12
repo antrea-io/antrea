@@ -11,41 +11,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package querier
-
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/memberlist"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/memberlist"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/proxy"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/memberlist"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/proxy"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 var _ AgentQuerier = new(agentQuerier)
-
 type AgentQuerier interface {
 	GetNodeConfig() *config.NodeConfig
 	GetNetworkConfig() *config.NetworkConfig
@@ -60,7 +52,6 @@ type AgentQuerier interface {
 	GetNodeLister() corelisters.NodeLister
 	GetBGPPolicyInfoQuerier() querier.AgentBGPPolicyInfoQuerier
 }
-
 type agentQuerier struct {
 	nodeConfig               *config.NodeConfig
 	networkConfig            *config.NetworkConfig
@@ -76,7 +67,6 @@ type agentQuerier struct {
 	nodeLister               corelisters.NodeLister
 	bgpPolicyInfoQuerier     querier.AgentBGPPolicyInfoQuerier
 }
-
 func NewAgentQuerier(
 	nodeConfig *config.NodeConfig,
 	networkConfig *config.NetworkConfig,
@@ -108,57 +98,46 @@ func NewAgentQuerier(
 		bgpPolicyInfoQuerier:     bgpPolicyInfoQuerier,
 	}
 }
-
 // GetNodeLister returns NodeLister.
 func (aq agentQuerier) GetNodeLister() corelisters.NodeLister {
 	return aq.nodeLister
 }
-
 // GetMemberlistCluster returns MemberlistCluster Interface.
 func (aq agentQuerier) GetMemberlistCluster() memberlist.Interface {
 	return aq.memberlistCluster
 }
-
 // GetNodeConfig returns NodeConfig.
 func (aq agentQuerier) GetNodeConfig() *config.NodeConfig {
 	return aq.nodeConfig
 }
-
 // GetNetworkConfig returns NetworkConfig.
 func (aq agentQuerier) GetNetworkConfig() *config.NetworkConfig {
 	return aq.networkConfig
 }
-
 // GetInterfaceStore returns InterfaceStore.
 func (aq agentQuerier) GetInterfaceStore() interfacestore.InterfaceStore {
 	return aq.interfaceStore
 }
-
 // GetK8sClient returns Kubernetes client.
 func (aq agentQuerier) GetK8sClient() clientset.Interface {
 	return aq.k8sClient
 }
-
 // GetOpenflowClient returns openflow.Client.
 func (aq *agentQuerier) GetOpenflowClient() openflow.Client {
 	return aq.ofClient
 }
-
 // GetOVSCtlClient returns a new OVSCtlClient.
 func (aq *agentQuerier) GetOVSCtlClient() ovsctl.OVSCtlClient {
 	return ovsctl.NewClient(aq.nodeConfig.OVSBridge)
 }
-
 // GetProxier returns proxy.Proxier.
 func (aq *agentQuerier) GetProxier() proxy.Proxier {
 	return aq.proxier
 }
-
 // GetNetworkPolicyInfoQuerier returns AgentNetworkPolicyInfoQuerier.
 func (aq agentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier {
 	return aq.networkPolicyInfoQuerier
 }
-
 // getOVSVersion gets current OVS version.
 func (aq agentQuerier) getOVSVersion() string {
 	v, err := aq.ovsBridgeClient.GetOVSVersion()
@@ -168,7 +147,6 @@ func (aq agentQuerier) getOVSVersion() string {
 	}
 	return v
 }
-
 // getOVSFlowTable gets current OVS flow tables.
 func (aq agentQuerier) getOVSFlowTable() map[string]int32 {
 	flowTable := make(map[string]int32)
@@ -178,7 +156,6 @@ func (aq agentQuerier) getOVSFlowTable() map[string]int32 {
 	}
 	return flowTable
 }
-
 // getAgentConditions gets current conditions of agent pod.
 func (aq agentQuerier) getAgentConditions(ovsConnected bool) []v1beta1.AgentCondition {
 	lastHeartbeatTime := metav1.Now()
@@ -217,7 +194,6 @@ func (aq agentQuerier) getAgentConditions(ovsConnected bool) []v1beta1.AgentCond
 		},
 	}
 }
-
 // getNetworkPolicyControllerInfo gets current network policy controller info
 // including: number of network policies, address groups and applied to groups.
 func (aq agentQuerier) getNetworkPolicyControllerInfo() v1beta1.NetworkPolicyControllerInfo {
@@ -227,7 +203,6 @@ func (aq agentQuerier) getNetworkPolicyControllerInfo() v1beta1.NetworkPolicyCon
 		AppliedToGroupNum: int32(aq.networkPolicyInfoQuerier.GetAppliedToGroupNum()),
 	}
 }
-
 // GetAgentInfo gets current agent pod info.
 func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool) {
 	// LocalPodNum, FlowTable, NetworkPolicyControllerInfo, OVSVersion and AgentConditions can be changed, so reset these fields.
@@ -244,7 +219,6 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 		agentInfo.OVSInfo.Version = ovsVersion
 	}
 	agentInfo.AgentConditions = aq.getAgentConditions(ovsConnected)
-
 	// Some other fields are needed when partial is false.
 	if !partial {
 		agentInfo.Version = querier.GetVersion()
@@ -264,7 +238,6 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 		agentInfo.NodePortLocalPortRange = aq.nplRange
 	}
 }
-
 // GetBGPPolicyInfoQuerier returns AgentBGPPolicyInfoQuerier.
 func (aq agentQuerier) GetBGPPolicyInfoQuerier() querier.AgentBGPPolicyInfoQuerier {
 	return aq.bgpPolicyInfoQuerier

@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package l7flowexporter
-
 import (
 	"fmt"
 	"strings"
 	"sync"
 	"time"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -28,24 +25,19 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	controllerName               = "L7FlowExporterController"
 	resyncPeriod   time.Duration = 0 * time.Second
@@ -53,33 +45,25 @@ const (
 	maxRetryDelay                = 300 * time.Second
 	defaultWorkers               = 4
 )
-
 var (
 	errInvalidAnnotation    = fmt.Errorf("annotation key %s can only have values (Ingress/Egress/Both)", types.L7FlowExporterAnnotationKey)
 	errPodInterfaceNotFound = fmt.Errorf("interface of Pod not found")
 )
-
 type L7FlowExporterController struct {
 	ofClient       openflow.Client
 	interfaceStore interfacestore.InterfaceStore
-
 	podInformer     cache.SharedIndexInformer
 	podLister       corelisters.PodLister
 	podListerSynced cache.InformerSynced
-
 	namespaceInformer     cache.SharedIndexInformer
 	namespaceLister       corelisters.NamespaceLister
 	namespaceListerSynced cache.InformerSynced
-
 	startSuricataOnceFn    func() error
 	podToDirectionMap      map[string]v1alpha2.Direction
 	podToDirectionMapMutex sync.RWMutex
-
 	targetPort uint32
-
 	queue workqueue.TypedRateLimitingInterface[string]
 }
-
 func NewL7FlowExporterController(
 	ofClient openflow.Client,
 	interfaceStore interfacestore.InterfaceStore,
@@ -121,12 +105,10 @@ func NewL7FlowExporterController(
 	)
 	return l7c
 }
-
 func (l7c *L7FlowExporterController) Run(stopCh <-chan struct{}) {
 	defer l7c.queue.ShutDown()
 	klog.InfoS("Starting", "Controller", controllerName)
 	defer klog.InfoS("Shutting down", "Controller", controllerName)
-
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, l7c.podListerSynced, l7c.namespaceListerSynced) {
 		return
 	}
@@ -134,25 +116,21 @@ func (l7c *L7FlowExporterController) Run(stopCh <-chan struct{}) {
 	if intf, ok := l7c.interfaceStore.GetInterfaceByName(config.L7RedirectTargetPortName); ok {
 		l7c.targetPort = uint32(intf.OFPort)
 	}
-
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(l7c.worker, time.Second, stopCh)
 	}
 	<-stopCh
 }
-
 func (l7c *L7FlowExporterController) worker() {
 	for l7c.processNextWorkItem() {
 	}
 }
-
 func (l7c *L7FlowExporterController) processNextWorkItem() bool {
 	key, quit := l7c.queue.Get()
 	if quit {
 		return false
 	}
 	defer l7c.queue.Done(key)
-
 	if err := l7c.syncPod(key); err == nil {
 		// If no error occurs we Forget this item, so it does not get queued again until
 		// another change happens.
@@ -169,7 +147,6 @@ func (l7c *L7FlowExporterController) processNextWorkItem() bool {
 	}
 	return true
 }
-
 func (l7c *L7FlowExporterController) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	if !isValidPod(pod) {
@@ -185,12 +162,10 @@ func (l7c *L7FlowExporterController) addPod(obj interface{}) {
 	if !podOK && !nsOK {
 		return
 	}
-
 	klog.V(2).InfoS("Processing Pod ADD event", "Pod", klog.KObj(pod))
 	podNN := k8s.NamespacedName(pod.Namespace, pod.Name)
 	l7c.queue.Add(podNN)
 }
-
 func (l7c *L7FlowExporterController) updatePod(oldObj interface{}, obj interface{}) {
 	oldPod := oldObj.(*v1.Pod)
 	updatedPod := obj.(*v1.Pod)
@@ -207,12 +182,10 @@ func (l7c *L7FlowExporterController) updatePod(oldObj interface{}, obj interface
 			return
 		}
 	}
-
 	klog.V(2).InfoS("Processing Pod UPDATE event", "Pod", klog.KObj(updatedPod))
 	podNN := k8s.NamespacedName(updatedPod.Namespace, updatedPod.Name)
 	l7c.queue.Add(podNN)
 }
-
 func (l7c *L7FlowExporterController) deletePod(obj interface{}) {
 	pod, ok := obj.(*v1.Pod)
 	if !ok {
@@ -232,12 +205,10 @@ func (l7c *L7FlowExporterController) deletePod(obj interface{}) {
 			return
 		}
 	}
-
 	klog.V(2).InfoS("Processing Pod DELETE event", "Pod", klog.KObj(pod))
 	podNN := k8s.NamespacedName(pod.Namespace, pod.Name)
 	l7c.queue.Add(podNN)
 }
-
 func (l7c *L7FlowExporterController) namespaceAnnotationExists(pod *v1.Pod) bool {
 	podNamespace, err := l7c.namespaceLister.Get(pod.Namespace)
 	if err != nil {
@@ -246,11 +217,9 @@ func (l7c *L7FlowExporterController) namespaceAnnotationExists(pod *v1.Pod) bool
 	_, ok := podNamespace.Annotations[types.L7FlowExporterAnnotationKey]
 	return ok
 }
-
 func isValidPod(pod *v1.Pod) bool {
 	return pod.Status.PodIP != "" && !pod.Spec.HostNetwork
 }
-
 func (l7c *L7FlowExporterController) addNamespace(obj interface{}) {
 	ns := obj.(*v1.Namespace)
 	if _, ok := ns.Annotations[types.L7FlowExporterAnnotationKey]; !ok {
@@ -263,7 +232,6 @@ func (l7c *L7FlowExporterController) addNamespace(obj interface{}) {
 		l7c.queue.Add(podNN)
 	}
 }
-
 func (l7c *L7FlowExporterController) updateNamespace(oldObj, obj interface{}) {
 	oldNS := oldObj.(*v1.Namespace)
 	updatedNS := obj.(*v1.Namespace)
@@ -272,20 +240,16 @@ func (l7c *L7FlowExporterController) updateNamespace(oldObj, obj interface{}) {
 	if oldAnnotation == updatedAnnotation {
 		return
 	}
-
 	klog.V(2).InfoS("Processing Namespace UPDATE event", "Namespace", klog.KObj(updatedNS))
-
 	affectedPods := l7c.getNonAnnotatedPodsFromNamespace(updatedNS)
 	for _, pod := range affectedPods {
 		podNN := k8s.NamespacedName(pod.Namespace, pod.Name)
 		l7c.queue.Add(podNN)
 	}
 }
-
 func (l7c *L7FlowExporterController) getNonAnnotatedPodsFromNamespace(ns *v1.Namespace) []*v1.Pod {
 	var nonAnnotatedPods []*v1.Pod
 	pods, _ := l7c.podLister.Pods(ns.Name).List(labels.Everything())
-
 	// Only select the non annotated Pods, as annotated Pods are handled separately
 	for _, pod := range pods {
 		_, ok := pod.Annotations[types.L7FlowExporterAnnotationKey]
@@ -295,7 +259,6 @@ func (l7c *L7FlowExporterController) getNonAnnotatedPodsFromNamespace(ns *v1.Nam
 	}
 	return nonAnnotatedPods
 }
-
 func (l7c *L7FlowExporterController) syncPod(podNN string) error {
 	podNamespace, podName := k8s.SplitNamespacedName(podNN)
 	pod, err := l7c.podLister.Pods(podNamespace).Get(podName)
@@ -319,7 +282,6 @@ func (l7c *L7FlowExporterController) syncPod(podNN string) error {
 			return l7c.removeTCFlow(podNN)
 		}
 	}
-
 	// Check if the annotation value is one of the specified values
 	direction, err := checkIfAnnotationCorrect(annotationValue)
 	if err != nil {
@@ -330,12 +292,10 @@ func (l7c *L7FlowExporterController) syncPod(podNN string) error {
 		return errPodInterfaceNotFound
 	}
 	sourceOfPort := []uint32{uint32(podInterfaces[0].OFPort)}
-
 	// Start Suricata before starting traffic control mark flows
 	if err := l7c.startSuricataOnceFn(); err != nil {
 		return err
 	}
-
 	oldDirection, exists := l7c.getMirroredDirection(podNN)
 	if exists {
 		if oldDirection == direction {
@@ -352,26 +312,22 @@ func (l7c *L7FlowExporterController) syncPod(podNN string) error {
 	l7c.updateMirroredDirection(podNN, direction)
 	return nil
 }
-
 func (l7c *L7FlowExporterController) updateMirroredDirection(podNN string, direction v1alpha2.Direction) {
 	l7c.podToDirectionMapMutex.Lock()
 	defer l7c.podToDirectionMapMutex.Unlock()
 	l7c.podToDirectionMap[podNN] = direction
 }
-
 func (l7c *L7FlowExporterController) deleteMirroredDirection(podNN string) {
 	l7c.podToDirectionMapMutex.Lock()
 	defer l7c.podToDirectionMapMutex.Unlock()
 	delete(l7c.podToDirectionMap, podNN)
 }
-
 func (l7c *L7FlowExporterController) getMirroredDirection(podNN string) (v1alpha2.Direction, bool) {
 	l7c.podToDirectionMapMutex.RLock()
 	defer l7c.podToDirectionMapMutex.RUnlock()
 	direction, ok := l7c.podToDirectionMap[podNN]
 	return direction, ok
 }
-
 func (l7c *L7FlowExporterController) IsL7FlowExporterRequested(podNN string, ingress bool) bool {
 	l7c.podToDirectionMapMutex.RLock()
 	defer l7c.podToDirectionMapMutex.RUnlock()
@@ -387,7 +343,6 @@ func (l7c *L7FlowExporterController) IsL7FlowExporterRequested(podNN string, ing
 	}
 	return false
 }
-
 func (l7c *L7FlowExporterController) removeTCFlow(podNN string) error {
 	if _, exists := l7c.getMirroredDirection(podNN); !exists {
 		return nil
@@ -398,11 +353,9 @@ func (l7c *L7FlowExporterController) removeTCFlow(podNN string) error {
 	l7c.deleteMirroredDirection(podNN)
 	return nil
 }
-
 func (l7c *L7FlowExporterController) generateTCName(podNN string) string {
 	return fmt.Sprintf("tcl7:%s", podNN)
 }
-
 func checkIfAnnotationCorrect(annotationValue string) (v1alpha2.Direction, error) {
 	var direction v1alpha2.Direction
 	annotationValue = strings.ToLower(annotationValue)

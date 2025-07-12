@@ -1,6 +1,5 @@
 //go:build !windows
 // +build !windows
-
 // Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,32 +13,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package iptables
-
 import (
 	"fmt"
 	"strconv"
 	"strings"
-
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util/ipset"
-=======
-	"antrea.io/antrea/pkg/agent/util/ipset"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util/ipset"
 )
-
 type iptablesRule struct {
 	chain string
 	specs *strings.Builder
 }
-
 type iptablesRuleBuilder struct {
 	iptablesRule
 }
-
 func NewRuleBuilder(chain string) IPTablesRuleBuilder {
 	builder := &iptablesRuleBuilder{
 		iptablesRule{
@@ -49,12 +38,10 @@ func NewRuleBuilder(chain string) IPTablesRuleBuilder {
 	}
 	return builder
 }
-
 func (b *iptablesRuleBuilder) writeSpec(spec string) {
 	b.specs.WriteString(spec)
 	b.specs.WriteByte(' ')
 }
-
 func (b *iptablesRuleBuilder) MatchCIDRSrc(cidr string) IPTablesRuleBuilder {
 	if cidr == "" || cidr == "0.0.0.0/0" || cidr == "::/0" {
 		return b
@@ -63,7 +50,6 @@ func (b *iptablesRuleBuilder) MatchCIDRSrc(cidr string) IPTablesRuleBuilder {
 	b.writeSpec(matchStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchCIDRDst(cidr string) IPTablesRuleBuilder {
 	if cidr == "" || cidr == "0.0.0.0/0" || cidr == "::/0" {
 		return b
@@ -72,7 +58,6 @@ func (b *iptablesRuleBuilder) MatchCIDRDst(cidr string) IPTablesRuleBuilder {
 	b.writeSpec(matchStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) SetLogPrefix(prefix string) IPTablesRuleBuilder {
 	if prefix == "" {
 		return b
@@ -81,7 +66,6 @@ func (b *iptablesRuleBuilder) SetLogPrefix(prefix string) IPTablesRuleBuilder {
 	b.writeSpec(matchStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchIPSetSrc(ipsetName string, ipsetType ipset.SetType) IPTablesRuleBuilder {
 	if ipsetName == "" {
 		return b
@@ -99,7 +83,6 @@ func (b *iptablesRuleBuilder) MatchIPSetSrc(ipsetName string, ipsetType ipset.Se
 	b.writeSpec(matchStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchIPSetDst(ipsetName string, ipsetType ipset.SetType) IPTablesRuleBuilder {
 	if ipsetName == "" {
 		return b
@@ -117,7 +100,6 @@ func (b *iptablesRuleBuilder) MatchIPSetDst(ipsetName string, ipsetType ipset.Se
 	b.writeSpec(matchStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchTransProtocol(protocol string) IPTablesRuleBuilder {
 	if protocol == "" {
 		return b
@@ -126,7 +108,6 @@ func (b *iptablesRuleBuilder) MatchTransProtocol(protocol string) IPTablesRuleBu
 	b.writeSpec(matchStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchPortDst(port *intstr.IntOrString, endPort *int32) IPTablesRuleBuilder {
 	if port == nil {
 		return b
@@ -140,7 +121,6 @@ func (b *iptablesRuleBuilder) MatchPortDst(port *intstr.IntOrString, endPort *in
 	b.writeSpec(matchStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchPortSrc(port, endPort *int32) IPTablesRuleBuilder {
 	if port == nil {
 		return b
@@ -154,7 +134,6 @@ func (b *iptablesRuleBuilder) MatchPortSrc(port, endPort *int32) IPTablesRuleBui
 	b.writeSpec(matchStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchICMP(icmpType, icmpCode *int32, ipProtocol Protocol) IPTablesRuleBuilder {
 	parts := []string{"-p"}
 	icmpTypeStr := "icmp"
@@ -162,13 +141,11 @@ func (b *iptablesRuleBuilder) MatchICMP(icmpType, icmpCode *int32, ipProtocol Pr
 		icmpTypeStr = "icmpv6"
 	}
 	parts = append(parts, icmpTypeStr)
-
 	if icmpType != nil {
 		icmpTypeFlag := "--icmp-type"
 		if ipProtocol != ProtocolIPv4 {
 			icmpTypeFlag = "--icmpv6-type"
 		}
-
 		if icmpCode != nil {
 			parts = append(parts, icmpTypeFlag, fmt.Sprintf("%d/%d", *icmpType, *icmpCode))
 		} else {
@@ -178,12 +155,10 @@ func (b *iptablesRuleBuilder) MatchICMP(icmpType, icmpCode *int32, ipProtocol Pr
 	b.writeSpec(strings.Join(parts, " "))
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchEstablishedOrRelated() IPTablesRuleBuilder {
 	b.writeSpec("-m conntrack --ctstate ESTABLISHED,RELATED")
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchInputInterface(interfaceName string) IPTablesRuleBuilder {
 	if interfaceName == "" {
 		return b
@@ -192,7 +167,6 @@ func (b *iptablesRuleBuilder) MatchInputInterface(interfaceName string) IPTables
 	b.writeSpec(specStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) MatchOutputInterface(interfaceName string) IPTablesRuleBuilder {
 	if interfaceName == "" {
 		return b
@@ -201,7 +175,6 @@ func (b *iptablesRuleBuilder) MatchOutputInterface(interfaceName string) IPTable
 	b.writeSpec(specStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) SetTarget(target string) IPTablesRuleBuilder {
 	if target == "" {
 		return b
@@ -210,7 +183,6 @@ func (b *iptablesRuleBuilder) SetTarget(target string) IPTablesRuleBuilder {
 	b.writeSpec(targetStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) SetTargetDNATToDst(dnatIP string, dnatPort *int32) IPTablesRuleBuilder {
 	if dnatIP == "" {
 		return b
@@ -225,17 +197,14 @@ func (b *iptablesRuleBuilder) SetTargetDNATToDst(dnatIP string, dnatPort *int32)
 	b.writeSpec(specStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) SetComment(comment string) IPTablesRuleBuilder {
 	if comment == "" {
 		return b
 	}
-
 	commentStr := fmt.Sprintf("-m comment --comment \"%s\"", comment)
 	b.writeSpec(commentStr)
 	return b
 }
-
 func (b *iptablesRuleBuilder) CopyBuilder() IPTablesRuleBuilder {
 	var copiedSpec strings.Builder
 	copiedSpec.Grow(b.specs.Len())
@@ -248,11 +217,9 @@ func (b *iptablesRuleBuilder) CopyBuilder() IPTablesRuleBuilder {
 	}
 	return builder
 }
-
 func (b *iptablesRuleBuilder) Done() IPTablesRule {
 	return &b.iptablesRule
 }
-
 func (e *iptablesRule) GetRule() string {
 	ruleStr := fmt.Sprintf("-A %s %s", e.chain, e.specs.String())
 	return ruleStr[:len(ruleStr)-1]

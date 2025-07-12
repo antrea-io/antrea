@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package packetcapture
-
 import (
 	"context"
 	"errors"
@@ -24,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
@@ -35,22 +32,17 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
 	"antrea.io/antrea/v2/pkg/antctl/raw"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	"antrea.io/antrea/v2/pkg/util/env"
-=======
-	"antrea.io/antrea/pkg/agent/packetcapture/capture"
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/util/env"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
-
 var (
 	defaultTimeout          = time.Second * 60
 	maxPacketCaptureTimeout = time.Second * 300
@@ -58,7 +50,6 @@ var (
 	getCopier               = getPodFileCopier
 	defaultFS               = afero.NewOsFs()
 )
-
 type packetCaptureOptions struct {
 	source    string
 	dest      string
@@ -68,9 +59,7 @@ type packetCaptureOptions struct {
 	flow      string
 	outputDir string
 }
-
 var options = &packetCaptureOptions{}
-
 var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Pods are in Namespace default
   $ antctl packetcapture -S pod1 -D pod2
   Start capturing packets from pod1 in Namespace ns1 to a destination IP
@@ -88,7 +77,6 @@ var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Po
   Save the packets file to a specified directory
   $ antctl packetcapture -S 192.168.123.123 -D pod2 -f tcp,tcp_dst=80 -o /tmp
 `
-
 func init() {
 	Command = &cobra.Command{
 		Use:     "packetcapture",
@@ -98,7 +86,6 @@ func init() {
 		Example: packetCaptureExample,
 		RunE:    packetCaptureRunE,
 	}
-
 	Command.Flags().StringVarP(&options.source, "source", "S", "", "source of the the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().StringVarP(&options.dest, "destination", "D", "", "destination of the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().Int32VarP(&options.number, "number", "n", 1, "target number of packets to capture, the capture will stop when it is reached")
@@ -106,13 +93,11 @@ func init() {
 	Command.Flags().BoolVarP(&options.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 	Command.Flags().StringVarP(&options.outputDir, "output-dir", "o", ".", "save the packets file to the target directory")
 }
-
 var protocols = map[string]int32{
 	"icmp": 1,
 	"tcp":  6,
 	"udp":  17,
 }
-
 var tcpFlags = map[string]int32{
 	"fin": 1,
 	"syn": 1 << 1,
@@ -123,11 +108,9 @@ var tcpFlags = map[string]int32{
 	"ece": 1 << 6,
 	"cwr": 1 << 7,
 }
-
 func getPodFileCopier(config *rest.Config, client kubernetes.Interface) raw.PodFileCopier {
 	return raw.NewPodFileCopier(config, client)
 }
-
 func getConfigAndClients(cmd *cobra.Command) (*rest.Config, kubernetes.Interface, antrea.Interface, error) {
 	kubeConfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
@@ -139,7 +122,6 @@ func getConfigAndClients(cmd *cobra.Command) (*rest.Config, kubernetes.Interface
 	}
 	return kubeConfig, k8sClientset, client, nil
 }
-
 func getPCName(options *packetCaptureOptions) string {
 	replace := func(s string) string {
 		return strings.ReplaceAll(s, "/", "-")
@@ -150,7 +132,6 @@ func getPCName(options *packetCaptureOptions) string {
 	}
 	return fmt.Sprintf("%s-%s", prefix, rand.String(8))
 }
-
 func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	options.timeout, _ = cmd.Flags().GetDuration("timeout")
 	restConfig, k8sClient, antreaClient, err := getConfigAndClients(cmd)
@@ -159,7 +140,6 @@ func packetCaptureRunE(cmd *cobra.Command, args []string) error {
 	}
 	return packetCaptureRun(cmd.Context(), cmd.OutOrStdout(), restConfig, k8sClient, antreaClient, options)
 }
-
 func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Config, k8sClient kubernetes.Interface, antreaClient antrea.Interface, options *packetCaptureOptions) error {
 	if options.timeout > maxPacketCaptureTimeout {
 		return fmt.Errorf("timeout cannot be longer than %v", maxPacketCaptureTimeout)
@@ -170,18 +150,15 @@ func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Confi
 	if options.number == 0 {
 		return errors.New("packet number should be larger than 0")
 	}
-
 	pc, err := newPacketCapture(options)
 	if err != nil {
 		return fmt.Errorf("error when constructing a PacketCapture CR: %w", err)
 	}
 	createCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-
 	if _, err := antreaClient.CrdV1alpha1().PacketCaptures().Create(createCtx, pc, metav1.CreateOptions{}); err != nil {
 		return fmt.Errorf("error when creating PacketCapture, is PacketCapture feature gate enabled? %w", err)
 	}
-
 	if options.nowait {
 		fmt.Fprintf(out, "PacketCapture Name: %s\n", pc.Name)
 		return nil
@@ -192,9 +169,7 @@ func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Confi
 			}
 		}()
 	}
-
 	var latestPC *v1alpha1.PacketCapture
-
 	// add extra timeout to make sure the wait won't be interrupted before PacketCapture timeout.
 	err = wait.PollUntilContextTimeout(ctx, 1*time.Second, options.timeout+time.Second*5, false, func(ctx context.Context) (bool, error) {
 		res, err := antreaClient.CrdV1alpha1().PacketCaptures().Get(ctx, pc.Name, metav1.GetOptions{})
@@ -212,7 +187,6 @@ func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Confi
 		}
 		return false, nil
 	})
-
 	if wait.Interrupted(err) {
 		err = errors.New("timeout while waiting for PacketCapture to complete")
 		if latestPC == nil {
@@ -221,7 +195,6 @@ func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Confi
 	} else if err != nil {
 		return fmt.Errorf("error when checking PacketCapture status: %w", err)
 	}
-
 	splits := strings.Split(latestPC.Status.FilePath, ":")
 	fileName := path.Base(splits[1])
 	copier := getCopier(restConfig, k8sClient)
@@ -231,7 +204,6 @@ func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Confi
 	fmt.Fprintf(out, "Captured packets file: %s\n", path.Join(options.outputDir, fileName))
 	return nil
 }
-
 func parseEndpoint(endpoint string) (*v1alpha1.PodReference, *string) {
 	var pod *v1alpha1.PodReference
 	var ip *string
@@ -254,7 +226,6 @@ func parseEndpoint(endpoint string) (*v1alpha1.PodReference, *string) {
 	}
 	return pod, ip
 }
-
 func getFlowFields(flow string) (map[string]string, error) {
 	fields := map[string]string{}
 	for _, v := range strings.Split(flow, ",") {
@@ -271,7 +242,6 @@ func getFlowFields(flow string) (map[string]string, error) {
 	}
 	return fields, nil
 }
-
 // tokenizeTCPFlags parses tcp_flags value and returns two slices: set (flags that must be set) and unset (flags that must be unset).
 func tokenizeTCPFlags(r string) ([]string, []string, error) {
 	var currentSign rune
@@ -302,7 +272,6 @@ func tokenizeTCPFlags(r string) ([]string, []string, error) {
 	}
 	return set, unset, nil
 }
-
 func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 	trimFlow := strings.ReplaceAll(options.flow, " ", "")
 	fields, err := getFlowFields(trimFlow)
@@ -337,12 +306,10 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 	}
 	if r, ok := fields["tcp_flags"]; ok {
 		var value, mask int32
-
 		set, unset, err := tokenizeTCPFlags(r)
 		if err != nil {
 			return nil, err
 		}
-
 		for _, flag := range set {
 			val := tcpFlags[flag]
 			value += val
@@ -352,7 +319,6 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 			val := tcpFlags[flag]
 			mask += val
 		}
-
 		if pkt.TransportHeader.TCP == nil {
 			pkt.TransportHeader.TCP = new(v1alpha1.TCPHeader)
 		}
@@ -392,9 +358,7 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 			}
 			icmpType = intstr.FromString(t)
 		}
-
 		pkt.TransportHeader.ICMP = new(v1alpha1.ICMPHeader)
-
 		c, ok := fields["icmp_code"]
 		if ok {
 			icmpCode, err := strconv.ParseUint(c, 0, 8)
@@ -417,7 +381,6 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 	}
 	return &pkt, nil
 }
-
 func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, error) {
 	var src v1alpha1.Source
 	if options.source != "" {
@@ -426,7 +389,6 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 			return nil, fmt.Errorf("source should be in the format of Namespace/Pod, Pod, or IPv4")
 		}
 	}
-
 	var dst v1alpha1.Destination
 	if options.dest != "" {
 		dst.Pod, dst.IP = parseEndpoint(options.dest)
@@ -434,7 +396,6 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 			return nil, fmt.Errorf("destination should be in the format of Namespace/Pod, Pod, or IPv4")
 		}
 	}
-
 	if src.Pod == nil && dst.Pod == nil {
 		return nil, errors.New("one of source and destination must be a Pod")
 	}
@@ -442,7 +403,6 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse flow: %w", err)
 	}
-
 	name := getPCName(options)
 	timeout := int32(options.timeout.Seconds())
 	pc := &v1alpha1.PacketCapture{

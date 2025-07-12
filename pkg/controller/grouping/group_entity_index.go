@@ -11,35 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package grouping
-
 import (
 	"fmt"
 	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	utilsets "antrea.io/antrea/v2/pkg/util/sets"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
-	utilsets "antrea.io/antrea/pkg/util/sets"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	utilsets "antrea.io/antrea/v2/pkg/util/sets"
 )
-
 const (
 	// Cluster scoped selectors are stored under empty Namespace in the selectorItemIndex.
 	emptyNamespace = ""
@@ -48,17 +40,13 @@ const (
 	CustomLabelKeyPrefix         = "internal.antrea.io/"
 	CustomLabelKeyServiceAccount = "service-account"
 )
-
 var (
 	// eventChanSize is declared as a variable to allow overriding for testing.
 	eventChanSize = 1000
 )
-
 type eventHandler func(group string)
-
 // GroupType is a public type used to differentiate Groups.
 type GroupType string
-
 // Interface provides methods to query entities that a given group selects and groups that select a given entity.
 // It maintains indexes between groups and entities to make the query efficient. It supports callers to register
 // callbacks that will be called when a specific type of groups' entities are updated.
@@ -102,15 +90,12 @@ type Interface interface {
 	// ExternalEntities.
 	HasSynced() bool
 }
-
 // entityType is an internal type used to differentiate Pod from ExternalEntity.
 type entityType int
-
 const (
 	podEntityType entityType = iota
 	externalEntityType
 )
-
 // entityItem contains an entity (either Pod or ExternalEntity) and some relevant information.
 type entityItem struct {
 	// entity is either a Pod or an ExternalEntity.
@@ -119,7 +104,6 @@ type entityItem struct {
 	// entityItems will be associated with the same labelItem if they have same Namespace, entityType, and labels.
 	labelItemKey string
 }
-
 // labelItem represents an individual label set. It's the actual object that will be matched with label selectors.
 // Entities of same type in same Namespace having same labels will share a labelItem.
 type labelItem struct {
@@ -134,7 +118,6 @@ type labelItem struct {
 	// The keys of the selectorItems that match the labelItem.
 	selectorItemKeys sets.Set[string]
 }
-
 // groupItem contains a group's metadata and its selector.
 type groupItem struct {
 	// The type of the group.
@@ -147,7 +130,6 @@ type groupItem struct {
 	// groupItems will be associated with the same selectorItem if they have same selector.
 	selectorItemKey string
 }
-
 // selectorItem represents an individual label selector. It's the actual object that will be matched with label sets.
 // Groups having same label selector will share a selectorItem.
 type selectorItem struct {
@@ -158,9 +140,7 @@ type selectorItem struct {
 	// The keys of the labelItems that match the selectorItem.
 	labelItemKeys sets.Set[string]
 }
-
 var _ Interface = &GroupEntityIndex{}
-
 // GroupEntityIndex implements Interface.
 //
 // It abstracts label set and label selector from entities and groups and does actual matching against the formers to
@@ -175,41 +155,32 @@ var _ Interface = &GroupEntityIndex{}
 // entityItem <===> labelItem <===> selectorItem <===> groupItem
 type GroupEntityIndex struct {
 	lock sync.RWMutex
-
 	// entityItems stores all entityItems.
 	entityItems map[string]*entityItem
-
 	// labelItems stores all labelItems.
 	labelItems map[string]*labelItem
 	// labelItemIndex is nested map from entityType to Namespace to keys of labelItems.
 	// It's used to filter potential labelItems when matching a Namespace scoped selectorItem.
 	labelItemIndex map[entityType]map[string]sets.Set[string]
-
 	// groupItems stores all groupItems.
 	groupItems map[string]*groupItem
-
 	// selectorItems stores all selectorItems.
 	selectorItems map[string]*selectorItem
 	// selectorItemIndex is nested map from entityType to Namespace to keys of selectorItems.
 	// It's used to filter potential selectorItems when matching an labelItem.
 	// Cluster scoped selectorItems are stored under empty Namespace "".
 	selectorItemIndex map[entityType]map[string]sets.Set[string]
-
 	// namespaceLabels stores label sets of all Namespaces.
 	namespaceLabels map[string]labels.Set
-
 	// eventHandlers is a map from group type to a list of handlers. When a type of group's updated, the corresponding
 	// event handlers will be called with the group name provided.
 	eventHandlers map[GroupType][]eventHandler
-
 	// eventChan is channel used for calling eventHandlers asynchronously.
 	eventChan chan string
-
 	// synced stores a boolean value, which tracks if the GroupEntityIndex has been initialized with the full lists of
 	// Pods, Namespaces, and ExternalEntities.
 	synced *atomic.Value
 }
-
 // NewGroupEntityIndex creates a GroupEntityIndex.
 func NewGroupEntityIndex() *GroupEntityIndex {
 	synced := &atomic.Value{}
@@ -228,18 +199,14 @@ func NewGroupEntityIndex() *GroupEntityIndex {
 	}
 	return index
 }
-
 func (i *GroupEntityIndex) GetEntities(groupType GroupType, name string) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
 	gKey := getGroupItemKey(groupType, name)
-
 	i.lock.RLock()
 	defer i.lock.RUnlock()
-
 	gItem, exists := i.groupItems[gKey]
 	if !exists {
 		return nil, nil
 	}
-
 	// Get the selectorItem the group is associated with.
 	sItem := i.selectorItems[gItem.selectorItemKey]
 	var pods []*v1.Pod
@@ -260,27 +227,21 @@ func (i *GroupEntityIndex) GetEntities(groupType GroupType, name string) ([]*v1.
 	}
 	return pods, externalEntities
 }
-
 func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string) (map[GroupType][]string, bool) {
 	return i.getGroups(podEntityType, namespace, name)
 }
-
 func (i *GroupEntityIndex) GetGroupsForExternalEntity(namespace, name string) (map[GroupType][]string, bool) {
 	return i.getGroups(externalEntityType, namespace, name)
 }
-
 func (i *GroupEntityIndex) getGroups(entityType entityType, namespace, name string) (map[GroupType][]string, bool) {
 	eKey := getEntityItemKeyByName(entityType, namespace, name)
-
 	i.lock.RLock()
 	defer i.lock.RUnlock()
-
 	// Get the selectorItem the group is associated with.
 	eItem, exists := i.entityItems[eKey]
 	if !exists {
 		return nil, false
 	}
-
 	groups := map[GroupType][]string{}
 	lItem := i.labelItems[eItem.labelItemKey]
 	// Get the keys of the selectorItems the labelItem matches.
@@ -294,19 +255,15 @@ func (i *GroupEntityIndex) getGroups(entityType entityType, namespace, name stri
 	}
 	return groups, true
 }
-
 func (i *GroupEntityIndex) AddNamespace(namespace *v1.Namespace) {
 	i.lock.Lock()
 	defer i.lock.Unlock()
-
 	namespaceLabels, exists := i.namespaceLabels[namespace.Name]
 	// Do nothing if labels are not updated.
 	if exists && labels.Equals(namespaceLabels, namespace.Labels) {
 		return
 	}
-
 	i.namespaceLabels[namespace.Name] = namespace.Labels
-
 	// Resync cluster scoped selectors as they may start or stop matching the Namespace because of the label update.
 	for _, namespaceToSelector := range i.selectorItemIndex {
 		// Cluster scoped selectors are stored under empty Namespace in the selectorItemIndex.
@@ -334,14 +291,11 @@ func (i *GroupEntityIndex) AddNamespace(namespace *v1.Namespace) {
 		}
 	}
 }
-
 func (i *GroupEntityIndex) DeleteNamespace(namespace *v1.Namespace) {
 	i.lock.Lock()
 	defer i.lock.Unlock()
-
 	delete(i.namespaceLabels, namespace.Name)
 }
-
 // deleteEntityFromLabelItem disconnects an entityItem from a labelItem.
 // The labelItem will be deleted if it's no longer used by any entityItem.
 func (i *GroupEntityIndex) deleteEntityFromLabelItem(label, entity string) *labelItem {
@@ -353,13 +307,11 @@ func (i *GroupEntityIndex) deleteEntityFromLabelItem(label, entity string) *labe
 	}
 	// Delete the labelItem itself.
 	delete(i.labelItems, label)
-
 	// Delete it from the labelItemIndex.
 	i.labelItemIndex[lItem.entityType][lItem.namespace].Delete(label)
 	if len(i.labelItemIndex[lItem.entityType][lItem.namespace]) == 0 {
 		delete(i.labelItemIndex[lItem.entityType], lItem.namespace)
 	}
-
 	// Delete the labelItem from matched selectorItems.
 	for selector := range lItem.selectorItemKeys {
 		sItem := i.selectorItems[selector]
@@ -367,7 +319,6 @@ func (i *GroupEntityIndex) deleteEntityFromLabelItem(label, entity string) *labe
 	}
 	return lItem
 }
-
 // createLabelItem creates a labelItem based on the provided entityItem.
 // It's called when there is no existing labelItem for a label set.
 func (i *GroupEntityIndex) createLabelItem(entityType entityType, eItem *entityItem, labels map[string]string) *labelItem {
@@ -387,7 +338,6 @@ func (i *GroupEntityIndex) createLabelItem(entityType entityType, eItem *entityI
 		i.labelItemIndex[entityType][lItem.namespace] = labelItemKeys
 	}
 	labelItemKeys.Insert(eItem.labelItemKey)
-
 	// Scan potential selectorItems and associate the new labelItem with the matched ones.
 	scanSelectorItems := func(selectorItemKeys sets.Set[string]) {
 		for sKey := range selectorItemKeys {
@@ -407,7 +357,6 @@ func (i *GroupEntityIndex) createLabelItem(entityType entityType, eItem *entityI
 	scanSelectorItems(clusterSelectorItemKeys)
 	return lItem
 }
-
 func (i *GroupEntityIndex) AddPod(pod *v1.Pod) {
 	// Create a new map to add custom labels to avoid changing the original labels and
 	// introducing data race.
@@ -418,20 +367,16 @@ func (i *GroupEntityIndex) AddPod(pod *v1.Pod) {
 	labels[CustomLabelKeyPrefix+CustomLabelKeyServiceAccount] = pod.Spec.ServiceAccountName
 	i.addEntity(podEntityType, pod, labels)
 }
-
 func (i *GroupEntityIndex) AddExternalEntity(ee *v1alpha2.ExternalEntity) {
 	i.addEntity(externalEntityType, ee, ee.Labels)
 }
-
 func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object, labels map[string]string) {
 	eKey := getEntityItemKey(entityType, entity)
 	lKey := getLabelItemKey(entityType, entity, labels)
 	var oldLabelItem *labelItem
 	var entityUpdated bool
-
 	i.lock.Lock()
 	defer i.lock.Unlock()
-
 	eItem, exists := i.entityItems[eKey]
 	if exists {
 		entityUpdated = entityAttrsUpdated(eItem.entity, entity)
@@ -458,14 +403,12 @@ func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object
 		}
 		i.entityItems[eKey] = eItem
 	}
-
 	// Create a labelItem if it doesn't exist.
 	lItem, exists := i.labelItems[lKey]
 	if !exists {
 		lItem = i.createLabelItem(entityType, eItem, labels)
 	}
 	lItem.entityItemKeys.Insert(eKey)
-
 	// Notify group updates.
 	var affectedSelectorItemKeys sets.Set[string]
 	if oldLabelItem != nil {
@@ -483,36 +426,28 @@ func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object
 		i.notify(sKey)
 	}
 }
-
 func (i *GroupEntityIndex) DeletePod(pod *v1.Pod) {
 	i.deleteEntity(podEntityType, pod)
 }
-
 func (i *GroupEntityIndex) DeleteExternalEntity(ee *v1alpha2.ExternalEntity) {
 	i.deleteEntity(externalEntityType, ee)
 }
-
 func (i *GroupEntityIndex) deleteEntity(entityType entityType, entity metav1.Object) {
 	eKey := getEntityItemKey(entityType, entity)
-
 	i.lock.Lock()
 	defer i.lock.Unlock()
-
 	eItem, exists := i.entityItems[eKey]
 	if !exists {
 		return
 	}
-
 	// Delete the entity from its associated labelItem and entityItems.
 	lItem := i.deleteEntityFromLabelItem(eItem.labelItemKey, eKey)
 	delete(i.entityItems, eKey)
-
 	// All selectorItems that match the labelItem are affected.
 	for sKey := range lItem.selectorItemKeys {
 		i.notify(sKey)
 	}
 }
-
 // deleteGroupFromSelectorItem disconnects a groupItem from a selectorItem.
 // The selectorItem will be deleted if it's no longer used by any groupItem.
 func (i *GroupEntityIndex) deleteGroupFromSelectorItem(sKey, gKey string) *selectorItem {
@@ -524,7 +459,6 @@ func (i *GroupEntityIndex) deleteGroupFromSelectorItem(sKey, gKey string) *selec
 	}
 	// Delete the selectorItem itself.
 	delete(i.selectorItems, sKey)
-
 	// Delete it from the selectorItemIndex.
 	entityType := podEntityType
 	if sItem.selector.ExternalEntitySelector != nil {
@@ -534,7 +468,6 @@ func (i *GroupEntityIndex) deleteGroupFromSelectorItem(sKey, gKey string) *selec
 	if len(i.selectorItemIndex[entityType][sItem.selector.Namespace]) == 0 {
 		delete(i.selectorItemIndex[entityType], sItem.selector.Namespace)
 	}
-
 	// Delete the selectorItem from matched labelItems.
 	for lKey := range sItem.labelItemKeys {
 		lItem := i.labelItems[lKey]
@@ -542,7 +475,6 @@ func (i *GroupEntityIndex) deleteGroupFromSelectorItem(sKey, gKey string) *selec
 	}
 	return sItem
 }
-
 // createSelectorItem creates a selectorItem based on the provided groupItem.
 // It's called when there is no existing selectorItem for a group selector.
 func (i *GroupEntityIndex) createSelectorItem(gItem *groupItem) *selectorItem {
@@ -564,7 +496,6 @@ func (i *GroupEntityIndex) createSelectorItem(gItem *groupItem) *selectorItem {
 		i.selectorItemIndex[entityType][sItem.selector.Namespace] = selectorItemKeys
 	}
 	selectorItemKeys.Insert(gItem.selectorItemKey)
-
 	// Scan potential labelItems and associates the new selectorItem with the matched ones.
 	if sItem.selector.Namespace != "" {
 		// The selector is Namespace scoped, it can only match labelItems in this Namespace.
@@ -586,7 +517,6 @@ func (i *GroupEntityIndex) createSelectorItem(gItem *groupItem) *selectorItem {
 	}
 	return sItem
 }
-
 // scanLabelItems scans potential labelItems and updates their association.
 func (i *GroupEntityIndex) scanLabelItems(labelItemKeys sets.Set[string], sItem *selectorItem) bool {
 	updated := false
@@ -610,14 +540,11 @@ func (i *GroupEntityIndex) scanLabelItems(labelItemKeys sets.Set[string], sItem 
 	}
 	return updated
 }
-
 func (i *GroupEntityIndex) AddGroup(groupType GroupType, name string, selector *types.GroupSelector) {
 	gKey := getGroupItemKey(groupType, name)
 	sKey := getSelectorItemKey(selector)
-
 	i.lock.Lock()
 	defer i.lock.Unlock()
-
 	gItem, exists := i.groupItems[gKey]
 	if exists {
 		// Its selector doesn't change, do nothing.
@@ -636,7 +563,6 @@ func (i *GroupEntityIndex) AddGroup(groupType GroupType, name string, selector *
 		}
 		i.groupItems[gKey] = gItem
 	}
-
 	// Create a selectorItem if it doesn't exist.
 	sItem, exists := i.selectorItems[sKey]
 	if !exists {
@@ -644,23 +570,18 @@ func (i *GroupEntityIndex) AddGroup(groupType GroupType, name string, selector *
 	}
 	sItem.groupItemKeys.Insert(gKey)
 }
-
 func (i *GroupEntityIndex) DeleteGroup(groupType GroupType, name string) {
 	gKey := getGroupItemKey(groupType, name)
-
 	i.lock.Lock()
 	defer i.lock.Unlock()
-
 	gItem, exists := i.groupItems[gKey]
 	if !exists {
 		return
 	}
-
 	// Delete the group from its associated selectorItem and groupItems.
 	i.deleteGroupFromSelectorItem(gItem.selectorItemKey, gKey)
 	delete(i.groupItems, gKey)
 }
-
 // notify notifies the affected groups to eventHandlers.
 // It's supposed to be called with the lock held as it accesses the selectorItems. Normally the method shouldn't block
 // as the event channel is buffered and the consumer Run should execute quickly. If it blocks in practice, we should
@@ -671,7 +592,6 @@ func (i *GroupEntityIndex) notify(selector string) {
 		i.eventChan <- group
 	}
 }
-
 func (i *GroupEntityIndex) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting GroupEntityIndex")
 	for {
@@ -688,19 +608,15 @@ func (i *GroupEntityIndex) Run(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 func (i *GroupEntityIndex) AddEventHandler(groupType GroupType, handler eventHandler) {
 	i.eventHandlers[groupType] = append(i.eventHandlers[groupType], handler)
 }
-
 func (i *GroupEntityIndex) HasSynced() bool {
 	return i.synced.Load().(bool)
 }
-
 func (i *GroupEntityIndex) setSynced(synced bool) {
 	i.synced.Store(synced)
 }
-
 func (i *GroupEntityIndex) match(entityType entityType, label labels.Set, namespace string, sel *types.GroupSelector) bool {
 	objSelector := sel.PodSelector
 	if entityType == externalEntityType {
@@ -747,7 +663,6 @@ func (i *GroupEntityIndex) match(entityType entityType, label labels.Set, namesp
 	// The group selects nothing when all selectors are missing.
 	return false
 }
-
 func entityAttrsUpdated(oldEntity, newEntity metav1.Object) bool {
 	switch oldValue := oldEntity.(type) {
 	case *v1.Pod:
@@ -776,27 +691,22 @@ func entityAttrsUpdated(oldEntity, newEntity metav1.Object) bool {
 	}
 	return false
 }
-
 // getEntityItemKey returns the entity key used in entityItems.
 func getEntityItemKey(entityType entityType, entity metav1.Object) string {
 	return fmt.Sprint(entityType) + "/" + entity.GetNamespace() + "/" + entity.GetName()
 }
-
 // getEntityItemKeyByName returns the entity key used in entityItems.
 func getEntityItemKeyByName(entityType entityType, namespace, name string) string {
 	return fmt.Sprint(entityType) + "/" + namespace + "/" + name
 }
-
 // getLabelItemKey returns the label key used in labelItems.
 func getLabelItemKey(entityType entityType, obj metav1.Object, allLabels map[string]string) string {
 	return fmt.Sprint(entityType) + "/" + obj.GetNamespace() + "/" + labels.Set(allLabels).String()
 }
-
 // getGroupItemKey returns the group key used in groupItems.
 func getGroupItemKey(groupType GroupType, name string) string {
 	return string(groupType) + "/" + name
 }
-
 // getSelectorItemKey returns the selector key used in selectorItems.
 func getSelectorItemKey(selector *types.GroupSelector) string {
 	return selector.NormalizedName

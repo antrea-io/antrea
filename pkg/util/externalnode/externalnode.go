@@ -11,32 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package externalnode
-
 import (
 	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
 	"fmt"
 	"io"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	EntityOwnerKind = "ExternalNode"
-
 	interfaceNameLength = 5
 )
-
 func GenExternalEntityName(externalNode *v1alpha1.ExternalNode) (string, error) {
 	if len(externalNode.Spec.Interfaces) == 0 {
 		// This should not happen since openAPIV3Schema checks it.
@@ -54,7 +45,6 @@ func GenExternalEntityName(externalNode *v1alpha1.ExternalNode) (string, error) 
 		return externalNode.Name + "-" + hashedIfName[:interfaceNameLength], nil
 	}
 }
-
 func GenerateEntityNodeKey(externalEntity *v1alpha2.ExternalEntity) string {
 	if externalEntity.Spec.ExternalNode == "" {
 		return ""

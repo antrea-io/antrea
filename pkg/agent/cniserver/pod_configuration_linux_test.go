@@ -11,21 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cniserver
-
 import (
 	"fmt"
 	"net"
 	"testing"
-
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
@@ -35,25 +30,21 @@ import (
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	routetest "antrea.io/antrea/pkg/agent/route/testing"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	"antrea.io/antrea/pkg/util/channel"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
+	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/v2/pkg/util/channel"
 )
-
 var (
 	containerMAC = "01:02:03:04:05:06"
 	hostIfaceMAC = "06:05:04:03:02:01"
 	containerIP  = net.ParseIP("10.1.2.100")
 )
-
 type fakeInterfaceConfigurator struct {
 	configureContainerLinkError         error
 	removeContainerLinkError            error
@@ -69,7 +60,6 @@ type fakeInterfaceConfigurator struct {
 	checkContainerInterfaceError        error
 	containerVFLink                     interface{}
 }
-
 func (c *fakeInterfaceConfigurator) configureContainerLink(podName string, podNamespace string, containerID string, containerNetNS string, containerIfaceName string, mtu int, brSriovVFDeviceID string, podSriovVFDeviceID string, result *current.Result, containerAccess *containerAccessArbitrator) error {
 	if c.configureContainerLinkError != nil {
 		return c.configureContainerLinkError
@@ -86,7 +76,6 @@ func (c *fakeInterfaceConfigurator) configureContainerLink(podName string, podNa
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 	return nil
 }
-
 func (c *fakeInterfaceConfigurator) removeContainerLink(containerID, hostInterfaceName string) error {
 	if c.removeContainerLinkError != nil {
 		return c.removeContainerLinkError
@@ -94,19 +83,15 @@ func (c *fakeInterfaceConfigurator) removeContainerLink(containerID, hostInterfa
 	c.hostIfaceName = ""
 	return nil
 }
-
 func (c *fakeInterfaceConfigurator) advertiseContainerAddr(containerNetNS string, containerIfaceName string, result *current.Result) error {
 	return c.advertiseContainerAddrError
 }
-
 func (c *fakeInterfaceConfigurator) validateVFRepInterface(sriovVFDeviceID string) (string, error) {
 	return c.hostIfaceName, c.validateVFRepInterfaceError
 }
-
 func (c *fakeInterfaceConfigurator) validateContainerPeerInterface(interfaces []*current.Interface, containerVeth *vethPair) (*vethPair, error) {
 	return containerVeth, c.validateContainerPeerInterfaceError
 }
-
 func (c *fakeInterfaceConfigurator) getInterceptedInterfaces(sandbox string, containerNetNS string, containerIFDev string) (*current.Interface, *current.Interface, error) {
 	containerIface := &current.Interface{
 		Name:    containerIFDev,
@@ -119,11 +104,9 @@ func (c *fakeInterfaceConfigurator) getInterceptedInterfaces(sandbox string, con
 	}
 	return containerIface, hostIface, c.getInterceptedInterfacesError
 }
-
 func (c *fakeInterfaceConfigurator) addPostInterfaceCreateHook(containerID, endpointName string, containerAccess *containerAccessArbitrator, hook postInterfaceCreateHook) error {
 	return nil
 }
-
 func (c *fakeInterfaceConfigurator) checkContainerInterface(containerNetns, containerID string, containerIface *current.Interface, containerIPs []*current.IPConfig, containerRoutes []*cnitypes.Route, sriovVFDeviceID string) (interface{}, error) {
 	if c.checkContainerInterfaceError != nil {
 		return nil, c.checkContainerInterfaceError
@@ -133,18 +116,15 @@ func (c *fakeInterfaceConfigurator) checkContainerInterface(containerNetns, cont
 	}
 	return c.containerVethPair, nil
 }
-
 func (c *fakeInterfaceConfigurator) changeContainerMTU(containerNetNS string, containerIFDev string, mtuDeduction int) error {
 	return nil
 }
-
 func newTestInterfaceConfigurator() *fakeInterfaceConfigurator {
 	return &fakeInterfaceConfigurator{
 		containerMAC: "01:02:03:04:05:06",
 		hostIfaceMAC: hostIfaceMAC,
 	}
 }
-
 func TestConnectInterceptedInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	testPodName := "test-pod"
@@ -153,7 +133,6 @@ func TestConnectInterceptedInterface(t *testing.T) {
 	containerID := generateUUID()
 	containerNetNS := "container-ns"
 	containerDev := "eth0"
-
 	createIfaceConfigurator := func(getInterceptedInterfacesError error) *fakeInterfaceConfigurator {
 		testIfaceConfigurator := newTestInterfaceConfigurator()
 		testIfaceConfigurator.hostIfaceName = hostInterfaceName
@@ -250,13 +229,11 @@ func TestConnectInterceptedInterface(t *testing.T) {
 		})
 	}
 }
-
 func TestCreateOVSPort(t *testing.T) {
 	controller := gomock.NewController(t)
 	containerID := generateUUID()
 	podName := "p0"
 	podNamespace := testPodNamespace
-
 	for _, tc := range []struct {
 		name                string
 		portName            string
@@ -293,7 +270,6 @@ func TestCreateOVSPort(t *testing.T) {
 		})
 	}
 }
-
 func TestParseOVSPortInterfaceConfig(t *testing.T) {
 	containerID := generateUUID()
 	portUUID := generateUUID()
@@ -473,7 +449,6 @@ func TestParseOVSPortInterfaceConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestCheckHostInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	hostIfaceName := "port1"
@@ -488,7 +463,6 @@ func TestCheckHostInterface(t *testing.T) {
 		PortUUID: generateUUID(),
 		OFPort:   int32(10),
 	}
-
 	for _, tc := range []struct {
 		name             string
 		vfRepIfaceError  error
@@ -531,11 +505,9 @@ func TestCheckHostInterface(t *testing.T) {
 		})
 	}
 }
-
 func TestConfigureSriovSecondaryInterface(t *testing.T) {
 	containerID := generateUUID()
 	containerNS := "containerNS"
-
 	for _, tc := range []struct {
 		name               string
 		podSriovVFDeviceID string
@@ -597,7 +569,6 @@ func TestConfigureSriovSecondaryInterface(t *testing.T) {
 				assert.Equal(t, 0, podConfigurator.ifaceStore.Len())
 				return
 			}
-
 			assert.Equal(t, 1, podConfigurator.ifaceStore.Len())
 			intfConfig, _ := podConfigurator.ifaceStore.GetContainerInterface(containerID)
 			assert.Equal(t, tc.intfConfig, intfConfig)
@@ -606,7 +577,6 @@ func TestConfigureSriovSecondaryInterface(t *testing.T) {
 		})
 	}
 }
-
 func newTestContainerInterfaceConfig(podName, containerID, ifDev string, vlan int) *interfacestore.InterfaceConfig {
 	hostIfaceName := util.GenerateContainerHostVethName(podName, testPodNamespace, containerID, ifDev)
 	fakePortUUID := generateUUID()
@@ -619,7 +589,6 @@ func newTestContainerInterfaceConfig(podName, containerID, ifDev string, vlan in
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: fakePortUUID, OFPort: 0}
 	return containerConfig
 }
-
 func TestConfigureVLANSecondaryInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -628,7 +597,6 @@ func TestConfigureVLANSecondaryInterface(t *testing.T) {
 	require.NoError(t, err, "No error expected in podConfigurator constructor")
 	testIfaceConfigurator := newTestInterfaceConfigurator()
 	pc.ifConfigurator = testIfaceConfigurator
-
 	containerNS := "containerNS"
 	podName := "pod1"
 	containerID := generateUUID()
@@ -636,12 +604,10 @@ func TestConfigureVLANSecondaryInterface(t *testing.T) {
 	containerCfg2 := newTestContainerInterfaceConfig(podName, containerID, "eth2", 0)
 	// Secondary interface with no IP.
 	containerCfg2.IPs = nil
-
 	result := ipamtest.GenerateIPAMResult([]string{"1.1.1.11/24,1.1.1.1,4", "3ffe:ffff:10:1ff::111/64,3ffe:ffff:10::1,6"}, routes, dns)
 	ipamResult := &ipam.IPAMResult{Result: *result, VLANID: 100}
 	testIfaceConfigurator.hostIfaceName = containerCfg1.InterfaceName
 	testIfaceConfigurator.containerMAC = containerCfg1.MAC.String()
-
 	mockOVSBridgeClient.EXPECT().CreateAccessPort(
 		containerCfg1.InterfaceName, containerCfg1.InterfaceName,
 		gomock.Any(), uint16(100)).Return(containerCfg1.PortUUID, nil).Times(1)
@@ -649,7 +615,6 @@ func TestConfigureVLANSecondaryInterface(t *testing.T) {
 	assert.Equal(t, 1, ifaceStore.Len())
 	intfConfig, _ := ifaceStore.GetContainerInterface(containerID)
 	assert.Equal(t, containerCfg1, intfConfig)
-
 	testIfaceConfigurator.hostIfaceName = containerCfg2.InterfaceName
 	testIfaceConfigurator.containerMAC = containerCfg2.MAC.String()
 	ipamResult = &ipam.IPAMResult{}
@@ -668,14 +633,12 @@ func TestConfigureVLANSecondaryInterface(t *testing.T) {
 		}
 	}
 }
-
 func TestDeleteVLANSecondaryInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	ifaceStore := interfacestore.NewInterfaceStore()
 	pc, err := NewSecondaryInterfaceConfigurator(mockOVSBridgeClient, ifaceStore)
 	require.Nil(t, err, "No error expected in podConfigurator constructor")
-
 	podName := "pod1"
 	containerID := generateUUID()
 	containerCfg1 := newTestContainerInterfaceConfig(podName, containerID, "eth1", 100)
@@ -684,18 +647,15 @@ func TestDeleteVLANSecondaryInterface(t *testing.T) {
 	containerCfg2.IPs = nil
 	ifaceStore.AddInterface(containerCfg1)
 	ifaceStore.AddInterface(containerCfg2)
-
 	mockOVSBridgeClient.EXPECT().DeletePort(containerCfg1.PortUUID).Return(nil)
 	assert.NoError(t, pc.DeleteVLANSecondaryInterface(containerCfg1))
 	intfConfig, _ := ifaceStore.GetContainerInterface(containerID)
 	assert.Equal(t, containerCfg2, intfConfig)
-
 	mockOVSBridgeClient.EXPECT().DeletePort(containerCfg2.PortUUID).Return(nil)
 	assert.NoError(t, pc.DeleteVLANSecondaryInterface(containerCfg2))
 	_, found := ifaceStore.GetContainerInterface(containerID)
 	assert.False(t, found, "Interface should not be in the local cache anymore")
 }
-
 func createPodConfigurator(controller *gomock.Controller, testIfaceConfigurator *fakeInterfaceConfigurator) *podConfigurator {
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -706,7 +666,6 @@ func createPodConfigurator(controller *gomock.Controller, testIfaceConfigurator 
 	configurator.ifConfigurator = testIfaceConfigurator
 	return configurator
 }
-
 func mockGetNSPath(err error) func() {
 	originalGetNSPath := getNSPath
 	getNSPath = func(netnsName string) (string, error) {

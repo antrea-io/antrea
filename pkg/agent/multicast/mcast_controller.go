@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicast
-
 import (
 	"fmt"
 	"net"
 	"sync"
 	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -30,52 +27,40 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 type eventType uint8
-
 const (
 	groupJoin eventType = iota
 	groupLeave
-
 	podInterfaceIndex = "podInterface"
-
 	// How long to wait before retrying the processing of a multicast group change.
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
-
 	// Interval of reprocessing every node.
 	nodeResyncPeriod = 60 * time.Second
-
 	// nodeUpdateKey is a key to trigger the Node list operation and update the OpenFlow group buckets to report
 	// the local multicast groups to other Nodes.
 	nodeUpdateKey = "nodeUpdate"
 )
-
 var workerCount uint8 = 2
-
 type mcastGroupEvent struct {
 	group net.IP
 	eType eventType
@@ -84,7 +69,6 @@ type mcastGroupEvent struct {
 	// srcNode is the Node IP where the IGMP report message is sent from. It is set only with encap mode.
 	srcNode net.IP
 }
-
 type GroupMemberStatus struct {
 	group net.IP
 	// localMembers is a map for the local Pod member and its last update time, key is the Pod's interface name,
@@ -95,7 +79,6 @@ type GroupMemberStatus struct {
 	remoteMembers sets.Set[string]
 	ofGroupID     binding.GroupIDType
 }
-
 // eventHandler process the multicast Group membership report or leave messages.
 func (c *Controller) eventHandler(stopCh <-chan struct{}) {
 	for {
@@ -111,7 +94,6 @@ func (c *Controller) eventHandler(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 // addGroupMemberStatus adds the new group into groupCache.
 func (c *Controller) addGroupMemberStatus(e *mcastGroupEvent) {
 	status := &GroupMemberStatus{
@@ -125,7 +107,6 @@ func (c *Controller) addGroupMemberStatus(e *mcastGroupEvent) {
 	c.queue.Add(e.group.String())
 	klog.InfoS("Added new multicast group to cache", "group", e.group, "interface", e.iface.InterfaceName)
 }
-
 // updateGroupMemberStatus updates the group status in groupCache. If a "join" message is sent from an existing member,
 // only updates the lastIGMPReport time. If a "join" message is sent from an "unknown" member, updates the lastIGMPReport time and
 // adds the new member into the group's local member set. If a "leave" message is sent from an existing member, removes
@@ -172,7 +153,6 @@ func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent
 		}
 	}
 }
-
 // checkLastMember sends out a query message on the group to check if there are still members in the group. If no new
 // membership report is received in the max response time, the group is removed from groupCache.
 func (c *Controller) checkLastMember(group net.IP) {
@@ -183,7 +163,6 @@ func (c *Controller) checkLastMember(group net.IP) {
 	}
 	c.queue.AddAfter(group.String(), igmpMaxResponseTime)
 }
-
 // clearStaleGroups checks the stale group members which have not been updated for c.mcastGroupTimeout, and then notifies worker
 // to remove them from groupCache.
 func (c *Controller) clearStaleGroups() {
@@ -215,7 +194,6 @@ func (c *Controller) clearStaleGroups() {
 		}
 	}
 }
-
 // removeLocalInterface searches the GroupMemberStatus which the deleted interface has joined, and then triggers a member
 // leave event so that Antrea can remove the corresponding interface from local multicast receivers on OVS. This function
 // should be called if the removed Pod receiver fails to send IGMP leave message before deletion.
@@ -240,7 +218,6 @@ func (c *Controller) removeLocalInterface(podEvent types.PodUpdate) {
 		c.groupEventCh <- event
 	}
 }
-
 type Controller struct {
 	ofClient         openflow.Client
 	v4GroupAllocator openflow.GroupAllocator
@@ -283,7 +260,6 @@ type Controller struct {
 	// TODO: remove this flag after IPv6 is supported in Multicast.
 	ipv6Enabled bool
 }
-
 func NewMulticastController(ofClient openflow.Client,
 	v4GroupAllocator openflow.GroupAllocator,
 	nodeConfig *config.NodeConfig,
@@ -360,7 +336,6 @@ func NewMulticastController(ofClient openflow.Client,
 	podUpdateSubscriber.Subscribe(c.memberChanged)
 	return c
 }
-
 func (c *Controller) Initialize() error {
 	if !c.ipv4Enabled {
 		return fmt.Errorf("Multicast is not supported on an IPv6-only cluster")
@@ -394,7 +369,6 @@ func (c *Controller) Initialize() error {
 	}
 	return nil
 }
-
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	// Periodically query Multicast Groups on OVS.
 	go wait.NonSlidingUntil(func() {
@@ -402,28 +376,23 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 			klog.ErrorS(err, "Failed to send IGMP query")
 		}
 	}, c.queryInterval, stopCh)
-
 	if c.encapEnabled {
 		go wait.NonSlidingUntil(c.syncLocalGroupsToOtherNodes, c.queryInterval, stopCh)
 		go wait.Until(c.nodeWorker, time.Second, stopCh)
 	}
-
 	// Periodically check the group member status, and remove the groups in which no members exist
 	go wait.NonSlidingUntil(c.clearStaleGroups, c.queryInterval, stopCh)
 	go c.eventHandler(stopCh)
-
 	for i := 0; i < int(workerCount); i++ {
 		// Process multicast Group membership report or leave messages.
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
 	go c.mRouteClient.run(stopCh)
 }
-
 func (c *Controller) worker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 // getGroupMemberStatusesByPod returns all GroupMemberStatus that the given podInterface is included in its localMembers.
 func (c *Controller) getGroupMemberStatusesByPod(podInterface string) []*GroupMemberStatus {
 	groupMembers := make([]*GroupMemberStatus, 0)
@@ -433,14 +402,12 @@ func (c *Controller) getGroupMemberStatusesByPod(podInterface string) []*GroupMe
 	}
 	return groupMembers
 }
-
 func (c *Controller) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(key)
-
 	if err := c.syncGroup(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
@@ -451,9 +418,7 @@ func (c *Controller) processNextWorkItem() bool {
 		klog.Errorf("Error syncing multicast group %s, requeuing. Error: %v", key, err)
 	}
 	return true
-
 }
-
 func (c *Controller) syncGroup(groupKey string) error {
 	startTime := time.Now()
 	defer func() {
@@ -517,7 +482,6 @@ func (c *Controller) syncGroup(groupKey string) error {
 			klog.ErrorS(err, "Failed to leave multicast group for multicast interfaces", "group", groupKey)
 			return err
 		}
-
 		if c.encapEnabled {
 			group := net.ParseIP(groupKey)
 			// Send IGMP leave message to other Nodes to notify the current Node leaves the given multicast group.
@@ -590,43 +554,36 @@ func (c *Controller) syncGroup(groupKey string) error {
 	c.addInstalledGroup(groupKey)
 	return nil
 }
-
 func (c *Controller) groupHasInstalled(groupKey string) bool {
 	c.installedGroupsMutex.RLock()
 	defer c.installedGroupsMutex.RUnlock()
 	return c.installedGroups.Has(groupKey)
 }
-
 func (c *Controller) addInstalledGroup(groupKey string) {
 	c.installedGroupsMutex.Lock()
 	c.installedGroups.Insert(groupKey)
 	c.installedGroupsMutex.Unlock()
 }
-
 func (c *Controller) delInstalledGroup(groupKey string) {
 	c.installedGroupsMutex.Lock()
 	c.installedGroups.Delete(groupKey)
 	c.installedGroupsMutex.Unlock()
 }
-
 func (c *Controller) localGroupHasInstalled(groupKey string) bool {
 	c.installedLocalGroupsMutex.RLock()
 	defer c.installedLocalGroupsMutex.RUnlock()
 	return c.installedLocalGroups.Has(groupKey)
 }
-
 func (c *Controller) addInstalledLocalGroup(groupKey string) {
 	c.installedLocalGroupsMutex.Lock()
 	c.installedLocalGroups.Insert(groupKey)
 	c.installedLocalGroupsMutex.Unlock()
 }
-
 func (c *Controller) delInstalledLocalGroup(groupKey string) {
 	c.installedLocalGroupsMutex.Lock()
 	c.installedLocalGroups.Delete(groupKey)
 	c.installedLocalGroupsMutex.Unlock()
 }
-
 func (c *Controller) addOrUpdateGroupEvent(e *mcastGroupEvent) {
 	obj, ok, _ := c.groupCache.GetByKey(e.group.String())
 	switch e.eType {
@@ -642,11 +599,9 @@ func (c *Controller) addOrUpdateGroupEvent(e *mcastGroupEvent) {
 		}
 	}
 }
-
 func (c *Controller) memberChanged(e interface{}) {
 	podEvent := e.(types.PodUpdate)
 	namespace, name := podEvent.PodNamespace, podEvent.PodName
-
 	klog.V(2).InfoS("Pod is updated", "IsAdd", podEvent.IsAdd, "namespace", namespace, "name", name)
 	event := &mcastGroupEvent{
 		group: types.McastAllHosts,
@@ -654,7 +609,6 @@ func (c *Controller) memberChanged(e interface{}) {
 	c.groupEventCh <- event
 	c.removeLocalInterface(podEvent)
 }
-
 func (c *Controller) initQueryGroup() error {
 	err := c.updateQueryGroup()
 	if err != nil {
@@ -666,7 +620,6 @@ func (c *Controller) initQueryGroup() error {
 	}
 	return nil
 }
-
 // updateQueryGroup gets all containers' interfaces, and add all ofports into IGMP query group.
 func (c *Controller) updateQueryGroup() error {
 	ifaces := c.ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
@@ -682,7 +635,6 @@ func (c *Controller) updateQueryGroup() error {
 		"ofGroup", c.queryGroupId, "localReceivers", memberPorts)
 	return nil
 }
-
 // syncLocalGroupsToOtherNodes sends IGMP join message to other Nodes in the same cluster to notify what multicast groups
 // are joined by this Node. This function is used only with encap mode.
 func (c *Controller) syncLocalGroupsToOtherNodes() {
@@ -699,13 +651,11 @@ func (c *Controller) syncLocalGroupsToOtherNodes() {
 		klog.ErrorS(err, "Failed to sync local multicast groups to other Nodes")
 	}
 }
-
 func (c *Controller) syncNodes() error {
 	startTime := time.Now()
 	defer func() {
 		klog.V(4).Infof("Finished syncing Node IPs. (%v)", time.Since(startTime))
 	}()
-
 	nodes, err := c.nodeLister.List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "Failed to list Nodes")
@@ -740,7 +690,6 @@ func (c *Controller) syncNodes() error {
 	c.syncLocalGroupsToOtherNodes()
 	return nil
 }
-
 func podInterfaceIndexFunc(obj interface{}) ([]string, error) {
 	groupState := obj.(*GroupMemberStatus)
 	podInterfaces := make([]string, 0, len(groupState.localMembers))
@@ -749,16 +698,13 @@ func podInterfaceIndexFunc(obj interface{}) ([]string, error) {
 	}
 	return podInterfaces, nil
 }
-
 func getGroupEventKey(obj interface{}) (string, error) {
 	groupState := obj.(*GroupMemberStatus)
 	return groupState.group.String(), nil
 }
-
 func (c *Controller) CollectIGMPReportNPStats() (igmpANNPStats, igmpACNPStats map[apitypes.UID]map[string]*types.RuleMetric) {
 	return c.igmpSnooper.collectStats()
 }
-
 func (c *Controller) GetGroupPods() map[string][]v1beta2.PodReference {
 	groupPodsMap := make(map[string][]v1beta2.PodReference)
 	for _, obj := range c.groupCache.List() {
@@ -776,12 +722,10 @@ func (c *Controller) GetGroupPods() map[string][]v1beta2.PodReference {
 	}
 	return groupPodsMap
 }
-
 // PodTrafficStats encodes the inbound and outbound multicast statistics of each Pod.
 type PodTrafficStats struct {
 	Inbound, Outbound uint64
 }
-
 func (c *Controller) GetPodStats(podName string, podNamespace string) *PodTrafficStats {
 	ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
 	for _, iface := range ifaces {
@@ -791,7 +735,6 @@ func (c *Controller) GetPodStats(podName string, podNamespace string) *PodTraffi
 	}
 	return nil
 }
-
 func (c *Controller) GetAllPodsStats() map[*interfacestore.InterfaceConfig]*PodTrafficStats {
 	statsMap := make(map[*interfacestore.InterfaceConfig]*PodTrafficStats)
 	egressPodStats := c.ofClient.MulticastEgressPodMetrics()
@@ -820,7 +763,6 @@ func (c *Controller) GetAllPodsStats() map[*interfacestore.InterfaceConfig]*PodT
 	}
 	return statsMap
 }
-
 func (c *Controller) checkNodeUpdate(old interface{}, cur interface{}) {
 	oldNode := old.(*corev1.Node)
 	if oldNode.Name == c.nodeConfig.Name {
@@ -842,12 +784,10 @@ func (c *Controller) checkNodeUpdate(old interface{}, cur interface{}) {
 	}
 	c.nodeUpdateQueue.Add(nodeUpdateKey)
 }
-
 func (c *Controller) nodeWorker() {
 	for c.processNextNodeItem() {
 	}
 }
-
 func (c *Controller) processNextNodeItem() bool {
 	key, quit := c.nodeUpdateQueue.Get()
 	if quit {
@@ -858,7 +798,6 @@ func (c *Controller) processNextNodeItem() bool {
 	// example, we do not call Forget if a transient error occurs, instead the item is put back
 	// on the workqueue and attempted again after a back-off period.
 	defer c.nodeUpdateQueue.Done(key)
-
 	if err := c.syncNodes(); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
@@ -870,7 +809,6 @@ func (c *Controller) processNextNodeItem() bool {
 	}
 	return true
 }
-
 func memberExists(status *GroupMemberStatus, e *mcastGroupEvent) bool {
 	var exist bool
 	switch e.iface.Type {
@@ -881,7 +819,6 @@ func memberExists(status *GroupMemberStatus, e *mcastGroupEvent) bool {
 	}
 	return exist
 }
-
 func addGroupMember(status *GroupMemberStatus, e *mcastGroupEvent) *GroupMemberStatus {
 	if e.iface.Type == interfacestore.ContainerInterface {
 		status.localMembers[e.iface.InterfaceName] = e.time
@@ -892,7 +829,6 @@ func addGroupMember(status *GroupMemberStatus, e *mcastGroupEvent) *GroupMemberS
 	}
 	return status
 }
-
 func deleteGroupMember(status *GroupMemberStatus, e *mcastGroupEvent) *GroupMemberStatus {
 	if e.iface.Type == interfacestore.ContainerInterface {
 		delete(status.localMembers, e.iface.InterfaceName)

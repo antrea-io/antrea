@@ -11,32 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"fmt"
 	"testing"
-
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 type ipStack int
-
 const (
 	ipv4Only ipStack = iota
 	ipv6Only
 	dualStack
 )
-
 var (
 	defaultOptions = clientOptions{
 		enableProxy:           true,
@@ -49,7 +39,6 @@ var (
 		enableL7NetworkPolicy: false,
 	}
 )
-
 func newTestFeaturePodConnectivity(ipProtocols []binding.Protocol, options ...clientOptionsFn) *featurePodConnectivity {
 	o := defaultOptions
 	for _, fn := range options {
@@ -63,7 +52,6 @@ func newTestFeaturePodConnectivity(ipProtocols []binding.Protocol, options ...cl
 		proxyAll:              o.proxyAll,
 	}
 }
-
 func newTestFeatureNetworkPolicy(nodeType config.NodeType, options ...clientOptionsFn) *featureNetworkPolicy {
 	o := defaultOptions
 	for _, fn := range options {
@@ -76,7 +64,6 @@ func newTestFeatureNetworkPolicy(nodeType config.NodeType, options ...clientOpti
 		enableL7NetworkPolicy: o.enableL7NetworkPolicy,
 	}
 }
-
 func newTestFeatureService(options ...clientOptionsFn) *featureService {
 	o := defaultOptions
 	for _, fn := range options {
@@ -88,19 +75,15 @@ func newTestFeatureService(options ...clientOptionsFn) *featureService {
 		proxyAll:           o.proxyAll,
 	}
 }
-
 func newTestFeatureEgress() *featureEgress {
 	return &featureEgress{}
 }
-
 func newTestFeatureMulticast() *featureMulticast {
 	return &featureMulticast{}
 }
-
 func newTestFeatureExternalNodeConnectivity() *featureExternalNodeConnectivity {
 	return &featureExternalNodeConnectivity{}
 }
-
 func TestBuildPipeline(t *testing.T) {
 	ipStackMap := map[ipStack][]binding.Protocol{
 		ipv4Only:  {binding.ProtocolIP},
@@ -463,13 +446,10 @@ func TestBuildPipeline(t *testing.T) {
 					MulticastEgressRuleTable,
 					MulticastEgressMetricTable,
 					MulticastEgressPodMetricTable,
-
 					MulticastRoutingTable,
-
 					MulticastIngressRuleTable,
 					MulticastIngressMetricTable,
 					MulticastIngressPodMetricTable,
-
 					MulticastOutputTable,
 				},
 			},
@@ -520,7 +500,6 @@ func TestBuildPipeline(t *testing.T) {
 					}
 				}
 			}
-
 			for pipelineID := firstPipeline; pipelineID <= lastPipeline; pipelineID++ {
 				if _, ok := pipelineRequiredTablesMap[pipelineID]; !ok {
 					continue
@@ -532,7 +511,6 @@ func TestBuildPipeline(t *testing.T) {
 					}
 				}
 				generatePipeline(pipelineID, requiredTables)
-
 				tables := tc.expectedTables[pipelineID]
 				for i := 0; i < len(tables)-1; i++ {
 					require.NotNil(t, tables[i].ofTable, "table %q should be initialized", tables[i].name)
@@ -544,7 +522,6 @@ func TestBuildPipeline(t *testing.T) {
 		})
 	}
 }
-
 func resetPipelines() {
 	objs := tableCache.List()
 	for i := 0; i < len(objs); i++ {

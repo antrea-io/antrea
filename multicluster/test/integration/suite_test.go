@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package integration
-
 import (
 	"context"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -34,8 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	mcsscheme "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/scheme"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/leader"
@@ -43,26 +38,21 @@ import (
 	antreamcscheme "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/scheme"
 	antreascheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/v2/pkg/signals"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
-	"antrea.io/antrea/multicluster/controllers/multicluster/member"
-	antreamcscheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
-	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
-	"antrea.io/antrea/pkg/signals"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/leader"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/member"
+	antreamcscheme "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/scheme"
+	antreascheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/v2/pkg/signals"
 	//+kubebuilder:scaffold:imports
 )
-
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
-
 const (
 	timeout  = time.Second * 15
 	interval = time.Second * 1
 )
-
 var (
 	cfg             *rest.Config
 	k8sClient       client.Client
@@ -73,32 +63,26 @@ var (
 	clusterSetID    = "test-clusterset"
 	testNamespace   = "testns"
 	testNSForStale  = "testns-stale"
-
 	testNS = &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testNamespace,
 		},
 	}
-
 	testNSStale = &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testNSForStale,
 		},
 	}
-
 	leaderNS = &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: LeaderNamespace,
 		},
 	}
 )
-
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
-
 	RunSpecs(t, "Controller Suite")
 }
-
 var _ = BeforeSuite(func() {
 	os.Setenv("KUBECONFIG", "/tmp/mc-integration-kubeconfig")
 	By("bootstrapping test environment")
@@ -110,7 +94,6 @@ var _ = BeforeSuite(func() {
 		ErrorIfCRDPathMissing: true,
 		UseExistingCluster:    &useExistingCluster,
 	}
-
 	var err error
 	done := make(chan interface{})
 	go func() {
@@ -121,7 +104,6 @@ var _ = BeforeSuite(func() {
 	Eventually(done).WithTimeout(1 * time.Minute).Should(BeClosed())
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
-
 	scheme := runtime.NewScheme()
 	err = mcsscheme.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -132,20 +114,16 @@ var _ = BeforeSuite(func() {
 	err = antreascheme.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	//+kubebuilder:scaffold:scheme
-
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
-
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
 	})
 	Expect(err).ToNot(HaveOccurred())
-
 	k8sServerURL = testEnv.Config.Host
 	stopCh := signals.RegisterSignalHandlers()
 	ctx := wait.ContextForChannel(stopCh)
-
 	By("Creating MemberClusterSetReconciler")
 	k8sClient.Create(ctx, leaderNS)
 	k8sClient.Create(ctx, testNS)
@@ -161,7 +139,6 @@ var _ = BeforeSuite(func() {
 	)
 	err = clusterSetReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
-
 	By("Creating ServiceExportReconciler")
 	svcExportReconciler := member.NewServiceExportReconciler(
 		k8sManager.GetClient(),
@@ -172,10 +149,8 @@ var _ = BeforeSuite(func() {
 		testNamespace)
 	err = svcExportReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
-
 	// import reconciler will be started from RemoteCommonArea after
 	// configureClusterSet finishes
-
 	By("Creating StaleController")
 	staleController := member.NewStaleResCleanupController(
 		k8sManager.GetClient(),
@@ -184,21 +159,18 @@ var _ = BeforeSuite(func() {
 		"default",
 		clusterSetReconciler,
 	)
-
 	go staleController.Run(stopCh)
 	// Fake the commonAreaCreation event since the ClusterSet creation is only triggered one time
 	// when the ClusterSet is created, but the stale controller test is not running yet.
 	go wait.UntilWithContext(ctx, func(ctx context.Context) {
 		commonAreaCreationCh <- struct{}{}
 	}, 5*time.Second)
-
 	By("Creating ResourceExportReconciler")
 	resExportReconciler := leader.NewResourceExportReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme())
 	err = resExportReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
-
 	go func() {
 		By("Start Manager")
 		err = k8sManager.Start(ctrl.SetupSignalHandler())
@@ -207,7 +179,6 @@ var _ = BeforeSuite(func() {
 	configureMemberClusterSet()
 	configureLeaderClusterSet()
 })
-
 func configureMemberClusterSet() {
 	clusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -230,7 +201,6 @@ func configureMemberClusterSet() {
 	err := k8sClient.Create(ctx, clusterSet, &client.CreateOptions{})
 	Expect(err == nil).Should(BeTrue())
 }
-
 func configureLeaderClusterSet() {
 	clusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -258,7 +228,6 @@ func configureLeaderClusterSet() {
 		return err == nil
 	}, timeout, interval).Should(BeTrue())
 }
-
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	k8sClient.Delete(context.TODO(), testNS)

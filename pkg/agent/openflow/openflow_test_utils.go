@@ -11,36 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
-<<<<<<< HEAD
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 // InitMockTables is used to init mock tables.
 func InitMockTables(tableMap map[*Table]uint8) {
 	for ft, id := range tableMap {
 		ft.ofTable = binding.NewOFTable(id, ft.name, 0, 0, 0)
 	}
 }
-
 // InitOFTableCache is used to update ofTableCache in tests.
 func InitOFTableCache(tableMap map[*Table]uint8) {
 	for ft := range tableMap {
 		tableCache.Update(ft)
 	}
 }
-
 // ResetOFTable is used for integration tests.
 func ResetOFTable() {
 	binding.ResetTableID()
 }
-
 // CleanOFTableCache is used to reset ofTableCache and only used in integration tests. When all integration tests about
 // openflow run in batch, unexpected flows could be installed on OVS due to stale ofTableCache, which may cause some tests
 // to fail. For example, for TestFuncA, EgressMarkTable is needed; for TestFuncB, EgressMarkTable is not needed. If TestFuncB is run

@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package recordmetrics
-
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
 	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
 	queriertest "antrea.io/antrea/v2/pkg/flowaggregator/querier/testing"
-=======
-	"antrea.io/antrea/pkg/flowaggregator/apis"
-	"antrea.io/antrea/pkg/flowaggregator/querier"
-	queriertest "antrea.io/antrea/pkg/flowaggregator/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
+	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
+	queriertest "antrea.io/antrea/v2/pkg/flowaggregator/querier/testing"
 )
-
 func TestRecordMetricsQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	faq := queriertest.NewMockFlowAggregatorQuerier(ctrl)
@@ -48,14 +40,12 @@ func TestRecordMetricsQuery(t *testing.T) {
 		WithLogExporter:        true,
 		WithIPFIXExporter:      true,
 	})
-
 	handler := HandleFunc(faq)
 	req, err := http.NewRequest(http.MethodGet, "", nil)
 	assert.Nil(t, err)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)
 	assert.Equal(t, http.StatusOK, recorder.Code)
-
 	var received apis.RecordMetricsResponse
 	err = json.Unmarshal(recorder.Body.Bytes(), &received)
 	assert.Nil(t, err)
@@ -70,7 +60,5 @@ func TestRecordMetricsQuery(t *testing.T) {
 		WithLogExporter:        true,
 		WithIPFIXExporter:      true,
 	}, received)
-
 	assert.Equal(t, received.GetTableRow(0), []string{"20", "15", "5", "30", "1", "true", "true", "true", "true"})
-
 }

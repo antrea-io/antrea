@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -25,16 +22,11 @@ import (
 	"k8s.io/component-base/featuregate"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 var (
 	query       = crdv1beta1.IGMPQuery
 	report      = crdv1beta1.IGMPReportV1
@@ -43,7 +35,6 @@ var (
 	passAction  = crdv1beta1.RuleActionPass
 	portNum80   = int32(80)
 )
-
 func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -1950,7 +1941,6 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 			operation:      admv1.Update,
 			expectedReason: "tier non-existent-tier does not exist",
 		}}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for feature, value := range tt.featureGates {
@@ -1969,7 +1959,6 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 		})
 	}
 }
-
 // Antrea NetworkPolicy use the same validator and has fewer cases to validate than
 // Antrea ClusterNetworkPolicy. Only provide one test case for create and update here.
 func TestValidateAntreaNetworkPolicy(t *testing.T) {
@@ -2058,7 +2047,6 @@ func TestValidateAntreaNetworkPolicy(t *testing.T) {
 			expectedReason: "except CIDR fd00:192:168:2::/64 is not a strict subset of CIDR fd00:192:168:1::/64",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for feature, value := range tt.featureGates {
@@ -2076,7 +2064,6 @@ func TestValidateAntreaNetworkPolicy(t *testing.T) {
 		})
 	}
 }
-
 func TestValidateAntreaClusterGroup(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -2382,7 +2369,6 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestValidateAntreaGroup(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -2657,7 +2643,6 @@ func TestValidateAntreaGroup(t *testing.T) {
 		})
 	}
 }
-
 func TestValidateTier(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -2846,7 +2831,6 @@ func TestValidateTier(t *testing.T) {
 			expectedReason: "tier tier-acnp-ref is referenced by 1 Antrea ClusterNetworkPolicies",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, controller := newController(nil, nil)
@@ -2877,7 +2861,6 @@ func TestValidateTier(t *testing.T) {
 		})
 	}
 }
-
 func TestValidateAdminNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name           string

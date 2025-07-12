@@ -11,32 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package operations
-
 import (
 	"fmt"
 	"time"
-
 	"antrea.io/libOpenflow/openflow15"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/metrics"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 type ofAction int32
-
 const (
 	add ofAction = iota
 	mod
 	del
 )
-
 func (a ofAction) String() string {
 	switch a {
 	case add:
@@ -49,7 +39,6 @@ func (a ofAction) String() string {
 		return "unknown"
 	}
 }
-
 type OFEntryOperations interface {
 	AddAll(flows []*openflow15.FlowMod) error
 	ModifyAll(flows []*openflow15.FlowMod) error
@@ -59,48 +48,37 @@ type OFEntryOperations interface {
 	ModifyOFEntries(ofEntries []binding.OFEntry) error
 	DeleteOFEntries(ofEntries []binding.OFEntry) error
 }
-
 type ofEntryOperations struct {
 	bridge binding.Bridge
 }
-
 func NewOFEntryOperations(b binding.Bridge) OFEntryOperations {
 	return &ofEntryOperations{bridge: b}
 }
-
 func (c *ofEntryOperations) AddAll(flowMessages []*openflow15.FlowMod) error {
 	return c.changeAll(map[ofAction][]*openflow15.FlowMod{add: flowMessages})
 }
-
 func (c *ofEntryOperations) ModifyAll(flowMessages []*openflow15.FlowMod) error {
 	return c.changeAll(map[ofAction][]*openflow15.FlowMod{mod: flowMessages})
 }
-
 func (c *ofEntryOperations) DeleteAll(flowMessages []*openflow15.FlowMod) error {
 	return c.changeAll(map[ofAction][]*openflow15.FlowMod{del: flowMessages})
 }
-
 func (c *ofEntryOperations) BundleOps(adds, mods, dels []*openflow15.FlowMod) error {
 	return c.changeAll(map[ofAction][]*openflow15.FlowMod{add: adds, mod: mods, del: dels})
 }
-
 func (c *ofEntryOperations) AddOFEntries(ofEntries []binding.OFEntry) error {
 	return c.changeOFEntries(ofEntries, add)
 }
-
 func (c *ofEntryOperations) ModifyOFEntries(ofEntries []binding.OFEntry) error {
 	return c.changeOFEntries(ofEntries, mod)
 }
-
 func (c *ofEntryOperations) DeleteOFEntries(ofEntries []binding.OFEntry) error {
 	return c.changeOFEntries(ofEntries, del)
 }
-
 func (c *ofEntryOperations) changeAll(flowsMap map[ofAction][]*openflow15.FlowMod) error {
 	if len(flowsMap) == 0 {
 		return nil
 	}
-
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
@@ -110,7 +88,6 @@ func (c *ofEntryOperations) changeAll(flowsMap map[ofAction][]*openflow15.FlowMo
 			}
 		}
 	}()
-
 	if err := c.bridge.AddFlowsInBundle(flowsMap[add], flowsMap[mod], flowsMap[del]); err != nil {
 		for k, v := range flowsMap {
 			if len(v) != 0 {
@@ -126,7 +103,6 @@ func (c *ofEntryOperations) changeAll(flowsMap map[ofAction][]*openflow15.FlowMo
 	}
 	return nil
 }
-
 func (c *ofEntryOperations) changeOFEntries(ofEntries []binding.OFEntry, action ofAction) error {
 	if len(ofEntries) == 0 {
 		return nil

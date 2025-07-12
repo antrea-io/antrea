@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package certificatesigningrequest
-
 import (
 	"bytes"
 	"context"
@@ -28,7 +26,6 @@ import (
 	"reflect"
 	"sync/atomic"
 	"time"
-
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -44,57 +41,43 @@ import (
 	"k8s.io/client-go/util/keyutil"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	antreaapis "antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/util/env"
-=======
-	antreaapis "antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/util/env"
->>>>>>> origin/main
+	antreaapis "antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
-
 const (
 	ipsecRootCAName               = "antrea-ipsec-ca"
 	ipsecCSRSigningControllerName = "IPsecCertificateSigningRequestSigningController"
 	workerItemKey                 = "key"
 	rootCACertKey                 = "ca.crt"
-
 	duration365d = time.Hour * 24 * 365
 	duration10y  = duration365d * 10
 )
-
 // IPsecCSRSigningController is responsible for signing CertificateSigningRequests.
 type IPsecCSRSigningController struct {
 	client          clientset.Interface
 	csrInformer     cache.SharedIndexInformer
 	csrLister       csrlister.CertificateSigningRequestLister
 	csrListerSynced cache.InformerSynced
-
 	configMapInformer     cache.SharedIndexInformer
 	configMapLister       corev1listers.ConfigMapLister
 	configMapListerSynced cache.InformerSynced
-
 	selfSignedCA bool
-
 	// saved CertificateAuthority
 	certificateAuthority atomic.Value
-
 	queue         workqueue.TypedRateLimitingInterface[string]
 	fixturesQueue workqueue.TypedRateLimitingInterface[string]
 }
-
 // certificateAuthority implements a certificate authority and used by the signing controller.
 type certificateAuthority struct {
 	// RawCert is an optional field to determine if signing cert/key pairs have changed
 	RawCert []byte
 	// RawKey is an optional field to determine if signing cert/key pairs have changed
 	RawKey []byte
-
 	Certificate *x509.Certificate
 	PrivateKey  crypto.Signer
 }
-
 func (c *certificateAuthority) signCSR(template *x509.Certificate, requestKey crypto.PublicKey) (*x509.Certificate, error) {
 	if len(c.RawCert) == 0 || len(c.RawKey) == 0 {
 		return nil, fmt.Errorf("certificate authority is not valid")
@@ -112,16 +95,12 @@ func (c *certificateAuthority) signCSR(template *x509.Certificate, requestKey cr
 	}
 	return certs[0], nil
 }
-
 // NewIPsecCSRSigningController returns a new *IPsecCSRSigningController.
 func NewIPsecCSRSigningController(client clientset.Interface, csrInformer cache.SharedIndexInformer, csrLister csrlister.CertificateSigningRequestLister, selfSignedCA bool) *IPsecCSRSigningController {
-
 	caConfigMapInformer := corev1informers.NewFilteredConfigMapInformer(client, env.GetAntreaNamespace(), resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, func(listOptions *metav1.ListOptions) {
 		listOptions.FieldSelector = fields.OneTermEqualSelector("metadata.name", ipsecRootCAName).String()
 	})
-
 	configMapLister := corev1listers.NewConfigMapLister(caConfigMapInformer.GetIndexer())
-
 	c := &IPsecCSRSigningController{
 		client:                client,
 		csrInformer:           csrInformer,
@@ -144,7 +123,6 @@ func NewIPsecCSRSigningController(client clientset.Interface, csrInformer cache.
 			},
 		),
 	}
-
 	csrInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: c.enqueueCertificateSigningRequest,
@@ -154,7 +132,6 @@ func NewIPsecCSRSigningController(client clientset.Interface, csrInformer cache.
 		},
 		resyncPeriod,
 	)
-
 	caConfigMapInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
@@ -169,40 +146,30 @@ func NewIPsecCSRSigningController(client clientset.Interface, csrInformer cache.
 		},
 		resyncPeriod,
 	)
-
 	return c
 }
-
 // Run begins watching and syncing of the IPsecCSRSigningController.
 func (c *IPsecCSRSigningController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.Infof("Starting %s", ipsecCSRSigningControllerName)
 	defer klog.Infof("Shutting down %s", ipsecCSRSigningControllerName)
-
 	go c.configMapInformer.Run(stopCh)
-
 	cacheSyncs := []cache.InformerSynced{c.csrListerSynced, c.configMapListerSynced}
 	if !cache.WaitForNamedCacheSync(ipsecCSRSigningControllerName, stopCh, cacheSyncs...) {
 		return
 	}
 	c.fixturesQueue.Add(workerItemKey)
-
 	go wait.Until(c.fixturesWorker, time.Second, stopCh)
-
 	go wait.NonSlidingUntil(func() {
 		if err := c.watchSecretChanges(stopCh); err != nil {
 			klog.ErrorS(err, "Watch Secret error", "secret", ipsecRootCAName)
 		}
 	}, time.Second*10, stopCh)
-
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.csrWorker, time.Second, stopCh)
 	}
-
 	<-stopCh
 }
-
 func (c *IPsecCSRSigningController) syncRootCertificateAndKey() error {
 	var caBytes, caKeyBytes []byte
 	caSecret, err := c.client.CoreV1().Secrets(env.GetAntreaNamespace()).Get(context.TODO(), ipsecRootCAName, metav1.GetOptions{})
@@ -288,12 +255,10 @@ func (c *IPsecCSRSigningController) syncRootCertificateAndKey() error {
 	}
 	return nil
 }
-
 func (c *IPsecCSRSigningController) csrWorker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 // watchSecretChanges uses watch API directly to watch for Secret changes.
 // Antrea Controller should not have List permission for Secrets.
 func (c *IPsecCSRSigningController) watchSecretChanges(endCh <-chan struct{}) error {
@@ -321,12 +286,10 @@ func (c *IPsecCSRSigningController) watchSecretChanges(endCh <-chan struct{}) er
 		}
 	}
 }
-
 func (c *IPsecCSRSigningController) fixturesWorker() {
 	for c.processNextFixtureWorkItem() {
 	}
 }
-
 func (c *IPsecCSRSigningController) enqueueCertificateSigningRequest(obj interface{}) {
 	csr, ok := obj.(*certificatesv1.CertificateSigningRequest)
 	if !ok {
@@ -334,7 +297,6 @@ func (c *IPsecCSRSigningController) enqueueCertificateSigningRequest(obj interfa
 	}
 	c.queue.Add(csr.Name)
 }
-
 func (c *IPsecCSRSigningController) syncCSR(key string) error {
 	startTime := time.Now()
 	defer func() {
@@ -388,7 +350,6 @@ func (c *IPsecCSRSigningController) syncCSR(key string) error {
 	}
 	return nil
 }
-
 func newCertificateTemplate(certReq *x509.CertificateRequest, usage []certificatesv1.KeyUsage) (*x509.Certificate, error) {
 	var sn big.Int
 	snBytes := make([]byte, 18)
@@ -414,7 +375,6 @@ func newCertificateTemplate(certReq *x509.CertificateRequest, usage []certificat
 	}
 	return template, nil
 }
-
 func (c *IPsecCSRSigningController) processNextFixtureWorkItem() bool {
 	key, quit := c.fixturesQueue.Get()
 	if quit {
@@ -430,7 +390,6 @@ func (c *IPsecCSRSigningController) processNextFixtureWorkItem() bool {
 	c.fixturesQueue.Forget(key)
 	return true
 }
-
 func (c *IPsecCSRSigningController) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
@@ -445,7 +404,6 @@ func (c *IPsecCSRSigningController) processNextWorkItem() bool {
 	c.queue.Forget(key)
 	return true
 }
-
 // generateSelfSignedRootCertificate creates self-signed CA certificates and returns the PEM encoded
 // certificates and private key.
 func generateSelfSignedRootCertificate(commonName string) ([]byte, []byte, error) {
@@ -466,7 +424,6 @@ func generateSelfSignedRootCertificate(commonName string) ([]byte, []byte, error
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 	}
-
 	caDERBytes, err := x509.CreateCertificate(rand.Reader, &caTemplate, &caTemplate, &caKey.PublicKey, caKey)
 	if err != nil {
 		return nil, nil, err

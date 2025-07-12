@@ -11,53 +11,40 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"crypto/tls"
 	"fmt"
 	"net"
 	"strings"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
-=======
-	"antrea.io/antrea/pkg/apis"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
 )
-
 const (
 	cipherSuite    = tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 // a TLS1.2 Cipher Suite
 	cipherSuiteStr = "ECDHE-RSA-AES128-GCM-SHA256"
 )
-
 var (
 	cipherSuites          = []uint16{cipherSuite}
 	curlTLS13CipherSuites = []string{"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"}
 )
-
 // TestAntreaApiserverTLSConfig tests Cipher Suite and TLSVersion config on Antrea apiserver, Controller side or Agent side.
 func TestAntreaApiserverTLSConfig(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	data.configureTLS(t, cipherSuites, "VersionTLS12")
-
 	controllerPod, err := data.getAntreaController()
 	assert.NoError(t, err, "failed to get Antrea Controller Pod")
 	controllerPodNode := controllerPod.Spec.NodeName
@@ -67,7 +54,6 @@ func TestAntreaApiserverTLSConfig(t *testing.T) {
 	nodeIPv6 := node.ipv6Addr
 	clientPodName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "client", controllerPodNode, data.testNamespace, true)
 	defer cleanupFunc()
-
 	tests := []struct {
 		name         string
 		apiserver    int
@@ -83,7 +69,6 @@ func TestAntreaApiserverTLSConfig(t *testing.T) {
 		})
 	}
 }
-
 func (data *TestData) configureTLS(t *testing.T, cipherSuites []uint16, tlsMinVersion string) {
 	var cipherSuitesStr string
 	for i, cs := range cipherSuites {
@@ -92,7 +77,6 @@ func (data *TestData) configureTLS(t *testing.T, cipherSuites []uint16, tlsMinVe
 			cipherSuitesStr = fmt.Sprintf("%s,", cipherSuitesStr)
 		}
 	}
-
 	cc := func(config *controllerconfig.ControllerConfig) {
 		config.TLSCipherSuites = cipherSuitesStr
 		config.TLSMinVersion = tlsMinVersion
@@ -105,7 +89,6 @@ func (data *TestData) configureTLS(t *testing.T, cipherSuites []uint16, tlsMinVe
 		t.Fatalf("Failed to configure Cipher Suites and TLSMinVersion: %v", err)
 	}
 }
-
 func (data *TestData) checkTLS(t *testing.T, podName string, containerName string, apiserver int, apiserverStr string, dstIPv4, dstIPv6 string) {
 	// 1. TLSMaxVersion unset, then a TLS1.3 Cipher Suite should be used.
 	stdouts := data.curlTestTLS(t, podName, containerName, false, apiserver, dstIPv4, dstIPv6)
@@ -120,7 +103,6 @@ func (data *TestData) checkTLS(t *testing.T, podName string, containerName strin
 		assert.True(t, oneTLS13CS,
 			"Cipher Suite used by %s apiserver should be a TLS1.3 one, output: %s", apiserverStr, stdout)
 	}
-
 	// 2. Set TLSMaxVersion to TLS1.2, then TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 should be used
 	stdouts = data.curlTestTLS(t, podName, containerName, true, apiserver, dstIPv4, dstIPv6)
 	for _, stdout := range stdouts {
@@ -128,7 +110,6 @@ func (data *TestData) checkTLS(t *testing.T, podName string, containerName strin
 			"Cipher Suite used by %s apiserver should be the TLS1.2 one '%s', output: %s", apiserverStr, cipherSuiteStr, stdout)
 	}
 }
-
 func (data *TestData) curlTestTLS(t *testing.T, pod string, container string, tls12 bool, port int, dstIPv4, dstIPv6 string) []string {
 	var out []string
 	for _, ip := range []string{dstIPv4, dstIPv6} {

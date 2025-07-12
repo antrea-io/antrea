@@ -11,31 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package egress
-
 import (
 	"encoding/json"
 	"fmt"
 	"net"
-
 	admv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
 	var msg string
 	allowed := true
-
 	klog.V(2).Info("Validating Egress", "request", review.Request)
 	var newObj, oldObj crdv1beta1.Egress
 	if review.Request.Object.Raw != nil {
@@ -50,7 +41,6 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 			return newAdmissionResponseForErr(err)
 		}
 	}
-
 	shouldAllow := func(oldEgress, newEgress *crdv1beta1.Egress) (bool, string) {
 		if len(newEgress.Spec.EgressIPs) > 0 {
 			return false, "spec.egressIPs is not supported yet"
@@ -89,7 +79,6 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 		}
 		return true, ""
 	}
-
 	switch review.Request.Operation {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for Egress")
@@ -102,7 +91,6 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 		klog.V(2).Info("Validating DELETE request for Egress")
 		// Always allow DELETE request.
 	}
-
 	if msg != "" {
 		result = &metav1.Status{
 			Message: msg,
@@ -113,7 +101,6 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 		Result:  result,
 	}
 }
-
 func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 	return &admv1.AdmissionResponse{
 		Result: &metav1.Status{

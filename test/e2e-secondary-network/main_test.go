@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // Package main under directory cmd parses and validates user input,
 // instantiates and initializes objects imported from pkg, and runs
 // the process
-
 package e2esecondary
-
 import (
 	"os"
 	"testing"
-
-<<<<<<< HEAD
 	antreae2e "antrea.io/antrea/v2/test/e2e"
-=======
 	antreae2e "antrea.io/antrea/test/e2e"
->>>>>>> origin/main
 )
-
 func TestMain(m *testing.M) {
 	os.Exit(antreae2e.RunTests(m))
 }

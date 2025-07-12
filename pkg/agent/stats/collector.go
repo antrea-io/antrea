@@ -11,46 +11,37 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package stats
-
 import (
 	"context"
 	"time"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/multicast"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/agent/client"
-	"antrea.io/antrea/pkg/agent/multicast"
-	"antrea.io/antrea/pkg/agent/openflow"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/util/env"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/client"
+	"antrea.io/antrea/v2/pkg/agent/multicast"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	// Period for performing stats collection and report.
 	collectPeriod = 60 * time.Second
 )
-
 // statsCollection is a collection of stats.
 type statsCollection struct {
 	// networkPolicyStats is a mapping from K8s NetworkPolicy UIDs to their traffic stats.
@@ -62,7 +53,6 @@ type statsCollection struct {
 	// multicastGroups is a map that encodes the list of Pods that has joined the multicast group.
 	multicastGroups map[string][]cpv1beta.PodReference
 }
-
 // Collector is responsible for collecting stats from the Openflow client, calculating the delta compared with the last
 // reported stats, and reporting it to the antrea-controller summary API.
 type Collector struct {
@@ -79,7 +69,6 @@ type Collector struct {
 	lastStatsCollection *statsCollection
 	multicastEnabled    bool
 }
-
 func NewCollector(antreaClientProvider client.AntreaClientProvider, ofClient openflow.Client, npQuerier querier.AgentNetworkPolicyInfoQuerier, mcQuerier *multicast.Controller) *Collector {
 	nodeName, _ := env.GetNodeName()
 	manager := &Collector{
@@ -92,18 +81,15 @@ func NewCollector(antreaClientProvider client.AntreaClientProvider, ofClient ope
 	}
 	return manager
 }
-
 // Run runs a loop that collects statistics and reports them until the provided channel is closed.
 func (m *Collector) Run(stopCh <-chan struct{}) {
 	klog.Info("Start collecting metrics")
 	ticker := time.NewTicker(collectPeriod)
 	defer ticker.Stop()
-
 	// Record the initial statistics as the base that will be used to calculate the delta.
 	// If the counters increase during antrea-agent's downtime, the delta will not be reported to the antrea-controller,
 	// it's however better than reporting the full statistics twice which could introduce greater deviations.
 	m.lastStatsCollection = m.collect()
-
 	for {
 		select {
 		case <-ticker.C:
@@ -120,7 +106,6 @@ func (m *Collector) Run(stopCh <-chan struct{}) {
 		}
 	}
 }
-
 // collect collects the stats of Openflow rules, maps them to the stats of NetworkPolicies.
 // It returns a map from NetworkPolicyReferences to their stats.
 func (m *Collector) collect() *statsCollection {
@@ -128,7 +113,6 @@ func (m *Collector) collect() *statsCollection {
 	npStatsMap := map[types.UID]*statsv1alpha1.TrafficStats{}
 	acnpStatsMap := map[types.UID]map[string]*statsv1alpha1.TrafficStats{}
 	annpStatsMap := map[types.UID]map[string]*statsv1alpha1.TrafficStats{}
-
 	for ofID, ruleStats := range ruleStatsMap {
 		rule := m.networkPolicyQuerier.GetRuleByFlowID(ofID)
 		if rule == nil {
@@ -137,7 +121,6 @@ func (m *Collector) collect() *statsCollection {
 			klog.Warningf("Cannot find NetworkPolicy Rule that has ofID %v", ofID)
 			continue
 		}
-
 		klog.V(4).Infof("Converting ofID %v to policy %s", ofID, rule.PolicyRef.ToString())
 		switch rule.PolicyRef.Type {
 		case cpv1beta.K8sNetworkPolicy:
@@ -159,7 +142,6 @@ func (m *Collector) collect() *statsCollection {
 		multicastGroups:                 multicastGroupMap,
 	}
 }
-
 func addPolicyStatsUp(statsMap map[types.UID]*statsv1alpha1.TrafficStats, ruleStats *agenttypes.RuleMetric, rule *agenttypes.PolicyRule) {
 	policyStats, exists := statsMap[rule.PolicyRef.UID]
 	if !exists {
@@ -168,7 +150,6 @@ func addPolicyStatsUp(statsMap map[types.UID]*statsv1alpha1.TrafficStats, ruleSt
 	}
 	addUp(policyStats, ruleStats)
 }
-
 func addRuleStatsUp(ruleStatsMap map[types.UID]map[string]*statsv1alpha1.TrafficStats, ruleStats *agenttypes.RuleMetric, rule *agenttypes.PolicyRule) {
 	lastRuleStats, exists := ruleStatsMap[rule.PolicyRef.UID]
 	if !exists {
@@ -182,13 +163,11 @@ func addRuleStatsUp(ruleStatsMap map[types.UID]map[string]*statsv1alpha1.Traffic
 	}
 	addUp(trafficStats, ruleStats)
 }
-
 func addUp(stats *statsv1alpha1.TrafficStats, inc *agenttypes.RuleMetric) {
 	stats.Sessions += int64(inc.Sessions)
 	stats.Packets += int64(inc.Packets)
 	stats.Bytes += int64(inc.Bytes)
 }
-
 func isIdenticalMulticastGroupMap(a, b map[string][]cpv1beta.PodReference) bool {
 	if len(a) != len(b) {
 		return false
@@ -215,14 +194,12 @@ func isIdenticalMulticastGroupMap(a, b map[string][]cpv1beta.PodReference) bool 
 	}
 	return true
 }
-
 func (m *Collector) calculateNPStats(curStatsCollection *statsCollection) (npStats, acnpStats, annpStats []cpv1beta.NetworkPolicyStats) {
 	npStats = calculateDiff(curStatsCollection.networkPolicyStats, m.lastStatsCollection.networkPolicyStats)
 	acnpStats = calculateRuleDiff(curStatsCollection.antreaClusterNetworkPolicyStats, m.lastStatsCollection.antreaClusterNetworkPolicyStats)
 	annpStats = calculateRuleDiff(curStatsCollection.antreaNetworkPolicyStats, m.lastStatsCollection.antreaNetworkPolicyStats)
 	return npStats, acnpStats, annpStats
 }
-
 func (m *Collector) calculateNodeStatsSummary(curStatsCollection *statsCollection) *cpv1beta.NodeStatsSummary {
 	var multicastGroups []cpv1beta.MulticastGroupInfo
 	multicastGroupsUpdated := false
@@ -246,7 +223,6 @@ func (m *Collector) calculateNodeStatsSummary(curStatsCollection *statsCollectio
 		Multicast:                    multicastGroups,
 	}
 }
-
 // mergeStatsWithIGMPReports merges acnpStats or annpStats with IGMP report statistics.
 // Unlike other networkpolicystats collection process, IGMP report statistics is not collected from OVS flows. It was collected during IGMP packetIn process by a local cache.
 // IGMP report statistics collected for a rule should be merged into already defined networkpolicy statistics before reporting.
@@ -271,10 +247,8 @@ func (m *Collector) mergeStatsWithIGMPReports(acnpStats, annpStats []cpv1beta.Ne
 		}
 		return originalStatsList
 	}
-
 	return mergeReportStats(multicastACNPStatsMap, acnpStats), mergeReportStats(multicastANNPStatsMap, annpStats)
 }
-
 // convertMulticastGroups converts multicastGroupMap into a slice of multicastGroups.
 // Calculating diff is not needed because we report full multicast group of the local node.
 func (m *Collector) convertMulticastGroups(multicastGroupMap map[string][]cpv1beta.PodReference) []cpv1beta.MulticastGroupInfo {
@@ -284,7 +258,6 @@ func (m *Collector) convertMulticastGroups(multicastGroupMap map[string][]cpv1be
 	}
 	return multicastGroups
 }
-
 // report calculates the delta of the stats and pushes it to the antrea-controller summary API.
 // If multicast feature gate is enabled, it also sends the full multicast group and IGMP report stats to the antrea-controller.
 func (m *Collector) report(curStatsCollection *statsCollection) error {
@@ -304,7 +277,6 @@ func (m *Collector) report(curStatsCollection *statsCollection) error {
 	}
 	return nil
 }
-
 func calculateRuleDiff(curStatsMap, lastStatsMap map[types.UID]map[string]*statsv1alpha1.TrafficStats) []cpv1beta.NetworkPolicyStats {
 	if len(curStatsMap) == 0 {
 		return nil
@@ -359,7 +331,6 @@ func calculateRuleDiff(curStatsMap, lastStatsMap map[types.UID]map[string]*stats
 	}
 	return statsList
 }
-
 func calculateDiff(curStatsMap, lastStatsMap map[types.UID]*statsv1alpha1.TrafficStats) []cpv1beta.NetworkPolicyStats {
 	if len(curStatsMap) == 0 {
 		return nil

@@ -11,36 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package grouping
-
 import (
 	"reflect"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 const informerDefaultResync = 30 * time.Second
-
 func TestGroupEntityControllerRun(t *testing.T) {
 	tests := []struct {
 		name                    string
@@ -74,7 +65,6 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			defer func() {
 				eventChanSize = originalEventChanSize
 			}()
-
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, tt.antreaPolicyEnabled)
 			var objs []runtime.Object
 			for _, pod := range tt.initialPods {
@@ -97,23 +87,19 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			c := NewGroupEntityController(index, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().ExternalEntities())
 			assert.False(t, index.HasSynced(), "GroupEntityIndex has been synced before starting InformerFactories")
-
 			informerFactory.Start(stopCh)
 			crdInformerFactory.Start(stopCh)
 			assert.False(t, index.HasSynced(), "GroupEntityIndex has been synced before starting GroupEntityController")
 			go c.groupEntityIndex.Run(stopCh)
 			go c.Run(stopCh)
-
 			assert.Eventually(t, func() bool {
 				return index.HasSynced()
 			}, time.Second, 10*time.Millisecond, "GroupEntityIndex hasn't been synced in 1 second after starting GroupEntityController")
 		})
 	}
 }
-
 func TestPodIPsIndexFunc(t *testing.T) {
 	type args struct {
 		obj interface{}

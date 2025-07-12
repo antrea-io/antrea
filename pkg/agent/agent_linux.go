@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,55 +13,43 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package agent
-
 import (
 	"context"
 	"fmt"
 	"net"
 	"time"
-
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/agent/util/ethtool"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/agent/util/ethtool"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	utilip "antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util/ethtool"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
-
 var (
 	// getInterfaceByName is meant to be overridden for testing.
 	getInterfaceByName = net.InterfaceByName
-
 	// setInterfaceARPAnnounce is meant to be overridden for testing.
 	setInterfaceARPAnnounce = util.EnsureARPAnnounceOnInterface
 )
-
 // prepareHostNetwork returns immediately on Linux.
 func (i *Initializer) prepareHostNetwork() error {
 	return nil
 }
-
 // Assuming a page cache of 4096, based on Suricata source code from L1752-L1798
 // at https://github.com/OISF/suricata/blob/49713ebaa0b8edb057d60f1cfe9126946645a848/src/source-af-packet.c#L1757C2-L1777C129.
 // The maximum supported MTU by Suricata is 32678 after calculation.
 const maxMTUSupportedBySuricata = 32678
-
 // prepareOVSBridgeForK8sNode returns immediately on Linux if connectUplinkToBridge is false.
 func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	if !i.connectUplinkToBridge {
@@ -82,16 +69,13 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	// Limitation: dynamic DNS servers will be lost after DHCP lease expired
 	uplinkNetConfig.Gateway = ""
 	uplinkNetConfig.DNSServers = ""
-
 	// Set datapathID of OVS bridge.
 	// If no datapathID configured explicitly, the reconfiguration operation will change OVS bridge datapathID
 	// and break the OpenFlow channel.
 	datapathID := util.GenerateOVSDatapathID(uplinkNetConfig.MAC.String())
-
 	if err = i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
 		return fmt.Errorf("failed to set datapath_id %s: err=%w", datapathID, err)
 	}
-
 	if hostOFPort, err := i.ovsBridgeClient.GetOFPort(uplinkNetConfig.Name, false); err == nil {
 		klog.InfoS("OVS bridge local port already exists", "name", uplinkNetConfig.Name)
 		i.nodeConfig.HostInterfaceOFPort = uint32(hostOFPort)
@@ -117,17 +101,14 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	}
 	return nil
 }
-
 // getTunnelLocalIP returns local_ip of tunnel port.
 // On linux platform, local_ip option is not needed.
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return nil
 }
-
 func getTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 	return util.GetIPNetDeviceByName(ifaceName)
 }
-
 func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	// Return immediately on Linux if connectUplinkToBridge is false.
 	if !i.connectUplinkToBridge {
@@ -136,7 +117,6 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	klog.InfoS("Bridging uplink to OVS bridge")
 	var err error
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
-
 	externalIDs := map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 	}
@@ -157,7 +137,6 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	if exists {
 		return nil
 	}
-
 	// Create uplink port.
 	uplinkPortUUID, err := i.ovsBridgeClient.CreateUplinkPort(bridgedUplinkName, int32(uplinkNetConfig.OFPort), map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
 	if err != nil {
@@ -174,7 +153,6 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	i.ifaceStore.AddInterface(uplinkInterface)
 	return nil
 }
-
 // RestoreOVSBridge returns immediately on Linux if connectUplinkToBridge is false.
 // OVS is managed by Antrea in Linux, network config must be restored to uplink before Antrea Agent shutdown.
 func (i *Initializer) RestoreOVSBridge() {
@@ -182,17 +160,14 @@ func (i *Initializer) RestoreOVSBridge() {
 		return
 	}
 	klog.InfoS("Restoring bridge config to uplink...")
-
 	if i.nodeConfig.UplinkNetConfig.Name != "" {
 		util.RestoreHostInterfaceConfiguration(i.ovsBridge, i.nodeConfig.UplinkNetConfig.Name)
 		klog.InfoS("Finished restoring bridge config to uplink...")
 	}
 }
-
 func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
 	return i.ovsBridgeClient.SetInterfaceMTU(iface, mtu)
 }
-
 func (i *Initializer) setVMNodeConfig(en *v1alpha1.ExternalNode, nodeName string) error {
 	i.nodeConfig = &config.NodeConfig{
 		Name:      nodeName,
@@ -201,22 +176,18 @@ func (i *Initializer) setVMNodeConfig(en *v1alpha1.ExternalNode, nodeName string
 	}
 	return nil
 }
-
 func (i *Initializer) prepareOVSBridgeForVM() error {
 	return i.setOVSDatapath()
 }
-
 func (i *Initializer) installVMInitialFlows() error {
 	return nil
 }
-
 // prepareL7EngineInterfaces creates two OVS internal ports. An application-aware engine will connect to OVS
 // through these two ports.
 func (i *Initializer) prepareL7EngineInterfaces() error {
 	trafficControlPortExternalIDs := map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTrafficControl,
 	}
-
 	for _, portName := range []string{config.L7RedirectTargetPortName, config.L7RedirectReturnPortName} {
 		_, exists := i.ifaceStore.GetInterface(portName)
 		if exists {
@@ -238,16 +209,13 @@ func (i *Initializer) prepareL7EngineInterfaces() error {
 		}); pollErr != nil {
 			return pollErr
 		}
-
 		ofPort, err := i.ovsBridgeClient.GetOFPort(portName, false)
 		if err != nil {
 			return err
 		}
-
 		itf := interfacestore.NewTrafficControlInterface(portName, &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort})
 		i.ifaceStore.AddInterface(itf)
 	}
-
 	targetPort, _ := i.ifaceStore.GetInterfaceByName(config.L7RedirectTargetPortName)
 	returnPort, _ := i.ifaceStore.GetInterfaceByName(config.L7RedirectReturnPortName)
 	i.l7NetworkPolicyConfig.TargetOFPort = uint32(targetPort.OFPort)
@@ -273,7 +241,6 @@ func (i *Initializer) prepareL7EngineInterfaces() error {
 	}
 	return nil
 }
-
 func (i *Initializer) setTXChecksumOffloadOnGateway() error {
 	if i.disableTXChecksumOffload {
 		if err := ethtool.EthtoolTXHWCsumOff(i.hostGateway); err != nil {

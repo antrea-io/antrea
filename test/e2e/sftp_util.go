@@ -11,35 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"fmt"
-
 	"golang.org/x/crypto/ssh"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
-=======
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
->>>>>>> origin/main
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
-
 var sftpLabels = map[string]string{"app": "sftp"}
-
 const (
 	sftpUser      = "foo"
 	sftpPassword  = "pass"
 	sftpUploadDir = "upload"
 )
-
 func genSFTPService(nodePort int32) *v1.Service {
 	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -59,7 +49,6 @@ func genSFTPService(nodePort int32) *v1.Service {
 		},
 	}
 }
-
 func genSSHKeysSecret(ed25519Key, rsaKey []byte) *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -72,7 +61,6 @@ func genSSHKeysSecret(ed25519Key, rsaKey []byte) *v1.Secret {
 		},
 	}
 }
-
 func genSFTPDeployment() *appsv1.Deployment {
 	replicas := int32(1)
 	return &appsv1.Deployment{
@@ -137,7 +125,6 @@ func genSFTPDeployment() *appsv1.Deployment {
 		},
 	}
 }
-
 func (data *TestData) deploySFTPServer(ctx context.Context, nodePort int32) (*appsv1.Deployment, *v1.Service, []ssh.PublicKey, error) {
 	ed25519PubKey, ed25519PrivateKey, err := sftptesting.GenerateEd25519Key()
 	if err != nil {
@@ -148,7 +135,6 @@ func (data *TestData) deploySFTPServer(ctx context.Context, nodePort int32) (*ap
 		return nil, nil, nil, fmt.Errorf("failed to generate RSA key: %w", err)
 	}
 	pubKeys := []ssh.PublicKey{ed25519PubKey, rsaPubKey}
-
 	_, err = data.clientset.CoreV1().Secrets(data.testNamespace).Create(ctx, genSSHKeysSecret(ed25519PrivateKey, rsaPrivateKey), metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create Secret for SSH private keys: %w", err)
@@ -161,6 +147,5 @@ func (data *TestData) deploySFTPServer(ctx context.Context, nodePort int32) (*ap
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create SFTP Service: %w", err)
 	}
-
 	return deployment, svc, pubKeys, nil
 }

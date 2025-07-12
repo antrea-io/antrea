@@ -11,41 +11,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package externalnode
-
 import (
 	"fmt"
 	"net"
 	"testing"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 )
-
 var (
 	eeNamespace = "eeNamespace"
 	hostIfName  = "hostIfName"
@@ -65,7 +57,6 @@ var (
 		},
 	}
 )
-
 func TestUpdateExternalNode(t *testing.T) {
 	iface := &net.Interface{
 		Index:        1,
@@ -219,7 +210,6 @@ func TestUpdateExternalNode(t *testing.T) {
 			defer mockConfigureLinkAddresses(nil)()
 			defer mockConfigureLinkRoutes(nil)()
 			defer mockLinkByName(t, tt.linkByNameCalledTimes)()
-
 			controller := gomock.NewController(t)
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 			mockOFClient := openflowtest.NewMockClient(controller)
@@ -238,7 +228,6 @@ func TestUpdateExternalNode(t *testing.T) {
 		})
 	}
 }
-
 func TestAddInterface(t *testing.T) {
 	_, cidr, _ := net.ParseCIDR("172.16.1.0/24")
 	for _, tt := range []struct {
@@ -374,7 +363,6 @@ func TestAddInterface(t *testing.T) {
 			defer mockLinkSetUp(nil)()
 			defer mockLinkSetMTU(nil)()
 			defer mockLinkByName(t, tt.linkByNameCalledTimes)()
-
 			controller := gomock.NewController(t)
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 			mockOFClient := openflowtest.NewMockClient(controller)
@@ -387,7 +375,6 @@ func TestAddInterface(t *testing.T) {
 		})
 	}
 }
-
 func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -395,7 +382,6 @@ func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(controller)
 	c := newExternalNodeController(t, controller, mockOVSBridgeClient, mockOFClient, mockOVSCtlClient, mockIfaceStore)
-
 	iface := &net.Interface{
 		Index:        1,
 		HardwareAddr: net.HardwareAddr{0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
@@ -423,7 +409,6 @@ func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 	defer mockLinkSetUp(nil)()
 	defer mockLinkSetMTU(nil)()
 	defer mockLinkByName(t, 2)()
-
 	mockOVSBridgeClient.EXPECT().CreatePort(uplinkName, uplinkName, map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
 	}).Return(uplinkUUID, nil)
@@ -431,7 +416,6 @@ func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 	mockOVSBridgeClient.EXPECT().GetOFPort(uplinkName, false).Times(1).Return(uplinkOFPort, nil)
 	mockOVSBridgeClient.EXPECT().GetOFPort(hostIfName, false).Times(1).Return(hostOFPort, nil)
 	mockOFClient.EXPECT().InstallVMUplinkFlows(hostIfName, hostOFPort, uplinkOFPort).Times(1)
-
 	ips := make([]net.IP, 0, len(ipAddrs))
 	for _, ip := range ipAddrs {
 		ips = append(ips, net.ParseIP(ip))
@@ -457,7 +441,6 @@ func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedHostIFConfig, hostIFConfig)
 }
-
 func TestDeleteExternalNode(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -504,7 +487,6 @@ func TestDeleteExternalNode(t *testing.T) {
 	c.deleteExternalNode()
 	assert.Nil(t, c.syncedExternalNode)
 }
-
 func TestMoveIFConfigurations(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -562,7 +544,6 @@ func TestMoveIFConfigurations(t *testing.T) {
 		})
 	}
 }
-
 func mockConfigureLinkRoutes(configureLinkRoutesErr error) func() {
 	originalConfigureLinkRoutes := configureLinkRoutes
 	configureLinkRoutes = func(link netlink.Link, routes []interface{}) error {
@@ -572,7 +553,6 @@ func mockConfigureLinkRoutes(configureLinkRoutesErr error) func() {
 		configureLinkRoutes = originalConfigureLinkRoutes
 	}
 }
-
 func mockConfigureLinkAddresses(configureLinkAddressesErr error) func() {
 	originalRemoveLinkRoutes := configureLinkAddresses
 	configureLinkAddresses = func(idx int, ipNets []*net.IPNet) error {
@@ -582,7 +562,6 @@ func mockConfigureLinkAddresses(configureLinkAddressesErr error) func() {
 		configureLinkAddresses = originalRemoveLinkRoutes
 	}
 }
-
 func mockRemoveLinkRoutes(removeLinkRoutesErr error) func() {
 	originalRemoveLinkRoutes := removeLinkRoutes
 	removeLinkRoutes = func(link netlink.Link) error {
@@ -592,7 +571,6 @@ func mockRemoveLinkRoutes(removeLinkRoutesErr error) func() {
 		removeLinkRoutes = originalRemoveLinkRoutes
 	}
 }
-
 func mockRemoveLinkIPs(removeLinkIPsErr error) func() {
 	originalRemoveLinkIPs := removeLinkIPs
 	removeLinkIPs = func(link netlink.Link) error {
@@ -602,7 +580,6 @@ func mockRemoveLinkIPs(removeLinkIPsErr error) func() {
 		removeLinkIPs = originalRemoveLinkIPs
 	}
 }
-
 func mockLinkSetUp(linkSetUpErr error) func() {
 	originalLinkSetUp := linkSetUp
 	linkSetUp = func(link netlink.Link) error {
@@ -612,7 +589,6 @@ func mockLinkSetUp(linkSetUpErr error) func() {
 		linkSetUp = originalLinkSetUp
 	}
 }
-
 func mockLinkSetMTU(linkSetMTUErr error) func() {
 	originalLinkSetMTU := linkSetMTU
 	linkSetMTU = func(link netlink.Link, mtu int) error {
@@ -622,7 +598,6 @@ func mockLinkSetMTU(linkSetMTUErr error) func() {
 		linkSetMTU = originalLinkSetMTU
 	}
 }
-
 func mockLinkByName(t *testing.T, calledTimes int) func() {
 	originalLinkByName := linkByName
 	counter := 0
@@ -637,7 +612,6 @@ func mockLinkByName(t *testing.T, calledTimes int) func() {
 		}
 	}
 }
-
 func mockHostInterfaceExists(existingIfaces map[string]bool) func() {
 	originalHostInterfaceExists := hostInterfaceExists
 	hostInterfaceExists = func(ifName string) bool {

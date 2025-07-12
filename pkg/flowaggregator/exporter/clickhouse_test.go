@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"database/sql"
 	"testing"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/clickhouseclient"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
-=======
-	"antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
-	"antrea.io/antrea/pkg/flowaggregator/options"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/clickhouseclient"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 )
-
 func TestClickHouse_UpdateOptions(t *testing.T) {
 	t.Setenv("CH_USERNAME", "default")
 	t.Setenv("CH_PASSWORD", "default")
@@ -64,7 +56,6 @@ func TestClickHouse_UpdateOptions(t *testing.T) {
 	clickHouseExporter.Start()
 	assert.Equal(t, clickHouseExporter.chExportProcess.GetClickHouseConfig(), chConfig)
 	assert.Equal(t, clickHouseExporter.chExportProcess.GetCommitInterval().String(), "8s")
-
 	compress = true
 	newOpt := &options.Options{
 		Config: &flowaggregator.FlowAggregatorConfig{

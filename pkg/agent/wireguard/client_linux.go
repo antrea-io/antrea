@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package wireguard
-
 import (
 	"errors"
 	"fmt"
@@ -24,26 +21,18 @@ import (
 	"net"
 	"strconv"
 	"sync"
-
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/util"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/util"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/util"
 )
-
 const defaultWireGuardInterfaceName = "antrea-wg0"
-
 var zeroKey = wgtypes.Key{}
-
 // wgctrlClient is an interface to mock wgctrl.Client
 type wgctrlClient interface {
 	io.Closer
@@ -51,16 +40,13 @@ type wgctrlClient interface {
 	Device(name string) (*wgtypes.Device, error)
 	ConfigureDevice(name string, config wgtypes.Config) error
 }
-
 var _ Interface = (*client)(nil)
-
 var (
 	linkAdd                    = netlink.LinkAdd
 	linkSetUp                  = netlink.LinkSetUp
 	linkSetMTU                 = netlink.LinkSetMTU
 	utilConfigureLinkAddresses = util.ConfigureLinkAddresses
 )
-
 type client struct {
 	wgClient                wgctrlClient
 	nodeName                string
@@ -69,7 +55,6 @@ type client struct {
 	wireGuardConfig         *config.WireGuardConfig
 	gatewayConfig           *config.GatewayConfig
 }
-
 func New(nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (Interface, error) {
 	wgClient, err := wgctrl.New()
 	if err != nil {
@@ -87,7 +72,6 @@ func New(nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig)
 	}
 	return c, nil
 }
-
 func (client *client) Init(ipv4 net.IP, ipv6 net.IP) (string, error) {
 	link := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: client.wireGuardConfig.Name, MTU: client.wireGuardConfig.MTU}}
 	err := linkAdd(link)
@@ -159,10 +143,8 @@ func (client *client) Init(ipv4 net.IP, ipv6 net.IP) (string, error) {
 		ListenPort:   &client.wireGuardConfig.Port,
 		ReplacePeers: false,
 	}
-
 	return client.privateKey.PublicKey().String(), client.wgClient.ConfigureDevice(client.wireGuardConfig.Name, cfg)
 }
-
 func (client *client) RemoveStalePeers(currentPeerPublickeys map[string]string) error {
 	wgdev, err := client.wgClient.Device(client.wireGuardConfig.Name)
 	if err != nil {
@@ -172,7 +154,6 @@ func (client *client) RemoveStalePeers(currentPeerPublickeys map[string]string) 
 	for _, peer := range wgdev.Peers {
 		restoredPeerPublicKeys[peer.PublicKey] = struct{}{}
 	}
-
 	for nodeName, pubKey := range currentPeerPublickeys {
 		pubKey, err := wgtypes.ParseKey(pubKey)
 		if err != nil {
@@ -193,22 +174,18 @@ func (client *client) RemoveStalePeers(currentPeerPublickeys map[string]string) 
 	}
 	return nil
 }
-
 func (client *client) UpdatePeer(nodeName, publicKeyString string, peerNodeIP net.IP, podCIDRs []*net.IPNet) error {
 	pubKey, err := wgtypes.ParseKey(publicKeyString)
 	if err != nil {
 		return err
 	}
 	var allowedIPs []net.IPNet
-
 	if peerNodeIP.To16() == nil {
 		return fmt.Errorf("peer Node IP is not valid: %s", peerNodeIP.String())
 	}
-
 	for _, cidr := range podCIDRs {
 		allowedIPs = append(allowedIPs, *cidr)
 	}
-
 	if key, exist := client.peerPublicKeyByNodeName.Load(nodeName); exist {
 		cachedPeerPubKey := key.(wgtypes.Key)
 		if cachedPeerPubKey != pubKey {
@@ -237,14 +214,12 @@ func (client *client) UpdatePeer(nodeName, publicKeyString string, peerNodeIP ne
 	}
 	return client.wgClient.ConfigureDevice(client.wireGuardConfig.Name, cfg)
 }
-
 func (client *client) deletePeerByPublicKey(pubKey wgtypes.Key) error {
 	cfg := wgtypes.Config{Peers: []wgtypes.PeerConfig{
 		{PublicKey: pubKey, Remove: true},
 	}}
 	return client.wgClient.ConfigureDevice(client.wireGuardConfig.Name, cfg)
 }
-
 func (client *client) DeletePeer(nodeName string) error {
 	key, exist := client.peerPublicKeyByNodeName.Load(nodeName)
 	if !exist {
@@ -257,7 +232,6 @@ func (client *client) DeletePeer(nodeName string) error {
 	client.peerPublicKeyByNodeName.Delete(nodeName)
 	return nil
 }
-
 func (client *client) CleanUp() error {
 	if err := netlink.LinkDel(&netlink.Device{
 		LinkAttrs: netlink.LinkAttrs{

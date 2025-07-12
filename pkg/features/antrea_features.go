@@ -11,59 +11,45 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package features
-
 import (
 	k8sruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/component-base/featuregate"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/runtime"
-=======
-	"antrea.io/antrea/pkg/util/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
-
 // When editing this file, make sure you edit the documentation as well to keep
 // it consistent: /docs/feature-gates.md
-
 const (
 	// Every feature gate should add constant here following this template:
 	//
 	// alpha: vX.Y
 	// beta: vX.Y
 	// MyFeature featuregate.Feature = "MyFeature"
-
 	// alpha: v0.8
 	// beta: v1.0
 	// Enable support for ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
 	AntreaPolicy featuregate.Feature = "AntreaPolicy"
-
 	// alpha: v0.13
 	// beta: v1.11
 	// GA: v1.14
 	// Enable EndpointSlice support in AntreaProxy. If AntreaProxy is not enabled, this
 	// flag will not take effect.
 	EndpointSlice featuregate.Feature = "EndpointSlice"
-
 	// alpha: v1.8
 	// beta: v1.12
 	// Enable TopologyAwareHints in AntreaProxy. If EndpointSlice is not enabled, this
 	// flag will not take effect.
 	TopologyAwareHints featuregate.Feature = "TopologyAwareHints"
-
 	// beta: v2.2
 	// Enables trafficDistribution in AntreaProxy. If EndpointSlice is not enabled, this
 	// flag will not take effect.
 	ServiceTrafficDistribution featuregate.Feature = "ServiceTrafficDistribution"
-
 	// alpha: v1.13
 	// beta: v2.1
 	// Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy.
 	CleanupStaleUDPSvcConntrack featuregate.Feature = "CleanupStaleUDPSvcConntrack"
-
 	// alpha: v0.8
 	// beta: v0.11
 	// GA: v1.14
@@ -71,128 +57,100 @@ const (
 	// It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
 	// Service traffic.
 	AntreaProxy featuregate.Feature = "AntreaProxy"
-
 	// alpha: v0.8
 	// beta: v0.11
 	// Allows to trace path from a generated packet.
 	Traceflow featuregate.Feature = "Traceflow"
-
 	// alpha: v2.2
 	// Allows to capture packets for a flow.
 	PacketCapture featuregate.Feature = "PacketCapture"
-
 	// alpha: v0.9
 	// Flow exporter exports IPFIX flow records of Antrea flows seen in conntrack module.
 	FlowExporter featuregate.Feature = "FlowExporter"
-
 	// alpha: v0.10
 	// beta: v1.2
 	// Enable collecting and exposing NetworkPolicy statistics.
 	NetworkPolicyStats featuregate.Feature = "NetworkPolicyStats"
-
 	// alpha: v0.13
 	// beta: v1.4
 	// GA: v1.14
 	// Expose Pod ports through NodePort
 	NodePortLocal featuregate.Feature = "NodePortLocal"
-
 	// alpha: v1.0
 	// beta: v1.6
 	// Enable controlling SNAT IPs of Pod egress traffic.
 	Egress featuregate.Feature = "Egress"
-
 	// alpha: v1.4
 	// beta: v1.12
 	// Run Kubernetes NodeIPAM with Antrea.
 	NodeIPAM featuregate.Feature = "NodeIPAM"
-
 	// alpha: v1.4
 	// Enable AntreaIPAM, which is required by bridging mode Pods and secondary network IPAM.
 	AntreaIPAM featuregate.Feature = "AntreaIPAM"
-
 	// alpha: v1.5
 	// beta: v1.12
 	// Enable Multicast.
 	Multicast featuregate.Feature = "Multicast"
-
 	// alpha: v1.7
 	// Enable Multicluster.
 	Multicluster featuregate.Feature = "Multicluster"
-
 	// alpha: v1.5
 	// Enable Secondary interface feature for Antrea.
 	SecondaryNetwork featuregate.Feature = "SecondaryNetwork"
-
 	// alpha: v1.5
 	// beta: v2.3
 	// Enable controlling Services with ExternalIP.
 	ServiceExternalIP featuregate.Feature = "ServiceExternalIP"
-
 	// alpha: v1.7
 	// Enable mirroring or redirecting the traffic Pods send or receive.
 	TrafficControl featuregate.Feature = "TrafficControl"
-
 	// alpha: v1.7
 	// Enable certificate-based authentication for IPSec tunnel.
 	IPsecCertAuth featuregate.Feature = "IPsecCertAuth"
-
 	// alpha: v1.8
 	// Enable running agent on an unmanaged VM/BM.
 	ExternalNode featuregate.Feature = "ExternalNode"
-
 	// alpha: v1.10
 	// Enable collecting support bundle files with SupportBundleCollection CRD.
 	SupportBundleCollection featuregate.Feature = "SupportBundleCollection"
-
 	// alpha: v1.10
 	// Enable users to protect their applications by specifying how they are allowed to communicate with others, taking
 	// into account application context.
 	L7NetworkPolicy featuregate.Feature = "L7NetworkPolicy"
-
 	// alpha: v1.13
 	// Allow users to specify the load balancer mode as DSR (Direct Server Return).
 	LoadBalancerModeDSR featuregate.Feature = "LoadBalancerModeDSR"
-
 	// alpha: v1.13
 	// Enable the AdminNetworkPolicy APIs
 	// https://github.com/kubernetes-sigs/network-policy-api
 	AdminNetworkPolicy featuregate.Feature = "AdminNetworkPolicy"
-
 	// alpha: v1.14
 	// Enable Egress traffic shaping.
 	EgressTrafficShaping featuregate.Feature = "EgressTrafficShaping"
-
 	// alpha: v1.15
 	// beta: v2.3
 	// Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
 	EgressSeparateSubnet featuregate.Feature = "EgressSeparateSubnet"
-
 	// alpha: v1.15
 	// Allows users to apply ClusterNetworkPolicy to Kubernetes Nodes.
 	NodeNetworkPolicy featuregate.Feature = "NodeNetworkPolicy"
-
 	// alpha: v1.15
 	// Enable layer 7 flow export on Pods and Namespaces
 	L7FlowExporter featuregate.Feature = "L7FlowExporter"
-
 	// alpha: v2.1
 	// Enable the NodeLatencyMonitor feature.
 	NodeLatencyMonitor featuregate.Feature = "NodeLatencyMonitor"
-
 	// alpha: v2.1
 	// Allow users to initiate BGP process on selected Kubernetes Nodes and advertise Service IPs, Pod IPs and Egress
 	// IPs to remote BGP peers.
 	BGPPolicy featuregate.Feature = "BGPPolicy"
 )
-
 var (
 	// DefaultMutableFeatureGate is a mutable version of DefaultFeatureGate.
 	DefaultMutableFeatureGate featuregate.MutableFeatureGate = featuregate.NewFeatureGate()
-
 	// DefaultFeatureGate is a shared global FeatureGate.
 	// The feature gate should be modified via DefaultMutableFeatureGate.
 	DefaultFeatureGate featuregate.FeatureGate = DefaultMutableFeatureGate
-
 	// DefaultAntreaFeatureGates consists of all known Antrea-specific feature keys.
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
@@ -229,7 +187,6 @@ var (
 		L7FlowExporter:              {Default: false, PreRelease: featuregate.Alpha},
 		NodeLatencyMonitor:          {Default: false, PreRelease: featuregate.Alpha},
 	}
-
 	// AgentGates consists of all known feature gates for the Antrea Agent.
 	// When adding a new feature gate that applies to the Antrea Agent, please also add it here.
 	AgentGates = sets.New[featuregate.Feature](
@@ -263,7 +220,6 @@ var (
 		L7FlowExporter,
 		NodeLatencyMonitor,
 	)
-
 	// ControllerGates consists of all known feature gates for the Antrea Controller.
 	// When adding a new feature gate that applies to the Antrea Controller, please also add it here.
 	ControllerGates = sets.New[featuregate.Feature](
@@ -281,7 +237,6 @@ var (
 		SupportBundleCollection,
 		Traceflow,
 	)
-
 	// UnsupportedFeaturesOnWindows records the features not supported on
 	// a Windows Node. Antrea Agent on a Windows Node checks the enabled
 	// features, and fails the startup if an unsupported feature is enabled.
@@ -327,7 +282,6 @@ var (
 		AdminNetworkPolicy:      {},
 	}
 )
-
 func init() {
 	if runtime.IsWindowsPlatform() {
 		for f := range unsupportedFeaturesOnWindows {
@@ -342,7 +296,6 @@ func init() {
 	}
 	k8sruntime.Must(DefaultMutableFeatureGate.Add(DefaultAntreaFeatureGates))
 }
-
 // SupportedOnWindows checks whether a feature is supported on a Windows Node.
 func SupportedOnWindows(feature featuregate.Feature) bool {
 	_, exists := DefaultAntreaFeatureGates[feature]
@@ -352,7 +305,6 @@ func SupportedOnWindows(feature featuregate.Feature) bool {
 	_, exists = unsupportedFeaturesOnWindows[feature]
 	return !exists
 }
-
 // SupportedOnExternalNode checks whether a feature is supported on an external Node.
 func SupportedOnExternalNode(feature featuregate.Feature) bool {
 	_, exists := DefaultAntreaFeatureGates[feature]
@@ -362,14 +314,12 @@ func SupportedOnExternalNode(feature featuregate.Feature) bool {
 	_, exists = supportedFeaturesOnExternalNode[feature]
 	return exists
 }
-
 func GetVersion(version string) string {
 	if version == "" {
 		version = "GA"
 	}
 	return version
 }
-
 func GetStatus(status bool) string {
 	if status {
 		return "Enabled"

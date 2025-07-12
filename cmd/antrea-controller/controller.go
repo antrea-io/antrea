@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"context"
 	"fmt"
@@ -21,7 +19,6 @@ import (
 	"os"
 	"path"
 	"time"
-
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -39,8 +36,6 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	netutils "k8s.io/utils/net"
 	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
-
-<<<<<<< HEAD
 	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/apiserver"
@@ -77,52 +72,48 @@ import (
 	"antrea.io/antrea/v2/pkg/version"
 	"antrea.io/antrea/v2/third_party/ipam/nodeipam"
 	"antrea.io/antrea/v2/third_party/ipam/nodeipam/ipam"
-=======
-	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/apiserver"
-	"antrea.io/antrea/pkg/apiserver/certificate"
-	"antrea.io/antrea/pkg/apiserver/openapi"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	"antrea.io/antrea/pkg/clusteridentity"
-	"antrea.io/antrea/pkg/controller/certificatesigningrequest"
-	"antrea.io/antrea/pkg/controller/egress"
-	egressstore "antrea.io/antrea/pkg/controller/egress/store"
-	"antrea.io/antrea/pkg/controller/externalippool"
-	"antrea.io/antrea/pkg/controller/externalnode"
-	"antrea.io/antrea/pkg/controller/grouping"
-	antreaipam "antrea.io/antrea/pkg/controller/ipam"
-	"antrea.io/antrea/pkg/controller/labelidentity"
-	"antrea.io/antrea/pkg/controller/metrics"
-	"antrea.io/antrea/pkg/controller/networkpolicy"
-	"antrea.io/antrea/pkg/controller/networkpolicy/store"
-	"antrea.io/antrea/pkg/controller/querier"
-	"antrea.io/antrea/pkg/controller/serviceexternalip"
-	"antrea.io/antrea/pkg/controller/stats"
-	"antrea.io/antrea/pkg/controller/supportbundlecollection"
-	supportbundlecollectionstore "antrea.io/antrea/pkg/controller/supportbundlecollection/store"
-	"antrea.io/antrea/pkg/controller/traceflow"
-	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/log"
-	"antrea.io/antrea/pkg/monitor"
-	"antrea.io/antrea/pkg/signals"
-	"antrea.io/antrea/pkg/util/cipher"
-	"antrea.io/antrea/pkg/util/env"
-	"antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/version"
+	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apiserver"
+	"antrea.io/antrea/v2/pkg/apiserver/certificate"
+	"antrea.io/antrea/v2/pkg/apiserver/openapi"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/clusteridentity"
+	"antrea.io/antrea/v2/pkg/controller/certificatesigningrequest"
+	"antrea.io/antrea/v2/pkg/controller/egress"
+	egressstore "antrea.io/antrea/v2/pkg/controller/egress/store"
+	"antrea.io/antrea/v2/pkg/controller/externalippool"
+	"antrea.io/antrea/v2/pkg/controller/externalnode"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	antreaipam "antrea.io/antrea/v2/pkg/controller/ipam"
+	"antrea.io/antrea/v2/pkg/controller/labelidentity"
+	"antrea.io/antrea/v2/pkg/controller/metrics"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/v2/pkg/controller/querier"
+	"antrea.io/antrea/v2/pkg/controller/serviceexternalip"
+	"antrea.io/antrea/v2/pkg/controller/stats"
+	"antrea.io/antrea/v2/pkg/controller/supportbundlecollection"
+	supportbundlecollectionstore "antrea.io/antrea/v2/pkg/controller/supportbundlecollection/store"
+	"antrea.io/antrea/v2/pkg/controller/traceflow"
+	"antrea.io/antrea/v2/pkg/features"
+	"antrea.io/antrea/v2/pkg/log"
+	"antrea.io/antrea/v2/pkg/monitor"
+	"antrea.io/antrea/v2/pkg/signals"
+	"antrea.io/antrea/v2/pkg/util/cipher"
+	"antrea.io/antrea/v2/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/version"
 	"antrea.io/antrea/third_party/ipam/nodeipam"
 	"antrea.io/antrea/third_party/ipam/nodeipam/ipam"
->>>>>>> origin/main
 )
-
 const (
 	// informerDefaultResync is the default resync period if a handler doesn't specify one.
 	// Use the same default value as kube-controller-manager:
 	// https://github.com/kubernetes/kubernetes/blob/release-1.17/pkg/controller/apis/config/v1alpha1/defaults.go#L120
 	informerDefaultResync = 12 * time.Hour
-
 	// serverMinWatchTimeout determines the timeout allocated to watches from Antrea
 	// clients. Each watch will be allocated a random timeout between this value and twice this
 	// value, to help randomly distribute reconnections over time.
@@ -135,7 +126,6 @@ const (
 	// production.
 	serverMinWatchTimeout = 2 * time.Hour
 )
-
 var allowedPaths = []string{
 	"/healthz",
 	"/livez",
@@ -159,7 +149,6 @@ var allowedPaths = []string{
 	"/convert/clustergroup",
 	"/convert/ippool",
 }
-
 // run starts Antrea Controller with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.InfoS("Starting Antrea Controller", "version", version.GetFullVersion())
@@ -193,23 +182,18 @@ func run(o *Options) error {
 	ipPoolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
 	adminNPInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
 	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
-
 	// Add IP-Pod index. Each Pod has no more than 2 IPs, the extra overhead is constant and acceptable.
 	// @tnqn evaluated the performance without/with IP index is 3us vs 4us per pod, i.e. 300ms vs 400ms for 100k Pods.
 	podInformer.Informer().AddIndexers(cache.Indexers{grouping.PodIPsIndex: grouping.PodIPsIndexFunc})
-
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		eeInformer.Informer().AddIndexers(cache.Indexers{grouping.ExternalEntityIPsIndex: grouping.ExternalEntityIPsIndexFunc})
 	}
-
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
 		env.GetAntreaNamespace(),
 		clusteridentity.DefaultClusterIdentityConfigMapName,
 		client,
 	)
-
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
-
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
 	appliedToGroupStore := store.NewAppliedToGroupStore()
@@ -239,31 +223,24 @@ func run(o *Options) error {
 		networkPolicyStore,
 		groupStore,
 		enableMulticlusterNP)
-
 	var externalNodeController *externalnode.ExternalNodeController
 	if features.DefaultFeatureGate.Enabled(features.ExternalNode) {
 		externalNodeController = externalnode.NewExternalNodeController(crdClient, externalNodeInformer, eeInformer)
 	}
-
 	var bundleCollectionController *supportbundlecollection.Controller
 	bundleCollectionStore := supportbundlecollectionstore.NewSupportBundleCollectionStore()
 	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
 		bundleCollectionInformer := crdInformerFactory.Crd().V1alpha1().SupportBundleCollections()
 		bundleCollectionController = supportbundlecollection.NewSupportBundleCollectionController(client, crdClient, bundleCollectionInformer, nodeInformer, externalNodeInformer, bundleCollectionStore)
 	}
-
 	var networkPolicyStatusController *networkpolicy.StatusController
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		networkPolicyStatusController = networkpolicy.NewStatusController(crdClient, networkPolicyStore, acnpInformer, annpInformer)
 	}
-
 	endpointQuerier := networkpolicy.NewEndpointQuerier(networkPolicyController)
-
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
-
 	externalNodeEnabled := features.DefaultFeatureGate.Enabled(features.ExternalNode)
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, externalNodeInformer, controllerQuerier, externalNodeEnabled)
-
 	var egressController *egress.EgressController
 	var externalIPPoolController *externalippool.ExternalIPPoolController
 	var externalIPController *serviceexternalip.ServiceExternalIPController
@@ -272,7 +249,6 @@ func run(o *Options) error {
 			crdClient, externalIPPoolInformer,
 		)
 	}
-
 	var csrApprovingController *certificatesigningrequest.CSRApprovingController
 	var csrSigningController *certificatesigningrequest.IPsecCSRSigningController
 	var csrInformer cache.SharedIndexInformer
@@ -282,38 +258,31 @@ func run(o *Options) error {
 			listOptions.FieldSelector = fields.OneTermEqualSelector("spec.signerName", apis.AntreaIPsecCSRSignerName).String()
 		})
 		csrLister = csrlisters.NewCertificateSigningRequestLister(csrInformer.GetIndexer())
-
 		if *o.config.IPsecCSRSignerConfig.AutoApprove {
 			csrApprovingController = certificatesigningrequest.NewCSRApprovingController(client, csrInformer, csrLister)
 		}
 		csrSigningController = certificatesigningrequest.NewIPsecCSRSigningController(client, csrInformer, csrLister, *o.config.IPsecCSRSignerConfig.SelfSignedCA)
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController = egress.NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPPoolController, egressGroupStore)
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPController = serviceexternalip.NewServiceExternalIPController(client, serviceInformer, externalIPPoolController)
 	}
-
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, tfInformer)
 	}
-
 	// statsAggregator takes stats summaries from antrea-agents, aggregates them, and serves the Stats APIs with the
 	// aggregated data. For now it's only used for NetworkPolicy stats.
 	var statsAggregator *stats.Aggregator
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		statsAggregator = stats.NewAggregator(networkPolicyInformer, acnpInformer, annpInformer)
 	}
-
 	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)
 	if err != nil {
 		return fmt.Errorf("error generating Cipher Suite list: %v", err)
 	}
-
 	var antreaIPAMController *antreaipam.AntreaIPAMController
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 		antreaIPAMController = antreaipam.NewAntreaIPAMController(crdClient,
@@ -322,7 +291,6 @@ func run(o *Options) error {
 			podInformer,
 			statefulSetInformer)
 	}
-
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		o.config.ClientCAFile,
 		client,
@@ -356,12 +324,10 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating API server: %v", err)
 	}
-
 	err = apiserver.CleanupDeprecatedAPIServices(aggregatorClient)
 	if err != nil {
 		return fmt.Errorf("failed to clean up the deprecated APIServices: %v", err)
 	}
-
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
@@ -371,9 +337,7 @@ func run(o *Options) error {
 	// stopCh is closed.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	log.StartLogFileNumberMonitor(stopCh)
-
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
 	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
@@ -383,43 +347,31 @@ func run(o *Options) error {
 		//  watching and handles policy events.
 		policyInformerFactory.Start(stopCh)
 	}
-
 	go clusterIdentityAllocator.Run(stopCh)
-
 	go controllerMonitor.Run(stopCh)
-
 	// It starts dispatching group updates to consumers, should start individually.
 	// If it's not running, adding Pods/Entities to groupEntityIndex may be blocked because of full channel.
 	go groupEntityIndex.Run(stopCh)
-
 	go groupEntityController.Run(stopCh)
-
 	if enableMulticlusterNP {
 		mcInformerFactoty := mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
 		labelIdentityInformer := mcInformerFactoty.Multicluster().V1alpha1().LabelIdentities()
 		labelIdentityController := labelidentity.NewLabelIdentityController(labelIdentityIndex, labelIdentityInformer)
 		mcInformerFactoty.Start(stopCh)
-
 		go labelIdentityIndex.Run(stopCh)
 		go labelIdentityController.Run(stopCh)
 	}
-
 	go networkPolicyController.Run(stopCh)
-
 	go apiServer.Run(ctx)
-
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		go statsAggregator.Run(stopCh)
 	}
-
 	if *o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go traceflowController.Run(stopCh)
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		go networkPolicyStatusController.Run(stopCh)
 	}
@@ -440,31 +392,24 @@ func run(o *Options) error {
 			return fmt.Errorf("failed to initialize node IPAM controller: %v", err)
 		}
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPPoolController.Run(stopCh)
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		go egressController.Run(stopCh)
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPController.Run(stopCh)
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.ExternalNode) {
 		go externalNodeController.Run(stopCh)
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
 		go bundleCollectionController.Run(stopCh)
 	}
-
 	if antreaIPAMController != nil {
 		go antreaIPAMController.Run(stopCh)
 	}
-
 	if features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
 		go csrInformer.Run(stopCh)
 		if *o.config.IPsecCSRSignerConfig.AutoApprove {
@@ -472,15 +417,12 @@ func run(o *Options) error {
 		}
 		go csrSigningController.Run(stopCh)
 	}
-
 	<-stopCh
 	klog.InfoS("Stopping Antrea Controller")
 	return nil
 }
-
 func getNodeCIDRMaskSizes(clusterCIDRs []*net.IPNet, maskSizeIPv4, maskSizeIPv6 int) []int {
 	nodeMaskCIDRs := make([]int, len(clusterCIDRs))
-
 	for idx, clusterCIDR := range clusterCIDRs {
 		if netutils.IsIPv6CIDR(clusterCIDR) {
 			nodeMaskCIDRs[idx] = maskSizeIPv6
@@ -490,7 +432,6 @@ func getNodeCIDRMaskSizes(clusterCIDRs []*net.IPNet, maskSizeIPv4, maskSizeIPv6 
 	}
 	return nodeMaskCIDRs
 }
-
 func startNodeIPAM(client clientset.Interface,
 	nodeInformer coreinformers.NodeInformer,
 	clusterCIDRs []*net.IPNet,
@@ -499,7 +440,6 @@ func startNodeIPAM(client clientset.Interface,
 	nodeCIDRMaskSizeIPv4 int,
 	nodeCIDRMaskSizeIPv6 int,
 	stopCh <-chan struct{}) error {
-
 	nodeCIDRMaskSizes := getNodeCIDRMaskSizes(clusterCIDRs, nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6)
 	nodeIPAM, err := nodeipam.NewNodeIpamController(
 		nodeInformer,
@@ -516,7 +456,6 @@ func startNodeIPAM(client clientset.Interface,
 	go nodeIPAM.Run(stopCh)
 	return nil
 }
-
 func createAPIServerConfig(kubeconfig string,
 	clientCAFile string,
 	client clientset.Interface,
@@ -546,12 +485,10 @@ func createAPIServerConfig(kubeconfig string,
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
-
 	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, apiserver.DefaultCAConfig())
 	if err != nil {
 		return nil, fmt.Errorf("error applying server cert: %v", err)
 	}
-
 	secureServing.BindPort = bindPort
 	secureServing.BindAddress = net.IPv4zero
 	// kubeconfig file is useful when antrea-controller is not running as a pod, like during development.
@@ -562,7 +499,6 @@ func createAPIServerConfig(kubeconfig string,
 	if len(clientCAFile) > 0 {
 		authentication.ClientCert.ClientCA = clientCAFile
 	}
-
 	serverConfig := genericapiserver.NewConfig(apiserver.Codecs)
 	if err := secureServing.ApplyTo(&serverConfig.SecureServing, &serverConfig.LoopbackClientConfig); err != nil {
 		return nil, err
@@ -573,7 +509,6 @@ func createAPIServerConfig(kubeconfig string,
 	if err := authorization.ApplyTo(&serverConfig.Authorization); err != nil {
 		return nil, err
 	}
-
 	if err := os.MkdirAll(path.Dir(apis.APIServerLoopbackTokenPath), os.ModeDir); err != nil {
 		return nil, fmt.Errorf("error when creating dirs of token file: %v", err)
 	}
@@ -592,7 +527,6 @@ func createAPIServerConfig(kubeconfig string,
 	serverConfig.MinRequestTimeout = int(serverMinWatchTimeout.Seconds())
 	serverConfig.SecureServing.CipherSuites = cipherSuites
 	serverConfig.SecureServing.MinTLSVersion = tlsMinVersion
-
 	return apiserver.NewConfig(
 		serverConfig,
 		client,

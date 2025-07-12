@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"testing"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/openflow"
 )
-
 func TestController_HandlePacketIn(t *testing.T) {
 	controller, _, _ := newTestController()
 	logPacketErr := fmt.Errorf("log")
@@ -43,13 +35,11 @@ func TestController_HandlePacketIn(t *testing.T) {
 	controller.storeDenyConnectionAction = func(in *ofctrl.PacketIn) error {
 		return storeDenyConnectionErr
 	}
-
 	logPktIn := &ofctrl.PacketIn{
 		PacketIn: &openflow15.PacketIn{},
 		UserData: []byte{1},
 	}
 	controller.HandlePacketIn(logPktIn)
-
 	for _, tt := range []struct {
 		name      string
 		packetIn  *ofctrl.PacketIn

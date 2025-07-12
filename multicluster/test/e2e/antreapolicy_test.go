@@ -11,23 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"fmt"
 	"testing"
 	"time"
-
-<<<<<<< HEAD
 	antreae2e "antrea.io/antrea/v2/test/e2e"
 	"antrea.io/antrea/v2/test/e2e/utils"
-=======
 	antreae2e "antrea.io/antrea/test/e2e"
 	"antrea.io/antrea/test/e2e/utils"
->>>>>>> origin/main
 )
-
 const (
 	// Provide enough time for policies to be imported and enforced by the CNI plugin.
 	policyRealizedTimeout              = 6 * time.Second
@@ -36,7 +29,6 @@ const (
 	acnpCrossClusterIsolationResExport = "test-acnp-cross-cluster-ns-isolation.yml"
 	acnpCrossClusterIsolationName      = "antrea-mc-strict-namespace-isolation-cross-cluster"
 )
-
 var (
 	allPodsPerCluster    []antreae2e.Pod
 	perNamespacePods     []string
@@ -44,7 +36,6 @@ var (
 	podsByNamespace      map[string][]antreae2e.Pod
 	clusterK8sUtilsMap   map[string]*antreae2e.KubernetesUtils
 )
-
 func failOnError(err error, t *testing.T) {
 	if err != nil {
 		t.Errorf("%+v", err)
@@ -54,7 +45,6 @@ func failOnError(err error, t *testing.T) {
 		t.Fatalf("test failed: %v", err)
 	}
 }
-
 // initializeForPolicyTest creates three Pods in three test Namespaces for each test cluster.
 func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 	perNamespacePods = []string{"a", "b", "c"}
@@ -62,11 +52,9 @@ func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 	for _, ns := range []string{"x", "y", "z"} {
 		perClusterNamespaces[ns] = antreae2e.TestNamespaceMeta{Name: ns}
 	}
-
 	allPodsPerCluster = []antreae2e.Pod{}
 	podsByNamespace = make(map[string][]antreae2e.Pod)
 	clusterK8sUtilsMap = make(map[string]*antreae2e.KubernetesUtils)
-
 	for _, podName := range perNamespacePods {
 		for _, ns := range perClusterNamespaces {
 			allPodsPerCluster = append(allPodsPerCluster, antreae2e.NewPod(ns.Name, podName))
@@ -84,14 +72,12 @@ func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 		clusterK8sUtilsMap[clusterName] = k8sUtils
 	}
 }
-
 // tearDownForPolicyTest deletes the test Namespaces specific for policy tests.
 func tearDownForPolicyTest() {
 	for _, k8sUtils := range clusterK8sUtilsMap {
 		k8sUtils.Cleanup(perClusterNamespaces)
 	}
 }
-
 // testAntreaPolicyCopySpanNSIsolation tests that after applying a ResourceExport of an ACNP
 // for Namespace isolation, strict Namespace isolation is enforced in each of the member clusters.
 func testAntreaPolicyCopySpanNSIsolation(t *testing.T, data *MCTestData) {
@@ -119,7 +105,6 @@ func testAntreaPolicyCopySpanNSIsolation(t *testing.T, data *MCTestData) {
 	}
 	executeTestsOnAllMemberClusters(t, testCaseList, acnpIsolationName, setup, teardown, false)
 }
-
 func testAntreaPolicyCrossClusterNSIsolation(t *testing.T, data *MCTestData) {
 	setup := func() {
 		err := data.deployACNPResourceExport(t, acnpCrossClusterIsolationResExport)
@@ -145,7 +130,6 @@ func testAntreaPolicyCrossClusterNSIsolation(t *testing.T, data *MCTestData) {
 	}
 	executeTestsOnAllMemberClusters(t, testCaseList, acnpCrossClusterIsolationName, setup, teardown, true)
 }
-
 func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCase, acnpName string, setup, teardown func(), testCrossCluster bool) {
 	setup()
 	for _, testCase := range testList {
@@ -189,7 +173,6 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 	}
 	teardown()
 }
-
 func (data *MCTestData) deployACNPResourceExport(t *testing.T, reFileName string) error {
 	t.Logf("Creating ResourceExport %s in the leader cluster", reFileName)
 	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(leaderCluster), fmt.Sprintf("kubectl apply -f %s", reFileName))
@@ -198,7 +181,6 @@ func (data *MCTestData) deployACNPResourceExport(t *testing.T, reFileName string
 	}
 	return nil
 }
-
 func (data *MCTestData) deleteACNPResourceExport(reFileName string) error {
 	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(leaderCluster), fmt.Sprintf("kubectl delete -f %s", reFileName))
 	if err != nil || rc != 0 || stderr != "" {

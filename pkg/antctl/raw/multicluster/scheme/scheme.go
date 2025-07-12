@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package scheme
-
 import (
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	mcsscheme "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/scheme"
-
-<<<<<<< HEAD
 	antreamcscheme "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/scheme"
-=======
-	antreamcscheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
->>>>>>> origin/main
+	antreamcscheme "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/scheme"
 )
-
 var Scheme = k8sruntime.NewScheme()
-
 func init() {
 	utilruntime.Must(mcsscheme.AddToScheme(Scheme))
 	utilruntime.Must(antreamcscheme.AddToScheme(Scheme))

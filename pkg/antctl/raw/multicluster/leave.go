@@ -11,28 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"strings"
-
 	"github.com/spf13/cobra"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
-=======
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 )
-
 var leaveOpts *common.CleanOptions
-
 var leaveExamples = strings.Trim(`
 # Leave the ClusterSet in the kube-system Namespace
   antctl mc leave --clusterset clusterset1 -n kube-system
 `, "\n")
-
 func NewLeaveCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:     "leave",
@@ -41,15 +31,12 @@ func NewLeaveCommand() *cobra.Command {
 		Example: leaveExamples,
 		RunE:    leaveRunE,
 	}
-
 	o := common.CleanOptions{}
 	leaveOpts = &o
 	command.Flags().StringVarP(&o.Namespace, "namespace", "n", common.DefaultMemberNamespace, "Antrea Multi-cluster Namespace. Defaults to "+common.DefaultMemberNamespace)
 	command.Flags().StringVarP(&o.ClusterSet, "clusterset", "", "", "ClusterSet ID")
-
 	return command
 }
-
 func leaveRunE(cmd *cobra.Command, args []string) error {
 	return common.Cleanup(cmd, leaveOpts)
 }

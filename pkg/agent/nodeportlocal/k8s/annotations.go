@@ -11,37 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package k8s
-
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	npltypes "antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
-=======
-	npltypes "antrea.io/antrea/pkg/agent/nodeportlocal/types"
->>>>>>> origin/main
+	npltypes "antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
 )
-
 const NPLEnabledAnnotationIndex = "nplEnabledAnnotation"
-
 func toJSON(serialize interface{}) string {
 	jsonMarshalled, _ := json.Marshal(serialize)
 	return string(jsonMarshalled)
 }
-
 func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []npltypes.NPLAnnotation) error {
 	if err := patchPod(annotations, pod, c.kubeClient); err != nil {
 		klog.Warningf("Unable to patch NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace, pod.Name, err)
@@ -49,7 +39,6 @@ func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []np
 	klog.V(2).Infof("Successfully updated NodePortLocal annotation for Pod %s/%s", pod.Namespace, pod.Name)
 	return nil
 }
-
 func patchPod(value []npltypes.NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Interface) error {
 	payloadValue := make(map[string]*string)
 	if len(value) > 0 {
@@ -58,13 +47,11 @@ func patchPod(value []npltypes.NPLAnnotation, pod *corev1.Pod, kubeClient client
 	} else {
 		payloadValue[npltypes.NPLAnnotationKey] = nil
 	}
-
 	newPayload := map[string]interface{}{
 		"metadata": map[string]map[string]*string{
 			"annotations": payloadValue,
 		},
 	}
-
 	payloadBytes, _ := json.Marshal(newPayload)
 	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.MergePatchType,
 		payloadBytes, metav1.PatchOptions{}, "status"); err != nil && !errors.IsNotFound(err) {
@@ -73,7 +60,6 @@ func patchPod(value []npltypes.NPLAnnotation, pod *corev1.Pod, kubeClient client
 	}
 	return nil
 }
-
 // compareNPLAnnotationLists returns true if and only if the two lists contain the same set of
 // annotations, irrespective of the order.
 func compareNPLAnnotationLists(annotations1, annotations2 []npltypes.NPLAnnotation) bool {
@@ -82,7 +68,6 @@ func compareNPLAnnotationLists(annotations1, annotations2 []npltypes.NPLAnnotati
 	}
 	nplAnnotationLess := func(a1, a2 *npltypes.NPLAnnotation) bool {
 		return a1.NodePort < a2.NodePort
-
 	}
 	sort.Slice(annotations1, func(i, j int) bool {
 		return nplAnnotationLess(&annotations1[i], &annotations1[j])

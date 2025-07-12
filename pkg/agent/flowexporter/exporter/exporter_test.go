@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"context"
 	"fmt"
@@ -22,7 +20,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,8 +32,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
@@ -44,28 +39,23 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	ipfixtest "antrea.io/antrea/v2/pkg/ipfix/testing"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/metrics"
-	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
+	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	ipfixtest "antrea.io/antrea/v2/pkg/ipfix/testing"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 const (
 	testTemplateIDv4      = uint16(256)
 	testTemplateIDv6      = uint16(257)
 	testActiveFlowTimeout = 3 * time.Second
 	testIdleFlowTimeout   = 1 * time.Second
 )
-
 func init() {
 	ipfixregistry.LoadRegistry()
 }
-
 func TestFlowExporter_sendTemplateSet(t *testing.T) {
 	for _, tc := range []struct {
 		v4Enabled bool
@@ -78,7 +68,6 @@ func TestFlowExporter_sendTemplateSet(t *testing.T) {
 		testSendTemplateSet(t, tc.v4Enabled, tc.v6Enabled)
 	}
 }
-
 func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	ctrl := gomock.NewController(t)
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
@@ -91,7 +80,6 @@ func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		v4Enabled:    v4Enabled,
 		v6Enabled:    v6Enabled,
 	}
-
 	if v4Enabled {
 		sendTemplateSet(t, ctrl, mockIPFIXExpProc, mockIPFIXRegistry, flowExp, false)
 	}
@@ -99,7 +87,6 @@ func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		sendTemplateSet(t, ctrl, mockIPFIXExpProc, mockIPFIXRegistry, flowExp, true)
 	}
 }
-
 func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ipfixtest.MockIPFIXExportingProcess, mockIPFIXRegistry *ipfixtest.MockIPFIXRegistry, flowExp *FlowExporter, isIPv6 bool) {
 	var mockTempSet = ipfixentitiestesting.NewMockSet(ctrl)
 	flowExp.ipfixSet = mockTempSet
@@ -137,14 +124,12 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
 	_, err := flowExp.sendTemplateSet(isIPv6)
 	assert.NoError(t, err, "Error when sending template set")
-
 	eL := flowExp.elementsListv4
 	if isIPv6 {
 		eL = flowExp.elementsListv6
 	}
 	assert.Len(t, eL, len(ianaIE)+len(IANAReverseInfoElements)+len(antreaIE), "flowExp.elementsList and template record should have same number of elements")
 }
-
 func getElementList(isIPv6 bool) []ipfixentities.InfoElementWithValue {
 	elemList := make([]ipfixentities.InfoElementWithValue, 0)
 	ianaIE := IANAInfoElementsIPv4
@@ -164,15 +149,12 @@ func getElementList(isIPv6 bool) []ipfixentities.InfoElementWithValue {
 	}
 	return elemList
 }
-
 type elementListMatcher struct {
 	elements []ipfixentities.InfoElementWithValue
 }
-
 func ElementListMatcher(elementList []ipfixentities.InfoElementWithValue) gomock.Matcher {
 	return elementListMatcher{elementList}
 }
-
 func (em elementListMatcher) Matches(arg interface{}) bool {
 	elements, _ := arg.([]ipfixentities.InfoElementWithValue)
 	for i, ieWithValue := range elements {
@@ -211,7 +193,6 @@ func (em elementListMatcher) Matches(arg interface{}) bool {
 func (em elementListMatcher) String() string {
 	return ""
 }
-
 // TestFlowExporter_sendDataRecord tests essentially if element names in the switch-case matches globals
 // IANAInfoElements and AntreaInfoElements.
 func TestFlowExporter_sendDataSet(t *testing.T) {
@@ -226,13 +207,11 @@ func TestFlowExporter_sendDataSet(t *testing.T) {
 		testSendDataSet(t, tc.v4Enabled, tc.v6Enabled)
 	}
 }
-
 func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	ctrl := gomock.NewController(t)
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
-
 	var connv4, connv6 *flowexporter.Connection
 	var elemListv4, elemListv6 []ipfixentities.InfoElementWithValue
 	if v4Enabled {
@@ -254,19 +233,16 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		v6Enabled:      v6Enabled,
 		ipfixSet:       mockDataSet,
 	}
-
 	sendDataSet := func(elemList []ipfixentities.InfoElementWithValue, templateID uint16, conn flowexporter.Connection) {
 		mockDataSet.EXPECT().ResetSet()
 		mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, templateID).Return(nil)
 		mockDataSet.EXPECT().AddRecordV2(ElementListMatcher(elemList), templateID).Return(nil)
 		mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
-
 		err := flowExp.addConnToSet(&conn)
 		assert.NoError(t, err, "Error when adding record to data set")
 		_, err = flowExp.sendDataSet()
 		assert.NoError(t, err, "Error when sending data set")
 	}
-
 	if v4Enabled {
 		sendDataSet(elemListv4, testTemplateIDv4, *connv4)
 	}
@@ -274,10 +250,8 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		sendDataSet(elemListv6, testTemplateIDv6, *connv6)
 	}
 }
-
 func TestFlowExporter_resolveCollectorAddress(t *testing.T) {
 	ctx := context.Background()
-
 	k8sClient := fake.NewSimpleClientset(
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
@@ -301,7 +275,6 @@ func TestFlowExporter_resolveCollectorAddress(t *testing.T) {
 			},
 		},
 	)
-
 	testCases := []struct {
 		name               string
 		inputAddr          string
@@ -338,7 +311,6 @@ func TestFlowExporter_resolveCollectorAddress(t *testing.T) {
 			expectedErr: "failed to resolve FlowAggregator Service",
 		},
 	}
-
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -352,7 +324,6 @@ func TestFlowExporter_resolveCollectorAddress(t *testing.T) {
 			if tc.withTLS {
 				exp.exporterInput.TLSClientConfig = &exporter.ExporterTLSClientConfig{}
 			}
-
 			err := exp.resolveCollectorAddress(ctx)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
@@ -369,7 +340,6 @@ func TestFlowExporter_resolveCollectorAddress(t *testing.T) {
 		})
 	}
 }
-
 func TestFlowExporter_initFlowExporter(t *testing.T) {
 	metrics.InitializeConnectionMetrics()
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
@@ -382,7 +352,6 @@ func TestFlowExporter_initFlowExporter(t *testing.T) {
 	conn2, err := net.ListenTCP("tcp", tcpAddr)
 	require.NoError(t, err, "Error when creating a local TCP server")
 	defer conn2.Close()
-
 	for _, tc := range []struct {
 		protocol string
 		address  string
@@ -406,7 +375,6 @@ func TestFlowExporter_initFlowExporter(t *testing.T) {
 		metrics.ReconnectionsToFlowCollector.Dec()
 	}
 }
-
 func checkTotalReconnectionsMetric(t *testing.T) {
 	expected := `
 	# HELP antrea_agent_flow_collector_reconnection_count [ALPHA] Number of re-connections between Flow Exporter and flow collector. This metric gets updated whenever the connection is re-established between the Flow Exporter and the flow collector (e.g. the Flow Aggregator).
@@ -416,7 +384,6 @@ func checkTotalReconnectionsMetric(t *testing.T) {
 	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expected), "antrea_agent_flow_collector_reconnection_count")
 	assert.NoError(t, err)
 }
-
 func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElementWithValue {
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Need only element name and other fields are set to dummy values
@@ -430,7 +397,6 @@ func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElement
 	for i, ie := range antreaIE {
 		elemList[i+len(ianaIE)+len(IANAReverseInfoElements)] = createElement(ie, ipfixregistry.AntreaEnterpriseID)
 	}
-
 	for i, ie := range elemList {
 		switch ieName := ie.GetInfoElement().Name; ieName {
 		case "flowStartSeconds":
@@ -464,7 +430,6 @@ func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElement
 	}
 	return elemList
 }
-
 func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8, tcpState string) *flowexporter.Connection {
 	var tuple flowexporter.Tuple
 	if !isIPv6 {
@@ -501,7 +466,6 @@ func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 	}
 	return conn
 }
-
 func getDenyConnection(isIPv6 bool, protoID uint8) *flowexporter.Connection {
 	var tuple, _ flowexporter.Tuple
 	if !isIPv6 {
@@ -517,7 +481,6 @@ func getDenyConnection(isIPv6 bool, protoID uint8) *flowexporter.Connection {
 	}
 	return conn
 }
-
 func TestFlowExporter_sendFlowRecords(t *testing.T) {
 	for _, tc := range []struct {
 		v4Enabled bool
@@ -530,7 +493,6 @@ func TestFlowExporter_sendFlowRecords(t *testing.T) {
 		testSendFlowRecords(t, tc.v4Enabled, tc.v6Enabled)
 	}
 }
-
 func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	var elemListv4, elemListv6 []ipfixentities.InfoElementWithValue
 	if v4Enabled {
@@ -539,7 +501,6 @@ func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	if v6Enabled {
 		elemListv6 = getElemList(IANAInfoElementsIPv6, AntreaInfoElementsIPv6)
 	}
-
 	flowExp := &FlowExporter{
 		elementsListv4: elemListv4,
 		elementsListv6: elemListv6,
@@ -547,7 +508,6 @@ func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		templateIDv6:   testTemplateIDv6,
 		v4Enabled:      v4Enabled,
 		v6Enabled:      v6Enabled}
-
 	if v4Enabled {
 		runSendFlowRecordTests(t, flowExp, false)
 	}
@@ -555,7 +515,6 @@ func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		runSendFlowRecordTests(t, flowExp, true)
 	}
 }
-
 func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
@@ -564,7 +523,6 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 	flowExp.ipfixSet = mockDataSet
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	startTime := time.Now()
-
 	tests := []struct {
 		name               string
 		isDenyConn         bool
@@ -681,7 +639,6 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 			var conn, denyConn *flowexporter.Connection
 			var connKey flowexporter.ConnectionKey
 			var pqItem *flowexporter.ItemToExpire
-
 			if !tt.isDenyConn {
 				// Prepare connection map
 				conn = getConnection(isIPv6, tt.isConnPresent, tt.statusFlag, tt.protoID, tt.tcpState)
@@ -708,7 +665,6 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 				pqItem.ActiveExpireTime = tt.activeExpireTime
 				pqItem.IdleExpireTime = tt.idleExpireTime
 			}
-
 			mockDataSet.EXPECT().ResetSet()
 			if !isIPv6 {
 				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv4).Return(nil)
@@ -721,7 +677,6 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 			_, err := flowExp.sendFlowRecords()
 			assert.NoError(t, err)
 			assert.Equalf(t, uint64(1), flowExp.numDataSetsSent, "1 data set should have been sent.")
-
 			switch id {
 			case 0: // conntrack connection being active time out
 				assert.True(t, pqItem.ActiveExpireTime.After(startTime))
@@ -747,7 +702,6 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 		})
 	}
 }
-
 func getNumOfConntrackConns(connStore *connections.ConntrackConnectionStore) int {
 	count := 0
 	countNumOfConns := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
@@ -757,7 +711,6 @@ func getNumOfConntrackConns(connStore *connections.ConntrackConnectionStore) int
 	connStore.ForAllConnectionsDo(countNumOfConns)
 	return count
 }
-
 func getNumOfDenyConns(connStore *connections.DenyConnectionStore) int {
 	count := 0
 	countNumOfConns := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
@@ -767,13 +720,11 @@ func getNumOfDenyConns(connStore *connections.DenyConnectionStore) int {
 	connStore.ForAllConnectionsDo(countNumOfConns)
 	return count
 }
-
 func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWithValue {
 	element, _ := ipfixregistry.GetInfoElement(name, enterpriseID)
 	ieWithValue, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
 	return ieWithValue
 }
-
 func TestFlowExporter_prepareExporterInputArgs(t *testing.T) {
 	for _, tc := range []struct {
 		collectorProto              string
@@ -792,7 +743,6 @@ func TestFlowExporter_prepareExporterInputArgs(t *testing.T) {
 		assert.Equal(t, tc.expectedProto, expInput.CollectorProtocol)
 	}
 }
-
 func TestFlowExporter_findFlowType(t *testing.T) {
 	conn1 := flowexporter.Connection{SourcePodName: "podA", DestinationPodName: "podB"}
 	conn2 := flowexporter.Connection{SourcePodName: "podA", DestinationPodName: ""}
@@ -812,7 +762,6 @@ func TestFlowExporter_findFlowType(t *testing.T) {
 		assert.Equal(t, tc.expectedFlowType, flowType)
 	}
 }
-
 func TestFlowExporter_fillEgressInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testCases := []struct {
@@ -841,7 +790,6 @@ func TestFlowExporter_fillEgressInfo(t *testing.T) {
 			expectedEgressNodeName: "",
 		},
 	}
-
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {

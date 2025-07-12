@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package certificate
-
 import (
 	"bytes"
 	"context"
 	"fmt"
 	"time"
-
 	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -32,16 +29,11 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/util/env"
-=======
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/util/env"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
-
 // CACertController is responsible for taking the CA certificate from the
 // caContentProvider and publishing it to the ConfigMap and the APIServices.
 type CACertController struct {
@@ -49,19 +41,15 @@ type CACertController struct {
 	caContentProvider dynamiccertificates.CAContentProvider
 	// queue only ever has one item, but it has nice error handling backoff/retry semantics
 	queue workqueue.TypedRateLimitingInterface[string]
-
 	client             kubernetes.Interface
 	aggregatorClient   clientset.Interface
 	apiExtensionClient apiextensionclientset.Interface
 	caConfig           *CAConfig
 }
-
 var _ dynamiccertificates.Listener = &CACertController{}
-
 func GetCAConfigMapNamespace() string {
 	return env.GetAntreaNamespace()
 }
-
 func newCACertController(caContentProvider dynamiccertificates.CAContentProvider,
 	client kubernetes.Interface,
 	aggregatorClient clientset.Interface,
@@ -86,7 +74,6 @@ func newCACertController(caContentProvider dynamiccertificates.CAContentProvider
 	}
 	return c
 }
-
 func (c *CACertController) UpdateCertificate(ctx context.Context) error {
 	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
 		if err := controller.RunOnce(ctx); err != nil {
@@ -95,32 +82,25 @@ func (c *CACertController) UpdateCertificate(ctx context.Context) error {
 			return err
 		}
 	}
-
 	return nil
 }
-
 // getCertificate exposes the certificate for testing.
 func (c *CACertController) getCertificate() []byte {
 	return c.caContentProvider.CurrentCABundleContent()
 }
-
 // Enqueue will be called after CACertController is registered as a listener of CA cert change.
 func (c *CACertController) Enqueue() {
 	// The key can be anything as we only have single item.
 	c.queue.Add("key")
 }
-
 func (c *CACertController) syncCACert() error {
 	caCert := c.caContentProvider.CurrentCABundleContent()
-
 	if err := c.syncConfigMap(caCert); err != nil {
 		return err
 	}
-
 	if err := c.syncAPIServices(caCert); err != nil {
 		return err
 	}
-
 	if err := c.syncMutatingWebhooks(caCert); err != nil {
 		return err
 	}
@@ -130,10 +110,8 @@ func (c *CACertController) syncCACert() error {
 	if err := c.syncConversionWebhooks(caCert); err != nil {
 		return err
 	}
-
 	return nil
 }
-
 // syncMutatingWebhooks updates the CABundle of the MutatingWebhookConfiguration backed by antrea-controller.
 func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
 	if c.caConfig.MutationWebhookSelector == nil {
@@ -154,7 +132,6 @@ func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
 	}
 	return nil
 }
-
 func (c *CACertController) syncConversionWebhooks(caCert []byte) error {
 	if c.caConfig.CRDConversionWebhookSelector == nil {
 		return nil
@@ -184,7 +161,6 @@ func (c *CACertController) syncConversionWebhooks(caCert []byte) error {
 	}
 	return nil
 }
-
 func (c *CACertController) patchWebhookWithCACert(webhookCfg *v1.MutatingWebhookConfiguration, caCert []byte) error {
 	updated := false
 	for idx, webhook := range webhookCfg.Webhooks {
@@ -203,7 +179,6 @@ func (c *CACertController) patchWebhookWithCACert(webhookCfg *v1.MutatingWebhook
 	}
 	return nil
 }
-
 // syncValidatingWebhooks updates the CABundle of the ValidatingWebhookConfiguration backed by antrea-controller.
 func (c *CACertController) syncValidatingWebhooks(caCert []byte) error {
 	if c.caConfig.ValidatingWebhookSelector == nil {
@@ -237,7 +212,6 @@ func (c *CACertController) syncValidatingWebhooks(caCert []byte) error {
 	}
 	return nil
 }
-
 // syncAPIServices updates the CABundle of the APIServices backed by antrea-controller.
 func (c *CACertController) syncAPIServices(caCert []byte) error {
 	if c.caConfig.APIServiceSelector == nil {
@@ -264,7 +238,6 @@ func (c *CACertController) syncAPIServices(caCert []byte) error {
 	}
 	return nil
 }
-
 // syncConfigMap updates the ConfigMap that holds the CA bundle, which will be read by API clients, e.g. antrea-agent.
 func (c *CACertController) syncConfigMap(caCert []byte) error {
 	// Use the Antrea Pod Namespace for the CA cert ConfigMap.
@@ -304,7 +277,6 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 	}
 	return nil
 }
-
 // RunOnce runs a single sync step to ensure that we have a valid starting configuration.
 func (c *CACertController) RunOnce(ctx context.Context) error {
 	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
@@ -321,48 +293,38 @@ func (c *CACertController) RunOnce(ctx context.Context) error {
 	}
 	return nil
 }
-
 // Run starts the CACertController and blocks until the context is canceled.
 func (c *CACertController) Run(ctx context.Context, workers int) {
 	defer c.queue.ShutDown()
-
 	klog.Infof("Starting CACertController")
 	defer klog.Infof("Shutting down CACertController")
-
 	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
 		// doesn't matter what workers say, only start one.
 		go controller.Run(ctx, 1)
 	}
-
 	// doesn't matter what workers say, only start one.
 	go wait.Until(c.runWorker, time.Second, ctx.Done())
 	// Periodically sync the CA cert to improve the robustness.
 	// In some cases the CA cert may be overridden by a stale instance or other deployment tools.
 	go wait.Until(c.Enqueue, 2*time.Minute, ctx.Done())
-
 	<-ctx.Done()
 }
-
 func (c *CACertController) runWorker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 func (c *CACertController) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(key)
-
 	err := c.syncCACert()
 	if err == nil {
 		c.queue.Forget(key)
 		return true
 	}
-
 	klog.Errorf("Error syncing CA cert, requeuing it: %v", err)
 	c.queue.AddRateLimited(key)
-
 	return true
 }

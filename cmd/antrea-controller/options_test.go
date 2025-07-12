@@ -11,23 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
-=======
-	"antrea.io/antrea/pkg/apis"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis"
+	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
 )
-
 func TestNewOptions(t *testing.T) {
 	op := newOptions()
 	op.setDefaults()
@@ -41,7 +33,6 @@ func TestNewOptions(t *testing.T) {
 	assert.EqualValues(t, defaultClientQPS, op.config.ClientConnection.QPS)
 	assert.EqualValues(t, defaultClientBurst, op.config.ClientConnection.Burst)
 }
-
 func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 	testCases := []struct {
 		name           string

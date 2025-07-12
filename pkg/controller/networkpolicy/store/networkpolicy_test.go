@@ -11,31 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package store
-
 import (
 	"context"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 func TestWatchNetworkPolicyEvent(t *testing.T) {
 	protocolTCP := controlplane.ProtocolTCP
 	npRef := controlplane.NetworkPolicyReference{
@@ -80,7 +72,6 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
-
 	testCases := map[string]struct {
 		fieldSelector fields.Selector
 		// The operations that will be executed on the store.
@@ -168,7 +159,6 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 		})
 	}
 }
-
 func TestGetNetworkPolicyByIndex(t *testing.T) {
 	policy1 := &types.NetworkPolicy{
 		Name: "bar",
@@ -202,7 +192,6 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 		}},
 		AppliedToGroups: []string{"appliedToGroup1", "appliedToGroup2"},
 	}
-
 	testCases := map[string]struct {
 		// The stored objects.
 		networkPolicies []*types.NetworkPolicy
@@ -258,7 +247,6 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 					t.Fatalf("Failed to store policy %v: %v", policy, err)
 				}
 			}
-
 			actualNetworkPolicies, err := store.GetByIndex(testCase.indexName, testCase.indexKey)
 			if err != nil {
 				t.Fatalf("Failed to get policies by index %s/%s: %v", testCase.indexName, testCase.indexKey, err)

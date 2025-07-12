@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package antctl
-
 import (
 	"bytes"
 	"context"
@@ -22,20 +20,14 @@ import (
 	"net"
 	"net/url"
 	"time"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
 	"antrea.io/antrea/apis/pkg/apis"
-=======
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/apis"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/apis"
 )
-
 // requestOption describes options to issue requests.
 type requestOption struct {
 	commandDefinition *commandDefinition
@@ -53,21 +45,17 @@ type requestOption struct {
 	// It set, it takes precedence over the above default endpoints.
 	server string
 }
-
 type AntctlClient interface {
 	request(opt *requestOption) (io.Reader, error)
 }
-
 // client issues requests to endpoints.
 type client struct {
 	// codec is the CodecFactory for this command, it is needed for remote accessing.
 	codec serializer.CodecFactory
 }
-
 func newClient(codec serializer.CodecFactory) AntctlClient {
 	return &client{codec: codec}
 }
-
 // resolveKubeconfig tries to load the kubeconfig specified in the requestOption.
 // It will return error if the stating of the file failed or the kubeconfig is malformed.
 // If the default kubeconfig not exists, it will try to use an in-cluster config.
@@ -96,7 +84,6 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 	kubeconfig.NegotiatedSerializer = c.codec
 	return kubeconfig, nil
 }
-
 func (c *client) request(opt *requestOption) (io.Reader, error) {
 	var e *endpoint
 	switch runtime.Mode {
@@ -112,7 +99,6 @@ func (c *client) request(opt *requestOption) (io.Reader, error) {
 	}
 	return c.nonResourceRequest(e.nonResourceEndpoint, opt)
 }
-
 func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) (io.Reader, error) {
 	kubeconfig, err := c.resolveKubeconfig(opt)
 	if err != nil {
@@ -142,7 +128,6 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 	}
 	return bytes.NewReader(result), nil
 }
-
 func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Reader, error) {
 	kubeconfig, err := c.resolveKubeconfig(opt)
 	if err != nil {
@@ -154,14 +139,12 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 	gv := e.groupVersionResource.GroupVersion()
 	kubeconfig.GroupVersion = &gv
 	kubeconfig.APIPath = "/apis"
-
 	restClient, err := rest.RESTClientFor(kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create rest client: %w", err)
 	}
 	// If timeout is zero, there will be no timeout.
 	restClient.Client.Timeout = opt.timeout
-
 	var restRequest *rest.Request
 	switch e.restMethod {
 	case restGet:
@@ -169,23 +152,19 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 	case restPost:
 		restRequest = restClient.Post()
 	}
-
 	restRequest = restRequest.
 		NamespaceIfScoped(opt.args["namespace"], e.namespaced).
 		Resource(e.groupVersionResource.Resource)
-
 	if len(e.resourceName) != 0 {
 		restRequest = restRequest.Name(e.resourceName)
 	} else if name, ok := opt.args["name"]; ok {
 		restRequest = restRequest.Name(name)
 	}
-
 	for arg, val := range opt.args {
 		if arg != "name" && arg != "namespace" {
 			restRequest = restRequest.Param(arg, val)
 		}
 	}
-
 	if e.parameterTransform != nil {
 		obj, err := e.parameterTransform(opt.args)
 		if err != nil {
@@ -193,7 +172,6 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 		}
 		restRequest = restRequest.Body(obj)
 	}
-
 	result := restRequest.Do(context.TODO())
 	if result.Error() != nil {
 		return nil, generateMessage(opt.commandDefinition, opt.args, true /* isResourceRequest */, result.Error())

@@ -11,24 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package serviceexternalip
-
 import (
 	"encoding/json"
 	"net/http"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/querier"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/features"
+	"antrea.io/antrea/v2/pkg/querier"
 )
-
 // HandleFunc creates a http.HandlerFunc which uses an ServiceExternalIPStatusQuerier
 // to query Service external IP status.
 func HandleFunc(sq querier.ServiceExternalIPStatusQuerier) http.HandlerFunc {

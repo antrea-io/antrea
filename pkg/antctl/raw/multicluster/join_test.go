@@ -11,32 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"bytes"
 	"log"
 	"os"
 	"testing"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 func TestJoin(t *testing.T) {
 	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -58,7 +50,6 @@ func TestJoin(t *testing.T) {
 			},
 		},
 	}
-
 	secretContent := []byte(`#test file
 ---
 apiVersion: v1
@@ -70,7 +61,6 @@ data:
   namespace: ZGVmYXVsdAo=
   token: YWJjZAo=
 type: Opaque`)
-
 	configContent := []byte(`apiVersion: multicluster.antrea.io/v1alpha1
 kind: ClusterSetJoinConfig
 clusterSetID: test-clusterset
@@ -89,7 +79,6 @@ data:
   namespace: ZGVmYXVsdAo=
   token: YWJjZAo=
 type: Opaque`)
-
 	tests := []struct {
 		name           string
 		expectedOutput string
@@ -132,14 +121,12 @@ type: Opaque`)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.Flag("clusterset").Value.Set("test-clusterset")
-
 	joinOpts.ClusterSetID = "test-clusterset"
 	joinOpts.LeaderClusterID = "leader-id"
 	joinOpts.LeaderNamespace = "leader-ns"
 	joinOpts.LeaderAPIServer = "http://localhost"
 	joinOpts.TokenSecretName = "member-token"
 	joinOpts.Namespace = "default"
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			joinOpts.ClusterID = tt.clusterID
@@ -160,7 +147,6 @@ type: Opaque`)
 				joinOpts.TokenSecretName = ""
 				joinOpts.TokenSecretFile = secret.Name()
 			}
-
 			joinOpts.ConfigFile = ""
 			if tt.configFile {
 				config, err := os.CreateTemp("", "config")
@@ -182,7 +168,6 @@ type: Opaque`)
 		})
 	}
 }
-
 func TestJoinOptValidate(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -288,7 +273,6 @@ func TestJoinOptValidate(t *testing.T) {
 			secretFile: true,
 		},
 	}
-
 	secretContent := []byte(`apiVersion: v1
 	kind: Secret
 	metadata:

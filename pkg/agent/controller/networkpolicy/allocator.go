@@ -11,37 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"math"
 	"strconv"
 	"sync"
 	"time"
-
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/types"
-=======
-	"antrea.io/antrea/pkg/agent/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/types"
 )
-
 const (
 	deleteQueueName = "async_delete_networkpolicyrule"
 )
-
 var (
 	minAsyncDeleteInterval = time.Second * 5
 )
-
 // idAllocator provides interfaces to allocate and release uint32 IDs. It's thread-safe.
 // It caches the last allocated ID and the IDs that have been released.
 // If no IDs that have been released, the next allocated IP will be lastAllocatedID+1.
@@ -53,7 +43,6 @@ type idAllocator struct {
 	// IDs that are less than or equal to it are available if they are in availableSet,
 	// otherwise unavailable.
 	lastAllocatedID uint32
-
 	// availableSet maintains the IDs that can be reused for allocation.
 	availableSet map[uint32]struct{}
 	// availableSlice maintains the order of release.
@@ -67,13 +56,11 @@ type idAllocator struct {
 	// deleteInterval is the delay interval for deleting the rule in the asyncRuleCache.
 	deleteInterval time.Duration
 }
-
 // asyncRuleCacheKeyFunc knows how to get key of a *rule.
 func asyncRuleCacheKeyFunc(obj interface{}) (string, error) {
 	rule := obj.(*types.PolicyRule)
 	return strconv.Itoa(int(rule.FlowID)), nil
 }
-
 // newIDAllocatorWithClock creates an ID allocator with a custom clock, which is
 // useful when writing unit tests.
 func newIDAllocatorWithClock(asyncRuleDeleteInterval time.Duration, clock clock.WithTicker, allocatedIDs ...uint32) *idAllocator {
@@ -85,14 +72,12 @@ func newIDAllocatorWithClock(asyncRuleDeleteInterval time.Duration, clock clock.
 			Clock: clock,
 		}),
 	}
-
 	// Set the deleteInterval.
 	if minAsyncDeleteInterval > asyncRuleDeleteInterval {
 		allocator.deleteInterval = minAsyncDeleteInterval
 	} else {
 		allocator.deleteInterval = asyncRuleDeleteInterval
 	}
-
 	var maxID uint32
 	allocatedSet := make(map[uint32]struct{}, len(allocatedIDs))
 	for _, id := range allocatedIDs {
@@ -110,48 +95,39 @@ func newIDAllocatorWithClock(asyncRuleDeleteInterval time.Duration, clock clock.
 	allocator.lastAllocatedID = maxID
 	return allocator
 }
-
 // newIDAllocator returns a new *idAllocator.
 // It takes a list of allocated IDs, which can be used for the restart case.
 func newIDAllocator(asyncRuleDeleteInterval time.Duration, allocatedIDs ...uint32) *idAllocator {
 	return newIDAllocatorWithClock(asyncRuleDeleteInterval, clock.RealClock{}, allocatedIDs...)
 }
-
 // allocateForRule allocates an uint32 ID for a given rule if it's available, otherwise
 // an error is returned. It will try to reuse the IDs that have been released first,
 // then allocate a new ID by incrementing the last allocated one.
 func (a *idAllocator) allocateForRule(rule *types.PolicyRule) error {
 	a.Lock()
 	defer a.Unlock()
-
 	if len(a.availableSlice) > 0 {
 		var id uint32
 		id, a.availableSlice = a.availableSlice[0], a.availableSlice[1:]
 		delete(a.availableSet, id)
-
 		// Add ID to the rule and the rule to asyncRuleCache.
 		rule.FlowID = id
 		a.asyncRuleCache.Add(rule)
-
 		return nil
 	}
 	if a.lastAllocatedID == math.MaxUint32 {
 		return fmt.Errorf("no ID available")
 	}
 	a.lastAllocatedID++
-
 	// Add ID to the rule and the rule to asyncRuleCache.
 	rule.FlowID = a.lastAllocatedID
 	a.asyncRuleCache.Add(rule)
-
 	return nil
 }
-
 // forgetRule adds the rule to the async delete queue with a given delay.
 func (a *idAllocator) forgetRule(ruleID uint32) {
 	a.deleteQueue.AddAfter(ruleID, a.deleteInterval)
 }
-
 func (a *idAllocator) getRuleFromAsyncCache(ruleID uint32) (*types.PolicyRule, bool, error) {
 	rule, exists, err := a.asyncRuleCache.GetByKey(strconv.Itoa(int(ruleID)))
 	if err != nil || !exists {
@@ -159,27 +135,23 @@ func (a *idAllocator) getRuleFromAsyncCache(ruleID uint32) (*types.PolicyRule, b
 	}
 	return rule.(*types.PolicyRule), exists, nil
 }
-
 func (a *idAllocator) runWorker(stopCh <-chan struct{}) {
 	defer a.deleteQueue.ShutDown()
 	go wait.Until(a.worker, time.Second, stopCh)
 	<-stopCh
 }
-
 // worker runs a worker thread that just dequeues item from deleteQueue,
 // deletes them from the asyncRuleCache, and releases the associated ID.
 func (a *idAllocator) worker() {
 	for a.processDeleteQueueItem() {
 	}
 }
-
 func (a *idAllocator) processDeleteQueueItem() bool {
 	key, quit := a.deleteQueue.Get()
 	if quit {
 		return false
 	}
 	defer a.deleteQueue.Done(key)
-
 	rule, exists, err := a.getRuleFromAsyncCache(key)
 	if !exists {
 		klog.Warningf("Rule with id %v is not present in the async rule cache", key)
@@ -193,20 +165,16 @@ func (a *idAllocator) processDeleteQueueItem() bool {
 		klog.Errorf("Unexpected error when trying to delete rule: %v", err)
 		return true
 	}
-
 	if err := a.release(key); err != nil {
 		klog.Errorf("Unexpected error when releasing id %d: %v", key, err)
 		return true
 	}
-
 	return true
 }
-
 // release releases an uint32 ID if it has been allocated before, otherwise error is returned.
 func (a *idAllocator) release(id uint32) error {
 	a.Lock()
 	defer a.Unlock()
-
 	if _, exists := a.availableSet[id]; exists {
 		return fmt.Errorf("ID %d has been released, duplicate release is not allowed", id)
 	}
@@ -217,31 +185,25 @@ func (a *idAllocator) release(id uint32) error {
 	a.availableSlice = append(a.availableSlice, id)
 	return nil
 }
-
 // l7VlanIDAllocator provides interfaces to allocate and release VLAN IDs for L7 rules. It also caches the mapping of
 // rule IDs to released VLAN IDs and provides an interface for L7 rule to query its allocated VLAN ID.
 type l7VlanIDAllocator struct {
 	sync.RWMutex
-
 	idCounter      uint32
 	recycled       []uint32
 	ruleIDToVlanID map[string]uint32
 }
-
 func newL7VlanIDAllocator() *l7VlanIDAllocator {
 	return &l7VlanIDAllocator{
 		ruleIDToVlanID: make(map[string]uint32),
 	}
 }
-
 func (l *l7VlanIDAllocator) allocate(ruleID string) uint32 {
 	l.Lock()
 	defer l.Unlock()
-
 	if vlanID, ok := l.ruleIDToVlanID[ruleID]; ok {
 		return vlanID
 	}
-
 	var vlanID uint32
 	if len(l.recycled) != 0 {
 		vlanID = l.recycled[len(l.recycled)-1]
@@ -253,24 +215,19 @@ func (l *l7VlanIDAllocator) allocate(ruleID string) uint32 {
 	l.ruleIDToVlanID[ruleID] = vlanID
 	return vlanID
 }
-
 func (l *l7VlanIDAllocator) release(ruleID string) {
 	l.Lock()
 	defer l.Unlock()
-
 	vlanID, ok := l.ruleIDToVlanID[ruleID]
 	if !ok {
 		return
 	}
-
 	l.recycled = append(l.recycled, vlanID)
 	delete(l.ruleIDToVlanID, ruleID)
 }
-
 func (l *l7VlanIDAllocator) query(ruleID string) uint32 {
 	l.RLock()
 	defer l.RUnlock()
-
 	vlanID, ok := l.ruleIDToVlanID[ruleID]
 	if ok {
 		return vlanID

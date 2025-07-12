@@ -1,26 +1,20 @@
 /*
 Copyright 2021 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package member
-
 import (
 	"context"
 	"reflect"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -32,22 +26,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	k8smcv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
 )
-
 var (
 	epPorts8080 = []corev1.EndpointPort{
 		{
@@ -56,12 +45,10 @@ var (
 			Protocol: corev1.ProtocolTCP,
 		},
 	}
-
 	nginxReq = ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: "default",
 		Name:      "nginx",
 	}}
-
 	existSvcExport = &k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -69,7 +56,6 @@ var (
 		},
 	}
 )
-
 func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	existSvcResExport := &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -84,10 +70,8 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 		},
 	}
 	exportedSvcNginx := common.SvcNginx.DeepCopy()
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(exportedSvcNginx).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existSvcResExport, existEpResExport).Build()
-
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonArea)
@@ -117,7 +101,6 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 		}
 	}
 }
-
 func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 	mcsSvc := common.SvcNginx.DeepCopy()
 	mcsSvc.Name = "antrea-mc-nginx"
@@ -128,7 +111,6 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 			Name:      "antrea-mc-nginx",
 		},
 	}
-
 	nginx0Svc := common.SvcNginx.DeepCopy()
 	nginx0Svc.Name = "nginx0"
 	nginx0SvcExport := &k8smcv1alpha1.ServiceExport{
@@ -137,7 +119,6 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 			Name:      "nginx0",
 		},
 	}
-
 	nginx1Svc := common.SvcNginx.DeepCopy()
 	nginx1Svc.Name = "nginx1"
 	now := metav1.Now()
@@ -160,7 +141,6 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 			},
 		},
 	}
-
 	nginx1EP := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -168,14 +148,12 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		},
 		Subsets: common.EPNginxSubset,
 	}
-
 	nginx2Svc := common.SvcNginx.DeepCopy()
 	nginx2Svc.Name = "nginx2"
 	nginx2SvcExportWithStatus := nginx1SvcExportWithStatus.DeepCopy()
 	nginx2SvcExportWithStatus.Name = "nginx2"
 	existingMessage := "the Service has no related Endpoints"
 	nginx2SvcExportWithStatus.Status.Conditions[0].Message = &existingMessage
-
 	nginx3Svc := common.SvcNginx.DeepCopy()
 	nginx3Svc.Name = "nginx3"
 	nginx3Svc.Spec.Type = corev1.ServiceTypeExternalName
@@ -185,7 +163,6 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 			Name:      "nginx3",
 		},
 	}
-
 	svcNoClusterIP := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "nginx-no-ip",
@@ -198,7 +175,6 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 			Type: corev1.ServiceTypeClusterIP,
 		},
 	}
-
 	svcNoClusterIPEP := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -206,14 +182,12 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		},
 		Subsets: common.EPNginxSubset,
 	}
-
 	svcExpNoClusterIP := &k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx-no-ip",
 		},
 	}
-
 	tests := []struct {
 		name            string
 		expectedReason  string
@@ -278,14 +252,12 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 			}},
 		},
 	}
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(mcsSvc, nginx0Svc, nginx1Svc, nginx3Svc, svcNoClusterIP, nginx1EP, svcNoClusterIPEP,
 		nginx2Svc, existSvcExport, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP).
 		WithStatusSubresource(mcsSvc, nginx0Svc, nginx1Svc, nginx3Svc, svcNoClusterIP, nginx1EP, svcNoClusterIPEP, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP).
 		Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
-
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", false, "default")
@@ -311,7 +283,6 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		})
 	}
 }
-
 func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 	epReady := true
 	protocol := corev1.ProtocolTCP
@@ -338,7 +309,6 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 			},
 		},
 	}
-
 	tests := []struct {
 		name                 string
 		endpointIPType       string
@@ -359,7 +329,6 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 			endpointSliceEnabled: true,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
@@ -393,7 +362,6 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 		})
 	}
 }
-
 func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 	sinfo := &svcInfo{
 		name:       common.SvcNginx.Name,
@@ -402,7 +370,6 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 		ports:      common.SvcNginx.Spec.Ports,
 		svcType:    string(common.SvcNginx.Spec.Type),
 	}
-
 	filteredSubsets := []corev1.EndpointSubset{
 		{
 			Addresses: []corev1.EndpointAddress{
@@ -419,18 +386,15 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 			},
 		},
 	}
-
 	epInfo := &epInfo{
 		name:      common.EPNginx.Name,
 		namespace: common.EPNginx.Namespace,
 		subsets:   filteredSubsets,
 	}
-
 	newSvcNginx := common.SvcNginx.DeepCopy()
 	newSvcNginx.Spec.Ports = []corev1.ServicePort{common.SvcPort8080}
 	newEpNginx := common.EPNginx.DeepCopy()
 	newEpNginx.Subsets[0].Ports = epPorts8080
-
 	svcNginxEPs := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "nginx",
@@ -457,11 +421,9 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 	existSvcRe.Name = "cluster-a-default-nginx-service"
 	existSvcRe.Spec.Service = &mcv1alpha1.ServiceExport{ServiceSpec: corev1.ServiceSpec{}}
 	existSvcRe.Spec.Service.ServiceSpec.Ports = []corev1.ServicePort{common.SvcPort80}
-
 	existEpRe := re.DeepCopy()
 	existEpRe.Name = "cluster-a-default-nginx-endpoints"
 	existEpRe.Spec.Endpoints = &mcv1alpha1.EndpointsExport{Subsets: filteredSubsets}
-
 	tests := []struct {
 		name              string
 		existingEndpoints *corev1.Endpoints
@@ -540,12 +502,10 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingService, tt.existingEndpoints, existSvcExport).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existSvcRe, existEpRe).Build()
-
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
@@ -579,7 +539,6 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 		})
 	}
 }
-
 func Test_objectMapFunc(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
@@ -613,7 +572,6 @@ func Test_objectMapFunc(t *testing.T) {
 		})
 	}
 }
-
 func Test_endpointSliceMapFunc(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
@@ -658,7 +616,6 @@ func Test_endpointSliceMapFunc(t *testing.T) {
 		})
 	}
 }
-
 func TestClusterSetMapFunc_ServiceExport(t *testing.T) {
 	clusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -716,11 +673,9 @@ func TestClusterSetMapFunc_ServiceExport(t *testing.T) {
 	r := NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, clusterSet.Namespace)
 	requests := r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, expectedReqs, requests)
-
 	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, "mismatch_ns")
 	requests = r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
-
 	// non-existing ClusterSet
 	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, "default")
 	r.installedSvcs.Add(&svcInfo{name: "nginx-stale", namespace: "default"})

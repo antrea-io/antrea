@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package k8s
-
 import (
 	"fmt"
 	"net"
 	"strings"
-
 	ip2 "github.com/containernetworking/plugins/pkg/ip"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
-
 // GetNodeAddrsWithType gets the available IP addresses of a Node. It will consider address types
 // specified in the types slice, in the provided order.
 // If no error is returned, the returned DualStackIPs includes at least one IPv4 or IPv6 address.
@@ -54,7 +46,6 @@ func GetNodeAddrsWithType(node *v1.Node, types []v1.NodeAddressType) (*ip.DualSt
 	if len(ipAddrStrs) == 0 {
 		return nil, fmt.Errorf("no IP with type in %v was found for Node '%s'", types, node.Name)
 	}
-
 	nodeAddrs := new(ip.DualStackIPs)
 	for i := range ipAddrStrs {
 		addr := net.ParseIP(ipAddrStrs[i])
@@ -69,14 +60,12 @@ func GetNodeAddrsWithType(node *v1.Node, types []v1.NodeAddressType) (*ip.DualSt
 	}
 	return nodeAddrs, nil
 }
-
 // GetNodeAddrs gets the available IP addresses of a Node. GetNodeAddrs will first try to get the
 // NodeInternalIP, then try to get the NodeExternalIP.
 // If no error is returned, the returned DualStackIPs includes at least one IPv4 or IPv6 address.
 func GetNodeAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
 	return GetNodeAddrsWithType(node, []v1.NodeAddressType{v1.NodeInternalIP, v1.NodeExternalIP})
 }
-
 // GetNodeAddrsFromAnnotations gets available IPs from the Node Annotation. The annotations are set by Antrea.
 func GetNodeAddrsFromAnnotations(node *v1.Node, annotationKey string) (*ip.DualStackIPs, error) {
 	annotationAddrsStr := node.Annotations[annotationKey]
@@ -97,7 +86,6 @@ func GetNodeAddrsFromAnnotations(node *v1.Node, annotationKey string) (*ip.DualS
 	}
 	return ipAddrs, nil
 }
-
 // GetNodeGatewayAddrs gets Node Antrea gateway IPs from the Node Spec.
 func GetNodeGatewayAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
 	nodeAddrs := new(ip.DualStackIPs)
@@ -126,7 +114,6 @@ func GetNodeGatewayAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
 	}
 	return nodeAddrs, nil
 }
-
 // GetNodeAllAddrs gets all Node IPs from the Node.
 func GetNodeAllAddrs(node *v1.Node) (ips sets.Set[string], err error) {
 	var nodeIPs, gwIPs, transportAddrs *ip.DualStackIPs
@@ -142,25 +129,20 @@ func GetNodeAllAddrs(node *v1.Node) (ips sets.Set[string], err error) {
 			ips.Insert(dsIPs.IPv6.String())
 		}
 	}
-
 	if nodeIPs, err = GetNodeAddrs(node); err != nil {
 		return
 	}
 	appendIP(nodeIPs)
-
 	if gwIPs, err = GetNodeGatewayAddrs(node); err != nil {
 		return
 	}
 	appendIP(gwIPs)
-
 	if transportAddrs, err = GetNodeAddrsFromAnnotations(node, types.NodeTransportAddressAnnotationKey); err != nil {
 		return
 	}
 	appendIP(transportAddrs)
-
 	return
 }
-
 func GetNodeTransportAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
 	transportAddrs, err := GetNodeAddrsFromAnnotations(node, types.NodeTransportAddressAnnotationKey)
 	if err != nil {

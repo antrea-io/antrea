@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package integration
-
 import (
 	"context"
 	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
@@ -26,27 +23,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/leader"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/leader"
 )
-
 // This file contains test cases for below basic scenarios:
 //  * Create ResourceImports when two ResourceExports are created
 //  * Update ResourceImports when one ResourceExports are removed
 //  * Delete ResourceImport when all ResourceExports are removed
-
 var (
 	testLeaderNS = "leaderns-one"
 )
-
 var _ = Describe("ResourceExport controller", func() {
 	const (
 		timeout   = time.Second * 15
@@ -60,13 +50,11 @@ var _ = Describe("ResourceExport controller", func() {
 	epResExportNameA := clusteraID + "-" + namespace + "-" + epName + "-endpoints"
 	svcResExportNameB := clusterbID + "-" + namespace + "-" + svcName + "-service"
 	epResExportNameB := clusterbID + "-" + namespace + "-" + epName + "-endpoints"
-
 	leaderNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testLeaderNS,
 		},
 	}
-
 	svcResExportA := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcResExportNameA,
@@ -192,40 +180,34 @@ var _ = Describe("ResourceExport controller", func() {
 		Expect(err == nil).Should(BeTrue())
 		err = k8sClient.Create(ctx, epResExportA, &client.CreateOptions{})
 		Expect(err == nil).Should(BeTrue())
-
 		svcResImport := &mcsv1alpha1.ResourceImport{}
 		Eventually(func() bool {
 			err = k8sClient.Get(ctx, svcResImportName, svcResImport)
 			return err == nil
 		}, timeout, interval).Should(BeTrue())
 		Expect(svcResImport.Spec.ServiceImport.Spec).Should(Equal(expectedSvcImportSpec))
-
 		epResImport := &mcsv1alpha1.ResourceImport{}
 		Eventually(func() bool {
 			err = k8sClient.Get(ctx, epResImportName, epResImport)
 			return err == nil
 		}, timeout, interval).Should(BeTrue())
 		Expect(epResImport.Spec.Endpoints.Subsets).Should(Equal(epResExportA.Spec.Endpoints.Subsets))
-
 		expectedSubsets := append(epResExportA.Spec.Endpoints.Subsets, epResExportB.Spec.Endpoints.Subsets...)
 		err = k8sClient.Create(ctx, svcResExportB, &client.CreateOptions{})
 		Expect(err == nil).Should(BeTrue())
 		err = k8sClient.Create(ctx, epResExportB, &client.CreateOptions{})
 		Expect(err == nil).Should(BeTrue())
-
 		// wait 2s for ResourceImport update
 		time.Sleep(2 * time.Second)
 		err = k8sClient.Get(ctx, epResImportName, epResImport)
 		Expect(elementsMatch(epResImport.Spec.Endpoints.Subsets, expectedSubsets)).Should(BeTrue())
 	})
-
 	It("Should update ResourceImports when a member cluster's ResourceExports are removed", func() {
 		By("By deleting one member cluster's ResourceExports")
 		err := k8sClient.Delete(ctx, &mcsv1alpha1.ResourceExport{ObjectMeta: metav1.ObjectMeta{Namespace: testLeaderNS, Name: svcResExportNameA}}, &client.DeleteOptions{})
 		Expect(err == nil).Should(BeTrue())
 		err = k8sClient.Delete(ctx, &mcsv1alpha1.ResourceExport{ObjectMeta: metav1.ObjectMeta{Namespace: testLeaderNS, Name: epResExportNameA}}, &client.DeleteOptions{})
 		Expect(err == nil).Should(BeTrue())
-
 		// wait 5s for ResourceImport update
 		time.Sleep(5 * time.Second)
 		epResImport := &mcsv1alpha1.ResourceImport{}
@@ -237,14 +219,12 @@ var _ = Describe("ResourceExport controller", func() {
 		Expect(err == nil).Should(BeTrue())
 		Expect(svcResImport.Spec.ServiceImport.Spec).Should(Equal(expectedSvcImportSpec))
 	})
-
 	It("Should delete ResourceImport when all member cluster's ResourceExports are removed", func() {
 		By("By deleting all member cluster's ResourceExports")
 		err := k8sClient.Delete(ctx, &mcsv1alpha1.ResourceExport{ObjectMeta: metav1.ObjectMeta{Namespace: testLeaderNS, Name: svcResExportNameB}}, &client.DeleteOptions{})
 		Expect(err == nil).Should(BeTrue())
 		err = k8sClient.Delete(ctx, &mcsv1alpha1.ResourceExport{ObjectMeta: metav1.ObjectMeta{Namespace: testLeaderNS, Name: epResExportNameB}}, &client.DeleteOptions{})
 		Expect(err == nil).Should(BeTrue())
-
 		// wait 2s for ResourceImport deletion
 		time.Sleep(2 * time.Second)
 		resImp := &mcsv1alpha1.ResourceImport{}
@@ -254,11 +234,8 @@ var _ = Describe("ResourceExport controller", func() {
 		Expect(apierrors.IsNotFound(err)).Should(BeTrue())
 	})
 })
-
 type dummyT struct{}
-
 func (t dummyT) Errorf(string, ...interface{}) {}
-
 // compare array ignoring the order of elements.
 func elementsMatch(listA, listB interface{}) bool {
 	return assert.ElementsMatch(dummyT{}, listA, listB)

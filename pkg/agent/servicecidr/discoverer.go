@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package servicecidr
-
 import (
 	"fmt"
 	"net"
 	"sync"
 	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,27 +27,19 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/strings/slices"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/util"
-=======
-	"antrea.io/antrea/pkg/agent/util"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/util"
 )
-
 const (
 	// Disable resyncing.
 	resyncPeriod time.Duration = 0
 )
-
 type EventHandler func(serviceCIDRs []*net.IPNet)
-
 type Interface interface {
 	GetServiceCIDRs() ([]*net.IPNet, error)
 	// The added handlers will be called when Service CIDR changes.
 	AddEventHandler(handler EventHandler)
 }
-
 type Discoverer struct {
 	serviceInformer cache.SharedIndexInformer
 	serviceLister   corelisters.ServiceLister
@@ -63,7 +52,6 @@ type Discoverer struct {
 	// initialized indicates whether the Discoverer has been initialized.
 	initialized bool
 }
-
 func NewServiceCIDRDiscoverer(serviceInformer coreinformers.ServiceInformer) *Discoverer {
 	d := &Discoverer{
 		serviceInformer: serviceInformer.Informer(),
@@ -79,10 +67,8 @@ func NewServiceCIDRDiscoverer(serviceInformer coreinformers.ServiceInformer) *Di
 	)
 	return d
 }
-
 func (d *Discoverer) Run(stopCh <-chan struct{}) {
 	defer d.queue.ShutDown()
-
 	klog.Info("Starting ServiceCIDRDiscoverer")
 	defer klog.Info("Stopping ServiceCIDRDiscoverer")
 	if !cache.WaitForCacheSync(stopCh, d.serviceInformer.HasSynced) {
@@ -90,14 +76,12 @@ func (d *Discoverer) Run(stopCh <-chan struct{}) {
 	}
 	svcs, _ := d.serviceLister.List(labels.Everything())
 	d.updateServiceCIDR(svcs...)
-
 	go func() {
 		for {
 			nn, quit := d.queue.Get()
 			if quit {
 				return
 			}
-
 			svc, _ := d.serviceLister.Services(nn.Namespace).Get(nn.Name)
 			// Ignore it if not found.
 			if svc != nil {
@@ -108,7 +92,6 @@ func (d *Discoverer) Run(stopCh <-chan struct{}) {
 	}()
 	<-stopCh
 }
-
 func (d *Discoverer) GetServiceCIDRs() ([]*net.IPNet, error) {
 	d.RLock()
 	defer d.RUnlock()
@@ -124,17 +107,14 @@ func (d *Discoverer) GetServiceCIDRs() ([]*net.IPNet, error) {
 	}
 	return serviceCIDRs, nil
 }
-
 func (d *Discoverer) AddEventHandler(handler EventHandler) {
 	d.eventHandlers = append(d.eventHandlers, handler)
 }
-
 func (d *Discoverer) addService(obj interface{}) {
 	svc := obj.(*corev1.Service)
 	klog.V(2).InfoS("Processing Service ADD event", "Service", klog.KObj(svc))
 	d.queue.Add(types.NamespacedName{Namespace: svc.Namespace, Name: svc.Name})
 }
-
 func (d *Discoverer) updateService(old, obj interface{}) {
 	oldSvc := old.(*corev1.Service)
 	curSvc := obj.(*corev1.Service)
@@ -143,16 +123,13 @@ func (d *Discoverer) updateService(old, obj interface{}) {
 		d.queue.Add(types.NamespacedName{Namespace: curSvc.Namespace, Name: curSvc.Name})
 	}
 }
-
 func (d *Discoverer) updateServiceCIDR(svcs ...*corev1.Service) {
 	var newServiceCIDRs []*net.IPNet
-
 	curServiceIPv4CIDR, curServiceIPv6CIDR := func() (*net.IPNet, *net.IPNet) {
 		d.RLock()
 		defer d.RUnlock()
 		return d.serviceIPv4CIDR, d.serviceIPv6CIDR
 	}()
-
 	updated := false
 	for _, svc := range svcs {
 		for _, clusterIPStr := range svc.Spec.ClusterIPs {
@@ -162,18 +139,15 @@ func (d *Discoverer) updateServiceCIDR(svcs ...*corev1.Service) {
 				continue
 			}
 			isIPv6 := utilnet.IsIPv6(clusterIP)
-
 			curServiceCIDR := curServiceIPv4CIDR
 			mask := net.IPv4len * 8
 			if isIPv6 {
 				curServiceCIDR = curServiceIPv6CIDR
 				mask = net.IPv6len * 8
 			}
-
 			if curServiceCIDR != nil && curServiceCIDR.Contains(clusterIP) {
 				continue
 			}
-
 			var newServiceCIDR *net.IPNet
 			var err error
 			if curServiceCIDR != nil {
@@ -189,7 +163,6 @@ func (d *Discoverer) updateServiceCIDR(svcs ...*corev1.Service) {
 				// If the calculated Service CIDR doesn't exist, generate a new Service CIDR with the ClusterIP.
 				newServiceCIDR = &net.IPNet{IP: clusterIP, Mask: mask}
 			}
-
 			if isIPv6 {
 				curServiceIPv6CIDR = newServiceCIDR
 			} else {
@@ -198,7 +171,6 @@ func (d *Discoverer) updateServiceCIDR(svcs ...*corev1.Service) {
 			updated = true
 		}
 	}
-
 	if !updated {
 		return
 	}

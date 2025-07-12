@@ -12,20 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package flowexporter
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 func TestIsConnectionDying(t *testing.T) {
 	for _, tc := range []struct {
 		tcpState       string
@@ -48,7 +41,6 @@ func TestIsConnectionDying(t *testing.T) {
 		assert.Equal(t, tc.expectedResult, result)
 	}
 }
-
 func TestConntrackConnActive(t *testing.T) {
 	for _, tc := range []struct {
 		originalPackets, prevPackets, reversePackets, prevReversePackets uint64
@@ -72,7 +64,6 @@ func TestConntrackConnActive(t *testing.T) {
 		assert.Equal(t, tc.expectedResult, result)
 	}
 }
-
 func TestRuleActionToUint8(t *testing.T) {
 	for _, tc := range []struct {
 		action         string
@@ -87,7 +78,6 @@ func TestRuleActionToUint8(t *testing.T) {
 		assert.Equal(t, tc.expectedResult, result)
 	}
 }
-
 func TestPolicyTypeToUint8(t *testing.T) {
 	for _, tc := range []struct {
 		policyType     v1beta2.NetworkPolicyType
@@ -101,7 +91,6 @@ func TestPolicyTypeToUint8(t *testing.T) {
 		assert.Equal(t, tc.expectedResult, result)
 	}
 }
-
 func TestLookupProtocolMap(t *testing.T) {
 	for _, tc := range []struct {
 		protocol       string

@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package controllerinfo
-
 import (
 	"encoding/json"
 	"io"
 	"strconv"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	"antrea.io/antrea/pkg/antctl/transform/common"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 // Response includes all data fields of clusterinfo.AntreaControllerInfo, but
 // removes the resource meta fields.
 type Response struct {
@@ -42,7 +34,6 @@ type Response struct {
 	ConnectedAgentNum           int32                                  `json:"connectedAgentNum,omitempty"`           // Number of agents which are connected to this controller
 	ControllerConditions        []crdv1beta1.ControllerCondition       `json:"controllerConditions,omitempty"`        // Controller condition contains types like ControllerHealthy
 }
-
 func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
 	b, err := io.ReadAll(reader)
 	if err != nil {
@@ -65,13 +56,10 @@ func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, erro
 	}
 	return resp, nil
 }
-
 var _ common.TableOutput = new(Response)
-
 func (r Response) GetTableHeader() []string {
 	return []string{"POD", "NODE", "STATUS", "NETWORK-POLICIES", "ADDRESS-GROUPS", "APPLIED-TO-GROUPS", "CONNECTED-AGENTS"}
 }
-
 func (r Response) GetControllerConditionStr() string {
 	if r.ControllerConditions == nil {
 		return ""
@@ -87,7 +75,6 @@ func (r Response) GetControllerConditionStr() string {
 	}
 	return controllerCondition
 }
-
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{r.PodRef.Namespace + "/" + r.PodRef.Name,
 		r.NodeRef.Name,
@@ -97,7 +84,6 @@ func (r Response) GetTableRow(maxColumnLength int) []string {
 		strconv.Itoa(int(r.NetworkPolicyControllerInfo.AppliedToGroupNum)),
 		strconv.Itoa(int(r.ConnectedAgentNum))}
 }
-
 func (r Response) SortRows() bool {
 	return true
 }

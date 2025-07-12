@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 func TestProcessAdminNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
 	portName := "secured"
@@ -437,7 +429,6 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 		})
 	}
 }
-
 func TestProcessBaselineAdminNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name                    string

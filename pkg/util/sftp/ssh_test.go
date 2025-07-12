@@ -11,23 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package sftp
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
-
-<<<<<<< HEAD
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
-=======
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
->>>>>>> origin/main
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
-
 func TestGetSSHClientConfig(t *testing.T) {
 	const (
 		user     = "foo"
@@ -37,7 +29,6 @@ func TestGetSSHClientConfig(t *testing.T) {
 	require.NoError(t, err)
 	ed25519PubKey, _, err := sftptesting.GenerateEd25519Key()
 	require.NoError(t, err)
-
 	testCases := []struct {
 		name                      string
 		hostKey                   []byte
@@ -72,7 +63,6 @@ func TestGetSSHClientConfig(t *testing.T) {
 			ed25519KeyValid:           true,
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, err := GetSSHClientConfig(user, password, tc.hostKey)

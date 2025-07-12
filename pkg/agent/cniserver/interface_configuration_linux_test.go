@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,16 +13,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cniserver
-
 import (
 	"fmt"
 	"net"
 	"sync"
 	"testing"
 	"unsafe"
-
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -31,8 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	"antrea.io/antrea/v2/pkg/agent/util/arping"
@@ -40,17 +34,14 @@ import (
 	netlinkutil "antrea.io/antrea/v2/pkg/agent/util/netlink"
 	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/agent/util/arping"
-	"antrea.io/antrea/pkg/agent/util/ndp"
-	netlinkutil "antrea.io/antrea/pkg/agent/util/netlink"
-	netlinktest "antrea.io/antrea/pkg/agent/util/netlink/testing"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util/arping"
+	"antrea.io/antrea/v2/pkg/agent/util/ndp"
+	netlinkutil "antrea.io/antrea/v2/pkg/agent/util/netlink"
+	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 var (
 	mtu                 = 1450
 	containerVethMac, _ = net.ParseMAC(containerMAC)
@@ -80,12 +71,10 @@ var (
 		PeerName: containerIfaceName,
 	}
 	validNSs = sync.Map{}
-
 	sriovUplinkName    = "uplink"
 	sriovVfIndex       = 5
 	sriovVfRepresentor = fmt.Sprintf("%s-%d", sriovUplinkName, sriovVfIndex)
 )
-
 func newTestIfConfigurator(ovsHardwareOffloadEnabled bool, netlink netlinkutil.Interface, sriovnet SriovNet) *ifConfigurator {
 	return &ifConfigurator{
 		ovsDatapathType:             ovsconfig.OVSDatapathSystem,
@@ -95,7 +84,6 @@ func newTestIfConfigurator(ovsHardwareOffloadEnabled bool, netlink netlinkutil.I
 		sriovnet:                    sriovnet,
 	}
 }
-
 type fakeNS struct {
 	path          string
 	fd            uintptr
@@ -103,7 +91,6 @@ type fakeNS struct {
 	stopCh        chan struct{}
 	waitCompleted bool
 }
-
 func (ns *fakeNS) Do(toRun func(ns.NetNS) error) error {
 	defer func() {
 		if ns.waitCompleted {
@@ -112,37 +99,30 @@ func (ns *fakeNS) Do(toRun func(ns.NetNS) error) error {
 	}()
 	return toRun(ns)
 }
-
 func (ns *fakeNS) Set() error {
 	return ns.setErr
 }
-
 func (ns *fakeNS) Path() string {
 	return ns.path
 }
-
 func (ns *fakeNS) Fd() uintptr {
 	return ns.fd
 }
-
 func (ns *fakeNS) Close() error {
 	return nil
 }
-
 func (ns *fakeNS) clear() {
 	if ns.waitCompleted {
 		<-ns.stopCh
 	}
 	validNSs.Delete(ns.path)
 }
-
 func createNS(t *testing.T, waitForComplete bool) *fakeNS {
 	nsPath := generateUUID()
 	fakeNs := &fakeNS{path: nsPath, fd: uintptr(unsafe.Pointer(&nsPath)), waitCompleted: waitForComplete, stopCh: make(chan struct{})}
 	validNSs.Store(nsPath, fakeNs)
 	return fakeNs
 }
-
 func getFakeNS(nspath string) (ns.NetNS, error) {
 	fakeNs, exists := validNSs.Load(nspath)
 	if exists {
@@ -150,18 +130,14 @@ func getFakeNS(nspath string) (ns.NetNS, error) {
 	}
 	return nil, fmt.Errorf("ns not found %s", nspath)
 }
-
 func TestConfigureContainerLink(t *testing.T) {
 	controller := gomock.NewController(t)
 	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
 	fakeNetlink := netlinktest.NewMockInterface(controller)
-
 	sriovVfNetdeviceName := "vfDevice"
 	vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVfNetdeviceName, Flags: net.FlagUp}}
-
 	defer mockGetNS()()
 	defer mockWithNetNSPath()()
-
 	for _, tc := range []struct {
 		name                      string
 		ovsHardwareOffloadEnabled bool
@@ -275,19 +251,16 @@ func TestConfigureContainerLink(t *testing.T) {
 		})
 	}
 }
-
 func TestChangeContainerMTU(t *testing.T) {
 	controller := gomock.NewController(t)
 	fakeNetlink := netlinktest.NewMockInterface(controller)
 	hostIfaceName := "pair0"
 	containerIfaceName := "eth0"
-
 	containerInterfaceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp}}
 	hostInterfaceLink := &netlink.Dummy{
 		LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: hostVethMac, Name: hostIfaceName, Flags: net.FlagUp},
 	}
 	notFoundErr := fmt.Errorf("not found")
-
 	tests := []struct {
 		name                   string
 		containerLink          netlink.Link
@@ -341,7 +314,6 @@ func TestChangeContainerMTU(t *testing.T) {
 			expectedErrStr:         "failed to set MTU for host interface",
 		},
 	}
-
 	defer mockWithNetNSPath()()
 	testIfConfigurator := newTestIfConfigurator(false, fakeNetlink, nil)
 	for _, tc := range tests {
@@ -351,14 +323,12 @@ func TestChangeContainerMTU(t *testing.T) {
 			defer mockGetInterfaceByName(nil, 2)()
 			defer mockIpGetVethPeerIfindex(2, tc.getPeerErr)()
 			defer mockGetInterfaceByIndex(tc.getInfByIdxErr, 2, hostIfaceName)()
-
 			if tc.containerLink != nil {
 				fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(tc.containerLink, nil).Times(1)
 				fakeNetlink.EXPECT().LinkSetMTU(tc.containerLink, gomock.Any()).Return(tc.setContainerMTUErr).Times(1)
 			} else {
 				fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(nil, tc.getContainerLinkErr).Times(1)
 			}
-
 			if tc.hostLink != nil {
 				fakeNetlink.EXPECT().LinkByName(hostIfaceName).Return(tc.hostLink, nil).Times(1)
 				fakeNetlink.EXPECT().LinkSetMTU(tc.hostLink, gomock.Any()).Return(tc.setPairInterfaceMTUErr).Times(1)
@@ -366,7 +336,6 @@ func TestChangeContainerMTU(t *testing.T) {
 			if tc.getHostLinkErr != nil {
 				fakeNetlink.EXPECT().LinkByName(hostIfaceName).Return(nil, tc.getHostLinkErr).Times(1)
 			}
-
 			err := testIfConfigurator.changeContainerMTU(containerNS.Path(), containerIfaceName, 50)
 			if tc.expectedErrStr != "" {
 				assert.Error(t, err)
@@ -377,7 +346,6 @@ func TestChangeContainerMTU(t *testing.T) {
 		})
 	}
 }
-
 func TestAdvertiseContainerAddr(t *testing.T) {
 	interfaceID := 1
 	ipv4CIDR := net.IPNet{
@@ -393,7 +361,6 @@ func TestAdvertiseContainerAddr(t *testing.T) {
 	defer mockIsNSorErr()()
 	defer mockWithNetNSPath()()
 	testIfConfigurator := newTestIfConfigurator(false, nil, nil)
-
 	for _, tc := range []struct {
 		name              string
 		result            *current.Result
@@ -489,17 +456,14 @@ func TestAdvertiseContainerAddr(t *testing.T) {
 		})
 	}
 }
-
 func TestCheckContainerInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	containerIPs := ipamResult.IPs
 	containerRoutes := ipamResult.Routes
 	sriovVfNetdeviceName := "vfDevice"
 	vfDeviceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: sriovVfNetdeviceName, Flags: net.FlagUp}}
-
 	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
 	fakeNetlink := netlinktest.NewMockInterface(controller)
-
 	defer mockWithNetNSPath()()
 	testIfConfigurator := newTestIfConfigurator(false, fakeNetlink, fakeSriovNet)
 	for _, tc := range []struct {
@@ -596,14 +560,11 @@ func TestCheckContainerInterface(t *testing.T) {
 			defer mockIpValidateExpectedInterfaceIPs(tc.validateIPErr)()
 			defer mockIpValidateExpectedRoute(tc.validateRouteErr)()
 			defer mockIpGetVethPeerIfindex(0, tc.getPeerErr)()
-
 			containerNS := createNS(t, false)
 			defer containerNS.clear()
-
 			if tc.containerIface.Sandbox == "" {
 				tc.containerIface.Sandbox = containerNS.Path()
 			}
-
 			if tc.containerLink != nil {
 				fakeNetlink.EXPECT().LinkByName(tc.containerIface.Name).Return(tc.containerLink, nil).Times(1)
 			}
@@ -620,12 +581,10 @@ func TestCheckContainerInterface(t *testing.T) {
 		})
 	}
 }
-
 func TestValidateVFRepInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
 	testIfConfigurator := newTestIfConfigurator(false, nil, fakeSriovNet)
-
 	for _, tc := range []struct {
 		name            string
 		sriovVFDeviceID string
@@ -673,12 +632,10 @@ func TestValidateVFRepInterface(t *testing.T) {
 		})
 	}
 }
-
 func TestGetInterceptedInterfaces(t *testing.T) {
 	sandbox := "containerSandbox"
 	containerNS := "containerNS"
 	testIfConfigurator := newTestIfConfigurator(false, nil, nil)
-
 	for _, tc := range []struct {
 		name                 string
 		hostIfaceName        string
@@ -728,12 +685,10 @@ func TestGetInterceptedInterfaces(t *testing.T) {
 		})
 	}
 }
-
 func TestValidateContainerPeerInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	fakeNetlink := netlinktest.NewMockInterface(controller)
 	testIfConfigurator := newTestIfConfigurator(false, fakeNetlink, nil)
-
 	for _, tc := range []struct {
 		name          string
 		interfaces    []*current.Interface
@@ -810,7 +765,6 @@ func TestValidateContainerPeerInterface(t *testing.T) {
 		})
 	}
 }
-
 func mockSetupVethWithName(setupVethErr error, containerIndex, hostIndex int) func() {
 	originalIPSetupVethWithName := ipSetupVethWithName
 	ipSetupVethWithName = func(contVethName, hostVethName string, mtu int, mac string, hostNS ns.NetNS) (net.Interface, net.Interface, error) {
@@ -825,7 +779,6 @@ func mockSetupVethWithName(setupVethErr error, containerIndex, hostIndex int) fu
 		ipSetupVethWithName = originalIPSetupVethWithName
 	}
 }
-
 func mockDelLinkByName(err error, deletedLink *string) func() {
 	origin := ipDelLinkByName
 	ipDelLinkByName = func(name string) error {
@@ -836,7 +789,6 @@ func mockDelLinkByName(err error, deletedLink *string) func() {
 		ipDelLinkByName = origin
 	}
 }
-
 func mockRenameInterface(renameIntefaceErr error) func() {
 	originalRenameInterface := renameInterface
 	renameInterface = func(from, to string) error {
@@ -846,7 +798,6 @@ func mockRenameInterface(renameIntefaceErr error) func() {
 		renameInterface = originalRenameInterface
 	}
 }
-
 func mockIPAMConfigureIface(ipamConfigureIfaceErr error) func() {
 	originalIPAMConfigureIface := ipamConfigureIface
 	ipamConfigureIface = func(ifName string, res *current.Result) error {
@@ -856,7 +807,6 @@ func mockIPAMConfigureIface(ipamConfigureIfaceErr error) func() {
 		ipamConfigureIface = originalIPAMConfigureIface
 	}
 }
-
 func mockEthtoolTXHWCsumOff(ethtoolEthTXHWCsumOffErr error) func() {
 	originalEthtoolTXHWCsumOff := ethtoolTXHWCsumOff
 	ethtoolTXHWCsumOff = func(name string) error {
@@ -866,7 +816,6 @@ func mockEthtoolTXHWCsumOff(ethtoolEthTXHWCsumOffErr error) func() {
 		ethtoolTXHWCsumOff = originalEthtoolTXHWCsumOff
 	}
 }
-
 func mockGetInterfaceByName(netInterfaceError error, ifaceIndex int) func() {
 	originalNetInterfaceByName := netInterfaceByName
 	netInterfaceByName = func(name string) (*net.Interface, error) {
@@ -876,7 +825,6 @@ func mockGetInterfaceByName(netInterfaceError error, ifaceIndex int) func() {
 		netInterfaceByName = originalNetInterfaceByName
 	}
 }
-
 func mockGetInterfaceByIndex(netInterfaceError error, ifaceIndex int, name string) func() {
 	originalNetInterfaceByIndex := netInterfaceByIndex
 	netInterfaceByIndex = func(idx int) (*net.Interface, error) {
@@ -886,7 +834,6 @@ func mockGetInterfaceByIndex(netInterfaceError error, ifaceIndex int, name strin
 		netInterfaceByIndex = originalNetInterfaceByIndex
 	}
 }
-
 func mockIpValidateExpectedInterfaceIPs(validateIPErr error) func() {
 	originalIpValidateExpectedInterfaceIPs := ipValidateExpectedInterfaceIPs
 	ipValidateExpectedInterfaceIPs = func(ifName string, resultIPs []*current.IPConfig) error {
@@ -896,7 +843,6 @@ func mockIpValidateExpectedInterfaceIPs(validateIPErr error) func() {
 		ipValidateExpectedInterfaceIPs = originalIpValidateExpectedInterfaceIPs
 	}
 }
-
 func mockIpValidateExpectedRoute(validateRouteErr error) func() {
 	originalIpValidateExpectedRoute := ipValidateExpectedRoute
 	ipValidateExpectedRoute = func(resultRoutes []*cnitypes.Route) error {
@@ -906,7 +852,6 @@ func mockIpValidateExpectedRoute(validateRouteErr error) func() {
 		ipValidateExpectedRoute = originalIpValidateExpectedRoute
 	}
 }
-
 func mockIpGetVethPeerIfindex(peerIndex int, getPeerErr error) func() {
 	originalIpGetVethPeerIfindex := ipGetVethPeerIfindex
 	ipGetVethPeerIfindex = func(ifName string) (netlink.Link, int, error) {
@@ -916,7 +861,6 @@ func mockIpGetVethPeerIfindex(peerIndex int, getPeerErr error) func() {
 		ipGetVethPeerIfindex = originalIpGetVethPeerIfindex
 	}
 }
-
 func mockGetNSPeerDevBridge(hostInterface *net.Interface, brName string, getPeerIfaceErr error) func() {
 	originalGetNSPeerDevBridge := getNSPeerDevBridge
 	getNSPeerDevBridge = func(nsPath, dev string) (*net.Interface, string, error) {
@@ -926,7 +870,6 @@ func mockGetNSPeerDevBridge(hostInterface *net.Interface, brName string, getPeer
 		getNSPeerDevBridge = originalGetNSPeerDevBridge
 	}
 }
-
 func mockGetNSDevInterface(containerInterface *net.Interface, getContainerIfaceErr error) func() {
 	originalGetNSDevInterface := getNSDevInterface
 	getNSDevInterface = func(nsPath, dev string) (*net.Interface, error) {
@@ -936,7 +879,6 @@ func mockGetNSDevInterface(containerInterface *net.Interface, getContainerIfaceE
 		getNSDevInterface = originalGetNSDevInterface
 	}
 }
-
 func mockGetNS() func() {
 	originalGetNS := nsGetNS
 	nsGetNS = getFakeNS
@@ -944,7 +886,6 @@ func mockGetNS() func() {
 		nsGetNS = originalGetNS
 	}
 }
-
 func mockWithNetNSPath() func() {
 	originalWithNetNSPath := nsWithNetNSPath
 	nsWithNetNSPath = func(nspath string, toRun func(ns.NetNS) error) error {
@@ -958,7 +899,6 @@ func mockWithNetNSPath() func() {
 		nsWithNetNSPath = originalWithNetNSPath
 	}
 }
-
 func mockIsNSorErr() func() {
 	originalIsNSorErr := nsIsNSorErr
 	nsIsNSorErr = func(nspath string) error {

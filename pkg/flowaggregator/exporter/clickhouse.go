@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"context"
 	"fmt"
@@ -21,34 +19,26 @@ import (
 	"path"
 	"reflect"
 	"time"
-
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/v2/pkg/flowaggregator/clickhouseclient"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
-	"antrea.io/antrea/pkg/flowaggregator/options"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/flowaggregator/clickhouseclient"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 )
-
 type ClickHouseExporter struct {
 	chConfig        *clickhouseclient.ClickHouseConfig
 	chExportProcess *clickhouseclient.ClickHouseExportProcess
 }
-
 const (
 	CACertFile      = "ca.crt"
 	CertDir         = "/etc/flow-aggregator/certs/clickhouse"
 	DefaultInterval = 1 * time.Second
 	Timeout         = 1 * time.Minute
 )
-
 func buildClickHouseConfig(opt *options.Options) clickhouseclient.ClickHouseConfig {
 	return clickhouseclient.ClickHouseConfig{
 		Username:           os.Getenv("CH_USERNAME"),
@@ -62,7 +52,6 @@ func buildClickHouseConfig(opt *options.Options) clickhouseclient.ClickHouseConf
 		InsecureSkipVerify: opt.Config.ClickHouse.TLS.InsecureSkipVerify,
 	}
 }
-
 func NewClickHouseExporter(clusterUUID uuid.UUID, opt *options.Options) (*ClickHouseExporter, error) {
 	chConfig := buildClickHouseConfig(opt)
 	klog.InfoS("ClickHouse configuration", "database", chConfig.Database, "databaseURL", chConfig.DatabaseURL, "debug", chConfig.Debug,
@@ -92,19 +81,15 @@ func NewClickHouseExporter(clusterUUID uuid.UUID, opt *options.Options) (*ClickH
 		chExportProcess: chExportProcess,
 	}, nil
 }
-
 func (e *ClickHouseExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
 	return e.chExportProcess.CacheRecord(record)
 }
-
 func (e *ClickHouseExporter) Start() {
 	e.chExportProcess.Start()
 }
-
 func (e *ClickHouseExporter) Stop() {
 	e.chExportProcess.Stop()
 }
-
 func (e *ClickHouseExporter) UpdateOptions(opt *options.Options) {
 	chConfig := buildClickHouseConfig(opt)
 	connect, err := clickhouseclient.PrepareClickHouseConnection(chConfig)
@@ -127,7 +112,6 @@ func (e *ClickHouseExporter) UpdateOptions(opt *options.Options) {
 	}
 	klog.InfoS("New ClickHouse configuration", "database", chConfig.Database, "databaseURL", chConfig.DatabaseURL, "debug", chConfig.Debug, "compress", *chConfig.Compress, "commitInterval", chConfig.CommitInterval)
 }
-
 func (e *ClickHouseExporter) Flush() error {
 	return nil
 }

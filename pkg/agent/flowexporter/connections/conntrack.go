@@ -11,28 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"net"
 	"net/netip"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
-
 // InitializeConnTrackDumper initializes the ConnTrackDumper interface for different OS and datapath types.
 func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, ovsDatapathType ovsconfig.OVSDatapathType, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) ConnTrackDumper {
 	var svcCIDRv4, svcCIDRv6 netip.Prefix
@@ -42,27 +34,22 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net
 	if serviceCIDRv6 != nil {
 		svcCIDRv6 = netip.MustParsePrefix(serviceCIDRv6.String())
 	}
-
 	var connTrackDumper ConnTrackDumper
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
 		connTrackDumper = NewConnTrackSystem(nodeConfig, svcCIDRv4, svcCIDRv6, isAntreaProxyEnabled, protocolFilter)
 	}
 	return connTrackDumper
 }
-
 func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) []*flowexporter.Connection {
-
 	filteredConns := conns[:0]
 	gwIPv4, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
 	gwIPv6, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv6)
-
 	for _, conn := range conns {
 		if conn.Zone != zoneFilter {
 			continue
 		}
 		srcIP := conn.FlowKey.SourceAddress
 		dstIP := conn.FlowKey.DestinationAddress
-
 		// Consider Pod-to-Pod, Pod-To-Service and Pod-To-External flows.
 		if srcIP == gwIPv4 || dstIP == gwIPv4 {
 			continue
@@ -70,7 +57,6 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 		if srcIP == gwIPv6 || dstIP == gwIPv6 {
 			continue
 		}
-
 		if !isAntreaProxyEnabled {
 			// Pod-to-Service flows with kube-proxy: There are two conntrack flows
 			// for every Pod-to-Service flow. One is with ClusterIP as destination
@@ -85,11 +71,9 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 				continue
 			}
 		}
-
 		if !protocolFilter.Allow(conn.FlowKey.Protocol) {
 			continue
 		}
-
 		filteredConns = append(filteredConns, conn)
 	}
 	return filteredConns

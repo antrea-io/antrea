@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipgroupassociation
-
 import (
 	"net"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -28,43 +25,34 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/controller/grouping"
 	"antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/controller/grouping"
-	"antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	"antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const informerDefaultResync = 30 * time.Second
-
 type fakeIPBQuerier struct {
 	ipGroupMap map[string][]types.Group
 }
-
 func (iq fakeIPBQuerier) GetAssociatedIPBlockGroups(ip net.IP) []types.Group {
 	if groupList, ok := iq.ipGroupMap[ip.String()]; ok {
 		return groupList
 	}
 	return nil
 }
-
 type fakeQuerier struct {
 	groups map[string][]types.Group
 }
-
 func (q fakeQuerier) GetAssociatedGroups(name, namespace string) []types.Group {
 	memberKey := k8s.NamespacedName(namespace, name)
 	if refs, ok := q.groups[memberKey]; ok {
@@ -72,13 +60,11 @@ func (q fakeQuerier) GetAssociatedGroups(name, namespace string) []types.Group {
 	}
 	return []types.Group{}
 }
-
 func TestREST(t *testing.T) {
 	r := NewREST(nil, nil, nil, nil)
 	assert.Equal(t, &controlplane.IPGroupAssociation{}, r.New())
 	assert.False(t, r.NamespaceScoped())
 }
-
 func TestRESTGet(t *testing.T) {
 	podA := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -296,7 +282,6 @@ func TestRESTGet(t *testing.T) {
 			expectErr: false,
 		},
 	}
-
 	podObjs := []runtime.Object{podA, podB}
 	client := fake.NewSimpleClientset(podObjs...)
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
@@ -307,14 +292,12 @@ func TestRESTGet(t *testing.T) {
 	eeInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
 	podInformer.Informer().AddIndexers(cache.Indexers{grouping.PodIPsIndex: grouping.PodIPsIndexFunc})
 	eeInformer.Informer().AddIndexers(cache.Indexers{grouping.ExternalEntityIPsIndex: grouping.ExternalEntityIPsIndexFunc})
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
 	crdInformerFactory.WaitForCacheSync(stopCh)
-
 	rest := NewREST(podInformer, eeInformer, fakeIPBQuerier{ipGroupMap: ipGroups}, fakeQuerier{groups: groups})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

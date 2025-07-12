@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package connections
-
 import (
 	"net"
 	"net/netip"
@@ -22,13 +20,10 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/ti-mo/conntrack"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
@@ -36,17 +31,14 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter/filter"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/util/sysctl"
-	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
+	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 )
-
 var (
 	srcAddr       = netip.MustParseAddr("1.2.3.4")
 	dstAddr       = netip.MustParseAddr("4.3.2.1")
@@ -54,7 +46,6 @@ var (
 	gwAddr        = netip.MustParseAddr("8.7.6.5")
 	_, podCIDR, _ = net.ParseCIDR("1.2.3.0/24")
 	svcCIDR       = netip.MustParsePrefix("100.50.25.0/24")
-
 	conntrackFlowTuple = conntrack.Tuple{
 		IP: conntrack.IPTuple{
 			SourceAddress:      srcAddr,
@@ -78,7 +69,6 @@ var (
 		},
 	}
 )
-
 func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	// Create flows for test
 	tuple := flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: dstAddr, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
@@ -112,7 +102,6 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 		Zone:    openflow.CtZone,
 	}
 	testFlowsMixedProtocols := []*flowexporter.Connection{antreaFlow, antreaFlow, antreaFlow, antreaUPDFlow, antreaUPDFlow, antreaSCTPFlow}
-
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
 	gwConfig := &config.GatewayConfig{
@@ -165,12 +154,10 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 			// Test the DumpFlows implementation of connTrackSystem
 			mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
 			connDumperDPSystem := NewConnTrackSystem(nodeConfig, svcCIDR, netip.Prefix{}, false, filter.NewProtocolFilter(tc.protocols))
-
 			connDumperDPSystem.connTrack = mockNetlinkCT
 			// Set expects for mocks
 			mockNetlinkCT.EXPECT().Dial().Return(nil)
 			mockNetlinkCT.EXPECT().DumpFlowsInCtZone(uint16(openflow.CtZone)).Return(slices.Clone(tc.testFlows), nil)
-
 			conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
 			require.NoError(t, err, "Dump flows function returned error")
 			assert.Equal(t, tc.expectedConnections, len(conns), "number of filtered connections should be equal")
@@ -178,13 +165,10 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 		})
 	}
 }
-
 func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
 	// Create mock interface
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
-
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
 	gwConfig := &config.GatewayConfig{
@@ -193,7 +177,6 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig: gwConfig,
 	}
-
 	connDumper := &connTrackOvsCtl{
 		nodeConfig,
 		svcCIDR,
@@ -237,7 +220,6 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		Labels:                     []byte{1, 0, 0, 0, 2, 0, 0, 0},
 	}
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/dump-conntrack", false, "-m", "-s").Return(ovsctlCmdOutput, nil)
-
 	conns, totalConns, err := connDumper.DumpFlows(uint16(openflow.CtZone))
 	require.NoError(t, err, "conntrackNetdev.DumpConnections function returned error")
 	assert.Equal(t, len(conns), 1)
@@ -247,7 +229,6 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	assert.Equal(t, conns[0], expConn, "filtered connection and expected connection should be same")
 	assert.Equal(t, len(outputFlow), totalConns, "Number of connections in conntrack table should be equal to outputFlow")
 }
-
 func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
 	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, netip.Prefix{}, netip.Prefix{}, false, filter.NewProtocolFilter(nil))
 	maxConns, err := connDumperDPSystem.GetMaxConnections()
@@ -256,7 +237,6 @@ func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
 	require.NoError(t, err, "Cannot read netfilter/nf_conntrack_max")
 	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to netfilter/nf_conntrack_max")
 }
-
 func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
@@ -275,7 +255,6 @@ func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 	require.NoError(t, err, "GetMaxConnections function returned error")
 	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to the previous hard-coded value")
 }
-
 func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 	// Create new conntrack flow with status set to assured.
 	netlinkFlow := &conntrack.Flow{
@@ -283,7 +262,6 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		Timeout: 123, Status: conntrack.Status{Value: conntrack.StatusAssured}, Mark: 0x1234, Zone: 2,
 		Timestamp: conntrack.Timestamp{Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC)},
 	}
-
 	tuple := flowexporter.Tuple{
 		SourceAddress:      conntrackFlowTuple.IP.SourceAddress,
 		DestinationAddress: conntrackFlowTupleReply.IP.SourceAddress,
@@ -311,13 +289,11 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		DestinationPodName:         "",
 		TCPState:                   "",
 	}
-
 	antreaFlow := NetlinkFlowToAntreaConnection(netlinkFlow)
 	// Just add the stop time directly as it will be set to the time of day at
 	// which the function was executed.
 	expectedAntreaFlow.StopTime = antreaFlow.StopTime
 	assert.Equalf(t, expectedAntreaFlow, antreaFlow, "both flows should be equal")
-
 	// Create new conntrack flow with status set to dying connection.
 	netlinkFlow = &conntrack.Flow{
 		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTupleReply, TupleMaster: conntrackFlowTuple,
@@ -348,11 +324,9 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		DestinationPodName:         "",
 		TCPState:                   "",
 	}
-
 	antreaFlow = NetlinkFlowToAntreaConnection(netlinkFlow)
 	assert.Equalf(t, expectedAntreaFlow, antreaFlow, "both flows should be equal")
 }
-
 func TestStateToString(t *testing.T) {
 	for _, tc := range []struct {
 		state          uint8

@@ -1,25 +1,19 @@
 /*
 Copyright 2021 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package leader
-
 import (
 	"reflect"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -30,20 +24,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 var (
 	now        = metav1.Now()
 	dropAction = v1beta1.RuleActionDrop
@@ -98,7 +87,6 @@ var (
 		},
 	}
 )
-
 func TestResourceExportReconciler_handleServiceExportDeleteEvent(t *testing.T) {
 	existingResExportWithLegacyFinalizer := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -136,23 +124,19 @@ func TestResourceExportReconciler_handleServiceExportDeleteEvent(t *testing.T) {
 	}
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-service"}
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExportWithLegacyFinalizer, existingResExport, existResImport).Build()
-
 	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
 	_, err := r.Reconcile(common.TestCtx, svcResReq)
 	require.NoError(t, err, "ResourceExport Reconciler should handle ResourceExport delete event successfully")
 	_, err = r.Reconcile(common.TestCtx, svcResReq2)
 	require.NoError(t, err, "ResourceExport Reconciler should handle ResourceExport delete event successfully")
-
 	resImport := &mcsv1alpha1.ResourceImport{}
 	err = fakeClient.Get(common.TestCtx, namespacedName, resImport)
 	assert.Truef(t, apierrors.IsNotFound(err), "ResourceExport Reconciler should delete ResourceImport successfully")
-
 	resExportsLeft := &mcsv1alpha1.ResourceExportList{}
 	err = fakeClient.List(common.TestCtx, resExportsLeft)
 	require.NoError(t, err, "failed to get all ResourceExports")
 	assert.Empty(t, resExportsLeft.Items, "unexpected number of ResourceExports left in the cluster after deletion")
 }
-
 func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T) {
 	existingResExport1 := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -221,24 +205,20 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-endpoints"}
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExport1, existingResExport2, existingResExport3, existResImport).
 		WithStatusSubresource(existingResExport1, existingResExport2, existingResExport3, existResImport).Build()
-
 	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
 	_, err := r.Reconcile(common.TestCtx, epResReq)
 	require.NoError(t, err, "ResourceExport Reconciler should handle Endpoints ResourceExport delete event successfully")
 	_, err = r.Reconcile(common.TestCtx, epResReq2)
 	require.NoError(t, err, "ResourceExport Reconciler should handle Endpoints ResourceExport delete event successfully")
-
 	resImport := &mcsv1alpha1.ResourceImport{}
 	err = fakeClient.Get(common.TestCtx, namespacedName, resImport)
 	require.NoError(t, err, "failed to get ResourceImport")
 	assert.ElementsMatch(t, expectedSubsets, resImport.Spec.Endpoints.Subsets, "unexpected ResourceImport Subsets")
-
 	resExportsLeft := &mcsv1alpha1.ResourceExportList{}
 	err = fakeClient.List(common.TestCtx, resExportsLeft)
 	require.NoError(t, err, "failed to get all ResourceExports")
 	assert.Equalf(t, 1, len(resExportsLeft.Items), "unexpected number of ResourceExports left in the cluster after deletion")
 }
-
 func TestResourceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 	existingResExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -281,7 +261,6 @@ func TestResourceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 		}
 	}
 }
-
 func TestResourceExportReconciler_handleEndpointExportCreateEvent(t *testing.T) {
 	existEPResExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -343,7 +322,6 @@ func TestResourceExportReconciler_handleEndpointExportCreateEvent(t *testing.T) 
 		}
 	}
 }
-
 func TestResourceExportReconciler_handleACNPExportCreateEvent(t *testing.T) {
 	existingResExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -377,7 +355,6 @@ func TestResourceExportReconciler_handleACNPExportCreateEvent(t *testing.T) {
 		}
 	}
 }
-
 var (
 	newResExport = &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -400,7 +377,6 @@ var (
 			},
 		},
 	}
-
 	existResImport = &mcsv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -419,7 +395,6 @@ var (
 		},
 	}
 )
-
 // When there is only one Service ResourceExport mapping to ResourceImport
 // the single one ResourceExport update should trigger ResourceImport update
 func TestResourceExportReconciler_handleSingleServiceUpdateEvent(t *testing.T) {
@@ -454,7 +429,6 @@ func TestResourceExportReconciler_handleSingleServiceUpdateEvent(t *testing.T) {
 		}
 	}
 }
-
 // When there are multiple Service ResourceExports mapping to ResourceImport
 // one ResourceExport update with ports conflicts should return error
 func TestResourceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
@@ -474,7 +448,6 @@ func TestResourceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 			},
 		},
 	}
-
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
 		WithObjects(newResExport, existingResExport2, existResImport).WithStatusSubresource(newResExport, existingResExport2, existResImport).Build()
 	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
@@ -492,7 +465,6 @@ func TestResourceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 		}
 	}
 }
-
 func TestResourceExportReconciler_handleClusterInfoKind(t *testing.T) {
 	clusterAInfo := mcsv1alpha1.ClusterInfo{
 		ClusterID:   "cluster-a",
@@ -640,7 +612,6 @@ func TestResourceExportReconciler_handleClusterInfoKind(t *testing.T) {
 			req := ctrl.Request{NamespacedName: namespacedName}
 			_, err := r.Reconcile(common.TestCtx, req)
 			require.NoError(t, err, "ResourceExport Reconciler should handle ResourceExports events successfully")
-
 			teImport := mcsv1alpha1.ResourceImport{}
 			err = fakeClient.Get(common.TestCtx, namespacedName, &teImport)
 			if err == nil {

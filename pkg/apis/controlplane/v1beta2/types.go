@@ -11,28 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package v1beta2
-
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-	statsv1alpha1 "antrea.io/antrea/apis/pkg/apis/stats/v1alpha1"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 )
-
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AppliedToGroup is the message format of antrea/pkg/controller/types.AppliedToGroup in an API response.
 type AppliedToGroup struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -40,7 +32,6 @@ type AppliedToGroup struct {
 	// GroupMembers is list of resources selected by this group.
 	GroupMembers []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,2,rep,name=groupMembers"`
 }
-
 // PodReference represents a Pod Reference.
 type PodReference struct {
 	// The name of this Pod.
@@ -48,13 +39,11 @@ type PodReference struct {
 	// The Namespace of this Pod.
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
-
 // NodeReference represents a Node Reference.
 type NodeReference struct {
 	// The name of this Node.
 	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
 }
-
 // ServiceReference represents reference to a v1.Service.
 type ServiceReference struct {
 	// The name of this Service.
@@ -62,7 +51,6 @@ type ServiceReference struct {
 	// The Namespace of this Service.
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
-
 // NamedPort represents a Port with a name on Pod.
 type NamedPort struct {
 	// Port represents the Port number.
@@ -72,7 +60,6 @@ type NamedPort struct {
 	// Protocol for port. Must be UDP, TCP, or SCTP.
 	Protocol Protocol `json:"protocol,omitempty" protobuf:"bytes,3,opt,name=protocol"`
 }
-
 // ExternalEntityReference represents a ExternalEntity Reference.
 type ExternalEntityReference struct {
 	// The name of this ExternalEntity.
@@ -80,7 +67,6 @@ type ExternalEntityReference struct {
 	// The Namespace of this ExternalEntity.
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
-
 // GroupMember represents resource member to be populated in Groups.
 type GroupMember struct {
 	// Pod maintains the reference to the Pod.
@@ -97,12 +83,10 @@ type GroupMember struct {
 	// Group and only a NodePort type Service can be referred by this field.
 	Service *ServiceReference `json:"service,omitempty" protobuf:"bytes,6,opt,name=service"`
 }
-
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // ClusterGroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a ClusterGroup.
 type ClusterGroupMembers struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -113,11 +97,9 @@ type ClusterGroupMembers struct {
 	TotalPages        int64         `json:"totalPages" protobuf:"varint,5,opt,name=totalPages"`
 	CurrentPage       int64         `json:"currentPage" protobuf:"varint,6,opt,name=currentPage"`
 }
-
 // +genclient
 // +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // GroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a Group.
 type GroupMembers struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -128,18 +110,14 @@ type GroupMembers struct {
 	TotalPages        int64         `json:"totalPages" protobuf:"varint,5,opt,name=totalPages"`
 	CurrentPage       int64         `json:"currentPage" protobuf:"varint,6,opt,name=currentPage"`
 }
-
 // +k8s:conversion-gen:explicit-from=net/url.Values
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type PaginationGetOptions struct {
 	metav1.TypeMeta `json:",inline"`
 	Page            int64 `json:"page" protobuf:"varint,1,opt,name=page"`
 	Limit           int64 `json:"limit" protobuf:"varint,2,opt,name=limit"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta     `json:",inline"`
@@ -147,39 +125,31 @@ type AppliedToGroupPatch struct {
 	AddedGroupMembers   []GroupMember `json:"addedGroupMembers,omitempty" protobuf:"bytes,2,rep,name=addedGroupMembers"`
 	RemovedGroupMembers []GroupMember `json:"removedGroupMembers,omitempty" protobuf:"bytes,3,rep,name=removedGroupMembers"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AppliedToGroupList is a list of AppliedToGroup objects.
 type AppliedToGroupList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []AppliedToGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
-
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AddressGroup is the message format of antrea/pkg/controller/types.AddressGroup in an API response.
 type AddressGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	GroupMembers      []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,2,rep,name=groupMembers"`
 }
-
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
 type IPAddress []byte
-
 // IPNet describes an IP network.
 type IPNet struct {
 	IP           IPAddress `json:"ip,omitempty" protobuf:"bytes,1,opt,name=ip"`
 	PrefixLength int32     `json:"prefixLength,omitempty" protobuf:"varint,2,opt,name=prefixLength"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AddressGroupPatch describes the incremental update of an AddressGroup.
 type AddressGroupPatch struct {
 	metav1.TypeMeta     `json:",inline"`
@@ -187,18 +157,14 @@ type AddressGroupPatch struct {
 	AddedGroupMembers   []GroupMember `json:"addedGroupMembers,omitempty" protobuf:"bytes,2,rep,name=addedGroupMembers"`
 	RemovedGroupMembers []GroupMember `json:"removedGroupMembers,omitempty" protobuf:"bytes,3,rep,name=removedGroupMembers"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AddressGroupList is a list of AddressGroup objects.
 type AddressGroupList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []AddressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
-
 type NetworkPolicyType string
-
 const (
 	K8sNetworkPolicy           NetworkPolicyType = "K8sNetworkPolicy"
 	AntreaClusterNetworkPolicy NetworkPolicyType = "AntreaClusterNetworkPolicy"
@@ -206,7 +172,6 @@ const (
 	AdminNetworkPolicy         NetworkPolicyType = "AdminNetworkPolicy"
 	BaselineAdminNetworkPolicy NetworkPolicyType = "BaselineAdminNetworkPolicy"
 )
-
 type NetworkPolicyReference struct {
 	// Type of the NetworkPolicy.
 	Type NetworkPolicyType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type,casttype=NetworkPolicyType"`
@@ -217,12 +182,10 @@ type NetworkPolicyReference struct {
 	// UID of the NetworkPolicy.
 	UID types.UID `json:"uid,omitempty" protobuf:"bytes,4,opt,name=uid,casttype=k8s.io/apimachinery/pkg/types.UID"`
 }
-
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.
 type NetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -241,15 +204,12 @@ type NetworkPolicy struct {
 	// Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
 	SourceRef *NetworkPolicyReference `json:"sourceRef,omitempty" protobuf:"bytes,6,opt,name=sourceRef"`
 }
-
 // Direction defines traffic direction of NetworkPolicyRule.
 type Direction string
-
 const (
 	DirectionIn  Direction = "In"
 	DirectionOut Direction = "Out"
 )
-
 // NetworkPolicyRule describes a particular set of traffic that is allowed.
 type NetworkPolicyRule struct {
 	// The direction of this rule.
@@ -268,11 +228,8 @@ type NetworkPolicyRule struct {
 	// Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty
 	// action “nil” defaults to Allow action, which would be the case for rules created for
 	// K8s Network Policy.
-<<<<<<< HEAD
-	Action *crdv1beta1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=antrea.io/antrea/apis/pkg/apis/security/v1beta1.RuleAction"`
-=======
-	Action *crdv1beta1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=antrea.io/antrea/pkg/apis/security/v1beta1.RuleAction"`
->>>>>>> origin/main
+	Action *crdv1beta1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=antrea.io/antrea/v2/pkg/apis/security/v1beta1.RuleAction"`
+	Action *crdv1beta1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=antrea.io/antrea/v2/pkg/apis/security/v1beta1.RuleAction"`
 	// EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
 	EnableLogging bool `json:"enableLogging" protobuf:"varint,7,opt,name=enableLogging"`
 	// AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
@@ -287,10 +244,8 @@ type NetworkPolicyRule struct {
 	// LogLabel is a user-defined arbitrary string which will be printed in the NetworkPolicy logs.
 	LogLabel string `json:"logLabel,omitempty" protobuf:"bytes,11,opt,name=logLabel"`
 }
-
 // Protocol defines network protocols supported for things like container ports.
 type Protocol string
-
 const (
 	// ProtocolTCP is the TCP protocol.
 	ProtocolTCP Protocol = "TCP"
@@ -300,10 +255,8 @@ const (
 	ProtocolSCTP Protocol = "SCTP"
 	// ProtocolICMP is the ICMP protocol.
 	ProtocolICMP Protocol = "ICMP"
-
 	ProtocolIGMP Protocol = "IGMP"
 )
-
 // Service describes a port to allow traffic on.
 type Service struct {
 	// The protocol (TCP, UDP, SCTP, or ICMP) which traffic must match. If not specified, this
@@ -334,13 +287,11 @@ type Service struct {
 	SrcPort    *int32 `json:"srcPort,omitempty" protobuf:"bytes,8,opt,name=srcPort"`
 	SrcEndPort *int32 `json:"srcEndPort,omitempty" protobuf:"bytes,9,opt,name=srcEndPort"`
 }
-
 // L7Protocol defines application layer protocol to match.
 type L7Protocol struct {
 	HTTP *HTTPProtocol `json:"http,omitempty" protobuf:"bytes,1,opt,name=http"`
 	TLS  *TLSProtocol  `json:"tls,omitempty" protobuf:"bytes,2,opt,name=tls"`
 }
-
 // HTTPProtocol matches HTTP requests with specific host, method, and path. All fields could be used alone or together.
 // If all fields are not provided, it matches all HTTP requests.
 type HTTPProtocol struct {
@@ -353,14 +304,12 @@ type HTTPProtocol struct {
 	// Path represents the URI path to match (Ex. "/index.html", "/admin").
 	Path string `json:"path,omitempty" protobuf:"bytes,3,opt,name=path"`
 }
-
 // TLSProtocol matches TLS handshake packets with specific SNI. If the field is not provided, this
 // matches all TLS handshake packets.
 type TLSProtocol struct {
 	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
 	SNI string `json:"sni,omitempty" protobuf:"bytes,1,opt,name=sni"`
 }
-
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
 // It could be a list of names of AddressGroups and/or a list of IPBlock.
 type NetworkPolicyPeer struct {
@@ -378,7 +327,6 @@ type NetworkPolicyPeer struct {
 	// This field can only be possibly set for NetworkPolicyPeer of ingress rules.
 	LabelIdentities []uint32 `json:"labelIdentities,omitempty" protobuf:"bytes,5,rep,name=labelIdentities"`
 }
-
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should
 // not be included within this rule.
 type IPBlock struct {
@@ -389,26 +337,21 @@ type IPBlock struct {
 	// +optional
 	Except []IPNet `json:"except,omitempty" protobuf:"bytes,2,rep,name=except"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NetworkPolicyList is a list of NetworkPolicy objects.
 type NetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []NetworkPolicy `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
-
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=create
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.
 type NodeStatsSummary struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-
 	// The TrafficStats of K8s NetworkPolicies collected from the Node.
 	NetworkPolicies []NetworkPolicyStats `json:"networkPolicies,omitempty" protobuf:"bytes,2,rep,name=networkPolicies"`
 	// The TrafficStats of Antrea ClusterNetworkPolicies collected from the Node.
@@ -418,7 +361,6 @@ type NodeStatsSummary struct {
 	// Multicast group information collected from the Node.
 	Multicast []MulticastGroupInfo `json:"multicast,omitempty" protobuf:"bytes,5,rep,name=multicast"`
 }
-
 // MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.
 type MulticastGroupInfo struct {
 	// Group is the IP of the multicast group.
@@ -426,7 +368,6 @@ type MulticastGroupInfo struct {
 	// Pods is the list of Pods that have joined the multicast group.
 	Pods []PodReference `json:"pods,omitempty" protobuf:"bytes,2,rep,name=pods"`
 }
-
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
 type NetworkPolicyStats struct {
 	// The reference of the NetworkPolicy.
@@ -436,9 +377,7 @@ type NetworkPolicyStats struct {
 	// The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
 	RuleTrafficStats []statsv1alpha1.RuleTrafficStats `json:"ruleTrafficStats,omitempty" protobuf:"bytes,3,rep,name=ruleTrafficStats"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NetworkPolicyStatus is the status of a NetworkPolicy.
 type NetworkPolicyStatus struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -446,7 +385,6 @@ type NetworkPolicyStatus struct {
 	// Nodes contains statuses produced on a list of Nodes.
 	Nodes []NetworkPolicyNodeStatus `json:"nodes,omitempty" protobuf:"bytes,2,rep,name=nodes"`
 }
-
 // NetworkPolicyNodeStatus is the status of a NetworkPolicy on a Node.
 type NetworkPolicyNodeStatus struct {
 	// The name of the Node that produces the status.
@@ -458,12 +396,10 @@ type NetworkPolicyNodeStatus struct {
 	// The error message to describe why the NetworkPolicy realization is failed on the Node.
 	Message string `json:"message,omitempty" protobuf:"bytes,4,opt,name=message"`
 }
-
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=create
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // NetworkPolicyEvaluation contains the request and response for a NetworkPolicy evaluation.
 type NetworkPolicyEvaluation struct {
 	metav1.TypeMeta `json:",inline"`
@@ -478,29 +414,22 @@ type NetworkPolicyEvaluation struct {
 	Request           *NetworkPolicyEvaluationRequest  `json:"request,omitempty" protobuf:"bytes,1,opt,name=request"`
 	Response          *NetworkPolicyEvaluationResponse `json:"response,omitempty" protobuf:"bytes,2,opt,name=response"`
 }
-
 // Entity contains Namespace and Pod name as a request parameter.
 type Entity struct {
 	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
 }
-
 // NetworkPolicyEvaluationRequest is the request body of NetworkPolicy evaluation.
 type NetworkPolicyEvaluationRequest struct {
 	Source      Entity `json:"source,omitempty" protobuf:"bytes,1,opt,name=source"`
 	Destination Entity `json:"destination,omitempty" protobuf:"bytes,2,opt,name=destination"`
 }
-
 // RuleRef contains basic information for the rule.
 type RuleRef struct {
 	Direction Direction              `json:"direction,omitempty" protobuf:"bytes,1,opt,name=direction"`
 	Name      string                 `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
-<<<<<<< HEAD
-	Action    *crdv1beta1.RuleAction `json:"action,omitempty" protobuf:"bytes,3,opt,name=action,casttype=antrea.io/antrea/apis/pkg/apis/security/v1beta1.RuleAction"`
-=======
-	Action    *crdv1beta1.RuleAction `json:"action,omitempty" protobuf:"bytes,3,opt,name=action,casttype=antrea.io/antrea/pkg/apis/security/v1beta1.RuleAction"`
->>>>>>> origin/main
+	Action    *crdv1beta1.RuleAction `json:"action,omitempty" protobuf:"bytes,3,opt,name=action,casttype=antrea.io/antrea/v2/pkg/apis/security/v1beta1.RuleAction"`
+	Action    *crdv1beta1.RuleAction `json:"action,omitempty" protobuf:"bytes,3,opt,name=action,casttype=antrea.io/antrea/v2/pkg/apis/security/v1beta1.RuleAction"`
 }
-
 // NetworkPolicyEvaluationResponse is the response of NetworkPolicy evaluation.
 type NetworkPolicyEvaluationResponse struct {
 	// The reference of the effective NetworkPolicy.
@@ -509,7 +438,6 @@ type NetworkPolicyEvaluationResponse struct {
 	// The content of the effective rule.
 	Rule RuleRef `json:"rule,omitempty" protobuf:"bytes,3,opt,name=rule"`
 }
-
 type GroupReference struct {
 	// Namespace of the Group. Empty for ClusterGroup.
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,1,opt,name=namespace"`
@@ -518,11 +446,9 @@ type GroupReference struct {
 	// UID of the Group.
 	UID types.UID `json:"uid,omitempty" protobuf:"bytes,3,opt,name=uid,casttype=k8s.io/apimachinery/pkg/types.UID"`
 }
-
 // +genclient
 // +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // GroupAssociation is the message format in an API response for groupassociation queries.
 type GroupAssociation struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -531,12 +457,10 @@ type GroupAssociation struct {
 	// Pod/ExternalEntity being queried.
 	AssociatedGroups []GroupReference `json:"associatedGroups" protobuf:"bytes,2,rep,name=associatedGroups"`
 }
-
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type IPGroupAssociation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
@@ -544,21 +468,17 @@ type IPGroupAssociation struct {
 	// IP address being queried.
 	AssociatedGroups []GroupReference `json:"associatedGroups" protobuf:"bytes,2,rep,name=associatedGroups"`
 }
-
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type EgressGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	// GroupMembers is list of resources selected by this group.
 	GroupMembers []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,2,rep,name=groupMembers"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // EgressGroupPatch describes the incremental update of an EgressGroup.
 type EgressGroupPatch struct {
 	metav1.TypeMeta
@@ -566,18 +486,14 @@ type EgressGroupPatch struct {
 	AddedGroupMembers   []GroupMember `protobuf:"bytes,2,rep,name=addedGroupMembers"`
 	RemovedGroupMembers []GroupMember `protobuf:"bytes,3,rep,name=removedGroupMembers"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // EgressGroupList is a list of EgressGroup objects.
 type EgressGroupList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []EgressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // SupportBundleCollectionStatus is the status of a SupportBundleCollection.
 type SupportBundleCollectionStatus struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -585,7 +501,6 @@ type SupportBundleCollectionStatus struct {
 	// Nodes contains statuses produced on a list of Nodes.
 	Nodes []SupportBundleCollectionNodeStatus `json:"nodes,omitempty" protobuf:"bytes,2,rep,name=nodes"`
 }
-
 // SupportBundleCollectionNodeStatus is the status of a SupportBundleCollection on a Node.
 type SupportBundleCollectionNodeStatus struct {
 	// The name of the Node that produces the status.
@@ -598,28 +513,23 @@ type SupportBundleCollectionNodeStatus struct {
 	Completed bool   `json:"completed,omitempty" protobuf:"varint,4,opt,name=completed"`
 	Error     string `json:"error,omitempty" protobuf:"bytes,5,opt,name=error"`
 }
-
 type BundleFileServer struct {
 	URL           string `json:"url" protobuf:"bytes,1,opt,name=url"`
 	HostPublicKey []byte `json:"hostPublicKey,omitempty" protobuf:"bytes,2,opt,name=hostPublicKey"`
 }
-
 type BasicAuthentication struct {
 	Username string `json:"username" protobuf:"bytes,1,opt,name=username"`
 	Password string `json:"password" protobuf:"bytes,2,opt,name=password"`
 }
-
 type BundleServerAuthConfiguration struct {
 	BearerToken         string               `json:"bearerToken,omitempty" protobuf:"bytes,1,opt,name=bearerToken"`
 	APIKey              string               `json:"apiKey,omitempty" protobuf:"bytes,2,opt,name=apiKey"`
 	BasicAuthentication *BasicAuthentication `json:"basicAuthentication,omitempty" protobuf:"bytes,3,opt,name=basicAuthentication"`
 }
-
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // SupportBundleCollection is the message format of antrea/pkg/controller/types.SupportBundleCollection in an API response.
 type SupportBundleCollection struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -629,9 +539,7 @@ type SupportBundleCollection struct {
 	FileServer        BundleFileServer              `json:"fileServer,omitempty" protobuf:"bytes,4,opt,name=fileServer"`
 	Authentication    BundleServerAuthConfiguration `json:"authentication,omitempty" protobuf:"bytes,5,opt,name=authentication"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // SupportBundleCollectionList is a list of SupportBundleCollection objects.
 type SupportBundleCollectionList struct {
 	metav1.TypeMeta `json:",inline"`

@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"encoding/json"
@@ -23,7 +21,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
@@ -33,32 +30,27 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/strings/slices"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	antreaagenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/antctl"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
-	secv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
 	"antrea.io/antrea/v2/test/e2e/utils"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow"
-	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/antctl"
-	"antrea.io/antrea/pkg/antctl/runtime"
-	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/flowaggregator/apis"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	antreaagenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/antctl"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/features"
+	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
 	"antrea.io/antrea/test/e2e/utils"
->>>>>>> origin/main
 )
-
 /* Sample output from the collector:
 IPFIX-HDR:
   version: 10,  Message Length: 617
@@ -139,7 +131,6 @@ Inter-Node: Flow record from destination Node is ignored, so only flow record fr
 AntreaProxy enabled (Intra-Node): Flow record information is complete for source and destination along with K8s service info such as destinationClusterIP, destinationServicePort, destinationServicePortName etc.
 AntreaProxy enabled (Inter-Node): Flow record from destination Node is ignored, so only flow record from the source Node has its K8s info like in Inter-Node case along with K8s Service info such as destinationClusterIP, destinationServicePort, destinationServicePortName etc.
 */
-
 const (
 	ingressAllowNetworkPolicyName  = "test-flow-aggregator-networkpolicy-ingress-allow"
 	ingressRejectANPName           = "test-flow-aggregator-anp-ingress-reject"
@@ -167,7 +158,6 @@ const (
 	serverPodPort                   = int32(80)
 	customClusterID                 = "custom-cluster-id"
 )
-
 var (
 	// Single iperf run results in two connections with separate ports (control connection and actual data connection).
 	// As 2s is the export active timeout of flow exporter and iperf traffic runs for 12s, we expect totally 12 records
@@ -181,12 +171,10 @@ var (
 	// We use a global variable for this to avoid having to pass it down to all helper functions.
 	// It will be initialized the first time setupFlowAggregatorTest is called.
 	antreaClusterUUID = ""
-
 	// In the ToExternalFlows test, flow record will arrive 5.5s (exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout) after executing wget command
 	// We set the timeout to 9s (5.5s plus one more aggregatorActiveFlowRecordTimeout) to make the ToExternalFlows test more stable
 	getCollectorOutputDefaultTimeout = exporterActiveFlowExportTimeout + 2*aggregatorActiveFlowRecordTimeout
 )
-
 type testFlow struct {
 	srcIP       string
 	dstIP       string
@@ -195,15 +183,12 @@ type testFlow struct {
 	svcIP       string
 	checkDstSvc bool
 }
-
 type flowRecord struct {
 	Data string `json:"data"`
 }
-
 type IPFIXCollectorResponse struct {
 	FlowRecords []flowRecord `json:"flowRecords"`
 }
-
 func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*TestData, bool, bool) {
 	teardownFuncs := make([]func(), 0)
 	t.Cleanup(func() {
@@ -232,11 +217,9 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 	teardownFuncs = append(teardownFuncs, func() { teardownFlowAggregator(t, data) })
 	return data, isIPv4Enabled(), isIPv6Enabled()
 }
-
 func TestFlowAggregatorSecureConnection(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
-
 	testCases := []struct {
 		flowVisibilityTestOptions
 		name string
@@ -304,11 +287,9 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 		})
 	}
 }
-
 func TestFlowAggregator(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
-
 	var err error
 	data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
 		databaseURL: defaultCHDatabaseURL,
@@ -316,37 +297,30 @@ func TestFlowAggregator(t *testing.T) {
 	if err := getAndCheckFlowAggregatorMetrics(t, data, true); err != nil {
 		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
 	}
-
 	k8sUtils, err = NewKubernetesUtils(data)
 	if err != nil {
 		t.Fatalf("Error when creating Kubernetes utils client: %v", err)
 	}
-
 	podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, err = createPerftestPods(data)
 	if err != nil {
 		t.Fatalf("Error when creating perftest Pods: %v", err)
 	}
-
 	if v4Enabled {
 		t.Run("IPv4", func(t *testing.T) { testHelper(t, data, false) })
 		t.Run("L7FlowExporterController_IPv4", func(t *testing.T) {
 			testL7FlowExporterController(t, data, false)
 		})
 	}
-
 	if v6Enabled {
 		t.Run("IPv6", func(t *testing.T) { testHelper(t, data, true) })
 		t.Run("L7FlowExporterController_IPv6", func(t *testing.T) {
 			testL7FlowExporterController(t, data, true)
 		})
 	}
-
 }
-
 func TestFlowAggregatorProxyMode(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
-
 	runTest := func(t *testing.T, tls bool, clientAuth bool) {
 		var err error
 		data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
@@ -358,31 +332,24 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 			},
 		})
 		require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
-
 		k8sUtils, err = NewKubernetesUtils(data)
 		require.NoError(t, err, "Error when creating Kubernetes utils client")
-
 		podAIPs, podBIPs, _, _, _, err = createPerftestPods(data)
 		require.NoError(t, err, "Error when creating perftest Pods")
-
 		if v4Enabled {
 			t.Run("IPv4", func(t *testing.T) { testHelperProxyMode(t, data, false) })
 		}
-
 		if v6Enabled {
 			t.Run("IPv6", func(t *testing.T) { testHelperProxyMode(t, data, true) })
 		}
 	}
-
 	t.Run("plaintext", func(t *testing.T) { runTest(t, false, false) })
 	t.Run("TLS", func(t *testing.T) { runTest(t, true, false) })
 	t.Run("mTLS", func(t *testing.T) { runTest(t, true, true) })
 }
-
 func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool) {
 	label := "Proxy-IntraNodeFlows"
 	addLabelToTestPods(t, data, label, []string{"perftest-a", "perftest-b"})
-
 	var srcIP, dstIP string
 	var cmd []string
 	if !isIPv6 {
@@ -397,7 +364,6 @@ func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool) {
 	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", cmd)
 	require.NoError(t, err, "Error when running iperf3 client")
 	_, srcPort, _ := getBandwidthAndPorts(stdout)
-
 	// should be larger than exporterActiveFlowExportTimeout (+ safety margin).
 	const timeout = 10 * time.Second
 	records := getCollectorOutput(t, srcIP, dstIP, srcPort, false /* isDstService */, true /* lookForFlowEnd */, isIPv6, data, label /* labelFilter */, timeout)
@@ -413,7 +379,6 @@ func testHelperProxyMode(t *testing.T, data *TestData, isIPv6 bool) {
 	assert.Contains(t, record, "originalExporterIPv4Address", "Record does not have originalExporterIPv4Address")
 	assert.Contains(t, record, "originalExporterIPv6Address", "Record does not have originalExporterIPv6Address")
 }
-
 func checkIntraNodeFlows(t *testing.T, data *TestData, podAIPs, podBIPs *PodIPs, isIPv6 bool, labelFilter string) {
 	np1, np2 := deployK8sNetworkPolicies(t, data, "perftest-a", "perftest-b")
 	defer func() {
@@ -434,7 +399,6 @@ func checkIntraNodeFlows(t *testing.T, data *TestData, podAIPs, podBIPs *PodIPs,
 		checkRecordsForFlows(t, data, podAIPs.IPv6.String(), podBIPs.IPv6.String(), isIPv6, true, false, true, false, labelFilter)
 	}
 }
-
 func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 	_, svcB, svcC, svcD, svcE, err := createPerftestServices(data, isIPv6)
 	if err != nil {
@@ -443,7 +407,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 	defer deletePerftestServices(t, data)
 	// Wait for the Service to be realized.
 	time.Sleep(3 * time.Second)
-
 	// IntraNodeFlows tests the case, where Pods are deployed on same Node
 	// and their flow information is exported as IPFIX flow records.
 	// K8s network policies are being tested here.
@@ -456,7 +419,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		addLabelToTestPods(t, data, label, podNames)
 		checkIntraNodeFlows(t, data, podAIPs, podBIPs, isIPv6, label)
 	})
-
 	// IntraNodeDenyConnIngressANP tests the case, where Pods are deployed on same Node with an Antrea ingress deny policy rule
 	// applied to destination Pod (one reject rule, one drop rule) and their flow information is exported as IPFIX flow records.
 	// perftest-a -> perftest-b (Ingress reject), perftest-a -> perftest-d (Ingress drop)
@@ -493,7 +455,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false, label)
 		}
 	})
-
 	// IntraNodeDenyConnEgressANP tests the case, where Pods are deployed on same Node with an Antrea egress deny policy rule
 	// applied to source Pods (one reject rule, one drop rule) and their flow information is exported as IPFIX flow records.
 	// perftest-a (Egress reject) -> perftest-b , perftest-a (Egress drop) -> perftest-d
@@ -530,7 +491,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false, label)
 		}
 	})
-
 	// IntraNodeDenyConnNP tests the case, where Pods are deployed on same Node with an ingress and an egress deny policy rule
 	// applied to one destination Pod, one source Pod, respectively and their flow information is exported as IPFIX flow records.
 	// perftest-a -> perftest-b (Ingress deny), perftest-d (Egress deny) -> perftest-a
@@ -567,7 +527,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, false, false, label)
 		}
 	})
-
 	// IntraNodeDenyConnIngressANPThroughSvc tests the case, where Pods are deployed on same Node with an Antrea
 	// ingress deny policy rule applied to destination Pod (one reject rule, one drop rule) and their flow information
 	// is exported as IPFIX flow records. The test also verify if the service information is well filled in the record.
@@ -609,7 +568,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true, label)
 		}
 	})
-
 	// IntraNodeDenyConnEgressANPThroughSvc tests the case, where Pods are deployed on same Node with an Antrea
 	// egress deny policy rule applied to source Pod (one reject rule, one drop rule) and their flow information
 	// is exported as IPFIX flow records. The test also verify if the service information is well filled in the record.
@@ -651,7 +609,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true, label)
 		}
 	})
-
 	// InterNodeFlows tests the case, where Pods are deployed on different Nodes
 	// and their flow information is exported as IPFIX flow records.
 	// Antrea network policies are being tested here.
@@ -674,7 +631,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForFlows(t, data, podAIPs.IPv6.String(), podCIPs.IPv6.String(), isIPv6, false, false, false, true, label)
 		}
 	})
-
 	// InterNodeDenyConnIngressANP tests the case, where Pods are deployed on different Nodes with an Antrea ingress deny policy rule
 	// applied to destination Pod (one reject rule, one drop rule) and their flow information is exported as IPFIX flow records.
 	// perftest-a -> perftest-c (Ingress reject), perftest-a -> perftest-e (Ingress drop)
@@ -711,7 +667,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false, label)
 		}
 	})
-
 	// InterNodeDenyConnEgressANP tests the case, where Pods are deployed on different Nodes with an Antrea egress deny policy rule
 	// applied to source Pod (one reject rule, one drop rule) and their flow information is exported as IPFIX flow records.
 	// perftest-a (Egress reject) -> perftest-c, perftest-a (Egress drop)-> perftest-e
@@ -748,7 +703,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false, label)
 		}
 	})
-
 	// InterNodeDenyConnNP tests the case, where Pods are deployed on different Nodes with an ingress and an egress deny policy rule
 	// applied to one destination Pod, one source Pod, respectively and their flow information is exported as IPFIX flow records.
 	// perftest-a -> perftest-c (Ingress deny), perftest-b (Egress deny) -> perftest-e
@@ -785,7 +739,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, false, false, label)
 		}
 	})
-
 	// InterNodeDenyConnIngressANPThroughSvc tests the case, where Pods are deployed on different Node with an Antrea
 	// ingress deny policy rule applied to destination Pod (one reject rule, one drop rule) and their flow information
 	// is exported as IPFIX flow records. The test also verify if the service information is well filled in the record.
@@ -832,7 +785,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true, label)
 		}
 	})
-
 	// InterNodeDenyConnEgressANPThroughSvc tests the case, where Pods are deployed on different Node with an Antrea
 	// egress deny policy rule applied to source Pod (one reject rule, one drop rule) and their flow information
 	// is exported as IPFIX flow records. The test also verify if the service information is well filled in the record.
@@ -874,10 +826,8 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true, label)
 		}
 	})
-
 	// Creating test server Pod for ToExternal tests
 	serverIPs := createToExternalTestServer(t, data)
-
 	// ToExternalEgressOnSourceNode tests the export of IPFIX flow records when
 	// a source Pod sends traffic to an external IP and an Egress is applied on
 	// the source Pod. In this case, the Egress Node is the same as the Source Node.
@@ -887,13 +837,11 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		skipIfNumNodesLessThan(t, 2)
 		skipIfEgressDisabled(t)
 		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
-
 		// Deploy the client Pod on the control-plane node
 		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
 		defer clientCleanupFunc()
 		label := "ToExternalEgressOnSourceNode"
 		addLabelToTestPods(t, data, label, []string{clientName})
-
 		// Create an Egress and the Egress IP is assigned to the Node running the client Pods
 		var egressNodeIP, egressNodeName string
 		egressNodeName = nodeName(0)
@@ -919,7 +867,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			}
 		}
 	})
-
 	// ToExternalEgressOnOtherNode tests the export of IPFIX flow records when
 	// a source Pod sends traffic to an external IP and an Egress applied on
 	// the source Pod. In this case, the Egress Node is different from the Source Node.
@@ -929,13 +876,11 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		skipIfNumNodesLessThan(t, 2)
 		skipIfEgressDisabled(t)
 		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
-
 		// Deploy the client Pod on the control-plane node
 		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
 		defer clientCleanupFunc()
 		label := "ToExternalEgressOnOtherNode"
 		addLabelToTestPods(t, data, label, []string{clientName})
-
 		// Create an Egress and the Egress IP is assigned to the Node not running the client Pods
 		var egressNodeIP, egressNodeName string
 		egressNodeName = nodeName(1)
@@ -961,7 +906,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			}
 		}
 	})
-
 	// ToExternalFlows tests the export of IPFIX flow records when a source Pod
 	// sends traffic to an external IP
 	t.Run("ToExternalFlows", func(t *testing.T) {
@@ -980,7 +924,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			}
 		}
 	})
-
 	// LocalServiceAccess tests the case, where Pod and Service are deployed on the same Node and their flow information is exported as IPFIX flow records.
 	t.Run("LocalServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
@@ -996,7 +939,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForFlows(t, data, podAIPs.IPv4.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, label)
 		}
 	})
-
 	// RemoteServiceAccess tests the case, where Pod and Service are deployed on different Nodes and their flow information is exported as IPFIX flow records.
 	t.Run("RemoteServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
@@ -1012,7 +954,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkRecordsForFlows(t, data, podAIPs.IPv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, label)
 		}
 	})
-
 	// Antctl tests ensure antctl is available in a Flow Aggregator Pod
 	// and check the output of antctl commands.
 	t.Run("Antctl", func(t *testing.T) {
@@ -1025,7 +966,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		for _, args := range antctl.CommandList.GetDebugCommands(runtime.ModeFlowAggregator) {
 			command := append([]string{"antctl"}, args...)
 			t.Logf("Run command: %s", command)
-
 			t.Run(strings.Join(command, " "), func(t *testing.T) {
 				stdout, stderr, err := runAntctl(podName, command, data)
 				require.NoErrorf(t, err, "Error when running 'antctl %s' from %s: %v\n%s", args, podName, err, antctlOutput(stdout, stderr))
@@ -1036,7 +976,6 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		})
 	})
 }
-
 func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string, podAIPs, podBIPs *PodIPs, isIPv6 bool) {
 	// A shorter iperfTime that provides stable test results, at which the first record ready in the AggregationProcess but not sent.
 	const iperfTimeSecShort = 5
@@ -1054,22 +993,18 @@ func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string,
 	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", []string{"bash", "-c", cmdStr})
 	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
 	_, srcPort, dstPort := getBandwidthAndPorts(stdout)
-
 	// run antctl command on flow aggregator to get flow records
 	args := []string{"get", "flowrecords", "-o", "json", "--srcip", srcIP, "--srcport", srcPort}
 	command := append([]string{"antctl"}, args...)
 	t.Logf("Run command: %s", command)
 	stdout, stderr, err := runAntctl(podName, command, data)
 	require.NoErrorf(t, err, "Error when running 'antctl get flowrecords -o json' from %s: %v\n%s", podName, err, antctlOutput(stdout, stderr))
-
 	var records []map[string]interface{}
 	err = json.Unmarshal([]byte(stdout), &records)
 	require.NoErrorf(t, err, "Error when parsing flow records from antctl: %v", err)
 	require.Len(t, records, 1)
-
 	checkAntctlRecord(t, records[0], srcIP, dstIP, srcPort, dstPort, isIPv6, data.testNamespace)
 }
-
 func checkAntctlRecord(t *testing.T, record map[string]interface{}, srcIP, dstIP, srcPort, dstPort string, isIPv6 bool, namespace string) {
 	assert := assert.New(t)
 	if isIPv6 {
@@ -1085,18 +1020,15 @@ func checkAntctlRecord(t *testing.T, record map[string]interface{}, srcIP, dstIP
 	assert.Equal("perftest-a", record["sourcePodName"], "The record from antctl does not have correct sourcePodName")
 	assert.Equal(namespace, record["sourcePodNamespace"], "The record from antctl does not have correct sourcePodNamespace")
 	assert.Equal(controlPlaneNodeName(), record["sourceNodeName"], "The record from antctl does not have correct sourceNodeName")
-
 	dstPortNum, err := strconv.Atoi(dstPort)
 	require.NoErrorf(t, err, "error when converting the iperf dstPort to int type: %s", dstPort)
 	assert.EqualValues(dstPortNum, record["destinationTransportPort"], "The record from antctl does not have correct destinationTransportPort")
 	assert.Equal("perftest-b", record["destinationPodName"], "The record from antctl does not have correct destinationPodName")
 	assert.Equal(namespace, record["destinationPodNamespace"], "The record from antctl does not have correct destinationPodNamespace")
 	assert.Equal(controlPlaneNodeName(), record["destinationNodeName"], "The record from antctl does not have correct destinationNodeName")
-
 	assert.EqualValues(ipfixregistry.FlowTypeIntraNode, record["flowType"], "The record from antctl does not have correct flowType")
 	assert.EqualValues(protocolIdentifierTCP, record["protocolIdentifier"], "The record from antctl does not have correct protocolIdentifier")
 }
-
 func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, labelFilter string) {
 	var cmdStr string
 	if !isIPv6 {
@@ -1120,11 +1052,9 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	} else {
 		t.Fatalf("Unit of the traffic bandwidth reported by iperf should be Mbits.")
 	}
-
 	checkRecordsForFlowsCollector(t, data, srcIP, dstIP, srcPort, isIPv6, isIntraNode, checkService, checkK8sNetworkPolicy, checkAntreaNetworkPolicy, bandwidthInMbps, labelFilter)
 	checkRecordsForFlowsClickHouse(t, data, srcIP, dstIP, srcPort, isIntraNode, checkService, checkK8sNetworkPolicy, checkAntreaNetworkPolicy, bandwidthInMbps, labelFilter)
 }
-
 func checkRecordsForFlowsCollector(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, isIPv6, isIntraNode, checkService, checkK8sNetworkPolicy, checkAntreaNetworkPolicy bool, bandwidthInMbps float64, labelFilter string) {
 	records := getCollectorOutput(t, srcIP, dstIP, srcPort, checkService, true, isIPv6, data, labelFilter, getCollectorOutputDefaultTimeout)
 	// Checking only data records as data records cannot be decoded without template
@@ -1172,7 +1102,6 @@ func checkRecordsForFlowsCollector(t *testing.T, data *TestData, srcIP, dstIP, s
 			assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleName: %s", testEgressRuleName), "Record does not have the correct NetworkPolicy RuleName with the egress rule")
 			assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the egress rule")
 		}
-
 		// Skip the bandwidth check for the iperf control flow records which have 0 throughput.
 		if !strings.Contains(record, "throughput: 0") {
 			flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
@@ -1195,13 +1124,11 @@ func checkRecordsForFlowsCollector(t *testing.T, data *TestData, srcIP, dstIP, s
 		}
 	}
 }
-
 func checkRecordsForFlowsClickHouse(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, isIntraNode, checkService, checkK8sNetworkPolicy, checkAntreaNetworkPolicy bool, bandwidthInMbps float64, labelFilter string) {
 	// Check the source port along with source and destination IPs as there
 	// are flow records for control flows during the iperf with same IPs
 	// and destination port.
 	clickHouseRecords := getClickHouseOutput(t, data, srcIP, dstIP, srcPort, checkService, true, labelFilter)
-
 	for _, record := range clickHouseRecords {
 		// Check if record has both Pod name of source and destination Pod.
 		if isIntraNode {
@@ -1241,7 +1168,6 @@ func checkRecordsForFlowsClickHouse(t *testing.T, data *TestData, srcIP, dstIP, 
 			assert.Equal(record.EgressNetworkPolicyRuleName, testEgressRuleName, "Record does not have the correct NetworkPolicy RuleName with the egress rule")
 			assert.Equal(record.EgressNetworkPolicyRuleAction, ipfixregistry.NetworkPolicyRuleActionAllow, "Record does not have the correct NetworkPolicy RuleAction with the egress rule")
 		}
-
 		// Skip the bandwidth check for the iperf control flow records which have 0 throughput.
 		if record.Throughput > 0 {
 			flowStartTime := record.FlowStartSeconds.Unix()
@@ -1260,12 +1186,10 @@ func checkRecordsForFlowsClickHouse(t *testing.T, data *TestData, srcIP, dstIP, 
 			t.Logf("Throughput check on record with flowEndSeconds-flowStartSeconds: %v, Iperf throughput: %.2f Mbits/s, ClickHouse record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
 			assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and ClickHouse record bandwidth should be lower than 15%%, record: %v", record)
 		}
-
 	}
 	// Checking only data records as data records cannot be decoded without template record.
 	assert.GreaterOrEqualf(t, len(clickHouseRecords), expectedNumDataRecords, "ClickHouse should receive expected number of flow records. Considered records: %s", clickHouseRecords)
 }
-
 func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName string, srcPodName string, srcIP string, dstIP string, dstPort int32, isIPv6 bool, egressName, egressIP, egressNodeName, labelFilter string) {
 	var cmd string
 	if !isIPv6 {
@@ -1283,7 +1207,6 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 			checkEgressInfo(t, record, egressName, egressIP, egressNodeName)
 		}
 	}
-
 	clickHouseRecords := getClickHouseOutput(t, data, srcIP, dstIP, "", false, false, labelFilter)
 	for _, record := range clickHouseRecords {
 		checkPodAndNodeDataClickHouse(data, t, record, srcPodName, srcNodeName, "", "")
@@ -1293,7 +1216,6 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 		}
 	}
 }
-
 func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2 testFlow, isIPv6, isIntraNode, isANP, useSvcIP bool, labelFilter string) {
 	var cmdStr1, cmdStr2 string
 	if !isIPv6 {
@@ -1304,7 +1226,6 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 			cmdStr1 = fmt.Sprintf("iperf3 -c %s -n 1", testFlow1.dstIP)
 			cmdStr2 = fmt.Sprintf("iperf3 -c %s -n 1", testFlow2.dstIP)
 		}
-
 	} else {
 		if useSvcIP {
 			cmdStr1 = fmt.Sprintf("iperf3 -6 -c %s -p %d -n 1", testFlow1.svcIP, iperfSvcPort)
@@ -1318,11 +1239,9 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 	assert.Error(t, err)
 	_, _, err = data.RunCommandFromPod(data.testNamespace, testFlow2.srcPodName, "", []string{"timeout", "2", "bash", "-c", cmdStr2})
 	assert.Error(t, err)
-
 	checkRecordsForDenyFlowsCollector(t, data, testFlow1, testFlow2, isIPv6, isIntraNode, isANP, labelFilter)
 	checkRecordsForDenyFlowsClickHouse(t, data, testFlow1, testFlow2, isIPv6, isIntraNode, isANP, labelFilter)
 }
-
 func checkRecordsForDenyFlowsCollector(t *testing.T, data *TestData, testFlow1, testFlow2 testFlow, isIPv6, isIntraNode, isANP bool, labelFilter string) {
 	records1 := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data, labelFilter, getCollectorOutputDefaultTimeout)
 	records2 := getCollectorOutput(t, testFlow2.srcIP, testFlow2.dstIP, "", false, false, isIPv6, data, labelFilter, getCollectorOutputDefaultTimeout)
@@ -1347,7 +1266,6 @@ func checkRecordsForDenyFlowsCollector(t *testing.T, data *TestData, testFlow1, 
 			ingressDropStr := fmt.Sprintf("ingressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionDrop)
 			egressRejectStr := fmt.Sprintf("egressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionReject)
 			egressDropStr := fmt.Sprintf("egressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionDrop)
-
 			if isIntraNode {
 				checkPodAndNodeData(t, record, srcPodName, controlPlaneNodeName(), dstPodName, controlPlaneNodeName(), data.testNamespace)
 				checkFlowType(t, record, ipfixregistry.FlowTypeIntraNode)
@@ -1396,7 +1314,6 @@ func checkRecordsForDenyFlowsCollector(t *testing.T, data *TestData, testFlow1, 
 		}
 	}
 }
-
 func checkRecordsForDenyFlowsClickHouse(t *testing.T, data *TestData, testFlow1, testFlow2 testFlow, isIPv6, isIntraNode, isANP bool, labelFilter string) {
 	clickHouseRecords1 := getClickHouseOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", false, false, labelFilter)
 	clickHouseRecords2 := getClickHouseOutput(t, data, testFlow2.srcIP, testFlow2.dstIP, "", false, false, labelFilter)
@@ -1414,7 +1331,6 @@ func checkRecordsForDenyFlowsClickHouse(t *testing.T, data *TestData, testFlow1,
 			dstPodName = testFlow2.dstPodName
 			checkDstSvc = testFlow2.checkDstSvc
 		}
-
 		if isIntraNode {
 			checkPodAndNodeDataClickHouse(data, t, record, srcPodName, controlPlaneNodeName(), dstPodName, controlPlaneNodeName())
 			checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeIntraNode)
@@ -1462,7 +1378,6 @@ func checkRecordsForDenyFlowsClickHouse(t *testing.T, data *TestData, testFlow1,
 		}
 	}
 }
-
 func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode string, namespace string) {
 	assert := assert.New(t)
 	assert.Contains(record, srcPod, "Record with srcIP does not have Pod name: %s", srcPod)
@@ -1481,7 +1396,6 @@ func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode 
 		assert.Contains(record, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"toolbox\"", srcPod), "Record does not have correct label for source Pod")
 	}
 }
-
 func checkPodAndNodeDataClickHouse(data *TestData, t *testing.T, record *ClickHouseFullRow, srcPod, srcNode, dstPod, dstNode string) {
 	assert := assert.New(t)
 	assert.Equal(record.SourcePodName, srcPod, "Record with srcIP does not have Pod name: %s", srcPod)
@@ -1500,36 +1414,29 @@ func checkPodAndNodeDataClickHouse(data *TestData, t *testing.T, record *ClickHo
 		assert.Contains(record.SourcePodLabels, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"toolbox\"", srcPod), "Record does not have correct label for source Pod")
 	}
 }
-
 func checkFlowType(t *testing.T, record string, flowType uint8) {
 	assert.Containsf(t, record, fmt.Sprintf("flowType: %d", flowType), "Record does not have correct flowType")
 }
-
 func checkFlowTypeClickHouse(t *testing.T, record *ClickHouseFullRow, flowType uint8) {
 	assert.Equal(t, record.FlowType, flowType, "Record does not have correct flowType")
 }
-
 func checkEgressInfo(t *testing.T, record, egressName, egressIP, egressNodeName string) {
 	assert.Containsf(t, record, fmt.Sprintf("egressName: %s", egressName), "Record does not have correct egressName")
 	assert.Containsf(t, record, fmt.Sprintf("egressIP: %s", egressIP), "Record does not have correct egressIP")
 	assert.Containsf(t, record, fmt.Sprintf("egressNodeName: %s", egressNodeName), "Record does not have correct egressNodeName")
 }
-
 func checkEgressInfoClickHouse(t *testing.T, record *ClickHouseFullRow, egressName, egressIP, egressNodeName string) {
 	assert.Equal(t, egressName, record.EgressName, "Record does not have correct egressName")
 	assert.Equal(t, egressIP, record.EgressIP, "Record does not have correct egressIP")
 	assert.Equal(t, egressNodeName, record.EgressNodeName, "Record does not have correct egressNodeName")
 }
-
 func checkL7FlowExporterData(t *testing.T, record, appProtocolName string) {
 	assert.Containsf(t, record, fmt.Sprintf("appProtocolName: %s", appProtocolName), "Record does not have correct Layer 7 protocol Name")
 }
-
 func checkL7FlowExporterDataClickHouse(t *testing.T, record *ClickHouseFullRow, appProtocolName string) {
 	assert.Equal(t, record.AppProtocolName, appProtocolName, "Record does not have correct Layer 7 protocol Name")
 	assert.NotEmpty(t, record.HttpVals, "Record does not have httpVals")
 }
-
 func getUint64FieldFromRecord(t require.TestingT, record string, field string) uint64 {
 	splitLines := strings.Split(record, "\n")
 	for _, line := range splitLines {
@@ -1542,7 +1449,6 @@ func getUint64FieldFromRecord(t require.TestingT, record string, field string) u
 	}
 	return 0
 }
-
 // getCollectorOutput polls the output of go-ipfix collector and checks if we have
 // received all the expected records for a given flow with source IP, destination IP
 // and source port. We send source port to ignore the control flows during the
@@ -1600,7 +1506,6 @@ func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstS
 	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records, source IP: %s, dest IP: %s, source port: %s, total records count: %d, filtered records count: %d", srcIP, dstIP, srcPort, len(allRecords), len(records))
 	return records
 }
-
 // getClickHouseOutput queries clickhouse with built-in client and checks if we have
 // received all the expected records for a given flow with source IP, destination IP
 // and source port. We send source port to ignore the control flows during the iperf test.
@@ -1608,7 +1513,6 @@ func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstS
 func getClickHouseOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, isDstService, lookForFlowEnd bool, labelFilter string) []*ClickHouseFullRow {
 	var flowRecords []*ClickHouseFullRow
 	var queryOutput string
-
 	query := fmt.Sprintf("SELECT * FROM flows WHERE (sourceIP = '%s') AND (destinationIP = '%s') AND (octetDeltaCount != 0)", srcIP, dstIP)
 	if isDstService {
 		query = fmt.Sprintf("SELECT * FROM flows WHERE (sourceIP = '%s') AND (destinationClusterIP = '%s') AND (octetDeltaCount != 0)", srcIP, dstIP)
@@ -1646,7 +1550,6 @@ func getClickHouseOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort str
 			}
 			flowRecords = append(flowRecords, &flowRecord)
 		}
-
 		if lookForFlowEnd {
 			for _, record := range flowRecords {
 				// flowEndReason == 3 means the end of flow detected
@@ -1661,7 +1564,6 @@ func getClickHouseOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort str
 	require.NoErrorf(t, err, "ClickHouse did not receive the expected records in query output: %v; query: %s", queryOutput, query)
 	return flowRecords
 }
-
 func filterCollectorRecords(records []string, filters ...string) []string {
 	filteredRecords := []string{}
 	match := func(record string) bool {
@@ -1683,7 +1585,6 @@ func filterCollectorRecords(records []string, filters ...string) []string {
 	}
 	return filteredRecords
 }
-
 func deployK8sNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
 	// Add K8s NetworkPolicy between two iperf Pods.
 	var err error
@@ -1729,7 +1630,6 @@ func deployK8sNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod strin
 	t.Log("Network Policies are realized.")
 	return np1, np2
 }
-
 func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string, srcNode, dstNode string) (anp1 *secv1beta1.NetworkPolicy, anp2 *secv1beta1.NetworkPolicy) {
 	builder1 := &utils.AntreaNetworkPolicySpecBuilder{}
 	// apply anp to dstPod, allow ingress from srcPod
@@ -1749,7 +1649,6 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 	if err1 != nil {
 		failOnError(fmt.Errorf("Error when creating Antrea Network Policy: %v", err1), t)
 	}
-
 	builder2 := &utils.AntreaNetworkPolicySpecBuilder{}
 	// apply anp to srcPod, allow egress to dstPod
 	builder2 = builder2.SetName(data.testNamespace, egressAntreaNetworkPolicyName).
@@ -1768,7 +1667,6 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 	if err2 != nil {
 		failOnError(fmt.Errorf("Error when creating Network Policy: %v", err2), t)
 	}
-
 	// Wait for network policies to be realized.
 	if err := WaitNetworkPolicyRealize(dstNode, openflow.AntreaPolicyIngressRuleTable, antreaIngressTableInitFlowCount+1, data); err != nil {
 		t.Errorf("Error when waiting for Antrea ingress Network Policy to be realized: %v", err)
@@ -1779,7 +1677,6 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 	t.Log("Antrea Network Policies are realized.")
 	return anp1, anp2
 }
-
 func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podReject, podDrop string, srcNode, dstNode string, isIngress bool) (anp1 *secv1beta1.NetworkPolicy, anp2 *secv1beta1.NetworkPolicy) {
 	var err error
 	builder1 := &utils.AntreaNetworkPolicySpecBuilder{}
@@ -1859,7 +1756,6 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 	t.Log("Antrea Network Policies are realized.")
 	return anp1, anp2
 }
-
 func deployDenyNetworkPolicies(t *testing.T, data *TestData, pod1, pod2 string, node1, node2 string) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
 	np1, err := data.createNetworkPolicy(ingressDenyNPName, &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
@@ -1895,7 +1791,6 @@ func deployDenyNetworkPolicies(t *testing.T, data *TestData, pod1, pod2 string, 
 	t.Log("Network Policies are realized.")
 	return np1, np2
 }
-
 func createPerftestPods(data *TestData) (*PodIPs, *PodIPs, *PodIPs, *PodIPs, *PodIPs, error) {
 	cmd := []string{"iperf3", "-s"}
 	create := func(name string, nodeName string, ports []corev1.ContainerPort) error {
@@ -1920,7 +1815,6 @@ func createPerftestPods(data *TestData) (*PodIPs, *PodIPs, *PodIPs, *PodIPs, *Po
 	}
 	return podIPsArray[0], podIPsArray[1], podIPsArray[2], podIPsArray[3], podIPsArray[4], nil
 }
-
 func createPerftestServices(data *TestData, isIPv6 bool) (*corev1.Service, *corev1.Service, *corev1.Service, *corev1.Service, *corev1.Service, error) {
 	svcIPFamily := corev1.IPv4Protocol
 	if isIPv6 {
@@ -1936,7 +1830,6 @@ func createPerftestServices(data *TestData, isIPv6 bool) (*corev1.Service, *core
 	}
 	return services[0], services[1], services[2], services[3], services[4], nil
 }
-
 func deletePerftestServices(t *testing.T, data *TestData) {
 	for _, serviceName := range serviceNames {
 		err := data.deleteService(data.testNamespace, serviceName)
@@ -1945,7 +1838,6 @@ func deletePerftestServices(t *testing.T, data *TestData) {
 		}
 	}
 }
-
 func addLabelToTestPods(t *testing.T, data *TestData, label string, podNames []string) {
 	for _, podName := range podNames {
 		testPod, err := data.clientset.CoreV1().Pods(data.testNamespace).Get(context.TODO(), podName, metav1.GetOptions{})
@@ -1966,7 +1858,6 @@ func addLabelToTestPods(t *testing.T, data *TestData, label string, podNames []s
 		require.NoErrorf(t, err, "Error when verifying the label on %s", testPod.Name)
 	}
 }
-
 // getBandwidthAndPorts parses iperf commands output and returns bandwidth,
 // source port and destination port. Bandwidth is returned as a slice containing
 // two strings (bandwidth value and bandwidth unit).
@@ -1987,7 +1878,6 @@ func getBandwidthAndPorts(iperfStdout string) ([]string, string, string) {
 	}
 	return bandwidth, srcPort, dstPort
 }
-
 func matchSrcAndDstAddress(srcIP string, dstIP string, isDstService bool, isIPv6 bool) (string, string) {
 	srcField := fmt.Sprintf("sourceIPv4Address: %s", srcIP)
 	dstField := fmt.Sprintf("destinationIPv4Address: %s", dstIP)
@@ -2003,21 +1893,17 @@ func matchSrcAndDstAddress(srcIP string, dstIP string, isDstService bool, isIPv6
 	}
 	return srcField, dstField
 }
-
 func createToExternalTestServer(t *testing.T, data *TestData) *PodIPs {
 	// Creating an agnhost server as a hostNetwork Pod
 	// Egress will be applied to the traffic when the destination is a hostNetwork Pod.
 	_, serverIPs, serverCleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string, hostNetwork bool) error {
 		return data.createServerPod(name, data.testNamespace, "", serverPodPort, false, true)
 	}, "test-server-", "", data.testNamespace, false)
-
 	t.Cleanup(func() {
 		serverCleanupFunc()
 	})
-
 	return serverIPs
 }
-
 func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHouseExporter bool) error {
 	flowAggPod, err := data.getFlowAggregator()
 	if err != nil {
@@ -2045,13 +1931,11 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 	}
 	return nil
 }
-
 func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 	skipIfFeatureDisabled(t, features.L7FlowExporter, true, false)
 	nodeName := nodeName(1)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "l7flowexportertestpodserver", nodeName, data.testNamespace, false)
 	defer cleanupFunc()
-
 	clientPodName := "l7flowexportertestpodclient"
 	clientPodLabels := map[string]string{"flowexportertest": "l7"}
 	clientPodAnnotations := map[string]string{antreaagenttypes.L7FlowExporterAnnotationKey: "both"}
@@ -2059,10 +1943,8 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 	clientPodIPs, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
 	require.NoErrorf(t, err, "Error when waiting for IP for Pod '%s': %v", clientPodName, err)
 	defer deletePodWrapper(t, data, data.testNamespace, clientPodName)
-
 	// Wait for the Suricata to start.
 	time.Sleep(3 * time.Second)
-
 	testFlow1 := testFlow{
 		srcPodName: clientPodName,
 	}
@@ -2083,10 +1965,8 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 		assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
 		assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", nodeName), "Record does not have correct sourceNodeName: %s", nodeName)
 		assert.Contains(record, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
-
 		checkL7FlowExporterData(t, record, "http")
 	}
-
 	clickHouseRecords := getClickHouseOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", false, true, "")
 	for _, record := range clickHouseRecords {
 		assert := assert.New(t)
@@ -2094,12 +1974,9 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 		assert.Equal(record.SourcePodNamespace, data.testNamespace, "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
 		assert.Equal(record.SourceNodeName, nodeName, "Record does not have correct sourceNodeName: %s", nodeName)
 		assert.Contains(record.SourcePodLabels, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
-
 		checkL7FlowExporterDataClickHouse(t, record, "http")
 	}
-
 }
-
 type ClickHouseFullRow struct {
 	TimeInserted                         time.Time `json:"timeInserted"`
 	FlowStartSeconds                     time.Time `json:"flowStartSeconds"`

@@ -11,22 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowexport
-
 import (
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
-
-<<<<<<< HEAD
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
-=======
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
->>>>>>> origin/main
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 )
-
 // ParseFlowCollectorAddr parses the flow collector address input for flow exporter and aggregator
 func ParseFlowCollectorAddr(addr string, defaultPort string, defaultProtocol string) (string, string, string, error) {
 	var strSlice []string
@@ -66,7 +59,6 @@ func ParseFlowCollectorAddr(addr string, defaultPort string, defaultProtocol str
 	}
 	return host, port, proto, nil
 }
-
 // ParseFlowIntervalString parses the flow poll or export interval input string for flow exporter and aggregator
 func ParseFlowIntervalString(intervalString string) (time.Duration, error) {
 	flowInterval, err := time.ParseDuration(intervalString)
@@ -78,7 +70,6 @@ func ParseFlowIntervalString(intervalString string) (time.Duration, error) {
 	}
 	return flowInterval, nil
 }
-
 // ParseTransportProtocol parses the transport protocol input for the flow aggregator
 func ParseTransportProtocol(transportProtocolInput flowaggregatorconfig.AggregatorTransportProtocol) (flowaggregatorconfig.AggregatorTransportProtocol, error) {
 	upperProtocolInput := flowaggregatorconfig.AggregatorTransportProtocol(strings.ToUpper(string(transportProtocolInput)))

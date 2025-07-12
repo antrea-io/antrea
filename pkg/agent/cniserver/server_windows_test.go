@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cniserver
-
 import (
 	"context"
 	"fmt"
@@ -21,7 +19,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"antrea.io/libOpenflow/openflow15"
 	"github.com/Microsoft/hcsshim"
 	"github.com/Microsoft/hcsshim/hcn"
@@ -32,8 +29,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
 	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
@@ -43,35 +38,30 @@ import (
 	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	winnettest "antrea.io/antrea/v2/pkg/agent/util/winnet/testing"
-	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"
-	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
-	"antrea.io/antrea/pkg/agent/cniserver/types"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	routetest "antrea.io/antrea/pkg/agent/route/testing"
-	"antrea.io/antrea/pkg/agent/util"
-	winnettest "antrea.io/antrea/pkg/agent/util/winnet/testing"
-	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	"antrea.io/antrea/pkg/util/channel"
-	utilip "antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
+	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
+	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
+	"antrea.io/antrea/v2/pkg/agent/cniserver/types"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	winnettest "antrea.io/antrea/v2/pkg/agent/util/winnet/testing"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
-
 var (
 	containerMACStr = "23:34:56:23:22:45"
 	dnsSearches     = []string{"a.b.c.d"}
-
 	mockWinnet *winnettest.MockInterface
-
 	interfaceForHostNetworkPod = &interfacestore.InterfaceConfig{
 		InterfaceName: "iface2",
 		Type:          interfacestore.ContainerInterface,
@@ -88,7 +78,6 @@ var (
 		},
 	}
 )
-
 func TestUpdateResultDNSConfig(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -165,7 +154,6 @@ func TestUpdateResultDNSConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestGetInfraContainer(t *testing.T) {
 	for _, tc := range []struct {
 		cniConfig           *CNIConfig
@@ -193,14 +181,11 @@ func TestGetInfraContainer(t *testing.T) {
 		assert.Equal(t, tc.expDockerContainer, isDockerContainer(tc.cniConfig.Netns))
 	}
 }
-
 var hostIfaces = sync.Map{}
-
 func testHostInterfaceExists(ifaceName string) bool {
 	_, exists := hostIfaces.Load(ifaceName)
 	return exists
 }
-
 type hnsTestUtil struct {
 	endpointID           string
 	hostIfaceName        string
@@ -211,7 +196,6 @@ type hnsTestUtil struct {
 	hnsEndpointCreatErr  error
 	endpointAttachErr    error
 }
-
 func newHnsTestUtil(endpointID string, existingHnsEndpoints []hcsshim.HNSEndpoint, isDocker bool, hnsEndpointCreatErr, endpointAttachErr error) *hnsTestUtil {
 	return &hnsTestUtil{
 		endpointID:           endpointID,
@@ -221,11 +205,9 @@ func newHnsTestUtil(endpointID string, existingHnsEndpoints []hcsshim.HNSEndpoin
 		endpointAttachErr:    endpointAttachErr,
 	}
 }
-
 func (t *hnsTestUtil) listHnsEndpointFunc() ([]hcsshim.HNSEndpoint, error) {
 	return t.existingHnsEndpoints, nil
 }
-
 func (t *hnsTestUtil) createHnsEndpoint(request *hcsshim.HNSEndpoint) (*hcsshim.HNSEndpoint, error) {
 	request.Id = t.endpointID
 	request.MacAddress = containerMACStr
@@ -239,24 +221,19 @@ func (t *hnsTestUtil) createHnsEndpoint(request *hcsshim.HNSEndpoint) (*hcsshim.
 	t.hostIfaceName = fmt.Sprintf("vEthernet (%s)", request.Name)
 	return request, t.hnsEndpointCreatErr
 }
-
 func (t *hnsTestUtil) getHcnEndpointByID(epID string) (*hcn.HostComputeEndpoint, error) {
 	return t.hcnEndpoint, nil
 }
-
 func (t *hnsTestUtil) deleteHnsEndpoint(endpoint *hcsshim.HNSEndpoint) (*hcsshim.HNSEndpoint, error) {
 	return t.hnsEndpoint, nil
 }
-
 func (t *hnsTestUtil) attachEndpointInNamespace(ep *hcn.HostComputeEndpoint, namespace string) error {
 	t.hcnEndpoint.HostComputeNamespace = namespace
 	return t.endpointAttachErr
 }
-
 func (t *hnsTestUtil) removeEndpointFromNamespace(namespace string, epID string) error {
 	return nil
 }
-
 func (t *hnsTestUtil) setFunctions() {
 	listHnsEndpointFunc = t.listHnsEndpointFunc
 	createHnsEndpointFunc = t.createHnsEndpoint
@@ -265,7 +242,6 @@ func (t *hnsTestUtil) setFunctions() {
 	deleteHnsEndpointFunc = t.deleteHnsEndpoint
 	removeEndpointFromNamespaceFunc = t.removeEndpointFromNamespace
 }
-
 func (t *hnsTestUtil) restore() {
 	listHnsEndpointFunc = hcsshim.HNSListEndpointRequest
 	createHnsEndpointFunc = createHnsEndpoint
@@ -274,7 +250,6 @@ func (t *hnsTestUtil) restore() {
 	deleteHnsEndpointFunc = deleteHnsEndpoint
 	removeEndpointFromNamespaceFunc = hcn.RemoveNamespaceEndpoint
 }
-
 func (t *hnsTestUtil) addHostInterface() {
 	if _, exists := hostIfaces.Load(t.hostIfaceName); exists {
 		return
@@ -285,7 +260,6 @@ func (t *hnsTestUtil) addHostInterface() {
 		})
 	}()
 }
-
 func newMockCNIServer(t *testing.T, controller *gomock.Controller, clients *mockClients, podUpdateNotifier *channel.SubscribableChannel) *CNIServer {
 	kubeClient := fakeclientset.NewClientset()
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -304,7 +278,6 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, clients *mock
 	cniServer.podConfigurator.ifConfigurator.(*ifConfigurator).winnet = mockWinnet
 	return cniServer
 }
-
 func prepareSetup(t *testing.T, ipamType string, name string, containerID, infraContainerID, netns string, prevResult *current.Result) (*cnipb.CniCmdRequest, string) {
 	networkCfg := generateNetworkConfiguration("", supportedCNIVersion, "", ipamType)
 	networkCfg.RuntimeConfig = types.RuntimeConfig{
@@ -323,16 +296,12 @@ func prepareSetup(t *testing.T, ipamType string, name string, containerID, infra
 	hostIfaceName := util.GenerateContainerInterfaceName(name, testPodNamespace, infraContainerID)
 	return requestMsg, hostIfaceName
 }
-
 func TestCmdAdd(t *testing.T) {
 	oriIPAMResult := &ipam.IPAMResult{Result: *ipamResult}
 	ctx := context.TODO()
-
 	containerdInfraContainer := generateUUID()
-
 	defer mockHostInterfaceExists()()
 	defer mockGetHnsNetworkByName()()
-
 	for _, tc := range []struct {
 		name                 string
 		podName              string
@@ -395,7 +364,6 @@ func TestCmdAdd(t *testing.T) {
 			ipam.ResetIPAMDriver(ipamType, ipamMock)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			isDocker := isDockerContainer(tc.netns)
 			testUtil := newHnsTestUtil(generateUUID(), tc.existingHnsEndpoints, isDocker, tc.hnsEndpointCreateErr, tc.endpointAttachErr)
 			testUtil.setFunctions()
@@ -406,10 +374,8 @@ func TestCmdAdd(t *testing.T) {
 				Spec:       corev1.PodSpec{NodeName: nodeName},
 			})
 			clients.startInformers(stopCh)
-
 			server := newMockCNIServer(t, controller, clients, waiter.notifier)
 			go server.podConfigurator.Run(stopCh)
-
 			requestMsg, ovsPortName := prepareSetup(t, ipamType, tc.podName, tc.containerID, tc.infraContainerID, tc.netns, nil)
 			if tc.endpointExists {
 				server.podConfigurator.ifConfigurator.(*ifConfigurator).addEndpoint(getHnsEndpoint(generateUUID(), ovsPortName))
@@ -485,16 +451,12 @@ func TestCmdAdd(t *testing.T) {
 		})
 	}
 }
-
 func TestCmdDel(t *testing.T) {
 	ctx := context.TODO()
-
 	containerID := "261a1970-5b6c-11ed-8caf-000c294e5d03"
 	containerMAC, _ := net.ParseMAC("11:22:33:44:33:22")
-
 	defer mockHostInterfaceExists()()
 	defer mockGetHnsNetworkByName()()
-
 	for _, tc := range []struct {
 		name           string
 		netns          string
@@ -533,7 +495,6 @@ func TestCmdDel(t *testing.T) {
 			ipamType := "windows-test"
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
 			ipam.ResetIPAMDriver(ipamType, ipamMock)
-
 			isDocker := isDockerContainer(tc.netns)
 			requestMsg, ovsPortName := prepareSetup(t, ipamType, testPodNameA, containerID, containerID, tc.netns, nil)
 			hnsEndpoint := getHnsEndpoint(generateUUID(), ovsPortName)
@@ -588,22 +549,18 @@ func TestCmdDel(t *testing.T) {
 		})
 	}
 }
-
 func TestCmdCheck(t *testing.T) {
 	ctx := context.TODO()
-
 	containerNetns := generateUUID()
 	containerID := "261a1970-5b6c-11ed-8caf-000c294e5d03"
 	mac, _ := net.ParseMAC("11:22:33:44:33:22")
 	containerIP, containerIPNet, _ := net.ParseCIDR("10.1.2.100/24")
 	containerIPNet.IP = containerIP
-
 	defer mockHostInterfaceExists()()
 	defer mockGetHnsNetworkByName()()
 	defer mockListHnsEndpoint(nil, nil)()
 	defer mockGetNetInterfaceAddrs(containerIPNet, nil)()
 	defer mockGetHnsEndpointByName(generateUUID(), mac)()
-
 	wrapperIPAMResult := func(ipamResult current.Result, interfaces []*current.Interface) *current.Result {
 		result := ipamResult
 		index := 1
@@ -620,7 +577,6 @@ func TestCmdCheck(t *testing.T) {
 		}
 		return containerIface
 	}
-
 	for _, tc := range []struct {
 		name               string
 		podName            string
@@ -723,7 +679,6 @@ func TestCmdCheck(t *testing.T) {
 			ipamType := "windows-test"
 			ipamMock := ipamtest.NewMockIPAMDriver(controller)
 			ipam.ResetIPAMDriver(ipamType, ipamMock)
-
 			defer mockGetNetInterfaceByName(tc.netInterface)()
 			clients := newMockClients(controller, nodeName)
 			clients.startInformers(stopCh)
@@ -741,12 +696,10 @@ func TestCmdCheck(t *testing.T) {
 		})
 	}
 }
-
 func TestReconcile(t *testing.T) {
 	controller := gomock.NewController(t)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-
 	clients := newMockClients(controller, nodeName, pod1, pod2, pod3)
 	clients.startInformers(stopCh)
 	kubeClient := clients.kubeClient
@@ -754,7 +707,6 @@ func TestReconcile(t *testing.T) {
 	mockOFClient = clients.ofClient
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
-
 	defer mockHostInterfaceExists()()
 	defer mockGetHnsNetworkByName()()
 	missingEndpoint := getHnsEndpoint(generateUUID(), "iface4")
@@ -762,7 +714,6 @@ func TestReconcile(t *testing.T) {
 	testUtil.createHnsEndpoint(missingEndpoint)
 	testUtil.setFunctions()
 	defer testUtil.restore()
-
 	mockOFClient.EXPECT().SubscribeOFPortStatusMessage(gomock.Any()).AnyTimes()
 	cniServer := newCNIServer(t)
 	cniServer.routeClient = mockRoute
@@ -774,7 +725,6 @@ func TestReconcile(t *testing.T) {
 	cniServer.podConfigurator, _ = newPodConfigurator(kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, waiter.notifier, clients.localPodInformer, cniServer.containerAccess)
 	cniServer.nodeConfig = &config.NodeConfig{Name: nodeName}
 	go cniServer.podConfigurator.Run(stopCh)
-
 	// Re-install Pod1 flows
 	expReinstalledPodCount := 3
 	podFlowsInstalled := make(chan string, expReinstalledPodCount)
@@ -782,13 +732,11 @@ func TestReconcile(t *testing.T) {
 		Do(func(interfaceName string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
 			podFlowsInstalled <- interfaceName
 		}).Times(1)
-
 	// Re-install host-network Pod (Pod2) flows
 	mockOFClient.EXPECT().InstallPodFlows(interfaceForHostNetworkPod.InterfaceName, interfaceForHostNetworkPod.IPs, interfaceForHostNetworkPod.MAC, uint32(interfaceForHostNetworkPod.OFPort), uint16(0), nil).
 		Do(func(interfaceName string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
 			podFlowsInstalled <- interfaceName
 		}).Times(1)
-
 	// Uninstall Pod3 flows which is deleted.
 	mockOFClient.EXPECT().UninstallPodFlows(staleInterface.InterfaceName).Return(nil).Times(1)
 	mockOVSBridgeClient.EXPECT().DeletePort(staleInterface.PortUUID).Return(nil).Times(1)
@@ -831,7 +779,6 @@ func TestReconcile(t *testing.T) {
 	}
 	assert.True(t, waiter.waitUntil(5*time.Second))
 }
-
 func getHnsEndpoint(id, name string) *hcsshim.HNSEndpoint {
 	return &hcsshim.HNSEndpoint{
 		Id:                 id,
@@ -843,7 +790,6 @@ func getHnsEndpoint(id, name string) *hcsshim.HNSEndpoint {
 		PrefixLength:       24,
 	}
 }
-
 func getFakeHnsNetworkByName(network string) (*hcsshim.HNSNetwork, error) {
 	return &hcsshim.HNSNetwork{
 		Name:               network,
@@ -862,7 +808,6 @@ func getFakeHnsNetworkByName(network string) (*hcsshim.HNSNetwork, error) {
 		ManagementIP:  "10.10.10.10/28",
 	}, nil
 }
-
 func mockHostInterfaceExists() func() {
 	originalHostInterfaceExistsFunc := hostInterfaceExistsFunc
 	hostInterfaceExistsFunc = testHostInterfaceExists
@@ -870,7 +815,6 @@ func mockHostInterfaceExists() func() {
 		hostInterfaceExistsFunc = originalHostInterfaceExistsFunc
 	}
 }
-
 func mockGetHnsNetworkByName() func() {
 	originalGetHnsNetworkByName := getHnsNetworkByNameFunc
 	getHnsNetworkByNameFunc = getFakeHnsNetworkByName
@@ -890,7 +834,6 @@ func mockGetNetInterfaceByName(netInterface *net.Interface) func() {
 		getNetInterfaceByNameFunc = originalGetNetInterfaceByName
 	}
 }
-
 func mockGetHnsEndpointByName(uuid string, mac net.HardwareAddr) func() {
 	originalGetHnsEndpointByName := getHnsEndpointByNameFunc
 	getHnsEndpointByNameFunc = func(endpointName string) (*hcsshim.HNSEndpoint, error) {
@@ -902,7 +845,6 @@ func mockGetHnsEndpointByName(uuid string, mac net.HardwareAddr) func() {
 		getHnsEndpointByNameFunc = originalGetHnsEndpointByName
 	}
 }
-
 func mockGetNetInterfaceAddrs(containerIPNet *net.IPNet, err error) func() {
 	originalGetNetInterfaceAddrs := getNetInterfaceAddrsFunc
 	getNetInterfaceAddrsFunc = func(intf *net.Interface) ([]net.Addr, error) {
@@ -912,7 +854,6 @@ func mockGetNetInterfaceAddrs(containerIPNet *net.IPNet, err error) func() {
 		getNetInterfaceAddrsFunc = originalGetNetInterfaceAddrs
 	}
 }
-
 func mockListHnsEndpoint(endpoints []hcsshim.HNSEndpoint, listError error) func() {
 	originalListHnsEndpoint := listHnsEndpointFunc
 	listHnsEndpointFunc = func() ([]hcsshim.HNSEndpoint, error) {

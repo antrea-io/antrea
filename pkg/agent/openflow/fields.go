@@ -11,17 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
-<<<<<<< HEAD
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	binding "antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 // Fields using reg.
 var (
 	tunnelVal     = uint32(1)
@@ -31,10 +25,8 @@ var (
 	bridgeVal     = uint32(5)
 	tcReturnVal   = uint32(6)
 	l7NPReturnVal = uint32(7)
-
 	outputToPortVal       = uint32(1)
 	outputToControllerVal = uint32(2)
-
 	// reg0 (NXM_NX_REG0)
 	// reg0[0..3]: Field to store the packet source. Marks in this field include:
 	//   - 1: from tunnel port.
@@ -97,11 +89,9 @@ var (
 	CtStateRestoredRegMark    = binding.NewOneBitRegMark(0, 23)
 	// reg0[25..32]: Field to indicate Antrea-native policy packetIn operations
 	PacketInOperationField = binding.NewRegField(0, 25, 32)
-
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.
 	TargetOFPortField = binding.NewRegField(1, 0, 31)
-
 	// reg2(NXM_NX_REG2)
 	// Field to help swap values in two different flow fields in the OpenFlow actions. This field is only used in func
 	// `arpResponderStaticFlow`.
@@ -110,14 +100,12 @@ var (
 	// packetIn.TableId where the flow with "SendToController" action is located as we may install the packetIn flows
 	// in a single table, e.g., Antrea-native policy logging flows.
 	PacketInTableField = binding.NewRegField(2, 0, 7)
-
 	// reg3(NXM_NX_REG3)
 	// Field to store the selected Service Endpoint IP
 	EndpointIPField = binding.NewRegField(3, 0, 31)
 	// Field to store the conjunction ID which is for rule in Antrea Policy. It shares the same register with EndpointIPField,
 	// since the service selection will finish when a packet hitting NetworkPolicy related rules.
 	APConjIDField = binding.NewRegField(3, 0, 31)
-
 	// reg4(NXM_NX_REG4)
 	// reg4[0..15]: Field to store the selected Service Endpoint port number.
 	EndpointPortField = binding.NewRegField(4, 0, 15)
@@ -159,19 +147,15 @@ var (
 	FromExternalRegMark = binding.NewOneBitRegMark(4, 27)
 	// reg4[28]: Mark to indicate that whether the traffic's source is a local Pod or the Node.
 	FromLocalRegMark = binding.NewOneBitRegMark(4, 28)
-
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.
 	TFEgressConjIDField = binding.NewRegField(5, 0, 31)
-
 	// reg6(NXM_NX_REG6)
 	// Field to store the Ingress conjunction ID hit by TraceFlow packet.
 	TFIngressConjIDField = binding.NewRegField(6, 0, 31)
-
 	// reg7(NXM_NX_REG7)
 	// Field to store the GroupID corresponding to the Service.
 	ServiceGroupIDField = binding.NewRegField(7, 0, 31)
-
 	// reg8(NXM_NX_REG8)
 	// Field to store the VLAN ID. Valid value is 0~4094. value=0 indicates packet without 802.1q header.
 	// VLANIDField for all incoming IP/IPv6 traffic with VLAN must be set explicitly at ClassifierTable or SpoofGuardTable.
@@ -183,24 +167,20 @@ var (
 	IPv6CtZoneTypeRegMark = binding.NewRegMark(CtZoneTypeField, 0b0011)
 	// Field to store the CtZone ID, which is a combination of VLANIDField and CtZoneTypeField to indicate CtZone for DstNAT.
 	CtZoneField = binding.NewRegField(8, 0, 15)
-
 	// reg9(NXM_NX_REG9)
 	// Field to cache the ofPort of the OVS interface to output traffic control packets.
 	TrafficControlTargetOFPortField = binding.NewRegField(9, 0, 31)
 )
-
 // Fields using xxreg.
 var (
 	// xxreg3(NXM_NX_XXREG3)
 	// xxreg3: Field to cache Endpoint IPv6 address. It occupies reg12-reg15 in the meanwhile.
 	EndpointIP6Field = binding.NewXXRegField(3, 0, 127)
 )
-
 // Marks using CT.
 var (
 	// TODO: There is a bug in libOpenflow when CT_MARK range is from 0 to 0, and a wrong mask will be got. As a result,
 	// don't just use bit 0 of CT_MARK.
-
 	// CTMark (NXM_NX_CT_MARK)
 	// CTMark[0..3]: Field to mark the source of the connection. This field has the same bits and positions as PktSourceField
 	// for persisting the value from reg0 to CTMark when committing the first packet of the connection with CT action.
@@ -208,34 +188,27 @@ var (
 	ConnSourceCTMarkField = binding.NewCTMarkField(0, 3)
 	FromGatewayCTMark     = binding.NewCTMark(ConnSourceCTMarkField, gatewayVal)
 	FromBridgeCTMark      = binding.NewCTMark(ConnSourceCTMarkField, bridgeVal)
-
 	// CTMark[4]: Marks to indicate whether DNAT is performed on the connection for Service.
 	// These CT marks are used in CtZone / CtZoneV6 and SNATCtZone / SNATCtZoneV6.
 	ServiceCTMark    = binding.NewOneBitCTMark(4)
 	NotServiceCTMark = binding.NewOneBitZeroCTMark(4)
-
 	// CTMark[5]: Mark to indicate SNAT is performed on the connection for Service.
 	// This CT mark is only used in CtZone / CtZoneV6.
 	ConnSNATCTMark = binding.NewOneBitCTMark(5)
-
 	// CTMark[6]: Mark to indicate the connection is hairpin.
 	// This CT mark is used in CtZone / CtZoneV6 and SNATCtZone / SNATCtZoneV6.
 	HairpinCTMark = binding.NewOneBitCTMark(6)
-
 	// CTMark[7]: Mark to indicate the connection should be redirected to an application-aware engine. This mark is only
 	// for L7 NetworkPolicy.
 	// This CT mark is used in CtZone / CtZoneV6.
 	L7NPRedirectCTMark = binding.NewOneBitCTMark(7)
 )
-
 // Fields using CT label.
 var (
 	// Field to store the ingress rule ID.
 	IngressRuleCTLabel = binding.NewCTLabel(0, 31)
-
 	// Field to store the egress rule ID.
 	EgressRuleCTLabel = binding.NewCTLabel(32, 63)
-
 	// Field to store the VLAN ID allocated for a L7 NetworkPolicy rule.
 	L7NPRuleVlanIDCTLabel = binding.NewCTLabel(64, 75)
 )

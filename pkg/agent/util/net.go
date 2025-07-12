@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package util
-
 import (
 	"crypto/rand"
 	"crypto/sha1" // #nosec G505: not used for security purposes
@@ -25,30 +23,21 @@ import (
 	"net"
 	"net/netip"
 	"strings"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
-
-<<<<<<< HEAD
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
-=======
-	utilip "antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
-
 const (
 	interfaceNameLength   = 15
 	interfacePrefixLength = 8
 	interfaceKeyLength    = interfaceNameLength - (interfacePrefixLength + 1)
-
 	FamilyIPv4 uint8 = 4
 	FamilyIPv6 uint8 = 6
-
 	bridgedUplinkSuffix = "~"
 )
-
 var (
 	// Declared variables which are meant to be overridden for testing.
 	netInterfaceByName  = net.InterfaceByName
@@ -56,7 +45,6 @@ var (
 	netInterfaces       = net.Interfaces
 	netInterfaceAddrs   = (*net.Interface).Addrs
 )
-
 func generateInterfaceName(key string, name string, useHead bool) string {
 	hash := sha1.New() // #nosec G401: not used for security purposes
 	io.WriteString(hash, key)
@@ -76,7 +64,6 @@ func generateInterfaceName(key string, name string, useHead bool) string {
 	}
 	return fmt.Sprintf("%s-%s", prefix, interfaceKey[:interfaceKeyLength])
 }
-
 // GenerateContainerInterfaceKey generates a unique string for a Pod's
 // interface as: "c/<Container-ID>/<IFDev-Name>".
 // We must use ContainerID instead of PodNamespace + PodName because there could
@@ -88,13 +75,11 @@ func generateInterfaceName(key string, name string, useHead bool) string {
 func GenerateContainerInterfaceKey(containerID, ifDev string) string {
 	return fmt.Sprintf("c/%s/%s", containerID, ifDev)
 }
-
 // GenerateNodeTunnelInterfaceKey generates a unique string for a Node's
 // tunnel interface as: node/<Node-name>.
 func GenerateNodeTunnelInterfaceKey(nodeName string) string {
 	return fmt.Sprintf("node/%s", nodeName)
 }
-
 // GenerateContainerInterfaceName generates a unique interface name using the
 // Pod's Namespace, name and container ID. The output should be deterministic
 // (so that multiple calls to GenerateContainerInterfaceName with the same
@@ -106,7 +91,6 @@ func GenerateContainerInterfaceName(podName, podNamespace, containerID string) s
 	// podNamespace is not used currently.
 	return generateInterfaceName(containerID, podName, true)
 }
-
 // GenerateContainerHostVethName generates a unique interface name using the
 // Pod's Name, container ID, and the container veth interface name. The output
 // should be deterministic.
@@ -120,27 +104,22 @@ func GenerateContainerHostVethName(podName, podNamespace, containerID, container
 	}
 	return generateInterfaceName(key, podName, true)
 }
-
 // GenerateNodeTunnelInterfaceName generates a unique interface name for the
 // tunnel to the Node, using the Node's name.
 func GenerateNodeTunnelInterfaceName(nodeName string) string {
 	return generateInterfaceName(GenerateNodeTunnelInterfaceKey(nodeName), nodeName, false)
 }
-
 type LinkNotFound struct {
 	error
 }
-
 func newLinkNotFoundError(name string) LinkNotFound {
 	return LinkNotFound{
 		fmt.Errorf("link %s not found", name),
 	}
 }
-
 func listenUnix(address string) (net.Listener, error) {
 	return net.Listen("unix", address)
 }
-
 // GetIPNetDeviceFromIP returns local IPs/masks and associated device from IP, and ignores the interfaces which have
 // names in the ignoredInterfaces.
 func GetIPNetDeviceFromIP(localIPs *utilip.DualStackIPs, ignoredInterfaces sets.Set[string]) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
@@ -148,7 +127,6 @@ func GetIPNetDeviceFromIP(localIPs *utilip.DualStackIPs, ignoredInterfaces sets.
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	// localIPs includes at most one IPv4 address and one IPv6 address. For each device in linkList, all its addresses
 	// are compared with IPs in localIPs. If found, the iface is set to the device and v4IPNet, v6IPNet are set to
 	// the matching addresses.
@@ -189,7 +167,6 @@ func GetIPNetDeviceFromIP(localIPs *utilip.DualStackIPs, ignoredInterfaces sets.
 	}
 	return v4IPNet, v6IPNet, iface, nil
 }
-
 func GetIPNetDeviceByName(ifaceName string) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, link *net.Interface, err error) {
 	link, err = netInterfaceByName(ifaceName)
 	if err != nil {
@@ -217,26 +194,21 @@ func GetIPNetDeviceByName(ifaceName string) (v4IPNet *net.IPNet, v6IPNet *net.IP
 	}
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }
-
 func GetIPNetDeviceByCIDRs(cidrsList []string) (v4IPNet, v6IPNet *net.IPNet, link *net.Interface, err error) {
 	cidrs, err := utilnet.ParseCIDRs(cidrsList)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	dualStack, err := utilnet.IsDualStackCIDRs(cidrs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	if len(cidrs) > 1 && !dualStack {
 		return nil, nil, nil, fmt.Errorf("len of cidrs is %v and they are not configured as dual stack (at least one from each IPFamily)", len(cidrs))
 	}
-
 	if len(cidrs) > 2 {
 		return nil, nil, nil, fmt.Errorf("length of cidrs is %v more than max allowed of 2", len(cidrs))
 	}
-
 	ifaces, err := netInterfaces()
 	if err != nil {
 		return nil, nil, nil, err
@@ -268,7 +240,6 @@ func GetIPNetDeviceByCIDRs(cidrsList []string) (v4IPNet, v6IPNet *net.IPNet, lin
 	}
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }
-
 func GetIPv4Addr(ips []net.IP) net.IP {
 	for _, ip := range ips {
 		if ip.To4() != nil {
@@ -277,7 +248,6 @@ func GetIPv4Addr(ips []net.IP) net.IP {
 	}
 	return nil
 }
-
 func GetIPWithFamily(ips []net.IP, addrFamily uint8) (net.IP, error) {
 	if addrFamily == FamilyIPv6 {
 		for _, ip := range ips {
@@ -294,7 +264,6 @@ func GetIPWithFamily(ips []net.IP, addrFamily uint8) (net.IP, error) {
 	}
 	return nil, errors.New("no IP found with IPv4 AddressFamily")
 }
-
 // ExtendCIDRWithIP is used for extending an IPNet with an IP.
 func ExtendCIDRWithIP(ipNet *net.IPNet, ip net.IP) (*net.IPNet, error) {
 	if ipNet == nil {
@@ -310,7 +279,6 @@ func ExtendCIDRWithIP(ipNet *net.IPNet, ip net.IP) (*net.IPNet, error) {
 	}
 	return newIPNet, nil
 }
-
 // This is copied from func commonPrefixLen in net/addrselect.go and modified:
 // - Replace argument type IP with argument type net.IP.
 // - Remove the prefix limit (64 bits) for IPv6.
@@ -345,39 +313,32 @@ func longestCommonPrefixLen(a, b net.IP) (cpl int) {
 	}
 	return
 }
-
 // GetAllNodeAddresses gets all Node IP addresses (not including IPv6 link local address).
 func GetAllNodeAddresses(excludeDevices []string) ([]net.IP, []net.IP, error) {
 	var nodeAddressesIPv4, nodeAddressesIPv6 []net.IP
 	_, ipv6LinkLocalNet, _ := net.ParseCIDR("fe80::/64")
-
 	// Get all interfaces.
 	interfaces, err := netInterfaces()
 	if err != nil {
 		return nil, nil, err
 	}
-
 	// Transform excludeDevices to a set
 	excludeDevicesSet := sets.New[string](excludeDevices...)
-
 	for i := range interfaces {
 		// If the device is in excludeDevicesSet, skip it.
 		if excludeDevicesSet.Has(interfaces[i].Name) {
 			continue
 		}
-
 		// Get all IPs of every interface
 		addrs, err := netInterfaceAddrs(&interfaces[i])
 		if err != nil {
 			return nil, nil, err
 		}
-
 		for _, addr := range addrs {
 			ip, _, _ := net.ParseCIDR(addr.String())
 			if ipv6LinkLocalNet.Contains(ip) {
 				continue // Skip IPv6 link local address
 			}
-
 			if ip.To4() != nil {
 				nodeAddressesIPv4 = append(nodeAddressesIPv4, ip)
 			} else {
@@ -387,7 +348,6 @@ func GetAllNodeAddresses(excludeDevices []string) ([]net.IP, []net.IP, error) {
 	}
 	return nodeAddressesIPv4, nodeAddressesIPv6, nil
 }
-
 // Copied from github.com/vishvananda/netlink/netlink.go
 // NewIPNet generates an IPNet from an ip address using a netmask of 32 or 128.
 func NewIPNet(ip net.IP) *net.IPNet {
@@ -396,7 +356,6 @@ func NewIPNet(ip net.IP) *net.IPNet {
 	}
 	return &net.IPNet{IP: ip, Mask: net.CIDRMask(128, 128)}
 }
-
 func PortToUint16(port int) uint16 {
 	if port > 0 && port <= math.MaxUint16 {
 		return uint16(port)
@@ -404,12 +363,10 @@ func PortToUint16(port int) uint16 {
 	klog.Errorf("Port value %d out-of-bounds", port)
 	return 0
 }
-
 // GenerateUplinkInterfaceName generates the uplink interface name after bridged to OVS
 func GenerateUplinkInterfaceName(name string) string {
 	return name + bridgedUplinkSuffix
 }
-
 func GenerateRandomMAC() net.HardwareAddr {
 	buf := make([]byte, 6)
 	if _, err := rand.Read(buf); err != nil {
@@ -420,7 +377,6 @@ func GenerateRandomMAC() net.HardwareAddr {
 	buf[0] |= 0x02
 	return buf
 }
-
 func getIPNetsByLink(link *net.Interface) ([]*net.IPNet, error) {
 	addrList, err := netInterfaceAddrs(link)
 	if err != nil {
@@ -434,7 +390,6 @@ func getIPNetsByLink(link *net.Interface) ([]*net.IPNet, error) {
 	}
 	return addrs, nil
 }
-
 // GenerateOVSDatapathID generates an OVS datapath ID string.
 func GenerateOVSDatapathID(macString string) string {
 	// The length of datapathID is 64 bits, the lower 48-bits are for a MAC address, while the
@@ -444,12 +399,10 @@ func GenerateOVSDatapathID(macString string) string {
 	}
 	return "0000" + strings.ReplaceAll(macString, ":", "")
 }
-
 // GetGatewayIPForPodCIDR returns the gateway IP for a given Pod CIDR.
 func GetGatewayIPForPodCIDR(cidr *net.IPNet) net.IP {
 	return ip.NextIP(cidr.IP.Mask(cidr.Mask))
 }
-
 // GetGatewayIPForPodPrefix acts like GetGatewayIPForPodCIDR but takes a netip.Prefix as a parameter
 // and returns a netip.Addr value.
 func GetGatewayIPForPodPrefix(prefix netip.Prefix) netip.Addr {

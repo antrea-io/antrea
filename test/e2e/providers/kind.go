@@ -11,55 +11,42 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package providers
-
 import (
 	"flag"
 	"fmt"
 	"os"
 	"path"
 	"strings"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/test/e2e/providers/exec"
-=======
 	"antrea.io/antrea/test/e2e/providers/exec"
->>>>>>> origin/main
 )
-
 var kindKubeconfigPath = flag.String("kind.kubeconfig", path.Join(homedir, ".kube", "config"), "Path of the kubeconfig of the cluster")
-
 type KindProvider struct {
 	controlPlaneNodeName string
 }
-
 func (provider *KindProvider) RunCommandOnControlPlaneNode(cmd string) (
 	code int, stdout string, stderr string, err error,
 ) {
 	return exec.RunDockerExecCommand(provider.controlPlaneNodeName, cmd, "/root", nil, "")
 }
-
 func (provider *KindProvider) RunCommandOnNode(nodeName string, cmd string) (
 	code int, stdout string, stderr string, err error,
 ) {
 	return exec.RunDockerExecCommand(nodeName, cmd, "/root", nil, "")
 }
-
 func (provider *KindProvider) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]string, stdin string, sudo bool) (
 	code int, stdout string, stderr string, err error,
 ) {
 	// sudo is not needed for Docker exec, so ignore the argument.
 	return exec.RunDockerExecCommand(nodeName, cmd, "/root", envs, stdin)
 }
-
 func (provider *KindProvider) GetKubeconfigPath() (string, error) {
 	if _, err := os.Stat(*kindKubeconfigPath); os.IsNotExist(err) {
 		return "", fmt.Errorf("Kubeconfig file not found at expected location '%s'", *kindKubeconfigPath)
 	}
 	return *kindKubeconfigPath, nil
 }
-
 // enableKubectlOnControlPlane copies the Kubeconfig file on the Kind control-plane / control-plane Node to the
 // default location, in order to make sure that we can run kubectl on the Node.
 func (provider *KindProvider) enableKubectlOnControlPlane() error {
@@ -69,7 +56,6 @@ func (provider *KindProvider) enableKubectlOnControlPlane() error {
 	}
 	return nil
 }
-
 // NewKindProvider returns an implementation of ProviderInterface which is suitable for a
 // Kubernetes test cluster created with Kind.
 // configPath is unused for the kind provider
@@ -82,7 +68,6 @@ func NewKindProvider(configPath string) (ProviderInterface, error) {
 	}
 	slicedOutput := strings.Fields(stdout)
 	provider.controlPlaneNodeName = slicedOutput[len(slicedOutput)-1]
-
 	if err := provider.enableKubectlOnControlPlane(); err != nil {
 		return nil, err
 	}

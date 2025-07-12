@@ -11,28 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package memberlist
-
 import (
 	"encoding/json"
 	"net/http"
 	"reflect"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/querier"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/querier"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/querier"
 )
-
 func generateResponse(node *v1.Node, aliveNodes sets.Set[string]) apis.MemberlistResponse {
 	status := "Dead"
 	if aliveNodes.Has(node.Name) {
@@ -44,7 +36,6 @@ func generateResponse(node *v1.Node, aliveNodes sets.Set[string]) apis.Memberlis
 		IP:       node.Status.Addresses[0].Address,
 	}
 }
-
 // HandleFunc returns the function which can handle queries issued by the memberlist command.
 func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +51,6 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 		for _, node := range allNodes {
 			memberlist = append(memberlist, generateResponse(node, aliveNodes))
 		}
-
 		err := json.NewEncoder(w).Encode(memberlist)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

@@ -11,19 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package portcache
-
 import (
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
-=======
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
 )
-
 const (
 	startPort = 61000
 	endPort   = 65000
@@ -32,7 +25,6 @@ const (
 	nodePort1 = startPort
 	nodePort2 = startPort + 1
 )
-
 func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener LocalPortOpener) *PortTable {
 	return &PortTable{
 		PortTableCache: cache.NewIndexer(GetPortTableKey, cache.Indexers{

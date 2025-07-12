@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package traceflow
-
 import (
 	"encoding/json"
 	"fmt"
-
 	admv1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	newResponse := func(allowed bool, deniedReason string) *admv1.AdmissionResponse {
 		resp := &admv1.AdmissionResponse{
@@ -45,9 +37,7 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 		}
 		return resp
 	}
-
 	klog.V(2).InfoS("Validating Traceflow", "request", review.Request)
-
 	var newObj crdv1beta1.Traceflow
 	if review.Request.Object.Raw != nil {
 		if err := json.Unmarshal(review.Request.Object.Raw, &newObj); err != nil {
@@ -55,7 +45,6 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 			return newResponse(false, err.Error())
 		}
 	}
-
 	switch review.Request.Operation {
 	case admv1.Create:
 		klog.V(2).InfoS("Validating CREATE request for Traceflow", "name", newObj.Name)
@@ -71,7 +60,6 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 		return newResponse(false, err.Error())
 	}
 }
-
 func (c *Controller) validate(tf *crdv1beta1.Traceflow) (allowed bool, deniedReason string) {
 	if !tf.Spec.LiveTraffic {
 		if tf.Spec.Source.Namespace == "" || tf.Spec.Source.Pod == "" {

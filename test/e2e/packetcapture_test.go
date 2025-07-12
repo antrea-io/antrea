@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"context"
 	"fmt"
@@ -27,7 +25,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcapgo"
@@ -40,44 +37,34 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	capture "antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
-=======
-	capture "antrea.io/antrea/pkg/agent/packetcapture/capture"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/features"
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
->>>>>>> origin/main
+	capture "antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/features"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
-
 var (
 	icmpProto = intstr.FromString("ICMP")
 	udpProto  = intstr.FromString("UDP")
 	tcpProto  = intstr.FromString("TCP")
 )
-
 type pcTestCase struct {
 	name           string
 	pc             *crdv1alpha1.PacketCapture
 	expectedStatus crdv1alpha1.PacketCaptureStatus
-
 	// required IP version, skip if not match.
 	ipVersion int
-
 	// optional timeout in seconds. If omitted, we will use a reasonable default for the test
 	// case. Note that this is the timeout used by the test when polling for the desired
 	// PacketCapture Status. It is different from the PacketCapture Timeout, which can be set as
 	// part of the pc field.
 	timeoutSeconds int
-
 	// number of netcat connections to make from the client to server
 	numConnections int
 }
-
 func createUDPServerPod(name string, ns string, portNum int32, serverNode string) error {
 	port := v1.ContainerPort{Name: fmt.Sprintf("port-%d", portNum), ContainerPort: portNum}
 	return NewPodBuilder(name, ns, agnhostImage).
@@ -87,7 +74,6 @@ func createUDPServerPod(name string, ns string, portNum int32, serverNode string
 		WithPorts([]v1.ContainerPort{port}).
 		Create(testData)
 }
-
 // TestPacketCapture is the top-level test which contains all subtests for
 // PacketCapture related test cases, so they can share setup, teardown.
 func TestPacketCapture(t *testing.T) {
@@ -98,14 +84,12 @@ func TestPacketCapture(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	deployment, svc, pubKeys, err := data.deploySFTPServer(context.TODO(), 0)
 	require.NoError(t, err, "failed to deploy SFTP server")
 	require.Len(t, pubKeys, 2)
 	pubKey1, pubKey2 := pubKeys[0], pubKeys[1]
 	require.NoError(t, data.waitForDeploymentReady(t, deployment.Namespace, deployment.Name, defaultTimeout))
 	require.NotEmpty(t, svc.Spec.ClusterIP)
-
 	sec := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			// #nosec G101
@@ -120,30 +104,24 @@ func TestPacketCapture(t *testing.T) {
 	_, err = data.clientset.CoreV1().Secrets(sec.Namespace).Create(context.TODO(), sec, metav1.CreateOptions{})
 	require.NoError(t, err)
 	defer data.clientset.CoreV1().Secrets(sec.Namespace).Delete(context.TODO(), sec.Name, metav1.DeleteOptions{})
-
 	t.Run("testPacketCaptureBasic", func(t *testing.T) {
 		testPacketCaptureBasic(t, data, svc.Spec.ClusterIP, pubKey1.Marshal(), pubKey2.Marshal())
 	})
 	t.Run("testPacketCaptureL4Filters", func(t *testing.T) {
 		testPacketCaptureL4Filters(t, data, svc.Spec.ClusterIP, pubKey1.Marshal())
 	})
-
 }
-
 // getLocalPcapFilepath returns the path of the local pcap file present inside the Pod, for the
 // Antrea Agent which ran the packet capture.
 func getLocalPcapFilepath(pcName string) string {
 	return path.Join("/tmp", "antrea", "packetcapture", "packets", pcName+".pcapng")
 }
-
 type packetCaptureOption func(pc *crdv1alpha1.PacketCapture)
-
 func packetCaptureTimeout(timeout *int32) packetCaptureOption {
 	return func(pc *crdv1alpha1.PacketCapture) {
 		pc.Spec.Timeout = timeout
 	}
 }
-
 func packetCaptureFirstN(firstN int32) packetCaptureOption {
 	return func(pc *crdv1alpha1.PacketCapture) {
 		pc.Spec.CaptureConfig.FirstN = &crdv1alpha1.PacketCaptureFirstNConfig{
@@ -151,13 +129,11 @@ func packetCaptureFirstN(firstN int32) packetCaptureOption {
 		}
 	}
 }
-
 func packetCaptureHostPublicKey(pubKey []byte) packetCaptureOption {
 	return func(pc *crdv1alpha1.PacketCapture) {
 		pc.Spec.FileServer.HostPublicKey = pubKey
 	}
 }
-
 func getPacketCaptureCR(name string, namespace string, clientPodName string, destinationPodName string, sftpURL string, packet *crdv1alpha1.Packet, direction crdv1alpha1.CaptureDirection, options ...packetCaptureOption) *crdv1alpha1.PacketCapture {
 	pc := &crdv1alpha1.PacketCapture{
 		ObjectMeta: metav1.ObjectMeta{
@@ -193,7 +169,6 @@ func getPacketCaptureCR(name string, namespace string, clientPodName string, des
 	}
 	return pc
 }
-
 // testPacketCaptureTCP verifies if PacketCapture can capture tcp packets. this function only contains basic
 // cases with pod-to-pod.
 func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, pubKey1, pubKey2 []byte) {
@@ -205,31 +180,26 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 	sftpURL := fmt.Sprintf("sftp://%s:22/%s", sftpServerIP, sftpUploadDir)
 	invalidPubKey, _, err := sftptesting.GenerateEd25519Key()
 	require.NoError(t, err)
-
 	require.NoError(t, data.createToolboxPodOnNode(clientPodName, data.testNamespace, node1, false))
 	defer data.DeletePodAndWait(defaultTimeout, clientPodName, data.testNamespace)
 	require.NoError(t, data.createServerPodWithLabels(tcpServerPodName, data.testNamespace, serverPodPort, nil))
 	defer data.DeletePodAndWait(defaultTimeout, tcpServerPodName, data.testNamespace)
 	require.NoError(t, createUDPServerPod(udpServerPodName, data.testNamespace, serverPodPort, node1))
 	defer data.DeletePodAndWait(defaultTimeout, udpServerPodName, data.testNamespace)
-
 	waitForPodIPs(t, data, []PodInfo{
 		{Name: clientPodName},
 		{Name: tcpServerPodName},
 		{Name: udpServerPodName},
 	})
-
 	// This is the name of the Antrea Pod which performs the capture. The capture is performed
 	// on the Node where the source Pod (clientPodName) is running, which is node1.
 	antreaPodName, err := data.getAntreaPodOnNode(node1)
 	require.NoError(t, err)
-
 	getPcapURL := func(name string) string {
 		p, err := url.JoinPath(sftpURL, name+".pcapng")
 		require.NoError(t, err)
 		return p
 	}
-
 	testcases := []pcTestCase{
 		{
 			name:      "ipv4-icmp-timeout",
@@ -561,7 +531,6 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 		}
 	})
 }
-
 // testPacketCaptureL4Filters is for test cases involving L4 protocol-specific filters.
 // Separating these from testPacketCaptureBasic ensures isolation of more advanced filtering scenarios, preventing
 // potential interference with other test cases.
@@ -570,23 +539,19 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 	clientPodName := "client-2"
 	tcpServerPodName := "tcp-server-2"
 	sftpURL := fmt.Sprintf("sftp://%s:22/%s", sftpServerIP, sftpUploadDir)
-
 	require.NoError(t, data.createToolboxPodOnNode(clientPodName, data.testNamespace, node1, false))
 	defer data.DeletePodAndWait(defaultTimeout, clientPodName, data.testNamespace)
 	require.NoError(t, data.createServerPodWithLabels(tcpServerPodName, data.testNamespace, serverPodPort, nil))
 	defer data.DeletePodAndWait(defaultTimeout, tcpServerPodName, data.testNamespace)
-
 	waitForPodIPs(t, data, []PodInfo{
 		{Name: clientPodName},
 		{Name: tcpServerPodName},
 	})
-
 	getPcapURL := func(name string) string {
 		p, err := url.JoinPath(sftpURL, name+".pcapng")
 		require.NoError(t, err)
 		return p
 	}
-
 	testcases := []pcTestCase{
 		{
 			name:      "ipv4-tcp-syn-both-timeout",
@@ -696,11 +661,9 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 		}
 	})
 }
-
 func getOSString() string {
 	return "linux"
 }
-
 func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	switch tc.ipVersion {
 	case 4:
@@ -708,7 +671,6 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	case 6:
 		skipIfNotIPv6Cluster(t)
 	}
-
 	var dstPodIPs *PodIPs
 	if tc.pc.Spec.Destination.IP != nil {
 		ip := net.ParseIP(*tc.pc.Spec.Destination.IP)
@@ -739,7 +701,6 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 			require.NoError(t, err)
 		}
 	}
-
 	if _, err := data.CRDClient.CrdV1alpha1().PacketCaptures().Create(context.TODO(), tc.pc, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Error when creating PacketCapture: %v", err)
 	}
@@ -748,7 +709,6 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 			t.Errorf("Error when deleting PacketCapture: %v", err)
 		}
 	}()
-
 	// The destination is unset or invalid, do not generate traffic as the test expects to fail.
 	if dstPodIPs != nil {
 		srcPod := tc.pc.Spec.Source.Pod.Name
@@ -787,7 +747,6 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 			}
 		}
 	}
-
 	const defaultTimeoutSeconds = 15
 	timeoutSeconds := tc.timeoutSeconds
 	// If timeout is not explicitly provided by test case...
@@ -802,7 +761,6 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 			timeoutSeconds += 5
 		}
 	}
-
 	pc, err := data.waitForPacketCapture(t, tc.pc.Name, timeoutSeconds, isPacketCaptureComplete)
 	if err != nil {
 		t.Fatalf("Error: Get PacketCapture failed: %v", err)
@@ -810,7 +768,6 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	if !packetCaptureStatusEqual(pc.Status, tc.expectedStatus) {
 		t.Errorf("CR status not match, actual: %+v, expected: %+v", pc.Status, tc.expectedStatus)
 	}
-
 	if tc.expectedStatus.NumberCaptured == 0 {
 		return
 	}
@@ -827,7 +784,6 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	defer file.Close()
 	require.NoError(t, verifyPacketFile(t, tc.pc, file, tc.expectedStatus.NumberCaptured, *srcPodIPs.IPv4, *dstPodIPs.IPv4))
 }
-
 func (data *TestData) waitForPacketCapture(t *testing.T, name string, specTimeout int, fn func(*crdv1alpha1.PacketCapture) bool) (*crdv1alpha1.PacketCapture, error) {
 	var pc *crdv1alpha1.PacketCapture
 	var err error
@@ -845,7 +801,6 @@ func (data *TestData) waitForPacketCapture(t *testing.T, name string, specTimeou
 			return true, nil
 		}
 		return false, nil
-
 	}); err != nil {
 		if pc != nil {
 			t.Errorf("Latest PacketCapture status: %s %+v", pc.Name, pc.Status)
@@ -854,7 +809,6 @@ func (data *TestData) waitForPacketCapture(t *testing.T, name string, specTimeou
 	}
 	return pc, nil
 }
-
 func isPacketCaptureComplete(pc *crdv1alpha1.PacketCapture) bool {
 	for _, cond := range pc.Status.Conditions {
 		if cond.Type == crdv1alpha1.PacketCaptureComplete && cond.Status == metav1.ConditionTrue {
@@ -862,9 +816,7 @@ func isPacketCaptureComplete(pc *crdv1alpha1.PacketCapture) bool {
 		}
 	}
 	return false
-
 }
-
 func isPacketCaptureRunning(pc *crdv1alpha1.PacketCapture) bool {
 	for _, cond := range pc.Status.Conditions {
 		if cond.Type == crdv1alpha1.PacketCaptureStarted && cond.Status == metav1.ConditionTrue {
@@ -872,23 +824,18 @@ func isPacketCaptureRunning(pc *crdv1alpha1.PacketCapture) bool {
 		}
 	}
 	return false
-
 }
-
 func packetCaptureConditionEqual(c1, c2 crdv1alpha1.PacketCaptureCondition) bool {
 	c1.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	c2.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	return c1 == c2
 }
-
 var packetCaptureStatusSemanticEquality = conversion.EqualitiesOrDie(
 	packetCaptureConditionSliceEqual,
 )
-
 func packetCaptureStatusEqual(status1, status2 crdv1alpha1.PacketCaptureStatus) bool {
 	return packetCaptureStatusSemanticEquality.DeepEqual(status1, status2)
 }
-
 func packetCaptureConditionSliceEqual(s1, s2 []crdv1alpha1.PacketCaptureCondition) bool {
 	sort.Slice(s1, func(i, j int) bool {
 		return s1[i].Type < s1[j].Type
@@ -896,7 +843,6 @@ func packetCaptureConditionSliceEqual(s1, s2 []crdv1alpha1.PacketCaptureConditio
 	sort.Slice(s2, func(i, j int) bool {
 		return s2[i].Type < s2[j].Type
 	})
-
 	if len(s1) != len(s2) {
 		return false
 	}
@@ -909,14 +855,12 @@ func packetCaptureConditionSliceEqual(s1, s2 []crdv1alpha1.PacketCaptureConditio
 	}
 	return true
 }
-
 // verifyPacketFile will read the packets file and check if packet count and packet data match with CR.
 func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Reader, targetNum int32, srcIP net.IP, dstIP net.IP) (err error) {
 	ngReader, err := pcapgo.NewNgReader(reader, pcapgo.DefaultNgReaderOptions)
 	if err != nil {
 		return err
 	}
-
 	for i := int32(0); i < targetNum; i++ {
 		data, _, err := ngReader.ReadPacketData()
 		if err != nil {
@@ -938,17 +882,14 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 			assert.Equal(t, srcIP.String(), ip.SrcIP.String())
 			assert.Equal(t, dstIP.String(), ip.DstIP.String())
 		}
-
 		if pc.Spec.Packet == nil {
 			continue
 		}
-
 		packetSpec := pc.Spec.Packet
 		proto := packetSpec.Protocol
 		if proto == nil {
 			continue
 		}
-
 		// addPortExpectations compares CRD ports with packet header ports based on capture direction
 		addPortExpectations := func(crdSrcPort, crdDstPort *int32, hdrSrcPort, hdrDstPort int32) {
 			t.Helper()
@@ -978,7 +919,6 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 				require.Fail(t, "Invalid direction value")
 			}
 		}
-
 		if strings.ToUpper(proto.StrVal) == "TCP" || proto.IntVal == 6 {
 			tcpLayer := packet.Layer(layers.LayerTypeTCP)
 			require.NotNil(t, tcpLayer)
@@ -1029,7 +969,6 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 						}
 						typeValue = uint8(capture.ICMPMsgTypeMap[crdv1alpha1.ICMPMsgType(strings.ToLower(f.Type.StrVal))])
 					}
-
 					if icmp.TypeCode.Type() == typeValue {
 						if f.Code == nil || icmp.TypeCode.Code() == uint8(*f.Code) {
 							matched = true

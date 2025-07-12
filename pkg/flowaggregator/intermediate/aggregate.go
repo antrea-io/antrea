@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package intermediate
-
 import (
 	"container/heap"
 	"encoding/json"
@@ -21,23 +19,16 @@ import (
 	"net"
 	"sync"
 	"time"
-
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
-
 var (
 	MaxRetries    = 2
 	MinExpiryTime = 100 * time.Millisecond
 )
-
 type aggregationProcess struct {
 	// flowKeyRecordMap maps each connection (5-tuple) with its records
 	flowKeyRecordMap map[FlowKey]*AggregationFlowRecord
@@ -65,14 +56,12 @@ type aggregationProcess struct {
 	stopChan chan bool
 	clock    clock.Clock
 }
-
 type AggregationInput struct {
 	RecordChan            <-chan *flowpb.Flow
 	WorkerNum             int
 	ActiveExpiryTimeout   time.Duration
 	InactiveExpiryTimeout time.Duration
 }
-
 func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) (*aggregationProcess, error) {
 	if input.RecordChan == nil {
 		return nil, fmt.Errorf("cannot create aggregationProcess process without input channel")
@@ -93,11 +82,9 @@ func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) 
 		clock,
 	}, nil
 }
-
 func InitAggregationProcess(input AggregationInput) (*aggregationProcess, error) {
 	return initAggregationProcessWithClock(input, clock.RealClock{})
 }
-
 func (a *aggregationProcess) Start() {
 	a.mutex.Lock()
 	for i := 0; i < a.workerNum; i++ {
@@ -108,7 +95,6 @@ func (a *aggregationProcess) Start() {
 	a.mutex.Unlock()
 	<-a.stopChan
 }
-
 func (a *aggregationProcess) Stop() {
 	a.mutex.Lock()
 	for _, worker := range a.workerList {
@@ -117,20 +103,17 @@ func (a *aggregationProcess) Stop() {
 	a.mutex.Unlock()
 	a.stopChan <- true
 }
-
 // GetNumFlows returns total number of connections/flows stored in map
 func (a *aggregationProcess) GetNumFlows() int64 {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	return int64(len(a.flowKeyRecordMap))
 }
-
 func (a *aggregationProcess) aggregateRecordByFlowKey(record *flowpb.Flow) error {
 	flowKey, isIPv4 := getFlowKeyFromRecord(record)
 	a.addOrUpdateRecordInMap(flowKey, record, isIPv4)
 	return nil
 }
-
 // ForAllRecordsDo takes in callback function to process the operations to flowkey->records pairs in the map
 func (a *aggregationProcess) ForAllRecordsDo(callback FlowKeyRecordMapCallBack) error {
 	a.mutex.Lock()
@@ -144,13 +127,11 @@ func (a *aggregationProcess) ForAllRecordsDo(callback FlowKeyRecordMapCallBack) 
 	}
 	return nil
 }
-
 func (a *aggregationProcess) deleteFlowKeyFromMap(flowKey FlowKey) error {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	return a.deleteFlowKeyFromMapWithoutLock(flowKey)
 }
-
 func (a *aggregationProcess) deleteFlowKeyFromMapWithoutLock(flowKey FlowKey) error {
 	_, exists := a.flowKeyRecordMap[flowKey]
 	if !exists {
@@ -159,13 +140,11 @@ func (a *aggregationProcess) deleteFlowKeyFromMapWithoutLock(flowKey FlowKey) er
 	delete(a.flowKeyRecordMap, flowKey)
 	return nil
 }
-
 // GetExpiryFromExpirePriorityQueue returns the earliest timestamp (active expiry
 // or inactive expiry) from expire priority queue.
 func (a *aggregationProcess) GetExpiryFromExpirePriorityQueue() time.Duration {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-
 	currTime := a.clock.Now()
 	if a.expirePriorityQueue.Len() > 0 {
 		// Get the minExpireTime of the top item in expirePriorityQueue.
@@ -180,7 +159,6 @@ func (a *aggregationProcess) GetExpiryFromExpirePriorityQueue() time.Duration {
 	}
 	return a.inactiveExpiryTimeout
 }
-
 // GetRecords returns map format flow records given a flow key.
 // In order to preserve backwards-compatibility (after migrating to Protobuf to represent flow
 // records), map keys are the names of the corresponding information elements, and values are typed
@@ -241,10 +219,8 @@ func (a *aggregationProcess) GetRecords(flowKey *FlowKey) []map[string]interface
 		}
 		return m
 	}
-
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-
 	var records []map[string]interface{}
 	// Complete filter
 	if flowKey != nil && flowKey.SourceAddress != "" && flowKey.DestinationAddress != "" &&
@@ -269,11 +245,9 @@ func (a *aggregationProcess) GetRecords(flowKey *FlowKey) []map[string]interface
 	}
 	return records
 }
-
 func (a *aggregationProcess) ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMapCallBack) error {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-
 	if a.expirePriorityQueue.Len() == 0 {
 		return nil
 	}
@@ -323,35 +297,27 @@ func (a *aggregationProcess) ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMa
 	}
 	return nil
 }
-
 func (a *aggregationProcess) SetCorrelatedFieldsFilled(record *AggregationFlowRecord, isFilled bool) {
 	record.areCorrelatedFieldsFilled = isFilled
 }
-
 func (a *aggregationProcess) AreCorrelatedFieldsFilled(record AggregationFlowRecord) bool {
 	return record.areCorrelatedFieldsFilled
 }
-
 func (a *aggregationProcess) SetExternalFieldsFilled(record *AggregationFlowRecord, isFilled bool) {
 	record.areExternalFieldsFilled = isFilled
 }
-
 func (a *aggregationProcess) AreExternalFieldsFilled(record AggregationFlowRecord) bool {
 	return record.areExternalFieldsFilled
 }
-
 func (a *aggregationProcess) IsAggregatedRecordIPv4(record AggregationFlowRecord) bool {
 	return record.isIPv4
 }
-
 // addOrUpdateRecordInMap either adds the record to flowKeyMap or updates the record in
 // flowKeyMap by doing correlation or updating the stats.
 func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *flowpb.Flow, isIPv4 bool) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-
 	correlationRequired := isCorrelationRequired(record.K8S.FlowType, record)
-
 	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
 	if exist {
@@ -400,7 +366,6 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 			waitForReadyToSendRetries: 0,
 			isIPv4:                    isIPv4,
 		}
-
 		if !correlationRequired {
 			aggregationRecord.ReadyToSend = true
 			// If no correlation is required for an Inter-Node record, K8s metadata is
@@ -418,7 +383,6 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 			flowKey: flowKey,
 		}
 		aggregationRecord.PriorityQueueItem = pqItem
-
 		pqItem.flowRecord = aggregationRecord
 		pqItem.activeExpireTime = currTime.Add(a.activeExpiryTimeout)
 		pqItem.inactiveExpireTime = currTime.Add(a.inactiveExpiryTimeout)
@@ -426,7 +390,6 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	}
 	a.flowKeyRecordMap[*flowKey] = aggregationRecord
 }
-
 // correlateRecords correlate the incomingRecord with existingRecord using correlation
 // fields. This is called for records whose flowType is InterNode.
 func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *flowpb.Flow) {
@@ -488,7 +451,6 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 		existingRecord.K8S.EgressNetworkPolicyRuleName = egressNetworkPolicyRuleName
 	}
 }
-
 // aggregateRecords aggregate the incomingRecord with existingRecord by updating
 // stats and flow timestamps.
 func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *flowpb.Flow, fillSrcStats, fillDstStats bool) {
@@ -536,14 +498,12 @@ func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *fl
 			existingRecord.App.HttpVals = updatedHttpVals
 		}
 	}
-
 	aggregateStats := func(incoming, existing *flowpb.Stats) {
 		existing.PacketTotalCount = incoming.PacketTotalCount
 		existing.PacketDeltaCount += incoming.PacketDeltaCount
 		existing.OctetTotalCount = incoming.OctetTotalCount
 		existing.OctetDeltaCount += incoming.OctetDeltaCount
 	}
-
 	var totalCountDiff, reverseTotalCountDiff uint64
 	if fillSrcStats {
 		incoming := incomingRecord.Stats
@@ -565,7 +525,6 @@ func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *fl
 		reverseTotalCountDiff = incoming.OctetTotalCount - existing.OctetTotalCount
 		aggregateStats(incoming, existing)
 	}
-
 	updateCommonStats := func(from, existing *flowpb.Stats) {
 		if existing.PacketTotalCount < from.PacketTotalCount {
 			existing.PacketTotalCount = from.PacketTotalCount
@@ -576,7 +535,6 @@ func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *fl
 		}
 		existing.OctetDeltaCount = from.OctetDeltaCount
 	}
-
 	if isLatest {
 		if fillSrcStats {
 			updateCommonStats(existingRecord.Aggregation.StatsFromSource, existingRecord.Stats)
@@ -587,7 +545,6 @@ func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *fl
 			updateCommonStats(existingRecord.Aggregation.ReverseStatsFromDestination, existingRecord.ReverseStats)
 		}
 	}
-
 	// Update the throughput & reverseThroughput fields:
 	// throughput = (octetTotalCount - prevOctetTotalCount) / (flowEndSeconds - prevFlowEndSeconds)
 	// reverseThroughput = (reverseOctetTotalCount - prevReverseOctetTotalCount) / (flowEndSeconds - prevFlowEndSeconds)
@@ -606,7 +563,6 @@ func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *fl
 		existingRecord.Aggregation.ReverseThroughput = reverseThroughput
 	}
 }
-
 // ResetStatAndThroughputElementsInRecord is called by the user after the aggregation
 // record is sent after its expiry either by active or inactive expiry interval. This
 // should be called by user after acquiring the mutex in the Aggregation process.
@@ -623,17 +579,14 @@ func (a *aggregationProcess) ResetStatAndThroughputElementsInRecord(record *flow
 	resetDeltaStats(record.Aggregation.ReverseStatsFromSource)
 	resetDeltaStats(record.Aggregation.StatsFromDestination)
 	resetDeltaStats(record.Aggregation.ReverseStatsFromDestination)
-
 	record.Aggregation.ThroughputFromSource = 0
 	record.Aggregation.ReverseThroughputFromSource = 0
 	record.Aggregation.ThroughputFromDestination = 0
 	record.Aggregation.ReverseThroughputFromDestination = 0
 	record.Aggregation.Throughput = 0
 	record.Aggregation.ReverseThroughput = 0
-
 	return nil
 }
-
 func (a *aggregationProcess) addFieldsForStatsAggregation(record *flowpb.Flow, fillSrcStats, fillDstStats bool) {
 	record.Aggregation.StatsFromSource = &flowpb.Stats{}
 	record.Aggregation.ReverseStatsFromSource = &flowpb.Stats{}
@@ -654,13 +607,11 @@ func (a *aggregationProcess) addFieldsForStatsAggregation(record *flowpb.Flow, f
 		copyStats(record.ReverseStats, record.Aggregation.ReverseStatsFromDestination)
 	}
 }
-
 func (a *aggregationProcess) addFieldsForThroughputCalculation(record *flowpb.Flow, fillSrcStats, fillDstStats bool) {
 	timeStart := record.StartTs.Seconds
 	timeEnd := record.EndTs.Seconds
 	byteCount := record.Stats.OctetTotalCount
 	reverseByteCount := record.ReverseStats.OctetTotalCount
-
 	record.Aggregation.EndTsFromSource = &timestamppb.Timestamp{}
 	if fillSrcStats {
 		record.Aggregation.EndTsFromSource.Seconds = timeEnd
@@ -669,7 +620,6 @@ func (a *aggregationProcess) addFieldsForThroughputCalculation(record *flowpb.Fl
 	if fillDstStats {
 		record.Aggregation.EndTsFromDestination.Seconds = timeEnd
 	}
-
 	// Initialize the throughput elements.
 	var throughput, reverseThroughput uint64
 	// For the edge case when the record has the same timeEnd and timeStart values,
@@ -689,7 +639,6 @@ func (a *aggregationProcess) addFieldsForThroughputCalculation(record *flowpb.Fl
 		record.Aggregation.ReverseThroughputFromDestination = reverseThroughput
 	}
 }
-
 // updateFlowEndSecondsFromNodes updates the value of flowEndSecondsFromSourceNode
 // or flowEndSecondsFromDestinationNode, returning the previous value before update.
 func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, existingRecord *flowpb.Flow, isSrc bool, incomingVal int64) int64 {
@@ -709,17 +658,14 @@ func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, exist
 	}
 	return existingVal
 }
-
 // isRecordFromSrc returns true if record belongs to inter-node flow and from source node.
 func isRecordFromSrc(record *flowpb.Flow) bool {
 	return record.K8S.SourcePodName != "" && record.K8S.DestinationPodName == ""
 }
-
 // isRecordFromDst returns true if record belongs to inter-node flow and from destination node.
 func isRecordFromDst(record *flowpb.Flow) bool {
 	return record.K8S.DestinationPodName != "" && record.K8S.SourcePodName == ""
 }
-
 func areRecordsFromSameNode(record1, record2 *flowpb.Flow) bool {
 	// If both records of inter-node flow are from source node, then send true.
 	if isRecordFromSrc(record1) && isRecordFromSrc(record2) {
@@ -731,7 +677,6 @@ func areRecordsFromSameNode(record1, record2 *flowpb.Flow) bool {
 	}
 	return false
 }
-
 // getFlowKeyFromRecord returns 5-tuple from data record
 func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 	source := net.IP(record.Ip.Source).String()
@@ -745,7 +690,6 @@ func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 	}
 	return flowKey, record.Ip.Version == flowpb.IPVersion_IP_VERSION_4
 }
-
 // isCorrelationRequired returns true for InterNode flowType when
 // either the egressNetworkPolicyRuleAction is not deny (drop/reject) or
 // the ingressNetworkPolicyRuleAction is not reject.
@@ -755,11 +699,9 @@ func isCorrelationRequired(flowType flowpb.FlowType, record *flowpb.Flow) bool {
 		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT &&
 		record.K8S.IngressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
 }
-
 func fillHttpVals(incomingHttpVals, existingHttpVals []byte) ([]byte, error) {
 	incomingHttpValsJson := make(map[int32]string)
 	existingHttpValsJson := make(map[int32]string)
-
 	if len(incomingHttpVals) > 0 {
 		if err := json.Unmarshal(incomingHttpVals, &incomingHttpValsJson); err != nil {
 			return nil, fmt.Errorf("error parsing JSON: %w", err)

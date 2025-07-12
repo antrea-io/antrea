@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package externalnode
-
 import (
 	"context"
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -28,26 +25,20 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8stesting "k8s.io/client-go/testing"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/pkg/client/clientset/versioned"
-	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	fakeclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 )
-
 var (
 	informerFactory crdinformers.SharedInformerFactory
 )
-
 func TestAddExternalNode(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
@@ -171,7 +162,6 @@ func TestAddExternalNode(t *testing.T) {
 		})
 	}
 }
-
 func TestUpdateExternalNode(t *testing.T) {
 	for _, tc := range []struct {
 		name                string
@@ -442,7 +432,6 @@ func TestUpdateExternalNode(t *testing.T) {
 				return true, nil
 			})
 			require.NoError(t, err)
-
 			_, err = controller.crdClient.CrdV1alpha1().ExternalNodes(tc.externalNode.Namespace).Update(context.TODO(), tc.updatedExternalNode, metav1.UpdateOptions{})
 			require.NoError(t, err)
 			err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
@@ -455,10 +444,8 @@ func TestUpdateExternalNode(t *testing.T) {
 				assert.False(t, exists)
 			}
 		})
-
 	}
 }
-
 func TestDeleteExternalNode(t *testing.T) {
 	externalNode := &v1alpha1.ExternalNode{
 		ObjectMeta: metav1.ObjectMeta{Name: "vm1", Namespace: "ns1", Labels: map[string]string{"en": "vm1"}},
@@ -512,7 +499,6 @@ func TestDeleteExternalNode(t *testing.T) {
 	})
 	assert.NoError(t, err)
 }
-
 func TestReconcileExternalNodes(t *testing.T) {
 	existingExternalNode := &v1alpha1.ExternalNode{
 		ObjectMeta: metav1.ObjectMeta{Name: "vm3", Namespace: "ns1", Labels: map[string]string{"en": "vm3"}},
@@ -576,7 +562,6 @@ func TestReconcileExternalNodes(t *testing.T) {
 	assert.NoError(t, checkErr)
 	assert.False(t, ok)
 }
-
 func TestUpdateExternalEntity(t *testing.T) {
 	existingEntity := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
@@ -649,7 +634,6 @@ func TestUpdateExternalEntity(t *testing.T) {
 		assert.True(t, reflect.DeepEqual(updatedEntity, entity))
 	})
 }
-
 func checkExternalEntityExists(crdClient versioned.Interface, ee *v1alpha2.ExternalEntity) (bool, error) {
 	entity, getErr := crdClient.CrdV1alpha2().ExternalEntities(ee.Namespace).Get(context.TODO(), ee.Name, metav1.GetOptions{})
 	if getErr != nil {
@@ -663,7 +647,6 @@ func checkExternalEntityExists(crdClient versioned.Interface, ee *v1alpha2.Exter
 	}
 	return true, nil
 }
-
 func newExternalNodeController(objects []runtime.Object) *ExternalNodeController {
 	crdClient := fakeclientset.NewSimpleClientset(objects...)
 	informerFactory = crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)

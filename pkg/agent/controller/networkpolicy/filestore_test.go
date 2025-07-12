@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"testing"
-
 	"github.com/google/uuid"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -25,22 +22,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer/protobuf"
 	"k8s.io/apimachinery/pkg/types"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 const (
 	testDataPath = "/var/run/antrea-test/file-store"
 )
-
 // Set it to NewMemMapFs as the file system may be not writable.
 // Change it to NewOsFs to evaluate performance when writing to disk.
 var newFS = afero.NewMemMapFs
-
 func newFakeFileStore(tb testing.TB, dir string) *fileStore {
 	serializer := protobuf.NewSerializer(scheme, scheme)
 	codec := codecs.CodecForVersions(serializer, serializer, v1beta2.SchemeGroupVersion, v1beta2.SchemeGroupVersion)
@@ -50,14 +40,12 @@ func newFakeFileStore(tb testing.TB, dir string) *fileStore {
 	assert.NoError(tb, err)
 	return s
 }
-
 func TestFileStore(t *testing.T) {
 	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, nil, []string{"appliedToGroup1"}, nil)
 	policy2 := newNetworkPolicy("policy2", "uid2", []string{"addressGroup2"}, nil, []string{"appliedToGroup2"}, nil)
 	policy3 := newNetworkPolicy("policy3", "uid3", []string{"addressGroup3"}, nil, []string{"appliedToGroup3"}, nil)
 	updatedPolicy2 := policy2.DeepCopy()
 	updatedPolicy2.AppliedToGroups = []string{"foo"}
-
 	tests := []struct {
 		name            string
 		ops             func(*fileStore)
@@ -100,7 +88,6 @@ func TestFileStore(t *testing.T) {
 			expectedObjects: []runtime.Object{updatedPolicy2, policy3},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newFakeFileStore(t, networkPoliciesDir)
@@ -111,7 +98,6 @@ func TestFileStore(t *testing.T) {
 		})
 	}
 }
-
 func BenchmarkFileStoreAddNetworkPolicy(b *testing.B) {
 	policy := newNetworkPolicy("policy1", types.UID(uuid.New().String()), []string{uuid.New().String()}, nil, []string{uuid.New().String()}, nil)
 	s := newFakeFileStore(b, networkPoliciesDir)
@@ -121,7 +107,6 @@ func BenchmarkFileStoreAddNetworkPolicy(b *testing.B) {
 		s.save(policy)
 	}
 }
-
 func BenchmarkFileStoreAddAppliedToGroup(b *testing.B) {
 	members := make([]v1beta2.GroupMember, 0, 100)
 	for i := 0; i < 100; i++ {
@@ -135,7 +120,6 @@ func BenchmarkFileStoreAddAppliedToGroup(b *testing.B) {
 		s.save(atg)
 	}
 }
-
 func BenchmarkFileStoreAddAddressGroup(b *testing.B) {
 	members := make([]v1beta2.GroupMember, 0, 1000)
 	for i := 0; i < 1000; i++ {
@@ -149,7 +133,6 @@ func BenchmarkFileStoreAddAddressGroup(b *testing.B) {
 		s.save(ag)
 	}
 }
-
 func BenchmarkFileStoreReplaceAll(b *testing.B) {
 	nps := make([]runtime.Object, 0, 1000)
 	atgs := make([]runtime.Object, 0, 1000)
@@ -159,14 +142,12 @@ func BenchmarkFileStoreReplaceAll(b *testing.B) {
 		addressGroupName := uuid.New().String()
 		appliedToGroupName := uuid.New().String()
 		nps = append(nps, newNetworkPolicy(policyName, types.UID(policyName), []string{addressGroupName}, nil, []string{appliedToGroupName}, nil))
-
 		var atgMembers []v1beta2.GroupMember
 		for j := 0; j < 100; j++ {
 			atgMembers = append(atgMembers, *newAppliedToGroupMemberPod(fmt.Sprintf("pod-%d", j), "namespace"))
 		}
 		atg := newAppliedToGroup(appliedToGroupName, atgMembers)
 		atgs = append(atgs, atg)
-
 		var agMembers []v1beta2.GroupMember
 		podNum := 100
 		if i < 10 {
@@ -180,7 +161,6 @@ func BenchmarkFileStoreReplaceAll(b *testing.B) {
 		ag := newAddressGroup(addressGroupName, agMembers)
 		ags = append(ags, ag)
 	}
-
 	networkPolicyStore := newFakeFileStore(b, networkPoliciesDir)
 	appliedToGroupStore := newFakeFileStore(b, appliedToGroupsDir)
 	addressGroupStore := newFakeFileStore(b, addressGroupsDir)

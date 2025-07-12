@@ -11,41 +11,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-<<<<<<< HEAD
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
-=======
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
->>>>>>> origin/main
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
 )
-
 func TestLog_UpdateOptions(t *testing.T) {
 	record1 := flowaggregatortesting.PrepareTestFlowRecord(true)
 	record2 := flowaggregatortesting.PrepareTestFlowRecord(true)
-
 	dir, err := os.MkdirTemp("", "flows")
 	defer os.RemoveAll(dir)
 	require.NoError(t, err)
 	path1 := filepath.Join(dir, "1.log")
 	path2 := filepath.Join(dir, "2.log")
-
 	opt := func(path string) *options.Options {
 		return &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
@@ -58,7 +48,6 @@ func TestLog_UpdateOptions(t *testing.T) {
 			},
 		}
 	}
-
 	countRecords := func(path string) int {
 		data, err := os.ReadFile(path)
 		if err != nil { // assume this always means the file does not exist
@@ -68,7 +57,6 @@ func TestLog_UpdateOptions(t *testing.T) {
 	}
 	require.Equal(t, 0, countRecords(path1))
 	require.Equal(t, 0, countRecords(path2))
-
 	logExporter, _ := NewLogExporter(opt(path1))
 	logExporter.Start()
 	require.NoError(t, logExporter.AddRecord(record1, false))
@@ -78,7 +66,6 @@ func TestLog_UpdateOptions(t *testing.T) {
 	logExporter.Stop()
 	assert.Equal(t, 1, countRecords(path2))
 }
-
 func TestLog_Filters(t *testing.T) {
 	type testRecord struct {
 		name string
@@ -172,7 +159,6 @@ func TestLog_Filters(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			opt := &options.Options{

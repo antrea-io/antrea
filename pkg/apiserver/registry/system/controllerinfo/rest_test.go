@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package controllerinfo
-
 import (
 	"context"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -25,29 +22,20 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientset "k8s.io/client-go/kubernetes"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-	system "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	system "antrea.io/antrea/pkg/apis/system/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 )
-
 type fakeControllerQuerier struct{}
-
 func (q *fakeControllerQuerier) GetControllerInfo(info *v1beta1.AntreaControllerInfo, partial bool) {}
-
 func (q *fakeControllerQuerier) GetK8sClient() clientset.Interface { return nil }
-
 func TestREST(t *testing.T) {
 	r := NewREST(nil)
 	assert.Equal(t, &v1beta1.AntreaControllerInfo{}, r.New())
 	assert.Equal(t, &v1beta1.AntreaControllerInfoList{}, r.NewList())
 	assert.False(t, r.NamespaceScoped())
 }
-
 func TestRESTGet(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -79,7 +67,6 @@ func TestRESTGet(t *testing.T) {
 		})
 	}
 }
-
 func TestRESTList(t *testing.T) {
 	tests := []struct {
 		name          string

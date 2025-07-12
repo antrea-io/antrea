@@ -11,39 +11,29 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package runtime
-
 import (
 	"fmt"
 	"os"
 	"strings"
-
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
 	"antrea.io/antrea/v2/pkg/util/runtime"
-=======
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/util/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
-
 const (
 	ModeController     string = "controller"
 	ModeAgent          string = "agent"
 	ModeFlowAggregator string = "flowaggregator"
 )
-
 var (
 	// Mode tells which mode antctl is running against.
 	Mode  string
 	InPod bool
 )
-
 func ResolveKubeconfig(path string) (*rest.Config, error) {
 	withExplicitPath := path != ""
 	if !withExplicitPath {
@@ -68,7 +58,6 @@ func ResolveKubeconfig(path string) (*rest.Config, error) {
 			path, inClusterErr,
 		)
 	}
-
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: path},
 		&clientcmd.ConfigOverrides{}).ClientConfig()
@@ -77,12 +66,10 @@ func ResolveKubeconfig(path string) (*rest.Config, error) {
 	}
 	return config, nil
 }
-
 func init() {
 	podName, found := os.LookupEnv("POD_NAME")
 	InPod = found && (strings.HasPrefix(podName, "antrea-agent") || strings.HasPrefix(podName, "antrea-controller") ||
 		strings.HasPrefix(podName, "flow-aggregator"))
-
 	if runtime.IsWindowsPlatform() && !InPod {
 		if _, err := os.Stat(apis.APIServerLoopbackTokenPath); err == nil {
 			InPod = true
@@ -90,7 +77,6 @@ func init() {
 			return
 		}
 	}
-
 	if strings.HasPrefix(podName, "antrea-agent") {
 		Mode = ModeAgent
 	} else if strings.HasPrefix(podName, "flow-aggregator") {

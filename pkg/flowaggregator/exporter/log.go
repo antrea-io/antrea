@@ -11,37 +11,28 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package exporter
-
 import (
 	"math"
 	"reflect"
 	"slices"
 	"sync"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowlogger"
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/flowlogger"
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
-	"antrea.io/antrea/pkg/flowaggregator/options"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowlogger"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 )
-
 type flowFilter struct {
 	IngressNetworkPolicyRuleActions []uint8
 	EgressNetworkPolicyRuleActions  []uint8
 }
-
 type LogExporter struct {
 	config     flowaggregatorconfig.FlowLoggerConfig
 	filters    []flowFilter
@@ -49,7 +40,6 @@ type LogExporter struct {
 	stopCh     chan struct{}
 	wg         sync.WaitGroup
 }
-
 func NewLogExporter(opt *options.Options) (*LogExporter, error) {
 	config := opt.Config.FlowLogger
 	klog.InfoS("FlowLogger configuration", "path", config.Path, "maxSize", config.MaxSize, "maxBackups", config.MaxBackups, "maxAge", config.MaxAge, "compress", *config.Compress, "prettyPrint", *config.PrettyPrint)
@@ -59,7 +49,6 @@ func NewLogExporter(opt *options.Options) (*LogExporter, error) {
 	exporter.buildFilters()
 	return exporter, nil
 }
-
 func (e *LogExporter) buildFilters() {
 	ruleActionToUint8 := func(a flowaggregatorconfig.NetworkPolicyRuleAction) uint8 {
 		switch a {
@@ -94,7 +83,6 @@ func (e *LogExporter) buildFilters() {
 		e.filters = append(e.filters, convertFilter(&e.config.Filters[idx]))
 	}
 }
-
 func (e *LogExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
 	r, err := flowrecord.GetFlowRecord(record)
 	if err != nil {
@@ -106,7 +94,6 @@ func (e *LogExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
 	}
 	return e.flowLogger.WriteRecord(r, *e.config.PrettyPrint)
 }
-
 func (e *LogExporter) applyFilters(r *flowrecord.FlowRecord) bool {
 	if len(e.filters) == 0 {
 		return true
@@ -124,15 +111,12 @@ func (e *LogExporter) applyFilters(r *flowrecord.FlowRecord) bool {
 	}
 	return false
 }
-
 func (e *LogExporter) Start() {
 	e.start()
 }
-
 func (e *LogExporter) Stop() {
 	e.stop()
 }
-
 func (e *LogExporter) start() {
 	e.stopCh = make(chan struct{})
 	e.flowLogger = flowlogger.NewFlowLogger(
@@ -149,14 +133,12 @@ func (e *LogExporter) start() {
 		e.flowLogger.FlushLoop(e.stopCh)
 	}()
 }
-
 func (e *LogExporter) stop() {
 	close(e.stopCh)
 	e.wg.Wait()
 	e.flowLogger.Close()
 	e.flowLogger = nil
 }
-
 func (e *LogExporter) UpdateOptions(opt *options.Options) {
 	config := opt.Config.FlowLogger
 	if reflect.DeepEqual(e.config, config) {
@@ -169,7 +151,6 @@ func (e *LogExporter) UpdateOptions(opt *options.Options) {
 	e.buildFilters()
 	e.start()
 }
-
 func (e *LogExporter) Flush() error {
 	// TODO: replace FlushLoop in flowlogger.FlowLogger?
 	return nil

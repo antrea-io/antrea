@@ -11,23 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package addressgroup
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 func TestListTransform(t *testing.T) {
 	var agA = cpv1beta.AddressGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -50,11 +42,9 @@ func TestListTransform(t *testing.T) {
 			CreationTimestamp: metav1.Time{Time: metav1.Now().Add(2)},
 		},
 	}
-
 	var agList = &cpv1beta.AddressGroupList{
 		Items: []cpv1beta.AddressGroup{agA, agC, agB},
 	}
-
 	tests := []struct {
 		name             string
 		opts             map[string]string
@@ -97,7 +87,6 @@ func TestListTransform(t *testing.T) {
 			expectedError: "couldn't find any field with path \"{.effective}\" in the list of objects",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := listTransform(agList, tt.opts)

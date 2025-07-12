@@ -11,42 +11,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // Package main under directory cmd parses and validates user input,
 // instantiates and initializes objects imported from pkg, and runs
 // the process.
-
 package main
-
 import (
 	"context"
 	"os"
 	"os/signal"
 	"syscall"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/member"
 	"antrea.io/antrea/v2/multicluster/test/mocks"
-=======
-	"antrea.io/antrea/multicluster/controllers/multicluster/member"
-	"antrea.io/antrea/multicluster/test/mocks"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/member"
+	"antrea.io/antrea/v2/multicluster/test/mocks"
 )
-
 var shutdownSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
-
 // The original signal handler function will close a channel twice. If the runLeader
 // and runMember run at the same time, there will be a panic. So we need another
 // signal handler function to avoid it.
 func mockSetupSignalHandler() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
-
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, shutdownSignals...)
 	go func() {
@@ -55,20 +44,16 @@ func mockSetupSignalHandler() context.Context {
 		<-c
 		os.Exit(1)
 	}()
-
 	return ctx
 }
-
 func TestCommands(t *testing.T) {
 	rootCommand := newControllerCommand()
 	rootCommand.AddCommand(newLeaderCommand())
 	rootCommand.AddCommand(newMemberCommand())
-
 	assert.Equal(t, "antrea-mc-controller", rootCommand.Use)
 	assert.Equal(t, "leader", newLeaderCommand().Use)
 	assert.Equal(t, "member", newMemberCommand().Use)
 }
-
 func TestRunMember(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -89,7 +74,6 @@ func TestRunMember(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
@@ -102,7 +86,6 @@ func TestRunMember(t *testing.T) {
 				return "10.101.0.0/16", nil
 			}
 			ctrl.SetupSignalHandler = mockSetupSignalHandler
-
 			err := runMember(tc.options)
 			assert.NoError(t, err, "got error when running runMember")
 		})

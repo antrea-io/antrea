@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package labelidentity
-
 import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/controller/types"
 )
-
 var (
 	pSelWeb = &metav1.LabelSelector{
 		MatchLabels: map[string]string{"app": "web"},
@@ -75,7 +67,6 @@ var (
 	labelD     = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:"
 	labelStale = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:<none>"
 )
-
 func TestLabelIdentityMatch(t *testing.T) {
 	tests := []struct {
 		label       string
@@ -189,7 +180,6 @@ func TestLabelIdentityMatch(t *testing.T) {
 		assert.Equalf(t, tt.expectMatch, matched, "Unexpected matching status for %s and %s.", tt.label, tt.selector.getKey())
 	}
 }
-
 func TestAddSelector(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -269,7 +259,6 @@ func TestAddSelector(t *testing.T) {
 		})
 	}
 }
-
 func TestDeletePolicySelectors(t *testing.T) {
 	tests := []struct {
 		policyKey     string
@@ -302,7 +291,6 @@ func TestDeletePolicySelectors(t *testing.T) {
 		})
 	}
 }
-
 func TestSetPolicySelectors(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -409,7 +397,6 @@ func TestSetPolicySelectors(t *testing.T) {
 		})
 	}
 }
-
 // Dedup LabelIdentity IDs in-place.
 func dedupLabelIdentites(labelIdentityIDs []uint32) []uint32 {
 	seen := map[uint32]struct{}{}
@@ -423,7 +410,6 @@ func dedupLabelIdentites(labelIdentityIDs []uint32) []uint32 {
 	}
 	return labelIdentityIDs[:idx]
 }
-
 func TestAddLabelIdentity(t *testing.T) {
 	labelIdentityAOriginalID := uint32(1)
 	tests := []struct {
@@ -495,7 +481,6 @@ func TestAddLabelIdentity(t *testing.T) {
 			i.AddSelector(selectorE, "policyE")
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			go i.Run(stopCh)
 			var lock sync.Mutex
 			var actualPoliciesCalled []string
@@ -504,7 +489,6 @@ func TestAddLabelIdentity(t *testing.T) {
 				defer lock.Unlock()
 				actualPoliciesCalled = append(actualPoliciesCalled, policyKey)
 			})
-
 			if tt.originalID != nil {
 				i.AddLabelIdentity(tt.normalizedLabel, *tt.originalID)
 			}
@@ -524,7 +508,6 @@ func TestAddLabelIdentity(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteLabelIdentity(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -589,7 +572,6 @@ func TestDeleteLabelIdentity(t *testing.T) {
 			i.AddSelector(selectorE, "policyE")
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			go i.Run(stopCh)
 			var lock sync.Mutex
 			var actualPoliciesCalled []string
@@ -612,7 +594,6 @@ func TestDeleteLabelIdentity(t *testing.T) {
 			lock.Lock()
 			actualPoliciesCalled = []string{}
 			lock.Unlock()
-
 			i.DeleteLabelIdentity(tt.labelToDelete)
 			assert.EventuallyWithT(t, func(t *assert.CollectT) {
 				lock.Lock()

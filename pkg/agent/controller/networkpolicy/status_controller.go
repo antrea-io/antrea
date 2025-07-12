@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"context"
 	"fmt"
 	"time"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -26,20 +23,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/client"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	"antrea.io/antrea/pkg/agent/client"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/agent/client"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 const (
 	realizedRulePolicyIndex = "policy"
 )
-
 // StatusManager keeps track of the realized NetworkPolicy rules. It syncs the status of a NetworkPolicy to the
 // antrea-controller once it is realized. A policy is considered realized when all of its desired rules have been
 // realized and all of its undesired rules have been removed.
@@ -55,7 +46,6 @@ type StatusManager interface {
 	// Start the status sync loop.
 	Run(stopCh <-chan struct{})
 }
-
 // StatusController implements StatusManager.
 type StatusController struct {
 	nodeName string
@@ -68,7 +58,6 @@ type StatusController struct {
 	// queue maintains the UIDs of the NetworkPolicy that need to be processed.
 	queue workqueue.TypedRateLimitingInterface[types.UID]
 }
-
 // realizedRule is the struct kept by StatusController for storing a realized rule.
 // It has policyID because "ruleCache" only keeps desired state of policies, so if a rule is no longer in a policy it
 // will be deleted immediately from "ruleCache" while we need to know these rules are actually uninstalled from
@@ -77,16 +66,13 @@ type realizedRule struct {
 	ruleID   string
 	policyID types.UID
 }
-
 func realizedRuleKeyFunc(obj interface{}) (string, error) {
 	return obj.(*realizedRule).ruleID, nil
 }
-
 func realizedRulePolicyIndexFunc(obj interface{}) ([]string, error) {
 	rule := obj.(*realizedRule)
 	return []string{string(rule.policyID)}, nil
 }
-
 func newStatusController(antreaClientProvider client.AntreaClientProvider, nodeName string, ruleCache *ruleCache) *StatusController {
 	return &StatusController{
 		statusControlInterface: &networkPolicyStatusControl{antreaClientProvider: antreaClientProvider},
@@ -103,7 +89,6 @@ func newStatusController(antreaClientProvider client.AntreaClientProvider, nodeN
 		),
 	}
 }
-
 func (c *StatusController) SetRuleRealization(ruleID string, policyID types.UID) {
 	_, exists, _ := c.realizedRules.GetByKey(ruleID)
 	// This rule has been realized before. The current call must be triggered by group member updates, which doesn't
@@ -114,7 +99,6 @@ func (c *StatusController) SetRuleRealization(ruleID string, policyID types.UID)
 	c.realizedRules.Add(&realizedRule{ruleID: ruleID, policyID: policyID})
 	c.queue.Add(policyID)
 }
-
 func (c *StatusController) DeleteRuleRealization(ruleID string) {
 	obj, exists, _ := c.realizedRules.GetByKey(ruleID)
 	// This rule hasn't been realized before, so it doesn't affect the policy's realization status.
@@ -124,19 +108,16 @@ func (c *StatusController) DeleteRuleRealization(ruleID string) {
 	c.realizedRules.Delete(obj)
 	c.queue.Add(obj.(*realizedRule).policyID)
 }
-
 func (c *StatusController) Resync(policyID types.UID) {
 	klog.V(2).Infof("Resyncing NetworkPolicyStatus for %s", policyID)
 	c.queue.Add(policyID)
 }
-
 // worker is a long-running function that will continually call the processNextWorkItem function in
 // order to read and process a message on the workqueue.
 func (c *StatusController) worker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 func (c *StatusController) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
@@ -147,7 +128,6 @@ func (c *StatusController) processNextWorkItem() bool {
 	// example, we do not call Forget if a transient error occurs, instead the item is put back
 	// on the workqueue and attempted again after a back-off period.
 	defer c.queue.Done(key)
-
 	if err := c.syncHandler(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
@@ -159,7 +139,6 @@ func (c *StatusController) processNextWorkItem() bool {
 	}
 	return true
 }
-
 func (c *StatusController) syncHandler(uid types.UID) error {
 	policy := c.ruleCache.getNetworkPolicy(string(uid))
 	// The policy must have been deleted, no further processing.
@@ -190,7 +169,6 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 	if len(desiredRuleSet) > 0 {
 		return nil
 	}
-
 	// At this point, all desired rules have been realized and all undesired rules have been removed, report it to the antrea-controller.
 	klog.V(2).Infof("Syncing NetworkPolicyStatus for %s, generation: %v", uid, policy.Generation)
 	status := &v1beta2.NetworkPolicyStatus{
@@ -207,27 +185,22 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 	}
 	return c.statusControlInterface.UpdateNetworkPolicyStatus(status.Name, status)
 }
-
 func (c *StatusController) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting NetworkPolicy StatusController")
 	defer klog.Info("Shutting down NetworkPolicy StatusController")
-
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
 	<-stopCh
 }
-
 // networkPolicyStatusControlInterface is an interface that knows how to get and update control plane NetworkPolicy status.
 // It's created as an interface to allow testing.
 type networkPolicyStatusControlInterface interface {
 	UpdateNetworkPolicyStatus(name string, status *v1beta2.NetworkPolicyStatus) error
 }
-
 type networkPolicyStatusControl struct {
 	antreaClientProvider client.AntreaClientProvider
 }
-
 func (c *networkPolicyStatusControl) UpdateNetworkPolicyStatus(name string, status *v1beta2.NetworkPolicyStatus) error {
 	antreaClient, err := c.antreaClientProvider.GetAntreaClient()
 	if err != nil {

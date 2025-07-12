@@ -11,46 +11,37 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"fmt"
 	"strconv"
 	"strings"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 )
-
 // TestBandwidth is the top-level test which contains all subtests for
 // Bandwidth related test cases so they can share setup, teardown.
 func TestBandwidth(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	t.Run("testPodTrafficShaping", func(t *testing.T) { testPodTrafficShaping(t, data) })
 }
-
 // TestBenchmarkBandwidth is the top-level benchmark test which contains all subtests for
 // Bandwidth related test cases so they can share setup, teardown.
 func TestBenchmarkBandwidth(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
 	skipIfHasWindowsNodes(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	t.Run("testBenchmarkBandwidthServiceLocalAccess", func(t *testing.T) {
 		testBenchmarkBandwidthServiceLocalAccess(t, data)
 	})
@@ -63,7 +54,6 @@ func TestBenchmarkBandwidth(t *testing.T) {
 		testBenchmarkBandwidthIntraNode(t, data)
 	})
 }
-
 // testBenchmarkBandwidthIntraNode runs the bandwidth benchmark between Pods on same node.
 func testBenchmarkBandwidthIntraNode(t *testing.T, data *TestData) {
 	if err := NewPodBuilder("perftest-a", data.testNamespace, ToolboxImage).OnNode(controlPlaneNodeName()).Create(data); err != nil {
@@ -88,7 +78,6 @@ func testBenchmarkBandwidthIntraNode(t *testing.T, data *TestData) {
 	stdout = strings.TrimSpace(stdout)
 	t.Logf("Bandwidth: %s", stdout)
 }
-
 func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string, data *TestData) {
 	svc, err := data.CreateService("perftest-b", data.testNamespace, iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, false, v1.ServiceTypeClusterIP, nil)
 	if err != nil {
@@ -114,30 +103,23 @@ func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string, da
 	stdout = strings.TrimSpace(stdout)
 	t.Logf("Bandwidth: %s", stdout)
 }
-
 // testBenchmarkBandwidthServiceLocalAccess runs the bandwidth benchmark of service
 // traffic between a Pod and an Endpoint on same Node.
 func testBenchmarkBandwidthServiceLocalAccess(t *testing.T, data *TestData) {
 	benchmarkBandwidthService(t, controlPlaneNodeName(), controlPlaneNodeName(), data)
 }
-
 // testBenchmarkBandwidthServiceRemoteAccess runs the bandwidth benchmark of service
 // traffic between a Pod and an Endpoint on different Node.
 func testBenchmarkBandwidthServiceRemoteAccess(t *testing.T, data *TestData) {
 	benchmarkBandwidthService(t, controlPlaneNodeName(), workerNodeName(1), data)
 }
-
 func testPodTrafficShaping(t *testing.T, data *TestData) {
-<<<<<<< HEAD
 	// Test is flaky on dual-stack clusters: https://github.com/antrea.io/antrea/v2/issues/1543.
-=======
 	// Test is flaky on dual-stack clusters: https://github.com/antrea-io/antrea/issues/1543.
->>>>>>> origin/main
 	// So we disable it except for IPv4 single-stack clusters for now.
 	skipIfIPv6Cluster(t)
 	nodeName := controlPlaneNodeName()
 	skipIfMissingKernelModule(t, data, nodeName, []string{"ifb", "sch_tbf", "sch_ingress"})
-
 	tests := []struct {
 		name string
 		// The bandwidths' unit is Mbits/sec.
@@ -186,7 +168,6 @@ func testPodTrafficShaping(t *testing.T, data *TestData) {
 			if err != nil {
 				t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
 			}
-
 			runIperf := func(cmd []string) {
 				stdout, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, "toolbox", cmd)
 				if err != nil {

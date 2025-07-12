@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package egress
-
 import (
 	"context"
 	"encoding/json"
@@ -22,7 +20,6 @@ import (
 	"reflect"
 	"sync"
 	"time"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,10 +31,8 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	egressv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	egressv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	egressinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
@@ -46,20 +41,17 @@ import (
 	"antrea.io/antrea/v2/pkg/controller/grouping"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	egressv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	egressinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	egresslisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	"antrea.io/antrea/pkg/controller/externalippool"
-	"antrea.io/antrea/pkg/controller/grouping"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	egressv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	egressinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
+	egresslisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/controller/externalippool"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const (
 	controllerName = "EgressController"
 	// Set resyncPeriod to 0 to disable resyncing.
@@ -71,27 +63,21 @@ const (
 	defaultWorkers = 4
 	// egressGroupType is the type used when registering EgressGroups to the grouping interface.
 	egressGroupType grouping.GroupType = "egressGroup"
-
 	externalIPPoolIndex = "externalIPPool"
 )
-
 // ipAllocation contains the IP and the IP Pool which allocates it.
 type ipAllocation struct {
 	ip     net.IP
 	ipPool string
 }
-
 // EgressController is responsible for synchronizing the EgressGroups selected by Egresses.
 type EgressController struct {
 	crdClient clientset.Interface
-
 	externalIPAllocator externalippool.ExternalIPAllocator
-
 	// ipAllocationMap is a map from Egress name to ipAllocation, which is used to check whether the Egress's IP has
 	// changed and to release the IP after the Egress is removed.
 	ipAllocationMap   map[string]*ipAllocation
 	ipAllocationMutex sync.RWMutex
-
 	egressInformer egressinformers.EgressInformer
 	egressLister   egresslisters.EgressLister
 	egressIndexer  cache.Indexer
@@ -106,7 +92,6 @@ type EgressController struct {
 	// Added as a member to the struct to allow injection for testing.
 	groupingInterfaceSynced func() bool
 }
-
 // NewEgressController returns a new *EgressController.
 func NewEgressController(crdClient clientset.Interface,
 	groupingInterface grouping.Interface,
@@ -163,14 +148,11 @@ func NewEgressController(crdClient clientset.Interface,
 	})
 	return c
 }
-
 // Run begins watching and syncing of the EgressController.
 func (c *EgressController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.InfoS("Starting", "controller", controllerName)
 	defer klog.InfoS("Shutting down", "controller", controllerName)
-
 	cacheSyncs := []cache.InformerSynced{c.egressListerSynced, c.groupingInterfaceSynced, c.externalIPAllocator.HasSynced}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
@@ -182,7 +164,6 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	}
 	<-stopCh
 }
-
 // restoreIPAllocations restores the existing EgressIPs of Egresses and records the successful ones in ipAllocationMap.
 func (c *EgressController) restoreIPAllocations(egresses []*egressv1beta1.Egress) {
 	var previousIPAllocations []externalippool.IPAllocation
@@ -208,19 +189,16 @@ func (c *EgressController) restoreIPAllocations(egresses []*egressv1beta1.Egress
 		klog.InfoS("Restored EgressIP", "egress", alloc.ObjectReference.Name, "ip", alloc.IP, "pool", alloc.IPPoolName)
 	}
 }
-
 func (c *EgressController) egressGroupWorker() {
 	for c.processNextEgressGroupWorkItem() {
 	}
 }
-
 func (c *EgressController) processNextEgressGroupWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(key)
-
 	if err := c.syncEgress(key); err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		c.queue.AddRateLimited(key)
@@ -232,7 +210,6 @@ func (c *EgressController) processNextEgressGroupWorkItem() bool {
 	c.queue.Forget(key)
 	return true
 }
-
 func (c *EgressController) getIPAllocation(egressName string) (net.IP, string, bool) {
 	c.ipAllocationMutex.RLock()
 	defer c.ipAllocationMutex.RUnlock()
@@ -242,13 +219,11 @@ func (c *EgressController) getIPAllocation(egressName string) (net.IP, string, b
 	}
 	return allocation.ip, allocation.ipPool, true
 }
-
 func (c *EgressController) deleteIPAllocation(egressName string) {
 	c.ipAllocationMutex.Lock()
 	defer c.ipAllocationMutex.Unlock()
 	delete(c.ipAllocationMap, egressName)
 }
-
 func (c *EgressController) setIPAllocation(egressName string, ip net.IP, poolName string) {
 	c.ipAllocationMutex.Lock()
 	defer c.ipAllocationMutex.Unlock()
@@ -257,7 +232,6 @@ func (c *EgressController) setIPAllocation(egressName string, ip net.IP, poolNam
 		ipPool: poolName,
 	}
 }
-
 // syncEgressIP is responsible for releasing stale EgressIP and allocating new EgressIP for an Egress if applicable.
 func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *egressv1beta1.Egress, error) {
 	prevIP, prevIPPool, exists := c.getIPAllocation(egress.Name)
@@ -280,12 +254,10 @@ func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *
 		// Either EgressIP or ExternalIPPool changes, release the previous one first.
 		c.releaseEgressIP(egress.Name, prevIP, prevIPPool)
 	}
-
 	// Skip allocating EgressIP if ExternalIPPool is not specified and return whatever user specifies.
 	if egress.Spec.ExternalIPPool == "" {
 		return net.ParseIP(egress.Spec.EgressIP), egress, nil
 	}
-
 	if !c.externalIPAllocator.IPPoolExists(egress.Spec.ExternalIPPool) {
 		// The IP pool has been deleted, reclaim the IP from the Egress API.
 		if egress.Spec.EgressIP != "" {
@@ -297,7 +269,6 @@ func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *
 		}
 		return nil, egress, fmt.Errorf("ExternalIPPool %s does not exist", egress.Spec.ExternalIPPool)
 	}
-
 	var ip net.IP
 	// User specifies the Egress IP, try to allocate it. If it fails, the datapath may still work, we just don't track
 	// the IP allocation so deleting this Egress won't release the IP to the Pool.
@@ -327,7 +298,6 @@ func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *
 	klog.InfoS("Allocated EgressIP", "egress", egress.Name, "ip", ip, "pool", egress.Spec.ExternalIPPool)
 	return ip, egress, nil
 }
-
 // updateEgressIP updates the Egress's EgressIP in Kubernetes API.
 func (c *EgressController) updateEgressIP(egress *egressv1beta1.Egress, ip string) (*egressv1beta1.Egress, error) {
 	var egressIPPtr *string
@@ -346,7 +316,6 @@ func (c *EgressController) updateEgressIP(egress *egressv1beta1.Egress, ip strin
 		return updatedEgress, nil
 	}
 }
-
 // releaseEgressIP removes the Egress's ipAllocation in the cache and releases the IP to the pool.
 func (c *EgressController) releaseEgressIP(egressName string, egressIP net.IP, poolName string) {
 	if err := c.externalIPAllocator.ReleaseIP(poolName, egressIP); err != nil {
@@ -366,14 +335,12 @@ func (c *EgressController) releaseEgressIP(egressName string, egressIP net.IP, p
 	}
 	c.deleteIPAllocation(egressName)
 }
-
 func (c *EgressController) syncEgress(key string) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
 		klog.V(2).InfoS("Finished syncing Egress", "egress", key, "duration", d)
 	}()
-
 	egress, err := c.egressLister.Get(key)
 	if err != nil {
 		// The Egress has been deleted, release its EgressIP if there was one.
@@ -382,19 +349,16 @@ func (c *EgressController) syncEgress(key string) error {
 		}
 		return nil
 	}
-
 	_, egress, err = c.syncEgressIP(egress)
 	c.updateEgressAllocatedCondition(egress, err)
 	if err != nil {
 		return err
 	}
-
 	egressGroupObj, found, _ := c.egressGroupStore.Get(key)
 	if !found {
 		klog.V(2).InfoS("EgressGroup %s not found", "name", key)
 		return nil
 	}
-
 	nodeNames := sets.Set[string]{}
 	podNum := 0
 	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
@@ -432,12 +396,10 @@ func (c *EgressController) syncEgress(key string) error {
 	c.egressGroupStore.Update(updatedEgressGroup)
 	return nil
 }
-
 func (c *EgressController) enqueueEgressGroup(key string) {
 	klog.V(4).InfoS("Adding new key to EgressGroup queue", "key", key)
 	c.queue.Add(key)
 }
-
 // addEgress processes Egress ADD events and creates corresponding EgressGroup.
 func (c *EgressController) addEgress(obj interface{}) {
 	egress := obj.(*egressv1beta1.Egress)
@@ -453,7 +415,6 @@ func (c *EgressController) addEgress(obj interface{}) {
 	c.groupingInterface.AddGroup(egressGroupType, egress.Name, groupSelector)
 	c.queue.Add(egress.Name)
 }
-
 // updateEgress processes Egress UPDATE events and updates corresponding EgressGroup.
 func (c *EgressController) updateEgress(old, cur interface{}) {
 	oldEgress := old.(*egressv1beta1.Egress)
@@ -469,7 +430,6 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 		c.queue.Add(curEgress.Name)
 	}
 }
-
 // deleteEgress processes Egress DELETE events and deletes corresponding EgressGroup.
 func (c *EgressController) deleteEgress(obj interface{}) {
 	egress := obj.(*egressv1beta1.Egress)
@@ -479,7 +439,6 @@ func (c *EgressController) deleteEgress(obj interface{}) {
 	c.groupingInterface.DeleteGroup(egressGroupType, egress.Name)
 	c.queue.Add(egress.Name)
 }
-
 // enqueueEgresses enqueues all Egresses that refer to the provided ExternalIPPool.
 func (c *EgressController) enqueueEgresses(poolName string) {
 	objects, _ := c.egressIndexer.ByIndex(externalIPPoolIndex, poolName)
@@ -488,7 +447,6 @@ func (c *EgressController) enqueueEgresses(poolName string) {
 		c.queue.Add(egress.Name)
 	}
 }
-
 func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.Egress, err error) {
 	var desiredCondition *egressv1beta1.EgressCondition
 	if egress.Spec.ExternalIPPool != "" {
@@ -510,7 +468,6 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 			}
 		}
 	}
-
 	toUpdate := egress.DeepCopy()
 	var updateErr, getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -539,7 +496,6 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 		klog.ErrorS(err, "Error updating Egress Status")
 	}
 }
-
 // compareConditionIgnoringTimestamp compares two conditions ignoring the timestamp
 func compareConditionIgnoringTimestamp(condition1, condition2 *egressv1beta1.EgressCondition) bool {
 	if condition1 == nil && condition2 == nil {

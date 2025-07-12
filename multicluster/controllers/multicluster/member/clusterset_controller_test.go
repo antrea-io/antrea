@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package member
-
 import (
 	"context"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -27,22 +24,17 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-<<<<<<< HEAD
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
 	"antrea.io/antrea/v2/multicluster/test/mocks"
-=======
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
-	"antrea.io/antrea/multicluster/test/mocks"
->>>>>>> origin/main
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
+	"antrea.io/antrea/v2/multicluster/test/mocks"
 )
-
 func TestMemberClusterDelete(t *testing.T) {
 	existingMemberClusterAnnounce := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
@@ -54,13 +46,11 @@ func TestMemberClusterDelete(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingMemberClusterAnnounce).Build()
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
-
 	reconciler := MemberClusterSetReconciler{
 		Client:           fakeClient,
 		remoteCommonArea: commonArea,
 		clusterSetID:     common.ClusterSetID("clusterset1"),
 	}
-
 	// Delete a different ClusterSet.
 	if _, err := reconciler.Reconcile(common.TestCtx, reconcile.Request{
 		NamespacedName: types.NamespacedName{
@@ -82,7 +72,6 @@ func TestMemberClusterDelete(t *testing.T) {
 			}
 		}
 	}
-
 	// Delete the current ClusterSet.
 	if _, err := reconciler.Reconcile(common.TestCtx, reconcile.Request{
 		NamespacedName: types.NamespacedName{
@@ -103,7 +92,6 @@ func TestMemberClusterDelete(t *testing.T) {
 		}
 	}
 }
-
 func TestMemberClusterStatus(t *testing.T) {
 	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -182,7 +170,6 @@ func TestMemberClusterStatus(t *testing.T) {
 			},
 		},
 	}
-
 	tests := []struct {
 		name           string
 		conditions     []mcv1alpha2.ClusterCondition
@@ -211,7 +198,6 @@ func TestMemberClusterStatus(t *testing.T) {
 			}
 			reconciler.updateStatus()
 			clusterSet := &mcv1alpha2.ClusterSet{}
-
 			err := fakeClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
 			assert.Equal(t, nil, err)
 			assert.Equal(t, tt.expectedStatus.ObservedGeneration, clusterSet.Status.ObservedGeneration)
@@ -232,7 +218,6 @@ func TestMemberClusterStatus(t *testing.T) {
 		})
 	}
 }
-
 func TestMemberCreateOrUpdateRemoteCommonArea(t *testing.T) {
 	existingSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -278,12 +263,10 @@ func TestMemberCreateOrUpdateRemoteCommonArea(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockManager := mocks.NewMockManager(mockCtrl)
 	getRemoteConfigAndClient = commonarea.FuncGetFakeRemoteConfigAndClient(mockManager)
-
 	err := reconciler.createRemoteCommonArea(existingClusterSet)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, expectedInstalledLeader, reconciler.installedLeader)
 }
-
 func TestMemberClusterSetAddWithoutClusterID(t *testing.T) {
 	existingSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -316,7 +299,6 @@ func TestMemberClusterSetAddWithoutClusterID(t *testing.T) {
 		},
 		Value: "member1",
 	}
-
 	tests := []struct {
 		name      string
 		clusterID common.ClusterID
@@ -332,11 +314,9 @@ func TestMemberClusterSetAddWithoutClusterID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSetWithoutClusterID, clusterClaim, existingSecret).Build()
-
 			mockCtrl := gomock.NewController(t)
 			mockManager := mocks.NewMockManager(mockCtrl)
 			getRemoteConfigAndClient = commonarea.FuncGetFakeRemoteConfigAndClient(mockManager)
-
 			reconciler := MemberClusterSetReconciler{
 				Client:                   fakeClient,
 				clusterCalimCRDAvailable: true,
@@ -351,7 +331,6 @@ func TestMemberClusterSetAddWithoutClusterID(t *testing.T) {
 				reconciler.remoteCommonArea = commonArea
 				reconciler.clusterID = tt.clusterID
 			}
-
 			if _, err := reconciler.Reconcile(common.TestCtx, ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: "mcs1",
@@ -363,7 +342,6 @@ func TestMemberClusterSetAddWithoutClusterID(t *testing.T) {
 				assert.Equal(t, nil, err)
 				assert.Equal(t, "clusterset1", string(reconciler.clusterSetID))
 				assert.Equal(t, "member1", string(reconciler.clusterID))
-
 				clusterSet := &mcv1alpha2.ClusterSet{}
 				err = fakeClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
 				assert.Equal(t, nil, err)

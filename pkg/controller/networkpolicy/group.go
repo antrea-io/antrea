@@ -11,31 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"context"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 // addGroup is responsible for processing the ADD event of a Group resource.
 func (n *NetworkPolicyController) addGroup(curObj interface{}) {
 	g := curObj.(*crdv1beta1.Group)
@@ -46,7 +38,6 @@ func (n *NetworkPolicyController) addGroup(curObj interface{}) {
 	n.internalGroupStore.Create(newGroup)
 	n.enqueueInternalGroup(key)
 }
-
 // updateGroup is responsible for processing the UPDATE event of a Group resource.
 func (n *NetworkPolicyController) updateGroup(oldObj, curObj interface{}) {
 	cg := curObj.(*crdv1beta1.Group)
@@ -55,7 +46,6 @@ func (n *NetworkPolicyController) updateGroup(oldObj, curObj interface{}) {
 	klog.V(2).InfoS("Processing UPDATE event for Group", "Group", key)
 	newGroup := n.processGroup(cg)
 	oldGroup := n.processGroup(og)
-
 	selectorUpdated := func() bool {
 		return getNormalizedNameForSelector(newGroup.Selector) != getNormalizedNameForSelector(oldGroup.Selector)
 	}
@@ -95,7 +85,6 @@ func (n *NetworkPolicyController) updateGroup(oldObj, curObj interface{}) {
 	n.internalGroupStore.Update(newGroup)
 	n.enqueueInternalGroup(key)
 }
-
 // deleteGroup is responsible for processing the DELETE event of a Group resource.
 func (n *NetworkPolicyController) deleteGroup(oldObj interface{}) {
 	og, ok := oldObj.(*crdv1beta1.Group)
@@ -120,7 +109,6 @@ func (n *NetworkPolicyController) deleteGroup(oldObj interface{}) {
 	}
 	n.enqueueInternalGroup(key)
 }
-
 func (n *NetworkPolicyController) processGroup(g *crdv1beta1.Group) *antreatypes.Group {
 	internalGroup := antreatypes.Group{
 		SourceReference: getGroupSourceRef(g),
@@ -153,7 +141,6 @@ func (n *NetworkPolicyController) processGroup(g *crdv1beta1.Group) *antreatypes
 	}
 	return &internalGroup
 }
-
 func getGroupSourceRef(g *crdv1beta1.Group) *controlplane.GroupReference {
 	return &controlplane.GroupReference{
 		Name:      g.GetName(),
@@ -161,7 +148,6 @@ func getGroupSourceRef(g *crdv1beta1.Group) *controlplane.GroupReference {
 		UID:       g.GetUID(),
 	}
 }
-
 func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.Group) error {
 	originalMembersComputedStatus := grp.MembersComputed
 	// Retrieve the Group corresponding to this key.
@@ -177,7 +163,6 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 	} else {
 		n.groupingInterface.DeleteGroup(internalGroupType, key)
 	}
-
 	membersComputed, membersComputedStatus := true, v1.ConditionFalse
 	// Update the Group status to Realized as Antrea has recognized the Group and
 	// processed its group members. The Group is considered realized if:
@@ -219,7 +204,6 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 	}
 	return err
 }
-
 // triggerANNPUpdates triggers processing of Antrea NetworkPolicies associated with the input Group.
 func (n *NetworkPolicyController) triggerANNPUpdates(g string) {
 	// If a Group is added/updated, it might have a reference in Antrea NetworkPolicy.
@@ -228,7 +212,6 @@ func (n *NetworkPolicyController) triggerANNPUpdates(g string) {
 		n.enqueueInternalNetworkPolicy(getANNPReference(obj.(*crdv1beta1.NetworkPolicy)))
 	}
 }
-
 // updateGroupStatus updates the Status subresource for a Group.
 func (n *NetworkPolicyController) updateGroupStatus(g *crdv1beta1.Group, cStatus v1.ConditionStatus) error {
 	condStatus := crdv1beta1.GroupCondition{

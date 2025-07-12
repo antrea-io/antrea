@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package util
-
 import (
 	"bytes"
 	"context"
@@ -25,43 +22,32 @@ import (
 	"net"
 	"strings"
 	"time"
-
 	"github.com/Microsoft/go-winio"
 	"github.com/Microsoft/hcsshim"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
 	"antrea.io/antrea/v2/pkg/agent/util/winnet"
-=======
-	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
-	"antrea.io/antrea/pkg/agent/util/winnet"
->>>>>>> origin/main
+	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
+	"antrea.io/antrea/v2/pkg/agent/util/winnet"
 )
-
 const (
 	LocalHNSNetwork = "antrea-hnsnetwork"
 	HNSNetworkType  = "Transparent"
 	namedPipePrefix = `\\.\pipe\`
-
 	AntreaNatName = "antrea-nat"
 	LocalVMSwitch = "antrea-switch"
 )
-
 var (
 	winnetUtil winnet.Interface = &winnet.Handle{}
-
 	getHNSNetworkByName = hcsshim.GetHNSNetworkByName
 	hnsNetworkRequest   = hcsshim.HNSNetworkRequest
 	hnsNetworkCreate    = (*hcsshim.HNSNetwork).Create
 	hnsNetworkDelete    = (*hcsshim.HNSNetwork).Delete
 )
-
 func GetNSPath(containerNetNS string) (string, error) {
 	return containerNetNS, nil
 }
-
 // CreateHNSNetwork creates a new HNS Network, whose type is "Transparent". The NetworkAdapter is using the host
 // interface which is configured with Node IP. HNS Network properties "ManagementIP" and "SourceMac" are used to record
 // the original IP and MAC addresses on the network adapter.
@@ -88,7 +74,6 @@ func CreateHNSNetwork(hnsNetName string, subnetCIDR *net.IPNet, nodeIP *net.IPNe
 	}
 	return hnsNet, nil
 }
-
 func DeleteHNSNetwork(hnsNetName string) error {
 	hnsNet, err := getHNSNetworkByName(hnsNetName)
 	if err != nil {
@@ -100,16 +85,13 @@ func DeleteHNSNetwork(hnsNetName string) error {
 	_, err = hnsNetworkDelete(hnsNet)
 	return err
 }
-
 type vSwitchExtensionPolicy struct {
 	ExtensionID string `json:"Id,omitempty"`
 	IsEnabled   bool
 }
-
 type ExtensionsPolicy struct {
 	Extensions []vSwitchExtensionPolicy `json:"Extensions"`
 }
-
 // EnableHNSNetworkExtension enables the specified vSwitchExtension on the target HNS Network. Antrea calls this function
 // to enable OVS Extension on the HNS Network.
 func EnableHNSNetworkExtension(hnsNetID string, vSwitchExtension string) error {
@@ -121,14 +103,12 @@ func EnableHNSNetworkExtension(hnsNetID string, vSwitchExtension string) error {
 		ExtensionsPolicy{
 			Extensions: []vSwitchExtensionPolicy{extensionPolicy},
 		})
-
 	_, err := hnsNetworkRequest("POST", hnsNetID, string(jsonString))
 	if err != nil {
 		return err
 	}
 	return nil
 }
-
 func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	if err := wait.PollUntilContextTimeout(context.TODO(), time.Second, 5*time.Second, true, func(ctx context.Context) (done bool, err error) {
 		if err := winnetUtil.EnableNetAdapter(name); err != nil {
@@ -148,7 +128,6 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	}); err != nil {
 		return nil, 0, fmt.Errorf("failed to enable network adapter %s: %v", name, err)
 	}
-
 	iface, err := netInterfaceByName(name)
 	if err != nil {
 		if opErr, ok := err.(*net.OpError); ok && opErr.Err.Error() == "no such network adapter" {
@@ -160,17 +139,14 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	index := iface.Index
 	return mac, index, nil
 }
-
 func addrEqual(addr1, addr2 *net.IPNet) bool {
 	size1, _ := addr1.Mask.Size()
 	size2, _ := addr2.Mask.Size()
 	return addr1.IP.Equal(addr2.IP) && size1 == size2
 }
-
 // addrSliceDifference returns elements in s1 but not in s2.
 func addrSliceDifference(s1, s2 []*net.IPNet) []*net.IPNet {
 	var diff []*net.IPNet
-
 	for _, e1 := range s1 {
 		found := false
 		for _, e2 := range s2 {
@@ -183,10 +159,8 @@ func addrSliceDifference(s1, s2 []*net.IPNet) []*net.IPNet {
 			diff = append(diff, e1)
 		}
 	}
-
 	return diff
 }
-
 // ConfigureLinkAddresses adds the provided addresses to the interface identified by index idx, if
 // they are missing from the interface. Any other existing address already configured for the
 // interface will be removed, unless it is a link-local address. At the moment, this function only
@@ -209,22 +183,18 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 			}
 		}
 	}
-
 	addrsToAdd := addrSliceDifference(ipNets, addrs)
 	addrsToRemove := addrSliceDifference(addrs, ipNets)
-
 	if len(addrsToAdd) == 0 && len(addrsToRemove) == 0 {
 		klog.V(2).Infof("IP configuration for interface %s does not need to change", ifaceName)
 		return nil
 	}
-
 	for _, addr := range addrsToRemove {
 		klog.V(2).Infof("Removing address %v from interface %s", addr, ifaceName)
 		if err := winnetUtil.RemoveNetAdapterIPAddress(ifaceName, addr.IP); err != nil {
 			return fmt.Errorf("failed to remove address %v from interface %s: %v", addr, ifaceName, err)
 		}
 	}
-
 	for _, addr := range addrsToAdd {
 		klog.V(2).Infof("Adding address %v to interface %s", addr, ifaceName)
 		if addr.IP.To4() == nil {
@@ -235,10 +205,8 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 			return fmt.Errorf("failed to add address %v to interface %s: %v", addr, ifaceName, err)
 		}
 	}
-
 	return nil
 }
-
 // PrepareHNSNetwork creates HNS Network for containers.
 func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapter *net.Interface, nodeGateway string, dnsServers string, routes []interface{}, newName string) error {
 	klog.InfoS("Creating HNSNetwork", "name", LocalHNSNetwork, "subnet", subnetCIDR, "nodeIP", nodeIPNet, "adapter", uplinkAdapter)
@@ -246,7 +214,6 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 	if err != nil {
 		return fmt.Errorf("error creating HNSNetwork: %v", err)
 	}
-
 	success := false
 	defer func() {
 		if !success {
@@ -316,23 +283,19 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 			return err
 		}
 	}
-
 	// Enable OVS Extension on the HNS Network. If an error occurs, delete the HNS Network and return the error.
 	// While the hnsshim API allows for enabling the OVS extension when creating an HNS network, it can cause the adapter being unable
 	// to obtain a valid DHCP IP in case of network interruption. Therefore, we have to enable the OVS extension after running adapterIPExists.
 	if err = EnableHNSNetworkExtension(hnsNet.Id, winnet.OVSExtensionID); err != nil {
 		return err
 	}
-
 	if err = winnetUtil.EnableRSCOnVSwitch(LocalHNSNetwork); err != nil {
 		return err
 	}
-
 	success = true
 	klog.InfoS("Created HNSNetwork", "name", hnsNet.Name, "id", hnsNet.Id)
 	return nil
 }
-
 // adapterIPExists finds the network adapter configured with the provided IP, MAC and its name has the given prefix.
 // If "namePrefix" is empty, it returns the first network adapter with the provided IP and MAC.
 // It returns true if the IP is found on the adapter, otherwise it returns false.
@@ -363,7 +326,6 @@ func adapterIPExists(ip net.IP, mac net.HardwareAddr, namePrefix string) (*net.I
 	}
 	return nil, false, fmt.Errorf("unable to find a network adapter with MAC %s, IP %s, and name prefix %s", mac.String(), ip.String(), namePrefix)
 }
-
 // GetDefaultGatewayByInterfaceIndex returns the default gateway configured on the specified interface.
 func GetDefaultGatewayByInterfaceIndex(ifIndex int) (string, error) {
 	ip, defaultDestination, _ := net.ParseCIDR("0.0.0.0/0")
@@ -381,7 +343,6 @@ func GetDefaultGatewayByInterfaceIndex(ifIndex int) (string, error) {
 	}
 	return routes[0].GatewayAddress.String(), nil
 }
-
 // ListenLocalSocket creates a listener on a Unix domain socket or a Windows named pipe.
 // - If the specified address starts with "\\.\pipe\",  create a listener on a Windows named pipe path.
 // - Else create a listener on a local Unix domain socket.
@@ -391,11 +352,9 @@ func ListenLocalSocket(address string) (net.Listener, error) {
 	}
 	return listenUnix(address)
 }
-
 func HostInterfaceExists(ifaceName string) bool {
 	return winnetUtil.NetAdapterExists(ifaceName)
 }
-
 func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interface{}, error) {
 	iface, err := netInterfaceByName(ifName)
 	if err != nil {
@@ -419,7 +378,6 @@ func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interfac
 	}
 	return iface, addrs, routes, nil
 }
-
 func RenameInterface(from, to string) error {
 	var renameErr error
 	pollErr := wait.PollUntilContextTimeout(context.TODO(), time.Millisecond*100, time.Second, false, func(ctx context.Context) (done bool, err error) {
@@ -435,7 +393,6 @@ func RenameInterface(from, to string) error {
 	}
 	return nil
 }
-
 func GenHostInterfaceName(upLinkIfName string) string {
 	return strings.TrimSuffix(upLinkIfName, bridgedUplinkSuffix)
 }

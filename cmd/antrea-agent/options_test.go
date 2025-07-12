@@ -11,29 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package main
-
 import (
 	"fmt"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/features"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/features"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/features"
 )
-
 func TestOptionsValidateTLSOptions(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -85,7 +77,6 @@ func TestOptionsValidateTLSOptions(t *testing.T) {
 		})
 	}
 }
-
 func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 	tests := []struct {
 		name                            string
@@ -146,7 +137,6 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, tt.enabledDSR)
-
 			o := &Options{config: &agentconfig.AgentConfig{
 				AntreaProxy: tt.antreaProxyConfig,
 			}}
@@ -160,7 +150,6 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestOptionsValidateEgressConfig(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -206,7 +195,6 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Egress, tt.featureGateValue)
-
 			o := &Options{config: &agentconfig.AgentConfig{
 				Egress: tt.egressConfig,
 			}}
@@ -220,7 +208,6 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestOptionsValidateMulticastConfig(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -281,7 +268,6 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 		})
 	}
 }
-
 func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -332,14 +318,12 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.SecondaryNetwork, tc.featureGateValue)
-
 			o := &Options{config: &agentconfig.AgentConfig{}}
 			for _, brName := range tc.ovsBridges {
 				br := agentconfig.OVSBridgeConfig{BridgeName: brName}
 				br.PhysicalInterfaces = tc.physicalInterfaces
 				o.config.SecondaryNetwork.OVSBridges = append(o.config.SecondaryNetwork.OVSBridges, br)
 			}
-
 			err := o.validateSecondaryNetworkConfig()
 			if tc.expectedErr == "" {
 				require.NoError(t, err)

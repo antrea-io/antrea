@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"bytes"
 	"context"
@@ -23,7 +21,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -44,13 +41,11 @@ import (
 	"k8s.io/utils/ptr"
 	fakepolicyversioned "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/fake"
 	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
-
-<<<<<<< HEAD
 	fakemcsversioned "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/fake"
 	mcsinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
@@ -59,47 +54,37 @@ import (
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 	"antrea.io/antrea/v2/pkg/util/externalnode"
-=======
-	fakemcsversioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
-	mcsinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/controller/grouping"
-	"antrea.io/antrea/pkg/controller/labelidentity"
-	"antrea.io/antrea/pkg/controller/networkpolicy/store"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/externalnode"
->>>>>>> origin/main
+	fakemcsversioned "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/fake"
+	mcsinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	"antrea.io/antrea/v2/pkg/controller/labelidentity"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/externalnode"
 )
-
 var alwaysReady = func() bool { return true }
-
 const informerDefaultResync = 30 * time.Second
-
 var (
 	k8sProtocolUDP  = corev1.ProtocolUDP
 	k8sProtocolTCP  = corev1.ProtocolTCP
 	k8sProtocolSCTP = corev1.ProtocolSCTP
-
 	protocolTCP  = controlplane.ProtocolTCP
 	protocolICMP = controlplane.ProtocolICMP
 	protocolIGMP = controlplane.ProtocolIGMP
-
 	int80   = intstr.FromInt(80)
 	int81   = intstr.FromInt(81)
 	int1000 = intstr.FromInt(1000)
-
 	int32For1999  = int32(1999)
 	int32For32220 = int32(32220)
 	int32For32230 = int32(32230)
-
 	strHTTP = intstr.FromString("http")
 )
-
 type networkPolicyController struct {
 	*NetworkPolicyController
 	namespaceStore             cache.Store
@@ -120,7 +105,6 @@ type networkPolicyController struct {
 	groupingController         *grouping.GroupEntityController
 	labelIdentityController    *labelidentity.Controller
 }
-
 // objects is an initial set of K8s objects that is exposed through the client.
 func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *networkPolicyController) {
 	client := newClientset(k8sObjects...)
@@ -198,7 +182,6 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		labelIdentityController,
 	}
 }
-
 // newControllerWithoutEventHandler creates a networkPolicyController that doesn't register event handlers so that the
 // tests can call event handlers in their own ways.
 func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *networkPolicyController) {
@@ -296,24 +279,18 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		nil,
 	}
 }
-
 func newClientset(objects ...runtime.Object) *fake.Clientset {
 	client := fake.NewSimpleClientset(objects...)
-
 	client.PrependReactor("create", "networkpolicies", k8stesting.ReactionFunc(func(action k8stesting.Action) (bool, runtime.Object, error) {
 		np := action.(k8stesting.CreateAction).GetObject().(*networkingv1.NetworkPolicy)
-
 		if np.ObjectMeta.GenerateName != "" {
 			np.ObjectMeta.Name = fmt.Sprintf("%s-%s", np.ObjectMeta.GenerateName, rand.String(8))
 			np.ObjectMeta.GenerateName = ""
 		}
-
 		return false, np, nil
 	}))
-
 	return client
 }
-
 func TestAddNetworkPolicy(t *testing.T) {
 	_, npc := newController(nil, nil)
 	np := getK8sNetworkPolicyObj()
@@ -324,7 +301,6 @@ func TestAddNetworkPolicy(t *testing.T) {
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
-
 func TestDeleteNetworkPolicy(t *testing.T) {
 	_, npc := newController(nil, nil)
 	np := getK8sNetworkPolicyObj()
@@ -335,7 +311,6 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
-
 func TestUpdateNetworkPolicy(t *testing.T) {
 	_, npc := newController(nil, nil)
 	np := getK8sNetworkPolicyObj()
@@ -348,7 +323,6 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
-
 func TestAddPod(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{
 		MatchLabels: map[string]string{"group": "appliedTo"},
@@ -876,7 +850,6 @@ func TestAddPod(t *testing.T) {
 		})
 	}
 }
-
 func TestDeletePod(t *testing.T) {
 	ns := metav1.NamespaceDefault
 	nodeName := "node1"
@@ -963,7 +936,6 @@ func TestDeletePod(t *testing.T) {
 	assert.False(t, updatedAddrGroup.GroupMembers.Has(memberPod2))
 	assert.False(t, groupMembers.Has(memberPod2))
 }
-
 func TestAddNamespace(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{}
 	selectorIn := metav1.LabelSelector{
@@ -1089,7 +1061,6 @@ func TestAddNamespace(t *testing.T) {
 			npc.addClusterGroup(testCG)
 			npc.cgStore.Add(testCG)
 			groupKey := testCG.Name
-
 			npc.groupingInterface.AddNamespace(tt.addedNamespace)
 			p1 := getPod("p1", "nsA", "nodeA", "1.2.3.4", false)
 			p2 := getPod("p2", "nsA", "nodeA", "2.2.3.4", false)
@@ -1122,7 +1093,6 @@ func TestAddNamespace(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteNamespace(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{}
 	selectorIn := metav1.LabelSelector{
@@ -1286,7 +1256,6 @@ func TestDeleteNamespace(t *testing.T) {
 		})
 	}
 }
-
 func TestAddAndUpdateService(t *testing.T) {
 	testPod1 := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1411,7 +1380,6 @@ func TestAddAndUpdateService(t *testing.T) {
 	assert.False(t, groupMembers1Updated.Has(memberPod1))
 	assert.True(t, groupMembers1Updated.Has(memberPod2))
 }
-
 func TestDeleteService(t *testing.T) {
 	testPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1473,7 +1441,6 @@ func TestDeleteService(t *testing.T) {
 	groupMembersUpdated, _, _ := npc.GetGroupMembers(testCG.Name)
 	assert.False(t, groupMembersUpdated.Has(memberPod))
 }
-
 func TestToGroupSelector(t *testing.T) {
 	pSelector := metav1.LabelSelector{}
 	pLabelSelector, _ := metav1.LabelSelectorAsSelector(&pSelector)
@@ -1557,7 +1524,6 @@ func TestToGroupSelector(t *testing.T) {
 		})
 	}
 }
-
 func TestGenerateNormalizedName(t *testing.T) {
 	pLabels := map[string]string{"app": "client"}
 	req1 := metav1.LabelSelectorRequirement{
@@ -1623,7 +1589,6 @@ func TestGenerateNormalizedName(t *testing.T) {
 		}
 	}
 }
-
 func TestToAntreaProtocol(t *testing.T) {
 	tables := []struct {
 		proto            *corev1.Protocol
@@ -1641,7 +1606,6 @@ func TestToAntreaProtocol(t *testing.T) {
 		}
 	}
 }
-
 func TestToAntreaServices(t *testing.T) {
 	tables := []struct {
 		ports              []networkingv1.NetworkPolicyPort
@@ -1685,7 +1649,6 @@ func TestToAntreaServices(t *testing.T) {
 		assert.Equal(t, table.expNamedPortExists, namedPortExist)
 	}
 }
-
 func TestToAntreaIPBlock(t *testing.T) {
 	expIPNet := controlplane.IPNet{
 		IP:           ipStrToIPAddress("10.0.0.0"),
@@ -1732,7 +1695,6 @@ func TestToAntreaIPBlock(t *testing.T) {
 		}
 	}
 }
-
 func TestToAntreaPeer(t *testing.T) {
 	testNPObj := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1905,7 +1867,6 @@ func TestToAntreaPeer(t *testing.T) {
 		})
 	}
 }
-
 func TestProcessNetworkPolicy(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -2346,21 +2307,17 @@ func TestProcessNetworkPolicy(t *testing.T) {
 			defer close(stopCh)
 			c.informerFactory.Start(stopCh)
 			c.informerFactory.WaitForCacheSync(stopCh)
-
 			actualPolicy, actualAppliedToGroups, actualAddressGroups := c.processNetworkPolicy(tt.inputPolicy)
 			assert.Equal(t, tt.expectedPolicy, actualPolicy, "processNetworkPolicy() got unexpected result")
-
 			if len(actualAddressGroups) != tt.expectedAddressGroups {
 				t.Errorf("len(addressGroups) got %v, want %v", len(actualAddressGroups), tt.expectedAddressGroups)
 			}
-
 			if len(actualAppliedToGroups) != tt.expectedAppliedToGroups {
 				t.Errorf("len(appliedToGroup) got %v, want %v", len(actualAppliedToGroups), tt.expectedAppliedToGroups)
 			}
 		})
 	}
 }
-
 func TestPodToGroupMember(t *testing.T) {
 	namedPod := getPod("", "", "", "", true)
 	unNamedPod := getPod("", "", "", "", false)
@@ -2500,7 +2457,6 @@ func TestPodToGroupMember(t *testing.T) {
 		})
 	}
 }
-
 func comparePodIPs(actIPs, expIPs []controlplane.IPAddress) bool {
 	if len(actIPs) != len(expIPs) {
 		return false
@@ -2512,7 +2468,6 @@ func comparePodIPs(actIPs, expIPs []controlplane.IPAddress) bool {
 	}
 	return true
 }
-
 func containsPodIP(expIPs []controlplane.IPAddress, actIP controlplane.IPAddress) bool {
 	for _, expIP := range expIPs {
 		if bytes.Equal(actIP, expIP) {
@@ -2521,7 +2476,6 @@ func containsPodIP(expIPs []controlplane.IPAddress, actIP controlplane.IPAddress
 	}
 	return false
 }
-
 func TestCIDRStrToIPNet(t *testing.T) {
 	tests := []struct {
 		name string
@@ -2556,7 +2510,6 @@ func TestCIDRStrToIPNet(t *testing.T) {
 		})
 	}
 }
-
 func TestIPNetToCIDRStr(t *testing.T) {
 	ipNetV4, _ := cidrStrToIPNet("10.9.8.7/6")
 	ipNetV6, _ := cidrStrToIPNet("2002::1234:abcd:ffff:c0a8:101/64")
@@ -2582,7 +2535,6 @@ func TestIPNetToCIDRStr(t *testing.T) {
 		})
 	}
 }
-
 func TestIPStrToIPAddress(t *testing.T) {
 	ip1 := "10.0.1.10"
 	expIP1 := net.ParseIP(ip1)
@@ -2612,7 +2564,6 @@ func TestIPStrToIPAddress(t *testing.T) {
 		})
 	}
 }
-
 func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
 	_, c := newController(nil, nil)
 	c.heartbeatCh = make(chan heartbeat, 2)
@@ -2633,7 +2584,6 @@ func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
 	_, ok = <-c.heartbeatCh
 	assert.True(t, ok, "Missing event on channel")
 }
-
 func TestInternalGroupKeyFunc(t *testing.T) {
 	expValue := "cgA"
 	cg := v1beta1.ClusterGroup{
@@ -2644,7 +2594,6 @@ func TestInternalGroupKeyFunc(t *testing.T) {
 	}
 	actualValue := internalGroupKeyFunc(&cg)
 	assert.Equal(t, expValue, actualValue)
-
 	expValue = "nsA/gA"
 	g := v1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uid-a"},
@@ -2655,7 +2604,6 @@ func TestInternalGroupKeyFunc(t *testing.T) {
 	actualValue = internalGroupKeyFunc(&g)
 	assert.Equal(t, expValue, actualValue)
 }
-
 func TestGetAppliedToWorkloads(t *testing.T) {
 	var emptyEEs []*v1alpha2.ExternalEntity
 	var emptyPods []*corev1.Pod
@@ -2709,7 +2657,6 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	podA.Labels = map[string]string{"foo1": "bar1"}
 	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
 	podB.Labels = map[string]string{"foo3": "bar3"}
-
 	selectorD := metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"foo4": "bar4",
@@ -2826,7 +2773,6 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 		})
 	}
 }
-
 func TestGetAddressGroupMemberSet(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cgA := v1beta1.ClusterGroup{
@@ -2877,7 +2823,6 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 	podA.Labels = map[string]string{"foo1": "bar1"}
 	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
 	podB.Labels = map[string]string{"foo3": "bar3"}
-
 	podAMemberSet := controlplane.GroupMemberSet{}
 	podAMemberSet.Insert(podToGroupMember(podA, true))
 	podABMemberSet := controlplane.GroupMemberSet{}
@@ -2953,7 +2898,6 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 		})
 	}
 }
-
 func TestAddressGroupWithNodeSelector(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -2965,9 +2909,7 @@ func TestAddressGroupWithNodeSelector(t *testing.T) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
 	cache.WaitForCacheSync(stopCh, c.groupingInterfaceSynced)
-
 	nodeSelectorA := metav1.LabelSelector{MatchLabels: map[string]string{"env": "pro"}}
-
 	fakeNode0 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode0"},
 		Status:     corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "1.1.1.1"}}},
@@ -2976,7 +2918,6 @@ func TestAddressGroupWithNodeSelector(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode1"},
 		Status:     corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "1.1.1.2"}}},
 	}
-
 	createNode := func(node *corev1.Node) error {
 		_, err := c.kubeClient.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
 		if err != nil {
@@ -2991,7 +2932,6 @@ func TestAddressGroupWithNodeSelector(t *testing.T) {
 	fakeNode0.Labels = nodeSelectorA.MatchLabels
 	assert.NoError(t, createNode(fakeNode0))
 	assert.NoError(t, createNode(fakeNode1))
-
 	ag := c.createAddressGroup("", nil, nil, nil, &nodeSelectorA)
 	assert.NoError(t, c.addressGroupStore.Create(ag))
 	assert.NoError(t, c.syncAddressGroup(ag.Name))
@@ -3004,7 +2944,6 @@ func TestAddressGroupWithNodeSelector(t *testing.T) {
 	assert.True(t, groupMembers.Has(memberNode0))
 	assert.False(t, groupMembers.Has(memberNode1))
 }
-
 func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {
 	ns := metav1.NamespaceDefault
 	npName := "testing-1"
@@ -3039,7 +2978,6 @@ func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {
 	}
 	return npObj
 }
-
 func getPod(name, ns, nodeName, podIP string, namedPort bool) *corev1.Pod {
 	if name == "" {
 		name = "testPod"
@@ -3088,7 +3026,6 @@ func getPod(name, ns, nodeName, podIP string, namedPort bool) *corev1.Pod {
 		},
 	}
 }
-
 // compareIPBlocks is a util function to compare the contents of two IPBlocks.
 func compareIPBlocks(ipb1, ipb2 *controlplane.IPBlock) bool {
 	if ipb1 == nil && ipb2 == nil {
@@ -3114,7 +3051,6 @@ func compareIPBlocks(ipb1, ipb2 *controlplane.IPBlock) bool {
 	}
 	return true
 }
-
 // compareIPNet is a util function to compare the contents of two IPNets.
 func compareIPNet(ipn1, ipn2 controlplane.IPNet) bool {
 	if !bytes.Equal(ipn1.IP, ipn2.IP) {
@@ -3125,7 +3061,6 @@ func compareIPNet(ipn1, ipn2 controlplane.IPNet) bool {
 	}
 	return true
 }
-
 // TestMultipleNetworkPoliciesWithSameAppliedTo verifies NetworkPolicyController can create and delete
 // InternalNetworkPolicy, AppliedToGroups and AddressGroups correctly when concurrently processing multiple
 // NetworkPolicies that refer to the same groups.
@@ -3161,7 +3096,6 @@ func TestMultipleNetworkPoliciesWithSameAppliedTo(t *testing.T) {
 			},
 		},
 	}
-
 	selectorAGroup := antreatypes.NewGroupSelector("default", &selectorA, nil, nil, nil)
 	selectorAGroupUID := getNormalizedUID(selectorAGroup.NormalizedName)
 	selectorBGroup := antreatypes.NewGroupSelector("default", &selectorB, nil, nil, nil)
@@ -3244,24 +3178,19 @@ func TestMultipleNetworkPoliciesWithSameAppliedTo(t *testing.T) {
 	go c.groupingInterface.Run(stopCh)
 	go c.groupingController.Run(stopCh)
 	go c.Run(stopCh)
-
 	c.kubeClient.NetworkingV1().NetworkPolicies(policyA.Namespace).Create(context.TODO(), policyA, metav1.CreateOptions{})
 	c.kubeClient.NetworkingV1().NetworkPolicies(policyB.Namespace).Create(context.TODO(), policyB, metav1.CreateOptions{})
-
 	checkInternalNetworkPolicyExist(t, c, expectedPolicyA)
 	checkInternalNetworkPolicyExist(t, c, expectedPolicyB)
 	checkAppliedToGroupExist(t, c, expectedAppliedToGroup)
 	checkAddressGroupExist(t, c, expectedAddressGroup)
-
 	c.kubeClient.NetworkingV1().NetworkPolicies(policyA.Namespace).Delete(context.TODO(), policyA.Name, metav1.DeleteOptions{})
 	c.kubeClient.NetworkingV1().NetworkPolicies(policyB.Namespace).Delete(context.TODO(), policyB.Name, metav1.DeleteOptions{})
-
 	checkInternalNetworkPolicyNotExist(t, c, expectedPolicyA)
 	checkInternalNetworkPolicyNotExist(t, c, expectedPolicyB)
 	checkAppliedToGroupNotExist(t, c, expectedAppliedToGroup)
 	checkAddressGroupNotExist(t, c, expectedAddressGroup)
 }
-
 func checkInternalNetworkPolicyExist(t *testing.T, c *networkPolicyController, policy *antreatypes.NetworkPolicy) {
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		obj, exists, _ := c.internalNetworkPolicyStore.Get(string(policy.UID))
@@ -3271,7 +3200,6 @@ func checkInternalNetworkPolicyExist(t *testing.T, c *networkPolicyController, p
 		assert.Equal(collect, policy, obj.(*antreatypes.NetworkPolicy))
 	}, 3*time.Second, 10*time.Millisecond)
 }
-
 func checkAppliedToGroupExist(t *testing.T, c *networkPolicyController, appliedToGroup *antreatypes.AppliedToGroup) {
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		obj, exists, _ := c.appliedToGroupStore.Get(string(appliedToGroup.UID))
@@ -3281,7 +3209,6 @@ func checkAppliedToGroupExist(t *testing.T, c *networkPolicyController, appliedT
 		assert.Equal(collect, appliedToGroup, obj.(*antreatypes.AppliedToGroup))
 	}, 3*time.Second, 10*time.Millisecond)
 }
-
 func checkAddressGroupExist(t *testing.T, c *networkPolicyController, addressGroup *antreatypes.AddressGroup) {
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		obj, exists, _ := c.addressGroupStore.Get(string(addressGroup.UID))
@@ -3291,28 +3218,24 @@ func checkAddressGroupExist(t *testing.T, c *networkPolicyController, addressGro
 		assert.Equal(collect, addressGroup, obj.(*antreatypes.AddressGroup))
 	}, 3*time.Second, 10*time.Millisecond)
 }
-
 func checkInternalNetworkPolicyNotExist(t *testing.T, c *networkPolicyController, policy *antreatypes.NetworkPolicy) {
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		_, exists, _ := c.internalNetworkPolicyStore.Get(string(policy.UID))
 		assert.False(collect, exists)
 	}, 3*time.Second, 10*time.Millisecond)
 }
-
 func checkAppliedToGroupNotExist(t *testing.T, c *networkPolicyController, appliedToGroup *antreatypes.AppliedToGroup) {
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		_, exists, _ := c.appliedToGroupStore.Get(string(appliedToGroup.UID))
 		assert.False(collect, exists)
 	}, 3*time.Second, 10*time.Millisecond)
 }
-
 func checkAddressGroupNotExist(t *testing.T, c *networkPolicyController, addressGroup *antreatypes.AddressGroup) {
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		_, exists, _ := c.addressGroupStore.Get(string(addressGroup.UID))
 		assert.False(collect, exists)
 	}, 3*time.Second, 10*time.Millisecond)
 }
-
 func TestSyncInternalNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
 	inputPolicy := &v1beta1.ClusterNetworkPolicy{
@@ -3337,7 +3260,6 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 			},
 		},
 	}
-
 	selectorAGroup := getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)
 	selectorBGroup := getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)
 	selectorCGroup := getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil, nil).NormalizedName)
@@ -3372,7 +3294,6 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 		},
 		AppliedToGroups: []string{selectorBGroup, selectorAGroup},
 	}
-
 	// Add a new policy, it should create an internal NetworkPolicy, AddressGroups and AppliedToGroups used by it.
 	_, c := newController(nil, nil)
 	c.acnpStore.Add(inputPolicy)
@@ -3386,7 +3307,6 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 	checkGroupItemExistence(t, c.addressGroupStore, selectorAGroup, selectorBGroup)
 	checkQueueItemExistence(t, c.appliedToGroupQueue, selectorAGroup, selectorBGroup)
 	checkGroupItemExistence(t, c.appliedToGroupStore, selectorAGroup, selectorBGroup)
-
 	// Set AppliedToGroups' span, the internal NetworkPolicy should be union of them.
 	appliedToGroupA, _, _ := c.appliedToGroupStore.Get(selectorAGroup)
 	appliedToGroupA.(*antreatypes.AppliedToGroup).NodeNames = sets.New[string]("nodeA", "nodeB")
@@ -3401,7 +3321,6 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 	// AddressGroups should be resynced while AppliedToGroups should not.
 	checkQueueItemExistence(t, c.addressGroupQueue, selectorAGroup, selectorBGroup)
 	checkQueueItemExistence(t, c.appliedToGroupQueue)
-
 	// Update the original NetworkPolicy's spec, stale groups should be deleted while new groups should be created.
 	updatedInputPolicy := inputPolicy.DeepCopy()
 	// Change selectorA to selectorC
@@ -3422,7 +3341,6 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 	checkQueueItemExistence(t, c.appliedToGroupQueue, selectorCGroup)
 	// AppliedToGroup with selectA is no longer used, it should be deleted from the storage.
 	checkGroupItemExistence(t, c.appliedToGroupStore, selectorCGroup, selectorBGroup)
-
 	// Remove the original NetworkPolicy, the internal NetworkPolicy and all AddressGroups and AppliedToGroups should be
 	// removed.
 	c.acnpStore.Delete(updatedInputPolicy)
@@ -3434,7 +3352,6 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 	checkQueueItemExistence(t, c.appliedToGroupQueue)
 	checkGroupItemExistence(t, c.appliedToGroupStore)
 }
-
 // TestSyncInternalNetworkPolicyWithSameName verifies SyncInternalNetworkPolicy can work correctly when processing
 // multiple NetworkPolicies that have the same name.
 func TestSyncInternalNetworkPolicyWithSameName(t *testing.T) {
@@ -3451,7 +3368,6 @@ func TestSyncInternalNetworkPolicyWithSameName(t *testing.T) {
 			PodSelector: selectorB,
 		},
 	}
-
 	selectorAGroup := getNormalizedUID(antreatypes.NewGroupSelector("default", &selectorA, nil, nil, nil).NormalizedName)
 	selectorBGroup := getNormalizedUID(antreatypes.NewGroupSelector("default", &selectorB, nil, nil, nil).NormalizedName)
 	expectedPolicyA := &antreatypes.NetworkPolicy{
@@ -3480,7 +3396,6 @@ func TestSyncInternalNetworkPolicyWithSameName(t *testing.T) {
 		AppliedToGroups: []string{selectorBGroup},
 		Rules:           []controlplane.NetworkPolicyRule{},
 	}
-
 	// Add and sync policyA first, it should create an AppliedToGroup.
 	_, c := newController(nil, nil)
 	c.networkPolicyStore.Add(policyA)
@@ -3490,7 +3405,6 @@ func TestSyncInternalNetworkPolicyWithSameName(t *testing.T) {
 	require.True(t, exists)
 	assert.Equal(t, expectedPolicyA, obj.(*antreatypes.NetworkPolicy))
 	checkGroupItemExistence(t, c.appliedToGroupStore, selectorAGroup)
-
 	// Delete policyA and add policyB, then sync them concurrently, the resources associated with policyA should be deleted.
 	c.networkPolicyStore.Delete(policyA)
 	c.networkPolicyStore.Add(policyB)
@@ -3512,7 +3426,6 @@ func TestSyncInternalNetworkPolicyWithSameName(t *testing.T) {
 	require.True(t, exists)
 	assert.Equal(t, expectedPolicyB, obj.(*antreatypes.NetworkPolicy))
 	checkGroupItemExistence(t, c.appliedToGroupStore, selectorBGroup)
-
 	// Delete policyB and sync it, the resources associated with policyB should be deleted.
 	c.networkPolicyStore.Delete(policyB)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefB))
@@ -3520,7 +3433,6 @@ func TestSyncInternalNetworkPolicyWithSameName(t *testing.T) {
 	require.False(t, exists)
 	checkGroupItemExistence(t, c.appliedToGroupStore)
 }
-
 // TestSyncInternalNetworkPolicyConcurrently verifies SyncInternalNetworkPolicy can create and delete AppliedToGroups
 // and AddressGroups correctly when concurrently processing multiple NetworkPolicies that refer to the same groups.
 func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
@@ -3547,7 +3459,6 @@ func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
 			},
 		},
 	}
-
 	selectorAGroup := getNormalizedUID(antreatypes.NewGroupSelector("default", &selectorA, nil, nil, nil).NormalizedName)
 	selectorBGroup := getNormalizedUID(antreatypes.NewGroupSelector("default", &selectorB, nil, nil, nil).NormalizedName)
 	expectedPolicyA := &antreatypes.NetworkPolicy{
@@ -3592,7 +3503,6 @@ func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
 		},
 		AppliedToGroups: []string{selectorAGroup},
 	}
-
 	// Add and sync policyA first, it should create an AddressGroup and AppliedToGroups.
 	_, c := newController(nil, nil)
 	c.networkPolicyStore.Add(policyA)
@@ -3603,7 +3513,6 @@ func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
 	assert.Equal(t, expectedPolicyA, obj.(*antreatypes.NetworkPolicy))
 	checkGroupItemExistence(t, c.appliedToGroupStore, selectorAGroup)
 	checkGroupItemExistence(t, c.addressGroupStore, selectorBGroup)
-
 	// Delete policyA and add policyB, then sync them concurrently, the groups should still exist.
 	c.networkPolicyStore.Delete(policyA)
 	c.networkPolicyStore.Add(policyB)
@@ -3626,7 +3535,6 @@ func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
 	assert.Equal(t, expectedPolicyB, obj.(*antreatypes.NetworkPolicy))
 	checkGroupItemExistence(t, c.appliedToGroupStore, selectorAGroup)
 	checkGroupItemExistence(t, c.addressGroupStore, selectorBGroup)
-
 	// Delete policyB and sync it, the groups should be deleted.
 	c.networkPolicyStore.Delete(policyB)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefB))
@@ -3635,7 +3543,6 @@ func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
 	checkGroupItemExistence(t, c.addressGroupStore)
 	checkGroupItemExistence(t, c.appliedToGroupStore)
 }
-
 func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 	p10 := float64(10)
 	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
@@ -3643,7 +3550,6 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 	podB := getPod("podB", "nsB", "nodeB", "10.0.0.2", false)
 	podB.Labels = selectorA.MatchLabels
 	selectorBGroup := getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorB, nil, nil, nil).NormalizedName)
-
 	tests := []struct {
 		name           string
 		groups         []*v1beta1.Group
@@ -3851,12 +3757,10 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 			go c.groupingInterface.Run(stopCh)
 			go c.groupingController.Run(stopCh)
 			go c.Run(stopCh)
-
 			for _, group := range tt.groups {
 				c.crdClient.CrdV1beta1().Groups(group.Namespace).Create(context.TODO(), group, metav1.CreateOptions{})
 			}
 			c.crdClient.CrdV1beta1().NetworkPolicies(tt.inputPolicy.Namespace).Create(context.TODO(), tt.inputPolicy, metav1.CreateOptions{})
-
 			var gotPolicy *antreatypes.NetworkPolicy
 			err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 3*time.Second, true, func(ctx context.Context) (done bool, err error) {
 				obj, exists, _ := c.internalNetworkPolicyStore.Get(tt.expectedPolicy.Name)
@@ -3870,7 +3774,6 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 		})
 	}
 }
-
 func TestSyncAppliedToGroupWithExternalEntity(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{
 		MatchLabels: map[string]string{"group": "appliedTo"},
@@ -3971,7 +3874,6 @@ func TestSyncAppliedToGroupWithExternalEntity(t *testing.T) {
 		})
 	}
 }
-
 func TestSyncAppliedToGroupWithNode(t *testing.T) {
 	selector := metav1.LabelSelector{
 		MatchLabels: map[string]string{"foo1": "bar1"},
@@ -3994,7 +3896,6 @@ func TestSyncAppliedToGroupWithNode(t *testing.T) {
 			Labels: map[string]string{"foo2": "bar2"},
 		},
 	}
-
 	_, npc := newController([]runtime.Object{nodeA, nodeB, nodeC}, nil)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -4009,7 +3910,6 @@ func TestSyncAppliedToGroupWithNode(t *testing.T) {
 	}
 	npc.appliedToGroupStore.Create(appliedToGroup)
 	npc.syncAppliedToGroup(appGroupID)
-
 	expectedAppliedToGroup := &antreatypes.AppliedToGroup{
 		Name:     appGroupID,
 		UID:      types.UID(appGroupID),
@@ -4034,14 +3934,12 @@ func TestSyncAppliedToGroupWithNode(t *testing.T) {
 	gotAppliedToGroup := gotAppliedToGroupObj.(*antreatypes.AppliedToGroup)
 	assert.Equal(t, expectedAppliedToGroup, gotAppliedToGroup)
 }
-
 func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 	ctx := context.TODO()
 	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
 	podA.Labels = map[string]string{"fooA": "barA"}
 	podB := getPod("podB", "nsB", "nodeB", "10.0.0.2", false)
 	podB.Labels = map[string]string{"fooB": "barB"}
-
 	cgA := &v1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "cgA-uid"},
 		Spec:       v1beta1.GroupSpec{PodSelector: &metav1.LabelSelector{MatchLabels: podA.Labels}},
@@ -4060,7 +3958,6 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 			},
 		},
 	}
-
 	_, npc := newController([]runtime.Object{podA, podB}, []runtime.Object{cgA, cgB, acnp})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -4071,7 +3968,6 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 	go npc.Run(stopCh)
 	go npc.groupingController.Run(stopCh)
 	go npc.groupingInterface.Run(stopCh)
-
 	expectedPolicy := &antreatypes.NetworkPolicy{
 		SpanMeta:  antreatypes.SpanMeta{NodeNames: sets.New(podA.Spec.NodeName)},
 		UID:       acnp.UID,
@@ -4109,7 +4005,6 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 			IPs: []controlplane.IPAddress{ipStrToIPAddress(podB.Status.PodIP)},
 		}),
 	}
-
 	checkResources := func(policy *antreatypes.NetworkPolicy, atg *antreatypes.AppliedToGroup, ag *antreatypes.AddressGroup) {
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			policies := npc.internalNetworkPolicyStore.List()
@@ -4117,7 +4012,6 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 				return
 			}
 			assert.Equal(c, policy, policies[0].(*antreatypes.NetworkPolicy))
-
 			atgs := npc.appliedToGroupStore.List()
 			if atg != nil {
 				if !assert.Len(c, atgs, 1) {
@@ -4127,7 +4021,6 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 			} else {
 				assert.Empty(c, atgs)
 			}
-
 			ags := npc.addressGroupStore.List()
 			if ag != nil {
 				if !assert.Len(c, ags, 1) {
@@ -4140,7 +4033,6 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 		}, 2*time.Second, 50*time.Millisecond)
 	}
 	checkResources(expectedPolicy, expectedAppliedToGroup, expectedAddressGroup)
-
 	// Delete the ClusterGroup used by the AddressGroup, the AddressGroup should be deleted, the rule's peer should be empty.
 	npc.crdClient.CrdV1beta1().ClusterGroups().Delete(ctx, cgB.Name, metav1.DeleteOptions{})
 	expectedPolicy2 := &antreatypes.NetworkPolicy{
@@ -4156,7 +4048,6 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 		TierPriority:    ptr.To(v1beta1.DefaultTierPriority),
 	}
 	checkResources(expectedPolicy2, expectedAppliedToGroup, nil)
-
 	// Delete the ClusterGroup used by the AppliedToGroup, the AppliedToGroup should be deleted, the policy's span and
 	// appliedToGroup should be empty.
 	npc.crdClient.CrdV1beta1().ClusterGroups().Delete(ctx, cgA.Name, metav1.DeleteOptions{})
@@ -4173,13 +4064,11 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 		TierPriority:    ptr.To(v1beta1.DefaultTierPriority),
 	}
 	checkResources(expectedPolicy3, nil, nil)
-
 	// Recreate the ClusterGroups, everything should be restored.
 	npc.crdClient.CrdV1beta1().ClusterGroups().Create(ctx, cgA, metav1.CreateOptions{})
 	npc.crdClient.CrdV1beta1().ClusterGroups().Create(ctx, cgB, metav1.CreateOptions{})
 	checkResources(expectedPolicy, expectedAppliedToGroup, expectedAddressGroup)
 }
-
 func checkQueueItemExistence[T comparable](t *testing.T, queue workqueue.TypedRateLimitingInterface[T], items ...T) {
 	require.Equal(t, len(items), queue.Len())
 	expectedItems := sets.New[T](items...)
@@ -4191,7 +4080,6 @@ func checkQueueItemExistence[T comparable](t *testing.T, queue workqueue.TypedRa
 	}
 	assert.Equal(t, expectedItems, actualItems)
 }
-
 func checkGroupItemExistence(t *testing.T, store storage.Interface, groups ...string) {
 	assert.Len(t, store.List(), len(groups))
 	for _, group := range groups {
@@ -4199,7 +4087,6 @@ func checkGroupItemExistence(t *testing.T, store storage.Interface, groups ...st
 		assert.True(t, exists)
 	}
 }
-
 func TestNodeToGroupMember(t *testing.T) {
 	tests := []struct {
 		name                string

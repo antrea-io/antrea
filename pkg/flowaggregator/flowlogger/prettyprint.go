@@ -11,19 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowlogger
-
 import (
 	"github.com/vmware/go-ipfix/pkg/registry"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/ip"
-=======
-	"antrea.io/antrea/pkg/util/ip"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
-
 func PrettyPrintRuleAction(action uint8) string {
 	switch action {
 	case registry.NetworkPolicyRuleActionNoAction:
@@ -38,7 +31,6 @@ func PrettyPrintRuleAction(action uint8) string {
 		return "Invalid"
 	}
 }
-
 func PrettyPrintPolicyType(policyType uint8) string {
 	switch policyType {
 	case 0:
@@ -53,7 +45,6 @@ func PrettyPrintPolicyType(policyType uint8) string {
 		return "Invalid"
 	}
 }
-
 func PrettyPrintProtocolIdentifier(protocolID uint8) string {
 	return ip.IPProtocolNumberToString(protocolID, "Unknown Protocol")
 }

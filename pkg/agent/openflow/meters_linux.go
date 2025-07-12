@@ -1,6 +1,5 @@
 //go:build linux
 // +build linux
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,20 +13,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"github.com/blang/semver"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/runtime"
-=======
-	"antrea.io/antrea/pkg/util/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
-
 func OVSMetersAreSupported() bool {
 	// According to the OVS documentation, meters are supported in the kernel module since 4.15
 	// (https://docs.openvswitch.org/en/latest/faq/releases/). However, it turns out that

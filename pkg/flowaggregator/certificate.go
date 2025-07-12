@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowaggregator
-
 import (
 	"bytes"
 	"context"
@@ -26,35 +24,26 @@ import (
 	"math/big"
 	"net"
 	"time"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/util/env"
-=======
-	"antrea.io/antrea/pkg/util/env"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/util/env"
 )
-
 const (
 	DefaultNamespace = "flow-aggregator"
-
 	CAConfigMapName = "flow-aggregator-ca"
 	CAConfigMapKey  = "ca.crt"
 	// #nosec G101: false positive triggered by variable name which includes "Secret"
 	ClientSecretName = "flow-aggregator-client-tls"
 	ServiceName      = "flow-aggregator"
 )
-
 var (
 	validFrom = time.Now().Add(-time.Hour) // valid an hour earlier to avoid flakes due to clock skew
 	maxAge    = time.Hour * 24 * 365       // one year self-signed certs
 )
-
 func getFlowAggregatorNamespace() string {
 	namespace := env.GetPodNamespace()
 	if namespace == "" {
@@ -62,7 +51,6 @@ func getFlowAggregatorNamespace() string {
 	}
 	return namespace
 }
-
 func generateCACertKey() (*x509.Certificate, *rsa.PrivateKey, []byte, error) {
 	cert := &x509.Certificate{
 		SerialNumber: big.NewInt(1),
@@ -91,15 +79,12 @@ func generateCACertKey() (*x509.Certificate, *rsa.PrivateKey, []byte, error) {
 		Type:  "CERTIFICATE",
 		Bytes: caCert,
 	})
-
 	return cert, caKey, caPEM.Bytes(), err
 }
-
 func getFlowAggregatorServerNames() []string {
 	namespace := getFlowAggregatorNamespace()
 	return []string{ServiceName + "." + namespace + ".svc"}
 }
-
 func generateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, isServer bool, flowAggregatorAddress string) ([]byte, []byte, error) {
 	var cert *x509.Certificate
 	if isServer {
@@ -143,22 +128,18 @@ func generateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, isServer b
 	if err != nil {
 		return nil, nil, err
 	}
-
 	certPEM := new(bytes.Buffer)
 	pem.Encode(certPEM, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: certBytes,
 	})
-
 	certKeyPEM := new(bytes.Buffer)
 	pem.Encode(certKeyPEM, &pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(certKey),
 	})
-
 	return certPEM.Bytes(), certKeyPEM.Bytes(), nil
 }
-
 func syncCAAndClientCert(caCert, clientCert, clientKey []byte, k8sClient kubernetes.Interface) error {
 	klog.Info("Syncing CA certificate, client certificate and client key with ConfigMap")
 	namespace := getFlowAggregatorNamespace()
@@ -193,7 +174,6 @@ func syncCAAndClientCert(caCert, clientCert, clientKey []byte, k8sClient kuberne
 			return fmt.Errorf("error creating ConfigMap %s: %v", CAConfigMapName, err)
 		}
 	}
-
 	secret, err := k8sClient.CoreV1().Secrets(clientSecretNamespace).Get(context.TODO(), ClientSecretName, metav1.GetOptions{})
 	exists = true
 	if err != nil {

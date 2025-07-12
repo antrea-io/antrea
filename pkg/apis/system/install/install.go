@@ -11,20 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package install
-
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/system/v1beta1"
-=======
-	"antrea.io/antrea/pkg/apis/system/v1beta1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 )
-
 // Install registers the API group and adds types to a scheme
 func Install(scheme *runtime.Scheme) {
 	utilruntime.Must(v1beta1.AddToScheme(scheme))

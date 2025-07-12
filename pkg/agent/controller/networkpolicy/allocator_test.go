@@ -11,35 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 var (
 	testAsyncDeleteInterval    = 50 * time.Millisecond
 	testMinAsyncDeleteInterval = 100 * time.Millisecond
 )
-
 func TestNewIDAllocator(t *testing.T) {
 	tests := []struct {
 		name                    string
@@ -80,7 +71,6 @@ func TestNewIDAllocator(t *testing.T) {
 		})
 	}
 }
-
 func TestAllocateForRule(t *testing.T) {
 	rule := &types.PolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -133,7 +123,6 @@ func TestAllocateForRule(t *testing.T) {
 		})
 	}
 }
-
 func TestRelease(t *testing.T) {
 	tests := []struct {
 		name                   string
@@ -179,29 +168,24 @@ func TestRelease(t *testing.T) {
 		})
 	}
 }
-
 // fakeClock is a wrapper around clocktesting.FakeClock that tracks the number
 // of times NewTimer has been called, so we can write a race-free test.
 type fakeClock struct {
 	*clocktesting.FakeClock
 	timersAdded atomic.Int32
 }
-
 func newFakeClock(t time.Time) *fakeClock {
 	return &fakeClock{
 		FakeClock: clocktesting.NewFakeClock(t),
 	}
 }
-
 func (c *fakeClock) TimersAdded() int32 {
 	return c.timersAdded.Load()
 }
-
 func (c *fakeClock) NewTimer(d time.Duration) clock.Timer {
 	defer c.timersAdded.Add(1)
 	return c.FakeClock.NewTimer(d)
 }
-
 func TestIdAllocatorWorker(t *testing.T) {
 	rule := &types.PolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -250,24 +234,19 @@ func TestIdAllocatorWorker(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			go a.runWorker(stopCh)
-
 			require.Zero(t, fakeClock.TimersAdded())
 			a.forgetRule(tt.rule.FlowID)
-
 			ruleHasBeenDeleted := func() bool {
 				a.Lock()
 				defer a.Unlock()
 				return len(a.availableSlice) > 0
 			}
-
 			// Wait for the DelayingQueue to create the timer which signals that the
 			// rule is ready to be deleted.
 			require.Eventually(t, func() bool {
 				return fakeClock.TimersAdded() > 0
 			}, 1*time.Second, 10*time.Millisecond)
-
 			fakeClock.SetTime(expectedDeleteTime.Add(-10 * time.Millisecond))
-
 			// We wait for a small duration and ensure that the rule is not deleted.
 			require.Never(t, func() bool {
 				return ruleHasBeenDeleted()
@@ -275,9 +254,7 @@ func TestIdAllocatorWorker(t *testing.T) {
 			_, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
 			require.NoError(t, err)
 			assert.True(t, exists, "Rule should be present in asyncRuleCache")
-
 			fakeClock.SetTime(expectedDeleteTime.Add(10 * time.Millisecond))
-
 			require.Eventually(t, func() bool {
 				return ruleHasBeenDeleted()
 			}, 1*time.Second, 10*time.Millisecond, "Rule ID was not released")
@@ -287,30 +264,23 @@ func TestIdAllocatorWorker(t *testing.T) {
 		})
 	}
 }
-
 func TestVlanIDAllocator(t *testing.T) {
 	vlanIDAllocator := newL7VlanIDAllocator()
 	ruleID1 := "rule1"
 	ruleID2 := "rule2"
 	ruleID3 := "rule3"
 	ruleID4 := "rule4"
-
 	vlanID1 := vlanIDAllocator.allocate(ruleID1)
 	assert.Equal(t, vlanID1, vlanIDAllocator.query(ruleID1))
-
 	vlanID2 := vlanIDAllocator.allocate(ruleID2)
 	assert.Equal(t, vlanID2, vlanIDAllocator.query(ruleID2))
-
 	vlanIDAllocator.release(ruleID1)
 	assert.Equal(t, uint32(0), vlanIDAllocator.query(ruleID1))
-
 	vlanIDAllocator.release(ruleID2)
 	assert.Equal(t, uint32(0), vlanIDAllocator.query(ruleID2))
-
 	vlanID3 := vlanIDAllocator.allocate(ruleID3)
 	assert.Equal(t, vlanID3, vlanIDAllocator.query(ruleID3))
 	assert.Equal(t, vlanID2, vlanID3)
-
 	vlanID4 := vlanIDAllocator.allocate(ruleID4)
 	assert.Equal(t, vlanID4, vlanIDAllocator.query(ruleID4))
 	assert.Equal(t, vlanID1, vlanID4)

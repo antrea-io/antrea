@@ -11,37 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package externalippool
-
 import (
 	"encoding/json"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
-	crdv1b1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
-=======
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
->>>>>>> origin/main
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
-
 func marshal(object runtime.Object) []byte {
 	raw, _ := json.Marshal(object)
 	return raw
 }
-
 func mutateExternalIPPool(pool *crdv1b1.ExternalIPPool, mutate func(*crdv1b1.ExternalIPPool)) *crdv1b1.ExternalIPPool {
 	mutate(pool)
 	return pool
 }
-
 func TestControllerValidateExternalIPPool(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -140,7 +130,6 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 		})
 	}
 }
-
 func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 	testCases := []struct {
 		name                    string
@@ -233,7 +222,6 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				}
 			}),
 		},
-
 		// test cases for cidr range overlap
 		{
 			name:           "cidr must not overlap with any existing cidr",
@@ -279,7 +267,6 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				newExternalIPPool("qux", "10.20.0.0/16", "", ""),
 			},
 		},
-
 		// test cases for start-end range overlap
 		{
 			name:           "start-end range must not overlap with any existing cidr",
@@ -337,24 +324,20 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				*testCase.externalIPPool,
 				testCase.existingExternalIPPools,
 			)
-
 			if testCase.errMsg == "" {
 				assert.Empty(t, errMsg)
 			} else {
-
 				assert.Equal(t, testCase.errMsg, errMsg)
 				if testCase.errMsg != "" {
 					assert.False(t, result)
 				} else {
 					assert.True(t, result)
 				}
-
 				// test if same message is returned by ValidateExternalIPPool
 				var fakeObjects []runtime.Object
 				for _, existingExternalIPPool := range testCase.existingExternalIPPools {
 					fakeObjects = append(fakeObjects, existingExternalIPPool)
 				}
-
 				c := newController(fakeObjects)
 				stopCh := make(chan struct{})
 				defer close(stopCh)
@@ -377,7 +360,6 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		})
 	}
 }
-
 func TestParseIPRangeCIDR(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -407,7 +389,6 @@ func TestParseIPRangeCIDR(t *testing.T) {
 		})
 	}
 }
-
 func TestParseIPRangeStartEnd(t *testing.T) {
 	testCases := []struct {
 		name   string

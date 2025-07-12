@@ -1,6 +1,5 @@
 //go:build !windows
 // +build !windows
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,21 +13,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package k8s
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
-=======
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
 )
-
 func BenchmarkCompareNPLAnnotationLists(b *testing.B) {
 	const nodeIP = "127.0.0.1"
 	a1 := types.NPLAnnotation{
@@ -82,7 +73,6 @@ func BenchmarkCompareNPLAnnotationLists(b *testing.B) {
 			false,
 		},
 	}
-
 	for _, bc := range benchmarkCases {
 		bc := bc
 		b.Run(bc.name, func(b *testing.B) {

@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package s3uploader
-
 import (
 	"bytes"
 	"context"
@@ -21,29 +19,22 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	s3uploadertesting "antrea.io/antrea/v2/pkg/flowaggregator/s3uploader/testing"
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
-=======
-	s3uploadertesting "antrea.io/antrea/pkg/flowaggregator/s3uploader/testing"
-	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
->>>>>>> origin/main
+	s3uploadertesting "antrea.io/antrea/v2/pkg/flowaggregator/s3uploader/testing"
+	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
 )
-
 var (
 	fakeClusterUUID = uuid.New().String()
 	recordStrIPv4   = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,172.18.0.1,http,mockHttpString,test-egress-node"
 	recordStrIPv6   = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,2001:0:3238:dfe1::ac12:1,http,mockHttpString,test-egress-node"
 )
-
 func TestUpdateS3Uploader(t *testing.T) {
 	s3UploadProc := S3UploadProcess{
 		bucketName:     "test-bucket-name-old",
@@ -61,7 +52,6 @@ func TestUpdateS3Uploader(t *testing.T) {
 	assert.NotNil(t, s3UploadProc.awsS3Client)
 	assert.NotNil(t, s3UploadProc.awsS3Uploader)
 }
-
 func TestCacheRecord(t *testing.T) {
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
@@ -70,7 +60,6 @@ func TestCacheRecord(t *testing.T) {
 		bufferQueue:      make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
 		clusterUUID:      fakeClusterUUID,
 	}
-
 	// First call, cache the record in currentBuffer.
 	record := flowaggregatortesting.PrepareTestFlowRecord(true)
 	s3UploadProc.CacheRecord(record)
@@ -78,7 +67,6 @@ func TestCacheRecord(t *testing.T) {
 	currentBuffer := strings.TrimRight(s3UploadProc.currentBuffer.String(), "\n")
 	assert.Equal(t, strings.Split(currentBuffer, ",")[:50], strings.Split(recordStrIPv4, ",")[:50])
 	assert.Equal(t, strings.Split(currentBuffer, ",")[51:], strings.Split(recordStrIPv4, ",")[51:])
-
 	// Second call, reach currentBuffer max size, add the currentBuffer to bufferQueue.
 	record = flowaggregatortesting.PrepareTestFlowRecord(false)
 	s3UploadProc.CacheRecord(record)
@@ -90,7 +78,6 @@ func TestCacheRecord(t *testing.T) {
 	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
 }
-
 func TestBatchUploadAll(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
@@ -108,7 +95,6 @@ func TestBatchUploadAll(t *testing.T) {
 	record := flowaggregatortesting.PrepareTestFlowRecord(true)
 	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
-
 	err := s3UploadProc.batchUploadAll(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
@@ -116,7 +102,6 @@ func TestBatchUploadAll(t *testing.T) {
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
 	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
 }
-
 func TestBatchUploadAllPartialSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
@@ -138,13 +123,11 @@ func TestBatchUploadAllPartialSuccess(t *testing.T) {
 	s3UploadProc.CacheRecord(record)
 	record = flowaggregatortesting.PrepareTestFlowRecord(false)
 	s3UploadProc.CacheRecord(record)
-
 	err := s3UploadProc.batchUploadAll(ctx)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, 1, len(s3UploadProc.buffersToUpload))
 	assert.EqualError(t, err, "error when uploading file to S3: random error")
 }
-
 func TestBatchUploadAllError(t *testing.T) {
 	ctx := context.Background()
 	s3uploader := &S3Uploader{}
@@ -160,11 +143,9 @@ func TestBatchUploadAllError(t *testing.T) {
 	cfg, _ := config.LoadDefaultConfig(ctx, config.WithRegion("us-west-2"))
 	s3UploadProc.awsS3Client = s3.NewFromConfig(cfg)
 	s3UploadProc.awsS3Uploader = s3manager.NewUploader(s3UploadProc.awsS3Client)
-
 	record := flowaggregatortesting.PrepareTestFlowRecord(true)
 	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
-
 	// It is expected to fail when calling uploadFile, as the correct S3 bucket
 	// configuration is not provided.
 	err := s3UploadProc.batchUploadAll(ctx)
@@ -175,7 +156,6 @@ func TestBatchUploadAllError(t *testing.T) {
 	expectedErrMsg := "error when uploading file to S3: operation error S3: PutObject"
 	assert.Contains(t, err.Error(), expectedErrMsg)
 }
-
 func TestFlowRecordPeriodicCommit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
@@ -199,7 +179,6 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 	record := flowaggregatortesting.PrepareTestFlowRecord(true)
 	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
-
 	s3UploadProc.startExportProcess()
 	assert.Eventually(t, func() bool {
 		select {
@@ -217,7 +196,6 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
 	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
 }
-
 func TestFlushCacheOnStop(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
@@ -235,7 +213,6 @@ func TestFlushCacheOnStop(t *testing.T) {
 	record := flowaggregatortesting.PrepareTestFlowRecord(true)
 	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
-
 	s3UploadProc.startExportProcess()
 	s3UploadProc.stopExportProcess(true)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))

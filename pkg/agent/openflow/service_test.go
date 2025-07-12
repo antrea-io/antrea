@@ -11,21 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
-=======
-	"antrea.io/antrea/pkg/agent/config"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
 )
-
 func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []string {
 	if !proxyEnabled {
 		return []string{
@@ -109,7 +101,6 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 	}
 	return flows
 }
-
 func Test_featureService_initFlows(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -166,7 +157,6 @@ func Test_featureService_initFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fc := newFakeClient(nil, tc.enableIPv4, tc.enableIPv6, config.K8sNode, config.TrafficEncapModeEncap, tc.clientOptions...)
 			defer resetPipelines()
-
 			flows := getFlowStrings(fc.featureService.initFlows())
 			assert.ElementsMatch(t, tc.expectedFlows, flows)
 		})

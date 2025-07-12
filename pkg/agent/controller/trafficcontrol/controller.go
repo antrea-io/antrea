@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package trafficcontrol
-
 import (
 	"context"
 	"crypto/sha1" // #nosec G505: not used for security purposes
@@ -25,7 +23,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,13 +34,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
@@ -51,22 +46,19 @@ import (
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	utilsets "antrea.io/antrea/v2/pkg/util/sets"
-=======
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/k8s"
-	utilsets "antrea.io/antrea/pkg/util/sets"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	utilsets "antrea.io/antrea/v2/pkg/util/sets"
 )
-
 const (
 	controllerName = "TrafficControlController"
 	// How long to wait before retrying the processing of a TrafficControl change.
@@ -76,24 +68,20 @@ const (
 	defaultWorkers = 4
 	// Disable resyncing.
 	resyncPeriod time.Duration = 0
-
 	// Default VXLAN tunnel destination port.
 	defaultVXLANTunnelDestinationPort = int32(4789)
 	// Default GENEVE tunnel destination port.
 	defaultGENEVETunnelDestinationPort = int32(6081)
-
 	portNamePrefixVXLAN  = "vxlan"
 	portNamePrefixGENEVE = "geneve"
 	portNamePrefixGRE    = "gre"
 	portNamePrefixERSPAN = "erspan"
 )
-
 var (
 	trafficControlPortExternalIDs = map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTrafficControl,
 	}
 )
-
 // trafficControlState keeps the actual state of a TrafficControl that has been realized.
 type trafficControlState struct {
 	// The actual name of target port used by a TrafficControl.
@@ -113,50 +101,39 @@ type trafficControlState struct {
 	// or alternative TrafficControl for these Pods.
 	pods sets.Set[string]
 }
-
 // podToTCBinding keeps the TrafficControls applied to a Pod. There is only one effective TrafficControl for a Pod at any
 // given time.
 type podToTCBinding struct {
 	effectiveTC    string
 	alternativeTCs sets.Set[string]
 }
-
 // portToTCBinding keeps the TrafficControls using an OVS port.
 type portToTCBinding struct {
 	interfaceConfig *interfacestore.InterfaceConfig
 	trafficControls sets.Set[string]
 }
-
 type Controller struct {
 	ofClient openflow.Client
-
 	portToTCBindings   map[string]*portToTCBinding
 	ovsBridgeClient    ovsconfig.OVSBridgeClient
 	ovsCtlClient       ovsctl.OVSCtlClient
 	ovsPortUpdateMutex sync.Mutex
-
 	interfaceStore interfacestore.InterfaceStore
-
 	podInformer     cache.SharedIndexInformer
 	podLister       corelisters.PodLister
 	podListerSynced cache.InformerSynced
-
 	namespaceInformer     cache.SharedIndexInformer
 	namespaceLister       corelisters.NamespaceLister
 	namespaceListerSynced cache.InformerSynced
-
 	podToTCBindings      map[string]*podToTCBinding
 	podToTCBindingsMutex sync.RWMutex
-
 	tcStates      map[string]*trafficControlState
 	tcStatesMutex sync.RWMutex
-
 	trafficControlInformer     cache.SharedIndexInformer
 	trafficControlLister       crdlisters.TrafficControlLister
 	trafficControlListerSynced cache.InformerSynced
 	queue                      workqueue.TypedRateLimitingInterface[string]
 }
-
 func NewTrafficControlController(ofClient openflow.Client,
 	interfaceStore interfacestore.InterfaceStore,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
@@ -216,7 +193,6 @@ func NewTrafficControlController(ofClient openflow.Client,
 	podUpdateSubscriber.Subscribe(c.processPodUpdate)
 	return c
 }
-
 // processPodUpdate will be called when CNIServer publishes a Pod update event, and the event of TrafficControl which is
 // the effective one of the Pod is triggered.
 func (c *Controller) processPodUpdate(e interface{}) {
@@ -230,7 +206,6 @@ func (c *Controller) processPodUpdate(e interface{}) {
 	}
 	c.queue.Add(binding.effectiveTC)
 }
-
 func (c *Controller) matchedPod(pod *v1.Pod, to *v1alpha2.AppliedTo) bool {
 	if to.NamespaceSelector == nil && to.PodSelector == nil {
 		return false
@@ -251,10 +226,8 @@ func (c *Controller) matchedPod(pod *v1.Pod, to *v1alpha2.AppliedTo) bool {
 			return false
 		}
 	}
-
 	return true
 }
-
 func (c *Controller) filterAffectedTCsByPod(pod *v1.Pod) sets.Set[string] {
 	affectedTCs := sets.New[string]()
 	allTCs, _ := c.trafficControlLister.List(labels.Everything())
@@ -265,7 +238,6 @@ func (c *Controller) filterAffectedTCsByPod(pod *v1.Pod) sets.Set[string] {
 	}
 	return affectedTCs
 }
-
 func (c *Controller) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	if pod.Spec.HostNetwork {
@@ -280,7 +252,6 @@ func (c *Controller) addPod(obj interface{}) {
 		c.queue.Add(affectedTC)
 	}
 }
-
 func (c *Controller) updatePod(oldObj interface{}, obj interface{}) {
 	oldPod := oldObj.(*v1.Pod)
 	pod := obj.(*v1.Pod)
@@ -301,7 +272,6 @@ func (c *Controller) updatePod(oldObj interface{}, obj interface{}) {
 		c.queue.Add(affectedTC)
 	}
 }
-
 func (c *Controller) deletePod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	if pod.Spec.HostNetwork {
@@ -316,7 +286,6 @@ func (c *Controller) deletePod(obj interface{}) {
 		c.queue.Add(affectedTC)
 	}
 }
-
 func matchedNamespace(namespace *v1.Namespace, to *v1alpha2.AppliedTo) bool {
 	if to.NamespaceSelector != nil {
 		nsSelector, _ := metav1.LabelSelectorAsSelector(to.NamespaceSelector)
@@ -326,7 +295,6 @@ func matchedNamespace(namespace *v1.Namespace, to *v1alpha2.AppliedTo) bool {
 	}
 	return true
 }
-
 func (c *Controller) filterAffectedTCsByNS(namespace *v1.Namespace) sets.Set[string] {
 	affectedTCs := sets.New[string]()
 	allTCs, _ := c.trafficControlLister.List(labels.Everything())
@@ -337,7 +305,6 @@ func (c *Controller) filterAffectedTCsByNS(namespace *v1.Namespace) sets.Set[str
 	}
 	return affectedTCs
 }
-
 func (c *Controller) addNamespace(obj interface{}) {
 	ns := obj.(*v1.Namespace)
 	affectedTCs := c.filterAffectedTCsByNS(ns)
@@ -349,7 +316,6 @@ func (c *Controller) addNamespace(obj interface{}) {
 		c.queue.Add(tc)
 	}
 }
-
 func (c *Controller) updateNamespace(oldObj, obj interface{}) {
 	oldNS := oldObj.(*v1.Namespace)
 	ns := obj.(*v1.Namespace)
@@ -367,13 +333,11 @@ func (c *Controller) updateNamespace(oldObj, obj interface{}) {
 		c.queue.Add(tc)
 	}
 }
-
 func (c *Controller) addTC(obj interface{}) {
 	tc := obj.(*v1alpha2.TrafficControl)
 	klog.V(2).InfoS("Processing TrafficControl ADD event", "TrafficControl", klog.KObj(tc))
 	c.queue.Add(tc.Name)
 }
-
 func (c *Controller) updateTC(oldObj interface{}, obj interface{}) {
 	oldTC := oldObj.(*v1alpha2.TrafficControl)
 	tc := obj.(*v1alpha2.TrafficControl)
@@ -382,42 +346,33 @@ func (c *Controller) updateTC(oldObj interface{}, obj interface{}) {
 		c.queue.Add(tc.Name)
 	}
 }
-
 func (c *Controller) deleteTC(obj interface{}) {
 	tc := obj.(*v1alpha2.TrafficControl)
 	klog.V(2).InfoS("Processing TrafficControl DELETE event", "TrafficControl", klog.KObj(tc))
 	c.queue.Add(tc.Name)
 }
-
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.InfoS("Starting", "controllerName", controllerName)
 	defer klog.InfoS("Shutting down", "controllerName", controllerName)
-
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.trafficControlListerSynced, c.podListerSynced, c.namespaceListerSynced) {
 		return
 	}
-
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
-
 	<-stopCh
 }
-
 func (c *Controller) worker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 func (c *Controller) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(key)
-
 	if err := c.syncTrafficControl(key); err == nil {
 		// If no error occurs we Forget this item, so it does not get queued again until
 		// another change happens.
@@ -429,7 +384,6 @@ func (c *Controller) processNextWorkItem() bool {
 	}
 	return true
 }
-
 func (c *Controller) newTrafficControlState(tcName string, action v1alpha2.TrafficControlAction, direction v1alpha2.Direction) *trafficControlState {
 	c.tcStatesMutex.Lock()
 	defer c.tcStatesMutex.Unlock()
@@ -442,20 +396,17 @@ func (c *Controller) newTrafficControlState(tcName string, action v1alpha2.Traff
 	c.tcStates[tcName] = state
 	return state
 }
-
 func (c *Controller) getTrafficControlState(tcName string) (*trafficControlState, bool) {
 	c.tcStatesMutex.RLock()
 	defer c.tcStatesMutex.RUnlock()
 	state, exists := c.tcStates[tcName]
 	return state, exists
 }
-
 func (c *Controller) deleteTrafficControlState(tcName string) {
 	c.tcStatesMutex.Lock()
 	defer c.tcStatesMutex.Unlock()
 	delete(c.tcStates, tcName)
 }
-
 func (c *Controller) filterPods(appliedTo *v1alpha2.AppliedTo) ([]*v1.Pod, error) {
 	// If both selectors are nil, no Pod should be selected.
 	if appliedTo.PodSelector == nil && appliedTo.NamespaceSelector == nil {
@@ -464,7 +415,6 @@ func (c *Controller) filterPods(appliedTo *v1alpha2.AppliedTo) ([]*v1.Pod, error
 	var podSelector, nsSelector labels.Selector
 	var err error
 	var selectedPods []*v1.Pod
-
 	if appliedTo.PodSelector != nil {
 		// If Pod selector is not nil, use it to select Pods.
 		podSelector, err = metav1.LabelSelectorAsSelector(appliedTo.PodSelector)
@@ -475,7 +425,6 @@ func (c *Controller) filterPods(appliedTo *v1alpha2.AppliedTo) ([]*v1.Pod, error
 		// If Pod selector is nil, then Namespace selector will not be nil, select all Pods from the selected Namespaces.
 		podSelector = labels.Everything()
 	}
-
 	if appliedTo.NamespaceSelector != nil {
 		// If Namespace selector is not nil, use it to select Namespaces.
 		var namespaces []*v1.Namespace
@@ -502,7 +451,6 @@ func (c *Controller) filterPods(appliedTo *v1alpha2.AppliedTo) ([]*v1.Pod, error
 			return nil, err
 		}
 	}
-
 	var nonHostNetworkPods []*v1.Pod
 	// TrafficControl does not support host network Pods.
 	for _, pod := range selectedPods {
@@ -510,14 +458,11 @@ func (c *Controller) filterPods(appliedTo *v1alpha2.AppliedTo) ([]*v1.Pod, error
 			nonHostNetworkPods = append(nonHostNetworkPods, pod)
 		}
 	}
-
 	return nonHostNetworkPods, nil
 }
-
 func genVXLANPortName(tunnel *v1alpha2.UDPTunnel) string {
 	hash := sha1.New() // #nosec G401: not used for security purposes
 	hash.Write(net.ParseIP(tunnel.RemoteIP))
-
 	destinationPort := defaultVXLANTunnelDestinationPort
 	if tunnel.DestinationPort != nil {
 		destinationPort = *tunnel.DestinationPort
@@ -530,11 +475,9 @@ func genVXLANPortName(tunnel *v1alpha2.UDPTunnel) string {
 	binary.Write(hash, binary.BigEndian, vni)
 	return fmt.Sprintf("%s-%s", portNamePrefixVXLAN, hex.EncodeToString(hash.Sum(nil))[:6])
 }
-
 func genGENEVEPortName(tunnel *v1alpha2.UDPTunnel) string {
 	hash := sha1.New() // #nosec G401: not used for security purposes
 	hash.Write(net.ParseIP(tunnel.RemoteIP))
-
 	destinationPort := defaultGENEVETunnelDestinationPort
 	if tunnel.DestinationPort != nil {
 		destinationPort = *tunnel.DestinationPort
@@ -547,11 +490,9 @@ func genGENEVEPortName(tunnel *v1alpha2.UDPTunnel) string {
 	binary.Write(hash, binary.BigEndian, vni)
 	return fmt.Sprintf("%s-%s", portNamePrefixGENEVE, hex.EncodeToString(hash.Sum(nil))[:6])
 }
-
 func genGREPortName(tunnel *v1alpha2.GRETunnel) string {
 	hash := sha1.New() // #nosec G401: not used for security purposes
 	hash.Write(net.ParseIP(tunnel.RemoteIP))
-
 	var key int32
 	if tunnel.Key != nil {
 		key = *tunnel.Key
@@ -559,7 +500,6 @@ func genGREPortName(tunnel *v1alpha2.GRETunnel) string {
 	binary.Write(hash, binary.BigEndian, key)
 	return fmt.Sprintf("%s-%s", portNamePrefixGRE, hex.EncodeToString(hash.Sum(nil))[:6])
 }
-
 // genERSPANPortName generates a port name for the given ERSPAN tunnel.
 // Note that ERSPAN tunnel's uniqueness is based on the remote IP and the session ID only, which means if there are two
 // tunnels having same remote IP and session ID but different other attributes, creating the second port would fail in
@@ -567,7 +507,6 @@ func genGREPortName(tunnel *v1alpha2.GRETunnel) string {
 func genERSPANPortName(tunnel *v1alpha2.ERSPANTunnel) string {
 	hash := sha1.New() // #nosec G401: not used for security purposes
 	hash.Write(net.ParseIP(tunnel.RemoteIP))
-
 	var sessionID, index, dir, hardwareID int32
 	if tunnel.SessionID != nil {
 		sessionID = *tunnel.SessionID
@@ -588,14 +527,12 @@ func genERSPANPortName(tunnel *v1alpha2.ERSPANTunnel) string {
 	binary.Write(hash, binary.BigEndian, hardwareID)
 	return fmt.Sprintf("%s-%s", portNamePrefixERSPAN, hex.EncodeToString(hash.Sum(nil))[:6])
 }
-
 func ParseTrafficControlInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) *interfacestore.InterfaceConfig {
 	return &interfacestore.InterfaceConfig{
 		Type:          interfacestore.TrafficControlInterface,
 		InterfaceName: portData.Name,
 		OVSPortConfig: portConfig}
 }
-
 // createOVSInternalPort creates an OVS internal port on OVS and corresponding interface on host. Note that, host interface
 // might not be available immediately after creating OVS internal port.
 func (c *Controller) createOVSInternalPort(portName string) (string, error) {
@@ -618,7 +555,6 @@ func (c *Controller) createOVSInternalPort(portName string) (string, error) {
 	}
 	return portUUID, nil
 }
-
 func (c *Controller) createUDPTunnelPort(portName string, tunnelType ovsconfig.TunnelType, tunnelConfig *v1alpha2.UDPTunnel) (string, error) {
 	extraOptions := map[string]interface{}{}
 	if tunnelConfig.DestinationPort != nil {
@@ -639,7 +575,6 @@ func (c *Controller) createUDPTunnelPort(portName string, tunnelType ovsconfig.T
 		trafficControlPortExternalIDs)
 	return portUUID, err
 }
-
 func (c *Controller) createGREPort(portName string, tunnelConfig *v1alpha2.GRETunnel) (string, error) {
 	extraOptions := map[string]interface{}{}
 	if tunnelConfig.Key != nil {
@@ -657,7 +592,6 @@ func (c *Controller) createGREPort(portName string, tunnelConfig *v1alpha2.GRETu
 		trafficControlPortExternalIDs)
 	return portUUID, err
 }
-
 func (c *Controller) createERSPANPort(portName string, tunnelConfig *v1alpha2.ERSPANTunnel) (string, error) {
 	extraOptions := make(map[string]interface{})
 	extraOptions["erspan_ver"] = strconv.Itoa(int(tunnelConfig.Version))
@@ -689,7 +623,6 @@ func (c *Controller) createERSPANPort(portName string, tunnelConfig *v1alpha2.ER
 		trafficControlPortExternalIDs)
 	return portUUID, err
 }
-
 func (c *Controller) getPortName(port *v1alpha2.TrafficControlPort) string {
 	var portName string
 	switch {
@@ -708,21 +641,18 @@ func (c *Controller) getPortName(port *v1alpha2.TrafficControlPort) string {
 	}
 	return portName
 }
-
 // getOrCreateTrafficControlPort ensures that there is an OVS port for the given TrafficControlPort and binds the port
 // to the TrafficControl. The OVS port will be created if the port doesn't exist. It returns the ofPort of the OVS port
 // on success, an error if there is.
 func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControlPort, portName, tcName string, isReturnPort bool) (uint32, error) {
 	c.ovsPortUpdateMutex.Lock()
 	defer c.ovsPortUpdateMutex.Unlock()
-
 	// Query the port binding information from portToTCBindings. If the corresponding binding information exists, indicating
 	// that the port has been created, then insert the TrafficControl to the set of TrafficControls using the port.
 	if binding, exists := c.portToTCBindings[portName]; exists {
 		c.portToTCBindings[portName].trafficControls.Insert(tcName)
 		return uint32(binding.interfaceConfig.OFPort), nil
 	}
-
 	// If there is no binding information of the port in portToTCBindings, query the interface store. If corresponding
 	// config is found, create binding information for the port. Note that, this is used to rebuild portToTCBindings
 	// after restarting Antrea Agent.
@@ -740,10 +670,8 @@ func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControl
 		}
 		return uint32(itf.OFPort), nil
 	}
-
 	var portUUID string
 	var err error
-
 	switch {
 	case port.OVSInternal != nil:
 		portUUID, err = c.createOVSInternalPort(portName)
@@ -758,11 +686,9 @@ func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControl
 	case port.ERSPAN != nil:
 		portUUID, err = c.createERSPANPort(portName, port.ERSPAN)
 	}
-
 	if err != nil {
 		return 0, err
 	}
-
 	ofPort, err := c.ovsBridgeClient.GetOFPort(portName, false)
 	if err != nil {
 		return 0, err
@@ -771,7 +697,6 @@ func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControl
 	if err = c.ovsCtlClient.SetPortNoFlood(int(ofPort)); err != nil {
 		return 0, fmt.Errorf("failed to set port %s with no-flood config: %w", portName, err)
 	}
-
 	// If the port is a return port and is newly created, install a return flow for the port.
 	if isReturnPort {
 		if err = c.ofClient.InstallTrafficControlReturnPortFlow(uint32(ofPort)); err != nil {
@@ -787,7 +712,6 @@ func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControl
 	}
 	return uint32(ofPort), nil
 }
-
 // releaseTrafficControlPort releases the port from the TrafficControl and deletes the port if it is no longer used by
 // any TrafficControl.
 func (c *Controller) releaseTrafficControlPort(portName, tcName string, isReturnPort bool) error {
@@ -798,7 +722,6 @@ func (c *Controller) releaseTrafficControlPort(portName, tcName string, isReturn
 		klog.InfoS("Port used by TrafficControl has been deleted", "port", portName, "TrafficControl", tcName)
 		return nil
 	}
-
 	portBinding.trafficControls.Delete(tcName)
 	if len(portBinding.trafficControls) == 0 {
 		// If the port is no longer used by any TrafficControl, delete the port.
@@ -816,13 +739,11 @@ func (c *Controller) releaseTrafficControlPort(portName, tcName string, isReturn
 	}
 	return nil
 }
-
 func (c *Controller) syncTrafficControl(tcName string) error {
 	startTime := time.Now()
 	defer func() {
 		klog.V(2).InfoS("Finished syncing TrafficControl", "TrafficControl", tcName, "durationTime", time.Since(startTime))
 	}()
-
 	tc, err := c.trafficControlLister.Get(tcName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -842,14 +763,12 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 		}
 		return err
 	}
-
 	// Get the TrafficControl state.
 	tcState, exists := c.getTrafficControlState(tcName)
 	// If the TrafficControl exists and corresponding state doesn't exist, create state for the TrafficControl.
 	if !exists {
 		tcState = c.newTrafficControlState(tcName, tc.Spec.Action, tc.Spec.Direction)
 	}
-
 	if tc.Spec.ReturnPort != nil {
 		// Get name of the return port.
 		returnPortName := c.getPortName(tc.Spec.ReturnPort)
@@ -871,7 +790,6 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 			tcState.returnPortName = returnPortName
 		}
 	}
-
 	// Get name of the target port.
 	targetPortName := c.getPortName(&tc.Spec.TargetPort)
 	// If the name is different from the cached name in the TrafficControl state, it could be caused by the target port
@@ -887,25 +805,21 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 		// Update target port name in state.
 		tcState.targetPortName = targetPortName
 	}
-
 	// Get or create the target port.
 	targetOFPort, err := c.getOrCreateTrafficControlPort(&tc.Spec.TargetPort, targetPortName, tcName, false)
 	if err != nil {
 		return err
 	}
-
 	// Check if the mark flows should be updated.
 	var needUpdateMarkFlows bool
 	if tcState.targetOFPort != targetOFPort || tcState.action != tc.Spec.Action || tcState.direction != tc.Spec.Direction {
 		needUpdateMarkFlows = true
 	}
-
 	// Get the list of Pods applying to the TrafficControl.
 	var pods []*v1.Pod
 	if pods, err = c.filterPods(&tc.Spec.AppliedTo); err != nil {
 		return err
 	}
-
 	stalePods := tcState.pods.Union(nil)
 	newPods := sets.New[string]()
 	newOfPorts := sets.New[int32]()
@@ -913,12 +827,10 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 		podNN := k8s.NamespacedName(pod.Namespace, pod.Name)
 		newPods.Insert(podNN)
 		stalePods.Delete(podNN)
-
 		// If the TrafficControl is not the effective TrafficControl for the Pod, do nothing.
 		if !c.bindPodToTrafficControl(podNN, tcName) {
 			continue
 		}
-
 		// If the TrafficControl is the effective TrafficControl for the Pod, insert the port to the new set in
 		// TrafficControl state.
 		podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace)
@@ -928,7 +840,6 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 		}
 		newOfPorts.Insert(podInterfaces[0].OFPort)
 	}
-
 	// If target ofPort / direction / action in TrafficControl is updated, the mark flows should be reinstalled; if the
 	// new ofPort set is different from the old ofPort set, the mark flows should be also reinstalled.
 	if needUpdateMarkFlows || !newOfPorts.Equal(tcState.ofPorts) {
@@ -951,21 +862,17 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 	tcState.targetOFPort = targetOFPort
 	tcState.action = tc.Spec.Action
 	tcState.direction = tc.Spec.Direction
-
 	if len(stalePods) != 0 {
 		// Resync the Pods applying to the TrafficControl to be deleted.
 		c.podsResync(stalePods, tcName)
 	}
-
 	return nil
 }
-
 func (c *Controller) uninstallTrafficControl(tcName string, tcState *trafficControlState) error {
 	// Uninstall the mark flows of the TrafficControl.
 	if err := c.ofClient.UninstallTrafficControlMarkFlows(tcName); err != nil {
 		return err
 	}
-
 	// Release the target port from the deleted TrafficControl.
 	if tcState.targetPortName != "" {
 		if err := c.releaseTrafficControlPort(tcState.targetPortName, tcName, false); err != nil {
@@ -984,7 +891,6 @@ func (c *Controller) uninstallTrafficControl(tcName string, tcState *trafficCont
 	}
 	return nil
 }
-
 func (c *Controller) podsResync(pods sets.Set[string], tcName string) {
 	// Resync the Pods that have new effective TrafficControl.
 	newEffectiveTCs := sets.New[string]()
@@ -998,13 +904,11 @@ func (c *Controller) podsResync(pods sets.Set[string], tcName string) {
 		c.queue.Add(tc)
 	}
 }
-
 // bindPodToTrafficControl binds the Pod with the TrafficControl and returns whether this TrafficControl is the effective
 // one for the Pod.
 func (c *Controller) bindPodToTrafficControl(pod, tc string) bool {
 	c.podToTCBindingsMutex.Lock()
 	defer c.podToTCBindingsMutex.Unlock()
-
 	binding, exists := c.podToTCBindings[pod]
 	if !exists {
 		// Promote itself as the effective TrafficControl for the Pod if there is no binding information for the Pod.
@@ -1022,14 +926,12 @@ func (c *Controller) bindPodToTrafficControl(pod, tc string) bool {
 	}
 	return false
 }
-
 // unbindPodFromTrafficControl unbinds the Pod with the TrafficControl. If the unbound TrafficControl was the effective
 // one for the Pod and there are alternative ones, it will return the new effective TrafficControl, otherwise return empty
 // string.
 func (c *Controller) unbindPodFromTrafficControl(pod, tcName string) string {
 	c.podToTCBindingsMutex.Lock()
 	defer c.podToTCBindingsMutex.Unlock()
-
 	// The binding must exist.
 	binding := c.podToTCBindings[pod]
 	if binding.effectiveTC == tcName {

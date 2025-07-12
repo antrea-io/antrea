@@ -33,8 +33,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
@@ -42,16 +41,6 @@ import (
 	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
 	"antrea.io/antrea/v2/pkg/ipfix"
 	"antrea.io/antrea/v2/pkg/util/podstore"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/exporter"
-	"antrea.io/antrea/pkg/flowaggregator/intermediate"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	"antrea.io/antrea/pkg/flowaggregator/querier"
-	"antrea.io/antrea/pkg/ipfix"
-	"antrea.io/antrea/pkg/util/podstore"
->>>>>>> origin/main
 )
 
 const (

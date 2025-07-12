@@ -1,6 +1,5 @@
 //go:build windows
 // +build windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,49 +13,34 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package winfirewall
-
 import (
 	"fmt"
 	"net"
 	"strings"
-
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	ps "antrea.io/antrea/v2/pkg/agent/util/powershell"
-=======
-	ps "antrea.io/antrea/pkg/agent/util/powershell"
->>>>>>> origin/main
+	ps "antrea.io/antrea/v2/pkg/agent/util/powershell"
 )
-
 type FWRuleDirection string
-
 const (
 	FWRuleIn  FWRuleDirection = "Inbound"
 	FWRuleOut FWRuleDirection = "Outbound"
 )
-
 type fwRuleAction string
-
 const (
 	fwRuleAllow fwRuleAction = "Allow"
 	fwRuleDeny  fwRuleAction = "Block"
 )
-
 type fwRuleProtocol string
-
 const (
 	fwRuleIPProtocol  fwRuleProtocol = "Any"
 	fwRuleTCPProtocol fwRuleProtocol = "TCP" //nolint: unused
 	fwRuleUDPProtocol fwRuleProtocol = "UDP" //nolint: unused
 )
-
 const (
 	fwRuleGroup string = "Antrea"
 )
-
 type winFirewallRule struct {
 	name          string
 	action        fwRuleAction
@@ -67,14 +51,12 @@ type winFirewallRule struct {
 	localPorts    []uint16
 	remotePorts   []uint16
 }
-
 // add adds Firewall rule on the Windows host. The name and display name of the firewall rule are the same.
 func (r *winFirewallRule) add() error {
 	cmd := fmt.Sprintf("New-NetFirewallRule -Enabled True -Group %s %s", fwRuleGroup, r.getCommandString())
 	_, err := ps.RunCommand(cmd)
 	return err
 }
-
 func (r *winFirewallRule) getCommandString() string {
 	cmd := fmt.Sprintf("-Name '%s' -DisplayName '%s' -Direction %s -Action %s -Protocol %s", r.name, r.name, r.direction, r.action, r.protocol)
 	if r.localAddress != nil {
@@ -91,7 +73,6 @@ func (r *winFirewallRule) getCommandString() string {
 	}
 	return cmd
 }
-
 func getPortsString(ports []uint16) string {
 	portStr := []string{}
 	for _, port := range ports {
@@ -99,20 +80,16 @@ func getPortsString(ports []uint16) string {
 	}
 	return strings.Join(portStr, ",")
 }
-
 type Client struct {
 }
-
 // AddRuleAllowIP adds Windows firewall rule to accept IP packets
 func (c *Client) AddRuleAllowIP(name string, direction FWRuleDirection, ipNet *net.IPNet) error {
 	return c.addIPRule(name, direction, ipNet, fwRuleAllow)
 }
-
 // AddRuleBlockIP adds Windows firewall rule to block IP packets
 func (c *Client) AddRuleBlockIP(name string, direction FWRuleDirection, ipNet *net.IPNet) error {
 	return c.addIPRule(name, direction, ipNet, fwRuleDeny)
 }
-
 func (c *Client) FirewallRuleExists(name string) (bool, error) {
 	cmd := fmt.Sprintf("Get-NetfirewallRule -DisplayName '%s'", name)
 	result, err := ps.RunCommand(cmd)
@@ -124,7 +101,6 @@ func (c *Client) FirewallRuleExists(name string) (bool, error) {
 	}
 	return result != "", nil
 }
-
 func checkDeletionError(err error) error {
 	if err == nil {
 		return nil
@@ -134,19 +110,16 @@ func checkDeletionError(err error) error {
 	}
 	return err
 }
-
 func (c *Client) DelFirewallRuleByName(name string) error {
 	cmd := fmt.Sprintf("Remove-NetFirewallRule -DisplayName '%s'", name)
 	_, err := ps.RunCommand(cmd)
 	return checkDeletionError(err)
 }
-
 func (c *Client) DelAllFirewallRules() error {
 	cmd := fmt.Sprintf("Remove-NetFirewallRule -Group '%s'", fwRuleGroup)
 	_, err := ps.RunCommand(cmd)
 	return checkDeletionError(err)
 }
-
 func (c *Client) addIPRule(name string, direction FWRuleDirection, ipNet *net.IPNet, action fwRuleAction) error {
 	exist, err := c.FirewallRuleExists(name)
 	if err != nil {
@@ -174,7 +147,6 @@ func (c *Client) addIPRule(name string, direction FWRuleDirection, ipNet *net.IP
 	klog.V(2).Infof("Added firewall rule %s", rule.getCommandString())
 	return nil
 }
-
 func NewClient() *Client {
 	return &Client{}
 }

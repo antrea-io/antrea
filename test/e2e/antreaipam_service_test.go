@@ -11,28 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"testing"
-
-<<<<<<< HEAD
 	annotation "antrea.io/antrea/v2/pkg/ipam"
-=======
-	annotation "antrea.io/antrea/pkg/ipam"
->>>>>>> origin/main
+	annotation "antrea.io/antrea/v2/pkg/ipam"
 )
-
 func TestAntreaIPAMService(t *testing.T) {
 	skipIfNotAntreaIPAMTest(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	// Create AntreaIPAM IPPool and test Namespace
 	var ipPools []string
 	for _, namespace := range []string{testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
@@ -50,7 +41,6 @@ func TestAntreaIPAMService(t *testing.T) {
 		}
 		defer deleteAntreaIPAMNamespace(t, data, namespace)
 	}
-
 	t.Run("testAntreaIPAMPodToAntreaIPAMClusterIPv4", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
 		data.testClusterIP(t, false, testAntreaIPAMNamespace, testAntreaIPAMNamespace)
@@ -96,7 +86,6 @@ func TestAntreaIPAMService(t *testing.T) {
 		data.testClusterIP(t, false, testAntreaIPAMNamespace11, data.testNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
-
 	t.Run("testAntreaIPAMPodToAntreaIPAMNodePort", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
 		data.testNodePort(t, false, testAntreaIPAMNamespace, testAntreaIPAMNamespace)

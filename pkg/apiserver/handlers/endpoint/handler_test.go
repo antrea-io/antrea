@@ -23,19 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
 	queriermock "antrea.io/antrea/v2/pkg/controller/networkpolicy/testing"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apiserver/apis"
-	queriermock "antrea.io/antrea/pkg/controller/networkpolicy/testing"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
->>>>>>> origin/main
 )
 
 type TestCase struct {

@@ -1,27 +1,21 @@
 /*
 Copyright 2022 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package member
-
 import (
 	"context"
 	"reflect"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,26 +25,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-<<<<<<< HEAD
 	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
-=======
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
->>>>>>> origin/main
+	mcsv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/commonarea"
 )
-
 const (
 	addEvent = iota
 	updateEvent
 	deleteEvent
 )
-
 var (
 	ns = &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -96,17 +84,14 @@ var (
 			},
 		},
 	}
-
 	normalizedLabel   = "ns:kubernetes.io/metadata.name=test-ns&pod:app=client"
 	normalizedLabelDB = "ns:kubernetes.io/metadata.name=test-ns&pod:app=db"
-
 	podANamespacedName = &types.NamespacedName{Namespace: "test-ns", Name: "pod-a"}
 	podBNamespacedName = &types.NamespacedName{Namespace: "test-ns", Name: "pod-b"}
 	podCNamespacedName = &types.NamespacedName{Namespace: "test-ns", Name: "pod-c"}
 	podAName           = podANamespacedName.String()
 	podBName           = podBNamespacedName.String()
 )
-
 func TestLabelIdentityReconciler(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -179,7 +164,6 @@ func TestLabelIdentityReconciler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingPods).WithObjects(ns).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, common.LeaderNamespace, nil)
@@ -187,7 +171,6 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, mcReconciler, "default")
 			go r.Run(stopCh)
-
 			for _, p := range tt.existingPods.Items {
 				req := ctrl.Request{
 					NamespacedName: types.NamespacedName{
@@ -211,10 +194,8 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			}
 			var err error
 			req := ctrl.Request{NamespacedName: *tt.podNamespaceName}
-
 			_, err = r.Reconcile(common.TestCtx, req)
 			assert.NoError(t, err, "LabelIdentity Reconciler got error during reconciling Pod event")
-
 			if !reflect.DeepEqual(r.labelToPodsCache, tt.expLabelsToPodsCache) {
 				t.Errorf("Unexpected labelToPodsCache in LabelIdentity Reconciler. Exp: %s, Act: %s", tt.expLabelsToPodsCache, r.labelToPodsCache)
 			}
@@ -237,7 +218,6 @@ func TestLabelIdentityReconciler(t *testing.T) {
 		})
 	}
 }
-
 func TestNamespaceMapFunc(t *testing.T) {
 	expReq := []reconcile.Request{
 		{
@@ -252,12 +232,10 @@ func TestNamespaceMapFunc(t *testing.T) {
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, common.LeaderNamespace, nil)
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", true, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonArea)
-
 	r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, mcReconciler, "default")
 	actualReq := r.namespaceMapFunc(context.Background(), ns)
 	assert.ElementsMatch(t, expReq, actualReq)
 }
-
 func TestGetNormalizedLabel(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -295,7 +273,6 @@ func TestGetNormalizedLabel(t *testing.T) {
 		})
 	}
 }
-
 func TestClusterSetMapFunc_LabelIdentity(t *testing.T) {
 	clusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -352,11 +329,9 @@ func TestClusterSetMapFunc_LabelIdentity(t *testing.T) {
 	r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, nil, clusterSet.Namespace)
 	requests := r.clusterSetMapFunc(context.Background(), clusterSet)
 	assert.Equal(t, expectedReqs, requests)
-
 	r = NewLabelIdentityReconciler(fakeClient, common.TestScheme, nil, "mismatch_ns")
 	requests = r.clusterSetMapFunc(context.Background(), clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
-
 	// non-existing ClusterSet
 	r = NewLabelIdentityReconciler(fakeClient, common.TestScheme, nil, "default")
 	r.labelToPodsCache["label"] = sets.New[string]("default/nginx")

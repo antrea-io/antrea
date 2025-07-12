@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package apiserver
-
 import (
 	"context"
 	"fmt"
@@ -21,7 +19,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -32,8 +29,6 @@ import (
 	"k8s.io/apiserver/pkg/server/healthz"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	apiserverversion "k8s.io/apiserver/pkg/util/version"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/addressgroup"
 	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/appliedtogroup"
@@ -50,8 +45,8 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/serviceexternalip"
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
-	systeminstall "antrea.io/antrea/apis/pkg/apis/system/install"
-	systemv1beta1 "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
+	systeminstall "antrea.io/antrea/v2/pkg/apis/system/install"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/apiserver"
 	"antrea.io/antrea/v2/pkg/apiserver/handlers/loglevel"
 	"antrea.io/antrea/v2/pkg/apiserver/openapi"
@@ -59,55 +54,47 @@ import (
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	"antrea.io/antrea/v2/pkg/querier"
 	antreaversion "antrea.io/antrea/v2/pkg/version"
-=======
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/addressgroup"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgppeer"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgppolicy"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/bgproute"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/fqdncache"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/networkpolicy"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstracing"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	systeminstall "antrea.io/antrea/pkg/apis/system/install"
-	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	"antrea.io/antrea/pkg/apiserver"
-	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
-	"antrea.io/antrea/pkg/apiserver/openapi"
-	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/querier"
-	antreaversion "antrea.io/antrea/pkg/version"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/addressgroup"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/agentinfo"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/appliedtogroup"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/bgppeer"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/bgppolicy"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/bgproute"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/featuregates"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/fqdncache"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/memberlist"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/multicast"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/networkpolicy"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/ovsflows"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/ovstracing"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/v2/pkg/agent/apiserver/handlers/serviceexternalip"
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	systeminstall "antrea.io/antrea/v2/pkg/apis/system/install"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver"
+	"antrea.io/antrea/v2/pkg/apiserver/handlers/loglevel"
+	"antrea.io/antrea/v2/pkg/apiserver/openapi"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/system/supportbundle"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/querier"
+	antreaversion "antrea.io/antrea/v2/pkg/version"
 )
-
 const CertPairName = "antrea-agent-api"
-
 var (
 	scheme = runtime.NewScheme()
 	codecs = serializer.NewCodecFactory(scheme)
 )
-
 func init() {
 	systeminstall.Install(scheme)
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
 }
-
 type agentAPIServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
 }
-
 func (s *agentAPIServer) Run(ctx context.Context) error {
 	return s.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
-
 func (s *agentAPIServer) GetCertData() []byte {
 	secureServingInfo := s.GenericAPIServer.SecureServingInfo
 	if secureServingInfo == nil {
@@ -116,7 +103,6 @@ func (s *agentAPIServer) GetCertData() []byte {
 	cert, _ := secureServingInfo.Cert.CurrentCertKeyContent()
 	return cert
 }
-
 func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier, s *genericapiserver.GenericAPIServer, bgpq querier.AgentBGPPolicyInfoQuerier) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/podmulticaststats", multicast.HandleFunc(mq))
@@ -135,7 +121,6 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/bgproutes", bgproute.HandleFunc(bgpq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/fqdncache", fqdncache.HandleFunc(npq))
 }
-
 func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool) error {
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(systemv1beta1.GroupName, scheme, metav1.ParameterCodec, codecs)
 	systemStorage := map[string]rest.Storage{}
@@ -145,7 +130,6 @@ func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.Agent
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 	return s.InstallAPIGroup(&systemGroup)
 }
-
 // New creates an APIServer for running in antrea agent.
 func New(aq agentquerier.AgentQuerier,
 	npq querier.AgentNetworkPolicyInfoQuerier,
@@ -175,7 +159,6 @@ func New(aq agentquerier.AgentQuerier,
 	installHandlers(aq, npq, mq, seipq, s, bgpq)
 	return &agentAPIServer{GenericAPIServer: s}, nil
 }
-
 func newConfig(aq agentquerier.AgentQuerier,
 	npq querier.AgentNetworkPolicyInfoQuerier,
 	secureServing *genericoptions.SecureServingOptionsWithLoopback,
@@ -190,11 +173,9 @@ func newConfig(aq agentquerier.AgentQuerier,
 		authentication.RemoteKubeConfigFile = kubeconfig
 		authorization.RemoteKubeConfigFile = kubeconfig
 	}
-
 	// Set the PairName but leave certificate directory blank to generate in-memory by default.
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = CertPairName
-
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
@@ -236,7 +217,6 @@ func newConfig(aq agentquerier.AgentQuerier,
 	serverConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(
 		openapi.GetOpenAPIDefinitions,
 		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
-
 	completedServerCfg := serverConfig.Complete(nil)
 	return &completedServerCfg, nil
 }

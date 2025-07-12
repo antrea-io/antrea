@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package flowaggregator
-
 import (
 	"context"
 	"fmt"
@@ -21,31 +19,21 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 )
-
 // Command is the support bundle command implementation.
 var Command *cobra.Command
-
 type FlowAggregatorConfigMutator func(c *flowaggregatorconfig.FlowAggregatorConfig, value string) error
-
 var mutators map[string]FlowAggregatorConfigMutator
-
 var getClients = getk8sClient
-
 var example = strings.Trim(`
   Enable ClickHouse
   $ antctl set flow-aggregator clickHouse.enable=true
@@ -64,7 +52,6 @@ var example = strings.Trim(`
   Enable IPFIX Flow Collector
   $ antctl set flow-aggregator flowCollector.enable=true
 `, "\n")
-
 func NewFlowAggregatorSetCommand() *cobra.Command {
 	Command = &cobra.Command{
 		Use:     "flow-aggregator",
@@ -103,7 +90,6 @@ func NewFlowAggregatorSetCommand() *cobra.Command {
 	}
 	return Command
 }
-
 func getk8sClient(cmd *cobra.Command) (kubernetes.Interface, error) {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
@@ -112,7 +98,6 @@ func getk8sClient(cmd *cobra.Command) (kubernetes.Interface, error) {
 	k8sClient, _, err := raw.SetupClients(kubeconfig)
 	return k8sClient, err
 }
-
 func updateRunE(cmd *cobra.Command, args []string) error {
 	k8sClient, err := getClients(cmd)
 	if err != nil {
@@ -145,7 +130,6 @@ func updateRunE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
 	if configMap.Data == nil {
 		configMap.Data = make(map[string]string)
 	}
@@ -155,7 +139,6 @@ func updateRunE(cmd *cobra.Command, args []string) error {
 	}
 	return nil
 }
-
 func setBoolOrFail(b *bool, value string) error {
 	boolValue, err := strconv.ParseBool(value)
 	if err != nil {
@@ -164,12 +147,10 @@ func setBoolOrFail(b *bool, value string) error {
 	*b = boolValue
 	return nil
 }
-
 func setStringOrFail(b *string, value string) error {
 	*b = value
 	return nil
 }
-
 func setCommitIntervalOrFail(b *string, value string) error {
 	commitInterval, err := time.ParseDuration(value)
 	if err != nil {
@@ -181,7 +162,6 @@ func setCommitIntervalOrFail(b *string, value string) error {
 	*b = value
 	return nil
 }
-
 // GetFAConfigMap is used to get and return the flow-aggregator configmap
 func GetFAConfigMap(k8sClient kubernetes.Interface, configMapName string) (*corev1.ConfigMap, error) {
 	if len(configMapName) == 0 {

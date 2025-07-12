@@ -11,52 +11,41 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package querier
-
 import (
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
-
 const (
 	ovsVersion          = "2.10.0"
 	defaultNPLPortRange = "61000-62001"
 )
-
 func getIPNet(ip string) *net.IPNet {
 	_, ipNet, _ := net.ParseCIDR(ip)
 	return ipNet
 }
-
 func TestAgentQuerierGetAgentInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	interfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	interfaceStore.EXPECT().GetContainerInterfaceNum().Return(2).AnyTimes()
-
 	ofClient := openflowtest.NewMockClient(ctrl)
 	ofClient.EXPECT().GetFlowTableStatus().Return([]binding.TableStatus{
 		{
@@ -66,16 +55,13 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 		},
 	}).AnyTimes()
 	ofClient.EXPECT().IsConnected().Return(true).AnyTimes()
-
 	ovsBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 	ovsBridgeClient.EXPECT().GetOVSVersion().Return(ovsVersion, nil).AnyTimes()
-
 	networkPolicyInfoQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	networkPolicyInfoQuerier.EXPECT().GetNetworkPolicyNum().Return(10).AnyTimes()
 	networkPolicyInfoQuerier.EXPECT().GetAppliedToGroupNum().Return(20).AnyTimes()
 	networkPolicyInfoQuerier.EXPECT().GetAddressGroupNum().Return(30).AnyTimes()
 	networkPolicyInfoQuerier.EXPECT().GetControllerConnectionStatus().Return(true).AnyTimes()
-
 	tests := []struct {
 		name              string
 		nodeConfig        *config.NodeConfig

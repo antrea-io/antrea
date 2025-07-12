@@ -11,29 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package types
-
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
-
-<<<<<<< HEAD
 	mccommon "antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
-=======
-	mccommon "antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/ovs/openflow"
+	mccommon "antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 // ServiceInfo is the internal struct for caching service information.
 type ServiceInfo struct {
 	*k8sproxy.BaseServiceInfo
@@ -46,7 +39,6 @@ type ServiceInfo struct {
 	// The load balancer mode specified in annotations.
 	LoadBalancerMode *config.LoadBalancerMode
 }
-
 func getLoadBalancerMode(service *corev1.Service) *config.LoadBalancerMode {
 	if modeStr, exists := service.Annotations[types.ServiceLoadBalancerModeAnnotationKey]; exists {
 		ok, mode := config.GetLoadBalancerModeFromStr(modeStr)
@@ -58,7 +50,6 @@ func getLoadBalancerMode(service *corev1.Service) *config.LoadBalancerMode {
 	}
 	return nil
 }
-
 // NewServiceInfo returns a new k8sproxy.ServicePort which abstracts a serviceInfo.
 func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo *k8sproxy.BaseServiceInfo) k8sproxy.ServicePort {
 	info := &ServiceInfo{BaseServiceInfo: baseInfo}
@@ -83,10 +74,8 @@ func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo 
 	}
 	return info
 }
-
 // NewEndpointInfo returns a new k8sproxy.Endpoint which abstracts an endpointsInfo.
 func NewEndpointInfo(baseInfo *k8sproxy.BaseEndpointInfo) k8sproxy.Endpoint {
 	return baseInfo
 }
-
 type EndpointsMap map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint

@@ -11,56 +11,39 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package bgp
-
 import (
 	"context"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-=======
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
-
 // Interface defines the methods for managing a BGP (Border Gateway Protocol) process.
 // Currently, only the goBGP implementation is available.
 // More implementations might be added later.
 type Interface interface {
 	// Start starts the BGP process.
 	Start(ctx context.Context) error
-
 	// Stop terminates the BGP process.
 	Stop(ctx context.Context) error
-
 	// AddPeer adds a new BGP peer.
 	AddPeer(ctx context.Context, peerConf PeerConfig) error
-
 	// UpdatePeer updates an existing BGP peer.
 	UpdatePeer(ctx context.Context, peerConf PeerConfig) error
-
 	// RemovePeer removes a specified BGP peer.
 	RemovePeer(ctx context.Context, peerConf PeerConfig) error
-
 	// GetPeers retrieves the current status of all BGP peers.
 	GetPeers(ctx context.Context) ([]PeerStatus, error)
-
 	// AdvertiseRoutes announces the specified routes to all BGP peers.
 	AdvertiseRoutes(ctx context.Context, routes []Route) error
-
 	// WithdrawRoutes withdraws the specified routes from all BGP peers.
 	WithdrawRoutes(ctx context.Context, routes []Route) error
-
 	// GetRoutes retrieves the advertised / received routes to / from the given peer.
 	GetRoutes(ctx context.Context, routeType RouteType, peerAddress string) ([]Route, error)
 }
-
 type Confederation struct {
 	Identifier uint32
 	MemberASNs []uint32
 }
-
 // GlobalConfig contains the global configuration to start a BGP server. More attributes might be added later.
 type GlobalConfig struct {
 	ASN           uint32
@@ -68,9 +51,7 @@ type GlobalConfig struct {
 	ListenPort    int32
 	Confederation *Confederation
 }
-
 type SessionState string
-
 const (
 	// SessionUnknown indicates an unknown BGP session state.
 	SessionUnknown SessionState = "Unknown"
@@ -83,14 +64,11 @@ const (
 	SessionOpenConfirm SessionState = "OpenConfirm"
 	SessionEstablished SessionState = "Established"
 )
-
 type RouteType int
-
 const (
 	RouteAdvertised RouteType = iota
 	RouteReceived
 )
-
 // PeerConfig contains the configuration for a BGP peer. More attributes might be added later.
 type PeerConfig struct {
 	*v1alpha1.BGPPeer
@@ -99,7 +77,6 @@ type PeerConfig struct {
 	// must be set to the appropriate password. Leaving this field empty will disable password authentication.
 	Password string
 }
-
 // PeerStatus contains the status information for a BGP peer. More attributes related to status might be added later.
 type PeerStatus struct {
 	Address                    string
@@ -110,7 +87,6 @@ type PeerStatus struct {
 	SessionState               SessionState
 	UptimeSeconds              int
 }
-
 // Route represents a BGP route. Currently only prefix (e.g., "192.168.0.0/24") is needed. More attributes might be
 // added later.
 type Route struct {

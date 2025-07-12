@@ -11,22 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package networkpolicy
-
 import (
 	"fmt"
 	"strings"
-
 	"k8s.io/apimachinery/pkg/runtime"
-
-<<<<<<< HEAD
-	cpv1beta "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
-=======
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
->>>>>>> origin/main
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
-
 // parsePeer parses Namespace/Pod name, empty string is returned if the argument is not of a
 // valid Namespace/Pod reference (missing pod name or invalid format). Namespace will be set
 // as default if missing, string without separator will be considered as pod name.
@@ -40,7 +32,6 @@ func parsePeer(str string) (string, string) {
 	}
 	return ns, pod
 }
-
 // NewNetworkPolicyEvaluation creates a new NetworkPolicyEvaluation resource
 // request from the command-line arguments provided to antctl.
 func NewNetworkPolicyEvaluation(args map[string]string) (runtime.Object, error) {

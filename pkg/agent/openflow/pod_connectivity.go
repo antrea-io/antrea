@@ -11,37 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"net"
-
 	"antrea.io/libOpenflow/openflow15"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/util/runtime"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/util/runtime"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
-
 type featurePodConnectivity struct {
 	cookieAllocator cookie.Allocator
 	ipProtocols     []binding.Protocol
-
 	nodeCachedFlows *flowCategoryCache
 	podCachedFlows  *flowCategoryCache
 	tcCachedFlows   *flowCategoryCache
-
 	gatewayIPs    map[binding.Protocol]net.IP
 	gatewayPort   uint32
 	uplinkPort    uint32
@@ -52,7 +42,6 @@ type featurePodConnectivity struct {
 	nodeIPs       map[binding.Protocol]net.IP
 	nodeConfig    *config.NodeConfig
 	networkConfig *config.NetworkConfig
-
 	connectUplinkToBridge bool
 	ctZoneSrcField        *binding.RegField
 	ipCtZoneTypeRegMarks  map[binding.Protocol]*binding.RegMark
@@ -61,14 +50,11 @@ type featurePodConnectivity struct {
 	enableDSR             bool
 	enableTrafficControl  bool
 	enableL7FlowExporter  bool
-
 	category cookie.Category
 }
-
 func (f *featurePodConnectivity) getFeatureName() string {
 	return "PodConnectivity"
 }
-
 func newFeaturePodConnectivity(
 	cookieAllocator cookie.Allocator,
 	ipProtocols []binding.Protocol,
@@ -105,7 +91,6 @@ func newFeaturePodConnectivity(
 			ipCtZoneTypeRegMarks[ipProtocol] = IPv6CtZoneTypeRegMark
 		}
 	}
-
 	gatewayPort := uint32(config.DefaultHostGatewayOFPort)
 	if nodeConfig.GatewayConfig != nil {
 		gatewayPort = nodeConfig.GatewayConfig.OFPort
@@ -114,7 +99,6 @@ func newFeaturePodConnectivity(
 	if nodeConfig.UplinkNetConfig != nil {
 		uplinkPort = nodeConfig.UplinkNetConfig.OFPort
 	}
-
 	return &featurePodConnectivity{
 		cookieAllocator:       cookieAllocator,
 		ipProtocols:           ipProtocols,
@@ -142,11 +126,9 @@ func newFeaturePodConnectivity(
 		category:              cookie.PodConnectivity,
 	}
 }
-
 func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 	var flows []binding.Flow
 	gatewayMAC := f.nodeConfig.GatewayConfig.MAC
-
 	for _, ipProtocol := range f.ipProtocols {
 		switch ipProtocol {
 		case binding.ProtocolIPv6:
@@ -177,12 +159,10 @@ func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 	flows = append(flows, f.l3FwdFlowToGateway()...)
 	// Add flow to ensure the liveliness check packet could be forwarded correctly.
 	flows = append(flows, f.localProbeFlows()...)
-
 	if f.tunnelPort != 0 {
 		flows = append(flows, f.tunnelClassifierFlow(f.tunnelPort))
 		flows = append(flows, f.l2ForwardCalcFlow(GlobalVirtualMAC, f.tunnelPort))
 	}
-
 	if f.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		flows = append(flows, f.l3FwdFlowRouteToGW()...)
 		// If IPv6 is enabled, this flow will never get hit. Replies any ARP request with the same global virtual MAC.
@@ -200,18 +180,14 @@ func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 	}
 	return GetFlowModMessages(flows, binding.AddMessage)
 }
-
 func (f *featurePodConnectivity) replayFlows() []*openflow15.FlowMod {
 	var flows []*openflow15.FlowMod
-
 	// Get cached flows.
 	for _, cachedFlows := range []*flowCategoryCache{f.nodeCachedFlows, f.podCachedFlows, f.tcCachedFlows} {
 		flows = append(flows, getCachedFlowMessages(cachedFlows)...)
 	}
-
 	return flows
 }
-
 // trafficControlMarkFlows generates the flows to mark the packets that need to be redirected or mirrored.
 func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32,
 	targetOFPort uint32,
@@ -251,7 +227,6 @@ func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32,
 	}
 	return flows
 }
-
 // trafficControlReturnClassifierFlow generates the flow to mark the packets from traffic control return port and forward
 // the packets to stageRouting directly. Note that, for the packets which are originally to be output to a tunnel port,
 // value of NXM_NX_TUN_IPV4_DST for the returned packets needs to be loaded in stageRouting.
@@ -263,7 +238,6 @@ func (f *featurePodConnectivity) trafficControlReturnClassifierFlow(returnOFPort
 		Action().GotoStage(stageRouting).
 		Done()
 }
-
 // trafficControlCommonFlows generates the common flows for traffic control.
 func (f *featurePodConnectivity) trafficControlCommonFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
@@ -291,15 +265,12 @@ func (f *featurePodConnectivity) trafficControlCommonFlows() []binding.Flow {
 			Done(),
 	}
 }
-
 func (f *featurePodConnectivity) initGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featurePodConnectivity) replayGroups() []binding.OFEntry {
 	return nil
 }
-
 func (f *featurePodConnectivity) replayMeters() []binding.OFEntry {
 	return nil
 }

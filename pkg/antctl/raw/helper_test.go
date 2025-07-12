@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package raw
-
 import (
 	"context"
 	"fmt"
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -27,24 +24,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	fakeclient "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/apis/pkg/apis"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	cert "antrea.io/antrea/v2/pkg/apiserver/certificate"
 	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/v2/pkg/util/k8s"
-=======
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	cert "antrea.io/antrea/pkg/apiserver/certificate"
-	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	"antrea.io/antrea/pkg/util/k8s"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	cert "antrea.io/antrea/v2/pkg/apiserver/certificate"
+	antreafakeclient "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
-
 const nodeIP = "8.8.8.8"
-
 var (
 	node = &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -90,12 +81,10 @@ var (
 		APIPort: apis.AntreaAgentAPIPort,
 	}
 )
-
 func TestCreateAgentClientCfg(t *testing.T) {
 	ctx := context.Background()
 	fakeCertData := []byte("foobar")
 	apiHost := fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP, fmt.Sprint(apis.AntreaAgentAPIPort)))
-
 	testCases := []struct {
 		name        string
 		certData    []byte
@@ -119,7 +108,6 @@ func TestCreateAgentClientCfg(t *testing.T) {
 			expectedErr: "no cert available",
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			k8sClient := fakeclient.NewSimpleClientset(node)
@@ -127,7 +115,6 @@ func TestCreateAgentClientCfg(t *testing.T) {
 			agentInfo.APICABundle = tc.certData
 			antreaClient := antreafakeclient.NewSimpleClientset(agentInfo)
 			kubeconfig := &rest.Config{}
-
 			cfg, err := CreateAgentClientCfg(ctx, k8sClient, antreaClient, kubeconfig, node.Name, tc.insecure)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
@@ -148,7 +135,6 @@ func TestCreateAgentClientCfg(t *testing.T) {
 		})
 	}
 }
-
 func TestCreateControllerClientCfg(t *testing.T) {
 	ctx := context.Background()
 	fakeCAData := "foobar"
@@ -171,7 +157,6 @@ func TestCreateControllerClientCfg(t *testing.T) {
 			"foo": "bar",
 		},
 	}
-
 	testCases := []struct {
 		name        string
 		cm          *corev1.ConfigMap
@@ -201,7 +186,6 @@ func TestCreateControllerClientCfg(t *testing.T) {
 			expectedErr: "error when getting cert",
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			objs := []runtime.Object{node}
@@ -211,7 +195,6 @@ func TestCreateControllerClientCfg(t *testing.T) {
 			k8sClient := fakeclient.NewSimpleClientset(objs...)
 			antreaClient := antreafakeclient.NewSimpleClientset(controllerInfo)
 			kubeconfig := &rest.Config{}
-
 			cfg, err := CreateControllerClientCfg(ctx, k8sClient, antreaClient, kubeconfig, tc.insecure)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)

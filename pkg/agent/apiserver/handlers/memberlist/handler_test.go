@@ -11,15 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package memberlist
-
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -29,20 +26,15 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/apis"
 	"antrea.io/antrea/v2/pkg/agent/memberlist"
 	memberlisttest "antrea.io/antrea/v2/pkg/agent/memberlist/testing"
 	queriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
-=======
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/memberlist"
-	memberlisttest "antrea.io/antrea/pkg/agent/memberlist/testing"
-	queriertest "antrea.io/antrea/pkg/agent/querier/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/memberlist"
+	memberlisttest "antrea.io/antrea/v2/pkg/agent/memberlist/testing"
+	queriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
 )
-
 var (
 	node1 = v1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
@@ -65,19 +57,15 @@ var (
 		},
 	}
 )
-
 func TestMemberlistQuery(t *testing.T) {
 	clientset := fake.NewSimpleClientset(&node1, &node2)
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	nodeLister := nodeInformer.Lister()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-
 	informerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
-
 	tests := []struct {
 		name                string
 		memberlistInterface func(*gomock.Controller) memberlist.Interface
@@ -117,7 +105,6 @@ func TestMemberlistQuery(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -127,14 +114,11 @@ func TestMemberlistQuery(t *testing.T) {
 				q.EXPECT().GetNodeLister().Return(tt.nodeLister)
 			}
 			handler := HandleFunc(q)
-
 			req, err := http.NewRequest(http.MethodGet, "", nil)
 			require.NoError(t, err)
-
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, req)
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
-
 			if tt.expectedStatus == http.StatusOK {
 				var received []apis.MemberlistResponse
 				err = json.Unmarshal(recorder.Body.Bytes(), &received)

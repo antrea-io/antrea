@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package nodeportlocal
-
 import (
 	"fmt"
-
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-
-<<<<<<< HEAD
 	nplk8s "antrea.io/antrea/v2/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
-=======
-	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
->>>>>>> origin/main
+	nplk8s "antrea.io/antrea/v2/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 )
-
 // InitializeNPLAgent initializes the NodePortLocal agent.
 // It sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
@@ -45,6 +37,5 @@ func InitializeNPLAgent(
 	if err != nil {
 		return nil, fmt.Errorf("error when initializing NodePortLocal port table: %v", err)
 	}
-
 	return nplk8s.NewNPLController(kubeClient, podInformer, serviceInformer.Informer(), portTable, nodeName), nil
 }

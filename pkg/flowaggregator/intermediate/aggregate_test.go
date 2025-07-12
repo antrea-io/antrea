@@ -11,40 +11,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package intermediate
-
 import (
 	"container/heap"
 	"net"
 	"net/netip"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	clocktesting "k8s.io/utils/clock/testing"
-
-<<<<<<< HEAD
-	flowpb "antrea.io/antrea/apis/pkg/apis/flow/v1alpha1"
-=======
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
->>>>>>> origin/main
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
-
 func init() {
 	MaxRetries = 1
 	MinExpiryTime = 0
 }
-
 const (
 	testTemplateID     = uint16(256)
 	testActiveExpiry   = 100 * time.Millisecond
 	testInactiveExpiry = 150 * time.Millisecond
 	testMaxRetries     = 2
 )
-
 func getEmptyFlowRecord() *flowpb.Flow {
 	return &flowpb.Flow{
 		Ipfix:        &flowpb.IPFIX{},
@@ -58,7 +48,6 @@ func getEmptyFlowRecord() *flowpb.Flow {
 		App:          &flowpb.App{},
 	}
 }
-
 func getBaseFlowRecord(isIPv6 bool, flowType flowpb.FlowType, isUpdatedRecord bool) *flowpb.Flow {
 	record := getEmptyFlowRecord()
 	record.Transport.SourcePort = 1234
@@ -97,7 +86,6 @@ func getBaseFlowRecord(isIPv6 bool, flowType flowpb.FlowType, isUpdatedRecord bo
 	record.K8S.FlowType = flowType
 	return record
 }
-
 func createFlowRecordForSrc(isIPv6 bool, flowType flowpb.FlowType, isUpdatedRecord bool, egressNetworkPolicyRuleAction flowpb.NetworkPolicyRuleAction) *flowpb.Flow {
 	record := getBaseFlowRecord(isIPv6, flowType, isUpdatedRecord)
 	if flowType != flowpb.FlowType_FLOW_TYPE_INTRA_NODE {
@@ -125,10 +113,8 @@ func createFlowRecordForSrc(isIPv6 bool, flowType flowpb.FlowType, isUpdatedReco
 		record.Stats.OctetDeltaCount = 1000
 		record.ReverseStats.OctetDeltaCount = 1000
 	}
-
 	return record
 }
-
 func createFlowRecordForDst(isIPv6 bool, flowType flowpb.FlowType, isUpdatedRecord bool, ingressNetworkPolicyRuleAction flowpb.NetworkPolicyRuleAction) *flowpb.Flow {
 	record := getBaseFlowRecord(isIPv6, flowType, isUpdatedRecord)
 	if flowType != flowpb.FlowType_FLOW_TYPE_INTRA_NODE {
@@ -158,10 +144,8 @@ func createFlowRecordForDst(isIPv6 bool, flowType flowpb.FlowType, isUpdatedReco
 		record.Stats.OctetDeltaCount = 1030
 		record.ReverseStats.OctetDeltaCount = 1030
 	}
-
 	return record
 }
-
 func TestInitAggregationProcess(t *testing.T) {
 	t.Run("no input channel", func(t *testing.T) {
 		_, err := InitAggregationProcess(AggregationInput{
@@ -178,7 +162,6 @@ func TestInitAggregationProcess(t *testing.T) {
 		assert.Equal(t, 2, aggregationProcess.workerNum)
 	})
 }
-
 func TestGetTupleRecordMap(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -188,7 +171,6 @@ func TestGetTupleRecordMap(t *testing.T) {
 	aggregationProcess, _ := InitAggregationProcess(input)
 	assert.Equal(t, aggregationProcess.flowKeyRecordMap, aggregationProcess.flowKeyRecordMap)
 }
-
 func TestAggregateRecordByFlowKey(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -209,7 +191,6 @@ func TestAggregateRecordByFlowKey(t *testing.T) {
 	assert.NotNil(t, item)
 	assert.Same(t, record, aggRecord.Record)
 	assert.Equal(t, []byte{0xa, 0x0, 0x0, 0x1}, aggRecord.Record.Ip.Source)
-
 	record = createFlowRecordForSrc(true, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	require.NoError(t, aggregationProcess.aggregateRecordByFlowKey(record))
 	assert.Equal(t, int64(2), aggregationProcess.GetNumFlows())
@@ -219,12 +200,10 @@ func TestAggregateRecordByFlowKey(t *testing.T) {
 	aggRecord = aggregationProcess.flowKeyRecordMap[flowKey]
 	assert.Same(t, record, aggRecord.Record)
 	assert.Equal(t, []byte{0x20, 0x1, 0x0, 0x0, 0x32, 0x38, 0xdf, 0xe1, 0x0, 0x63, 0x0, 0x0, 0x0, 0x0, 0xfe, 0xfb}, aggRecord.Record.Ip.Source)
-
 	// Test data record with invalid "flowEndSeconds" field
 	record.EndTs.Seconds = 0
 	assert.NoError(t, aggregationProcess.aggregateRecordByFlowKey(record))
 }
-
 func TestAggregationProcess(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -248,7 +227,6 @@ func TestAggregationProcess(t *testing.T) {
 	aggRecord := aggregationProcess.flowKeyRecordMap[flowKey]
 	assert.Same(t, aggRecord.Record, record, "records should be equal")
 }
-
 func BenchmarkAggregateRecordByFlowKey(b *testing.B) {
 	bench := func(b *testing.B, isIPv6 bool) {
 		recordChan := make(chan *flowpb.Flow)
@@ -267,11 +245,9 @@ func BenchmarkAggregateRecordByFlowKey(b *testing.B) {
 			assert.EqualValues(b, 1, ap.GetNumFlows())
 		}
 	}
-
 	b.Run("ipv4", func(b *testing.B) { bench(b, false) })
 	b.Run("ipv6", func(b *testing.B) { bench(b, true) })
 }
-
 func TestCorrelateRecordsForInterNodeFlow(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -315,7 +291,6 @@ func TestCorrelateRecordsForInterNodeFlow(t *testing.T) {
 	record2 = createFlowRecordForDst(true, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	runCorrelationAndCheckResult(t, ap, clock, record2, record1, true, flowpb.FlowType_FLOW_TYPE_INTER_NODE, true)
 }
-
 func TestCorrelateRecordsForInterNodeDenyFlow(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -344,7 +319,6 @@ func TestCorrelateRecordsForInterNodeDenyFlow(t *testing.T) {
 	// Cleanup the flowKeyMap in aggregation process.
 	ap.deleteFlowKeyFromMap(*flowKey1)
 }
-
 func TestCorrelateRecordsForIntraNodeFlow(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -367,7 +341,6 @@ func TestCorrelateRecordsForIntraNodeFlow(t *testing.T) {
 	record1 = createFlowRecordForSrc(true, flowpb.FlowType_FLOW_TYPE_INTRA_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	runCorrelationAndCheckResult(t, ap, clock, record1, nil, true, flowpb.FlowType_FLOW_TYPE_INTRA_NODE, false)
 }
-
 func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -390,7 +363,6 @@ func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 	record1 = createFlowRecordForSrc(true, flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	runCorrelationAndCheckResult(t, ap, clock, record1, nil, true, flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL, false)
 }
-
 func TestAggregateRecordsForInterNodeFlow(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -401,7 +373,6 @@ func TestAggregateRecordsForInterNodeFlow(t *testing.T) {
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
 	ap, _ := initAggregationProcessWithClock(input, clock)
-
 	// Test the scenario (added in order): srcRecord, dstRecord, record1_updated, record2_updated
 	srcRecord := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	dstRecord := createFlowRecordForDst(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
@@ -409,7 +380,6 @@ func TestAggregateRecordsForInterNodeFlow(t *testing.T) {
 	latestDstRecord := createFlowRecordForDst(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, true, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	runAggregationAndCheckResult(t, ap, clock, srcRecord, dstRecord, latestSrcRecord, latestDstRecord, false)
 }
-
 func TestDeleteFlowKeyFromMapWithLock(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -437,7 +407,6 @@ func TestDeleteFlowKeyFromMapWithLock(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, aggregationProcess.flowKeyRecordMap)
 }
-
 func TestGetExpiryFromExpirePriorityQueue(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -470,7 +439,6 @@ func TestGetExpiryFromExpirePriorityQueue(t *testing.T) {
 			[]*flowpb.Flow{recordIPv4Src, recordIPv4Dst, recordIPv6Src, recordIPv6Dst},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, record := range tc.records {
@@ -482,7 +450,6 @@ func TestGetExpiryFromExpirePriorityQueue(t *testing.T) {
 		})
 	}
 }
-
 func assertElementMap(t *testing.T, record map[string]interface{}, ipv6 bool) {
 	if ipv6 {
 		assert.Equal(t, net.ParseIP("2001:0:3238:dfe1:63::fefb"), record["sourceIPv6Address"])
@@ -518,7 +485,6 @@ func assertElementMap(t *testing.T, record map[string]interface{}, ipv6 bool) {
 	assert.Equal(t, uint64(502), record["reversePacketTotalCount"])
 	assert.Equal(t, uint64(0), record["reversePacketDeltaCount"])
 }
-
 func TestGetRecords(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -528,20 +494,17 @@ func TestGetRecords(t *testing.T) {
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
 	ap, _ := InitAggregationProcess(input)
-
 	// Add records with IPv4 fields.
 	recordIPv4Src := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	recordIPv4Dst := createFlowRecordForDst(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	// Add records with IPv6 fields.
 	recordIPv6Src := createFlowRecordForSrc(true, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	recordIPv6Dst := createFlowRecordForDst(true, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
-
 	records := []*flowpb.Flow{recordIPv4Src, recordIPv4Dst, recordIPv6Src, recordIPv6Dst}
 	for _, record := range records {
 		flowKey, isIPv4 := getFlowKeyFromRecord(record)
 		ap.addOrUpdateRecordInMap(flowKey, record, isIPv4)
 	}
-
 	flowKeyIPv4, _ := getFlowKeyFromRecord(recordIPv4Src)
 	partialFlowKeyIPv6 := &FlowKey{
 		SourceAddress: "2001:0:3238:dfe1:63::fefb",
@@ -585,7 +548,6 @@ func TestGetRecords(t *testing.T) {
 		})
 	}
 }
-
 func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -606,7 +568,6 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 		numExecutions = numExecutions + 1
 		return nil
 	}
-
 	testCases := []struct {
 		name               string
 		records            []*flowpb.Flow
@@ -650,7 +611,6 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 			0,
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			numExecutions = 0
@@ -688,7 +648,6 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 		})
 	}
 }
-
 func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *clocktesting.FakeClock, record1, record2 *flowpb.Flow, isIPv6 bool, flowType flowpb.FlowType, needsCorrelation bool) {
 	flowKey1, isIPv4 := getFlowKeyFromRecord(record1)
 	ap.addOrUpdateRecordInMap(flowKey1, record1, isIPv4)
@@ -731,19 +690,16 @@ func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *c
 		assert.True(t, ap.AreCorrelatedFieldsFilled(*aggRecord))
 	}
 }
-
 func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *clocktesting.FakeClock, srcRecord, dstRecord, srcRecordLatest, dstRecordLatest *flowpb.Flow, isIntraNode bool) {
 	flowKey, isIPv4 := getFlowKeyFromRecord(srcRecord)
 	addOrUpdateRecordInMap := func(record *flowpb.Flow) {
 		ap.addOrUpdateRecordInMap(flowKey, record, isIPv4)
 		clock.Step(10 * time.Millisecond)
 	}
-
 	addOrUpdateRecordInMap(srcRecord)
 	item := ap.expirePriorityQueue.Peek()
 	oldActiveExpiryTime := item.activeExpireTime
 	oldInactiveExpiryTime := item.inactiveExpireTime
-
 	if !isIntraNode {
 		addOrUpdateRecordInMap(dstRecord)
 	}
@@ -765,21 +721,16 @@ func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *c
 	assert.Equal(t, netip.MustParseAddr("192.168.0.1").AsSlice(), aggRecord.Record.K8S.DestinationClusterIp)
 	assert.EqualValues(t, 4739, aggRecord.Record.K8S.DestinationServicePort)
 	assert.Equal(t, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION, aggRecord.Record.K8S.IngressNetworkPolicyRuleAction)
-
 	assert.Equal(t, dstRecordLatest.EndTs, aggRecord.Record.EndTs)
 	assert.Equal(t, dstRecordLatest.EndReason, aggRecord.Record.EndReason)
 	assert.Equal(t, dstRecordLatest.Transport, aggRecord.Record.Transport)
 	assert.Equal(t, dstRecordLatest.App, aggRecord.Record.App)
-
 	assert.Equal(t, dstRecordLatest.Stats, aggRecord.Record.Stats)
 	assert.Equal(t, dstRecordLatest.ReverseStats, aggRecord.Record.ReverseStats)
-
 	assert.Equal(t, srcRecordLatest.Stats, aggRecord.Record.Aggregation.StatsFromSource)
 	assert.Equal(t, srcRecordLatest.ReverseStats, aggRecord.Record.Aggregation.ReverseStatsFromSource)
-
 	assert.Equal(t, dstRecordLatest.Stats, aggRecord.Record.Aggregation.StatsFromDestination)
 	assert.Equal(t, dstRecordLatest.ReverseStats, aggRecord.Record.Aggregation.ReverseStatsFromDestination)
-
 	assert.EqualValues(t, 915, aggRecord.Record.Aggregation.Throughput)
 	assert.EqualValues(t, 915, aggRecord.Record.Aggregation.ReverseThroughput)
 	assert.EqualValues(t, 888, aggRecord.Record.Aggregation.ThroughputFromSource)

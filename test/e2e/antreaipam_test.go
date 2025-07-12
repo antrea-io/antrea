@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package e2e
-
 import (
 	"bytes"
 	"context"
@@ -24,25 +22,19 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilnet "k8s.io/utils/net"
-
-<<<<<<< HEAD
-	crdv1alpha2 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/apis/pkg/apis/crd/v1beta1"
+	crdv1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	annotation "antrea.io/antrea/v2/pkg/ipam"
-=======
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	annotation "antrea.io/antrea/pkg/ipam"
->>>>>>> origin/main
+	crdv1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	annotation "antrea.io/antrea/v2/pkg/ipam"
 )
-
 var (
 	subnetIPv4RangesMap = map[string]crdv1beta1.IPPool{
 		testAntreaIPAMNamespace: {
@@ -120,7 +112,6 @@ var (
 			},
 		},
 	}
-
 	v1a1Pool = crdv1alpha2.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-ippool-v1alpha1",
@@ -142,7 +133,6 @@ var (
 			},
 		},
 	}
-
 	v1b1Pool = crdv1beta1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-ippool-v1beta1",
@@ -161,20 +151,16 @@ var (
 		},
 	}
 )
-
 var (
 	antreaIPAMNamespaces = []string{testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12}
 )
-
 func TestAntreaIPAM(t *testing.T) {
 	skipIfNotAntreaIPAMTest(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
 	// Create AntreaIPAM IPPool and test Namespace
 	var ipPools []string
 	for _, namespace := range antreaIPAMNamespaces {
@@ -199,11 +185,9 @@ func TestAntreaIPAM(t *testing.T) {
 	}
 	defer deleteIPPoolWrapper(t, data, ipPool.Name)
 	ipPools = append(ipPools, ipPool.Name)
-
 	t.Run("testIPPoolConversion", func(t *testing.T) {
 		testIPPoolConversion(t, data)
 	})
-
 	// connectivity test with antrea redeploy
 	t.Run("testAntreaIPAMPodConnectivityAfterAntreaRestart", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
@@ -215,7 +199,6 @@ func TestAntreaIPAM(t *testing.T) {
 		testPodConnectivityAfterAntreaRestart(t, data, testAntreaIPAMNamespace11)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
-
 	// basic test
 	t.Run("testAntreaIPAMPodAssignIP", func(t *testing.T) { testPodAssignIP(t, data, testAntreaIPAMNamespace, "192.168.240.0/24", "") })
 	t.Run("testDeleteAntreaIPAMPod", func(t *testing.T) { testDeletePod(t, data, testAntreaIPAMNamespace) })
@@ -225,7 +208,6 @@ func TestAntreaIPAM(t *testing.T) {
 		testGratuitousARP(t, data, testAntreaIPAMNamespace11)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
-
 	// connectivity test
 	t.Run("testAntreaIPAMPodConnectivitySameNode", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
@@ -295,7 +277,6 @@ func TestAntreaIPAM(t *testing.T) {
 		testOVSFlowReplay(t, data, testAntreaIPAMNamespace11)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
-
 	// StatefulSet test
 	dedicatedIPPoolKey := "1"
 	t.Run("testAntreaIPAMStatefulSetDedicated", func(t *testing.T) {
@@ -306,14 +287,12 @@ func TestAntreaIPAM(t *testing.T) {
 		testAntreaIPAMStatefulSet(t, data, nil)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
-
 	t.Run("testMulticastWithFlexibleIPAM", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
 		skipIfNotIPv4Cluster(t)
 		runMulticastTestCases(t, data, testAntreaIPAMNamespace)
 	})
 }
-
 func testIPPoolConversion(t *testing.T, data *TestData) {
 	_, err := data.CRDClient.CrdV1alpha2().IPPools().Create(context.TODO(), &v1a1Pool, metav1.CreateOptions{})
 	assert.NoError(t, err, "failed to create v1alpha2 IPPool")
@@ -326,7 +305,6 @@ func testIPPoolConversion(t *testing.T, data *TestData) {
 	assert.Equal(t, v1a1Pool.Spec.IPRanges[0].Gateway, v1beta1Pool.Spec.SubnetInfo.Gateway)
 	assert.Equal(t, v1a1Pool.Spec.IPRanges[0].PrefixLength, v1beta1Pool.Spec.SubnetInfo.PrefixLength)
 	assert.Equal(t, int32(v1a1Pool.Spec.IPRanges[0].VLAN), v1beta1Pool.Spec.SubnetInfo.VLAN)
-
 	_, err = data.CRDClient.CrdV1beta1().IPPools().Create(context.TODO(), &v1b1Pool, metav1.CreateOptions{})
 	defer deleteIPPoolWrapper(t, data, v1b1Pool.Name)
 	assert.NoError(t, err, "failed to create v1beta1 IPPool")
@@ -337,16 +315,13 @@ func testIPPoolConversion(t *testing.T, data *TestData) {
 	assert.Equal(t, v1b1Pool.Spec.SubnetInfo.Gateway, v1alpha2Pool.Spec.IPRanges[0].Gateway)
 	assert.Equal(t, v1b1Pool.Spec.SubnetInfo.PrefixLength, v1alpha2Pool.Spec.IPRanges[0].PrefixLength)
 	assert.Equal(t, v1b1Pool.Spec.SubnetInfo.VLAN, int32(v1alpha2Pool.Spec.IPRanges[0].VLAN))
-
 	v1alpha2Pool.Spec.IPRanges[0].PrefixLength = 25
 	_, err = data.CRDClient.CrdV1beta1().IPPools().Update(context.TODO(), &v1b1Pool, metav1.UpdateOptions{})
 	assert.Error(t, err, "The prefixLength of IPPool should be immutable")
-
 	v1alpha2Pool.Spec.IPRanges[0].Gateway = "10.10.2.1"
 	_, err = data.CRDClient.CrdV1beta1().IPPools().Update(context.TODO(), &v1b1Pool, metav1.UpdateOptions{})
 	assert.Error(t, err, "The gateway of IPPool should be immutable")
 }
-
 func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 	numPods := 2 // Two AntreaIPAM Pods, can be increased
 	PodInfos := make([]PodInfo, numPods)
@@ -360,7 +335,6 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 		Namespace: data.testNamespace,
 	})
 	workerNode := workerNodeName(1)
-
 	t.Logf("Creating %d toolbox Pods on '%s'", numPods+1, workerNode)
 	for i := range PodInfos {
 		PodInfos[i].OS = clusterInfo.nodesOS[workerNode]
@@ -369,10 +343,8 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 		}
 		defer deletePodWrapper(t, data, PodInfos[i].Namespace, PodInfos[i].Name)
 	}
-
 	data.runPingMesh(t, PodInfos, toolboxContainerName, true)
 }
-
 func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 	maxNodes := 3
 	var PodInfos []PodInfo
@@ -386,7 +358,6 @@ func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 	}
 	data.runPingMesh(t, PodInfos, toolboxContainerName, true)
 }
-
 func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey *string) {
 	stsName := randName("sts-test-")
 	ipPoolName := subnetIPv4RangesMap[testAntreaIPAMNamespace].Name
@@ -413,7 +384,6 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 		t.Fatalf("Error when waiting for StatefulSet Pods to get IPs: %v", err)
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
-
 	ipOffsets = []int32{0}
 	size = len(ipOffsets)
 	_, err = data.updateStatefulSetSize(stsName, testAntreaIPAMNamespace, int32(size))
@@ -424,7 +394,6 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 		t.Fatalf("Error when waiting for StatefulSet Pods to get IPs: %v", err)
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
-
 	stsName2 := randName("sts-test-")
 	ipOffsets = []int32{3}
 	size = len(ipOffsets)
@@ -453,7 +422,6 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 		t.Fatalf("Error when waiting for StatefulSet Pods to get IPs: %v", err)
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName2, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
-
 	podName := randName("test-standalone-pod-")
 	podAnnotations := map[string]string{}
 	if dedicatedIPPoolKey != nil {
@@ -490,7 +458,6 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 			},
 		},
 	}))
-
 	ipOffsets = []int32{0, 1, 4}
 	size = len(ipOffsets)
 	reservedIPOffsets = ipOffsets
@@ -502,7 +469,6 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 		t.Fatalf("Error when waiting for StatefulSet Pods to get IPs: %v", err)
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
-
 	data.DeletePodAndWait(defaultTimeout, podName, testAntreaIPAMNamespace)
 	_, err = data.restartStatefulSet(stsName, testAntreaIPAMNamespace)
 	if err != nil {
@@ -513,14 +479,11 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 		t.Fatalf("Error when waiting for StatefulSet Pods to get IPs: %v", err)
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
-
 	cleanup()
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, nil, nil)
-
 	cleanup2()
 	checkStatefulSetIPPoolAllocation(t, data, stsName2, testAntreaIPAMNamespace, ipPoolName, nil, nil)
 }
-
 func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string, namespace string, ipPoolName string, ipOffsets, reservedIPOffsets []int32) {
 	ipPool, err := data.CRDClient.CrdV1beta1().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
 	if err != nil {
@@ -564,7 +527,6 @@ func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string
 	}
 	expectedIPAddressJson, _ := json.Marshal(expectedIPAddressMap)
 	tb.Logf("expectedIPAddressMap: %s", expectedIPAddressJson)
-
 	err = wait.PollUntilContextTimeout(context.Background(), time.Second*3, time.Second*15, false, func(ctx context.Context) (bool, error) {
 		ipPool, err := data.CRDClient.CrdV1beta1().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
 		if err != nil {
@@ -600,20 +562,17 @@ func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string
 	})
 	require.Nil(tb, err)
 }
-
 func deleteAntreaIPAMNamespace(tb testing.TB, data *TestData, namespace string) {
 	tb.Logf("Deleting '%s' K8s Namespace", namespace)
 	if err := data.DeleteNamespace(namespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down test: %v", err)
 	}
 }
-
 func createIPPool(tb testing.TB, data *TestData, key string) (*crdv1beta1.IPPool, error) {
 	ipv4IPPool := subnetIPv4RangesMap[key]
 	tb.Logf("Creating IPPool '%s'", ipv4IPPool.Name)
 	return data.CRDClient.CrdV1beta1().IPPools().Create(context.TODO(), &ipv4IPPool, metav1.CreateOptions{})
 }
-
 func checkIPPoolAllocation(tb testing.TB, data *TestData, ipPoolName, podIPString string) (isBelongTo bool, ipAddressState *crdv1beta1.IPAddressState, err error) {
 	ipPool, err := data.CRDClient.CrdV1beta1().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
 	if err != nil {
@@ -645,7 +604,6 @@ func checkIPPoolAllocation(tb testing.TB, data *TestData, ipPoolName, podIPStrin
 	}
 	return
 }
-
 func deleteIPPoolWrapper(tb testing.TB, data *TestData, name string) {
 	tb.Logf("Deleting IPPool '%s'", name)
 	for i := 0; i < 10; i++ {
@@ -659,7 +617,6 @@ func deleteIPPoolWrapper(tb testing.TB, data *TestData, name string) {
 		}
 	}
 }
-
 func checkIPPoolsEmpty(tb testing.TB, data *TestData, names []string) {
 	count := 0
 	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, defaultTimeout, true, func(ctx context.Context) (bool, error) {

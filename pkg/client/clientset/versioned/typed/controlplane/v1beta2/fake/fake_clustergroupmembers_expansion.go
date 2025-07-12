@@ -11,30 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package fake
-
 import (
 	"context"
-
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/testing"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/clustergroupmember"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/clustergroupmember"
 )
-
 func (c *FakeClusterGroupMembers) PaginatedGet(ctx context.Context, name string, pagination v1beta2.PaginationGetOptions, options v1.GetOptions) (result *v1beta2.ClusterGroupMembers, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(clustergroupmembersResource, name), &v1beta2.ClusterGroupMembers{})
-
 	if obj == nil {
 		return nil, err
 	}

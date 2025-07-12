@@ -11,44 +11,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package ipam
-
 import (
 	"context"
 	"os"
 	"path/filepath"
-
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam/hostlocal"
 	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver/ipam/hostlocal"
-	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam/hostlocal"
+	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
 )
-
 const (
 	ipamHostLocal  = "host-local"
 	defaultCNIPath = "/opt/cni/bin"
 )
-
 type IPAMDelegator struct {
 	pluginType string
 }
-
 var (
 	// Declare these two functions as variable for test
 	execPluginWithResultFunc = invoke.ExecPluginWithResult
 	execPluginNoResultFunc   = invoke.ExecPluginWithoutResult
 )
-
 func (d *IPAMDelegator) Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, *IPAMResult, error) {
 	var success = false
 	defer func() {
@@ -65,7 +54,6 @@ func (d *IPAMDelegator) Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networ
 	if err != nil {
 		return true, nil, err
 	}
-
 	ipamResult, err := current.NewResultFromResult(r)
 	if err != nil {
 		return true, nil, err
@@ -74,17 +62,14 @@ func (d *IPAMDelegator) Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networ
 	// IPAM Delegator always owns the request
 	return true, &IPAMResult{Result: *ipamResult}, nil
 }
-
 func (d *IPAMDelegator) Del(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, error) {
 	args.Command = "DEL"
 	if err := delegateNoResult(d.pluginType, networkConfig, args); err != nil {
 		return true, err
 	}
-
 	// IPAM Delegator always owns the request
 	return true, nil
 }
-
 func (d *IPAMDelegator) Check(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, error) {
 	args.Command = "CHECK"
 	if err := delegateNoResult(d.pluginType, networkConfig, args); err != nil {
@@ -92,7 +77,6 @@ func (d *IPAMDelegator) Check(args *invoke.Args, k8sArgs *argtypes.K8sArgs, netw
 	}
 	return true, nil
 }
-
 // GarbageCollectContainerIPs will release IPs allocated by the delegated IPAM
 // plugin that are no longer in-use (if there is any). It should be called on an
 // agent restart to provide garbage collection for IPs, and to avoid IP leakage
@@ -104,11 +88,9 @@ func (d *IPAMDelegator) Check(args *invoke.Args, k8sArgs *argtypes.K8sArgs, netw
 func GarbageCollectContainerIPs(network string, desiredIPs sets.Set[string]) error {
 	return hostlocal.GarbageCollectContainerIPs(network, desiredIPs)
 }
-
 var defaultExec invoke.Exec = &invoke.DefaultExec{
 	RawExec: &invoke.RawExec{Stderr: os.Stderr},
 }
-
 func delegateCommon(delegatePlugin string, exec invoke.Exec, cniPath string) (string, invoke.Exec, error) {
 	// The CNI searching paths passed from kubelet.
 	configuredPaths := filepath.SplitList(cniPath)
@@ -120,35 +102,28 @@ func delegateCommon(delegatePlugin string, exec invoke.Exec, cniPath string) (st
 	// Pod can be found.
 	paths[0] = defaultCNIPath
 	copy(paths[1:], configuredPaths)
-
 	pluginPath, err := exec.FindInPath(delegatePlugin, paths)
 	if err != nil {
 		return "", nil, err
 	}
-
 	return pluginPath, exec, nil
 }
-
 func delegateWithResult(delegatePlugin string, networkConfig []byte, args *invoke.Args) (types.Result, error) {
 	ctx := context.TODO()
 	pluginPath, realExec, err := delegateCommon(delegatePlugin, defaultExec, args.Path)
 	if err != nil {
 		return nil, err
 	}
-
 	return execPluginWithResultFunc(ctx, pluginPath, networkConfig, args, realExec)
 }
-
 func delegateNoResult(delegatePlugin string, networkConfig []byte, args *invoke.Args) error {
 	ctx := context.TODO()
 	pluginPath, realExec, err := delegateCommon(delegatePlugin, defaultExec, args.Path)
 	if err != nil {
 		return err
 	}
-
 	return execPluginNoResultFunc(ctx, pluginPath, networkConfig, args, realExec)
 }
-
 func init() {
 	RegisterIPAMDriver(ipamHostLocal, &IPAMDelegator{pluginType: ipamHostLocal})
 }

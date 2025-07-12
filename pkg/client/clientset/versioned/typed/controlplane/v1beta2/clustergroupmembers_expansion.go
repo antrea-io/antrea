@@ -11,29 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package v1beta2
-
 import (
 	"context"
 	"fmt"
-
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-<<<<<<< HEAD
-	"antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
-=======
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 )
-
 // The ClusterGroupMembersExpansion interface allows manually adding extra methods to the ClusterGroupMembersInterface.
 type ClusterGroupMembersExpansion interface {
 	PaginatedGet(ctx context.Context, name string, pagination v1beta2.PaginationGetOptions, options v1.GetOptions) (result *v1beta2.ClusterGroupMembers, err error)
 }
-
 func (c *clusterGroupMembers) PaginatedGet(ctx context.Context, name string, pagination v1beta2.PaginationGetOptions, options v1.GetOptions) (result *v1beta2.ClusterGroupMembers, err error) {
 	result = &v1beta2.ClusterGroupMembers{}
 	err = c.GetClient().Get().

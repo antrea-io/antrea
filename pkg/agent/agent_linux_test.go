@@ -11,35 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package agent
-
 import (
 	"fmt"
 	"net"
 	"strings"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	mock "go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 )
-
 func mockSetInterfaceMTU(t *testing.T, returnErr error) {
 }
-
 func mockGetInterfaceByName(t *testing.T, ipDevice *net.Interface) {
 	prevGetInterfaceByName := getInterfaceByName
 	getInterfaceByName = func(name string) (*net.Interface, error) {
@@ -47,7 +38,6 @@ func mockGetInterfaceByName(t *testing.T, ipDevice *net.Interface) {
 	}
 	t.Cleanup(func() { getInterfaceByName = prevGetInterfaceByName })
 }
-
 func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 	macAddr, _ := net.ParseMAC("00:00:5e:00:53:01")
 	_, nodeIPNet, _ := net.ParseCIDR("192.168.10.10/24")
@@ -62,7 +52,6 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 		UplinkNetConfig: &config.AdapterNetConfig{},
 		NodeIPv4Addr:    nodeIPNet,
 	}
-
 	tests := []struct {
 		name                  string
 		connectUplinkToBridge bool
@@ -100,7 +89,6 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := mock.NewController(t)

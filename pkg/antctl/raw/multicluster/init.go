@@ -11,29 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package multicluster
-
 import (
 	"context"
 	"fmt"
 	"os"
 	"strings"
-
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
-=======
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 )
-
 const defaultToken = "default-member-token"
-
 type initOptions struct {
 	namespace   string
 	clusterSet  string
@@ -42,9 +33,7 @@ type initOptions struct {
 	output      string
 	k8sClient   client.Client
 }
-
 var initOpts *initOptions
-
 func (o *initOptions) validate(cmd *cobra.Command) error {
 	if o.namespace == "" {
 		return fmt.Errorf("Namespace must be specified")
@@ -64,7 +53,6 @@ func (o *initOptions) validate(cmd *cobra.Command) error {
 	}
 	return nil
 }
-
 var initExample = strings.Trim(`
 # Initialize ClusterSet in the given Namespace of the leader cluster.
   $ antctl mc init --clusterset clusterset1 --clusterid cluster-north -n antrea-multicluster
@@ -73,7 +61,6 @@ var initExample = strings.Trim(`
 # Initialize ClusterSet with a default member token, and save the join config as well as the token Secret to a file.
   $ antctl mc init --clusterset clusterset1 --clusterid cluster-north --create-token -n antrea-multicluster -j join-config.yml
 `, "\n")
-
 func NewInitCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:     "init",
@@ -82,7 +69,6 @@ func NewInitCommand() *cobra.Command {
 		Example: initExample,
 		RunE:    initRunE,
 	}
-
 	o := initOptions{}
 	initOpts = &o
 	command.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace of the ClusterSet")
@@ -91,10 +77,8 @@ func NewInitCommand() *cobra.Command {
 	command.Flags().BoolVarP(&o.createToken, "create-token", "", false, "If specified, a default member token will be created. "+
 		"If the output file is also specified, the token Secret manifest will be saved to the file after the join config.")
 	command.Flags().StringVarP(&o.output, "join-config-file", "j", "", "File to save the config parameters for member clusters to join the ClusterSet")
-
 	return command
 }
-
 func initRunE(cmd *cobra.Command, args []string) error {
 	if err := initOpts.validate(cmd); err != nil {
 		return err
@@ -111,19 +95,16 @@ func initRunE(cmd *cobra.Command, args []string) error {
 	if createErr != nil {
 		return createErr
 	}
-
 	// Declare ClusterSet init succeeded, even if there is a failure later when creating the
 	// member token or writing the join config file.
 	fmt.Fprintf(cmd.OutOrStdout(), "Successfully initialized ClusterSet %s\n", initOpts.clusterSet)
 	fmt.Fprintf(cmd.OutOrStdout(), "You can run command \"antctl mc get joinconfig -n %s\" to print the parameters needed for a member cluster to join the ClusterSet.\n", initOpts.namespace)
-
 	var tokenSecret *corev1.Secret
 	if initOpts.createToken {
 		if err := common.CreateMemberToken(cmd, initOpts.k8sClient, defaultToken, initOpts.namespace, &createdRes); err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create member token. You may run command \"antctl mc create membertoken\" to create a token.\n")
 			return err
 		}
-
 		tokenSecret = &corev1.Secret{}
 		if err := initOpts.k8sClient.Get(context.TODO(), types.NamespacedName{
 			Namespace: initOpts.namespace,
@@ -132,7 +113,6 @@ func initRunE(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-
 	var err error
 	var file *os.File
 	if initOpts.output != "" {
@@ -146,6 +126,5 @@ func initRunE(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Saved ClusterSet join parameters to file: %s\n", initOpts.output)
 	}
-
 	return nil
 }

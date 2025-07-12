@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundlecollection
-
 import (
 	"context"
 	"fmt"
 	"reflect"
 	"sync"
 	"time"
-
 	"github.com/spf13/afero"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -29,40 +26,32 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/exec"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/client"
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
-	"antrea.io/antrea/apis/pkg/apis/controlplane"
-	cpv1b2 "antrea.io/antrea/apis/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	cpv1b2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/support"
 	"antrea.io/antrea/v2/pkg/util/compress"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	"antrea.io/antrea/v2/pkg/util/sftp"
-=======
-	"antrea.io/antrea/pkg/agent/client"
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	"antrea.io/antrea/pkg/apis/controlplane"
-	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/support"
-	"antrea.io/antrea/pkg/util/compress"
-	"antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/sftp"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/client"
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	cpv1b2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/support"
+	"antrea.io/antrea/v2/pkg/util/compress"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/sftp"
 )
-
 type ProtocolType string
-
 const (
 	sftpProtocol ProtocolType = "sftp"
-
 	controllerName = "SupportBundleCollectionController"
 )
-
 var (
 	emptyWatch      = watch.NewEmptyWatch()
 	defaultFS       = afero.NewOsFs()
@@ -70,7 +59,6 @@ var (
 	// Declared as variable for testing.
 	newAgentDumper = support.NewAgentDumper
 )
-
 type SupportBundleController struct {
 	nodeName                     string
 	supportBundleNodeType        controlplane.SupportBundleCollectionNodeType
@@ -86,7 +74,6 @@ type SupportBundleController struct {
 	v6Enabled                    bool
 	sftpUploader                 sftp.Uploader
 }
-
 func NewSupportBundleController(nodeName string,
 	supportBundleNodeType controlplane.SupportBundleCollectionNodeType,
 	namespace string,
@@ -113,7 +100,6 @@ func NewSupportBundleController(nodeName string,
 	}
 	return c
 }
-
 func (c *SupportBundleController) watchSupportBundleCollections() {
 	klog.Info("Starting watch for SupportBundleCollections")
 	antreaClient, err := c.antreaClientGetter.GetAntreaClient()
@@ -139,14 +125,12 @@ func (c *SupportBundleController) watchSupportBundleCollections() {
 		klog.ErrorS(nil, "Failed to start watch for SupportBundleCollections, please ensure antrea service is reachable for the agent")
 		return
 	}
-
 	klog.Info("Started watch for SupportBundleCollections")
 	eventCount := 0
 	defer func() {
 		klog.InfoS("Stopped watch for SupportBundleCollections", "totalItemsReceived", eventCount)
 		watcher.Stop()
 	}()
-
 	for {
 		event, ok := <-watcher.ResultChan()
 		if !ok {
@@ -168,45 +152,36 @@ func (c *SupportBundleController) watchSupportBundleCollections() {
 		eventCount++
 	}
 }
-
 func (c *SupportBundleController) addSupportBundleCollection(supportBundle *cpv1b2.SupportBundleCollection) {
 	c.supportBundleCollectionMutex.Lock()
 	c.supportBundleCollection = supportBundle
 	c.supportBundleCollectionMutex.Unlock()
 	c.queue.Add(supportBundle.Name)
 }
-
 func (c *SupportBundleController) deleteSupportBundleCollection(supportBundle *cpv1b2.SupportBundleCollection) {
 	c.supportBundleCollectionMutex.Lock()
 	c.supportBundleCollection = nil
 	c.supportBundleCollectionMutex.Unlock()
 	c.queue.Add(supportBundle.Name)
 }
-
 func (c *SupportBundleController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
-
 	klog.InfoS("Starting", "controllerName", controllerName)
 	defer klog.InfoS("Shutting down", "controllerName", controllerName)
-
 	go wait.NonSlidingUntil(c.watchSupportBundleCollections, 5*time.Second, stopCh)
-
 	go wait.Until(c.worker, time.Second, stopCh)
 	<-stopCh
 }
-
 func (c *SupportBundleController) worker() {
 	for c.processNextWorkItem() {
 	}
 }
-
 func (c *SupportBundleController) processNextWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(key)
-
 	if err := c.syncSupportBundleCollection(key); err == nil {
 		klog.InfoS("Successfully synced support bundle", "name", key)
 	} else {
@@ -215,7 +190,6 @@ func (c *SupportBundleController) processNextWorkItem() bool {
 	}
 	return true
 }
-
 func (c *SupportBundleController) syncSupportBundleCollection(key string) error {
 	klog.InfoS("Processing support bundle collection", "name", key)
 	supportBundle := func() *cpv1b2.SupportBundleCollection {
@@ -226,7 +200,6 @@ func (c *SupportBundleController) syncSupportBundleCollection(key string) error 
 	if supportBundle == nil {
 		return nil
 	}
-
 	err := c.generateSupportBundle(supportBundle)
 	if err != nil {
 		if updateErr := c.updateSupportBundleCollectionStatus(key, false, err); updateErr != nil {
@@ -237,10 +210,8 @@ func (c *SupportBundleController) syncSupportBundleCollection(key string) error 
 	if updateErr := c.updateSupportBundleCollectionStatus(key, true, err); updateErr != nil {
 		return fmt.Errorf("failed to update complete collection status: %w", updateErr)
 	}
-
 	return nil
 }
-
 func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.SupportBundleCollection) error {
 	klog.V(2).InfoS("Generating support bundle collection", "name", supportBundle.Name)
 	basedir, err := afero.TempDir(defaultFS, "", "bundle_tmp_")
@@ -248,7 +219,6 @@ func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.Su
 		return fmt.Errorf("error when creating temp dir: %w", err)
 	}
 	defer defaultFS.RemoveAll(basedir)
-
 	agentDumper := newAgentDumper(defaultFS, defaultExecutor, c.ovsCtlClient, c.aq, c.npq, supportBundle.SinceTime, c.v4Enabled, c.v6Enabled)
 	if err = agentDumper.DumpLog(basedir); err != nil {
 		return err
@@ -277,7 +247,6 @@ func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.Su
 	if err = agentDumper.DumpOVSPorts(basedir); err != nil {
 		return err
 	}
-
 	outputFile, err := afero.TempFile(defaultFS, "", "bundle_*.tar.gz")
 	if err != nil {
 		return fmt.Errorf("error when creating temp file: %w", err)
@@ -289,23 +258,19 @@ func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.Su
 		if err = defaultFS.Remove(outputFile.Name()); err != nil {
 			klog.ErrorS(err, "Error when removing output tar file", "file", outputFile.Name())
 		}
-
 	}()
 	klog.V(2).InfoS("Compressing support bundle collection", "name", supportBundle.Name)
 	if _, err = compress.PackDir(defaultFS, basedir, outputFile); err != nil {
 		return fmt.Errorf("error when packaging support bundle: %w", err)
 	}
-
 	return c.uploadSupportBundle(supportBundle, outputFile)
 }
-
 func (c *SupportBundleController) uploadSupportBundle(supportBundle *cpv1b2.SupportBundleCollection, outputFile afero.File) error {
 	klog.V(2).InfoS("Uploading support bundle collection", "name", supportBundle.Name)
 	uploader, err := c.getUploaderByProtocol(sftpProtocol)
 	if err != nil {
 		return fmt.Errorf("failed to upload support bundle while getting uploader: %v", err)
 	}
-
 	if _, err := outputFile.Seek(0, 0); err != nil {
 		return fmt.Errorf("failed to upload to the file server while setting offset: %v", err)
 	}
@@ -320,14 +285,12 @@ func (c *SupportBundleController) uploadSupportBundle(supportBundle *cpv1b2.Supp
 	}
 	return uploader.Upload(supportBundle.FileServer.URL, fileName, cfg, outputFile)
 }
-
 func (c *SupportBundleController) getUploaderByProtocol(protocol ProtocolType) (sftp.Uploader, error) {
 	if protocol == sftpProtocol {
 		return c.sftpUploader, nil
 	}
 	return nil, fmt.Errorf("unsupported protocol %s", protocol)
 }
-
 func (c *SupportBundleController) updateSupportBundleCollectionStatus(key string, complete bool, genErr error) error {
 	antreaClient, err := c.antreaClientGetter.GetAntreaClient()
 	if err != nil {

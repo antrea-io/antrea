@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package supportbundle
-
 import (
 	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
-
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,32 +28,26 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/exec"
 	exectesting "k8s.io/utils/exec/testing"
-
-<<<<<<< HEAD
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
 	agentqueriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
-	system "antrea.io/antrea/apis/pkg/apis/system/v1beta1"
+	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/v2/pkg/querier"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 	"antrea.io/antrea/v2/pkg/support"
-=======
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	agentqueriertest "antrea.io/antrea/pkg/agent/querier/testing"
-	system "antrea.io/antrea/pkg/apis/system/v1beta1"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
-	"antrea.io/antrea/pkg/querier"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	"antrea.io/antrea/pkg/support"
->>>>>>> origin/main
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	agentqueriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
+	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	ovsctltest "antrea.io/antrea/v2/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/v2/pkg/querier"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	"antrea.io/antrea/v2/pkg/support"
 )
-
 type testExec struct {
 	exectesting.FakeExec
 }
-
 func (te *testExec) Command(cmd string, args ...string) exec.Cmd {
 	fakeCmd := new(exectesting.FakeCmd)
 	fakeCmd.CombinedOutputScript = append(fakeCmd.CombinedOutputScript, func() ([]byte, []byte, error) {
@@ -64,13 +55,11 @@ func (te *testExec) Command(cmd string, args ...string) exec.Cmd {
 	})
 	return fakeCmd
 }
-
 func TestREST(t *testing.T) {
 	r := &supportBundleREST{}
 	assert.Equal(t, &system.SupportBundle{}, r.New())
 	assert.False(t, r.NamespaceScoped())
 }
-
 func TestClean(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)
@@ -78,7 +67,6 @@ func TestClean(t *testing.T) {
 		defaultFS = afero.NewOsFs()
 		defaultExecutor = exec.New()
 	}()
-
 	for name, tc := range map[string]struct {
 		needCancel bool
 		duration   time.Duration
@@ -125,7 +113,6 @@ func TestClean(t *testing.T) {
 		})
 	}
 }
-
 func TestCollect(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)
@@ -133,7 +120,6 @@ func TestCollect(t *testing.T) {
 		defaultFS = afero.NewOsFs()
 		defaultExecutor = exec.New()
 	}()
-
 	storage := NewControllerStorage()
 	dumper1Executed := false
 	dumper1 := func(string) error {
@@ -158,7 +144,6 @@ func TestCollect(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, exist)
 }
-
 func TestControllerStorage(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)
@@ -166,7 +151,6 @@ func TestControllerStorage(t *testing.T) {
 		defaultFS = afero.NewOsFs()
 		defaultExecutor = exec.New()
 	}()
-
 	storage := NewControllerStorage()
 	_, err := storage.SupportBundle.Create(context.TODO(), &system.SupportBundle{
 		ObjectMeta: metav1.ObjectMeta{
@@ -176,7 +160,6 @@ func TestControllerStorage(t *testing.T) {
 		Since:  "-1h",
 	}, nil, nil)
 	require.NoError(t, err)
-
 	var collectedBundle *system.SupportBundle
 	assert.Eventually(t, func() bool {
 		object, err := storage.SupportBundle.Get(context.TODO(), modeController, nil)
@@ -192,14 +175,11 @@ func TestControllerStorage(t *testing.T) {
 	exist, err := afero.Exists(defaultFS, filePath)
 	require.NoError(t, err)
 	require.True(t, exist)
-
 	_, err = storage.SupportBundle.Get(context.TODO(), modeAgent, nil)
 	assert.Equal(t, errors.NewNotFound(system.Resource("supportBundle"), modeAgent), err)
-
 	_, deleted, err := storage.SupportBundle.Delete(context.TODO(), modeAgent, nil, nil)
 	assert.Equal(t, errors.NewNotFound(system.Resource("supportBundle"), modeAgent), err)
 	assert.False(t, deleted)
-
 	_, deleted, err = storage.SupportBundle.Delete(context.TODO(), modeController, nil, nil)
 	assert.NoError(t, err)
 	assert.True(t, deleted)
@@ -215,51 +195,39 @@ func TestControllerStorage(t *testing.T) {
 		return !exist
 	}, time.Second*2, time.Millisecond*100, "Supportbundle file %s was not deleted after deleting the Supportbundle object", filePath)
 }
-
 type fakeAgentDumper struct {
 	returnErr error
 }
-
 func (f *fakeAgentDumper) DumpFlows(basedir string) error {
 	return f.returnErr
 }
-
 func (f *fakeAgentDumper) DumpGroups(basedir string) error {
 	return f.returnErr
 }
-
 func (f *fakeAgentDumper) DumpHostNetworkInfo(basedir string) error {
 	return f.returnErr
 }
-
 func (f *fakeAgentDumper) DumpLog(basedir string) error {
 	return f.returnErr
 }
-
 func (f *fakeAgentDumper) DumpAgentInfo(basedir string) error {
 	return f.returnErr
 }
-
 func (f *fakeAgentDumper) DumpNetworkPolicyResources(basedir string) error {
 	return f.returnErr
 }
-
 func (f *fakeAgentDumper) DumpHeapPprof(basedir string) error {
 	return f.returnErr
 }
-
 func (f *fakeAgentDumper) DumpGoroutinePprof(basedir string) error {
 	return f.returnErr
 }
-
 func (f *fakeAgentDumper) DumpOVSPorts(basedir string) error {
 	return f.returnErr
 }
-
 func (f *fakeAgentDumper) DumpMemberlist(basedir string) error {
 	return f.returnErr
 }
-
 func TestAgentStorage(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)
@@ -271,7 +239,6 @@ func TestAgentStorage(t *testing.T) {
 		defaultExecutor = exec.New()
 		newAgentDumper = support.NewAgentDumper
 	}()
-
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 	fakeOVSCtl := ovsctltest.NewMockOVSCtlClient(ctrl)
@@ -286,7 +253,6 @@ func TestAgentStorage(t *testing.T) {
 		Since:  "-1h",
 	}, nil, nil)
 	require.NoError(t, err)
-
 	var collectedBundle *system.SupportBundle
 	assert.Eventually(t, func() bool {
 		object, err := storage.SupportBundle.Get(ctx, modeAgent, nil)
@@ -302,7 +268,6 @@ func TestAgentStorage(t *testing.T) {
 	exist, err := afero.Exists(defaultFS, filePath)
 	require.NoError(t, err)
 	require.True(t, exist)
-
 	_, deleted, err := storage.SupportBundle.Delete(ctx, modeAgent, nil, nil)
 	assert.NoError(t, err)
 	assert.True(t, deleted)
@@ -318,7 +283,6 @@ func TestAgentStorage(t *testing.T) {
 		return !exist
 	}, time.Second*2, time.Millisecond*100, "Supportbundle file %s was not deleted after deleting the Supportbundle object", filePath)
 }
-
 func TestAgentStorageFailure(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)
@@ -330,13 +294,11 @@ func TestAgentStorageFailure(t *testing.T) {
 		defaultExecutor = exec.New()
 		newAgentDumper = support.NewAgentDumper
 	}()
-
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 	fakeOVSCtl := ovsctltest.NewMockOVSCtlClient(ctrl)
 	fakeAgentQuerier := agentqueriertest.NewMockAgentQuerier(ctrl)
 	fakeNetworkPolicyQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-
 	storage := NewAgentStorage(fakeOVSCtl, fakeAgentQuerier, fakeNetworkPolicyQuerier, true, true)
 	_, err := storage.SupportBundle.Create(ctx, &system.SupportBundle{
 		ObjectMeta: metav1.ObjectMeta{
@@ -346,7 +308,6 @@ func TestAgentStorageFailure(t *testing.T) {
 		Since:  "-1h",
 	}, nil, nil)
 	require.NoError(t, err)
-
 	var collectedBundle *system.SupportBundle
 	assert.Eventually(t, func() bool {
 		object, err := storage.SupportBundle.Get(ctx, modeAgent, nil)
@@ -357,7 +318,6 @@ func TestAgentStorageFailure(t *testing.T) {
 	assert.Empty(t, collectedBundle.Filepath)
 	assert.Empty(t, collectedBundle.Sum)
 	assert.Empty(t, collectedBundle.Size)
-
 	_, err = storage.SupportBundle.Get(ctx, modeController, nil)
 	assert.Equal(t, errors.NewNotFound(system.Resource("supportBundle"), modeController), err)
 	_, deleted, err := storage.SupportBundle.Delete(ctx, modeController, nil, nil)

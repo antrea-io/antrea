@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"errors"
 	"fmt"
@@ -22,7 +20,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
@@ -30,62 +27,48 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
 	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
 	opstest "antrea.io/antrea/v2/pkg/agent/openflow/operations/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	"antrea.io/antrea/apis/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	ovsoftest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 	"antrea.io/antrea/v2/pkg/util/runtime"
 	"antrea.io/antrea/v2/third_party/proxy"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	opstest "antrea.io/antrea/pkg/agent/openflow/operations/testing"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	utilip "antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/runtime"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	opstest "antrea.io/antrea/v2/pkg/agent/openflow/operations/testing"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	ovsoftest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/runtime"
 	"antrea.io/antrea/third_party/proxy"
->>>>>>> origin/main
 )
-
 const bridgeName = "dummy-br"
-
 var (
 	bridgeMgmtAddr = binding.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
-
 	fakeGatewayMAC, _ = net.ParseMAC("0a:00:00:00:00:01")
 	fakeUplinkMAC, _  = net.ParseMAC("0a:00:00:00:00:02")
-
 	fakeGatewayIPv4, fakePodIPv4CIDR, _ = net.ParseCIDR("10.10.0.1/24")
 	fakeNodeIPv4, fakeNodeIPv4Addr, _   = net.ParseCIDR("192.168.77.100/24")
-
 	fakeGatewayIPv6, fakePodIPv6CIDR, _ = net.ParseCIDR("fec0:10:10::1/80")
 	fakeNodeIPv6, fakeNodeIPv6Addr, _   = net.ParseCIDR("fec0:192:168:77::100/80")
-
 	_, fakeServiceIPv4CIDR, _ = net.ParseCIDR("10.96.0.0/16")
 	_, fakeServiceIPv6CIDR, _ = net.ParseCIDR("fec0:10:96::/64")
-
 	_, fakeEgressExceptIPv4CIDR, _ = net.ParseCIDR("192.168.78.0/24")
 	_, fakeEgressExceptIPv6CIDR, _ = net.ParseCIDR("fec0:192:168:78::/80")
-
 	fakeL7NPTargetOFPort = uint32(10)
 	fakeL7NPReturnOFPort = uint32(11)
-
 	defaultPacketInRate = 5000
 )
-
 func skipTest(tb testing.TB, skipLinux, skipWindows bool) {
 	if !runtime.IsWindowsPlatform() && skipLinux {
 		tb.Skipf("Skip test on Linux")
@@ -94,7 +77,6 @@ func skipTest(tb testing.TB, skipLinux, skipWindows bool) {
 		tb.Skipf("Skip test on Windows")
 	}
 }
-
 type clientOptions struct {
 	enableOVSMeters            bool
 	enableProxy                bool
@@ -111,45 +93,36 @@ type clientOptions struct {
 	enableL7FlowExporter       bool
 	trafficEncryptionMode      config.TrafficEncryptionModeType
 }
-
 type clientOptionsFn func(*clientOptions)
-
 func setEnableOVSMeters(v bool) clientOptionsFn {
 	return func(o *clientOptions) {
 		o.enableOVSMeters = v
 	}
 }
-
 func enableProxyAll(o *clientOptions) {
 	o.enableProxy = true
 	o.proxyAll = true
 }
-
 func enableDSR(o *clientOptions) {
 	o.enableProxy = true
 	o.proxyAll = true
 	o.enableDSR = true
 }
-
 func enableProxy(o *clientOptions) {
 	o.enableProxy = true
 }
-
 func disableProxy(o *clientOptions) {
 	o.enableProxy = false
 	o.proxyAll = false
 }
-
 func disableEgress(o *clientOptions) {
 	o.enableEgress = false
 }
-
 func enableEgressTrafficShaping(o *clientOptions) {
 	// traffic shaping requires meter support
 	o.enableOVSMeters = true
 	o.enableEgressTrafficShaping = true
 }
-
 func setEnableEgressTrafficShaping(v bool) clientOptionsFn {
 	return func(o *clientOptions) {
 		if v {
@@ -158,37 +131,29 @@ func setEnableEgressTrafficShaping(v bool) clientOptionsFn {
 		o.enableEgressTrafficShaping = v
 	}
 }
-
 func enableConnectUplinkToBridge(o *clientOptions) {
 	o.connectUplinkToBridge = true
 }
-
 func enableMulticast(o *clientOptions) {
 	o.enableMulticast = true
 }
-
 func disableAntreaPolicy(o *clientOptions) {
 	o.enableAntreaPolicy = false
 }
-
 func enableL7NetworkPolicy(o *clientOptions) {
 	o.enableL7NetworkPolicy = true
 }
-
 func enableTrafficControl(o *clientOptions) {
 	o.enableTrafficControl = true
 }
-
 func enableMulticluster(o *clientOptions) {
 	o.enableMulticluster = true
 }
-
 func setTrafficEncryptionMode(trafficEncryptionMode config.TrafficEncryptionModeType) clientOptionsFn {
 	return func(o *clientOptions) {
 		o.trafficEncryptionMode = trafficEncryptionMode
 	}
 }
-
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	gwIP, ipNet, _ := net.ParseCIDR("10.10.0.1/24")
 	hostName := cacheKey
@@ -204,7 +169,6 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	}
 	return 0, err
 }
-
 func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	containerID := cacheKey
 	podMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
@@ -218,7 +182,6 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	}
 	return 0, err
 }
-
 func installPodFlowsWithLabelID(ofClient Client, cacheKey string, labelID *uint32) (int, error) {
 	containerID := cacheKey
 	podMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
@@ -232,7 +195,6 @@ func installPodFlowsWithLabelID(ofClient Client, cacheKey string, labelID *uint3
 	}
 	return 0, err
 }
-
 // TestIdempotentFlowInstallation checks that InstallNodeFlows and InstallPodFlows are idempotent.
 func TestIdempotentFlowInstallation(t *testing.T) {
 	labelID := uint32(1)
@@ -246,7 +208,6 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 		{"PodFlows", "aaaa-bbbb-cccc-dddd", nil, 5, installPodFlowsWithLabelID},
 		{"SNPPodFlows", "eeee-ffff-gggg-hhhh", &labelID, 5, installPodFlowsWithLabelID},
 	}
-
 	// Check the flows are installed only once even though InstallNodeFlows/InstallPodFlows is called multiple times.
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -254,23 +215,19 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// Installing the flows should succeed, and all the flows should be added into the cache.
 			numCached1, err := tc.installFn(fc, tc.cacheKey, tc.labelID)
 			require.Nil(t, err, "Error when installing Node flows")
 			assert.Equal(t, tc.numFlows, numCached1)
-
 			// Installing the same flows again must not return an error and should not
 			// add additional flows to the cache.
 			m.EXPECT().BundleOps(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			numCached2, err := tc.installFn(fc, tc.cacheKey, tc.labelID)
 			require.Nil(t, err, "Error when installing Node flows again")
-
 			assert.Equal(t, numCached1, numCached2)
 		})
 	}
-
 	// Check the flows could be installed successfully with retry, and all the flows are added into the flow cache only once.
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -278,24 +235,19 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
-
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
-
 			// Installing the flows failed at the first time, and no flow cache is created.
 			numCached1, err := tc.installFn(fc, tc.cacheKey, tc.labelID)
 			require.NotNil(t, err, "Installing flows in bundle is expected to fail")
 			assert.Equal(t, 0, numCached1)
-
 			// Installing the same flows successfully at the second time, and add flows to the cache.
 			numCached2, err := tc.installFn(fc, tc.cacheKey, tc.labelID)
 			require.Nil(t, err, "Error when installing Node flows again")
-
 			assert.Equal(t, tc.numFlows, numCached2)
 		})
 	}
 }
-
 // TestFlowInstallationFailed checks that no flows are installed into the flow cache if InstallNodeFlows and InstallPodFlows fail.
 func TestFlowInstallationFailed(t *testing.T) {
 	testCases := []struct {
@@ -307,27 +259,22 @@ func TestFlowInstallationFailed(t *testing.T) {
 		{"NodeFlows", "host", 1, installNodeFlows},
 		{"PodFlows", "aaaa-bbbb-cccc-dddd", 1, installPodFlows},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
-
 			// We generate an error for AddAll call.
 			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(tc.numAddCalls)
-
 			var err error
 			var numCached int
-
 			numCached, err = tc.installFn(fc, tc.cacheKey)
 			require.NotNil(t, err, "Installing flows is expected to fail")
 			assert.Equal(t, 0, numCached)
 		})
 	}
 }
-
 // TestConcurrentFlowInstallation checks that flow installation for a given flow category (e.g. Node
 // flows) and for different cache keys (e.g. different Node hostnames) can happen concurrently.
 func TestConcurrentFlowInstallation(t *testing.T) {
@@ -344,7 +291,6 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
-
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
 			timeoutCh := make(chan struct{})
 			rendezvousCh := make(chan struct{})
@@ -357,10 +303,8 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 				}
 				return nil
 			}).AnyTimes()
-
 			var wg sync.WaitGroup
 			done := make(chan struct{})
-
 			for i := 0; i < 2; i++ {
 				wg.Add(1)
 				cacheKey := fmt.Sprintf(tc.cacheKeyFormat, i)
@@ -373,7 +317,6 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 				defer close(done)
 				wg.Wait()
 			}()
-
 			select {
 			case <-time.After(time.Second):
 				close(timeoutCh)
@@ -383,9 +326,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			}
 		})
 	}
-
 }
-
 func newFakeClient(
 	mockOFEntryOperations *opstest.MockOFEntryOperations,
 	enableIPv4,
@@ -396,7 +337,6 @@ func newFakeClient(
 ) *client {
 	return newFakeClientWithBridge(mockOFEntryOperations, enableIPv4, enableIPv6, nodeType, trafficEncapMode, nil, options...)
 }
-
 func newFakeClientWithBridge(
 	mockOFEntryOperations *opstest.MockOFEntryOperations,
 	enableIPv4,
@@ -415,7 +355,6 @@ func newFakeClientWithBridge(
 	for _, fn := range options {
 		fn(o)
 	}
-
 	client := NewClient(bridgeName,
 		bridgeMgmtAddr,
 		nodeiptest.NewFakeNodeIPChecker(),
@@ -435,18 +374,15 @@ func newFakeClientWithBridge(
 		NewGroupAllocator(),
 		false,
 		defaultPacketInRate)
-
 	// Meters must be supported to enable Egress traffic shaping.
 	// For unit tests, we can "force" client.ovsMetersAreSupported to true, even if the platform
 	// running the unit tests don't actually support meters.
 	client.ovsMetersAreSupported = o.enableOVSMeters
-
 	var egressExceptCIDRs []net.IPNet
 	var serviceIPv4CIDR, serviceIPv6CIDR *net.IPNet
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
 	var ipProtocols []binding.Protocol
 	var l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
-
 	if enableIPv4 {
 		fakeNodeIPv4Addr.IP = fakeNodeIPv4
 		if o.enableEgress {
@@ -515,14 +451,12 @@ func newFakeClientWithBridge(
 		NodePortAddressesIPv4: nodePortAddressesIPv4,
 		NodePortAddressesIPv6: nodePortAddressesIPv6,
 	}
-
 	if o.enableL7NetworkPolicy {
 		l7NetworkPolicyConfig = &config.L7NetworkPolicyConfig{
 			TargetOFPort: fakeL7NPTargetOFPort,
 			ReturnOFPort: fakeL7NPReturnOFPort,
 		}
 	}
-
 	client.cookieAllocator = cookie.NewAllocator(1)
 	client.ofEntryOperations = mockOFEntryOperations
 	client.nodeConfig = nodeConfig
@@ -535,17 +469,14 @@ func newFakeClientWithBridge(
 	client.generatePipelines()
 	client.realizePipelines()
 	binding.TableNameCache = getTableNameCache()
-
 	// This is needed even when bridge != nil for proper table initialization.
 	client.bridge.(*binding.OFBridge).SetOFSwitch(ofctrl.NewSwitch(&util.MessageStream{}, GlobalVirtualMAC, client.bridge.(ofctrl.AppInterface), make(chan int), 32776))
 	client.bridge.(*binding.OFBridge).Initialize()
 	if bridge != nil {
 		client.bridge = bridge
 	}
-
 	return client
 }
-
 func getTableNameCache() map[uint8]string {
 	tableNameCache := map[uint8]string{}
 	maxTableId := binding.NextTableID() - 1
@@ -556,7 +487,6 @@ func getTableNameCache() map[uint8]string {
 	}
 	return tableNameCache
 }
-
 func getFlowStrings(flows interface{}) []string {
 	getStrings := func(message *openflow15.FlowMod) []string {
 		var strs []string
@@ -584,22 +514,18 @@ func getFlowStrings(flows interface{}) []string {
 	}
 	return flowStrings
 }
-
 func getGroupFromCache(groupCache binding.Group) string {
 	binding.TableNameCache = getTableNameCache()
-
 	messages, _ := groupCache.GetBundleMessages(binding.AddMessage)
 	groupString := binding.GroupModToString(messages[0].GetMessage().(*openflow15.GroupMod))
 	return groupString
 }
-
 func Test_client_InstallNodeFlows(t *testing.T) {
 	peerGwIPv4, peerPodCIDRv4, _ := net.ParseCIDR("10.10.1.1/24")
 	peerGwIPv6, peerPodCIDRv6, _ := net.ParseCIDR("fec0:10:10:1::1/80")
 	peerGwMAC, _ := net.ParseMAC("00:00:10:10:01:01")
 	tunnelPeerIPv4 := net.ParseIP("192.168.77.101")
 	tunnelPeerIPv6 := net.ParseIP("fec0:192:168:77::101")
-
 	testCases := []struct {
 		name             string
 		enableIPv4       bool
@@ -702,37 +628,29 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			skipTest(t, tc.skipLinux, tc.skipWindows)
-
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 			hostname := "node1"
-
 			assert.NoError(t, fc.InstallNodeFlows(hostname, tc.peerConfigs, tc.tunnelPeerIPs, tc.ipsecTunOFPort, peerGwMAC))
 			fCacheI, ok := fc.featurePodConnectivity.nodeCachedFlows.Load(hostname)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
-
 			assert.NoError(t, fc.UninstallNodeFlows(hostname))
 			_, ok = fc.featurePodConnectivity.nodeCachedFlows.Load(hostname)
 			require.False(t, ok)
 		})
 	}
 }
-
 func Test_client_InstallPodFlows(t *testing.T) {
 	podIPv4 := net.ParseIP("10.10.0.66")
 	podIPv6 := net.ParseIP("fec0:10:10::66")
 	podMAC, _ := net.ParseMAC("00:00:10:10:00:66")
 	podOfPort := uint32(100)
 	antreaIPAMPodIPv4 := net.ParseIP("192.168.77.200")
-
 	testCases := []struct {
 		name             string
 		enableIPv4       bool
@@ -875,25 +793,20 @@ func Test_client_InstallPodFlows(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
 			defer resetPipelines()
-
 			expectedCalled := 1
 			if fc.enableMulticast {
 				expectedCalled = 2
 			}
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(expectedCalled)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(expectedCalled)
-
 			interfaceName := "pod1"
 			cacheKey := fmt.Sprintf("multicast_pod_metric_%s", interfaceName)
-
 			assert.NoError(t, fc.InstallPodFlows(interfaceName, tc.podInterfaceIPs, podMAC, podOfPort, tc.vlanID, nil))
 			fCacheI, ok := fc.featurePodConnectivity.podCachedFlows.Load(interfaceName)
 			require.True(t, ok)
@@ -904,7 +817,6 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				flows = append(flows, getFlowStrings(fCacheI)...)
 			}
 			assert.ElementsMatch(t, tc.expectedFlows, flows)
-
 			assert.NoError(t, fc.UninstallPodFlows(interfaceName))
 			_, ok = fc.featurePodConnectivity.podCachedFlows.Load(interfaceName)
 			require.False(t, ok)
@@ -915,7 +827,6 @@ func Test_client_InstallPodFlows(t *testing.T) {
 		})
 	}
 }
-
 func Test_client_UpdatePodFlows(t *testing.T) {
 	podIPv4 := net.ParseIP("10.10.0.66")
 	podIPv4Updated := net.ParseIP("10.10.0.88")
@@ -978,10 +889,8 @@ func Test_client_UpdatePodFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// When only the Pod IP is updated, the flow change in Classifier and L2ForwardingCalc table should just be mod
 			// messages since no flow matcher has changed. The other flows should be deleted and added as the latest ones.
@@ -992,40 +901,32 @@ func Test_client_UpdatePodFlows(t *testing.T) {
 			}
 			m.EXPECT().BundleOps(gomock.Len(numFlowDelAndAdds), gomock.Len(2), gomock.Len(numFlowDelAndAdds)).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 			interfaceName := "pod1"
 			assert.NoError(t, fc.InstallPodFlows(interfaceName, tc.podInterfaceIPs, podMAC, podOfPort, tc.vlanID, nil))
 			fCacheI, ok := fc.featurePodConnectivity.podCachedFlows.Load(interfaceName)
 			require.True(t, ok)
 			flows := getFlowStrings(fCacheI)
 			assert.ElementsMatch(t, tc.expectedFlows, flows)
-
 			assert.NoError(t, fc.InstallPodFlows(interfaceName, tc.podUpdatedInterfaceIPs, podMAC, podOfPort, tc.vlanID, nil))
 			fCacheI, ok = fc.featurePodConnectivity.podCachedFlows.Load(interfaceName)
 			require.True(t, ok)
 			flows = getFlowStrings(fCacheI)
 			assert.ElementsMatch(t, tc.expectedNewFlows, flows)
-
 			assert.NoError(t, fc.UninstallPodFlows(interfaceName))
 			_, ok = fc.featurePodConnectivity.podCachedFlows.Load(interfaceName)
 			require.False(t, ok)
 		})
 	}
 }
-
 func Test_client_GetPodFlowKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	m := opstest.NewMockOFEntryOperations(ctrl)
-
 	fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 	defer resetPipelines()
-
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
-
 	interfaceName := "pod1"
 	podInterfaceIPs := []net.IP{net.ParseIP("10.10.0.11")}
 	podMAC, _ := net.ParseMAC("00:00:10:10:00:11")
-
 	assert.NoError(t, fc.InstallPodFlows(interfaceName, podInterfaceIPs, podMAC, uint32(11), 0, nil))
 	flowKeys := fc.GetPodFlowKeys(interfaceName)
 	expectedFlowKeys := []string{
@@ -1037,10 +938,8 @@ func Test_client_GetPodFlowKeys(t *testing.T) {
 	}
 	assert.ElementsMatch(t, expectedFlowKeys, flowKeys)
 }
-
 func Test_client_InstallServiceGroup(t *testing.T) {
 	groupID := binding.GroupIDType(100)
-
 	testCases := []struct {
 		name                 string
 		withSessionAffinity  bool
@@ -1108,15 +1007,12 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000/0x4000->reg0,resubmit:EndpointDNAT",
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
-
 			m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteOFEntries(gomock.Any()).Return(tc.deleteOFEntriesError).Times(1)
 			assert.NoError(t, fc.InstallServiceGroup(groupID, tc.withSessionAffinity, tc.endpoints))
@@ -1124,7 +1020,6 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 			require.True(t, ok)
 			group := getGroupFromCache(gCacheI.(binding.Group))
 			assert.Equal(t, tc.expectedGroup, group)
-
 			if tc.deleteOFEntriesError == nil {
 				assert.NoError(t, fc.UninstallServiceGroup(groupID))
 				_, ok = fc.featureService.groupCache.Load(groupID)
@@ -1137,7 +1032,6 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 		})
 	}
 }
-
 func Test_client_InstallEndpointFlows(t *testing.T) {
 	ep1IPv4 := "10.10.0.100"
 	ep2IPv4 := "10.10.0.101"
@@ -1232,13 +1126,10 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 			assert.NoError(t, fc.InstallEndpointFlows(tc.protocol, tc.endpoints))
 			var flows []string
 			for _, ep := range tc.endpoints {
@@ -1249,7 +1140,6 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				flows = append(flows, getFlowStrings(fCacheI)...)
 			}
 			assert.ElementsMatch(t, tc.expectedFlows, flows)
-
 			assert.NoError(t, fc.UninstallEndpointFlows(tc.protocol, tc.endpoints))
 			for _, ep := range tc.endpoints {
 				endpointPort, _ := ep.Port()
@@ -1260,14 +1150,12 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 		})
 	}
 }
-
 func Test_client_InstallServiceFlows(t *testing.T) {
 	clusterGroupID := binding.GroupIDType(100)
 	localGroupID := binding.GroupIDType(101)
 	svcIPv4 := net.ParseIP("10.96.0.100")
 	svcIPv6 := net.ParseIP("fec0:10:96::100")
 	port := uint16(80)
-
 	testCases := []struct {
 		name               string
 		trafficPolicyLocal bool
@@ -1469,7 +1357,6 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			var options []clientOptionsFn
 			if tc.isDSR {
 				options = append(options, enableDSR)
@@ -1479,12 +1366,9 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			}
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, options...)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 			cacheKey := generateServicePortFlowCacheKey(tc.svcIP, port, tc.protocol)
-
 			assert.NoError(t, fc.InstallServiceFlows(&types.ServiceConfig{
 				ServiceIP:          tc.svcIP,
 				ServicePort:        port,
@@ -1501,21 +1385,17 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			fCacheI, ok := fc.featureService.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
-
 			assert.NoError(t, fc.UninstallServiceFlows(tc.svcIP, port, tc.protocol))
 			_, ok = fc.featureService.cachedFlows.Load(cacheKey)
 			require.False(t, ok)
 		})
 	}
 }
-
 func Test_client_GetServiceFlowKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	m := opstest.NewMockOFEntryOperations(ctrl)
-
 	fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 	defer resetPipelines()
-
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(2)
 	groupID := binding.GroupIDType(105)
 	svcIP := net.ParseIP("10.96.0.224")
@@ -1525,7 +1405,6 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 		proxy.NewBaseEndpointInfo("10.10.0.11", "", "", 80, false, true, false, false, nil),
 		proxy.NewBaseEndpointInfo("10.10.0.12", "", "", 80, true, true, false, false, nil),
 	}
-
 	assert.NoError(t, fc.InstallServiceFlows(&types.ServiceConfig{
 		ServiceIP:          svcIP,
 		ServicePort:        svcPort,
@@ -1550,7 +1429,6 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 	}
 	assert.ElementsMatch(t, expectedFlowKeys, flowKeys)
 }
-
 func Test_client_InstallSNATBypassServiceFlows(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -1613,16 +1491,13 @@ func Test_client_InstallSNATBypassServiceFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			assert.NoError(t, fc.InstallSNATBypassServiceFlows(tc.serviceCIDRs))
 			fCacheI, ok := fc.featureEgress.cachedFlows.Load("svc-cidrs")
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
-
 			m.EXPECT().BundleOps(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 			assert.NoError(t, fc.InstallSNATBypassServiceFlows(tc.newServiceCIDRs))
 			fCacheI, ok = fc.featureEgress.cachedFlows.Load("svc-cidrs")
@@ -1631,10 +1506,8 @@ func Test_client_InstallSNATBypassServiceFlows(t *testing.T) {
 		})
 	}
 }
-
 func Test_client_InstallSNATMarkFlows(t *testing.T) {
 	mark := uint32(100)
-
 	testCases := []struct {
 		name                  string
 		snatIP                net.IP
@@ -1680,27 +1553,22 @@ func Test_client_InstallSNATMarkFlows(t *testing.T) {
 			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, setEnableEgressTrafficShaping(tc.trafficShapingEnabled))
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 			cacheKey := fmt.Sprintf("s%x", mark)
 			assert.NoError(t, fc.InstallSNATMarkFlows(tc.snatIP, mark))
 			fCacheI, ok := fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
-
 			assert.NoError(t, fc.UninstallSNATMarkFlows(mark))
 			_, ok = fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.False(t, ok)
 		})
 	}
 }
-
 func Test_client_InstallPodSNATFlows(t *testing.T) {
 	snatIP := net.ParseIP("192.168.77.101")
 	ofPort := uint32(100)
-
 	testCases := []struct {
 		name                  string
 		trafficShapingEnabled bool
@@ -1731,45 +1599,37 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, setEnableEgressTrafficShaping(tc.trafficShapingEnabled))
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
 			cacheKey := fmt.Sprintf("p%x", ofPort)
-
 			assert.NoError(t, fc.InstallPodSNATFlows(ofPort, snatIP, tc.snatMark))
 			fCacheI, ok := fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
-
 			assert.NoError(t, fc.UninstallPodSNATFlows(ofPort))
 			_, ok = fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.False(t, ok)
 		})
 	}
 }
-
 func Test_client_InstallEgressQoS(t *testing.T) {
 	meterID := uint32(100)
 	meterRate := uint32(100)
 	meterBurst := uint32(200)
 	expectedFlows := []string{"cookie=0x1040000000000, table=EgressQoS, priority=200,pkt_mark=0x64/0xff actions=meter:100,goto_table:L2ForwardingCalc"}
-
 	ctrl := gomock.NewController(t)
 	m := opstest.NewMockOFEntryOperations(ctrl)
 	bridge := ovsoftest.NewMockBridge(ctrl)
 	fc := newFakeClientWithBridge(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, bridge, enableEgressTrafficShaping)
 	defer resetPipelines()
-
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 	m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 	meter := ovsoftest.NewMockMeter(ctrl)
 	meterBuilder := ovsoftest.NewMockMeterBandBuilder(ctrl)
 	bridge.EXPECT().NewMeter(binding.MeterIDType(meterID), ofctrl.MeterBurst|ofctrl.MeterKbps).Return(meter).Times(1)
@@ -1779,20 +1639,16 @@ func Test_client_InstallEgressQoS(t *testing.T) {
 	meterBuilder.EXPECT().Burst(meterBurst).Return(meterBuilder).Times(1)
 	meterBuilder.EXPECT().Done().Return(meter).Times(1)
 	meter.EXPECT().Add().Return(nil).Times(1)
-
 	require.NoError(t, fc.InstallEgressQoS(meterID, meterRate, meterBurst))
-
 	cacheKey := fmt.Sprintf("eq%x", meterID)
 	fCacheI, ok := fc.featureEgress.cachedFlows.Load(cacheKey)
 	require.True(t, ok)
 	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI))
-
 	meter.EXPECT().Delete().Return(nil).Times(1)
 	require.NoError(t, fc.UninstallEgressQoS(meterID))
 	_, ok = fc.featureEgress.cachedFlows.Load(cacheKey)
 	require.False(t, ok)
 }
-
 func Test_client_InstallTraceflowFlows(t *testing.T) {
 	type fields struct {
 	}
@@ -1824,7 +1680,6 @@ func Test_client_InstallTraceflowFlows(t *testing.T) {
 		})
 	}
 }
-
 func Test_client_SendTraceflowPacket(t *testing.T) {
 	type args struct {
 		dataplaneTag uint8
@@ -1932,12 +1787,10 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 		})
 	}
 }
-
 func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	m := opstest.NewMockOFEntryOperations(ctrl)
 	fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, ovsoftest.NewMockBridge(ctrl))
 	defer resetPipelines()
-
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 	_, ipCIDR, _ := net.ParseCIDR("192.168.2.30/32")
 	flows, _ := EgressDefaultTable.ofTable.BuildFlow(priority100).Action().Drop().Done().GetBundleMessages(binding.AddMessage)
@@ -1958,12 +1811,10 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	fc.featureNetworkPolicy.policyCache.Add(&policyRuleConjunction{metricFlows: []*openflow15.FlowMod{flowMsg}})
 	return fc
 }
-
 func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
 	m := ovsoftest.NewMockBridge(ctrl)
 	fc := newFakeClientWithBridge(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap, m)
 	defer resetPipelines()
-
 	bridge := binding.OFBridge{}
 	m.EXPECT().BuildPacketOut().Return(bridge.BuildPacketOut()).Times(1)
 	if success {
@@ -1971,7 +1822,6 @@ func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
 	}
 	return fc
 }
-
 func Test_client_setBasePacketOutBuilder(t *testing.T) {
 	type args struct {
 		srcMAC  string
@@ -2044,7 +1894,6 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 		})
 	}
 }
-
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
 	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, false, false, nil, false, defaultPacketInRate)
 	m := ovsoftest.NewMockBridge(ctrl)
@@ -2056,7 +1905,6 @@ func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *clie
 	}
 	return ofClient
 }
-
 func Test_client_SendPacketOut(t *testing.T) {
 	dstIPv4 := net.ParseIP("10.10.0.66")
 	dstIPv6 := net.ParseIP("fec0:10:10::66")
@@ -2156,14 +2004,12 @@ func Test_client_SendPacketOut(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockBridge := ovsoftest.NewMockBridge(ctrl)
 			fc := newFakeClientWithBridge(nil, true, true, config.K8sNode, config.TrafficEncapModeEncap, mockBridge)
 			defer resetPipelines()
-
 			srcMAC := fc.nodeConfig.GatewayConfig.MAC
 			dstMAC, _ := net.ParseMAC("00:00:10:10:00:66")
 			srcIP := fc.nodeConfig.GatewayConfig.IPv4
@@ -2172,7 +2018,6 @@ func Test_client_SendPacketOut(t *testing.T) {
 				srcIP = fc.nodeConfig.GatewayConfig.IPv6
 				dstIP = dstIPv6
 			}
-
 			inPort := fc.nodeConfig.GatewayConfig.OFPort
 			outPort := uint32(2)
 			if tc.name == "SendIGMPRemoteReportPacketOut" {
@@ -2180,7 +2025,6 @@ func Test_client_SendPacketOut(t *testing.T) {
 				outPort = 0
 				srcIP = fc.nodeConfig.NodeIPv4Addr.IP
 			}
-
 			mockPacketOutBuilder := ovsoftest.NewMockPacketOutBuilder(ctrl)
 			mockBridge.EXPECT().BuildPacketOut().Return(mockPacketOutBuilder)
 			mockPacketOutBuilder.EXPECT().SetSrcMAC(srcMAC).Return(mockPacketOutBuilder)
@@ -2195,7 +2039,6 @@ func Test_client_SendPacketOut(t *testing.T) {
 			mockPacketOutBuilder.EXPECT().Done()
 			mockBridge.EXPECT().SendPacketOut(gomock.Any())
 			mockPacketOutBuilder.EXPECT().SetIPProtocol(tc.protocol).Return(mockPacketOutBuilder)
-
 			switch tc.protocol {
 			case binding.ProtocolTCP, binding.ProtocolTCPv6:
 				mockPacketOutBuilder.EXPECT().SetTCPSrcPort(tc.tcpSrcPort).Return(mockPacketOutBuilder)
@@ -2264,11 +2107,9 @@ func Test_client_SendPacketOut(t *testing.T) {
 		})
 	}
 }
-
 func Test_client_InstallMulticastFlows(t *testing.T) {
 	multicastIPv4 := net.ParseIP("224.0.0.100")
 	groupID := binding.GroupIDType(101)
-
 	testCases := []struct {
 		name          string
 		multicastIP   net.IP
@@ -2287,78 +2128,61 @@ func Test_client_InstallMulticastFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableMulticast)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 			cacheKey := fmt.Sprintf("multicast_%s", tc.multicastIP.String())
 			assert.NoError(t, fc.InstallMulticastFlows(tc.multicastIP, groupID))
 			fCacheI, ok := fc.featureMulticast.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
-
 			assert.NoError(t, fc.UninstallMulticastFlows(tc.multicastIP))
 			_, ok = fc.featureMulticast.cachedFlows.Load(cacheKey)
 			require.False(t, ok)
 		})
 	}
 }
-
 func Test_client_InstallMulticastRemoteReportFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	m := opstest.NewMockOFEntryOperations(ctrl)
-
 	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, enableMulticast)
 	defer resetPipelines()
-
 	groupID := binding.GroupIDType(102)
 	expectedFlows := []string{
 		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=32768,nw_dst=224.0.0.0/4 actions=set_field:0x1/0xf->reg0,goto_table:MulticastEgressRule",
 		"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,in_port=4294967293 actions=group:102",
 		"cookie=0x1050000000000, table=Classifier, priority=200,in_port=4294967293 actions=goto_table:PipelineIPClassifier",
 	}
-
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
-
 	cacheKey := "multicast_encap"
-
 	assert.NoError(t, fc.InstallMulticastRemoteReportFlows(groupID))
 	fCacheI, ok := fc.featureMulticast.cachedFlows.Load(cacheKey)
 	require.True(t, ok)
 	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI))
 }
-
 func Test_client_InstallMulticasFlexibleIPAMFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := opstest.NewMockOFEntryOperations(ctrl)
 	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeNoEncap, enableMulticast, enableConnectUplinkToBridge, disableEgress)
 	defer resetPipelines()
-
 	expectedFlows := []string{
 		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=32770,nw_dst=224.0.0.0/4 actions=goto_table:MulticastEgressRule",
 		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=4294967294,nw_dst=224.0.0.0/4 actions=goto_table:MulticastEgressRule",
 	}
-
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
-
 	cacheKey := "multicast_flexible_ipam"
-
 	assert.NoError(t, fc.InstallMulticastFlexibleIPAMFlows())
 	fCacheI, ok := fc.featureMulticast.cachedFlows.Load(cacheKey)
 	require.True(t, ok)
 	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI))
 }
-
 func Test_client_SendIGMPQueryPacketOut(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockBridge := ovsoftest.NewMockBridge(ctrl)
 	fc := newFakeClientWithBridge(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap, mockBridge)
 	defer resetPipelines()
-
 	srcMAC := fc.nodeConfig.GatewayConfig.MAC
 	srcIP := fc.nodeConfig.GatewayConfig.IPv4
 	inPort := fc.nodeConfig.GatewayConfig.OFPort
@@ -2371,10 +2195,8 @@ func Test_client_SendIGMPQueryPacketOut(t *testing.T) {
 		Checksum:        0,
 		GroupAddress:    dstIP,
 	}
-
 	mockPacketOutBuilder := ovsoftest.NewMockPacketOutBuilder(ctrl)
 	mockBridge.EXPECT().BuildPacketOut().Return(mockPacketOutBuilder).AnyTimes()
-
 	mockPacketOutBuilder.EXPECT().SetSrcMAC(srcMAC).Return(mockPacketOutBuilder)
 	mockPacketOutBuilder.EXPECT().SetDstMAC(dstMAC).Return(mockPacketOutBuilder)
 	mockPacketOutBuilder.EXPECT().SetSrcIP(srcIP).Return(mockPacketOutBuilder)
@@ -2384,20 +2206,16 @@ func Test_client_SendIGMPQueryPacketOut(t *testing.T) {
 	if outPort != 0 {
 		mockPacketOutBuilder.EXPECT().SetOutport(outPort).Return(mockPacketOutBuilder)
 	}
-
 	mockPacketOutBuilder.EXPECT().SetIPProtocol(binding.ProtocolIGMP).Return(mockPacketOutBuilder)
 	mockPacketOutBuilder.EXPECT().SetL4Packet(igmp).Return(mockPacketOutBuilder)
 	mockPacketOutBuilder.EXPECT().Done()
-
 	mockBridge.EXPECT().SendPacketOut(gomock.Any())
 	assert.NoError(t, fc.SendIGMPQueryPacketOut(dstMAC, dstIP, outPort, igmp))
 }
-
 func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 	tcName := "test_tc"
 	sourceOFPorts := []uint32{50, 100}
 	targetOFPort := uint32(200)
-
 	testCases := []struct {
 		name          string
 		direction     v1alpha2.Direction
@@ -2463,59 +2281,45 @@ func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableTrafficControl)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 			cacheKey := fmt.Sprintf("tc_%s", tcName)
-
 			assert.NoError(t, fc.InstallTrafficControlMarkFlows(tcName, sourceOFPorts, targetOFPort, tc.direction, tc.action, types.TrafficControlFlowPriorityMedium))
 			fCacheI, ok := fc.featurePodConnectivity.tcCachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
-
 			assert.NoError(t, fc.UninstallTrafficControlMarkFlows(tcName))
 			_, ok = fc.featurePodConnectivity.tcCachedFlows.Load(cacheKey)
 			require.False(t, ok)
 		})
 	}
 }
-
 func Test_client_InstallTrafficControlReturnPortFlow(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	m := opstest.NewMockOFEntryOperations(ctrl)
-
 	fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableTrafficControl)
 	defer resetPipelines()
-
 	returnOFPort := uint32(200)
 	expectedFlows := []string{
 		"cookie=0x1010000000000, table=Classifier, priority=200,in_port=200 actions=set_field:0x6/0xf->reg0,goto_table:L3Forwarding",
 	}
-
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 	m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 	cacheKey := fmt.Sprintf("tc_%d", returnOFPort)
-
 	assert.NoError(t, fc.InstallTrafficControlReturnPortFlow(returnOFPort))
 	fCacheI, ok := fc.featurePodConnectivity.tcCachedFlows.Load(cacheKey)
 	require.True(t, ok)
 	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI))
-
 	assert.NoError(t, fc.UninstallTrafficControlReturnPortFlow(returnOFPort))
 	_, ok = fc.featurePodConnectivity.tcCachedFlows.Load(cacheKey)
 	require.False(t, ok)
 }
-
 func Test_client_InstallMulticastGroup(t *testing.T) {
 	groupID := binding.GroupIDType(101)
 	localReceivers := []uint32{50, 100}
@@ -2564,19 +2368,15 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableMulticast)
 			defer resetPipelines()
-
 			m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteOFEntries(gomock.Any()).Return(tc.deleteOFEntriesError).Times(1)
-
 			assert.NoError(t, fc.InstallMulticastGroup(groupID, tc.localReceivers, tc.remoteNodeReceivers))
 			gCacheI, ok := fc.featureMulticast.groupCache.Load(groupID)
 			require.True(t, ok)
 			group := getGroupFromCache(gCacheI.(binding.Group))
 			assert.Equal(t, tc.expectedGroup, group)
-
 			if tc.deleteOFEntriesError == nil {
 				assert.NoError(t, fc.UninstallMulticastGroup(groupID))
 				_, ok = fc.featureMulticast.groupCache.Load(groupID)
@@ -2589,12 +2389,10 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 		})
 	}
 }
-
 func Test_client_InstallMulticlusterNodeFlows(t *testing.T) {
 	clusterID := "test_cluster"
 	_, peerServiceCIDRIPv4, _ := net.ParseCIDR("10.97.0.0/16")
 	tunnelPeerIPv4 := net.ParseIP("192.168.78.101")
-
 	testCases := []struct {
 		name          string
 		peerConfigs   map[*net.IPNet]net.IP
@@ -2617,32 +2415,26 @@ func Test_client_InstallMulticlusterNodeFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableMulticluster)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 			assert.NoError(t, fc.InstallMulticlusterNodeFlows(clusterID, tc.peerConfigs, tc.tunnelPeerIP, true))
 			cacheKey := fmt.Sprintf("cluster_%s", clusterID)
 			fCacheI, ok := fc.featureMulticluster.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
-
 			assert.NoError(t, fc.UninstallMulticlusterFlows(clusterID))
 			_, ok = fc.featureMulticluster.cachedFlows.Load(cacheKey)
 			require.False(t, ok)
 		})
 	}
 }
-
 func Test_client_InstallMulticlusterGatewayFlows(t *testing.T) {
 	clusterID := "test_cluster"
 	_, peerServiceCIDRIPv4, _ := net.ParseCIDR("10.97.0.0/16")
 	tunnelPeerIPv4 := net.ParseIP("192.168.78.101")
 	localGatewayIPv4 := net.ParseIP("192.168.77.100")
-
 	testCases := []struct {
 		name           string
 		peerConfigs    map[*net.IPNet]net.IP
@@ -2670,51 +2462,39 @@ func Test_client_InstallMulticlusterGatewayFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := opstest.NewMockOFEntryOperations(ctrl)
-
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableMulticluster)
 			defer resetPipelines()
-
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-
 			cacheKey := fmt.Sprintf("cluster_%s", clusterID)
-
 			assert.NoError(t, fc.InstallMulticlusterGatewayFlows(clusterID, tc.peerConfigs, tc.tunnelPeerIP, tc.localGatewayIP, true))
 			fCacheI, ok := fc.featureMulticluster.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
-
 			assert.NoError(t, fc.UninstallMulticlusterFlows(clusterID))
 			_, ok = fc.featureMulticluster.cachedFlows.Load(cacheKey)
 			require.False(t, ok)
 		})
 	}
 }
-
 func Test_client_InstallMulticlusterClassifierFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	m := opstest.NewMockOFEntryOperations(ctrl)
-
 	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, enableMulticluster)
 	defer resetPipelines()
-
 	tunnelOFPort := uint32(200)
 	expectedFlows := []string{
 		"cookie=0x1060000000000, table=Classifier, priority=210,in_port=200,dl_dst=aa:bb:cc:dd:ee:f0 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
 		"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:f0 actions=set_field:0xc8->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 		"cookie=0x1060000000000, table=Output, priority=210,reg1=0xc8,in_port=200 actions=IN_PORT",
 	}
-
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
-
 	cacheKey := "multicluster-classifier"
-
 	assert.NoError(t, fc.InstallMulticlusterClassifierFlows(tunnelOFPort, true))
 	fCacheI, ok := fc.featureMulticluster.cachedFlows.Load(cacheKey)
 	require.True(t, ok)
 	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI))
 }
-
 func Test_client_RegisterPacketInHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	bridge := ovsoftest.NewMockBridge(ctrl)
@@ -2723,7 +2503,6 @@ func Test_client_RegisterPacketInHandler(t *testing.T) {
 	bridge.EXPECT().ResumePacket(gomock.Any()).Times(1)
 	fc.ResumePausePacket(nil)
 }
-
 func Test_client_ReplayFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -2732,13 +2511,11 @@ func Test_client_ReplayFlows(t *testing.T) {
 	clientOptions := []clientOptionsFn{enableTrafficControl, enableMulticast, enableMulticluster, enableEgressTrafficShaping}
 	fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, bridge, clientOptions...)
 	defer resetPipelines()
-
 	expectedFlows := append(pipelineDefaultFlows(true /* egressTrafficShapingEnabled */, false /* externalNodeEnabled */, true /* isEncap */, true /* isIPv4 */), egressInitFlows(true)...)
 	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
 	expectedFlows = append(expectedFlows, networkPolicyInitFlows(true, false)...)
 	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeNone, false, true, true, true)...)
 	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
-
 	addFlowInCache := func(cache *flowCategoryCache, cacheKey string, flows []binding.Flow) {
 		fCache := flowMessageCache{}
 		for _, flow := range flows {
@@ -2747,7 +2524,6 @@ func Test_client_ReplayFlows(t *testing.T) {
 		}
 		cache.Store(cacheKey, fCache)
 	}
-
 	replayedFlows := make([]string, 0)
 	// Feature Egress replays flows.
 	snatIP := net.ParseIP("192.168.77.100")
@@ -2806,7 +2582,6 @@ func Test_client_ReplayFlows(t *testing.T) {
 		"cookie=0x1020000000000, table=IngressRule, priority=200,conj_id=15 actions=set_field:0xf->reg3,set_field:0x400/0x400->reg0,set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x1b/0xff->reg2,group:4",
 		"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x64 actions=set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x400000/0x600000->reg0,set_field:0x1c/0xff->reg2,goto_table:Output",
 	)
-
 	// Feature Pod connectivity replays flows.
 	podMAC, _ := net.ParseMAC("00:00:10:10:00:66")
 	addFlowInCache(fc.featurePodConnectivity.podCachedFlows, "podFlows", fc.featurePodConnectivity.l3FwdFlowToPod(localGatewayMAC, []net.IP{podIP}, podMAC, false, 0))
@@ -2830,12 +2605,9 @@ func Test_client_ReplayFlows(t *testing.T) {
 	replayedFlows = append(replayedFlows,
 		"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0042,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.66:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 	)
-
 	expectedFlows = append(expectedFlows, replayedFlows...)
-
 	bridge.EXPECT().DeleteGroupAll().Return(nil).Times(1)
 	bridge.EXPECT().DeleteMeterAll().Return(nil).Times(1)
-
 	actualGroups := make([]string, 0)
 	m.EXPECT().AddOFEntries(gomock.Any()).Do(func(ofEntries []binding.OFEntry) {
 		for _, entry := range ofEntries {
@@ -2844,18 +2616,14 @@ func Test_client_ReplayFlows(t *testing.T) {
 				groupString := getGroupFromCache(entry.(binding.Group))
 				actualGroups = append(actualGroups, groupString)
 			case binding.MeterEntry:
-
 			}
-
 		}
 	}).AnyTimes()
-
 	actualFlows := make([]string, 0)
 	m.EXPECT().AddAll(gomock.Any()).Do(func(flowMessages []*openflow15.FlowMod) {
 		flowStrings := getFlowStrings(flowMessages)
 		actualFlows = append(actualFlows, flowStrings...)
 	}).Return(nil).AnyTimes()
-
 	// Use mock for the unit test on meter is because the current implementation in ofnet does not support
 	// sending Meter modification message in a bundle message. The "Add" meter actions is dependent on a valid
 	// connection to OVS, hence it may return timeout error without a mock which is possibly block the comparation
@@ -2892,12 +2660,10 @@ func Test_client_ReplayFlows(t *testing.T) {
 	} {
 		expectNewMeter(uint32(meterCfg.id), meterCfg.rate, meterCfg.rate*2, ofctrl.MeterPktps, false)
 	}
-
 	fc.ReplayFlows()
 	assert.ElementsMatch(t, expectedFlows, actualFlows)
 	assert.ElementsMatch(t, expectedGroups, actualGroups)
 }
-
 func TestCachedFlowIsDrop(t *testing.T) {
 	_, ipCIDR, _ := net.ParseCIDR("192.168.2.30/32")
 	flows, err := EgressDefaultTable.ofTable.
@@ -2910,7 +2676,6 @@ func TestCachedFlowIsDrop(t *testing.T) {
 	require.Equal(t, 1, len(flows))
 	msg := flows[0].GetMessage().(*openflow15.FlowMod)
 	assert.True(t, isDropFlow(msg))
-
 	flows, err = EgressDefaultTable.ofTable.
 		BuildFlow(priority100).
 		MatchDstIPNet(*ipCIDR).
@@ -2922,7 +2687,6 @@ func TestCachedFlowIsDrop(t *testing.T) {
 	msg = flows[0].GetMessage().(*openflow15.FlowMod)
 	assert.False(t, isDropFlow(msg))
 }
-
 func TestSubscribeOFPortStatusMessage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ch := make(chan *openflow15.PortStatus)
@@ -2933,14 +2697,11 @@ func TestSubscribeOFPortStatusMessage(t *testing.T) {
 	bridge.EXPECT().SubscribePortStatusConsumer(ch).Times(1)
 	c.SubscribeOFPortStatusMessage(ch)
 }
-
 func Test_client_InstallL7NetworkPolicyFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	m := opstest.NewMockOFEntryOperations(ctrl)
-
 	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, enableL7NetworkPolicy)
 	defer resetPipelines()
-
 	expectedFlows := []string{
 		"cookie=0x1020000000000, table=Classifier, priority=200,in_port=11,vlan_tci=0x1000/0x1000 actions=pop_vlan,set_field:0x7/0xf->reg0,goto_table:UnSNAT",
 		"cookie=0x1020000000000, table=ConntrackZone, priority=212,ip,reg0=0x0/0x800000 actions=set_field:0x800000/0x800000->reg0,ct(table=ConntrackZone,zone=65520)",
@@ -2952,7 +2713,6 @@ func Test_client_InstallL7NetworkPolicyFlows(t *testing.T) {
 		"cookie=0x1020000000000, table=Output, priority=213,reg0=0x7/0xf actions=output:NXM_NX_REG1[]",
 		"cookie=0x1020000000000, table=Output, priority=212,ct_mark=0x80/0x80 actions=push_vlan:0x8100,move:NXM_NX_CT_LABEL[64..75]->OXM_OF_VLAN_VID[0..11],output:10",
 	}
-
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 	cacheKey := "l7_np_flows"
 	require.NoError(t, fc.InstallL7NetworkPolicyFlows())

@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package capture
-
 import (
 	"net"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/bpf"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
-
-<<<<<<< HEAD
-	crdv1alpha1 "antrea.io/antrea/apis/pkg/apis/crd/v1alpha1"
-=======
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
->>>>>>> origin/main
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
-
 var (
 	testTCPProtocol             = intstr.FromString("TCP")
 	testUDPProtocol             = intstr.FromString("UDP")
@@ -40,7 +32,6 @@ var (
 	testICMPMsgEcho             = intstr.FromString(string(crdv1alpha1.ICMPMsgTypeEcho))
 	testICMPMsgEchoReply        = intstr.FromString(string(crdv1alpha1.ICMPMsgTypeEchoReply))
 )
-
 func TestCalculateInstructionsSize(t *testing.T) {
 	tt := []struct {
 		name      string
@@ -164,14 +155,12 @@ func TestCalculateInstructionsSize(t *testing.T) {
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 		},
 	}
-
 	for _, item := range tt {
 		t.Run(item.name, func(t *testing.T) {
 			assert.Equal(t, item.count, calculateInstructionsSize(item.packet, item.direction))
 		})
 	}
 }
-
 func TestPacketCaptureCompileBPF(t *testing.T) {
 	tt := []struct {
 		name  string
@@ -579,7 +568,6 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 			},
 		},
 	}
-
 	for _, item := range tt {
 		t.Run(item.name, func(t *testing.T) {
 			result := compilePacketFilter(item.spec.Packet, item.srcIP, item.dstIP, item.spec.Direction)

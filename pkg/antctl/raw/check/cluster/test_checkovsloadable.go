@@ -11,27 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cluster
-
 import (
 	"context"
 	"fmt"
 	"strings"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/antctl/raw"
-=======
-	"antrea.io/antrea/pkg/antctl/raw"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/antctl/raw"
 )
-
 type checkOVSLoadable struct{}
-
 func init() {
 	RegisterTest("check-if-openvswitch-is-loadable", &checkOVSLoadable{})
 }
-
 func (c *checkOVSLoadable) Run(ctx context.Context, testContext *testContext) error {
 	command := []string{
 		"/bin/sh",

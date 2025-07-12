@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package cniserver
-
 import (
 	"context"
 	"errors"
@@ -21,7 +19,6 @@ import (
 	"net"
 	"testing"
 	"time"
-
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/google/uuid"
@@ -29,8 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
 	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
@@ -40,27 +35,24 @@ import (
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
-	cnipb "antrea.io/antrea/apis/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
-=======
-	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"
-	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
-	types "antrea.io/antrea/pkg/agent/cniserver/types"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	routetest "antrea.io/antrea/pkg/agent/route/testing"
-	"antrea.io/antrea/pkg/agent/util"
-	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	"antrea.io/antrea/pkg/util/channel"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
+	ipamtest "antrea.io/antrea/v2/pkg/agent/cniserver/ipam/testing"
+	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
+	types "antrea.io/antrea/v2/pkg/agent/cniserver/types"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/v2/pkg/util/channel"
 )
-
 func TestValidatePrevResult(t *testing.T) {
 	cniServer := newCNIServer(t)
 	cniVersion := supportedCNIVersion
@@ -70,20 +62,17 @@ func TestValidatePrevResult(t *testing.T) {
 	networkCfg.PrevResult = nil
 	ipamResult := ipamtest.GenerateIPAMResult(ips, routes, dns)
 	networkCfg.RawPrevResult, _ = translateRawPrevResult(ipamResult, cniVersion)
-
 	prevResult, _ := cniServer.parsePrevResultFromRequest(networkCfg)
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns}
 	containerID := uuid.New().String()
 	hostIfaceName := util.GenerateContainerInterfaceName(testPodNameA, testPodNamespace, containerID)
 	hostIface := &current.Interface{Name: hostIfaceName}
 	prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-
 	baseCNIConfig := func() *CNIConfig {
 		cniConfig := &CNIConfig{NetworkConfig: networkCfg, CniCmdArgs: &cnipb.CniCmdArgs{Args: args}}
 		cniConfig.ContainerId = containerID
 		return cniConfig
 	}
-
 	t.Run("Invalid container interface veth", func(t *testing.T) {
 		cniConfig := baseCNIConfig()
 		cniConfig.Ifname = "invalid_iface" // invalid
@@ -94,7 +83,6 @@ func TestValidatePrevResult(t *testing.T) {
 			"prevResult does not match network configuration",
 		)
 	})
-
 	t.Run("Invalid container interface SR-IOV VF", func(t *testing.T) {
 		cniConfig := baseCNIConfig()
 		cniConfig.Ifname = "invalid_iface" // invalid
@@ -105,7 +93,6 @@ func TestValidatePrevResult(t *testing.T) {
 			"prevResult does not match network configuration",
 		)
 	})
-
 	t.Run("Interface check failure veth", func(t *testing.T) {
 		cniConfig := baseCNIConfig()
 		cniConfig.Ifname = ifname
@@ -115,7 +102,6 @@ func TestValidatePrevResult(t *testing.T) {
 		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
-
 	t.Run("Interface check failure SR-IOV VF", func(t *testing.T) {
 		cniConfig := baseCNIConfig()
 		cniConfig.Ifname = ifname
@@ -127,7 +113,6 @@ func TestValidatePrevResult(t *testing.T) {
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
 }
-
 func TestRemoveInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -137,21 +122,17 @@ func TestRemoveInterface(t *testing.T) {
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
 	podConfigurator, err := newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
 	require.Nil(t, err, "No error expected in podConfigurator constructor")
-
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	containerIP := net.ParseIP("1.1.1.1")
-
 	var containerID string
 	var podName string
 	var hostIfaceName string
 	var fakePortUUID string
-
 	newContainerConfig := func(name string) *interfacestore.InterfaceConfig {
 		containerID = uuid.New().String()
 		podName = name
 		hostIfaceName = util.GenerateContainerInterfaceName(podName, testPodNamespace, containerID)
 		fakePortUUID = uuid.New().String()
-
 		containerConfig := interfacestore.NewContainerInterface(
 			hostIfaceName,
 			containerID,
@@ -165,47 +146,37 @@ func TestRemoveInterface(t *testing.T) {
 		containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: fakePortUUID, OFPort: 0}
 		return containerConfig
 	}
-
 	t.Run("Successful removal", func(t *testing.T) {
 		containerCfg := newContainerConfig("test1")
 		ifaceStore.AddInterface(containerCfg)
-
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
 		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(nil)
 		mockRoute.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule([]net.IP{containerIP}).Return(nil).Times(1)
-
 		err := podConfigurator.removeInterfaces(containerID)
 		require.Nil(t, err, "Failed to remove interface")
 		_, found := ifaceStore.GetContainerInterface(containerID)
 		assert.False(t, found, "Interface should not be in the local cache anymore")
 	})
-
 	t.Run("Error in OVS port delete", func(t *testing.T) {
 		containerCfg := newContainerConfig("test2")
 		ifaceStore.AddInterface(containerCfg)
-
 		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(ovsconfig.NewTransactionError(fmt.Errorf("error while deleting OVS port"), true))
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
-
 		err := podConfigurator.removeInterfaces(containerID)
 		require.NotNil(t, err, "Expected interface remove to fail")
 		_, found := ifaceStore.GetContainerInterface(containerID)
 		assert.True(t, found, "Interface should still be in local cache because of port deletion failure")
 	})
-
 	t.Run("Error in Pod flows delete", func(t *testing.T) {
 		containerCfg := newContainerConfig("test3")
 		ifaceStore.AddInterface(containerCfg)
-
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(fmt.Errorf("failed to delete openflow entry"))
-
 		err := podConfigurator.removeInterfaces(containerID)
 		require.NotNil(t, err, "Expected interface remove to fail")
 		_, found := ifaceStore.GetContainerInterface(containerID)
 		assert.True(t, found, "Interface should still be in local cache because of flow deletion failure")
 	})
 }
-
 func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ipam.IPAMDriver, ipamType string, enableSecondaryNetworkIPAM, isChaining bool) *CNIServer {
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
@@ -224,7 +195,6 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ip
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer
 }
-
 func createCNIRequestAndInterfaceName(t *testing.T, name string, cniType string, result *current.Result, ipamType string, withPreviousResult bool) (*cnipb.CniCmdRequest, string) {
 	networkCfg := generateNetworkConfiguration("", supportedCNIVersion, cniType, ipamType)
 	networkCfg.DNS = cnitypes.DNS{
@@ -237,13 +207,10 @@ func createCNIRequestAndInterfaceName(t *testing.T, name string, cniType string,
 	requestMsg, _ := newRequest(podArgs, networkCfg, "", t)
 	return requestMsg, util.GenerateContainerInterfaceName(name, testPodNamespace, testPodInfraContainerID)
 }
-
 func TestCmdAdd(t *testing.T) {
 	ctx := context.TODO()
-
 	versionedIPAMResult, err := ipamResult.GetAsVersion(supportedCNIVersion)
 	assert.NoError(t, err)
-
 	for _, tc := range []struct {
 		name                       string
 		ipamType                   string
@@ -380,12 +347,10 @@ func TestCmdAdd(t *testing.T) {
 		})
 	}
 }
-
 func TestCmdDel(t *testing.T) {
 	ovsPortID := generateUUID()
 	ovsPort := int32(100)
 	ctx := context.TODO()
-
 	for _, tc := range []struct {
 		name                       string
 		ipamType                   string
@@ -535,14 +500,12 @@ func TestCmdDel(t *testing.T) {
 		})
 	}
 }
-
 func TestCmdCheck(t *testing.T) {
 	controller := gomock.NewController(t)
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ovsPortID := generateUUID()
 	ovsPort := int32(100)
 	ctx := context.TODO()
-
 	prepareRequest := func(name string, cniType string, ipamType string, withPreviousResult bool) (*cnipb.CniCmdRequest, string) {
 		hostInterfaceName := util.GenerateContainerInterfaceName(name, testPodNamespace, testPodInfraContainerID)
 		networkCfg := generateNetworkConfiguration("", supportedCNIVersion, cniType, ipamType)
@@ -626,7 +589,6 @@ func TestCmdCheck(t *testing.T) {
 		assert.Equal(t, emptyResponse, resp)
 	})
 }
-
 func TestReconcile(t *testing.T) {
 	controller := gomock.NewController(t)
 	kubeClient := fakeclientset.NewClientset(pod1, pod2, pod3)

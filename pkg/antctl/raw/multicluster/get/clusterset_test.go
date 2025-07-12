@@ -11,27 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package get
-
 import (
 	"bytes"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-<<<<<<< HEAD
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
-=======
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
->>>>>>> origin/main
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
-
 func TestGetClusterSet(t *testing.T) {
 	clusterSetList := &mcv1alpha2.ClusterSetList{
 		Items: []mcv1alpha2.ClusterSet{
@@ -129,7 +121,6 @@ func TestGetClusterSet(t *testing.T) {
 			donotFake:      true,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := NewClusterSetCommand()
@@ -137,7 +128,6 @@ func TestGetClusterSet(t *testing.T) {
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 			cmd.SetArgs(tt.args)
-
 			fakeClient := fake.NewClientBuilder().WithScheme(mcscheme.Scheme).Build()
 			if tt.existingClusterSets != nil {
 				fakeClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithLists(tt.existingClusterSets).Build()
@@ -145,7 +135,6 @@ func TestGetClusterSet(t *testing.T) {
 			if !tt.donotFake {
 				optionsClusterSet.k8sClient = fakeClient
 			}
-
 			if tt.allNamespaces {
 				optionsClusterSet.allNamespaces = true
 			}

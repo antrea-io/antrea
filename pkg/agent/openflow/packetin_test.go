@@ -11,35 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package openflow
-
 import (
 	"testing"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
-
-<<<<<<< HEAD
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/ovs/openflow"
-=======
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/ovs/openflow"
->>>>>>> origin/main
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/ovs/openflow"
 )
-
 type fakeHandler struct {
 	callChannel chan ofpPacketInCategory
 	category    ofpPacketInCategory
 }
-
 func (fh *fakeHandler) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	fh.callChannel <- fh.category
 	return nil
 }
-
 func Test_RegisterPacketInHandler(t *testing.T) {
 	fc := newFakeClient(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 	defer resetPipelines()
@@ -50,7 +40,6 @@ func Test_RegisterPacketInHandler(t *testing.T) {
 	fc.RegisterPacketInHandler(uint8(PacketInCategoryTF), fakeHandler)
 	assert.Equal(t, fc.packetInHandlers, map[uint8]PacketInHandler{0: fakeHandler})
 }
-
 func Test_StartPacketInHandler(t *testing.T) {
 	fc := newFakeClient(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 	defer resetPipelines()
