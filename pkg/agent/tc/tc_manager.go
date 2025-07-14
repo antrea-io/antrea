@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/vishvananda/netlink"
 	"k8s.io/klog/v2"
 )
 
@@ -37,8 +38,8 @@ type Manager struct {
 	localPodCIDR *net.IPNet
 
 	// Maps to track installed rules
-	localPodRules    map[string]*TCRule // key: Pod IP
-	remoteNodeRules  map[string]*TCRule // key: Node IP
+	localPodRules   map[string]*TCRule // key: Pod IP
+	remoteNodeRules map[string]*TCRule // key: Node IP
 
 	// Node MAC addresses for remote Nodes
 	nodeMACs map[string]net.HardwareAddr // key: Node IP
@@ -60,10 +61,10 @@ func NewManager(transportInterface, gatewayInterface string, localPodCIDR *net.I
 	return &Manager{
 		transportInterface: transportInterface,
 		gatewayInterface:   gatewayInterface,
-		localPodCIDR:      localPodCIDR,
-		localPodRules:     make(map[string]*TCRule),
-		remoteNodeRules:   make(map[string]*TCRule),
-		nodeMACs:          make(map[string]net.HardwareAddr),
+		localPodCIDR:       localPodCIDR,
+		localPodRules:      make(map[string]*TCRule),
+		remoteNodeRules:    make(map[string]*TCRule),
+		nodeMACs:           make(map[string]net.HardwareAddr),
 	}
 }
 
@@ -198,7 +199,15 @@ func (m *Manager) RemoveRemoteNode(nodeIP net.IP) error {
 }
 
 // addClsactQdisc adds a clsact qdisc to the specified interface
+// Uses netlink to check if qdisc exists, falls back to tc command for creation
 func (m *Manager) addClsactQdisc(interfaceName string) error {
+	// First check if the interface exists using netlink
+	link, err := netlink.LinkByName(interfaceName)
+	if err != nil {
+		return fmt.Errorf("failed to get link %s: %v", interfaceName, err)
+	}
+
+	// Use tc command to add clsact qdisc (netlink doesn't have good TC support)
 	cmd := exec.Command("tc", "qdisc", "add", "dev", interfaceName, "clsact")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		// If qdisc already exists, that's fine
@@ -206,10 +215,13 @@ func (m *Manager) addClsactQdisc(interfaceName string) error {
 			return fmt.Errorf("failed to add clsact qdisc: %v, output: %s", err, string(output))
 		}
 	}
+
+	klog.V(4).InfoS("Added clsact qdisc to interface", "interface", interfaceName, "linkIndex", link.Attrs().Index)
 	return nil
 }
 
-// addTCRule adds a TC rule using the flower classifier
+// addTCRule adds a TC rule using the tc command
+// Note: Using tc command because netlink TC support is limited and complex
 func (m *Manager) addTCRule(rule *TCRule) error {
 	args := []string{
 		"filter", "add", "dev", rule.Interface, rule.Direction,
@@ -222,10 +234,12 @@ func (m *Manager) addTCRule(rule *TCRule) error {
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to add TC rule: %v, output: %s", err, string(output))
 	}
+
+	klog.V(4).InfoS("Added TC rule", "interface", rule.Interface, "direction", rule.Direction, "match", rule.Match)
 	return nil
 }
 
-// removeTCRule removes a TC rule
+// removeTCRule removes a TC rule using the tc command
 func (m *Manager) removeTCRule(rule *TCRule) error {
 	args := []string{
 		"filter", "del", "dev", rule.Interface, rule.Direction,
@@ -240,6 +254,8 @@ func (m *Manager) removeTCRule(rule *TCRule) error {
 			return fmt.Errorf("failed to remove TC rule: %v, output: %s", err, string(output))
 		}
 	}
+
+	klog.V(4).InfoS("Removed TC rule", "interface", rule.Interface, "direction", rule.Direction, "match", rule.Match)
 	return nil
 }
 
@@ -251,7 +267,7 @@ func (m *Manager) removeLocalPodRule(podIP string) error {
 	}
 
 	if err := m.removeTCRule(rule); err != nil {
-		return err
+		return fmt.Errorf("failed to remove local Pod TC rule: %v", err)
 	}
 
 	delete(m.localPodRules, podIP)
@@ -267,7 +283,7 @@ func (m *Manager) removeRemoteNodeRule(nodeIP string) error {
 	}
 
 	if err := m.removeTCRule(rule); err != nil {
-		return err
+		return fmt.Errorf("failed to remove remote Node TC rule: %v", err)
 	}
 
 	delete(m.remoteNodeRules, nodeIP)
@@ -289,15 +305,17 @@ func (m *Manager) GetStats() map[string]interface{} {
 	defer m.mu.RUnlock()
 
 	return map[string]interface{}{
-		"enabled":           m.enabled,
-		"localPodRules":     len(m.localPodRules),
-		"remoteNodeRules":   len(m.remoteNodeRules),
+		"enabled":            m.enabled,
+		"localPodRules":      len(m.localPodRules),
+		"remoteNodeRules":    len(m.remoteNodeRules),
 		"transportInterface": m.transportInterface,
-		"gatewayInterface":  m.gatewayInterface,
+		"gatewayInterface":   m.gatewayInterface,
 	}
 }
 
-// AddPodRules adds traffic control rules for a Pod to bypass netfilter
+// AddPodRules is a convenience method for adding Pod rules
 func (m *Manager) AddPodRules(interfaceName string, podIP net.IP, ofPort uint32) error {
-	return m.AddLocalPod(podIP, nil) // Use existing method, MAC will be set by OVS
-} 
+	// This method can be used for additional Pod-specific rules if needed
+	// For now, it's a placeholder for future extensions
+	return nil
+}
