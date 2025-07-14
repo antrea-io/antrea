@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/controller/validation"
 )
 
 func marshal(object runtime.Object) []byte {
@@ -95,7 +96,7 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "existing IPRanges [10.10.20.1-10.10.20.2] cannot be deleted",
+					Message: "existing IPRanges [10.10.20.1-10.10.20.2] cannot be updated or deleted",
 				},
 			},
 		},
@@ -239,7 +240,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				newExternalIPPool("baz", "10.10.20.0/24", "", ""),
 				newExternalIPPool("qux", "10.20.0.0/16", "", ""),
 			},
-			errMsg: "range [10.20.30.0/24] overlaps with range [10.20.0.0/16] of pool qux",
+			errMsg: "range [10.20.30.0/24] overlaps with range [10.20.0.0/16] of ExternalIPPool qux",
 		},
 		{
 			name:           "cidr must not overlap with any existing start-end range",
@@ -247,7 +248,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 			existingExternalIPPools: []*crdv1b1.ExternalIPPool{
 				newExternalIPPool("bar", "", "10.20.30.10", "10.20.30.50"),
 			},
-			errMsg: "range [10.20.30.0/24] overlaps with range [10.20.30.10-10.20.30.50] of pool bar",
+			errMsg: "range [10.20.30.0/24] overlaps with range [10.20.30.10-10.20.30.50] of ExternalIPPool bar",
 		},
 		{
 			name: "cidr must not overlap with any cidr",
@@ -285,7 +286,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				newExternalIPPool("baz", "10.20.0.0/16", "", ""),
 				newExternalIPPool("qux", "10.30.0.0/20", "", ""),
 			},
-			errMsg: "range [10.30.10.0-10.30.20.0] overlaps with range [10.30.0.0/20] of pool qux",
+			errMsg: "range [10.30.10.0-10.30.20.0] overlaps with range [10.30.0.0/20] of ExternalIPPool qux",
 		},
 		{
 			name:           "start-end range must not overlap with any existing start-end range",
@@ -294,7 +295,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				newExternalIPPool("bar", "10.10.0.0/16", "", ""),
 				newExternalIPPool("baz", "", "10.30.20.0", "10.30.40.0"),
 			},
-			errMsg: "range [10.30.10.0-10.30.20.0] overlaps with range [10.30.20.0-10.30.40.0] of pool baz",
+			errMsg: "range [10.30.10.0-10.30.20.0] overlaps with range [10.30.20.0-10.30.40.0] of ExternalIPPool baz",
 		},
 		{
 			name: "start-end range must not overlap with any cidr",
@@ -329,8 +330,8 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			errMsg, result := validateIPRangesAndSubnetInfo(
-				*testCase.externalIPPool,
+			errMsg, result := validateIPRangesAndSubnetInfoForExternalIPPool(
+				testCase.externalIPPool,
 				testCase.existingExternalIPPools,
 			)
 
@@ -398,7 +399,7 @@ func TestParseIPRangeCIDR(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// discard parsed net.IPNet, we only need to make assertions on errMsg.
-			_, errMsg := parseIPRangeCIDR(testCase.cidr)
+			_, errMsg := validation.ParseIPRangeCIDR(testCase.cidr)
 			assert.Equal(t, testCase.errMsg, errMsg)
 		})
 	}
@@ -431,8 +432,7 @@ func TestParseIPRangeStartEnd(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			// discard parsed net.IP, we only need to make assertions on errMsg.
-			_, _, errMsg := parseIPRangeStartEnd(testCase.start, testCase.end)
+			_, _, errMsg := validation.ParseIPRangeStartEnd(testCase.start, testCase.end)
 			assert.Equal(t, testCase.errMsg, errMsg)
 		})
 	}
