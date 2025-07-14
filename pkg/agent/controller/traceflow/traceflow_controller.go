@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -90,8 +91,6 @@ type Controller struct {
 	kubeClient             clientset.Interface
 	serviceLister          corelisters.ServiceLister
 	serviceListerSynced    cache.InformerSynced
-	nodeLister             corelisters.NodeLister
-	nodeListerSynced       cache.InformerSynced
 	crdClient              clientsetversioned.Interface
 	traceflowInformer      crdinformers.TraceflowInformer
 	traceflowLister        crdlisters.TraceflowLister
@@ -99,6 +98,7 @@ type Controller struct {
 	ofClient               openflow.Client
 	networkPolicyQuerier   querier.AgentNetworkPolicyInfoQuerier
 	egressQuerier          querier.EgressQuerier
+	podSubnetChecker       PodSubnetChecker
 	interfaceStore         interfacestore.InterfaceStore
 	networkConfig          *config.NetworkConfig
 	nodeConfig             *config.NodeConfig
@@ -117,11 +117,11 @@ func NewTraceflowController(
 	kubeClient clientset.Interface,
 	crdClient clientsetversioned.Interface,
 	serviceInformer coreinformers.ServiceInformer,
-	nodeInformer coreinformers.NodeInformer,
 	traceflowInformer crdinformers.TraceflowInformer,
 	client openflow.Client,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	egressQuerier querier.EgressQuerier,
+	podSubnetChecker PodSubnetChecker,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
 	nodeConfig *config.NodeConfig,
@@ -136,6 +136,7 @@ func NewTraceflowController(
 		ofClient:              client,
 		networkPolicyQuerier:  npQuerier,
 		egressQuerier:         egressQuerier,
+		podSubnetChecker:      podSubnetChecker,
 		interfaceStore:        interfaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
@@ -166,11 +167,6 @@ func NewTraceflowController(
 		c.serviceLister = serviceInformer.Lister()
 		c.serviceListerSynced = serviceInformer.Informer().HasSynced
 	}
-	// Only used for NoEncap mode.
-	if !c.networkConfig.TrafficEncapMode.SupportsEncap() {
-		c.nodeLister = nodeInformer.Lister()
-		c.nodeListerSynced = nodeInformer.Informer().HasSynced
-	}
 	return c
 }
 
@@ -190,9 +186,6 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	cacheSyncs := []cache.InformerSynced{c.traceflowListerSynced}
 	if c.enableAntreaProxy {
 		cacheSyncs = append(cacheSyncs, c.serviceListerSynced)
-	}
-	if !c.networkConfig.TrafficEncapMode.SupportsEncap() {
-		cacheSyncs = append(cacheSyncs, c.nodeListerSynced)
 	}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
@@ -617,4 +610,11 @@ func (c *Controller) cleanupTraceflow(tfName string) {
 			break
 		}
 	}
+}
+
+type PodSubnetChecker interface {
+	// LookupIPInPodSubnets returns two boolean values. The first one indicates whether the IP can be
+	// found in a PodCIDR for one of the cluster Nodes. The second one indicates whether the IP is used
+	// as a gateway IP. The second boolean value can only be true if the first one is true.
+	LookupIPInPodSubnets(ip netip.Addr) (isFound bool, isGWIP bool)
 }
