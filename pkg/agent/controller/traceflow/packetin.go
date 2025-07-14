@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"antrea.io/libOpenflow/openflow15"
@@ -26,7 +27,6 @@ import (
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -349,19 +349,9 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			ob.Action = crdv1beta1.ActionForwardedOutOfOverlay
 		} else if outputPort == gwPort { // noEncap
 			isPodIP := false
-			nodes, _ := c.nodeLister.List(labels.Everything())
-		nodeLoop:
-			for _, node := range nodes {
-				for _, cidr := range node.Spec.PodCIDRs {
-					_, netCIDR, err := net.ParseCIDR(cidr)
-					if err != nil {
-						continue
-					}
-					if netCIDR.Contains(netIPDst) {
-						isPodIP = true
-						break nodeLoop
-					}
-				}
+			if c.nodeRouteQuerier != nil {
+				netAddrDst, _ := netip.AddrFromSlice(netIPDst)
+				isPodIP, _ = c.nodeRouteQuerier.LookupIPInPodSubnets(netAddrDst)
 			}
 			if isPodIP {
 				ob.Action = crdv1beta1.ActionForwarded
