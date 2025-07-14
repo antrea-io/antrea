@@ -17,6 +17,7 @@ package traceflow
 import (
 	"bytes"
 	"net"
+	"net/netip"
 	"os"
 	"testing"
 
@@ -53,6 +54,8 @@ var (
 	dstIPv4        = "192.168.99.99"
 	pod1MAC, _     = net.ParseMAC("aa:bb:cc:dd:ee:0f")
 	pod2MAC, _     = net.ParseMAC("aa:bb:cc:dd:ee:00")
+	podCIDR1IPv4   = netip.MustParsePrefix("192.168.10.0/24")
+	podCIDR2IPv4   = netip.MustParsePrefix("192.168.11.0/24")
 	ofPortPod1     = uint32(1)
 	ofPortPod2     = uint32(2)
 	protocolICMPv6 = int32(58)
@@ -100,6 +103,12 @@ var (
 	}
 )
 
+type fakePodSubnetChecker struct{}
+
+func (f *fakePodSubnetChecker) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
+	return podCIDR1IPv4.Contains(ip) || podCIDR2IPv4.Contains(ip), false
+}
+
 type fakeTraceflowController struct {
 	*Controller
 	kubeClient           kubernetes.Interface
@@ -117,7 +126,6 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 	kubeClient := fake.NewSimpleClientset(&pod1, &pod2, &pod3, &svc1)
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
 	serviceInformer := informerFactory.Core().V1().Services()
-	nodeInformer := informerFactory.Core().V1().Nodes()
 	mockOFClient := openflowtest.NewMockClient(controller)
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
@@ -135,8 +143,6 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		kubeClient:            kubeClient,
 		serviceLister:         serviceInformer.Lister(),
 		serviceListerSynced:   serviceInformer.Informer().HasSynced,
-		nodeLister:            nodeInformer.Lister(),
-		nodeListerSynced:      nodeInformer.Informer().HasSynced,
 		crdClient:             crdClient,
 		traceflowInformer:     traceflowInformer,
 		traceflowLister:       traceflowInformer.Lister(),
@@ -144,6 +150,7 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		ofClient:              mockOFClient,
 		networkPolicyQuerier:  npQuerier,
 		egressQuerier:         egressQuerier,
+		podSubnetChecker:      &fakePodSubnetChecker{},
 		interfaceStore:        ifaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,

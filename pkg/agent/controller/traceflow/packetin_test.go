@@ -15,7 +15,6 @@
 package traceflow
 
 import (
-	"context"
 	"encoding/binary"
 	"net"
 	"reflect"
@@ -27,7 +26,6 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -817,20 +815,8 @@ func TestParsePacketIn(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.expectedTf}, tt.networkConfig, tt.nodeConfig)
-			_, err := tfc.kubeClient.CoreV1().Nodes().Create(context.TODO(), &v1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node2",
-				},
-				Spec: v1.NodeSpec{
-					PodCIDRs: []string{"fffe::/64", "invalid", "192.168.11.0/24"},
-				},
-				Status: v1.NodeStatus{},
-			}, metav1.CreateOptions{})
-			require.NoError(t, err)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-			tfc.informerFactory.Start(stopCh)
-			tfc.informerFactory.WaitForCacheSync(stopCh)
 			tfc.crdInformerFactory.Start(stopCh)
 			tfc.crdInformerFactory.WaitForCacheSync(stopCh)
 			tfc.runningTraceflows[tt.expectedTf.Status.DataplaneTag] = tt.tfState

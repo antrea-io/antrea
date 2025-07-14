@@ -2065,9 +2065,7 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 	}
 	expectOutputAction := v1beta1.ActionForwardedOutOfOverlay
 	currentEncapMode, err := data.GetEncapMode()
-	if err != nil {
-		t.Fatalf("Failed to get encap mode: %v", err)
-	}
+	require.NoError(t, err, "Failed to get encap mode")
 	if currentEncapMode == config.TrafficEncapModeNoEncap {
 		expectOutputAction = v1beta1.ActionForwardedOutOfNetwork
 	}
