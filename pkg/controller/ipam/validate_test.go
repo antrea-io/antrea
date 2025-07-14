@@ -90,7 +90,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "Invalid prefix length 32",
+					Message: "invalid prefixLength 32",
 				},
 			},
 		},
@@ -103,7 +103,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 					pool.Spec.IPRanges = []crdv1beta1.IPRange{
 						{
 							Start: "192.168.0.10",
-							End:   "192.168.0.9",
+							End:   "192.168.0.3",
 						},
 					}
 				}))},
@@ -111,7 +111,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "range start 192.168.0.10 should not be greater than range end 192.168.0.9",
+					Message: "range start 192.168.0.10 should not be greater than range end 192.168.0.3",
 				},
 			},
 		},
@@ -139,7 +139,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "IPRanges [192.168.3.0/26,192.168.3.10-192.168.3.20] overlap",
+					Message: "range [192.168.3.10-192.168.3.20] overlaps with range [192.168.3.0/26]",
 				},
 			},
 		},
@@ -167,7 +167,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "IPRanges [192.168.3.12/30,192.168.3.10-192.168.3.20] overlap",
+					Message: "range [192.168.3.10-192.168.3.20] overlaps with range [192.168.3.12/30]",
 				},
 			},
 		},
@@ -191,7 +191,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "Range is invalid. IP version of range 10:2400::0/96 differs from gateway IP version",
+					Message: "range [10:2400::0/96] must be a strict subset of the subnet 192.168.3.1/24",
 				},
 			},
 		},
@@ -215,7 +215,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "Range is invalid. CIDR 192.168.10.0/26 is not contained within subnet 192.168.1.1/24",
+					Message: "range [192.168.10.0/26] must be a strict subset of the subnet 192.168.1.1/24",
 				},
 			},
 		},
@@ -243,7 +243,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 				Operation: "UPDATE",
 				OldObject: runtime.RawExtension{Raw: marshal(testIPPool)},
 				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
-					pool.Spec.IPRanges[0].CIDR = "192.168.1.0/24"
+					pool.Spec.IPRanges[0].CIDR = "192.168.0.1/26"
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
@@ -284,7 +284,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "IPRanges [192.168.0.5-192.168.0.10,192.168.0.0/26] overlap",
+					Message: "range [192.168.0.5-192.168.0.10] overlaps with range [192.168.0.0/26]",
 				},
 			},
 		},
@@ -320,10 +320,22 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+
+			namespace, pool, statefulSet := initTestObjects(false, false, 0)
+			controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
+			controller.informerFactory.Start(stopCh)
+			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+
+			go controller.Run(stopCh)
+
 			review := &admv1.AdmissionReview{
 				Request: tt.request,
 			}
-			gotResponse := ValidateIPPool(review)
+			gotResponse := controller.ValidateIPPool(review)
 			assert.Equal(t, tt.expectedResponse, gotResponse)
 		})
 	}
