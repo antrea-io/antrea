@@ -27,6 +27,7 @@ import (
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/validation"
 )
 
 func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
@@ -66,8 +67,8 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		if msg, allowed = validateIPRangesAndSubnetInfo(newObj, externalIPPools); !allowed {
 			break
 		}
-		oldIPRangeSet := getIPRangeSet(oldObj.Spec.IPRanges)
-		newIPRangeSet := getIPRangeSet(newObj.Spec.IPRanges)
+		oldIPRangeSet := validation.GetIPRangeSet(oldObj.Spec.IPRanges)
+		newIPRangeSet := validation.GetIPRangeSet(newObj.Spec.IPRanges)
 		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
 		if deletedIPRanges.Len() > 0 {
 			allowed = false
@@ -130,12 +131,12 @@ func validateIPRangesAndSubnetInfo(externalIPPool crdv1beta1.ExternalIPPool, exi
 
 			if ipRange.CIDR != "" {
 				key = fmt.Sprintf("range [%s] of pool %s", ipRange.CIDR, pool.Name)
-				cidr, _ := parseIPRangeCIDR(ipRange.CIDR)
+				cidr, _ := validation.ParseIPRangeCIDR(ipRange.CIDR)
 				start, end = utilip.GetStartAndEndOfPrefix(cidr)
 
 			} else {
 				key = fmt.Sprintf("range [%s-%s] of pool %s", ipRange.Start, ipRange.End, pool.Name)
-				start, end, _ = parseIPRangeStartEnd(ipRange.Start, ipRange.End)
+				start, end, _ = validation.ParseIPRangeStartEnd(ipRange.Start, ipRange.End)
 
 			}
 			combinedRanges[key] = [2]netip.Addr{start, end}
@@ -148,7 +149,7 @@ func validateIPRangesAndSubnetInfo(externalIPPool crdv1beta1.ExternalIPPool, exi
 
 		if ipRange.CIDR != "" {
 			key = fmt.Sprintf("range [%s]", ipRange.CIDR)
-			cidr, errMsg := parseIPRangeCIDR(ipRange.CIDR)
+			cidr, errMsg := validation.ParseIPRangeCIDR(ipRange.CIDR)
 			if errMsg != "" {
 				return errMsg, false
 			}
@@ -158,21 +159,13 @@ func validateIPRangesAndSubnetInfo(externalIPPool crdv1beta1.ExternalIPPool, exi
 			key = fmt.Sprintf("range [%s-%s]", ipRange.Start, ipRange.End)
 
 			var errMsg string
-			start, end, errMsg = parseIPRangeStartEnd(ipRange.Start, ipRange.End)
+			start, end, errMsg = validation.ParseIPRangeStartEnd(ipRange.Start, ipRange.End)
 			if errMsg != "" {
 				return errMsg, false
 			}
 
-			// validate if start and end belong to same ip family
-			if start.Is4() != end.Is4() {
-				return fmt.Sprintf("range start %s and range end %s should belong to same family",
-					ipRange.Start, ipRange.End), false
-			}
-
-			// validate if start address <= end address
-			if start.Compare(end) == 1 {
-				return fmt.Sprintf("range start %s should not be greater than range end %s",
-					ipRange.Start, ipRange.End), false
+			if msg, res := validation.ValidateIPRange(ipRange); !res {
+				return msg, false
 			}
 		}
 
@@ -193,46 +186,6 @@ func validateIPRangesAndSubnetInfo(externalIPPool crdv1beta1.ExternalIPPool, exi
 		combinedRanges[key] = [2]netip.Addr{start, end}
 	}
 	return "", true
-}
-
-func parseIPRangeCIDR(cidrStr string) (netip.Prefix, string) {
-	var cidr netip.Prefix
-	var err error
-
-	cidr, err = netip.ParsePrefix(cidrStr)
-	if err != nil {
-		return cidr, fmt.Sprintf("invalid cidr %s", cidrStr)
-	}
-	cidr = cidr.Masked()
-	return cidr, ""
-}
-
-func parseIPRangeStartEnd(startStr, endStr string) (netip.Addr, netip.Addr, string) {
-	var start, end netip.Addr
-	var err error
-
-	start, err = netip.ParseAddr(startStr)
-	if err != nil {
-		return start, end, fmt.Sprintf("invalid start ip address %s", startStr)
-	}
-
-	end, err = netip.ParseAddr(endStr)
-	if err != nil {
-		return start, end, fmt.Sprintf("invalid end ip address %s", endStr)
-	}
-	return start, end, ""
-}
-
-func getIPRangeSet(ipRanges []crdv1beta1.IPRange) sets.Set[string] {
-	set := sets.New[string]()
-	for _, ipRange := range ipRanges {
-		ipRangeStr := ipRange.CIDR
-		if ipRangeStr == "" {
-			ipRangeStr = fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)
-		}
-		set.Insert(ipRangeStr)
-	}
-	return set
 }
 
 func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
