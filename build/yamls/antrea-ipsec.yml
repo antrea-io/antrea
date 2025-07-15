@@ -4321,7 +4321,7 @@ data:
       # logged on the antrea agent. By default the full set of supported
       # protocols are exported which are:
       # "tcp", "udp", "sctp"
-      protocolFilter: 
+      protocolFilter:
 
     nodePortLocal:
     # Enable NodePortLocal, a feature used to make Pods reachable using port forwarding on the host. To
@@ -5515,7 +5515,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: be503a3fa823f8f59d30534532c6029bc1f579c16b94ccdf1af6b8c8347f02e9
+        checksum/config: b1759a7185fce7308723e0f322796b8d22e55847448b94fc47085e08c36504ae
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5807,7 +5807,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: be503a3fa823f8f59d30534532c6029bc1f579c16b94ccdf1af6b8c8347f02e9
+        checksum/config: b1759a7185fce7308723e0f322796b8d22e55847448b94fc47085e08c36504ae
       labels:
         app: antrea
         component: antrea-controller
