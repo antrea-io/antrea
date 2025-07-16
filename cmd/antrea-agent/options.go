@@ -603,9 +603,9 @@ func (o *Options) validateK8sNodeOptions() error {
 				return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
 			}
 		}
-		if encryptionMode != config.TrafficEncryptionModeNone {
-			return fmt.Errorf("TrafficEncryptionMode %s may only be enabled in %s mode", encryptionMode, config.TrafficEncapModeEncap)
-		}
+		//if encryptionMode != config.TrafficEncryptionModeNone {
+		//	return fmt.Errorf("TrafficEncryptionMode %s may only be enabled in %s mode", encryptionMode, config.TrafficEncapModeEncap)
+		//}
 	}
 	if o.config.NoSNAT && (encapMode != config.TrafficEncapModeNoEncap && encapMode != config.TrafficEncapModeNetworkPolicyOnly) {
 		return fmt.Errorf("noSNAT is only applicable to the %s mode", config.TrafficEncapModeNoEncap)

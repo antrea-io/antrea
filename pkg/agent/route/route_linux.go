@@ -1431,6 +1431,11 @@ func (c *Client) initEgressPolicyIPRules() error {
 		if err := c.netlink.RuleAdd(rule); err != nil {
 			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
 		}
+
+		rule = generateRule(types.EgressPolicyRouteTable, types.ToRemoteViaTunnelMark, &types.ToRemoteViaTunnelMark, netlink.FAMILY_V4)
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
+		}
 	}
 	return nil
 }
@@ -1651,6 +1656,38 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 			podCIDRRoute.Src = c.nodeConfig.GatewayConfig.IPv6
 		}
 		routes = append(routes, podCIDRRoute)
+
+		if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+			policyRoute := &netlink.Route{
+				Dst:       podCIDR,
+				LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+				Gw:        nodeGwIP,
+				Table:     types.EgressPolicyRouteTable,
+			}
+			if podCIDR.IP.To4() == nil {
+				requireNodeGwIPv6RouteAndNeigh = true
+				// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
+				// TODO: Kernel >= 4.16 supports adding IPv6 route with onlink flag. Delete this route after Kernel version
+				//       requirement bump in future.
+				routes = append(routes, &netlink.Route{
+					Dst:       &net.IPNet{IP: nodeGwIP, Mask: net.CIDRMask(128, 128)},
+					LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+					Table:     types.EgressPolicyRouteTable,
+				})
+			} else {
+				policyRoute.Flags = int(netlink.FLAG_ONLINK)
+			}
+			routes = append(routes, policyRoute)
+
+			policyRoute = &netlink.Route{
+				Dst:       &net.IPNet{IP: nodeIP, Mask: net.CIDRMask(32, 32)},
+				LinkIndex: c.nodeConfig.WireGuardConfig.LinkIndex,
+				Src:       c.nodeConfig.GatewayConfig.IPv4,
+				Scope:     netlink.SCOPE_LINK,
+				Table:     types.EgressPolicyRouteTable,
+			}
+			routes = append(routes, policyRoute)
+		}
 	} else if c.networkConfig.NeedsTunnelToPeer(nodeIP, nodeTransportIPAddr) {
 		if podCIDR.IP.To4() == nil {
 			requireNodeGwIPv6RouteAndNeigh = true

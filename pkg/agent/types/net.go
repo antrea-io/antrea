@@ -21,6 +21,8 @@ const (
 
 	// RemotePodSourceBit is the bit of the iptables fwmark space to mark remotely generated Pod packets.
 	RemotePodSourceBit = 30
+
+	ToRemoteViaTunnelBit = 29
 )
 
 var (
@@ -29,6 +31,8 @@ var (
 
 	// RemotePodSourceMark is the mark generated from RemotePodSourceBit.
 	RemotePodSourceMark = uint32(1 << RemotePodSourceBit)
+
+	ToRemoteViaTunnelMark = uint32(1 << ToRemoteViaTunnelBit)
 
 	// SNATIPMarkMask is the bits of packet mark that stores the ID of the
 	// SNAT IP for a "Pod -> external" egress packet, that is to be SNAT'd.

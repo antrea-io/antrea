@@ -638,7 +638,9 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		if peerNodeIP == nil {
 			peerNodeIP = peerNodeIPs.IPv6
 		}
-		if err := c.wireGuardClient.UpdatePeer(nodeName, peerWireGuardPublicKey, peerNodeIP, peerPodCIDRs); err != nil {
+		// TODO: support IPv6
+		allowIPs := append(peerPodCIDRs, &net.IPNet{IP: peerNodeIP, Mask: net.CIDRMask(32, 32)})
+		if err := c.wireGuardClient.UpdatePeer(nodeName, peerWireGuardPublicKey, peerNodeIP, allowIPs); err != nil {
 			return err
 		}
 	}
