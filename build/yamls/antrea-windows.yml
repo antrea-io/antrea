@@ -262,6 +262,10 @@ spec:
         image: antrea/antrea-windows:latest
         imagePullPolicy: IfNotPresent
         name: antrea-agent
+        resources:
+            requests:
+              cpu: 200m
+              memory: 100Mi
         volumeMounts:
         - mountPath: /etc/antrea
           name: antrea-windows-config
@@ -279,6 +283,9 @@ spec:
         image: antrea/antrea-windows:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
+        resources:
+            requests:
+              cpu: 100m
         volumeMounts:
         - mountPath: /etc/antrea
           name: antrea-windows-config
