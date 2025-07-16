@@ -150,6 +150,26 @@ func TestSyncNeighbors(t *testing.T) {
 	assert.NoError(t, c.syncNeighbor())
 }
 
+func TestSyncIPRules(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockNetlink := netlinktest.NewMockInterface(ctrl)
+
+	c := &Client{
+		netlink: mockNetlink,
+		ipRules: sync.Map{},
+	}
+
+	rule1 := &netlink.Rule{Family: netlink.FAMILY_V4, Table: 100, Mark: uint32(0xf), Mask: ptr.To(uint32(0xf))}
+	rule2 := &netlink.Rule{Family: netlink.FAMILY_V6, Table: 101, Mark: uint32(0xf), Mask: ptr.To(uint32(0xf))}
+	mockNetlink.EXPECT().RuleList(netlink.FAMILY_ALL).Return([]netlink.Rule{*rule1}, nil)
+	mockNetlink.EXPECT().RuleAdd(rule2)
+
+	c.ipRules.Store(100, rule1)
+	c.ipRules.Store(101, rule2)
+
+	assert.NoError(t, c.syncIPRule())
+}
+
 func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
