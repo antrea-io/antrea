@@ -15,9 +15,9 @@
     - [Initialize ClusterSet](#initialize-clusterset)
     - [Initialize ClusterSet for a Dual-role Cluster](#initialize-clusterset-for-a-dual-role-cluster)
 - [Multi-cluster Gateway Configuration](#multi-cluster-gateway-configuration)
-  - [Member Cluster Service CIDR Discovery](#member-cluster-service-cidr-discovery)
   - [Multi-cluster WireGuard Encryption](#multi-cluster-wireguard-encryption)
 - [Multi-cluster Service](#multi-cluster-service)
+  - [Member Cluster Service CIDR Discovery](#member-cluster-service-cidr-discovery)
 - [Multi-cluster Pod-to-Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
 - [Multi-cluster NetworkPolicy](#multi-cluster-networkpolicy)
   - [Egress Rule to Multi-cluster Service](#egress-rule-to-multi-cluster-service)
@@ -74,15 +74,13 @@ To use the latest version of Antrea Multi-cluster from the Antrea main branch,
 you can change the YAML manifest path to: `https://github.com/antrea-io/antrea/tree/main/multicluster/build/yamls/`
 when applying or downloading an Antrea YAML manifest.
 
-[Multi-cluster Services](#multi-cluster-service) and
-[multi-cluster Pod-to-Pod connectivity](#multi-cluster-pod-to-pod-connectivity),
-in particular configuration (please check the corresponding sections to learn more
-information), requires an Antrea Multi-cluster Gateway to be set up in each member
-cluster by default to route Service and Pod traffic across clusters. To support
-Multi-cluster Gateways, `antrea-agent` must be deployed with the `Multicluster`
-feature enabled in a member cluster. You can set the following configuration parameters
-in `antrea-agent.conf` of the Antrea deployment manifest to enable the `Multicluster`
-feature:
+Antrea Multi-cluster features including [Multi-cluster Service](#multi-cluster-service),
+[Pod-to-Pod connectivity](#multi-cluster-pod-to-pod-connectivity), and
+[Multi-cluster NetworkPolicy](#multi-cluster-networkpolicy) require the
+`Multicluster` feature gate and [Antrea Multi-cluster Gateway](#multi-cluster-gateway-configuration)
+to be enabled for `antrea-agent` in each member cluster. You can set the
+following configuration options in `antrea-agent.conf` of the Antrea deployment
+manifest to enable the `Multicluster` feature and Multi-cluster Gateway:
 
 ```yaml
 kind: ConfigMap
@@ -99,11 +97,13 @@ data:
       namespace: "" # Change to the Namespace where antrea-mc-controller is deployed.
 ```
 
-In order for Multi-cluster features to work, it is necessary for `enableGateway` to be set to true by
-the user, except when Pod-to-Pod direct connectivity already exists (e.g., provided by the cloud provider)
-and `endpointIPType` is configured as `PodIP`. Details can be found in [Multi-cluster Services](#multi-cluster-service).
-Please note that [Multi-cluster NetworkPolicy](#multi-cluster-networkpolicy) always requires
-Gateway.
+Only when cross-cluster Pod-to-Pod direct connectivity already exists (e.g.
+Pods get routable IPs in the underlay physical or cloud network), Multi-cluster
+Gateway is not required for Multi-cluster Service and Pod-to-Pod communication.
+More information can be found in the [Multi-cluster Gateway](#multi-cluster-gateway-configuration)
+and [Multi-cluster Service](#multi-cluster-service) sections. Please note that
+[Multi-cluster NetworkPolicy](#multi-cluster-networkpolicy) always requires
+Multi-cluster Gateway.
 
 Prior to Antrea v1.11.0, Multi-cluster Gateway only works with Antrea `encap` traffic
 mode, and all member clusters in a ClusterSet must use the same tunnel type. Since
@@ -139,10 +139,10 @@ For a version older than v1.14, please check the user guide document of the vers
 `https://github.com/antrea-io/antrea/blob/release-$version/docs/multicluster/user-guide.md`,
 where `$version` can be `1.12`, `1.13` etc.
 
-   ```bash
-   kubectl create ns antrea-multicluster
-   kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader.yml
-   ```
+```bash
+kubectl create ns antrea-multicluster
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader.yml
+```
 
 The Multi-cluster Controller in the leader cluster will be deployed in Namespace `antrea-multicluster`
 by default. If you'd like to use another Namespace, you can change `antrea-multicluster` to the desired
@@ -331,25 +331,18 @@ spec:
 
 ## Multi-cluster Gateway Configuration
 
-Multi-cluster Gateways are responsible for establishing tunnels between clusters.
+Multi-cluster Gateways establish tunnels between member clusters and route Pod
+and Service traffic across clusters. It is required unless Pod-to-Pod direct
+connectivity already exists across clusters, in which case you can set the
+`endpointIPType` option to `PodIP` in ConfigMap `antrea-mc-controller-config`
+to enable Multi-cluster Service without Multi-cluster Gateway. For more
+information please refer to the [Multi-cluster Service section](#multi-cluster-service).
+
 Each member cluster should have one Node serving as its Multi-cluster Gateway.
-Multi-cluster Service traffic is routed among clusters through the tunnels between
-Gateways.
-
-Below is a table about communication support for different configurations.
-
-| Pod-to-Pod connectivity provided by underlay | Gateway Enabled | MC EndpointTypes  | Cross-cluster Service/Pod communications |
-| -------------------------------------------- | --------------- | ----------------- | ---------------------------------------- |
-| No                                           | No              | N/A               | No                                       |
-| Yes                                          | No              | PodIP             | Yes                                      |
-| No                                           | Yes             | PodIP/ClusterIP   | Yes                                      |
-| Yes                                          | Yes             | PodIP/ClusterIP   | Yes                                      |
-
-After a member cluster joins a ClusterSet, and the `Multicluster` feature is
-enabled on `antrea-agent`, you can select a Node of the cluster to serve as
-the Multi-cluster Gateway by adding an annotation:
-`multicluster.antrea.io/gateway=true` to the K8s Node. For example, you can run
-the following command to annotate Node `node-1` as the Multi-cluster Gateway:
+You can select a Node of a member cluster to be the Multi-cluster Gateway by
+adding an annotation: `multicluster.antrea.io/gateway=true` to the K8s Node. For
+example, you can run the following command to annotate Node `node-1` as the
+Multi-cluster Gateway:
 
 ```bash
 kubectl annotate node node-1 multicluster.antrea.io/gateway=true
@@ -417,16 +410,6 @@ clusters. Once you confirm that all `Gateway` and `ClusterInfoImport` are
 created correctly, you can follow the [Multi-cluster Service](#multi-cluster-service)
 section to create multi-cluster Services and verify cross-cluster Service
 access.
-
-### Member Cluster Service CIDR Discovery
-
-Multi-cluster Controller in a member cluster will try to discover the cluster's
-Service CIDR automatically, when the member cluster is running a K8s version
-earlier than v.1.33.0; while you can also manually specify the `serviceCIDR`
-option in ConfigMap `antrea-mc-controller-config`. For clusters with K8s
-v1.33.0 or later, the `serviceCIDR` option is currently required and must be
-explicitly specified, until support for Service CIDR auto-discovery with newer
-K8s versions is added.
 
 ### Multi-cluster WireGuard Encryption
 
@@ -532,19 +515,38 @@ exported a Service: `default/nginx` with TCP Port `80`, other clusters can only
 export the same Service with the same Ports definition including Port names. At
 the moment, Antrea Multi-cluster supports only IPv4 multi-cluster Services.
 
-By default, a multi-cluster Service will use the exported Services' ClusterIPs (the
-original Service ClusterIPs in the export clusters) as Endpoints. Since Antrea
-v1.9.0, Antrea Multi-cluster also supports using the backend Pod IPs as the
-multi-cluster Service endpoints. You can change the value of configuration option
-`endpointIPType` in ConfigMap `antrea-mc-controller-config` from `ClusterIP`
-to `PodIP` to use Pod IPs as endpoints. All member clusters in a ClusterSet should
-use the same endpoint type. Existing ServiceExports should be re-exported after
-changing `endpointIPType`. `ClusterIP` type requires that Service CIDRs (ClusterIP
-ranges) must not overlap among member clusters, and always requires Multi-cluster
-Gateways to be configured. `PodIP` type requires Pod CIDRs not to overlap among
-clusters, and it also requires Multi-cluster Gateways when there is no direct Pod-to-Pod
-connectivity across clusters. Also refer to [Multi-cluster Pod-to-Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
-for more information.
+By default, a multi-cluster Service will use the exported Services' ClusterIPs
+(the original Service ClusterIPs in the export clusters) as Endpoints. Since
+Antrea v1.9.0, Antrea Multi-cluster also supports using the backend Pod IPs as
+the multi-cluster Service endpoints. You can change the value of `endpointIPType`
+in ConfigMap `antrea-mc-controller-config` from `ClusterIP` to `PodIP` to use
+Pod IPs as endpoints. All member clusters in a ClusterSet must use the same
+endpoint type. Existing ServiceExports should be re-exported after changing
+`endpointIPType`. The `ClusterIP` endpoint type requires that Service CIDRs
+(ClusterIP ranges) must not overlap among member clusters, and requires
+Multi-cluster Gateways to be configured. The `PodIP` endpoint type requires
+Pod CIDRs not to overlap among member clusters, and it also requires
+Multi-cluster Gateways unless there is direct Pod-to-Pod connectivity across
+clusters.
+
+The table below lists the supported configurations.
+
+| Pod-to-Pod connectivity by underlay | Gateway Enabled | Endpoint IP Type |
+| ----------------------------------- | --------------- | ---------------- |
+| Yes                                 | No              | PodIP            |
+| No                                  | Yes             | PodIP/ClusterIP  |
+| Yes                                 | Yes             | PodIP/ClusterIP  |
+
+### Member Cluster Service CIDR Discovery
+
+Multi-cluster Controller in a member cluster needs to export the cluster's
+Service CIDR to other member clusters. when the member cluster is running a K8s
+version earlier than v.1.33.0, Multi-cluster Controller will try to discover
+the cluster's Service CIDR automatically; while you can also manually specify
+the `serviceCIDR` option in ConfigMap `antrea-mc-controller-config`. For
+clusters with K8s v1.33.0 or later, the `serviceCIDR` option is currently
+required and must be explicitly specified, until support for Service CIDR
+auto-discovery with newer K8s versions is added.
 
 ## Multi-cluster Pod-to-Pod Connectivity
 
