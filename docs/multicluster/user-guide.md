@@ -15,6 +15,7 @@
     - [Initialize ClusterSet](#initialize-clusterset)
     - [Initialize ClusterSet for a Dual-role Cluster](#initialize-clusterset-for-a-dual-role-cluster)
 - [Multi-cluster Gateway Configuration](#multi-cluster-gateway-configuration)
+  - [Member Cluster Service CIDR Discovery](#member-cluster-service-cidr-discovery)
   - [Multi-cluster WireGuard Encryption](#multi-cluster-wireguard-encryption)
 - [Multi-cluster Service](#multi-cluster-service)
 - [Multi-cluster Pod-to-Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
@@ -399,13 +400,11 @@ supported.
 After the Gateway is created, Multi-cluster Controller will be responsible
 for exporting the cluster's network information to other member clusters
 through the leader cluster, including the cluster's Gateway IP and Service
-CIDR. Multi-cluster Controller will try to discover the cluster's Service CIDR
-automatically, but you can also manually specify the `serviceCIDR` option in
-ConfigMap `antrea-mc-controller-config`. In other member clusters, a
-ClusterInfoImport CR will be created for the cluster which includes the
-exported network information. For example, in cluster `test-cluster-west`, you
-you can see a ClusterInfoImport CR with name `test-cluster-east-clusterinfo`
-is created for cluster `test-cluster-east`:
+CIDR (check [Member Cluster Service CIDR Discovery](#member-cluster-service-cidr-discovery)).
+In other member clusters, a ClusterInfoImport CR will be created for the
+cluster which includes the exported network information. For example, in cluster
+`test-cluster-west`, you can see a ClusterInfoImport CR with name
+`test-cluster-east-clusterinfo` is created for cluster `test-cluster-east`:
 
 ```bash
 $ kubectl get clusterinfoimport -n kube-system
@@ -418,6 +417,16 @@ clusters. Once you confirm that all `Gateway` and `ClusterInfoImport` are
 created correctly, you can follow the [Multi-cluster Service](#multi-cluster-service)
 section to create multi-cluster Services and verify cross-cluster Service
 access.
+
+### Member Cluster Service CIDR Discovery
+
+Multi-cluster Controller in a member cluster will try to discover the cluster's
+Service CIDR automatically, when the member cluster is running a K8s version
+earlier than v.1.33.0; while you can also manually specify the `serviceCIDR`
+option in ConfigMap `antrea-mc-controller-config`. For clusters with K8s
+v1.33.0 or later, the `serviceCIDR` option is currently required and must be
+explicitly specified, until support for Service CIDR auto-discovery with newer
+K8s versions is added.
 
 ### Multi-cluster WireGuard Encryption
 
