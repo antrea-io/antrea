@@ -38,7 +38,7 @@ AWS_SERVICE_USER_ROLE_ARN=""
 AWS_DURATION_SECONDS=7200
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
-                  [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--aws-service-user <ServiceUserName>]\
+                  [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>]\
                   [--aws-service-user-role-arn <ServiceUserRoleARN>] [--ssh-key <SSHKey] [--ssh-private-key <SSHPrivateKey] [--log-mode <SonobuoyResultLogLevel>]\
                   [--setup-only] [--cleanup-only]
 
@@ -50,7 +50,6 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --aws-access-key              AWS Acess Key for logging in to awscli.
         --aws-secret-key              AWS Secret Key for logging in to awscli.
         --aws-service-user-role-arn   AWS Service User Role ARN for logging in to awscli.
-        --aws-service-user            AWS Service User Name for logging in to awscli.
         --aws-region                  The AWS region where the cluster will be initiated. Defaults to us-east-2.
         --ssh-key                     The path of key to be used for ssh access to worker nodes.
         --log-mode                    Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
