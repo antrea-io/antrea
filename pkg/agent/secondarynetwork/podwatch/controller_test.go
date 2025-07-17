@@ -335,8 +335,7 @@ func TestPodControllerRun(t *testing.T) {
 		containerNetNS(containerID),
 		interfaceName,
 		defaultMTU,
-		// We haven't updated the vfDeviceIDUsageMap, so a different device will be allocated.
-		sriovDeviceID12,
+		sriovDeviceID11,
 		&ipamResult.Result,
 	).Do(func(string, string, string, string, string, int, string, *current.Result) {
 		atomic.AddInt32(&interfaceConfigured, 1)
@@ -1144,15 +1143,26 @@ func TestPodControllerAddPod(t *testing.T) {
 	t.Run("updating deviceID cache per Pod", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		podController, _, _, _ := testPodController(ctrl)
-		_, err := podController.assignUnusedSriovVFDeviceID(podName, testNamespace, sriovResourceName1, interfaceName)
-		_, exists := podController.vfDeviceIDUsageMap.Load(podKey)
+		tmpPodName := "poda"
+		tmpPodNamespace := "testns"
+		tmpPodKey := podKeyGet(tmpPodName, tmpPodNamespace)
+		_, err := podController.assignSriovVFDeviceID(tmpPodName, tmpPodNamespace, sriovResourceName1, interfaceName)
+		vfDeviceIDInfoCache, exists := podController.vfDeviceIDUsageMap.Load(tmpPodKey)
 		assert.True(t, exists)
+		vfDeviceIDsInfo := vfDeviceIDInfoCache.([]podSriovVFDeviceIDInfo)
+		assert.Equal(t, interfaceName, vfDeviceIDsInfo[0].ifName, "incorrect interface name")
 		require.NoError(t, err, "error while assigning unused VfDevice ID")
-		podController.releaseSriovVFDeviceID(podName, testNamespace, interfaceName)
-		_, exists = podController.vfDeviceIDUsageMap.Load(podKey)
+		// The second call would get the assigned SR-IOV device ID directly.
+		deviceID, err := podController.assignSriovVFDeviceID(tmpPodName, tmpPodNamespace, sriovResourceName1, interfaceName)
+		_, exists = podController.vfDeviceIDUsageMap.Load(tmpPodKey)
 		assert.True(t, exists)
-		podController.deleteVFDeviceIDListPerPod(podName, testNamespace)
-		_, exists = podController.vfDeviceIDUsageMap.Load(podKey)
+		assert.Equal(t, sriovDeviceID11, deviceID, "incorrect device ID")
+		require.NoError(t, err, "error while getting assigned VfDevice ID")
+		podController.releaseSriovVFDeviceID(tmpPodName, tmpPodNamespace, interfaceName)
+		_, exists = podController.vfDeviceIDUsageMap.Load(tmpPodKey)
+		assert.True(t, exists)
+		podController.deleteVFDeviceIDListPerPod(tmpPodName, tmpPodNamespace)
+		_, exists = podController.vfDeviceIDUsageMap.Load(tmpPodKey)
 		assert.False(t, exists)
 	})
 }
