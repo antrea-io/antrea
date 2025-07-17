@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,59 +17,36 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	statsv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeAntreaClusterNetworkPolicyStats implements AntreaClusterNetworkPolicyStatsInterface
-type FakeAntreaClusterNetworkPolicyStats struct {
+// fakeAntreaClusterNetworkPolicyStats implements AntreaClusterNetworkPolicyStatsInterface
+type fakeAntreaClusterNetworkPolicyStats struct {
+	*gentype.FakeClientWithList[*v1alpha1.AntreaClusterNetworkPolicyStats, *v1alpha1.AntreaClusterNetworkPolicyStatsList]
 	Fake *FakeStatsV1alpha1
 }
 
-var antreaclusternetworkpolicystatsResource = v1alpha1.SchemeGroupVersion.WithResource("antreaclusternetworkpolicystats")
-
-var antreaclusternetworkpolicystatsKind = v1alpha1.SchemeGroupVersion.WithKind("AntreaClusterNetworkPolicyStats")
-
-// Get takes name of the antreaClusterNetworkPolicyStats, and returns the corresponding antreaClusterNetworkPolicyStats object, and an error if there is any.
-func (c *FakeAntreaClusterNetworkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.AntreaClusterNetworkPolicyStats, err error) {
-	emptyResult := &v1alpha1.AntreaClusterNetworkPolicyStats{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(antreaclusternetworkpolicystatsResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeAntreaClusterNetworkPolicyStats(fake *FakeStatsV1alpha1) statsv1alpha1.AntreaClusterNetworkPolicyStatsInterface {
+	return &fakeAntreaClusterNetworkPolicyStats{
+		gentype.NewFakeClientWithList[*v1alpha1.AntreaClusterNetworkPolicyStats, *v1alpha1.AntreaClusterNetworkPolicyStatsList](
+			fake.Fake,
+			"",
+			v1alpha1.SchemeGroupVersion.WithResource("antreaclusternetworkpolicystats"),
+			v1alpha1.SchemeGroupVersion.WithKind("AntreaClusterNetworkPolicyStats"),
+			func() *v1alpha1.AntreaClusterNetworkPolicyStats { return &v1alpha1.AntreaClusterNetworkPolicyStats{} },
+			func() *v1alpha1.AntreaClusterNetworkPolicyStatsList {
+				return &v1alpha1.AntreaClusterNetworkPolicyStatsList{}
+			},
+			func(dst, src *v1alpha1.AntreaClusterNetworkPolicyStatsList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.AntreaClusterNetworkPolicyStatsList) []*v1alpha1.AntreaClusterNetworkPolicyStats {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.AntreaClusterNetworkPolicyStatsList, items []*v1alpha1.AntreaClusterNetworkPolicyStats) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.AntreaClusterNetworkPolicyStats), err
-}
-
-// List takes label and field selectors, and returns the list of AntreaClusterNetworkPolicyStats that match those selectors.
-func (c *FakeAntreaClusterNetworkPolicyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.AntreaClusterNetworkPolicyStatsList, err error) {
-	emptyResult := &v1alpha1.AntreaClusterNetworkPolicyStatsList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(antreaclusternetworkpolicystatsResource, antreaclusternetworkpolicystatsKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.AntreaClusterNetworkPolicyStatsList{ListMeta: obj.(*v1alpha1.AntreaClusterNetworkPolicyStatsList).ListMeta}
-	for _, item := range obj.(*v1alpha1.AntreaClusterNetworkPolicyStatsList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested antreaClusterNetworkPolicyStats.
-func (c *FakeAntreaClusterNetworkPolicyStats) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(antreaclusternetworkpolicystatsResource, opts))
 }

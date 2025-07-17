@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta1
 
 import (
-	"context"
+	context "context"
 
-	v1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
@@ -33,25 +33,26 @@ type SupportBundlesGetter interface {
 
 // SupportBundleInterface has methods to work with SupportBundle resources.
 type SupportBundleInterface interface {
-	Create(ctx context.Context, supportBundle *v1beta1.SupportBundle, opts v1.CreateOptions) (*v1beta1.SupportBundle, error)
+	Create(ctx context.Context, supportBundle *systemv1beta1.SupportBundle, opts v1.CreateOptions) (*systemv1beta1.SupportBundle, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.SupportBundle, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*systemv1beta1.SupportBundle, error)
 	SupportBundleExpansion
 }
 
 // supportBundles implements SupportBundleInterface
 type supportBundles struct {
-	*gentype.Client[*v1beta1.SupportBundle]
+	*gentype.Client[*systemv1beta1.SupportBundle]
 }
 
 // newSupportBundles returns a SupportBundles
 func newSupportBundles(c *SystemV1beta1Client) *supportBundles {
 	return &supportBundles{
-		gentype.NewClient[*v1beta1.SupportBundle](
+		gentype.NewClient[*systemv1beta1.SupportBundle](
 			"supportbundles",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta1.SupportBundle { return &v1beta1.SupportBundle{} }),
+			func() *systemv1beta1.SupportBundle { return &systemv1beta1.SupportBundle{} },
+		),
 	}
 }

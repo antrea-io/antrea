@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // BGPPolicyLister helps list BGPPolicies.
@@ -28,19 +28,19 @@ import (
 type BGPPolicyLister interface {
 	// List lists all BGPPolicies in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.BGPPolicy, err error)
+	List(selector labels.Selector) (ret []*crdv1alpha1.BGPPolicy, err error)
 	// Get retrieves the BGPPolicy from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.BGPPolicy, error)
+	Get(name string) (*crdv1alpha1.BGPPolicy, error)
 	BGPPolicyListerExpansion
 }
 
 // bGPPolicyLister implements the BGPPolicyLister interface.
 type bGPPolicyLister struct {
-	listers.ResourceIndexer[*v1alpha1.BGPPolicy]
+	listers.ResourceIndexer[*crdv1alpha1.BGPPolicy]
 }
 
 // NewBGPPolicyLister returns a new BGPPolicyLister.
 func NewBGPPolicyLister(indexer cache.Indexer) BGPPolicyLister {
-	return &bGPPolicyLister{listers.New[*v1alpha1.BGPPolicy](indexer, v1alpha1.Resource("bgppolicy"))}
+	return &bGPPolicyLister{listers.New[*crdv1alpha1.BGPPolicy](indexer, crdv1alpha1.Resource("bgppolicy"))}
 }
