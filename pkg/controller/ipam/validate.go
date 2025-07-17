@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 
 	admv1 "k8s.io/api/admission/v1"
@@ -227,16 +228,26 @@ func validateIPRange(r crdv1beta1.IPRange, subnetInfo crdv1beta1.SubnetInfo) (bo
 				r.CIDR, netCIDR.IP.String(), subnetInfo.PrefixLength)
 		}
 	} else {
-		rStart := net.ParseIP(r.Start)
-		rEnd := net.ParseIP(r.End)
-		if utilnet.IPFamilyOf(rStart) != gatewayIPVersion || utilnet.IPFamilyOf(rEnd) != gatewayIPVersion {
+		startAddr, _ := netip.ParseAddr(r.Start)
+		endAddr, _ := netip.ParseAddr(r.End)
+
+		startNetIP := net.IP(startAddr.AsSlice())
+		endNetIP := net.IP(endAddr.AsSlice())
+
+		if utilnet.IPFamilyOf(startNetIP) != gatewayIPVersion || utilnet.IPFamilyOf(endNetIP) != gatewayIPVersion {
 			return false, fmt.Sprintf(
 				"Range is invalid. IP version of range %s-%s differs from gateway IP version", r.Start, r.End)
 		}
-		if !netCIDR.Contains(rStart) || !netCIDR.Contains(rEnd) {
+		if !netCIDR.Contains(startNetIP) || !netCIDR.Contains(endNetIP) {
 			return false, fmt.Sprintf(
 				"Range is invalid. range %s-%s is not contained within subnet %s/%d",
 				r.Start, r.End, netCIDR.IP.String(), subnetInfo.PrefixLength)
+		}
+
+		// validate if start address <= end address
+		if startAddr.Compare(endAddr) == 1 {
+			return false, fmt.Sprintf("range start %s should not be greater than range end %s",
+				r.Start, r.End)
 		}
 	}
 

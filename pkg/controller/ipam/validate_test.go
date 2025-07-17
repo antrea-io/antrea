@@ -95,6 +95,27 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			},
 		},
 		{
+			name: "CREATE operation with invalid iprange should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges = []crdv1beta1.IPRange{
+						{
+							Start: "192.168.0.10",
+							End:   "192.168.0.9",
+						},
+					}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "range start 192.168.0.10 should not be greater than range end 192.168.0.9",
+				},
+			},
+		},
+		{
 			name: "CREATE operation with CIDR partially overlap with IP range should not be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
