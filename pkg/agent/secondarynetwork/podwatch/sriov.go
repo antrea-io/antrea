@@ -147,18 +147,29 @@ func (pc *PodController) releaseSriovVFDeviceID(podName, podNamespace, interface
 	}
 }
 
-func (pc *PodController) assignUnusedSriovVFDeviceID(podName, podNamespace, resourceName, interfaceName string) (string, error) {
+func (pc *PodController) assignSriovVFDeviceID(podName, podNamespace, resourceName, interfaceName string) (string, error) {
 	var cache []podSriovVFDeviceIDInfo
 	cache, err := pc.buildVFDeviceIDListPerPod(podName, podNamespace)
 	if err != nil {
 		return "", err
 	}
-	for idx := range cache {
-		if cache[idx].resourceName == resourceName && cache[idx].ifName == "" {
-			// Unused PCI address found. Associate PCI address to the interface.
-			cache[idx].ifName = interfaceName
-			return cache[idx].vfDeviceID, nil
+
+	var unusedIdx = -1
+	for i := range cache {
+		entry := &cache[i]
+		if entry.resourceName == resourceName {
+			if entry.ifName == interfaceName {
+				return entry.vfDeviceID, nil
+			}
+			if entry.ifName == "" && unusedIdx == -1 {
+				unusedIdx = i // remember the first match of unused PCI address
+			}
 		}
+	}
+
+	if unusedIdx != -1 {
+		cache[unusedIdx].ifName = interfaceName
+		return cache[unusedIdx].vfDeviceID, nil
 	}
 	return "", fmt.Errorf("no available device")
 }
@@ -172,7 +183,7 @@ func (pc *PodController) configureSriovAsSecondaryInterface(
 	mtu int,
 	result *current.Result,
 ) error {
-	podSriovVFDeviceID, err := pc.assignUnusedSriovVFDeviceID(pod.Name, pod.Namespace, resourceName, network.InterfaceRequest)
+	podSriovVFDeviceID, err := pc.assignSriovVFDeviceID(pod.Name, pod.Namespace, resourceName, network.InterfaceRequest)
 	if err != nil {
 		return err
 	}
