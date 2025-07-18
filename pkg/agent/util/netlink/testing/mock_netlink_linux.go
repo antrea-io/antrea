@@ -128,6 +128,34 @@ func (mr *MockInterfaceMockRecorder) ConntrackDeleteFilter(table, family, filter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConntrackDeleteFilter", reflect.TypeOf((*MockInterface)(nil).ConntrackDeleteFilter), table, family, filter)
 }
 
+// FilterDel mocks base method.
+func (m *MockInterface) FilterDel(filter netlink.Filter) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FilterDel", filter)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// FilterDel indicates an expected call of FilterDel.
+func (mr *MockInterfaceMockRecorder) FilterDel(filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterDel", reflect.TypeOf((*MockInterface)(nil).FilterDel), filter)
+}
+
+// FilterReplace mocks base method.
+func (m *MockInterface) FilterReplace(filter netlink.Filter) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FilterReplace", filter)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// FilterReplace indicates an expected call of FilterReplace.
+func (mr *MockInterfaceMockRecorder) FilterReplace(filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterReplace", reflect.TypeOf((*MockInterface)(nil).FilterReplace), filter)
+}
+
 // LinkAddAltName mocks base method.
 func (m *MockInterface) LinkAddAltName(link netlink.Link, name string) error {
 	m.ctrl.T.Helper()
@@ -341,6 +369,34 @@ func (m *MockInterface) NeighSet(neigh *netlink.Neigh) error {
 func (mr *MockInterfaceMockRecorder) NeighSet(neigh any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NeighSet", reflect.TypeOf((*MockInterface)(nil).NeighSet), neigh)
+}
+
+// QdiscDel mocks base method.
+func (m *MockInterface) QdiscDel(qdisc netlink.Qdisc) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QdiscDel", qdisc)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// QdiscDel indicates an expected call of QdiscDel.
+func (mr *MockInterfaceMockRecorder) QdiscDel(qdisc any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QdiscDel", reflect.TypeOf((*MockInterface)(nil).QdiscDel), qdisc)
+}
+
+// QdiscReplace mocks base method.
+func (m *MockInterface) QdiscReplace(qdisc netlink.Qdisc) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QdiscReplace", qdisc)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// QdiscReplace indicates an expected call of QdiscReplace.
+func (mr *MockInterfaceMockRecorder) QdiscReplace(qdisc any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QdiscReplace", reflect.TypeOf((*MockInterface)(nil).QdiscReplace), qdisc)
 }
 
 // RouteAdd mocks base method.

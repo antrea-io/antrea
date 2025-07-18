@@ -2521,3 +2521,281 @@ func TestClearConntrackEntryForService(t *testing.T) {
 		})
 	}
 }
+
+func TestAddTcFiltersRedirectBetweenGwAndTransport(t *testing.T) {
+	peerPodCIDR := ip.MustParseCIDR("192.168.1.0/24")
+	peerNodeIP := ip.MustParseCIDR("192.168.77.101/24")
+	peerNodeIPInAnotherSubnet := ip.MustParseCIDR("192.168.78.101/24")
+	podCIDR := ip.MustParseCIDR("192.168.0.0/24")
+	nodeTransportAddr := ip.MustParseCIDR("192.168.77.100/24")
+	gwIfindex := 10
+	nodeTransportIfindex := 11
+	filterOnGw := generateTcFilterWithActionRedirect(gwIfindex,
+		nodeTransportIfindex,
+		unix.ETH_P_IP,
+		podCIDR,
+		peerPodCIDR,
+		tcPriorityNormal,
+		1)
+	filterOnTransport := generateTcFilterWithActionRedirect(nodeTransportIfindex,
+		gwIfindex,
+		unix.ETH_P_IP,
+		peerPodCIDR,
+		podCIDR,
+		tcPriorityNormal,
+		1)
+	nodeConfig := &config.NodeConfig{
+		GatewayConfig: &config.GatewayConfig{
+			LinkIndex: gwIfindex,
+			IPv4:      net.ParseIP("192.168.0.1"),
+		},
+		PodIPv4CIDR:                 podCIDR,
+		NodeTransportInterfaceIndex: nodeTransportIfindex,
+		NodeTransportIPv4Addr:       nodeTransportAddr,
+	}
+
+	testCases := []struct {
+		name          string
+		networkConfig *config.NetworkConfig
+		peerPodCIDR   *net.IPNet
+		peerNodeIP    *net.IPNet
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+		expectedErr   string
+	}{
+		{
+			name: "Skip when encap mode",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+			},
+			peerPodCIDR:   peerPodCIDR,
+			peerNodeIP:    peerNodeIP,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name: "Skip when peer Node is in a different subnet",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeHybrid,
+			},
+			peerPodCIDR:   peerPodCIDR,
+			peerNodeIP:    peerNodeIPInAnotherSubnet,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name: "Successfully installed all tc filters",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+			},
+			peerPodCIDR: peerPodCIDR,
+			peerNodeIP:  peerNodeIP,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterReplace(filterOnGw).Times(1)
+				mockNetlink.FilterReplace(filterOnTransport).Times(1)
+			},
+		},
+		{
+			name: "Failed to install all tc filters",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+			},
+			peerPodCIDR: peerPodCIDR,
+			peerNodeIP:  peerNodeIP,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterReplace(filterOnGw).Times(1)
+				mockNetlink.FilterReplace(filterOnTransport).Return(fmt.Errorf("failed to install tc filter")).Times(1)
+			},
+			expectedErr: "failed to install tc filter",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:           mockNetlink,
+				networkConfig:     tc.networkConfig,
+				nodeConfig:        nodeConfig,
+				tcHandleAllocator: newTcHandleAllocator(),
+			}
+			tc.expectedCalls(mockNetlink.EXPECT())
+			err := c.AddTcFiltersRedirectBetweenGwAndTransport(podCIDR,
+				tc.peerPodCIDR,
+				tc.peerNodeIP.IP,
+				gwIfindex,
+				nodeTransportIfindex)
+			v, ok := c.tcFilters.Load(tc.peerPodCIDR.String())
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+				if ok {
+					assert.IsType(t, []netlink.Filter{}, v)
+				}
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+				assert.False(t, ok)
+				assert.Nil(t, v)
+			}
+		})
+	}
+}
+
+func TestDeleteTcFiltersRedirectBetweenGwAndTransport(t *testing.T) {
+	unknownPeerPodCIDR := ip.MustParseCIDR("192.168.2.0/24")
+	peerPodCIDR := ip.MustParseCIDR("192.168.1.0/24")
+	gwIfindex := 10
+	nodeTransportIfindex := 11
+	gwFilter := &netlink.Flower{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: gwIfindex,
+			Priority:  tcPriorityNormal,
+			Handle:    1,
+		},
+	}
+	transportFilter := &netlink.Flower{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: nodeTransportIfindex,
+			Priority:  tcPriorityNormal,
+			Handle:    1,
+		},
+	}
+	existingTcFilters := map[string][]netlink.Filter{peerPodCIDR.String(): {gwFilter, transportFilter}}
+
+	testCases := []struct {
+		name          string
+		peerPodCIDR   *net.IPNet
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+		expectedErr   string
+	}{
+		{
+			name:          "Unknown peer Pod CIDR",
+			peerPodCIDR:   unknownPeerPodCIDR,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name:        "successfully deleted all tc filters",
+			peerPodCIDR: peerPodCIDR,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterDel(gwFilter).Times(1)
+				mockNetlink.FilterDel(transportFilter).Times(1)
+			},
+		},
+		{
+			name:        "Failed to delete all tc filters",
+			peerPodCIDR: peerPodCIDR,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterDel(gwFilter).Times(1)
+				mockNetlink.FilterDel(transportFilter).Return(fmt.Errorf("failed to delete tc filter")).Times(1)
+			},
+			expectedErr: "failed to delete tc filter",
+		},
+		{
+			name:        "Ignore when deleting a tc filter that doesn't exist",
+			peerPodCIDR: peerPodCIDR,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterDel(gwFilter).Times(1)
+				mockNetlink.FilterDel(transportFilter).Return(fmt.Errorf("no such file or directory")).Times(1)
+			},
+			expectedErr: "",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:           mockNetlink,
+				tcHandleAllocator: newTcHandleAllocator(),
+			}
+			for k, v := range existingTcFilters {
+				c.tcFilters.Store(k, v)
+			}
+			tc.expectedCalls(mockNetlink.EXPECT())
+			err := c.DeleteTcFiltersRedirectBetweenGwAndTransport(tc.peerPodCIDR)
+			v, ok := c.tcFilters.Load(tc.peerPodCIDR.String())
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+				assert.False(t, ok)
+				assert.Nil(t, v)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+				assert.True(t, ok)
+				assert.NotNil(t, v)
+			}
+		})
+	}
+}
+
+func TestAddTcFilterPassToGw(t *testing.T) {
+	transportIfindex := 10
+	tests := []struct {
+		name          string
+		gatewayIP     net.IP
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+		expectedErr   string
+	}{
+		{
+			name:      "successfully installed IPv4 tc filter",
+			gatewayIP: net.ParseIP("10.10.0.1"),
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				filter := generateTcFilterWithActionPass(transportIfindex,
+					unix.ETH_P_IP,
+					&net.IPNet{IP: net.ParseIP("10.10.0.1"), Mask: net.CIDRMask(32, 32)},
+					tcPriorityHigh,
+					1)
+				mockNetlink.FilterReplace(filter).Times(1)
+			},
+		},
+		{
+			name:      "successfully installed IPv6 tc filter",
+			gatewayIP: net.ParseIP("fd00::1"),
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				filter := generateTcFilterWithActionPass(transportIfindex,
+					unix.ETH_P_IPV6,
+					&net.IPNet{IP: net.ParseIP("fd00::1"), Mask: net.CIDRMask(128, 128)},
+					tcPriorityHigh,
+					1)
+				mockNetlink.FilterReplace(filter).Times(1)
+			},
+		},
+		{
+			name:      "Failed to add tc filter",
+			gatewayIP: net.ParseIP("10.10.0.1"),
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				filter := generateTcFilterWithActionPass(transportIfindex,
+					unix.ETH_P_IP,
+					&net.IPNet{IP: net.ParseIP("10.10.0.1"), Mask: net.CIDRMask(32, 32)},
+					tcPriorityHigh,
+					1)
+				mockNetlink.FilterReplace(filter).Return(fmt.Errorf("failed to add tc filter")).Times(1)
+			},
+			expectedErr: "failed to add tc filter",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:           mockNetlink,
+				tcHandleAllocator: newTcHandleAllocator(),
+			}
+			tc.expectedCalls(mockNetlink.EXPECT())
+			err := c.AddTcFilterPassToGw(tc.gatewayIP, transportIfindex)
+
+			var gatewayIPNet *net.IPNet
+			if tc.gatewayIP.To4() == nil {
+				gatewayIPNet = &net.IPNet{IP: tc.gatewayIP, Mask: net.CIDRMask(128, 128)}
+			} else {
+				gatewayIPNet = &net.IPNet{IP: tc.gatewayIP, Mask: net.CIDRMask(32, 32)}
+			}
+			v, ok := c.tcFilters.Load(gatewayIPNet.String())
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+				assert.True(t, ok)
+				assert.NotNil(t, v)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+				assert.False(t, ok)
+				assert.Nil(t, v)
+			}
+		})
+	}
+}

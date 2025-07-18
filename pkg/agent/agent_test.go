@@ -423,17 +423,21 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 					TunnelType:       tt.tunnelType,
 				},
 			}
+
+			expectedNodeConfig.NodeTransportInterfaceIndex = ipDevice.Index
 			if tt.transportIfName != "" {
 				initializer.networkConfig.TransportIface = tt.transportInterface.iface.Name
 				expectedNodeConfig.NodeTransportInterfaceName = tt.transportInterface.iface.Name
 				expectedNodeConfig.NodeTransportIPv4Addr = tt.transportInterface.ipV4Net
 				expectedNodeConfig.NodeTransportIPv6Addr = tt.transportInterface.ipV6Net
+				expectedNodeConfig.NodeTransportInterfaceIndex = testTransportIface.iface.Index
 				mockGetTransportIPNetDeviceByName(t, tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)
 			} else if len(tt.transportIfCIDRs) > 0 {
 				initializer.networkConfig.TransportIfaceCIDRs = tt.transportIfCIDRs
 				expectedNodeConfig.NodeTransportInterfaceName = tt.transportInterface.iface.Name
 				expectedNodeConfig.NodeTransportIPv4Addr = tt.transportInterface.ipV4Net
 				expectedNodeConfig.NodeTransportIPv6Addr = tt.transportInterface.ipV6Net
+				expectedNodeConfig.NodeTransportInterfaceIndex = testTransportIface.iface.Index
 				mockGetIPNetDeviceByCIDRs(t, tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)
 			}
 

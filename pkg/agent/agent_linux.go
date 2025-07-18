@@ -273,3 +273,29 @@ func (i *Initializer) setTXChecksumOffloadOnGateway() error {
 	}
 	return nil
 }
+
+func (i *Initializer) addTcQdiscs() error {
+	err := i.routeClient.AddTcQdiscClsAct(i.nodeConfig.GatewayConfig.LinkIndex)
+	if err != nil {
+		return fmt.Errorf("error when adding tc qdisc clsact on host gateway interface: %w", err)
+	}
+	err = i.routeClient.AddTcQdiscClsAct(i.nodeConfig.NodeTransportInterfaceIndex)
+	if err != nil {
+		return fmt.Errorf("error when adding tc qdisc clsact on host transport interface: %w", err)
+	}
+	return nil
+}
+
+func (i *Initializer) addTcFiltersPassToGw() error {
+	if i.nodeConfig.PodIPv4CIDR != nil {
+		if err := i.routeClient.AddTcFilterPassToGw(i.nodeConfig.GatewayConfig.IPv4, i.nodeConfig.NodeTransportInterfaceIndex); err != nil {
+			return fmt.Errorf("error when adding tc filter to IPv4 traffic received on transport interface and destined for gateway: %w", err)
+		}
+	}
+	if i.nodeConfig.PodIPv6CIDR != nil {
+		if err := i.routeClient.AddTcFilterPassToGw(i.nodeConfig.GatewayConfig.IPv6, i.nodeConfig.NodeTransportInterfaceIndex); err != nil {
+			return fmt.Errorf("error when adding tc filter to IPv6 traffic received on transport interface and destined for gateway: %w", err)
+		}
+	}
+	return nil
+}

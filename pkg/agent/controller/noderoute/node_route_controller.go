@@ -502,6 +502,9 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 		if err := c.routeClient.DeleteRoutes(podCIDR); err != nil {
 			return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 		}
+		if err := c.routeClient.DeleteTcFiltersRedirectBetweenGwAndTransport(podCIDR); err != nil {
+			return fmt.Errorf("failed to delete the tc filter for Node %s: %v", nodeName, err)
+		}
 	}
 	if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
 		return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
@@ -658,9 +661,23 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 			if err := c.routeClient.AddRoutes(peerPodCIDR, nodeName, peerNodeIPs.IPv6, peerGatewayIP); err != nil {
 				return err
 			}
+			if err := c.routeClient.AddTcFiltersRedirectBetweenGwAndTransport(c.nodeConfig.PodIPv6CIDR,
+				peerPodCIDR,
+				peerNodeIPs.IPv6,
+				c.nodeConfig.GatewayConfig.LinkIndex,
+				c.nodeConfig.NodeTransportInterfaceIndex); err != nil {
+				return err
+			}
 			peerGatewayIPs.IPv6 = peerGatewayIP
 		} else {
 			if err := c.routeClient.AddRoutes(peerPodCIDR, nodeName, peerNodeIPs.IPv4, peerGatewayIP); err != nil {
+				return err
+			}
+			if err := c.routeClient.AddTcFiltersRedirectBetweenGwAndTransport(c.nodeConfig.PodIPv4CIDR,
+				peerPodCIDR,
+				peerNodeIPs.IPv4,
+				c.nodeConfig.GatewayConfig.LinkIndex,
+				c.nodeConfig.NodeTransportInterfaceIndex); err != nil {
 				return err
 			}
 			peerGatewayIPs.IPv4 = peerGatewayIP

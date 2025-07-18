@@ -77,4 +77,12 @@ type Interface interface {
 	LinkList() ([]netlink.Link, error)
 
 	ConntrackDeleteFilter(table netlink.ConntrackTableType, family netlink.InetFamily, filter netlink.CustomConntrackFilter) (uint, error)
+
+	FilterReplace(filter netlink.Filter) error
+
+	FilterDel(filter netlink.Filter) error
+
+	QdiscReplace(qdisc netlink.Qdisc) error
+
+	QdiscDel(qdisc netlink.Qdisc) error
 }
