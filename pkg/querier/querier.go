@@ -16,6 +16,7 @@ package querier
 
 import (
 	"context"
+	"net/netip"
 	"regexp"
 
 	v1 "k8s.io/api/core/v1"
@@ -158,4 +159,11 @@ type AgentBGPPolicyInfoQuerier interface {
 	GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error)
 	// GetBGPRoutes returns the advertised BGP routes.
 	GetBGPRoutes(ctx context.Context) (map[bgp.Route]bgpcontroller.RouteMetadata, error)
+}
+
+type NodeRouteQuerier interface {
+	// LookupIPInPodSubnets returns two boolean values. The first one indicates whether the IP can be
+	// found in a PodCIDR for one of the cluster Nodes. The second one indicates whether the IP is used
+	// as a gateway IP. The second boolean value can only be true if the first one is true.
+	LookupIPInPodSubnets(ip netip.Addr) (bool, bool)
 }

@@ -17,6 +17,7 @@ package traceflow
 import (
 	"bytes"
 	"net"
+	"net/netip"
 	"os"
 	"testing"
 
@@ -100,6 +101,13 @@ var (
 	}
 )
 
+type fakeNodeRouteQuerier struct{}
+
+func (f *fakeNodeRouteQuerier) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
+	podCIDR, _ := netip.ParsePrefix("192.168.11.0/24")
+	return podCIDR.Contains(ip), false
+}
+
 type fakeTraceflowController struct {
 	*Controller
 	kubeClient           kubernetes.Interface
@@ -141,6 +149,7 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		ofClient:              mockOFClient,
 		networkPolicyQuerier:  npQuerier,
 		egressQuerier:         egressQuerier,
+		nodeRouteQuerier:      &fakeNodeRouteQuerier{},
 		interfaceStore:        ifaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
