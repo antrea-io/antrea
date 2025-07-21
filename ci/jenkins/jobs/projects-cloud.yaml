@@ -693,7 +693,7 @@
           - shell: |-
               #!/bin/bash
               sudo ./ci/test-conformance-eks.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
-                --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --aws-service-user ${{AWS_SERVICE_USER_NAME}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} \
+                --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} \
                 --log-mode detail --setup-only
           triggers:
           - timed: H H */2 * *
@@ -724,9 +724,6 @@
             - text:
                 credential-id: AWS_SERVICE_USER_ROLE_ARN # Jenkins secret that stores aws role arn
                 variable: AWS_SERVICE_USER_ROLE_ARN
-            - text:
-                credential-id: AWS_SERVICE_USER_NAME # Jenkins secret that stores aws source profile
-                variable: AWS_SERVICE_USER_NAME
       - 'cloud-{name}-{test_name}-cleanup':
           test_name: eks
           description: This is for deleting EKS test clusters.
@@ -1635,8 +1632,7 @@
               export WORKER_NODE_ENI=${{WORKER_NODE_ENI}}
               export SUBNET_CIDR_RES_ID=${{SUBNET_CIDR_RESERVATION_ID}}
               source ./ci/test-sriov-secondary-network-aws.sh --cleanup-only \
-                --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --aws-service-user ${{AWS_SERVICE_USER_NAME}} \
-                --CONTROLPLANE_INSTANCE_ID ${{CONTROLPLANE_INSTANCE_ID}}
+                --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}}
           concurrent: false
           disabled: false
           node: antrea-cloud
@@ -1659,9 +1655,6 @@
             - text:
                 credential-id: AWS_SERVICE_USER_ROLE_ARN
                 variable: AWS_SERVICE_USER_ROLE_ARN
-            - text:
-               credential-id: AWS_SERVICE_USER_NAME
-               variable: AWS_SERVICE_USER_NAME
       - '{name}-{test_name}-for-pull-request':
           disabled: false
           test_name: sriov-secondary-network-e2e
@@ -1693,7 +1686,7 @@
               [ "$DOCKER_REGISTRY" != "docker.io" ] || ./ci/jenkins/docker_login.sh --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
               sudo ./ci/test-sriov-secondary-network-aws.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
                 --aws-security-group-id ${{AWS_SECURITY_GROUP}} --aws-subnet-id ${{AWS_SUBNET_ID}} \
-                --aws-ec2-ssh-key-name ${{AWS_EC2_SSH_KEY_NAME}} --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --aws-service-user ${{AWS_SERVICE_USER_NAME}}
+                --aws-ec2-ssh-key-name ${{AWS_EC2_SSH_KEY_NAME}} --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}}
           publishers:
           - email:
               notify-every-unstable-build: true
@@ -1724,9 +1717,6 @@
             - text:
                 credential-id: AWS_SERVICE_USER_ROLE_ARN
                 variable: AWS_SERVICE_USER_ROLE_ARN
-            - text:
-               credential-id: AWS_SERVICE_USER_NAME
-               variable: AWS_SERVICE_USER_NAME
             - ssh-user-private-key:
                 credential-id: AWS_EC2_SSH_KEY
                 key-file-variable: AWS_EC2_SSH_KEY
