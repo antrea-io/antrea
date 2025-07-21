@@ -112,6 +112,12 @@ type GroupEntityController struct {
 	// namespaceAddEvents tracks the number of Namespace Add events that have been processed.
 	namespaceAddEvents *eventsCounter
 
+	nodeInformer coreinformers.NodeInformer
+	// nodeListerSynced is a function which returns true if the node shared informer has been synced at least once.
+	nodeListerSynced cache.InformerSynced
+	// nodeAddEvents tracks the number of Node Add events that have been processed.
+	nodeAddEvents *eventsCounter
+
 	groupEntityIndex *GroupEntityIndex
 }
 
@@ -127,6 +133,9 @@ func NewGroupEntityController(groupEntityIndex *GroupEntityIndex,
 		namespaceInformer:          namespaceInformer,
 		namespaceListerSynced:      namespaceInformer.Informer().HasSynced,
 		namespaceAddEvents:         new(eventsCounter),
+		nodeInformer:               nodeInformer,
+		nodeAddEvents:              new(eventsCounter),
+		nodeListerSynced:           nodeInformer.Informer().HasSynced,
 		externalEntityInformer:     externalEntityInformer,
 		externalEntityListerSynced: externalEntityInformer.Informer().HasSynced,
 		externalEntityAddEvents:    new(eventsCounter),
@@ -167,7 +176,7 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
 
-	cacheSyncs := []cache.InformerSynced{c.podListerSynced, c.namespaceListerSynced}
+	cacheSyncs := []cache.InformerSynced{c.podListerSynced, c.namespaceListerSynced, c.nodeListerSynced}
 	// Wait for externalEntityListerSynced when AntreaPolicy feature gate is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		cacheSyncs = append(cacheSyncs, c.externalEntityListerSynced)
@@ -179,6 +188,7 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 	// the groupEntityIndex has been initialized with the full list of each kind.
 	initialPodCount := len(c.podInformer.Informer().GetStore().List())
 	initialNamespaceCount := len(c.namespaceInformer.Informer().GetStore().List())
+	initialNodeCount := len(c.nodeInformer.Informer().GetStore().List())
 	initialExternalEntityCount := 0
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		initialExternalEntityCount = len(c.externalEntityInformer.Informer().GetStore().List())
@@ -190,6 +200,9 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 			return false, nil
 		}
 		if uint64(initialNamespaceCount) > c.namespaceAddEvents.Load() {
+			return false, nil
+		}
+		if uint64(initialNodeCount) > c.nodeAddEvents.Load() {
 			return false, nil
 		}
 		if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
