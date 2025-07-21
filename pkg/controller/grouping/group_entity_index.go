@@ -571,6 +571,28 @@ func (i *GroupEntityIndex) createSelectorItem(gItem *groupItem) *selectorItem {
 				i.scanLabelItems(i.labelItemIndex[entityType][namespace], sItem)
 			}
 		}
+	} else if sItem.selector.NodeSelector != nil {
+		// save the pods who's labels match this nodeSelector's labels
+
+		// loop through the entities
+		for entityItemKey, entityItem := range i.entityItems {
+			// if the entity is a pod
+			switch entityItem.entity.(type) {
+			case *v1.Pod:
+				// pod's labels matches
+				pod := entityItem.entity.(*v1.Pod)
+				nodeName := pod.Spec.NodeName
+				nodeLabels, exists := i.nodeLabels[nodeName]
+				if !exists {
+					continue
+				}
+
+				if sItem.selector.NodeSelector.Matches(nodeLabels) {
+					sItem.entityItemKeys.Insert(entityItemKey)
+				}
+			}
+		}
+
 	} else {
 		// The selector is Cluster scoped and match all Namespaces.
 		for _, labelItemKeys := range i.labelItemIndex[entityType] {

@@ -143,7 +143,7 @@ func (c *NetworkPolicyController) processClusterGroup(cg *crdv1beta1.ClusterGrou
 			Name:      svcSelector.Name,
 		}
 	} else {
-		groupSelector := antreatypes.NewGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, cg.Spec.ExternalEntitySelector, nil)
+		groupSelector := antreatypes.NewGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, cg.Spec.ExternalEntitySelector, cg.Spec.NodeSelector)
 		internalGroup.Selector = groupSelector
 	}
 	return &internalGroup
