@@ -272,13 +272,14 @@ func TestGetRejectOFPorts(t *testing.T) {
 		},
 	}
 	tests := []struct {
-		name          string
-		rejectType    rejectType
-		tunPort       uint32
-		srcInterface  *interfacestore.InterfaceConfig
-		dstInterface  *interfacestore.InterfaceConfig
-		expectInPort  uint32
-		expectOutPort uint32
+		name           string
+		rejectType     rejectType
+		tunPort        uint32
+		packetInDstMAC string
+		srcInterface   *interfacestore.InterfaceConfig
+		dstInterface   *interfacestore.InterfaceConfig
+		expectInPort   uint32
+		expectOutPort  uint32
 	}{
 		{
 			name:          "rejectPodLocal",
@@ -358,23 +359,25 @@ func TestGetRejectOFPorts(t *testing.T) {
 			expectOutPort: gwPort,
 		},
 		{
-			name:          "rejectServiceRemoteToExternal",
-			rejectType:    rejectServiceRemoteToExternal,
-			tunPort:       tunPort,
-			expectInPort:  tunPort,
-			expectOutPort: unsetPort,
+			name:           "RejectServiceRemoteToExternalFromTun",
+			rejectType:     rejectServiceRemoteToExternal,
+			tunPort:        tunPort,
+			packetInDstMAC: openflow.GlobalVirtualMAC.String(),
+			expectInPort:   tunPort,
+			expectOutPort:  unsetPort,
 		},
 		{
-			name:          "RejectServiceRemoteToExternalWithoutTun",
-			rejectType:    rejectServiceRemoteToExternal,
-			tunPort:       unsetPort,
-			expectInPort:  gwPort,
-			expectOutPort: unsetPort,
+			name:           "RejectServiceRemoteToExternalFromGateway",
+			rejectType:     rejectServiceRemoteToExternal,
+			tunPort:        unsetPort,
+			packetInDstMAC: "ab:cd:ef:gh:ij",
+			expectInPort:   gwPort,
+			expectOutPort:  unsetPort,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inPort, outPort := getRejectOFPorts(tt.rejectType, tt.srcInterface, tt.dstInterface, gwPort, tt.tunPort)
+			inPort, outPort := getRejectOFPorts(tt.rejectType, tt.srcInterface, tt.dstInterface, gwPort, tt.tunPort, tt.packetInDstMAC)
 			assert.Equal(t, tt.expectInPort, inPort)
 			assert.Equal(t, tt.expectOutPort, outPort)
 		})
