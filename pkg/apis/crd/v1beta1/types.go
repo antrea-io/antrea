@@ -1054,6 +1054,9 @@ const (
 	// ActionForwardedOutOfOverlay indicates that the packet has been forwarded out of the network
 	// managed by Antrea. This indicates that the Traceflow request can be considered complete.
 	ActionForwardedOutOfOverlay TraceflowAction = "ForwardedOutOfOverlay"
+	// ActionForwardedOutOfNetwork indicates that the packet has been forwarded out of the network
+	// managed by Antrea, but it's not a full end-to-end observation.
+	ActionForwardedOutOfNetwork TraceflowAction = "ForwardedOutOfNetwork"
 	ActionMarkedForSNAT         TraceflowAction = "MarkedForSNAT"
 	ActionForwardedToEgressNode TraceflowAction = "ForwardedToEgressNode"
 )
