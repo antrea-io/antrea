@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,47 +17,26 @@
 package fake
 
 import (
-	"context"
-
 	v1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	testing "k8s.io/client-go/testing"
+	systemv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeSupportBundles implements SupportBundleInterface
-type FakeSupportBundles struct {
+// fakeSupportBundles implements SupportBundleInterface
+type fakeSupportBundles struct {
+	*gentype.FakeClient[*v1beta1.SupportBundle]
 	Fake *FakeSystemV1beta1
 }
 
-var supportbundlesResource = v1beta1.SchemeGroupVersion.WithResource("supportbundles")
-
-var supportbundlesKind = v1beta1.SchemeGroupVersion.WithKind("SupportBundle")
-
-// Get takes name of the supportBundle, and returns the corresponding supportBundle object, and an error if there is any.
-func (c *FakeSupportBundles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.SupportBundle, err error) {
-	emptyResult := &v1beta1.SupportBundle{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(supportbundlesResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeSupportBundles(fake *FakeSystemV1beta1) systemv1beta1.SupportBundleInterface {
+	return &fakeSupportBundles{
+		gentype.NewFakeClient[*v1beta1.SupportBundle](
+			fake.Fake,
+			"",
+			v1beta1.SchemeGroupVersion.WithResource("supportbundles"),
+			v1beta1.SchemeGroupVersion.WithKind("SupportBundle"),
+			func() *v1beta1.SupportBundle { return &v1beta1.SupportBundle{} },
+		),
+		fake,
 	}
-	return obj.(*v1beta1.SupportBundle), err
-}
-
-// Create takes the representation of a supportBundle and creates it.  Returns the server's representation of the supportBundle, and an error, if there is any.
-func (c *FakeSupportBundles) Create(ctx context.Context, supportBundle *v1beta1.SupportBundle, opts v1.CreateOptions) (result *v1beta1.SupportBundle, err error) {
-	emptyResult := &v1beta1.SupportBundle{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(supportbundlesResource, supportBundle, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1beta1.SupportBundle), err
-}
-
-// Delete takes name of the supportBundle and deletes it. Returns an error if one occurs.
-func (c *FakeSupportBundles) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(supportbundlesResource, name, opts), &v1beta1.SupportBundle{})
-	return err
 }

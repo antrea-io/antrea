@@ -34,7 +34,7 @@ fi
 
 if ! which kubectl > /dev/null; then
     if [[ ${os} == 'darwin' || ${os} == 'linux' ]]; then
-        curl -LO https://dl.k8s.io/release/v1.31.1/bin/${os}/amd64/kubectl
+        curl -LO https://dl.k8s.io/release/v1.33.1/bin/${os}/amd64/kubectl
         chmod +x ./kubectl
         if [[ "$WORKDIR" != "" ]];then
           mv kubectl "$WORKDIR"

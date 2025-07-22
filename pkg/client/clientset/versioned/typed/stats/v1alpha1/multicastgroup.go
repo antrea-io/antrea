@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,26 +34,27 @@ type MulticastGroupsGetter interface {
 
 // MulticastGroupInterface has methods to work with MulticastGroup resources.
 type MulticastGroupInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.MulticastGroup, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.MulticastGroupList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*statsv1alpha1.MulticastGroup, error)
+	List(ctx context.Context, opts v1.ListOptions) (*statsv1alpha1.MulticastGroupList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	MulticastGroupExpansion
 }
 
 // multicastGroups implements MulticastGroupInterface
 type multicastGroups struct {
-	*gentype.ClientWithList[*v1alpha1.MulticastGroup, *v1alpha1.MulticastGroupList]
+	*gentype.ClientWithList[*statsv1alpha1.MulticastGroup, *statsv1alpha1.MulticastGroupList]
 }
 
 // newMulticastGroups returns a MulticastGroups
 func newMulticastGroups(c *StatsV1alpha1Client) *multicastGroups {
 	return &multicastGroups{
-		gentype.NewClientWithList[*v1alpha1.MulticastGroup, *v1alpha1.MulticastGroupList](
+		gentype.NewClientWithList[*statsv1alpha1.MulticastGroup, *statsv1alpha1.MulticastGroupList](
 			"multicastgroups",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha1.MulticastGroup { return &v1alpha1.MulticastGroup{} },
-			func() *v1alpha1.MulticastGroupList { return &v1alpha1.MulticastGroupList{} }),
+			func() *statsv1alpha1.MulticastGroup { return &statsv1alpha1.MulticastGroup{} },
+			func() *statsv1alpha1.MulticastGroupList { return &statsv1alpha1.MulticastGroupList{} },
+		),
 	}
 }

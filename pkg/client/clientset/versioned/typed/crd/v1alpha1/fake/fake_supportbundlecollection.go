@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,120 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	crdv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeSupportBundleCollections implements SupportBundleCollectionInterface
-type FakeSupportBundleCollections struct {
+// fakeSupportBundleCollections implements SupportBundleCollectionInterface
+type fakeSupportBundleCollections struct {
+	*gentype.FakeClientWithList[*v1alpha1.SupportBundleCollection, *v1alpha1.SupportBundleCollectionList]
 	Fake *FakeCrdV1alpha1
 }
 
-var supportbundlecollectionsResource = v1alpha1.SchemeGroupVersion.WithResource("supportbundlecollections")
-
-var supportbundlecollectionsKind = v1alpha1.SchemeGroupVersion.WithKind("SupportBundleCollection")
-
-// Get takes name of the supportBundleCollection, and returns the corresponding supportBundleCollection object, and an error if there is any.
-func (c *FakeSupportBundleCollections) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.SupportBundleCollection, err error) {
-	emptyResult := &v1alpha1.SupportBundleCollection{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(supportbundlecollectionsResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeSupportBundleCollections(fake *FakeCrdV1alpha1) crdv1alpha1.SupportBundleCollectionInterface {
+	return &fakeSupportBundleCollections{
+		gentype.NewFakeClientWithList[*v1alpha1.SupportBundleCollection, *v1alpha1.SupportBundleCollectionList](
+			fake.Fake,
+			"",
+			v1alpha1.SchemeGroupVersion.WithResource("supportbundlecollections"),
+			v1alpha1.SchemeGroupVersion.WithKind("SupportBundleCollection"),
+			func() *v1alpha1.SupportBundleCollection { return &v1alpha1.SupportBundleCollection{} },
+			func() *v1alpha1.SupportBundleCollectionList { return &v1alpha1.SupportBundleCollectionList{} },
+			func(dst, src *v1alpha1.SupportBundleCollectionList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.SupportBundleCollectionList) []*v1alpha1.SupportBundleCollection {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.SupportBundleCollectionList, items []*v1alpha1.SupportBundleCollection) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.SupportBundleCollection), err
-}
-
-// List takes label and field selectors, and returns the list of SupportBundleCollections that match those selectors.
-func (c *FakeSupportBundleCollections) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.SupportBundleCollectionList, err error) {
-	emptyResult := &v1alpha1.SupportBundleCollectionList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(supportbundlecollectionsResource, supportbundlecollectionsKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.SupportBundleCollectionList{ListMeta: obj.(*v1alpha1.SupportBundleCollectionList).ListMeta}
-	for _, item := range obj.(*v1alpha1.SupportBundleCollectionList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested supportBundleCollections.
-func (c *FakeSupportBundleCollections) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(supportbundlecollectionsResource, opts))
-}
-
-// Create takes the representation of a supportBundleCollection and creates it.  Returns the server's representation of the supportBundleCollection, and an error, if there is any.
-func (c *FakeSupportBundleCollections) Create(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.CreateOptions) (result *v1alpha1.SupportBundleCollection, err error) {
-	emptyResult := &v1alpha1.SupportBundleCollection{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(supportbundlecollectionsResource, supportBundleCollection, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.SupportBundleCollection), err
-}
-
-// Update takes the representation of a supportBundleCollection and updates it. Returns the server's representation of the supportBundleCollection, and an error, if there is any.
-func (c *FakeSupportBundleCollections) Update(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.UpdateOptions) (result *v1alpha1.SupportBundleCollection, err error) {
-	emptyResult := &v1alpha1.SupportBundleCollection{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateActionWithOptions(supportbundlecollectionsResource, supportBundleCollection, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.SupportBundleCollection), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeSupportBundleCollections) UpdateStatus(ctx context.Context, supportBundleCollection *v1alpha1.SupportBundleCollection, opts v1.UpdateOptions) (result *v1alpha1.SupportBundleCollection, err error) {
-	emptyResult := &v1alpha1.SupportBundleCollection{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(supportbundlecollectionsResource, "status", supportBundleCollection, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.SupportBundleCollection), err
-}
-
-// Delete takes name of the supportBundleCollection and deletes it. Returns an error if one occurs.
-func (c *FakeSupportBundleCollections) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(supportbundlecollectionsResource, name, opts), &v1alpha1.SupportBundleCollection{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeSupportBundleCollections) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionActionWithOptions(supportbundlecollectionsResource, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.SupportBundleCollectionList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched supportBundleCollection.
-func (c *FakeSupportBundleCollections) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.SupportBundleCollection, err error) {
-	emptyResult := &v1alpha1.SupportBundleCollection{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceActionWithOptions(supportbundlecollectionsResource, name, pt, data, opts, subresources...), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.SupportBundleCollection), err
 }

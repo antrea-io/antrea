@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2659,17 +2659,17 @@ func (mr *MockPacketOutBuilderMockRecorder) SetIPHeaderID(id any) *gomock.Call {
 }
 
 // SetIPProtocol mocks base method.
-func (m *MockPacketOutBuilder) SetIPProtocol(protocol openflow.Protocol) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetIPProtocol(arg0 openflow.Protocol) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetIPProtocol", protocol)
+	ret := m.ctrl.Call(m, "SetIPProtocol", arg0)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)
 	return ret0
 }
 
 // SetIPProtocol indicates an expected call of SetIPProtocol.
-func (mr *MockPacketOutBuilderMockRecorder) SetIPProtocol(protocol any) *gomock.Call {
+func (mr *MockPacketOutBuilderMockRecorder) SetIPProtocol(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPProtocol", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPProtocol), protocol)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIPProtocol", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetIPProtocol), arg0)
 }
 
 // SetIPProtocolValue mocks base method.

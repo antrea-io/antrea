@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1beta1
 
 import (
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // AntreaAgentInfoLister helps list AntreaAgentInfos.
@@ -28,19 +28,19 @@ import (
 type AntreaAgentInfoLister interface {
 	// List lists all AntreaAgentInfos in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1beta1.AntreaAgentInfo, err error)
+	List(selector labels.Selector) (ret []*crdv1beta1.AntreaAgentInfo, err error)
 	// Get retrieves the AntreaAgentInfo from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1beta1.AntreaAgentInfo, error)
+	Get(name string) (*crdv1beta1.AntreaAgentInfo, error)
 	AntreaAgentInfoListerExpansion
 }
 
 // antreaAgentInfoLister implements the AntreaAgentInfoLister interface.
 type antreaAgentInfoLister struct {
-	listers.ResourceIndexer[*v1beta1.AntreaAgentInfo]
+	listers.ResourceIndexer[*crdv1beta1.AntreaAgentInfo]
 }
 
 // NewAntreaAgentInfoLister returns a new AntreaAgentInfoLister.
 func NewAntreaAgentInfoLister(indexer cache.Indexer) AntreaAgentInfoLister {
-	return &antreaAgentInfoLister{listers.New[*v1beta1.AntreaAgentInfo](indexer, v1beta1.Resource("antreaagentinfo"))}
+	return &antreaAgentInfoLister{listers.New[*crdv1beta1.AntreaAgentInfo](indexer, crdv1beta1.Resource("antreaagentinfo"))}
 }

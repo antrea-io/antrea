@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,31 +17,26 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeGroupAssociations implements GroupAssociationInterface
-type FakeGroupAssociations struct {
+// fakeGroupAssociations implements GroupAssociationInterface
+type fakeGroupAssociations struct {
+	*gentype.FakeClient[*v1beta2.GroupAssociation]
 	Fake *FakeControlplaneV1beta2
-	ns   string
 }
 
-var groupassociationsResource = v1beta2.SchemeGroupVersion.WithResource("groupassociations")
-
-var groupassociationsKind = v1beta2.SchemeGroupVersion.WithKind("GroupAssociation")
-
-// Get takes name of the groupAssociation, and returns the corresponding groupAssociation object, and an error if there is any.
-func (c *FakeGroupAssociations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.GroupAssociation, err error) {
-	emptyResult := &v1beta2.GroupAssociation{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(groupassociationsResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeGroupAssociations(fake *FakeControlplaneV1beta2, namespace string) controlplanev1beta2.GroupAssociationInterface {
+	return &fakeGroupAssociations{
+		gentype.NewFakeClient[*v1beta2.GroupAssociation](
+			fake.Fake,
+			namespace,
+			v1beta2.SchemeGroupVersion.WithResource("groupassociations"),
+			v1beta2.SchemeGroupVersion.WithKind("GroupAssociation"),
+			func() *v1beta2.GroupAssociation { return &v1beta2.GroupAssociation{} },
+		),
+		fake,
 	}
-	return obj.(*v1beta2.GroupAssociation), err
 }
