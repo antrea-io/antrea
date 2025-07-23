@@ -235,12 +235,29 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local Pods" -j ACCEPT
 -A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local Pods" -j ACCEPT
 `,
-				"mangle": `:ANTREA-MANGLE - [0:0]
-:ANTREA-OUTPUT - [0:0]
--A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE
+				"mangle": `:ANTREA-OUTPUT - [0:0]
+:ANTREA-PREROUTING - [0:0]
+-A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
 -A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
 -A ANTREA-OUTPUT -o antrea-gw0 -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -j MARK --set-xmark 0x80000000/0x80000000
 `,
+			}
+			if tc.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+				expectedIPTables["mangle"] = `:ANTREA-OUTPUT - [0:0]
+:ANTREA-PREROUTING - [0:0]
+-A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
+-A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
+-A ANTREA-OUTPUT -o antrea-gw0 -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -j MARK --set-xmark 0x80000000/0x80000000
+-A ANTREA-PREROUTING ! -i antrea-gw0 -m comment --comment "Antrea: restore fwmark from connmark for reply packets sourced from remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING ! -s 10.10.10.0/24 -i antrea-gw0 -m comment --comment "Antrea: set connmark for the first Egress request packet" -m conntrack --ctstate NEW -m mark ! --mark 0x0/0xff -j CONNMARK --set-xmark 0x40000000/0x40000000
+`
+			} else {
+				expectedIPTables["mangle"] = `:ANTREA-OUTPUT - [0:0]
+:ANTREA-PREROUTING - [0:0]
+-A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
+-A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
+-A ANTREA-OUTPUT -o antrea-gw0 -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -j MARK --set-xmark 0x80000000/0x80000000
+`
 			}
 			if tc.noSNAT {
 				expectedIPTables["nat"] = `:ANTREA-POSTROUTING - [0:0]
@@ -420,7 +437,7 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		assert.Contains(t, entries, tc.peerCIDR, "entry should be in ipset")
 
 		assert.NoError(t, routeClient.DeleteRoutes(peerCIDR), "deleting routes failed")
-		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))
+		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table main exact %s", peerCIDR))
 		assert.NoError(t, err)
 		assert.Equal(t, "", output, "expected no routes to %s", peerCIDR)
 		entries, err = ipset.ListEntries("ANTREA-POD-IP")
@@ -461,7 +478,7 @@ func TestSyncRoutes(t *testing.T) {
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
 		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.nodeName, tc.peerIP, nhCIDRIP), "adding routes failed")
 
-		listCmd := fmt.Sprintf("ip route show table 0 exact %s", peerCIDR)
+		listCmd := fmt.Sprintf("ip route show table main exact %s", peerCIDR)
 		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
 		assert.NoError(t, err, "error executing ip route command: %s", listCmd)
 
@@ -500,7 +517,7 @@ func TestSyncGatewayKernelRoute(t *testing.T) {
 	err = routeClient.Initialize(nodeConfig, func() {})
 	assert.NoError(t, err)
 
-	listCmd := fmt.Sprintf("ip route show table 0 exact %s", podCIDR)
+	listCmd := fmt.Sprintf("ip route show table main exact %s", podCIDR)
 
 	err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (done bool, err error) {
 		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
@@ -605,12 +622,12 @@ func TestReconcile(t *testing.T) {
 		for dst, uplink := range tc.expRoutes {
 			expNum := 0
 			if uplink != nil {
-				output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", dst))
+				output, err := ExecOutputTrim(fmt.Sprintf("ip route show table main exact %s", dst))
 				assert.NoError(t, err)
 				assert.Contains(t, output, fmt.Sprintf("dev%s", uplink.Attrs().Name))
 				expNum = 1
 			}
-			output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s | wc -l", dst))
+			output, err := ExecOutputTrim(fmt.Sprintf("ip route show table main exact %s | wc -l", dst))
 			assert.NoError(t, err)
 			assert.Equal(t, fmt.Sprint(expNum), output, "mismatch number of routes to %s", dst)
 		}
@@ -741,7 +758,7 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 			assert.Equal(t, expNeighStr, ipNeigh, "IPv6 Neighbor mismatch")
 		}
 		assert.NoError(t, routeClient.DeleteRoutes(peerCIDR), "deleting routes failed")
-		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))
+		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table main exact %s", peerCIDR))
 		assert.NoError(t, err)
 		assert.Equal(t, "", output, "expected no routes to %s", peerCIDR)
 	}

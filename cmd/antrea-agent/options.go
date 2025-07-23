@@ -522,8 +522,8 @@ func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType) er
 	if !features.DefaultFeatureGate.Enabled(features.Egress) {
 		return nil
 	}
-	if encapMode != config.TrafficEncapModeEncap {
-		klog.InfoS("The Egress feature gate is enabled, but it won't work because it is only applicable to the encap mode")
+	if encapMode != config.TrafficEncapModeEncap && encapMode != config.TrafficEncapModeHybrid {
+		klog.InfoS("The Egress feature gate is enabled, but it won't work because it is only applicable to the encap or hybrid mode")
 		return nil
 	}
 	for _, cidr := range o.config.Egress.ExceptCIDRs {
@@ -603,9 +603,9 @@ func (o *Options) validateK8sNodeOptions() error {
 				return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
 			}
 		}
-		if encryptionMode != config.TrafficEncryptionModeNone {
-			return fmt.Errorf("TrafficEncryptionMode %s may only be enabled in %s mode", encryptionMode, config.TrafficEncapModeEncap)
-		}
+		//if encryptionMode != config.TrafficEncryptionModeNone {
+		//	return fmt.Errorf("TrafficEncryptionMode %s may only be enabled in %s mode", encryptionMode, config.TrafficEncapModeEncap)
+		//}
 	}
 	if o.config.NoSNAT && (encapMode != config.TrafficEncapModeNoEncap && encapMode != config.TrafficEncapModeNetworkPolicyOnly) {
 		return fmt.Errorf("noSNAT is only applicable to the %s mode", config.TrafficEncapModeNoEncap)
