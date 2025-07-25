@@ -30,7 +30,6 @@ YAMLS=(
     "build/yamls/antrea-ipsec.yml"
     "build/yamls/antrea-eks.yml"
     "build/yamls/antrea-gke.yml"
-    "build/yamls/antrea-aks.yml"
     "build/yamls/flow-aggregator.yml"
 )
 

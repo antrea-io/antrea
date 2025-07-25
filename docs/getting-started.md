@@ -170,12 +170,11 @@ please refer to this [guide](minikube.md).
 To deploy Antrea in a [Rancher](https://github.com/rancher/rancher) managed cluster,
 please refer to this [guide](kubernetes-installers.md#rancher).
 
-### Deploying Antrea in AKS, EKS, and GKE
+### Deploying Antrea in EKS and GKE
 
 Antrea can work with cloud managed Kubernetes services, and can be deployed to
-AKS, EKS, and GKE clusters.
+EKS, and GKE clusters.
 
-* To deploy Antrea to an AKS or an AKS Engine cluster, please refer to [the AKS installation guide](aks-installation.md).
 * To deploy Antrea to an EKS cluster, please refer to [the EKS installation guide](eks-installation.md).
 * To deploy Antrea to a GKE cluster, please refer to [the GKE installation guide](gke-installation.md).
 

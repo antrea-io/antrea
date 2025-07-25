@@ -301,12 +301,6 @@ by Antrea. Antrea just implements NetworkPolicies for Pod traffic, but relies on
 another cloud CNI and cloud network to implement Pod IPAM and cross-Node traffic
 forwarding. Refer to the [NetworkPolicyOnly mode design document](policy-only.md)
 for more information.
-
-[Antrea for AKS
-Engine](https://github.com/Azure/aks-engine/blob/master/docs/topics/features.md#feat-antrea)
-and [Antrea EKS support](../eks-installation.md) work in `NetworkPolicyOnly`
-mode.
-
 ## Features
 
 ### Antrea Network Policy
