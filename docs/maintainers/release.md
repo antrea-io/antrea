@@ -36,7 +36,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
    - Jenkins tests need to be [triggered manually](../../CONTRIBUTING.md#getting-your-pr-verified-by-ci).
    - Cloud tests need to be triggered manually through the
      [Jenkins web UI](https://jenkins.antrea.io/). Admin access is
-     required. For each job (AKS, EKS, GKE), click on `Build with Parameters`,
+     required. For each job (EKS, GKE), click on `Build with Parameters`,
      and enter the name of your fork as `ANTREA_REPO` and the name of your
      branch as `ANTREA_GIT_REVISION`. Test starting times need to be staggered:
      if multiple jobs run at the same time, the Jenkins worker may run

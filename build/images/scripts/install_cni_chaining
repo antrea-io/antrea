@@ -61,7 +61,6 @@ done
 cni_conf_path="$HOST_CNI_NET_DIR/$cni_conf_name"
 
 # EKS uses 10-aws.conflist
-# AKS uses 10-azure.conflist
 cni_conf_name_antrea="05-antrea.conflist"
 cni_conf_path_antrea="$HOST_CNI_NET_DIR/$cni_conf_name_antrea"
 
