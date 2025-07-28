@@ -76,8 +76,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "AntreaIPAM",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -208,8 +208,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "controller",
 			"name": "AntreaIPAM",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "controller",
@@ -283,8 +283,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "AntreaIPAM",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -412,8 +412,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "agent",
 			"name": "AntreaIPAM",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "agent",
@@ -610,8 +610,8 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "controller",
 			"name": "AntreaIPAM",
-			"status": "Disabled",
-			"version": "ALPHA"
+			"status": "Enabled",
+			"version": "BETA"
 		},
 		{
 			"component": "controller",
@@ -695,7 +695,7 @@ func TestGetFeatureGates(t *testing.T) {
 			runE: controllerRemoteRunE,
 			expectedOutput: `Antrea Agent Feature Gates
 FEATUREGATE                     STATUS       VERSION
-AntreaIPAM                      Disabled     ALPHA
+AntreaIPAM                      Enabled      BETA
 AntreaPolicy                    Enabled      BETA
 AntreaProxy                     Enabled      BETA
 CleanupStaleUDPSvcConntrack     Disabled     ALPHA
@@ -720,7 +720,7 @@ TrafficControl                  Disabled     ALPHA
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
 AdminNetworkPolicy          Disabled     ALPHA
-AntreaIPAM                  Disabled     ALPHA
+AntreaIPAM                  Enabled      BETA
 AntreaPolicy                Enabled      BETA
 Egress                      Enabled      BETA
 IPsecCertAuth               Disabled     ALPHA
@@ -740,7 +740,7 @@ Traceflow                   Enabled      BETA
 			runE: agentRunE,
 			expectedOutput: `Antrea Agent Feature Gates
 FEATUREGATE                     STATUS       VERSION
-AntreaIPAM                      Disabled     ALPHA
+AntreaIPAM                      Enabled      BETA
 AntreaPolicy                    Enabled      BETA
 AntreaProxy                     Enabled      BETA
 CleanupStaleUDPSvcConntrack     Disabled     ALPHA
@@ -769,7 +769,7 @@ TrafficControl                  Disabled     ALPHA
 			runE: controllerLocalRunE,
 			expectedOutput: `Antrea Agent Feature Gates
 FEATUREGATE                     STATUS       VERSION
-AntreaIPAM                      Disabled     ALPHA
+AntreaIPAM                      Enabled      BETA
 AntreaPolicy                    Enabled      BETA
 AntreaProxy                     Enabled      BETA
 CleanupStaleUDPSvcConntrack     Disabled     ALPHA
@@ -794,7 +794,7 @@ TrafficControl                  Disabled     ALPHA
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
 AdminNetworkPolicy          Disabled     ALPHA
-AntreaIPAM                  Disabled     ALPHA
+AntreaIPAM                  Enabled      BETA
 AntreaPolicy                Enabled      BETA
 Egress                      Enabled      BETA
 IPsecCertAuth               Disabled     ALPHA
@@ -814,7 +814,7 @@ Traceflow                   Enabled      BETA
 			runE: controllerLocalRunE,
 			expectedOutput: `Antrea Agent Feature Gates
 FEATUREGATE                     STATUS       VERSION
-AntreaIPAM                      Disabled     ALPHA
+AntreaIPAM                      Enabled      BETA
 AntreaPolicy                    Enabled      BETA
 AntreaProxy                     Enabled      BETA
 CleanupStaleUDPSvcConntrack     Disabled     ALPHA
@@ -853,7 +853,7 @@ TrafficControl              Disabled     ALPHA
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
 AdminNetworkPolicy          Disabled     ALPHA
-AntreaIPAM                  Disabled     ALPHA
+AntreaIPAM                  Enabled      BETA
 AntreaPolicy                Enabled      BETA
 Egress                      Enabled      BETA
 IPsecCertAuth               Disabled     ALPHA
