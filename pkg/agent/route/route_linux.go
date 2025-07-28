@@ -152,6 +152,8 @@ type Client struct {
 	clusterNodeIP6s sync.Map
 	// egressRoutes caches ip routes about Egresses.
 	egressRoutes sync.Map
+	// ipRules caches ip rules.
+	ipRules sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
@@ -319,6 +321,9 @@ func (c *Client) syncIPInfra() {
 	if err := c.syncNeighbor(); err != nil {
 		klog.ErrorS(err, "Failed to sync neighbor")
 	}
+	if err := c.syncIPRule(); err != nil {
+		klog.ErrorS(err, "Failed to sync ip rule")
+	}
 
 	klog.V(3).Info("Successfully synced iptables, ipset, route and neighbor")
 }
@@ -467,6 +472,86 @@ func (c *Client) syncNeighbor() error {
 			return restoreNeighbor(v.(*netlink.Neigh))
 		})
 	}
+
+	return nil
+}
+
+func normalizeIPRule(r *netlink.Rule) string {
+	var mask uint32
+	if r.Mask != nil {
+		mask = *r.Mask
+	} else {
+		mask = ^uint32(0)
+	}
+	src := "_"
+	if r.Src != nil {
+		src = r.Src.String()
+	}
+	dst := "_"
+	if r.Dst != nil {
+		dst = r.Dst.String()
+	}
+	dport := "_"
+	if r.Dport != nil {
+		dport = fmt.Sprintf("%d_%d", r.Dport.Start, r.Dport.End)
+	}
+	sport := "_"
+	if r.Sport != nil {
+		sport = fmt.Sprintf("%d_%d", r.Sport.Start, r.Sport.End)
+	}
+	uidRange := "_"
+	if r.UIDRange != nil {
+		uidRange = fmt.Sprintf("%d_%d", r.UIDRange.Start, r.UIDRange.End)
+	}
+	return fmt.Sprintf("%d|%d|%d|%d|%d|%d|%d|%s|%s|%d|%s|%s|%d|%d|%t|%s|%s|%d|%s|%d|%d",
+		r.Family,
+		r.Table,
+		r.Mark,
+		mask,
+		r.Tos,
+		r.TunID,
+		r.Goto,
+		src,
+		dst,
+		r.Flow,
+		r.IifName,
+		r.OifName,
+		r.SuppressIfgroup,
+		r.SuppressPrefixlen,
+		r.Invert,
+		dport,
+		sport,
+		r.IPProto,
+		uidRange,
+		r.Protocol,
+		r.Type,
+	)
+}
+
+// syncIPRule ensures that the necessary ip rules required by Antrea exist.
+func (c *Client) syncIPRule() error {
+	ruleList, err := c.netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	ruleKeys := sets.New[string]()
+	for i := range ruleList {
+		rule := ruleList[i]
+		ruleKeys.Insert(normalizeIPRule(&rule))
+	}
+	restoreRule := func(rule *netlink.Rule) bool {
+		if ruleKeys.Has(normalizeIPRule(rule)) {
+			return true
+		}
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			klog.ErrorS(err, "Failed to sync ip rule", "rule", rule)
+			return false
+		}
+		return true
+	}
+	c.ipRules.Range(func(_, v interface{}) bool {
+		return restoreRule(v.(*netlink.Rule))
+	})
 
 	return nil
 }
