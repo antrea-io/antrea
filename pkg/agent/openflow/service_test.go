@@ -45,7 +45,7 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x3/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark,set_field:0x40/0x40->ct_mark))",
 			"cookie=0x1030000000000, table=SNAT, priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ip,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark))",
 			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=-new-rpl+trk,ct_mark=0x20/0x20,ip actions=ct(table=L2ForwardingCalc,zone=65521,nat)",
-			"cookie=0x1030000000000, table=Output, priority=210,ct_mark=0x40/0x40 actions=IN_PORT",
+			"cookie=0x1030000000000, table=Output, priority=210,ct_mark=0x40/0x40,reg0=0x200000/0x600000 actions=IN_PORT",
 		}
 		if proxyAllEnabled {
 			flows = append(flows,
@@ -78,7 +78,7 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ipv6,reg0=0x3/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=fec0:10:10::1),exec(set_field:0x10/0x10->ct_mark,set_field:0x40/0x40->ct_mark))",
 			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=-new-rpl+trk,ct_mark=0x20/0x20,ipv6 actions=ct(table=L2ForwardingCalc,zone=65511,nat)",
 			"cookie=0x1030000000000, table=SNAT, priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ipv6,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=fec0:10:10::1),exec(set_field:0x10/0x10->ct_mark))",
-			"cookie=0x1030000000000, table=Output, priority=210,ct_mark=0x40/0x40 actions=IN_PORT",
+			"cookie=0x1030000000000, table=Output, priority=210,ct_mark=0x40/0x40,reg0=0x200000/0x600000 actions=IN_PORT",
 		}
 		if proxyAllEnabled {
 			flows = append(flows,
