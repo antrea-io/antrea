@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/util/validation"
 )
 
 func marshal(object runtime.Object) []byte {
@@ -398,7 +399,7 @@ func TestParseIPRangeCIDR(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// discard parsed net.IPNet, we only need to make assertions on errMsg.
-			_, errMsg := parseIPRangeCIDR(testCase.cidr)
+			_, errMsg := validation.ParseIPRangeCIDR(testCase.cidr)
 			assert.Equal(t, testCase.errMsg, errMsg)
 		})
 	}
@@ -432,7 +433,7 @@ func TestParseIPRangeStartEnd(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// discard parsed net.IP, we only need to make assertions on errMsg.
-			_, _, errMsg := parseIPRangeStartEnd(testCase.start, testCase.end)
+			_, _, errMsg := validation.ParseIPRangeStartEnd(testCase.start, testCase.end)
 			assert.Equal(t, testCase.errMsg, errMsg)
 		})
 	}
