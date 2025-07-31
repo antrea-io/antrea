@@ -51,6 +51,11 @@ func (r *ResourceExportReconciler) handleClusterInfo(ctx context.Context, req ct
 		return ctrl.Result{}, nil
 	}
 
+	// For ResourceExports that are not deleted, make sure that their finalizers are set
+	// with ResourceExportFinalizer before the reconciliation loop.
+	if r, err := r.setResourceExportFinalizers(&resExport); err != nil {
+		return r, err
+	}
 	resImport.Spec = mcsv1alpha1.ResourceImportSpec{
 		Kind:      constants.ClusterInfoKind,
 		Name:      resExport.Name,
