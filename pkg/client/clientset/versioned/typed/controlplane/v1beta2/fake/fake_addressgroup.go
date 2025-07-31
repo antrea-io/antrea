@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,59 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeAddressGroups implements AddressGroupInterface
-type FakeAddressGroups struct {
+// fakeAddressGroups implements AddressGroupInterface
+type fakeAddressGroups struct {
+	*gentype.FakeClientWithList[*v1beta2.AddressGroup, *v1beta2.AddressGroupList]
 	Fake *FakeControlplaneV1beta2
 }
 
-var addressgroupsResource = v1beta2.SchemeGroupVersion.WithResource("addressgroups")
-
-var addressgroupsKind = v1beta2.SchemeGroupVersion.WithKind("AddressGroup")
-
-// Get takes name of the addressGroup, and returns the corresponding addressGroup object, and an error if there is any.
-func (c *FakeAddressGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.AddressGroup, err error) {
-	emptyResult := &v1beta2.AddressGroup{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(addressgroupsResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeAddressGroups(fake *FakeControlplaneV1beta2) controlplanev1beta2.AddressGroupInterface {
+	return &fakeAddressGroups{
+		gentype.NewFakeClientWithList[*v1beta2.AddressGroup, *v1beta2.AddressGroupList](
+			fake.Fake,
+			"",
+			v1beta2.SchemeGroupVersion.WithResource("addressgroups"),
+			v1beta2.SchemeGroupVersion.WithKind("AddressGroup"),
+			func() *v1beta2.AddressGroup { return &v1beta2.AddressGroup{} },
+			func() *v1beta2.AddressGroupList { return &v1beta2.AddressGroupList{} },
+			func(dst, src *v1beta2.AddressGroupList) { dst.ListMeta = src.ListMeta },
+			func(list *v1beta2.AddressGroupList) []*v1beta2.AddressGroup {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1beta2.AddressGroupList, items []*v1beta2.AddressGroup) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1beta2.AddressGroup), err
-}
-
-// List takes label and field selectors, and returns the list of AddressGroups that match those selectors.
-func (c *FakeAddressGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.AddressGroupList, err error) {
-	emptyResult := &v1beta2.AddressGroupList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(addressgroupsResource, addressgroupsKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1beta2.AddressGroupList{ListMeta: obj.(*v1beta2.AddressGroupList).ListMeta}
-	for _, item := range obj.(*v1beta2.AddressGroupList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested addressGroups.
-func (c *FakeAddressGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(addressgroupsResource, opts))
 }

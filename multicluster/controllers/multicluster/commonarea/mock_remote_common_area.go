@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,9 +34,8 @@ import (
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
-	types "k8s.io/apimachinery/pkg/types"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
-	manager "sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // MockCommonArea is a mock of CommonArea interface.
@@ -121,7 +120,7 @@ func (mr *MockCommonAreaMockRecorder) DeleteAllOf(ctx, obj any, opts ...any) *go
 }
 
 // Get mocks base method.
-func (m *MockCommonArea) Get(ctx context.Context, key types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
+func (m *MockCommonArea) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, key, obj}
 	for _, a := range opts {
@@ -404,7 +403,7 @@ func (mr *MockRemoteCommonAreaMockRecorder) DeleteAllOf(ctx, obj any, opts ...an
 }
 
 // Get mocks base method.
-func (m *MockRemoteCommonArea) Get(ctx context.Context, key types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
+func (m *MockRemoteCommonArea) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, key, obj}
 	for _, a := range opts {
@@ -712,7 +711,7 @@ func (m *MockImportReconciler) EXPECT() *MockImportReconcilerMockRecorder {
 }
 
 // SetupWithManager mocks base method.
-func (m *MockImportReconciler) SetupWithManager(mgr manager.Manager) error {
+func (m *MockImportReconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetupWithManager", mgr)
 	ret0, _ := ret[0].(error)

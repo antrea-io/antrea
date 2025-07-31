@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ResourceImportLister helps list ResourceImports.
@@ -28,7 +28,7 @@ import (
 type ResourceImportLister interface {
 	// List lists all ResourceImports in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.ResourceImport, err error)
+	List(selector labels.Selector) (ret []*multiclusterv1alpha1.ResourceImport, err error)
 	// ResourceImports returns an object that can list and get ResourceImports.
 	ResourceImports(namespace string) ResourceImportNamespaceLister
 	ResourceImportListerExpansion
@@ -36,17 +36,17 @@ type ResourceImportLister interface {
 
 // resourceImportLister implements the ResourceImportLister interface.
 type resourceImportLister struct {
-	listers.ResourceIndexer[*v1alpha1.ResourceImport]
+	listers.ResourceIndexer[*multiclusterv1alpha1.ResourceImport]
 }
 
 // NewResourceImportLister returns a new ResourceImportLister.
 func NewResourceImportLister(indexer cache.Indexer) ResourceImportLister {
-	return &resourceImportLister{listers.New[*v1alpha1.ResourceImport](indexer, v1alpha1.Resource("resourceimport"))}
+	return &resourceImportLister{listers.New[*multiclusterv1alpha1.ResourceImport](indexer, multiclusterv1alpha1.Resource("resourceimport"))}
 }
 
 // ResourceImports returns an object that can list and get ResourceImports.
 func (s *resourceImportLister) ResourceImports(namespace string) ResourceImportNamespaceLister {
-	return resourceImportNamespaceLister{listers.NewNamespaced[*v1alpha1.ResourceImport](s.ResourceIndexer, namespace)}
+	return resourceImportNamespaceLister{listers.NewNamespaced[*multiclusterv1alpha1.ResourceImport](s.ResourceIndexer, namespace)}
 }
 
 // ResourceImportNamespaceLister helps list and get ResourceImports.
@@ -54,15 +54,15 @@ func (s *resourceImportLister) ResourceImports(namespace string) ResourceImportN
 type ResourceImportNamespaceLister interface {
 	// List lists all ResourceImports in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.ResourceImport, err error)
+	List(selector labels.Selector) (ret []*multiclusterv1alpha1.ResourceImport, err error)
 	// Get retrieves the ResourceImport from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.ResourceImport, error)
+	Get(name string) (*multiclusterv1alpha1.ResourceImport, error)
 	ResourceImportNamespaceListerExpansion
 }
 
 // resourceImportNamespaceLister implements the ResourceImportNamespaceLister
 // interface.
 type resourceImportNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.ResourceImport]
+	listers.ResourceIndexer[*multiclusterv1alpha1.ResourceImport]
 }
