@@ -311,7 +311,7 @@ type FlowExporterConfig struct {
 	// logged on the antrea agent. By default the full set of supported
 	// protocols are exported which are:
 	// "tcp", "udp", "sctp"
-	ProtocolFilter []string `yaml:"protocols,omitempty"`
+	ProtocolFilter []string `yaml:"protocolFilter,omitempty"`
 }
 
 type MulticastConfig struct {

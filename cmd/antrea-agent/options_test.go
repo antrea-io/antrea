@@ -15,11 +15,16 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/utils/ptr"
 
@@ -342,4 +347,57 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOptionsUnmarshalling(t *testing.T) {
+	t.Run("protocolFilter can be unmarshalled", func(t *testing.T) {
+		configYML, err := generateAntreaConf()
+		if err != nil {
+			t.Error("Failed to generate config from build yaml")
+		}
+		agentConfig := agentconfig.AgentConfig{}
+		err = yaml.Unmarshal([]byte(configYML), &agentConfig)
+		if err != nil {
+			t.Error("failed to unmarshal config file")
+		}
+		assert.Contains(t, agentConfig.FlowExporter.ProtocolFilter, "tcp")
+	})
+}
+
+func generateAntreaConf() (string, error) {
+	generatedAntreaConfYML := "../../build/yamls/antrea.yml"
+	startString := "antrea-agent.conf"
+	endString := "antrea-cni.conflist"
+	appendToString := "protocolFilter:"
+
+	file, err := os.Open(generatedAntreaConfYML)
+	if err != nil {
+		return "", errors.Wrap(err, "Error opening build yml")
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var result strings.Builder
+	foundStart := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, startString) {
+			foundStart = true
+			continue
+		}
+
+		if foundStart {
+			if strings.Contains(line, endString) {
+				break
+			}
+
+			if strings.Contains(line, appendToString) {
+				result.WriteString(line + " [\"tcp\"]" + "\n")
+			} else {
+				result.WriteString(line + "\n")
+			}
+		}
+	}
+	return result.String(), nil
 }
