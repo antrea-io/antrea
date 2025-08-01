@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/types"
@@ -596,4 +598,61 @@ func TestGroupEntityIndexEventHandlers(t *testing.T) {
 			}, 1*time.Second, 50*time.Millisecond)
 		})
 	}
+}
+
+func TestCreateNodeLabelItems(t *testing.T) {
+	t.Run("Index has the new node label item", func(t *testing.T) {
+		groupEntityIndex := NewGroupEntityIndex()
+		testLabels := labels.Set{"some-node": "red"}
+		labelItemKey := getNodeLabelItemKey(testLabels)
+		testEntityItem := &entityItem{
+			entity:       podFoo1,
+			labelItemKey: labelItemKey,
+		}
+
+		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+		assert.Equal(t, groupEntityIndex.nodeLabelItems[labelItemKey], nodeLabelItem)
+	})
+	t.Run("nodeLabelItem links back to pod", func(t *testing.T) {
+		groupEntityIndex := NewGroupEntityIndex()
+		testLabels := labels.Set{"some-node": "red"}
+		labelItemKey := getNodeLabelItemKey(testLabels)
+		testEntityItem := &entityItem{
+			entity:       podFoo1,
+			labelItemKey: labelItemKey,
+		}
+		entityItemKey := getEntityItemKey(podEntityType, podFoo1)
+
+		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+		assert.Contains(t, nodeLabelItem.entityItemKeys, entityItemKey)
+	})
+	t.Run("nodeLabelItem links to matching selector item", func(t *testing.T) {
+		groupEntityIndex := NewGroupEntityIndex()
+		testLabels := map[string]string{"some-node": "red"}
+		labelItemKey := getNodeLabelItemKey(testLabels)
+		testEntityItem := &entityItem{
+			entity:       podFoo1,
+			labelItemKey: labelItemKey,
+		}
+		labelSelector := metav1.LabelSelector{
+			MatchLabels: testLabels,
+		}
+		selector, _ := metav1.LabelSelectorAsSelector(&labelSelector)
+		selectorNormalizedName := "selector-normalized-name"
+		groupSelector := &types.GroupSelector{
+			NormalizedName: selectorNormalizedName,
+			NodeSelector:   selector,
+		}
+		groupItem := &groupItem{
+			groupType:       groupType1,
+			name:            "group-node-label",
+			selector:        groupSelector,
+			selectorItemKey: getSelectorItemKey(groupSelector),
+		}
+		groupEntityIndex.createSelectorItem(groupItem)
+		groupEntityIndex.selectorItemIndex[podEntityType][emptyNamespace] = sets.New[string](selectorNormalizedName)
+
+		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+		assert.Contains(t, nodeLabelItem.selectorItemKeys, selectorNormalizedName)
+	})
 }
