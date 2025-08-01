@@ -177,6 +177,8 @@ type NodeConfig struct {
 	NodeTransportIPv6Addr *net.IPNet
 	// The original MTU of the Node's transport interface.
 	NodeTransportInterfaceMTU int
+	// The ifindex of the Node's transport interface.
+	NodeTransportInterfaceIndex int
 	// TunnelOFPort is the OpenFlow port number of tunnel interface allocated by OVS. With noEncap mode, the value is 0.
 	TunnelOFPort uint32
 	// HostInterfaceOFPort is the OpenFlow port number of the host interface allocated by OVS. The host interface is the
