@@ -18,7 +18,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 
 ## List of Jenkins jobs
 
-[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy&subject=EKS%20Conformance/NetworkPolicy)](https://jenkins.antrea.io/job/cloud-antrea-eks-conformance-net-policy/) [![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy&subject=GKE%20Conformance/NetworkPolicy%20)](https://jenkins.antrea.io/job/cloud-antrea-gke-conformance-net-policy/) [![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy&subject=AKS%20Conformance/NetworkPolicy%20)](https://jenkins.antrea.io/job/cloud-antrea-aks-conformance-net-policy/)
+[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy&subject=EKS%20Conformance/NetworkPolicy)](https://jenkins.antrea.io/job/cloud-antrea-eks-conformance-net-policy/) [![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy&subject=GKE%20Conformance/NetworkPolicy%20)](https://jenkins.antrea.io/job/cloud-antrea-gke-conformance-net-policy/)
 
 * [e2e [gated check-in]](https://jenkins.antrea.io/job/antrea-e2e-for-pull-request/):
   [end-to-end tests](../../test/e2e) for Antrea.
@@ -212,14 +212,6 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
   |  K8s Version   |     Node OS     | VPC Native Mode (on by default) |  Status  |
   | :------------: | :-------------: | :-----------------------------: |:-------: |
   |    1.25.5      |     Ubuntu      |  On                             |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](https://jenkins.antrea.io/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
-
-* [AKS conformance/network policy [bi-daily]](https://jenkins.antrea.io/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
-  community tests on AKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
-  Current test environment matrix:
-
-  |  K8s Version   |  Node Type          |  Node OS        |  Status  |
-  | :------------: | :-----------------: | :-------------: | :------: |
-  |    1.24.9      |  Standard_DS2_v2    |  Ubuntu 18.04   |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](https://jenkins.antrea.io/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
 * [matrix-test [weekly]](https://jenkins.antrea.io/job/antrea-weekly-matrix-compatibility-test/):
   runs Antrea e2e, K8s Conformance and NetworkPolicy tests, using different combinations of various operating systems and K8s releases.
