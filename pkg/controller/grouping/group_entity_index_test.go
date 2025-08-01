@@ -601,7 +601,7 @@ func TestGroupEntityIndexEventHandlers(t *testing.T) {
 }
 
 func TestCreateNodeLabelItems(t *testing.T) {
-	t.Run("Index has the new node label item", func(t *testing.T) {
+	t.Run("nodeLabelItem is added to the Index", func(t *testing.T) {
 		groupEntityIndex := NewGroupEntityIndex()
 		testLabels := labels.Set{"some-node": "red"}
 		labelItemKey := getNodeLabelItemKey(testLabels)
@@ -612,6 +612,42 @@ func TestCreateNodeLabelItems(t *testing.T) {
 
 		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
 		assert.Equal(t, groupEntityIndex.nodeLabelItems[labelItemKey], nodeLabelItem)
+	})
+	t.Run("when label item exists", func(t *testing.T) {
+		t.Run("nodeLabelItem is not duplicated on the index", func(t *testing.T) {
+			groupEntityIndex := NewGroupEntityIndex()
+			testLabels := labels.Set{"some-node": "red"}
+			labelItemKey := getNodeLabelItemKey(testLabels)
+			testEntityItem := &entityItem{
+				entity:       podFoo1,
+				labelItemKey: labelItemKey,
+			}
+			testEntityItem2 := &entityItem{
+				entity:       podFoo2,
+				labelItemKey: labelItemKey,
+			}
+
+			groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+			groupEntityIndex.createNodeLabelItem(testEntityItem2, testLabels)
+			assert.Equal(t, len(groupEntityIndex.nodeLabelItems), 1)
+		})
+		t.Run("nodeLabelItem is updated with multiple links to pods", func(t *testing.T) {
+			groupEntityIndex := NewGroupEntityIndex()
+			testLabels := labels.Set{"some-node": "red"}
+			labelItemKey := getNodeLabelItemKey(testLabels)
+			testEntityItem := &entityItem{
+				entity:       podFoo1,
+				labelItemKey: labelItemKey,
+			}
+			testEntityItem2 := &entityItem{
+				entity:       podFoo2,
+				labelItemKey: labelItemKey,
+			}
+
+			groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+			updatedNodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem2, testLabels)
+			assert.Equal(t, len(updatedNodeLabelItem.entityItemKeys), 2)
+		})
 	})
 	t.Run("nodeLabelItem links back to pod", func(t *testing.T) {
 		groupEntityIndex := NewGroupEntityIndex()

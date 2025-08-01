@@ -426,16 +426,18 @@ func (i *GroupEntityIndex) createLabelItem(entityType entityType, eItem *entityI
 	return lItem
 }
 
-// createNodeLabelItem creates a labelItem based for pods to save nodeLabel information
+// createNodeLabelItem creates a labelItem based for pods to save nodeLabel information. If the label item already exists, it's entityItemKeys are updated fort his entity.
 func (i *GroupEntityIndex) createNodeLabelItem(eItem *entityItem, labels map[string]string) *labelItem {
-	lItem := &labelItem{
-		labels:           labels,
-		entityItemKeys:   sets.New[string](),
-		selectorItemKeys: sets.New[string](),
-	}
-	// Create the labelItem.
 	labelItemKey := getNodeLabelItemKey(labels)
-	i.nodeLabelItems[labelItemKey] = lItem
+	lItem, exists := i.nodeLabelItems[labelItemKey]
+	if !exists {
+		lItem = &labelItem{
+			labels:           labels,
+			entityItemKeys:   sets.New[string](),
+			selectorItemKeys: sets.New[string](),
+		}
+		i.nodeLabelItems[labelItemKey] = lItem
+	}
 
 	// Link back to entity
 	lItem.entityItemKeys.Insert(getEntityItemKey(podEntityType, eItem.entity))
