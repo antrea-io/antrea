@@ -25,10 +25,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"bytes"
 
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v2"
 	"k8s.io/utils/exec"
+	"github.com/prometheus/common/expfmt"
+    "k8s.io/component-base/metrics/legacyregistry"
 
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
 	clusterinformationv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -68,6 +71,12 @@ type AgentDumper interface {
 	// DumpMemberlist should create a file that contains state of Memberlist
 	// cluster of the agent Pod under the basedir.
 	DumpMemberlist(basedir string) error
+	// DumpPrometheusMetrics should create a file that contains Agent Prometheus metrics.
+	DumpPrometheusMetrics(basedir string) error
+}
+
+func (d *agentDumper) DumpPrometheusMetrics(basedir string) error {
+    return exportPrometheusMetrics(d.fs, basedir, "agent", "agentmetrics")
 }
 
 // ControllerDumper is the interface for dumping runtime information of the
@@ -86,6 +95,12 @@ type ControllerDumper interface {
 	DumpHeapPprof(basedir string) error
 	// DumpGoroutinePprof should create a pprof file of goroutine stacks of the controller.
 	DumpGoroutinePprof(basedir string) error
+	// DumpPrometheusMetrics should create a file that contains Controller Prometheus metrics.
+	DumpPrometheusMetrics(basedir string) error
+}
+
+func (d *controllerDumper) DumpPrometheusMetrics(basedir string) error {
+    return exportPrometheusMetrics(d.fs, basedir, "controller", "controllermetrics")
 }
 
 func DumpHeapPprof(fs afero.Fs, basedir string) error {
@@ -371,4 +386,25 @@ func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OV
 		v4Enabled:    v4Enabled,
 		v6Enabled:    v6Enabled,
 	}
+}
+
+func exportPrometheusMetrics(fs afero.Fs, basedir, metricsSource, filename string) error {
+    allMetrics, err := legacyregistry.DefaultGatherer.Gather()
+    if err != nil {
+        return fmt.Errorf("failed to gather metrics: %w", err)
+    }
+
+    var buf bytes.Buffer
+    encoder := expfmt.NewEncoder(&buf, expfmt.NewFormat(expfmt.TypeTextPlain))
+    prefix := "antrea_" + metricsSource + "_"
+
+    for _, mf := range allMetrics {
+        if strings.HasPrefix(mf.GetName(), prefix) {
+            if err := encoder.Encode(mf); err != nil {
+                return fmt.Errorf("failed to encode metric %s: %w", mf.GetName(), err)
+            }
+        }
+    }
+
+    return writeFile(fs, filepath.Join(basedir, filename), "metrics", buf.Bytes())
 }
