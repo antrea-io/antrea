@@ -449,10 +449,10 @@ func run(o *Options) error {
 
 	var proxier proxy.Proxier
 	if o.enableAntreaProxy {
-		proxier, err = proxy.NewProxier(nodeConfig.Name,
+		proxier, err = proxy.NewProxier(ctx,
+			nodeConfig.Name,
 			k8sClient,
 			serviceInformer,
-			endpointsInformer,
 			endpointSliceInformer,
 			nodeInformer,
 			ofClient,
@@ -849,7 +849,7 @@ func run(o *Options) error {
 	}
 
 	if o.enableAntreaProxy {
-		go proxier.GetProxyProvider().Run(stopCh)
+		go proxier.GetProxyProvider().Run(ctx.Done())
 
 		// If AntreaProxy is configured to proxy all Service traffic, we need to wait for it to sync at least once
 		// before moving forward. Components that rely on Service availability should run after it, otherwise accessing

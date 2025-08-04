@@ -242,6 +242,9 @@ type AntreaProxyConfig struct {
 	//                  can reply to clients directly, bypassing the ingress Node.
 	// A Service's load balancer mode can be overridden by annotating it with `service.antrea.io/load-balancer-mode`.
 	DefaultLoadBalancerMode string `yaml:"defaultLoadBalancerMode,omitempty"`
+	// HealthzBindAddress is the IP address and port for the health check server to serve on, defaulting to
+	// "0.0.0.0:10256" (if bindAddress is unset or IPv4), or "[::]:10256" (if bindAddress is IPv6).
+	HealthzBindAddress string
 	// Disables the health check server run by Antrea Proxy, which provides health information about Services of
 	// type LoadBalancer with externalTrafficPolicy set to Local, when proxyAll is enabled. This avoids race
 	// conditions between kube-proxy and Antrea proxy, with both trying to bind to the same addresses, when proxyAll
