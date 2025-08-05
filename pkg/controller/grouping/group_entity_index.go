@@ -638,9 +638,7 @@ func (i *GroupEntityIndex) createSelectorItem(gItem *groupItem) *selectorItem {
 			}
 		}
 	} else if sItem.selector.NodeSelector != nil {
-		labelItemKeys := i.labelItemIndex[podEntityType][emptyNamespace]
-		i.scanLabelItems(labelItemKeys, sItem)
-
+		i.syncNodeLabelItems(sItem)
 	} else {
 		// The selector is Cluster scoped and match all Namespaces.
 		for _, labelItemKeys := range i.labelItemIndex[entityType] {
@@ -648,6 +646,20 @@ func (i *GroupEntityIndex) createSelectorItem(gItem *groupItem) *selectorItem {
 		}
 	}
 	return sItem
+}
+
+// syncNodeLabelItems updates the associations between nodeLabelItems and the
+// given selectorItem
+// TODO delete links where needed
+func (i *GroupEntityIndex) syncNodeLabelItems(sItem *selectorItem) {
+	for key, label := range i.nodeLabelItems {
+		if i.match(podEntityType, label.labels, emptyNamespace, sItem.selector) {
+			if !sItem.labelItemKeys.Has(key) {
+				sItem.labelItemKeys.Insert(key)
+				label.selectorItemKeys.Insert(sItem.selector.NormalizedName)
+			}
+		} // TODO else delete association
+	}
 }
 
 // scanLabelItems scans potential labelItems and updates their association.
