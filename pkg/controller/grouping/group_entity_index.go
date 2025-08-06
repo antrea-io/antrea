@@ -250,9 +250,14 @@ func (i *GroupEntityIndex) GetEntities(groupType GroupType, name string) ([]*v1.
 	var externalEntities []*v1alpha2.ExternalEntity
 	// Get the keys of the labelItems the selectorItem matches.
 	for lKey := range sItem.labelItemKeys {
-		lItem := i.labelItems[lKey]
+		var entityItemKeys sets.Set[string]
+		if gItem.selector.NodeSelector == nil {
+			entityItemKeys = i.labelItems[lKey].entityItemKeys
+		} else {
+			entityItemKeys = i.nodeLabelItems[lKey].entityItemKeys
+		}
 		// Collect the entityItems that share the labelItem.
-		for entityItemKey := range lItem.entityItemKeys {
+		for entityItemKey := range entityItemKeys {
 			eItem := i.entityItems[entityItemKey]
 			switch entity := eItem.entity.(type) {
 			case *v1.Pod:
@@ -506,12 +511,10 @@ func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object
 			entity:       entity,
 			labelItemKey: lKey,
 		}
-		switch entity.(type) {
+		switch entity := entity.(type) {
 		case *v1.Pod:
-			pod := entity.(*v1.Pod)
-			nodeName := pod.Spec.NodeName
+			nodeName := entity.Spec.NodeName
 			eItem.nodeName = nodeName
-			//TODO: check for existence
 			i.createNodeLabelItem(eItem, i.nodeLabels[nodeName])
 		}
 

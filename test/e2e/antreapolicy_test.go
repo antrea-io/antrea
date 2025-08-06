@@ -932,7 +932,14 @@ func testACNPClusterGroupAppliedToNodeSelector(t *testing.T) {
 	ns := randName("cg-with-nodeselector-test" + "-")
 	err := testData.CreateNamespace(ns, nil)
 	failOnError(err, t)
-	defer k8sUtils.Cleanup(map[string]TestNamespaceMeta{ns: TestNamespaceMeta{Name: ns}})
+
+	testNSMeta := TestNamespaceMeta{
+		Name: ns,
+	}
+	testNSMetaMap := map[string]TestNamespaceMeta{
+		ns: testNSMeta,
+	}
+	defer k8sUtils.Cleanup(testNSMetaMap)
 
 	// Create pods on separate nodes
 	_, err = k8sUtils.CreateOrUpdateDeployment(ns, "pod-a-on-kind-worker", 1, map[string]string{"pod": "a"}, "kind-worker", false)

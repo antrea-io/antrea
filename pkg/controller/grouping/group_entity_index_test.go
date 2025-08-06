@@ -37,6 +37,8 @@ const (
 var (
 	// Fake Pods
 	podFoo1                 = newPod("default", "podFoo1", map[string]string{"app": "foo"})
+	podFoo1OnNode           = newPodOnNode("default", "podFoo1", "nodeFoo", map[string]string{"app": "foo"})
+	podFoo2OnNode           = newPodOnNode("default", "podFoo2", "nodeFoo", map[string]string{"app": "foo"})
 	podFoo2                 = newPod("default", "podFoo2", map[string]string{"app": "foo"})
 	podBar1                 = newPod("default", "podBar1", map[string]string{"app": "bar"})
 	podFoo1InOtherNamespace = newPod("other", "podFoo1", map[string]string{"app": "foo"})
@@ -105,6 +107,15 @@ func newPod(namespace, name string, labels map[string]string) *v1.Pod {
 	}
 }
 
+func newPodOnNode(namespace, name, nodeName string, labels map[string]string) *v1.Pod {
+	pod := newPod(namespace, name, labels)
+	pod.Spec = v1.PodSpec{
+		NodeName: nodeName,
+	}
+
+	return pod
+}
+
 func newNode(name string, labels map[string]string) *v1.Node {
 	return &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -130,10 +141,19 @@ func TestGroupEntityIndexGetEntities(t *testing.T) {
 		existingPods             []*v1.Pod
 		existingExternalEntities []*v1alpha2.ExternalEntity
 		existingNamespaces       []*v1.Namespace
+		existingNodes            []*v1.Node
 		inputGroupSelector       *types.GroupSelector
 		expectedPods             []*v1.Pod
 		expectedExternalEntities []*v1alpha2.ExternalEntity
 	}{
+		{
+			name:                     "nodeSelector",
+			existingPods:             []*v1.Pod{podFoo1OnNode, podFoo2OnNode, podBar1, podFoo1InOtherNamespace},
+			existingExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace},
+			existingNodes:            []*v1.Node{nodeFoo},
+			inputGroupSelector:       types.NewGroupSelector("", nil, nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"node": "foo"}}),
+			expectedPods:             []*v1.Pod{podFoo1OnNode, podFoo2OnNode},
+		},
 		{
 			name:                     "namespace scoped pod selector",
 			existingPods:             []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
@@ -182,6 +202,11 @@ func TestGroupEntityIndexGetEntities(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			index := NewGroupEntityIndex()
 
+			if tt.existingNodes != nil {
+				for _, node := range tt.existingNodes {
+					index.AddNode(node)
+				}
+			}
 			for _, pod := range tt.existingPods {
 				index.AddPod(pod)
 			}
