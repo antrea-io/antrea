@@ -696,7 +696,7 @@ func TestCreateNodeLabelItems(t *testing.T) {
 func TestCreateSelectorItem(t *testing.T) {
 	t.Run("when NodeSelector is set", func(t *testing.T) {
 		t.Run("when matching labelItems exists", func(t *testing.T) {
-			t.Run("selectorItem links to matching label item", func(t *testing.T) {
+			t.Run("selectorItem links to matching label item and vice versa", func(t *testing.T) {
 				groupEntityIndex := NewGroupEntityIndex()
 				testLabels := map[string]string{"some-node": "red"}
 				labelItemKey := getNodeLabelItemKey(testLabels)
@@ -704,7 +704,7 @@ func TestCreateSelectorItem(t *testing.T) {
 					entity:       podFoo1,
 					labelItemKey: labelItemKey,
 				}
-				groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+				nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
 
 				labelSelector := metav1.LabelSelector{
 					MatchLabels: testLabels,
@@ -723,6 +723,7 @@ func TestCreateSelectorItem(t *testing.T) {
 				}
 				selectorItem := groupEntityIndex.createSelectorItem(groupItem)
 				assert.Contains(t, selectorItem.labelItemKeys, labelItemKey)
+				assert.Contains(t, nodeLabelItem.selectorItemKeys, selectorNormalizedName)
 			})
 		})
 	})
