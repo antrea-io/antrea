@@ -48,6 +48,9 @@ var (
 	// Fake Namespaces
 	nsDefault = newNamespace("default", map[string]string{"company": "default"})
 	nsOther   = newNamespace("other", map[string]string{"company": "other"})
+	// Fake Node
+	nodeFoo         = newNode("nodeFoo", map[string]string{"node": "foo"})
+	nodeFooModified = newNode("nodeFoo", map[string]string{"node": "foo-modified"})
 	// Fake groups
 	groupPodFooType1             = &group{groupType: groupType1, groupName: "groupPodFooType1", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil)}
 	groupPodFooType2             = &group{groupType: groupType2, groupName: "groupPodFooType2", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil)}
@@ -98,6 +101,15 @@ func newPod(namespace, name string, labels map[string]string) *v1.Pod {
 			Namespace: namespace,
 			Name:      name,
 			Labels:    labels,
+		},
+	}
+}
+
+func newNode(name string, labels map[string]string) *v1.Node {
+	return &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: labels,
 		},
 	}
 }
@@ -726,5 +738,30 @@ func TestCreateSelectorItem(t *testing.T) {
 				assert.Contains(t, nodeLabelItem.selectorItemKeys, selectorNormalizedName)
 			})
 		})
+	})
+}
+
+func TestAddNode(t *testing.T) {
+	t.Run("nodeLabels contains new node", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		index.AddNode(nodeFoo)
+		assert.Contains(t, index.nodeLabels, "nodeFoo")
+		assert.Equal(t, index.nodeLabels["nodeFoo"], labels.Set(labels.Set{"node": "foo"}))
+	})
+	t.Run("nodeLabels is unchanged when node is readded", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		index.AddNode(nodeFoo)
+		index.AddNode(nodeFoo)
+		assert.Contains(t, index.nodeLabels, "nodeFoo")
+		assert.Equal(t, len(index.nodeLabels), 1)
+		assert.Equal(t, index.nodeLabels["nodeFoo"], labels.Set(labels.Set{"node": "foo"}))
+	})
+	t.Run("nodeLabels is updated when node is readded with new labels", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		index.AddNode(nodeFoo)
+		index.AddNode(nodeFooModified)
+		assert.Contains(t, index.nodeLabels, "nodeFoo")
+		assert.Equal(t, len(index.nodeLabels), 1)
+		assert.Equal(t, index.nodeLabels["nodeFoo"], labels.Set(labels.Set{"node": "foo-modified"}))
 	})
 }
