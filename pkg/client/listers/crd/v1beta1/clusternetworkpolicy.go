@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1beta1
 
 import (
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ClusterNetworkPolicyLister helps list ClusterNetworkPolicies.
@@ -28,19 +28,19 @@ import (
 type ClusterNetworkPolicyLister interface {
 	// List lists all ClusterNetworkPolicies in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1beta1.ClusterNetworkPolicy, err error)
+	List(selector labels.Selector) (ret []*crdv1beta1.ClusterNetworkPolicy, err error)
 	// Get retrieves the ClusterNetworkPolicy from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1beta1.ClusterNetworkPolicy, error)
+	Get(name string) (*crdv1beta1.ClusterNetworkPolicy, error)
 	ClusterNetworkPolicyListerExpansion
 }
 
 // clusterNetworkPolicyLister implements the ClusterNetworkPolicyLister interface.
 type clusterNetworkPolicyLister struct {
-	listers.ResourceIndexer[*v1beta1.ClusterNetworkPolicy]
+	listers.ResourceIndexer[*crdv1beta1.ClusterNetworkPolicy]
 }
 
 // NewClusterNetworkPolicyLister returns a new ClusterNetworkPolicyLister.
 func NewClusterNetworkPolicyLister(indexer cache.Indexer) ClusterNetworkPolicyLister {
-	return &clusterNetworkPolicyLister{listers.New[*v1beta1.ClusterNetworkPolicy](indexer, v1beta1.Resource("clusternetworkpolicy"))}
+	return &clusterNetworkPolicyLister{listers.New[*crdv1beta1.ClusterNetworkPolicy](indexer, crdv1beta1.Resource("clusternetworkpolicy"))}
 }

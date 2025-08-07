@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1alpha2
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	apiscrdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha2 "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	crdv1alpha2 "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // TrafficControls.
 type TrafficControlInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha2.TrafficControlLister
+	Lister() crdv1alpha2.TrafficControlLister
 }
 
 type trafficControlInformer struct {
@@ -59,16 +59,28 @@ func NewFilteredTrafficControlInformer(client versioned.Interface, resyncPeriod 
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha2().TrafficControls().List(context.TODO(), options)
+				return client.CrdV1alpha2().TrafficControls().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha2().TrafficControls().Watch(context.TODO(), options)
+				return client.CrdV1alpha2().TrafficControls().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha2().TrafficControls().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha2().TrafficControls().Watch(ctx, options)
 			},
 		},
-		&crdv1alpha2.TrafficControl{},
+		&apiscrdv1alpha2.TrafficControl{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,9 +91,9 @@ func (f *trafficControlInformer) defaultInformer(client versioned.Interface, res
 }
 
 func (f *trafficControlInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdv1alpha2.TrafficControl{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiscrdv1alpha2.TrafficControl{}, f.defaultInformer)
 }
 
-func (f *trafficControlInformer) Lister() v1alpha2.TrafficControlLister {
-	return v1alpha2.NewTrafficControlLister(f.Informer().GetIndexer())
+func (f *trafficControlInformer) Lister() crdv1alpha2.TrafficControlLister {
+	return crdv1alpha2.NewTrafficControlLister(f.Informer().GetIndexer())
 }

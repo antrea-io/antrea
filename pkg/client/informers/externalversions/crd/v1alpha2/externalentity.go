@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1alpha2
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	apiscrdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha2 "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	crdv1alpha2 "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // ExternalEntities.
 type ExternalEntityInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha2.ExternalEntityLister
+	Lister() crdv1alpha2.ExternalEntityLister
 }
 
 type externalEntityInformer struct {
@@ -60,16 +60,28 @@ func NewFilteredExternalEntityInformer(client versioned.Interface, namespace str
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha2().ExternalEntities(namespace).List(context.TODO(), options)
+				return client.CrdV1alpha2().ExternalEntities(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha2().ExternalEntities(namespace).Watch(context.TODO(), options)
+				return client.CrdV1alpha2().ExternalEntities(namespace).Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha2().ExternalEntities(namespace).List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha2().ExternalEntities(namespace).Watch(ctx, options)
 			},
 		},
-		&crdv1alpha2.ExternalEntity{},
+		&apiscrdv1alpha2.ExternalEntity{},
 		resyncPeriod,
 		indexers,
 	)
@@ -80,9 +92,9 @@ func (f *externalEntityInformer) defaultInformer(client versioned.Interface, res
 }
 
 func (f *externalEntityInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdv1alpha2.ExternalEntity{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiscrdv1alpha2.ExternalEntity{}, f.defaultInformer)
 }
 
-func (f *externalEntityInformer) Lister() v1alpha2.ExternalEntityLister {
-	return v1alpha2.NewExternalEntityLister(f.Informer().GetIndexer())
+func (f *externalEntityInformer) Lister() crdv1alpha2.ExternalEntityLister {
+	return crdv1alpha2.NewExternalEntityLister(f.Informer().GetIndexer())
 }

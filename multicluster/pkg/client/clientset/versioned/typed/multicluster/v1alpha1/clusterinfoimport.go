@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	scheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,33 +35,36 @@ type ClusterInfoImportsGetter interface {
 
 // ClusterInfoImportInterface has methods to work with ClusterInfoImport resources.
 type ClusterInfoImportInterface interface {
-	Create(ctx context.Context, clusterInfoImport *v1alpha1.ClusterInfoImport, opts v1.CreateOptions) (*v1alpha1.ClusterInfoImport, error)
-	Update(ctx context.Context, clusterInfoImport *v1alpha1.ClusterInfoImport, opts v1.UpdateOptions) (*v1alpha1.ClusterInfoImport, error)
+	Create(ctx context.Context, clusterInfoImport *multiclusterv1alpha1.ClusterInfoImport, opts v1.CreateOptions) (*multiclusterv1alpha1.ClusterInfoImport, error)
+	Update(ctx context.Context, clusterInfoImport *multiclusterv1alpha1.ClusterInfoImport, opts v1.UpdateOptions) (*multiclusterv1alpha1.ClusterInfoImport, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, clusterInfoImport *v1alpha1.ClusterInfoImport, opts v1.UpdateOptions) (*v1alpha1.ClusterInfoImport, error)
+	UpdateStatus(ctx context.Context, clusterInfoImport *multiclusterv1alpha1.ClusterInfoImport, opts v1.UpdateOptions) (*multiclusterv1alpha1.ClusterInfoImport, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ClusterInfoImport, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ClusterInfoImportList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*multiclusterv1alpha1.ClusterInfoImport, error)
+	List(ctx context.Context, opts v1.ListOptions) (*multiclusterv1alpha1.ClusterInfoImportList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ClusterInfoImport, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *multiclusterv1alpha1.ClusterInfoImport, err error)
 	ClusterInfoImportExpansion
 }
 
 // clusterInfoImports implements ClusterInfoImportInterface
 type clusterInfoImports struct {
-	*gentype.ClientWithList[*v1alpha1.ClusterInfoImport, *v1alpha1.ClusterInfoImportList]
+	*gentype.ClientWithList[*multiclusterv1alpha1.ClusterInfoImport, *multiclusterv1alpha1.ClusterInfoImportList]
 }
 
 // newClusterInfoImports returns a ClusterInfoImports
 func newClusterInfoImports(c *MulticlusterV1alpha1Client, namespace string) *clusterInfoImports {
 	return &clusterInfoImports{
-		gentype.NewClientWithList[*v1alpha1.ClusterInfoImport, *v1alpha1.ClusterInfoImportList](
+		gentype.NewClientWithList[*multiclusterv1alpha1.ClusterInfoImport, *multiclusterv1alpha1.ClusterInfoImportList](
 			"clusterinfoimports",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.ClusterInfoImport { return &v1alpha1.ClusterInfoImport{} },
-			func() *v1alpha1.ClusterInfoImportList { return &v1alpha1.ClusterInfoImportList{} }),
+			func() *multiclusterv1alpha1.ClusterInfoImport { return &multiclusterv1alpha1.ClusterInfoImport{} },
+			func() *multiclusterv1alpha1.ClusterInfoImportList {
+				return &multiclusterv1alpha1.ClusterInfoImportList{}
+			},
+		),
 	}
 }

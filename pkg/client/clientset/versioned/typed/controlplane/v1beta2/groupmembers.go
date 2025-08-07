@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta2
 
 import (
-	"context"
+	context "context"
 
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
@@ -33,23 +33,24 @@ type GroupMembersGetter interface {
 
 // GroupMembersInterface has methods to work with GroupMembers resources.
 type GroupMembersInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta2.GroupMembers, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*controlplanev1beta2.GroupMembers, error)
 	GroupMembersExpansion
 }
 
 // groupMembers implements GroupMembersInterface
 type groupMembers struct {
-	*gentype.Client[*v1beta2.GroupMembers]
+	*gentype.Client[*controlplanev1beta2.GroupMembers]
 }
 
 // newGroupMembers returns a GroupMembers
 func newGroupMembers(c *ControlplaneV1beta2Client, namespace string) *groupMembers {
 	return &groupMembers{
-		gentype.NewClient[*v1beta2.GroupMembers](
+		gentype.NewClient[*controlplanev1beta2.GroupMembers](
 			"groupmembers",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1beta2.GroupMembers { return &v1beta2.GroupMembers{} }),
+			func() *controlplanev1beta2.GroupMembers { return &controlplanev1beta2.GroupMembers{} },
+		),
 	}
 }

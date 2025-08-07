@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	apismulticlusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	versioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // LabelIdentities.
 type LabelIdentityInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.LabelIdentityLister
+	Lister() multiclusterv1alpha1.LabelIdentityLister
 }
 
 type labelIdentityInformer struct {
@@ -59,16 +59,28 @@ func NewFilteredLabelIdentityInformer(client versioned.Interface, resyncPeriod t
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.MulticlusterV1alpha1().LabelIdentities().List(context.TODO(), options)
+				return client.MulticlusterV1alpha1().LabelIdentities().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.MulticlusterV1alpha1().LabelIdentities().Watch(context.TODO(), options)
+				return client.MulticlusterV1alpha1().LabelIdentities().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.MulticlusterV1alpha1().LabelIdentities().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.MulticlusterV1alpha1().LabelIdentities().Watch(ctx, options)
 			},
 		},
-		&multiclusterv1alpha1.LabelIdentity{},
+		&apismulticlusterv1alpha1.LabelIdentity{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,9 +91,9 @@ func (f *labelIdentityInformer) defaultInformer(client versioned.Interface, resy
 }
 
 func (f *labelIdentityInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&multiclusterv1alpha1.LabelIdentity{}, f.defaultInformer)
+	return f.factory.InformerFor(&apismulticlusterv1alpha1.LabelIdentity{}, f.defaultInformer)
 }
 
-func (f *labelIdentityInformer) Lister() v1alpha1.LabelIdentityLister {
-	return v1alpha1.NewLabelIdentityLister(f.Informer().GetIndexer())
+func (f *labelIdentityInformer) Lister() multiclusterv1alpha1.LabelIdentityLister {
+	return multiclusterv1alpha1.NewLabelIdentityLister(f.Informer().GetIndexer())
 }

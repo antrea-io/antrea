@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,15 +27,15 @@ type FakeCrdV1alpha2 struct {
 }
 
 func (c *FakeCrdV1alpha2) ExternalEntities(namespace string) v1alpha2.ExternalEntityInterface {
-	return &FakeExternalEntities{c, namespace}
+	return newFakeExternalEntities(c, namespace)
 }
 
 func (c *FakeCrdV1alpha2) IPPools() v1alpha2.IPPoolInterface {
-	return &FakeIPPools{c}
+	return newFakeIPPools(c)
 }
 
 func (c *FakeCrdV1alpha2) TrafficControls() v1alpha2.TrafficControlInterface {
-	return &FakeTrafficControls{c}
+	return newFakeTrafficControls(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

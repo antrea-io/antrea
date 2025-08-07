@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,63 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	statsv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeNetworkPolicyStats implements NetworkPolicyStatsInterface
-type FakeNetworkPolicyStats struct {
+// fakeNetworkPolicyStats implements NetworkPolicyStatsInterface
+type fakeNetworkPolicyStats struct {
+	*gentype.FakeClientWithList[*v1alpha1.NetworkPolicyStats, *v1alpha1.NetworkPolicyStatsList]
 	Fake *FakeStatsV1alpha1
-	ns   string
 }
 
-var networkpolicystatsResource = v1alpha1.SchemeGroupVersion.WithResource("networkpolicystats")
-
-var networkpolicystatsKind = v1alpha1.SchemeGroupVersion.WithKind("NetworkPolicyStats")
-
-// Get takes name of the networkPolicyStats, and returns the corresponding networkPolicyStats object, and an error if there is any.
-func (c *FakeNetworkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.NetworkPolicyStats, err error) {
-	emptyResult := &v1alpha1.NetworkPolicyStats{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(networkpolicystatsResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeNetworkPolicyStats(fake *FakeStatsV1alpha1, namespace string) statsv1alpha1.NetworkPolicyStatsInterface {
+	return &fakeNetworkPolicyStats{
+		gentype.NewFakeClientWithList[*v1alpha1.NetworkPolicyStats, *v1alpha1.NetworkPolicyStatsList](
+			fake.Fake,
+			namespace,
+			v1alpha1.SchemeGroupVersion.WithResource("networkpolicystats"),
+			v1alpha1.SchemeGroupVersion.WithKind("NetworkPolicyStats"),
+			func() *v1alpha1.NetworkPolicyStats { return &v1alpha1.NetworkPolicyStats{} },
+			func() *v1alpha1.NetworkPolicyStatsList { return &v1alpha1.NetworkPolicyStatsList{} },
+			func(dst, src *v1alpha1.NetworkPolicyStatsList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.NetworkPolicyStatsList) []*v1alpha1.NetworkPolicyStats {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.NetworkPolicyStatsList, items []*v1alpha1.NetworkPolicyStats) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.NetworkPolicyStats), err
-}
-
-// List takes label and field selectors, and returns the list of NetworkPolicyStats that match those selectors.
-func (c *FakeNetworkPolicyStats) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.NetworkPolicyStatsList, err error) {
-	emptyResult := &v1alpha1.NetworkPolicyStatsList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(networkpolicystatsResource, networkpolicystatsKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.NetworkPolicyStatsList{ListMeta: obj.(*v1alpha1.NetworkPolicyStatsList).ListMeta}
-	for _, item := range obj.(*v1alpha1.NetworkPolicyStatsList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested networkPolicyStats.
-func (c *FakeNetworkPolicyStats) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(networkpolicystatsResource, c.ns, opts))
-
 }

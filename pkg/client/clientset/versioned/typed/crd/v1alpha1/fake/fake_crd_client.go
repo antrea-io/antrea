@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,23 +27,23 @@ type FakeCrdV1alpha1 struct {
 }
 
 func (c *FakeCrdV1alpha1) BGPPolicies() v1alpha1.BGPPolicyInterface {
-	return &FakeBGPPolicies{c}
+	return newFakeBGPPolicies(c)
 }
 
 func (c *FakeCrdV1alpha1) ExternalNodes(namespace string) v1alpha1.ExternalNodeInterface {
-	return &FakeExternalNodes{c, namespace}
+	return newFakeExternalNodes(c, namespace)
 }
 
 func (c *FakeCrdV1alpha1) NodeLatencyMonitors() v1alpha1.NodeLatencyMonitorInterface {
-	return &FakeNodeLatencyMonitors{c}
+	return newFakeNodeLatencyMonitors(c)
 }
 
 func (c *FakeCrdV1alpha1) PacketCaptures() v1alpha1.PacketCaptureInterface {
-	return &FakePacketCaptures{c}
+	return newFakePacketCaptures(c)
 }
 
 func (c *FakeCrdV1alpha1) SupportBundleCollections() v1alpha1.SupportBundleCollectionInterface {
-	return &FakeSupportBundleCollections{c}
+	return newFakeSupportBundleCollections(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

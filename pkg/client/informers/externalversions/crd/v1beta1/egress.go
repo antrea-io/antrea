@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1beta1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	apiscrdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1beta1 "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // Egresses.
 type EgressInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1beta1.EgressLister
+	Lister() crdv1beta1.EgressLister
 }
 
 type egressInformer struct {
@@ -59,16 +59,28 @@ func NewFilteredEgressInformer(client versioned.Interface, resyncPeriod time.Dur
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1beta1().Egresses().List(context.TODO(), options)
+				return client.CrdV1beta1().Egresses().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1beta1().Egresses().Watch(context.TODO(), options)
+				return client.CrdV1beta1().Egresses().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1beta1().Egresses().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1beta1().Egresses().Watch(ctx, options)
 			},
 		},
-		&crdv1beta1.Egress{},
+		&apiscrdv1beta1.Egress{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,9 +91,9 @@ func (f *egressInformer) defaultInformer(client versioned.Interface, resyncPerio
 }
 
 func (f *egressInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdv1beta1.Egress{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiscrdv1beta1.Egress{}, f.defaultInformer)
 }
 
-func (f *egressInformer) Lister() v1beta1.EgressLister {
-	return v1beta1.NewEgressLister(f.Informer().GetIndexer())
+func (f *egressInformer) Lister() crdv1beta1.EgressLister {
+	return crdv1beta1.NewEgressLister(f.Informer().GetIndexer())
 }

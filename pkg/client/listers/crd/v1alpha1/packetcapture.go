@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // PacketCaptureLister helps list PacketCaptures.
@@ -28,19 +28,19 @@ import (
 type PacketCaptureLister interface {
 	// List lists all PacketCaptures in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.PacketCapture, err error)
+	List(selector labels.Selector) (ret []*crdv1alpha1.PacketCapture, err error)
 	// Get retrieves the PacketCapture from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.PacketCapture, error)
+	Get(name string) (*crdv1alpha1.PacketCapture, error)
 	PacketCaptureListerExpansion
 }
 
 // packetCaptureLister implements the PacketCaptureLister interface.
 type packetCaptureLister struct {
-	listers.ResourceIndexer[*v1alpha1.PacketCapture]
+	listers.ResourceIndexer[*crdv1alpha1.PacketCapture]
 }
 
 // NewPacketCaptureLister returns a new PacketCaptureLister.
 func NewPacketCaptureLister(indexer cache.Indexer) PacketCaptureLister {
-	return &packetCaptureLister{listers.New[*v1alpha1.PacketCapture](indexer, v1alpha1.Resource("packetcapture"))}
+	return &packetCaptureLister{listers.New[*crdv1alpha1.PacketCapture](indexer, crdv1alpha1.Resource("packetcapture"))}
 }

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	apiscrdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // NodeLatencyMonitors.
 type NodeLatencyMonitorInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.NodeLatencyMonitorLister
+	Lister() crdv1alpha1.NodeLatencyMonitorLister
 }
 
 type nodeLatencyMonitorInformer struct {
@@ -59,16 +59,28 @@ func NewFilteredNodeLatencyMonitorInformer(client versioned.Interface, resyncPer
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().NodeLatencyMonitors().List(context.TODO(), options)
+				return client.CrdV1alpha1().NodeLatencyMonitors().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().NodeLatencyMonitors().Watch(context.TODO(), options)
+				return client.CrdV1alpha1().NodeLatencyMonitors().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha1().NodeLatencyMonitors().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha1().NodeLatencyMonitors().Watch(ctx, options)
 			},
 		},
-		&crdv1alpha1.NodeLatencyMonitor{},
+		&apiscrdv1alpha1.NodeLatencyMonitor{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,9 +91,9 @@ func (f *nodeLatencyMonitorInformer) defaultInformer(client versioned.Interface,
 }
 
 func (f *nodeLatencyMonitorInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdv1alpha1.NodeLatencyMonitor{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiscrdv1alpha1.NodeLatencyMonitor{}, f.defaultInformer)
 }
 
-func (f *nodeLatencyMonitorInformer) Lister() v1alpha1.NodeLatencyMonitorLister {
-	return v1alpha1.NewNodeLatencyMonitorLister(f.Informer().GetIndexer())
+func (f *nodeLatencyMonitorInformer) Lister() crdv1alpha1.NodeLatencyMonitorLister {
+	return crdv1alpha1.NewNodeLatencyMonitorLister(f.Informer().GetIndexer())
 }

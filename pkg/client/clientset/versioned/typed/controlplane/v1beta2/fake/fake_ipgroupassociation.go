@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,29 +17,26 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeIPGroupAssociations implements IPGroupAssociationInterface
-type FakeIPGroupAssociations struct {
+// fakeIPGroupAssociations implements IPGroupAssociationInterface
+type fakeIPGroupAssociations struct {
+	*gentype.FakeClient[*v1beta2.IPGroupAssociation]
 	Fake *FakeControlplaneV1beta2
 }
 
-var ipgroupassociationsResource = v1beta2.SchemeGroupVersion.WithResource("ipgroupassociations")
-
-var ipgroupassociationsKind = v1beta2.SchemeGroupVersion.WithKind("IPGroupAssociation")
-
-// Get takes name of the iPGroupAssociation, and returns the corresponding iPGroupAssociation object, and an error if there is any.
-func (c *FakeIPGroupAssociations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.IPGroupAssociation, err error) {
-	emptyResult := &v1beta2.IPGroupAssociation{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(ipgroupassociationsResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeIPGroupAssociations(fake *FakeControlplaneV1beta2) controlplanev1beta2.IPGroupAssociationInterface {
+	return &fakeIPGroupAssociations{
+		gentype.NewFakeClient[*v1beta2.IPGroupAssociation](
+			fake.Fake,
+			"",
+			v1beta2.SchemeGroupVersion.WithResource("ipgroupassociations"),
+			v1beta2.SchemeGroupVersion.WithKind("IPGroupAssociation"),
+			func() *v1beta2.IPGroupAssociation { return &v1beta2.IPGroupAssociation{} },
+		),
+		fake,
 	}
-	return obj.(*v1beta2.IPGroupAssociation), err
 }

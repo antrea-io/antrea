@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,129 +17,32 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeClusterSets implements ClusterSetInterface
-type FakeClusterSets struct {
+// fakeClusterSets implements ClusterSetInterface
+type fakeClusterSets struct {
+	*gentype.FakeClientWithList[*v1alpha2.ClusterSet, *v1alpha2.ClusterSetList]
 	Fake *FakeMulticlusterV1alpha2
-	ns   string
 }
 
-var clustersetsResource = v1alpha2.SchemeGroupVersion.WithResource("clustersets")
-
-var clustersetsKind = v1alpha2.SchemeGroupVersion.WithKind("ClusterSet")
-
-// Get takes name of the clusterSet, and returns the corresponding clusterSet object, and an error if there is any.
-func (c *FakeClusterSets) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.ClusterSet, err error) {
-	emptyResult := &v1alpha2.ClusterSet{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(clustersetsResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeClusterSets(fake *FakeMulticlusterV1alpha2, namespace string) multiclusterv1alpha2.ClusterSetInterface {
+	return &fakeClusterSets{
+		gentype.NewFakeClientWithList[*v1alpha2.ClusterSet, *v1alpha2.ClusterSetList](
+			fake.Fake,
+			namespace,
+			v1alpha2.SchemeGroupVersion.WithResource("clustersets"),
+			v1alpha2.SchemeGroupVersion.WithKind("ClusterSet"),
+			func() *v1alpha2.ClusterSet { return &v1alpha2.ClusterSet{} },
+			func() *v1alpha2.ClusterSetList { return &v1alpha2.ClusterSetList{} },
+			func(dst, src *v1alpha2.ClusterSetList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha2.ClusterSetList) []*v1alpha2.ClusterSet { return gentype.ToPointerSlice(list.Items) },
+			func(list *v1alpha2.ClusterSetList, items []*v1alpha2.ClusterSet) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha2.ClusterSet), err
-}
-
-// List takes label and field selectors, and returns the list of ClusterSets that match those selectors.
-func (c *FakeClusterSets) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.ClusterSetList, err error) {
-	emptyResult := &v1alpha2.ClusterSetList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(clustersetsResource, clustersetsKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha2.ClusterSetList{ListMeta: obj.(*v1alpha2.ClusterSetList).ListMeta}
-	for _, item := range obj.(*v1alpha2.ClusterSetList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested clusterSets.
-func (c *FakeClusterSets) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(clustersetsResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a clusterSet and creates it.  Returns the server's representation of the clusterSet, and an error, if there is any.
-func (c *FakeClusterSets) Create(ctx context.Context, clusterSet *v1alpha2.ClusterSet, opts v1.CreateOptions) (result *v1alpha2.ClusterSet, err error) {
-	emptyResult := &v1alpha2.ClusterSet{}
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateActionWithOptions(clustersetsResource, c.ns, clusterSet, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha2.ClusterSet), err
-}
-
-// Update takes the representation of a clusterSet and updates it. Returns the server's representation of the clusterSet, and an error, if there is any.
-func (c *FakeClusterSets) Update(ctx context.Context, clusterSet *v1alpha2.ClusterSet, opts v1.UpdateOptions) (result *v1alpha2.ClusterSet, err error) {
-	emptyResult := &v1alpha2.ClusterSet{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateActionWithOptions(clustersetsResource, c.ns, clusterSet, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha2.ClusterSet), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeClusterSets) UpdateStatus(ctx context.Context, clusterSet *v1alpha2.ClusterSet, opts v1.UpdateOptions) (result *v1alpha2.ClusterSet, err error) {
-	emptyResult := &v1alpha2.ClusterSet{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceActionWithOptions(clustersetsResource, "status", c.ns, clusterSet, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha2.ClusterSet), err
-}
-
-// Delete takes name of the clusterSet and deletes it. Returns an error if one occurs.
-func (c *FakeClusterSets) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(clustersetsResource, c.ns, name, opts), &v1alpha2.ClusterSet{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeClusterSets) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionActionWithOptions(clustersetsResource, c.ns, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha2.ClusterSetList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched clusterSet.
-func (c *FakeClusterSets) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.ClusterSet, err error) {
-	emptyResult := &v1alpha2.ClusterSet{}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceActionWithOptions(clustersetsResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha2.ClusterSet), err
 }

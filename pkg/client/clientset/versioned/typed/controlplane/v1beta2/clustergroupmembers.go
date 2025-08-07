@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta2
 
 import (
-	"context"
+	context "context"
 
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
@@ -33,23 +33,24 @@ type ClusterGroupMembersGetter interface {
 
 // ClusterGroupMembersInterface has methods to work with ClusterGroupMembers resources.
 type ClusterGroupMembersInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta2.ClusterGroupMembers, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*controlplanev1beta2.ClusterGroupMembers, error)
 	ClusterGroupMembersExpansion
 }
 
 // clusterGroupMembers implements ClusterGroupMembersInterface
 type clusterGroupMembers struct {
-	*gentype.Client[*v1beta2.ClusterGroupMembers]
+	*gentype.Client[*controlplanev1beta2.ClusterGroupMembers]
 }
 
 // newClusterGroupMembers returns a ClusterGroupMembers
 func newClusterGroupMembers(c *ControlplaneV1beta2Client) *clusterGroupMembers {
 	return &clusterGroupMembers{
-		gentype.NewClient[*v1beta2.ClusterGroupMembers](
+		gentype.NewClient[*controlplanev1beta2.ClusterGroupMembers](
 			"clustergroupmembers",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta2.ClusterGroupMembers { return &v1beta2.ClusterGroupMembers{} }),
+			func() *controlplanev1beta2.ClusterGroupMembers { return &controlplanev1beta2.ClusterGroupMembers{} },
+		),
 	}
 }

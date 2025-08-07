@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,108 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	crdv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeAntreaAgentInfos implements AntreaAgentInfoInterface
-type FakeAntreaAgentInfos struct {
+// fakeAntreaAgentInfos implements AntreaAgentInfoInterface
+type fakeAntreaAgentInfos struct {
+	*gentype.FakeClientWithList[*v1beta1.AntreaAgentInfo, *v1beta1.AntreaAgentInfoList]
 	Fake *FakeCrdV1beta1
 }
 
-var antreaagentinfosResource = v1beta1.SchemeGroupVersion.WithResource("antreaagentinfos")
-
-var antreaagentinfosKind = v1beta1.SchemeGroupVersion.WithKind("AntreaAgentInfo")
-
-// Get takes name of the antreaAgentInfo, and returns the corresponding antreaAgentInfo object, and an error if there is any.
-func (c *FakeAntreaAgentInfos) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AntreaAgentInfo, err error) {
-	emptyResult := &v1beta1.AntreaAgentInfo{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(antreaagentinfosResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeAntreaAgentInfos(fake *FakeCrdV1beta1) crdv1beta1.AntreaAgentInfoInterface {
+	return &fakeAntreaAgentInfos{
+		gentype.NewFakeClientWithList[*v1beta1.AntreaAgentInfo, *v1beta1.AntreaAgentInfoList](
+			fake.Fake,
+			"",
+			v1beta1.SchemeGroupVersion.WithResource("antreaagentinfos"),
+			v1beta1.SchemeGroupVersion.WithKind("AntreaAgentInfo"),
+			func() *v1beta1.AntreaAgentInfo { return &v1beta1.AntreaAgentInfo{} },
+			func() *v1beta1.AntreaAgentInfoList { return &v1beta1.AntreaAgentInfoList{} },
+			func(dst, src *v1beta1.AntreaAgentInfoList) { dst.ListMeta = src.ListMeta },
+			func(list *v1beta1.AntreaAgentInfoList) []*v1beta1.AntreaAgentInfo {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1beta1.AntreaAgentInfoList, items []*v1beta1.AntreaAgentInfo) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1beta1.AntreaAgentInfo), err
-}
-
-// List takes label and field selectors, and returns the list of AntreaAgentInfos that match those selectors.
-func (c *FakeAntreaAgentInfos) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.AntreaAgentInfoList, err error) {
-	emptyResult := &v1beta1.AntreaAgentInfoList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(antreaagentinfosResource, antreaagentinfosKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1beta1.AntreaAgentInfoList{ListMeta: obj.(*v1beta1.AntreaAgentInfoList).ListMeta}
-	for _, item := range obj.(*v1beta1.AntreaAgentInfoList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested antreaAgentInfos.
-func (c *FakeAntreaAgentInfos) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(antreaagentinfosResource, opts))
-}
-
-// Create takes the representation of a antreaAgentInfo and creates it.  Returns the server's representation of the antreaAgentInfo, and an error, if there is any.
-func (c *FakeAntreaAgentInfos) Create(ctx context.Context, antreaAgentInfo *v1beta1.AntreaAgentInfo, opts v1.CreateOptions) (result *v1beta1.AntreaAgentInfo, err error) {
-	emptyResult := &v1beta1.AntreaAgentInfo{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(antreaagentinfosResource, antreaAgentInfo, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1beta1.AntreaAgentInfo), err
-}
-
-// Update takes the representation of a antreaAgentInfo and updates it. Returns the server's representation of the antreaAgentInfo, and an error, if there is any.
-func (c *FakeAntreaAgentInfos) Update(ctx context.Context, antreaAgentInfo *v1beta1.AntreaAgentInfo, opts v1.UpdateOptions) (result *v1beta1.AntreaAgentInfo, err error) {
-	emptyResult := &v1beta1.AntreaAgentInfo{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateActionWithOptions(antreaagentinfosResource, antreaAgentInfo, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1beta1.AntreaAgentInfo), err
-}
-
-// Delete takes name of the antreaAgentInfo and deletes it. Returns an error if one occurs.
-func (c *FakeAntreaAgentInfos) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(antreaagentinfosResource, name, opts), &v1beta1.AntreaAgentInfo{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeAntreaAgentInfos) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionActionWithOptions(antreaagentinfosResource, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1beta1.AntreaAgentInfoList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched antreaAgentInfo.
-func (c *FakeAntreaAgentInfos) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.AntreaAgentInfo, err error) {
-	emptyResult := &v1beta1.AntreaAgentInfo{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceActionWithOptions(antreaagentinfosResource, name, pt, data, opts, subresources...), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1beta1.AntreaAgentInfo), err
 }

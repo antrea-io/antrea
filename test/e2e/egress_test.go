@@ -485,7 +485,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				// Testing the events recorded during creation of an Egress resource.
 				expectedMessage := fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.expectedEgressIP, egress.Status.EgressNode)
 				assert.EventuallyWithT(t, func(c *assert.CollectT) {
-					events, err := data.clientset.CoreV1().Events("").Search(scheme.Scheme, egress)
+					events, err := data.clientset.CoreV1().Events("").SearchWithContext(context.TODO(), scheme.Scheme, egress)
 					if assert.NoError(c, err) && assert.Len(c, events.Items, 1) {
 						assert.Contains(c, events.Items[0].Message, expectedMessage)
 					}
@@ -604,7 +604,7 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 				fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.newEgressIP, tt.newNode),
 			}
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
-				events, err := data.clientset.CoreV1().Events("").Search(scheme.Scheme, egress)
+				events, err := data.clientset.CoreV1().Events("").SearchWithContext(context.TODO(), scheme.Scheme, egress)
 				if assert.NoError(c, err) && assert.Len(c, events.Items, len(expectedMessages)) {
 					recordedMessages := []string{}
 					for _, items := range events.Items {

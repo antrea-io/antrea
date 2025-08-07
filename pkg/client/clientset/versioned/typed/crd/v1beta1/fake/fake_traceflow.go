@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,120 +17,32 @@
 package fake
 
 import (
-	"context"
-
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	crdv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeTraceflows implements TraceflowInterface
-type FakeTraceflows struct {
+// fakeTraceflows implements TraceflowInterface
+type fakeTraceflows struct {
+	*gentype.FakeClientWithList[*v1beta1.Traceflow, *v1beta1.TraceflowList]
 	Fake *FakeCrdV1beta1
 }
 
-var traceflowsResource = v1beta1.SchemeGroupVersion.WithResource("traceflows")
-
-var traceflowsKind = v1beta1.SchemeGroupVersion.WithKind("Traceflow")
-
-// Get takes name of the traceflow, and returns the corresponding traceflow object, and an error if there is any.
-func (c *FakeTraceflows) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.Traceflow, err error) {
-	emptyResult := &v1beta1.Traceflow{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(traceflowsResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeTraceflows(fake *FakeCrdV1beta1) crdv1beta1.TraceflowInterface {
+	return &fakeTraceflows{
+		gentype.NewFakeClientWithList[*v1beta1.Traceflow, *v1beta1.TraceflowList](
+			fake.Fake,
+			"",
+			v1beta1.SchemeGroupVersion.WithResource("traceflows"),
+			v1beta1.SchemeGroupVersion.WithKind("Traceflow"),
+			func() *v1beta1.Traceflow { return &v1beta1.Traceflow{} },
+			func() *v1beta1.TraceflowList { return &v1beta1.TraceflowList{} },
+			func(dst, src *v1beta1.TraceflowList) { dst.ListMeta = src.ListMeta },
+			func(list *v1beta1.TraceflowList) []*v1beta1.Traceflow { return gentype.ToPointerSlice(list.Items) },
+			func(list *v1beta1.TraceflowList, items []*v1beta1.Traceflow) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1beta1.Traceflow), err
-}
-
-// List takes label and field selectors, and returns the list of Traceflows that match those selectors.
-func (c *FakeTraceflows) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.TraceflowList, err error) {
-	emptyResult := &v1beta1.TraceflowList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(traceflowsResource, traceflowsKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1beta1.TraceflowList{ListMeta: obj.(*v1beta1.TraceflowList).ListMeta}
-	for _, item := range obj.(*v1beta1.TraceflowList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested traceflows.
-func (c *FakeTraceflows) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(traceflowsResource, opts))
-}
-
-// Create takes the representation of a traceflow and creates it.  Returns the server's representation of the traceflow, and an error, if there is any.
-func (c *FakeTraceflows) Create(ctx context.Context, traceflow *v1beta1.Traceflow, opts v1.CreateOptions) (result *v1beta1.Traceflow, err error) {
-	emptyResult := &v1beta1.Traceflow{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(traceflowsResource, traceflow, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1beta1.Traceflow), err
-}
-
-// Update takes the representation of a traceflow and updates it. Returns the server's representation of the traceflow, and an error, if there is any.
-func (c *FakeTraceflows) Update(ctx context.Context, traceflow *v1beta1.Traceflow, opts v1.UpdateOptions) (result *v1beta1.Traceflow, err error) {
-	emptyResult := &v1beta1.Traceflow{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateActionWithOptions(traceflowsResource, traceflow, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1beta1.Traceflow), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeTraceflows) UpdateStatus(ctx context.Context, traceflow *v1beta1.Traceflow, opts v1.UpdateOptions) (result *v1beta1.Traceflow, err error) {
-	emptyResult := &v1beta1.Traceflow{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(traceflowsResource, "status", traceflow, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1beta1.Traceflow), err
-}
-
-// Delete takes name of the traceflow and deletes it. Returns an error if one occurs.
-func (c *FakeTraceflows) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(traceflowsResource, name, opts), &v1beta1.Traceflow{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeTraceflows) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionActionWithOptions(traceflowsResource, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1beta1.TraceflowList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched traceflow.
-func (c *FakeTraceflows) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.Traceflow, err error) {
-	emptyResult := &v1beta1.Traceflow{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceActionWithOptions(traceflowsResource, name, pt, data, opts, subresources...), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1beta1.Traceflow), err
 }

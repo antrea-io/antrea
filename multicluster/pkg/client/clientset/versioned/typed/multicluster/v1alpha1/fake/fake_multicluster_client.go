@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,31 +27,31 @@ type FakeMulticlusterV1alpha1 struct {
 }
 
 func (c *FakeMulticlusterV1alpha1) ClusterInfoImports(namespace string) v1alpha1.ClusterInfoImportInterface {
-	return &FakeClusterInfoImports{c, namespace}
+	return newFakeClusterInfoImports(c, namespace)
 }
 
 func (c *FakeMulticlusterV1alpha1) ClusterSets(namespace string) v1alpha1.ClusterSetInterface {
-	return &FakeClusterSets{c, namespace}
+	return newFakeClusterSets(c, namespace)
 }
 
 func (c *FakeMulticlusterV1alpha1) Gateways(namespace string) v1alpha1.GatewayInterface {
-	return &FakeGateways{c, namespace}
+	return newFakeGateways(c, namespace)
 }
 
 func (c *FakeMulticlusterV1alpha1) LabelIdentities() v1alpha1.LabelIdentityInterface {
-	return &FakeLabelIdentities{c}
+	return newFakeLabelIdentities(c)
 }
 
 func (c *FakeMulticlusterV1alpha1) MemberClusterAnnounces(namespace string) v1alpha1.MemberClusterAnnounceInterface {
-	return &FakeMemberClusterAnnounces{c, namespace}
+	return newFakeMemberClusterAnnounces(c, namespace)
 }
 
 func (c *FakeMulticlusterV1alpha1) ResourceExports(namespace string) v1alpha1.ResourceExportInterface {
-	return &FakeResourceExports{c, namespace}
+	return newFakeResourceExports(c, namespace)
 }
 
 func (c *FakeMulticlusterV1alpha1) ResourceImports(namespace string) v1alpha1.ResourceImportInterface {
-	return &FakeResourceImports{c, namespace}
+	return newFakeResourceImports(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

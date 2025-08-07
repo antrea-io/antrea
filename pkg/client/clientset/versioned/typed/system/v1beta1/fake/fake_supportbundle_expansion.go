@@ -22,11 +22,11 @@ import (
 	"k8s.io/client-go/testing"
 )
 
-func (c *FakeSupportBundles) Download(ctx context.Context, name string) (io.ReadCloser, error) {
+func (c *fakeSupportBundles) Download(ctx context.Context, name string) (io.ReadCloser, error) {
 	// This should record the action correctly.
 	// Reactors are not supported here, since we do not return a runtime.Object.
 	_, err := c.Fake.
-		Invokes(testing.NewRootGetSubresourceAction(supportbundlesResource, "download", name), nil)
+		Invokes(testing.NewRootGetSubresourceAction(c.Resource(), "download", name), nil)
 	if err != nil {
 		return nil, err
 	}

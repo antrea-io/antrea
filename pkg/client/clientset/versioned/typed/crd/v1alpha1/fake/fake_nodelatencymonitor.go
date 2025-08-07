@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,108 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	crdv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeNodeLatencyMonitors implements NodeLatencyMonitorInterface
-type FakeNodeLatencyMonitors struct {
+// fakeNodeLatencyMonitors implements NodeLatencyMonitorInterface
+type fakeNodeLatencyMonitors struct {
+	*gentype.FakeClientWithList[*v1alpha1.NodeLatencyMonitor, *v1alpha1.NodeLatencyMonitorList]
 	Fake *FakeCrdV1alpha1
 }
 
-var nodelatencymonitorsResource = v1alpha1.SchemeGroupVersion.WithResource("nodelatencymonitors")
-
-var nodelatencymonitorsKind = v1alpha1.SchemeGroupVersion.WithKind("NodeLatencyMonitor")
-
-// Get takes name of the nodeLatencyMonitor, and returns the corresponding nodeLatencyMonitor object, and an error if there is any.
-func (c *FakeNodeLatencyMonitors) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.NodeLatencyMonitor, err error) {
-	emptyResult := &v1alpha1.NodeLatencyMonitor{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(nodelatencymonitorsResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeNodeLatencyMonitors(fake *FakeCrdV1alpha1) crdv1alpha1.NodeLatencyMonitorInterface {
+	return &fakeNodeLatencyMonitors{
+		gentype.NewFakeClientWithList[*v1alpha1.NodeLatencyMonitor, *v1alpha1.NodeLatencyMonitorList](
+			fake.Fake,
+			"",
+			v1alpha1.SchemeGroupVersion.WithResource("nodelatencymonitors"),
+			v1alpha1.SchemeGroupVersion.WithKind("NodeLatencyMonitor"),
+			func() *v1alpha1.NodeLatencyMonitor { return &v1alpha1.NodeLatencyMonitor{} },
+			func() *v1alpha1.NodeLatencyMonitorList { return &v1alpha1.NodeLatencyMonitorList{} },
+			func(dst, src *v1alpha1.NodeLatencyMonitorList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.NodeLatencyMonitorList) []*v1alpha1.NodeLatencyMonitor {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.NodeLatencyMonitorList, items []*v1alpha1.NodeLatencyMonitor) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.NodeLatencyMonitor), err
-}
-
-// List takes label and field selectors, and returns the list of NodeLatencyMonitors that match those selectors.
-func (c *FakeNodeLatencyMonitors) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.NodeLatencyMonitorList, err error) {
-	emptyResult := &v1alpha1.NodeLatencyMonitorList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(nodelatencymonitorsResource, nodelatencymonitorsKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.NodeLatencyMonitorList{ListMeta: obj.(*v1alpha1.NodeLatencyMonitorList).ListMeta}
-	for _, item := range obj.(*v1alpha1.NodeLatencyMonitorList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested nodeLatencyMonitors.
-func (c *FakeNodeLatencyMonitors) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(nodelatencymonitorsResource, opts))
-}
-
-// Create takes the representation of a nodeLatencyMonitor and creates it.  Returns the server's representation of the nodeLatencyMonitor, and an error, if there is any.
-func (c *FakeNodeLatencyMonitors) Create(ctx context.Context, nodeLatencyMonitor *v1alpha1.NodeLatencyMonitor, opts v1.CreateOptions) (result *v1alpha1.NodeLatencyMonitor, err error) {
-	emptyResult := &v1alpha1.NodeLatencyMonitor{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(nodelatencymonitorsResource, nodeLatencyMonitor, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.NodeLatencyMonitor), err
-}
-
-// Update takes the representation of a nodeLatencyMonitor and updates it. Returns the server's representation of the nodeLatencyMonitor, and an error, if there is any.
-func (c *FakeNodeLatencyMonitors) Update(ctx context.Context, nodeLatencyMonitor *v1alpha1.NodeLatencyMonitor, opts v1.UpdateOptions) (result *v1alpha1.NodeLatencyMonitor, err error) {
-	emptyResult := &v1alpha1.NodeLatencyMonitor{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateActionWithOptions(nodelatencymonitorsResource, nodeLatencyMonitor, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.NodeLatencyMonitor), err
-}
-
-// Delete takes name of the nodeLatencyMonitor and deletes it. Returns an error if one occurs.
-func (c *FakeNodeLatencyMonitors) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(nodelatencymonitorsResource, name, opts), &v1alpha1.NodeLatencyMonitor{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeNodeLatencyMonitors) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionActionWithOptions(nodelatencymonitorsResource, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.NodeLatencyMonitorList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched nodeLatencyMonitor.
-func (c *FakeNodeLatencyMonitors) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.NodeLatencyMonitor, err error) {
-	emptyResult := &v1alpha1.NodeLatencyMonitor{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceActionWithOptions(nodelatencymonitorsResource, name, pt, data, opts, subresources...), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.NodeLatencyMonitor), err
 }

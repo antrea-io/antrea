@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1beta1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	apiscrdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1beta1 "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // Tiers.
 type TierInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1beta1.TierLister
+	Lister() crdv1beta1.TierLister
 }
 
 type tierInformer struct {
@@ -59,16 +59,28 @@ func NewFilteredTierInformer(client versioned.Interface, resyncPeriod time.Durat
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1beta1().Tiers().List(context.TODO(), options)
+				return client.CrdV1beta1().Tiers().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1beta1().Tiers().Watch(context.TODO(), options)
+				return client.CrdV1beta1().Tiers().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1beta1().Tiers().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1beta1().Tiers().Watch(ctx, options)
 			},
 		},
-		&crdv1beta1.Tier{},
+		&apiscrdv1beta1.Tier{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,9 +91,9 @@ func (f *tierInformer) defaultInformer(client versioned.Interface, resyncPeriod 
 }
 
 func (f *tierInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdv1beta1.Tier{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiscrdv1beta1.Tier{}, f.defaultInformer)
 }
 
-func (f *tierInformer) Lister() v1beta1.TierLister {
-	return v1beta1.NewTierLister(f.Informer().GetIndexer())
+func (f *tierInformer) Lister() crdv1beta1.TierLister {
+	return crdv1beta1.NewTierLister(f.Informer().GetIndexer())
 }

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	apiscrdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -34,7 +34,7 @@ import (
 // PacketCaptures.
 type PacketCaptureInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.PacketCaptureLister
+	Lister() crdv1alpha1.PacketCaptureLister
 }
 
 type packetCaptureInformer struct {
@@ -59,16 +59,28 @@ func NewFilteredPacketCaptureInformer(client versioned.Interface, resyncPeriod t
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().PacketCaptures().List(context.TODO(), options)
+				return client.CrdV1alpha1().PacketCaptures().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().PacketCaptures().Watch(context.TODO(), options)
+				return client.CrdV1alpha1().PacketCaptures().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha1().PacketCaptures().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.CrdV1alpha1().PacketCaptures().Watch(ctx, options)
 			},
 		},
-		&crdv1alpha1.PacketCapture{},
+		&apiscrdv1alpha1.PacketCapture{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,9 +91,9 @@ func (f *packetCaptureInformer) defaultInformer(client versioned.Interface, resy
 }
 
 func (f *packetCaptureInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdv1alpha1.PacketCapture{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiscrdv1alpha1.PacketCapture{}, f.defaultInformer)
 }
 
-func (f *packetCaptureInformer) Lister() v1alpha1.PacketCaptureLister {
-	return v1alpha1.NewPacketCaptureLister(f.Informer().GetIndexer())
+func (f *packetCaptureInformer) Lister() crdv1alpha1.PacketCaptureLister {
+	return crdv1alpha1.NewPacketCaptureLister(f.Informer().GetIndexer())
 }

@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha2
 
 import (
-	"context"
+	context "context"
 
-	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,31 +35,32 @@ type TrafficControlsGetter interface {
 
 // TrafficControlInterface has methods to work with TrafficControl resources.
 type TrafficControlInterface interface {
-	Create(ctx context.Context, trafficControl *v1alpha2.TrafficControl, opts v1.CreateOptions) (*v1alpha2.TrafficControl, error)
-	Update(ctx context.Context, trafficControl *v1alpha2.TrafficControl, opts v1.UpdateOptions) (*v1alpha2.TrafficControl, error)
+	Create(ctx context.Context, trafficControl *crdv1alpha2.TrafficControl, opts v1.CreateOptions) (*crdv1alpha2.TrafficControl, error)
+	Update(ctx context.Context, trafficControl *crdv1alpha2.TrafficControl, opts v1.UpdateOptions) (*crdv1alpha2.TrafficControl, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha2.TrafficControl, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha2.TrafficControlList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1alpha2.TrafficControl, error)
+	List(ctx context.Context, opts v1.ListOptions) (*crdv1alpha2.TrafficControlList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.TrafficControl, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *crdv1alpha2.TrafficControl, err error)
 	TrafficControlExpansion
 }
 
 // trafficControls implements TrafficControlInterface
 type trafficControls struct {
-	*gentype.ClientWithList[*v1alpha2.TrafficControl, *v1alpha2.TrafficControlList]
+	*gentype.ClientWithList[*crdv1alpha2.TrafficControl, *crdv1alpha2.TrafficControlList]
 }
 
 // newTrafficControls returns a TrafficControls
 func newTrafficControls(c *CrdV1alpha2Client) *trafficControls {
 	return &trafficControls{
-		gentype.NewClientWithList[*v1alpha2.TrafficControl, *v1alpha2.TrafficControlList](
+		gentype.NewClientWithList[*crdv1alpha2.TrafficControl, *crdv1alpha2.TrafficControlList](
 			"trafficcontrols",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha2.TrafficControl { return &v1alpha2.TrafficControl{} },
-			func() *v1alpha2.TrafficControlList { return &v1alpha2.TrafficControlList{} }),
+			func() *crdv1alpha2.TrafficControl { return &crdv1alpha2.TrafficControl{} },
+			func() *crdv1alpha2.TrafficControlList { return &crdv1alpha2.TrafficControlList{} },
+		),
 	}
 }

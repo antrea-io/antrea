@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	scheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,31 +35,32 @@ type GatewaysGetter interface {
 
 // GatewayInterface has methods to work with Gateway resources.
 type GatewayInterface interface {
-	Create(ctx context.Context, gateway *v1alpha1.Gateway, opts v1.CreateOptions) (*v1alpha1.Gateway, error)
-	Update(ctx context.Context, gateway *v1alpha1.Gateway, opts v1.UpdateOptions) (*v1alpha1.Gateway, error)
+	Create(ctx context.Context, gateway *multiclusterv1alpha1.Gateway, opts v1.CreateOptions) (*multiclusterv1alpha1.Gateway, error)
+	Update(ctx context.Context, gateway *multiclusterv1alpha1.Gateway, opts v1.UpdateOptions) (*multiclusterv1alpha1.Gateway, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.Gateway, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.GatewayList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*multiclusterv1alpha1.Gateway, error)
+	List(ctx context.Context, opts v1.ListOptions) (*multiclusterv1alpha1.GatewayList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.Gateway, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *multiclusterv1alpha1.Gateway, err error)
 	GatewayExpansion
 }
 
 // gateways implements GatewayInterface
 type gateways struct {
-	*gentype.ClientWithList[*v1alpha1.Gateway, *v1alpha1.GatewayList]
+	*gentype.ClientWithList[*multiclusterv1alpha1.Gateway, *multiclusterv1alpha1.GatewayList]
 }
 
 // newGateways returns a Gateways
 func newGateways(c *MulticlusterV1alpha1Client, namespace string) *gateways {
 	return &gateways{
-		gentype.NewClientWithList[*v1alpha1.Gateway, *v1alpha1.GatewayList](
+		gentype.NewClientWithList[*multiclusterv1alpha1.Gateway, *multiclusterv1alpha1.GatewayList](
 			"gateways",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.Gateway { return &v1alpha1.Gateway{} },
-			func() *v1alpha1.GatewayList { return &v1alpha1.GatewayList{} }),
+			func() *multiclusterv1alpha1.Gateway { return &multiclusterv1alpha1.Gateway{} },
+			func() *multiclusterv1alpha1.GatewayList { return &multiclusterv1alpha1.GatewayList{} },
+		),
 	}
 }

@@ -31,7 +31,7 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	apiserverversion "k8s.io/apiserver/pkg/util/version"
+	basecompatibility "k8s.io/component-base/compatibility"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/addressgroup"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
@@ -57,7 +57,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/querier"
-	antreaversion "antrea.io/antrea/pkg/version"
+	"antrea.io/antrea/pkg/version"
 )
 
 const CertPairName = "antrea-agent-api"
@@ -186,7 +186,7 @@ func newConfig(aq agentquerier.AgentQuerier,
 	if err := os.WriteFile(loopbackClientTokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
 		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
 	}
-	serverConfig.EffectiveVersion = apiserverversion.NewEffectiveVersion(antreaversion.GetFullVersion())
+	serverConfig.EffectiveVersion = basecompatibility.NewEffectiveVersionFromString(version.GetFullVersion(), "", "")
 	serverConfig.EnableMetrics = enableMetrics
 	// Add readiness probe to check the status of watchers.
 	watcherCheck := healthz.NamedCheck("watcher", func(_ *http.Request) error {

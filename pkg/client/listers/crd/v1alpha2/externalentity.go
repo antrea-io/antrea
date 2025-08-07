@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package v1alpha2
 
 import (
-	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ExternalEntityLister helps list ExternalEntities.
@@ -28,7 +28,7 @@ import (
 type ExternalEntityLister interface {
 	// List lists all ExternalEntities in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha2.ExternalEntity, err error)
+	List(selector labels.Selector) (ret []*crdv1alpha2.ExternalEntity, err error)
 	// ExternalEntities returns an object that can list and get ExternalEntities.
 	ExternalEntities(namespace string) ExternalEntityNamespaceLister
 	ExternalEntityListerExpansion
@@ -36,17 +36,17 @@ type ExternalEntityLister interface {
 
 // externalEntityLister implements the ExternalEntityLister interface.
 type externalEntityLister struct {
-	listers.ResourceIndexer[*v1alpha2.ExternalEntity]
+	listers.ResourceIndexer[*crdv1alpha2.ExternalEntity]
 }
 
 // NewExternalEntityLister returns a new ExternalEntityLister.
 func NewExternalEntityLister(indexer cache.Indexer) ExternalEntityLister {
-	return &externalEntityLister{listers.New[*v1alpha2.ExternalEntity](indexer, v1alpha2.Resource("externalentity"))}
+	return &externalEntityLister{listers.New[*crdv1alpha2.ExternalEntity](indexer, crdv1alpha2.Resource("externalentity"))}
 }
 
 // ExternalEntities returns an object that can list and get ExternalEntities.
 func (s *externalEntityLister) ExternalEntities(namespace string) ExternalEntityNamespaceLister {
-	return externalEntityNamespaceLister{listers.NewNamespaced[*v1alpha2.ExternalEntity](s.ResourceIndexer, namespace)}
+	return externalEntityNamespaceLister{listers.NewNamespaced[*crdv1alpha2.ExternalEntity](s.ResourceIndexer, namespace)}
 }
 
 // ExternalEntityNamespaceLister helps list and get ExternalEntities.
@@ -54,15 +54,15 @@ func (s *externalEntityLister) ExternalEntities(namespace string) ExternalEntity
 type ExternalEntityNamespaceLister interface {
 	// List lists all ExternalEntities in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha2.ExternalEntity, err error)
+	List(selector labels.Selector) (ret []*crdv1alpha2.ExternalEntity, err error)
 	// Get retrieves the ExternalEntity from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha2.ExternalEntity, error)
+	Get(name string) (*crdv1alpha2.ExternalEntity, error)
 	ExternalEntityNamespaceListerExpansion
 }
 
 // externalEntityNamespaceLister implements the ExternalEntityNamespaceLister
 // interface.
 type externalEntityNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha2.ExternalEntity]
+	listers.ResourceIndexer[*crdv1alpha2.ExternalEntity]
 }

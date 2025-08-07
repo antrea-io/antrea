@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,59 +17,34 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeNetworkPolicies implements NetworkPolicyInterface
-type FakeNetworkPolicies struct {
+// fakeNetworkPolicies implements NetworkPolicyInterface
+type fakeNetworkPolicies struct {
+	*gentype.FakeClientWithList[*v1beta2.NetworkPolicy, *v1beta2.NetworkPolicyList]
 	Fake *FakeControlplaneV1beta2
 }
 
-var networkpoliciesResource = v1beta2.SchemeGroupVersion.WithResource("networkpolicies")
-
-var networkpoliciesKind = v1beta2.SchemeGroupVersion.WithKind("NetworkPolicy")
-
-// Get takes name of the networkPolicy, and returns the corresponding networkPolicy object, and an error if there is any.
-func (c *FakeNetworkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.NetworkPolicy, err error) {
-	emptyResult := &v1beta2.NetworkPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(networkpoliciesResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeNetworkPolicies(fake *FakeControlplaneV1beta2) controlplanev1beta2.NetworkPolicyInterface {
+	return &fakeNetworkPolicies{
+		gentype.NewFakeClientWithList[*v1beta2.NetworkPolicy, *v1beta2.NetworkPolicyList](
+			fake.Fake,
+			"",
+			v1beta2.SchemeGroupVersion.WithResource("networkpolicies"),
+			v1beta2.SchemeGroupVersion.WithKind("NetworkPolicy"),
+			func() *v1beta2.NetworkPolicy { return &v1beta2.NetworkPolicy{} },
+			func() *v1beta2.NetworkPolicyList { return &v1beta2.NetworkPolicyList{} },
+			func(dst, src *v1beta2.NetworkPolicyList) { dst.ListMeta = src.ListMeta },
+			func(list *v1beta2.NetworkPolicyList) []*v1beta2.NetworkPolicy {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1beta2.NetworkPolicyList, items []*v1beta2.NetworkPolicy) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1beta2.NetworkPolicy), err
-}
-
-// List takes label and field selectors, and returns the list of NetworkPolicies that match those selectors.
-func (c *FakeNetworkPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.NetworkPolicyList, err error) {
-	emptyResult := &v1beta2.NetworkPolicyList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(networkpoliciesResource, networkpoliciesKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1beta2.NetworkPolicyList{ListMeta: obj.(*v1beta2.NetworkPolicyList).ListMeta}
-	for _, item := range obj.(*v1beta2.NetworkPolicyList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested networkPolicies.
-func (c *FakeNetworkPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(networkpoliciesResource, opts))
 }

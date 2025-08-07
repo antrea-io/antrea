@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 package v1beta1
 
 import (
-	"context"
+	context "context"
 
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,31 +35,32 @@ type AntreaAgentInfosGetter interface {
 
 // AntreaAgentInfoInterface has methods to work with AntreaAgentInfo resources.
 type AntreaAgentInfoInterface interface {
-	Create(ctx context.Context, antreaAgentInfo *v1beta1.AntreaAgentInfo, opts v1.CreateOptions) (*v1beta1.AntreaAgentInfo, error)
-	Update(ctx context.Context, antreaAgentInfo *v1beta1.AntreaAgentInfo, opts v1.UpdateOptions) (*v1beta1.AntreaAgentInfo, error)
+	Create(ctx context.Context, antreaAgentInfo *crdv1beta1.AntreaAgentInfo, opts v1.CreateOptions) (*crdv1beta1.AntreaAgentInfo, error)
+	Update(ctx context.Context, antreaAgentInfo *crdv1beta1.AntreaAgentInfo, opts v1.UpdateOptions) (*crdv1beta1.AntreaAgentInfo, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.AntreaAgentInfo, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.AntreaAgentInfoList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*crdv1beta1.AntreaAgentInfo, error)
+	List(ctx context.Context, opts v1.ListOptions) (*crdv1beta1.AntreaAgentInfoList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.AntreaAgentInfo, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *crdv1beta1.AntreaAgentInfo, err error)
 	AntreaAgentInfoExpansion
 }
 
 // antreaAgentInfos implements AntreaAgentInfoInterface
 type antreaAgentInfos struct {
-	*gentype.ClientWithList[*v1beta1.AntreaAgentInfo, *v1beta1.AntreaAgentInfoList]
+	*gentype.ClientWithList[*crdv1beta1.AntreaAgentInfo, *crdv1beta1.AntreaAgentInfoList]
 }
 
 // newAntreaAgentInfos returns a AntreaAgentInfos
 func newAntreaAgentInfos(c *CrdV1beta1Client) *antreaAgentInfos {
 	return &antreaAgentInfos{
-		gentype.NewClientWithList[*v1beta1.AntreaAgentInfo, *v1beta1.AntreaAgentInfoList](
+		gentype.NewClientWithList[*crdv1beta1.AntreaAgentInfo, *crdv1beta1.AntreaAgentInfoList](
 			"antreaagentinfos",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1beta1.AntreaAgentInfo { return &v1beta1.AntreaAgentInfo{} },
-			func() *v1beta1.AntreaAgentInfoList { return &v1beta1.AntreaAgentInfoList{} }),
+			func() *crdv1beta1.AntreaAgentInfo { return &crdv1beta1.AntreaAgentInfo{} },
+			func() *crdv1beta1.AntreaAgentInfoList { return &crdv1beta1.AntreaAgentInfoList{} },
+		),
 	}
 }

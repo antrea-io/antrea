@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,29 +17,26 @@
 package fake
 
 import (
-	"context"
-
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	testing "k8s.io/client-go/testing"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeNodeStatsSummaries implements NodeStatsSummaryInterface
-type FakeNodeStatsSummaries struct {
+// fakeNodeStatsSummaries implements NodeStatsSummaryInterface
+type fakeNodeStatsSummaries struct {
+	*gentype.FakeClient[*v1beta2.NodeStatsSummary]
 	Fake *FakeControlplaneV1beta2
 }
 
-var nodestatssummariesResource = v1beta2.SchemeGroupVersion.WithResource("nodestatssummaries")
-
-var nodestatssummariesKind = v1beta2.SchemeGroupVersion.WithKind("NodeStatsSummary")
-
-// Create takes the representation of a nodeStatsSummary and creates it.  Returns the server's representation of the nodeStatsSummary, and an error, if there is any.
-func (c *FakeNodeStatsSummaries) Create(ctx context.Context, nodeStatsSummary *v1beta2.NodeStatsSummary, opts v1.CreateOptions) (result *v1beta2.NodeStatsSummary, err error) {
-	emptyResult := &v1beta2.NodeStatsSummary{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(nodestatssummariesResource, nodeStatsSummary, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeNodeStatsSummaries(fake *FakeControlplaneV1beta2) controlplanev1beta2.NodeStatsSummaryInterface {
+	return &fakeNodeStatsSummaries{
+		gentype.NewFakeClient[*v1beta2.NodeStatsSummary](
+			fake.Fake,
+			"",
+			v1beta2.SchemeGroupVersion.WithResource("nodestatssummaries"),
+			v1beta2.SchemeGroupVersion.WithKind("NodeStatsSummary"),
+			func() *v1beta2.NodeStatsSummary { return &v1beta2.NodeStatsSummary{} },
+		),
+		fake,
 	}
-	return obj.(*v1beta2.NodeStatsSummary), err
 }

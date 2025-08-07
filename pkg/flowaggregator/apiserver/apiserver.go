@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	apiserverversion "k8s.io/apiserver/pkg/util/version"
+	basecompatibility "k8s.io/component-base/compatibility"
 
 	"antrea.io/antrea/pkg/apis"
 	systeminstall "antrea.io/antrea/pkg/apis/system/install"
@@ -35,7 +35,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/flowrecords"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
-	antreaversion "antrea.io/antrea/pkg/version"
+	"antrea.io/antrea/pkg/version"
 )
 
 const (
@@ -122,7 +122,7 @@ func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
 	if err := os.WriteFile(apis.APIServerLoopbackTokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
 		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
 	}
-	serverConfig.EffectiveVersion = apiserverversion.NewEffectiveVersion(antreaversion.GetFullVersion())
+	serverConfig.EffectiveVersion = basecompatibility.NewEffectiveVersionFromString(version.GetFullVersion(), "", "")
 
 	completedServerCfg := serverConfig.Complete(nil)
 	return &completedServerCfg, nil
