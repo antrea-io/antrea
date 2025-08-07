@@ -162,9 +162,9 @@ func NewGroupEntityController(groupEntityIndex *GroupEntityIndex,
 	// Add handlers for Node events.
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc: c.addNode,
-			//UpdateFunc: c.updateNode, TODO
-			//DeleteFunc: c.deleteNode, TODO
+			AddFunc:    c.addNode,
+			UpdateFunc: c.updateNode,
+			DeleteFunc: c.deleteNode,
 		},
 		resyncPeriod,
 	)
@@ -294,6 +294,17 @@ func (c *GroupEntityController) addNode(obj interface{}) {
 	klog.V(2).Infof("Processing Node %s ADD event, labels: %v", node.Name, node.Labels)
 	c.groupEntityIndex.AddNode(node)
 	c.nodeAddEvents.Increment()
+}
+
+func (c *GroupEntityController) updateNode(_, curObj interface{}) {
+	node := curObj.(*v1.Node)
+	klog.V(2).Infof("Processing Node %s UPDATE event, labels: %v", node.Name, node.Labels)
+	c.groupEntityIndex.AddNode(node)
+}
+
+func (c *GroupEntityController) deleteNode(old interface{}) {
+	node := old.(*v1.Node)
+	c.groupEntityIndex.DeleteNode(node)
 }
 
 func (c *GroupEntityController) addExternalEntity(obj interface{}) {

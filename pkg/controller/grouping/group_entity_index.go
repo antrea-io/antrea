@@ -358,6 +358,26 @@ func (i *GroupEntityIndex) AddNode(node *v1.Node) {
 	i.nodeLabels[node.Name] = node.Labels
 }
 
+func (i *GroupEntityIndex) UpdateNode(node *v1.Node) {
+	i.lock.Lock()
+	defer i.lock.Unlock()
+
+	nodeLabels, exists := i.nodeLabels[node.Name]
+	// Do nothing if labels are not updated.
+	if exists && labels.Equals(nodeLabels, node.Labels) {
+		return
+	}
+
+	i.nodeLabels[node.Name] = node.Labels
+}
+
+func (i *GroupEntityIndex) DeleteNode(node *v1.Node) {
+	i.lock.Lock()
+	defer i.lock.Unlock()
+
+	delete(i.nodeLabels, node.Name)
+}
+
 func (i *GroupEntityIndex) DeleteNamespace(namespace *v1.Namespace) {
 	i.lock.Lock()
 	defer i.lock.Unlock()

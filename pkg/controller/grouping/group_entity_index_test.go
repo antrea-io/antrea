@@ -790,3 +790,12 @@ func TestAddNode(t *testing.T) {
 		assert.Equal(t, index.nodeLabels["nodeFoo"], labels.Set(labels.Set{"node": "foo-modified"}))
 	})
 }
+
+func TestDeleteNode(t *testing.T) {
+	t.Run("node is removed from nodeLabels", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		index.AddNode(nodeFoo)
+		index.DeleteNode(nodeFoo)
+		assert.NotContains(t, index.nodeLabels, "nodeFoo")
+	})
+}
