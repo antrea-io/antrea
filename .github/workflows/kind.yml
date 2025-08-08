@@ -89,7 +89,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -152,7 +152,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -222,7 +222,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -289,7 +289,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -358,7 +358,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -421,7 +421,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -492,14 +492,14 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
         run: |
           docker load -i antrea-ubuntu.tar
       - name: Download Flow Aggregator image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: flow-aggregator-cov
       - name: Load Flow Aggregator image
@@ -562,7 +562,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -608,7 +608,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -654,7 +654,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -700,7 +700,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -746,7 +746,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -792,7 +792,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -837,7 +837,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -879,7 +879,7 @@ jobs:
         with:
           show-progress: false
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
