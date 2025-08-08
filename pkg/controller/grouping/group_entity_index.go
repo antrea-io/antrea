@@ -415,9 +415,14 @@ func (i *GroupEntityIndex) deleteEntityFromLabelItem(label, entity string) *labe
 }
 
 // deleteEntityFromNodeLabelItem disconnects an entityItem from a nodeLabelItem.
-// TODO The labelItem will be deleted if it's no longer used by any entityItem.
-func (i *GroupEntityIndex) deleteEntityFromNodeLabelItem(nodeLabelItemKey string) {
-	delete(i.nodeLabelItems, nodeLabelItemKey)
+// The nodeLabelItem will be deleted if it's no longer used by any entityItem.
+func (i *GroupEntityIndex) deleteEntityFromNodeLabelItem(entity *entityItem) {
+	nodeLabelItem := i.nodeLabelItems[entity.nodeLabelItemKey]
+	nodeLabelItem.entityItemKeys.Delete(entity.nodeLabelItemKey)
+	if len(nodeLabelItem.entityItemKeys) > 0 {
+		return
+	}
+	delete(i.nodeLabelItems, entity.nodeLabelItemKey)
 }
 
 // createLabelItem creates a labelItem based on the provided entityItem.
@@ -602,7 +607,7 @@ func (i *GroupEntityIndex) deleteEntity(entityType entityType, entity metav1.Obj
 
 	switch entity.(type) {
 	case *v1.Pod:
-		i.deleteEntityFromNodeLabelItem(eItem.nodeLabelItemKey)
+		i.deleteEntityFromNodeLabelItem(eItem)
 	}
 
 	// All selectorItems that match the labelItem are affected.
