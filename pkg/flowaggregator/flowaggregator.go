@@ -237,18 +237,20 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	var wg sync.WaitGroup
 
-	// We first wait for the PodStore to sync to avoid lookup failures when processing records.
-	const podStoreSyncTimeout = 30 * time.Second
-	klog.InfoS("Waiting for PodStore to sync", "timeout", podStoreSyncTimeout)
-	if err := wait.PollUntilContextTimeout(wait.ContextForChannel(stopCh), 100*time.Millisecond, podStoreSyncTimeout, true, func(ctx context.Context) (done bool, err error) {
-		return fa.podStore.HasSynced(), nil
-	}); err != nil {
-		// PodStore not synced within a reasonable time. We continue with the rest of the
-		// function but there may be error logs when processing records.
-		klog.ErrorS(err, "PodStore not synced", "timeout", podStoreSyncTimeout)
-	} else {
-		klog.InfoS("PodStore synced")
-	}
+	// We first wait for the object stores to sync to avoid lookup failures when processing records.
+	const objectStoreSyncTimeout = 30 * time.Second
+	func() {
+		ctx, cancel := context.WithTimeout(wait.ContextForChannel(stopCh), objectStoreSyncTimeout)
+		defer cancel()
+		klog.InfoS("Waiting for object stores to sync", "timeout", objectStoreSyncTimeout)
+		if err := objectstore.WaitForStoreSync(ctx, fa.podStore.HasSynced, fa.nodeStore.HasSynced, fa.serviceStore.HasSynced); err != nil {
+			// Stores not synced within a reasonable time. We continue with the rest of the
+			// function but there may be error logs when processing records.
+			klog.ErrorS(err, "Object stores not synced", "timeout", objectStoreSyncTimeout)
+			return
+		}
+		klog.InfoS("Object stores synced")
+	}()
 
 	wg.Add(1)
 	go func() {
@@ -286,14 +288,6 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	if fa.logExporter != nil {
 		fa.logExporter.Start()
 	}
-
-	wg.Add(1)
-	go func() {
-		// Waiting for this function to return on stop makes it easier to set expectations
-		// when testing.
-		defer wg.Done()
-		fa.podStore.Run(stopCh)
-	}()
 
 	wg.Add(1)
 	go func() {

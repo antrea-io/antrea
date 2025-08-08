@@ -15,6 +15,7 @@
 package objectstore
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -334,4 +335,18 @@ func (s *ObjectStore[T]) processDeleteQueueItem(objectDeletionKey *objectKey) bo
 // HasSynced returns true when the event handler has been called for the initial list of Objects.
 func (s *ObjectStore[T]) HasSynced() bool {
 	return s.hasSynced()
+}
+
+// WaitForStoreSync waits for stores to sync. It returns an error if the context is cancelled. You
+// need to provide the HasSynced method for each store you want to wait on.
+func WaitForStoreSync(ctx context.Context, storeSyncs ...func() bool) error {
+	const storeSyncPollInterval = 100 * time.Millisecond
+	return wait.PollUntilContextCancel(ctx, storeSyncPollInterval, true, func(ctx context.Context) (done bool, err error) {
+		for _, synced := range storeSyncs {
+			if !synced() {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
 }
