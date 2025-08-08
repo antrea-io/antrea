@@ -1,5 +1,16 @@
 # Changelog 2.1
 
+## 2.1.2 - 2025-08-06
+
+### Fixed
+
+- Periodically sync permanent neighbors to ensure route correctness for Antrea host gateway interface. ([#7238](https://github.com/antrea-io/antrea/pull/7238), [@hongliangl])
+- Sync affected groups in the Antrea Controller when a Pod goes into `Terminated` state, to ensure that the Pod is excluded from NetworkPolicy source and destination immediately. ([#7217](https://github.com/antrea-io/antrea/pull/7217), [@Dyanngg])
+- Fix rollback when `configureContainerLinkVeth` fails, to ensure subsequent retries can succeed. ([#7210](https://github.com/antrea-io/antrea/pull/7210) [#7213](https://github.com/antrea-io/antrea/pull/7213), [@tnqn])
+- Fix Agent crash when deleting the Secret storing BGP passwords. ([#7042](https://github.com/antrea-io/antrea/pull/7042), [@hongliangl])
+- Filter out the `hostNetwork` Pods locally on Linux to fix K8s compatibility issue, since the `spec.hostNetwork` field selector for Pods is not supported before K8s v1.28. ([#7012](https://github.com/antrea-io/antrea/pull/7012), [@wenyingd])
+- Add `-ComputerName localhost` explicitly for VMSwitch commands to avoid potential validation issues on Windows with Active Directory. ([#6985](https://github.com/antrea-io/antrea/pull/6985), [@XinShuYang])
+
 ## 2.1.1 - 2025-02-19
 
 ### Added
