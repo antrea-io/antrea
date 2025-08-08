@@ -826,5 +826,17 @@ func TestDeletePod(t *testing.T) {
 			index.DeletePod(podFoo1)
 			assert.Contains(t, index.nodeLabelItems, labelItemKey)
 		})
+		t.Run("nodeLabelItem's link to the entity is removed", func(t *testing.T) {
+			index := NewGroupEntityIndex()
+			testLabels := labels.Set{"node": "foo"}
+			labelItemKey := getNodeLabelItemKey(testLabels)
+			index.AddNode(nodeFoo)
+			index.AddPod(podFoo1OnNode)
+			index.AddPod(podFoo2OnNode)
+			nodeLabelItem := index.nodeLabelItems[labelItemKey]
+
+			index.DeletePod(podFoo1OnNode)
+			assert.Equal(t, len(nodeLabelItem.entityItemKeys), 1)
+		})
 	})
 }

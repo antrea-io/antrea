@@ -418,7 +418,7 @@ func (i *GroupEntityIndex) deleteEntityFromLabelItem(label, entity string) *labe
 // The nodeLabelItem will be deleted if it's no longer used by any entityItem.
 func (i *GroupEntityIndex) deleteEntityFromNodeLabelItem(entity *entityItem) {
 	nodeLabelItem := i.nodeLabelItems[entity.nodeLabelItemKey]
-	nodeLabelItem.entityItemKeys.Delete(entity.nodeLabelItemKey)
+	nodeLabelItem.entityItemKeys.Delete(getEntityItemKey(podEntityType, entity.entity))
 	if len(nodeLabelItem.entityItemKeys) > 0 {
 		return
 	}
