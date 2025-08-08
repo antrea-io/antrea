@@ -114,6 +114,9 @@ type entityItem struct {
 
 	// for entityItems of type Pod, the name of the node is stored for nodeSelector suppport
 	nodeName string
+	// nodeLabelItem key is the key of the nodeLabelItem that the entityItem is associated with.
+	// entityItems will be associated with the same nodeLabelItem if their node has the same labels
+	nodeLabelItemKey string
 }
 
 // labelItem represents an individual label set. It's the actual object that will be matched with label selectors.
@@ -467,7 +470,7 @@ func (i *GroupEntityIndex) createNodeLabelItem(eItem *entityItem, labels map[str
 	// Link back to entity
 	lItem.entityItemKeys.Insert(getEntityItemKey(podEntityType, eItem.entity))
 
-	// Scan potential selectorItems and associate the new labelItem with the matched ones.
+	// Scan potential selectorItems and associate the new nodeLabelItem with the matched ones.
 	scanSelectorItems := func(selectorItemKeys sets.Set[string]) {
 		for sKey := range selectorItemKeys {
 			sItem := i.selectorItems[sKey]
@@ -535,7 +538,9 @@ func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object
 		case *v1.Pod:
 			nodeName := entity.Spec.NodeName
 			eItem.nodeName = nodeName
-			i.createNodeLabelItem(eItem, i.nodeLabels[nodeName])
+			nodeLabels := i.nodeLabels[nodeName]
+			i.createNodeLabelItem(eItem, nodeLabels)
+			eItem.nodeLabelItemKey = getNodeLabelItemKey(nodeLabels)
 		}
 
 		i.entityItems[eKey] = eItem

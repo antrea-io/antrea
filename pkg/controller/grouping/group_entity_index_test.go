@@ -643,8 +643,7 @@ func TestCreateNodeLabelItems(t *testing.T) {
 		testLabels := labels.Set{"some-node": "red"}
 		labelItemKey := getNodeLabelItemKey(testLabels)
 		testEntityItem := &entityItem{
-			entity:       podFoo1,
-			labelItemKey: labelItemKey,
+			entity: podFoo1,
 		}
 
 		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
@@ -654,14 +653,11 @@ func TestCreateNodeLabelItems(t *testing.T) {
 		t.Run("nodeLabelItem is not duplicated on the index", func(t *testing.T) {
 			groupEntityIndex := NewGroupEntityIndex()
 			testLabels := labels.Set{"some-node": "red"}
-			labelItemKey := getNodeLabelItemKey(testLabels)
 			testEntityItem := &entityItem{
-				entity:       podFoo1,
-				labelItemKey: labelItemKey,
+				entity: podFoo1,
 			}
 			testEntityItem2 := &entityItem{
-				entity:       podFoo2,
-				labelItemKey: labelItemKey,
+				entity: podFoo2,
 			}
 
 			groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
@@ -671,14 +667,11 @@ func TestCreateNodeLabelItems(t *testing.T) {
 		t.Run("nodeLabelItem is updated with multiple links to pods", func(t *testing.T) {
 			groupEntityIndex := NewGroupEntityIndex()
 			testLabels := labels.Set{"some-node": "red"}
-			labelItemKey := getNodeLabelItemKey(testLabels)
 			testEntityItem := &entityItem{
-				entity:       podFoo1,
-				labelItemKey: labelItemKey,
+				entity: podFoo1,
 			}
 			testEntityItem2 := &entityItem{
-				entity:       podFoo2,
-				labelItemKey: labelItemKey,
+				entity: podFoo2,
 			}
 
 			groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
@@ -688,24 +681,20 @@ func TestCreateNodeLabelItems(t *testing.T) {
 	})
 	t.Run("nodeLabelItem links back to pod", func(t *testing.T) {
 		groupEntityIndex := NewGroupEntityIndex()
-		testLabels := labels.Set{"some-node": "red"}
-		labelItemKey := getNodeLabelItemKey(testLabels)
+		nodeLabels := labels.Set{"node": "foo"}
 		testEntityItem := &entityItem{
-			entity:       podFoo1,
-			labelItemKey: labelItemKey,
+			entity: podFoo1OnNode,
 		}
 		entityItemKey := getEntityItemKey(podEntityType, podFoo1)
 
-		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, nodeLabels)
 		assert.Contains(t, nodeLabelItem.entityItemKeys, entityItemKey)
 	})
 	t.Run("nodeLabelItem links to matching selector item", func(t *testing.T) {
 		groupEntityIndex := NewGroupEntityIndex()
 		testLabels := map[string]string{"some-node": "red"}
-		labelItemKey := getNodeLabelItemKey(testLabels)
 		testEntityItem := &entityItem{
-			entity:       podFoo1,
-			labelItemKey: labelItemKey,
+			entity: podFoo1,
 		}
 		labelSelector := metav1.LabelSelector{
 			MatchLabels: testLabels,
@@ -799,3 +788,17 @@ func TestDeleteNode(t *testing.T) {
 		assert.NotContains(t, index.nodeLabels, "nodeFoo")
 	})
 }
+
+func TestAddPod(t *testing.T) {
+	t.Run("nodeLabelItemKey is on the entity", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		nodeLabel := map[string]string{"node": "foo"}
+		nodeLabelItemKey := getNodeLabelItemKey(nodeLabel)
+		entityItemKey := getEntityItemKey(podEntityType, podFoo1OnNode)
+		index.AddNode(nodeFoo)
+
+		index.AddPod(podFoo1OnNode)
+		assert.Equal(t, index.entityItems[entityItemKey].nodeLabelItemKey, nodeLabelItemKey)
+	})
+}
+
