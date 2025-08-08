@@ -61,10 +61,16 @@ const (
 	// Service traffic, when AntreaProxy is disabled. The EndpointPod is on a remote
 	// Node and the dstPod of the reject response is on the local Node.
 	rejectNoAPServiceRemoteToLocal
-	// rejectServiceRemoteToExternal represents this packetOut is used to reject
-	// Service traffic, when AntreaProxy is enabled. The EndpointPod is on a remote
-	// Node and the destination of the reject response is an external client.
-	rejectServiceRemoteToExternal
+	// rejectServiceRemoteFromTunToExternal represents this packetOut is used to reject
+	// Service traffic, when AntreaProxy is enabled. The EndpointPod is on a remote Node
+	// that is reachable from OVS via the tunnel interface, and the destination of the reject
+	// response is an external client.
+	rejectServiceRemoteFromTunToExternal
+	// rejectServiceRemoteFromGwToExternal represents this packetOut is used to reject
+	// Service traffic, when AntreaProxy is enabled. The EndpointPod is on a remote Node
+	// that is reachable from OVS via the antrea gateway interface, and the destination of
+	// the reject response is an external client.
+	rejectServiceRemoteFromGwToExternal
 	// unsupported indicates that Antrea couldn't generate packetOut for current
 	// packetIn.
 	unsupported
@@ -153,12 +159,33 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		gwIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.GatewayInterface)
 		return dstIsLocal && dstMAC == gwIfaces[0].MAC.String()
 	}
-	packetOutType := getRejectType(isServiceTraffic(), c.antreaProxyEnabled, srcIsLocal, dstIsDirect)
+
+	// When rejecting external client access to a Service with a remote Endpoint, there are two scenarios:
+	// 1. If the remote Endpoint is reachable via the OVS tunnel interface (i.e., traffic mode is "encap" or "hybrid"
+	//    with the remote Node on a different subnet), the packet-out should simulate being sent from the tunnel.
+	// 2. If the remote Endpoint is reachable via the OVS gateway interface and Node route (i.e., traffic mode is
+	//    "noEncap" or "hybrid" with the remote Node on the same subnet), the packet-out should simulate being sent
+	//    from the gateway.
+	// The PktDestinationField set in L3Forwarding table indicates the intended outPort of the packet-in packet, which
+	// can help determine the appropriate inPort for the packet-out packet.
+	var srcFromTun bool
+	if match := getMatchRegField(matches, openflow.PktDestinationField); match != nil {
+		pktDestinationVal, err := getInfoInReg(match, openflow.PktDestinationField.GetRange().ToNXRange())
+		if err != nil {
+			return err
+		}
+		srcFromTun = pktDestinationVal == openflow.ToTunnelRegMark.GetValue()
+	}
+
+	packetOutType := getRejectType(isServiceTraffic(), c.antreaProxyEnabled, srcIsLocal, dstIsDirect, srcFromTun)
 	if packetOutType == unsupported {
 		return fmt.Errorf("error when generating reject response for the packet from: %s to %s: neither source nor destination are on this Node", dstIP, srcIP)
 	}
-	if packetOutType == rejectServiceRemoteToExternal {
+	if packetOutType == rejectServiceRemoteFromTunToExternal {
 		dstMAC = openflow.GlobalVirtualMAC.String()
+	}
+	if packetOutType == rejectServiceRemoteFromGwToExternal {
+		dstMAC = c.nodeConfig.GatewayConfig.MAC.String()
 	}
 	// When in AntreaIPAM mode, even though srcPod and dstPod are on the same Node, MAC
 	// will still be re-written in L3ForwardingTable. During rejection, the reject
@@ -188,7 +215,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 }
 
 // getRejectType returns rejectType of a rejection.
-func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal bool) rejectType {
+func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal, srcFromTun bool) rejectType {
 	if !isServiceTraffic {
 		if srcIsLocal {
 			if dstIsLocal {
@@ -219,11 +246,19 @@ func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal 
 	if dstIsLocal {
 		return rejectServiceRemoteToLocal
 	}
-	return rejectServiceRemoteToExternal
+	if srcFromTun {
+		return rejectServiceRemoteFromTunToExternal
+	} else {
+		return rejectServiceRemoteFromGwToExternal
+	}
 }
 
 // getRejectOFPorts returns the inPort and outPort of a packetOut based on the rejectType.
-func getRejectOFPorts(rejectType rejectType, sIface, dIface *interfacestore.InterfaceConfig, gwOFPort, tunOFPort uint32) (uint32, uint32) {
+func getRejectOFPorts(rejectType rejectType,
+	sIface *interfacestore.InterfaceConfig,
+	dIface *interfacestore.InterfaceConfig,
+	gwOFPort uint32,
+	tunOFPort uint32) (uint32, uint32) {
 	inPort := gwOFPort
 	outPort := uint32(0)
 	switch rejectType {
@@ -264,13 +299,10 @@ func getRejectOFPorts(rejectType rejectType, sIface, dIface *interfacestore.Inte
 			inPort = gwOFPort
 		}
 		outPort = gwOFPort
-	case rejectServiceRemoteToExternal:
+	case rejectServiceRemoteFromTunToExternal:
 		inPort = tunOFPort
-		if inPort == 0 {
-			// If tunnel interface is not found, which means we are in noEncap mode, then use
-			// gateway port as inPort.
-			inPort = gwOFPort
-		}
+	case rejectServiceRemoteFromGwToExternal:
+		inPort = gwOFPort
 	}
 	return inPort, outPort
 }
