@@ -802,3 +802,16 @@ func TestAddPod(t *testing.T) {
 	})
 }
 
+func TestDeletePod(t *testing.T) {
+	t.Run("when a single pod was linked to a nodeLabelItem", func(t *testing.T) {
+		t.Run("the nodeLabelItem is removed from nodeLabelItems", func(t *testing.T) {
+			index := NewGroupEntityIndex()
+			testLabels := labels.Set{"node": "foo"}
+			labelItemKey := getNodeLabelItemKey(testLabels)
+			index.AddPod(podFoo1OnNode)
+
+			index.DeletePod(podFoo1)
+			assert.NotContains(t, index.nodeLabelItems, labelItemKey)
+		})
+	})
+}
