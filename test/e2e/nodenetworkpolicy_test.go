@@ -37,12 +37,6 @@ import (
 const labelNodeHostname = "kubernetes.io/hostname"
 
 func initializeAntreaNodeNetworkPolicy(t *testing.T, data *TestData, toHostNetworkPod bool) {
-	p80 = 80
-	p81 = 81
-	p8080 = 8080
-	p8081 = 8081
-	p8082 = 8082
-	p8085 = 8085
 	podsPerNamespace = []string{"a"}
 	suffix := randName("")
 	namespaces = make(map[string]TestNamespaceMeta)
