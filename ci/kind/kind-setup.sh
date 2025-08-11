@@ -23,7 +23,7 @@ ANTREA_IMAGES="antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu
 IMAGES=$ANTREA_IMAGES
 ANTREA_CNI=false
 ACTION=""
-UNTIL_TIME_IN_MINS=""
+UNTIL_TIME_IN_MINS=60
 POD_CIDR=""
 SERVICE_CIDR=""
 IP_FAMILY="ipv4"
@@ -83,7 +83,7 @@ where:
   --deploy-external-agnhost: deploy a container running agnhost as an external server for the cluster, default is $DEPLOY_EXTERNAL_AGNHOST.
   --deploy-external-frr: deploy a container running FRR as an external router for the cluster, default is $DEPLOY_EXTERNAL_FRR.
   --all: delete all kind clusters.
-  --until: delete kind clusters that have been created before the specified duration.
+  --until: delete kind clusters that have been created before the specified duration (in minutes).
 "
 
 function print_usage {
@@ -113,6 +113,8 @@ function docker_run_with_host_net {
 }
 
 function configure_networks {
+  local cluster_name="$1"
+
   echo "Configuring networks"
   networks=$(docker network ls -f name=antrea --format '{{.Name}}')
   networks="$(echo $networks)"
@@ -136,9 +138,9 @@ function configure_networks {
   fi
 
   # remove old networks
-  nodes="$(kind get nodes --name $CLUSTER_NAME | grep worker)"
+  nodes="$(kind get nodes --name $cluster_name | grep worker)"
   nodes=$(echo $nodes)
-  networks+=" kind"
+  networks+=" $cluster_name"
   echo "removing worker nodes $nodes from networks $networks"
   for n in $networks; do
     rm_nodes=$(docker network inspect $n --format '{{range $i, $conf:=.Containers}}{{$conf.Name}} {{end}}')
@@ -148,7 +150,7 @@ function configure_networks {
         echo "disconnected worker $rn from network $n"
       fi
     done
-    if [[ $n != "kind" ]]; then
+    if [[ $n != "$cluster_name" ]]; then
       docker network rm $n > /dev/null 2>&1
       echo "removed network $n"
     fi
@@ -158,7 +160,7 @@ function configure_networks {
   i=0
   networks=()
   for subnet in $SUBNETS; do
-    network=antrea-$i
+    network=antrea-$cluster_name-$i
     docker_network_args=("-d" "bridge")
     # append gateway_mode options based on Docker version
     if version_ge "$docker_version" "28.0.0"; then
@@ -187,12 +189,12 @@ function configure_networks {
 
   num_networks=${#networks[@]}
   if [[ $num_networks -eq 0 ]]; then
-    networks+=("kind")
+    networks+=("$cluster_name")
     num_networks=$((num_networks+1))
   fi
 
-  control_plane_ip4=$(docker inspect $CLUSTER_NAME-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
-  control_plane_ip6=$(docker inspect $CLUSTER_NAME-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6Address}}{{end}}')
+  control_plane_ip4=$(docker inspect $cluster_name-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
+  control_plane_ip6=$(docker inspect $cluster_name-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6Address}}{{end}}')
 
   i=0
   for node in $nodes; do
@@ -242,8 +244,8 @@ function configure_networks {
     # change kubelet config before reset network
     docker exec -t $node sed -i "s/node-ip=.*/node-ip=$node_ips/g" /var/lib/kubelet/kubeadm-flags.env
     # this is needed to ensure that the worker node can still connect to the apiserver
-    [[ "$IP_FAMILY" != "ipv6" ]] && docker exec -t $node bash -c "echo '$control_plane_ip4 $CLUSTER_NAME-control-plane' >> /etc/hosts"
-    [[ "$IP_FAMILY" != "ipv4" ]] && docker exec -t $node bash -c "echo '$control_plane_ip6 $CLUSTER_NAME-control-plane' >> /etc/hosts"
+    [[ "$IP_FAMILY" != "ipv6" ]] && docker exec -t $node bash -c "echo '$control_plane_ip4 $cluster_name-control-plane' >> /etc/hosts"
+    [[ "$IP_FAMILY" != "ipv4" ]] && docker exec -t $node bash -c "echo '$control_plane_ip6 $cluster_name-control-plane' >> /etc/hosts"
     docker exec -t $node pkill kubelet
     # it's possible that kube-proxy is not running yet on some Nodes
     docker exec -t $node pkill kube-proxy || true
@@ -288,7 +290,7 @@ function configure_networks {
       fi
   done
 
-  nodes="$(kind get nodes --name $CLUSTER_NAME)"
+  nodes="$(kind get nodes --name $cluster_name)"
   for node in $nodes; do
     # disable tx checksum offload
     # otherwise we observe that inter-Node tunnelled traffic crossing Docker networks is dropped
@@ -298,6 +300,8 @@ function configure_networks {
 }
 
 function configure_extra_networks {
+  local cluster_name="$1"
+
   if [[ -z $EXTRA_NETWORKS ]]; then
     return
   fi
@@ -307,14 +311,14 @@ function configure_extra_networks {
   i=0
   networks=()
   for s in $EXTRA_NETWORKS ; do
-    network=antrea-$i
+    network=antrea-$cluster_name-$i
     echo "creating network $network with $s"
     docker network create -d bridge --subnet $s $network >/dev/null 2>&1
     networks+=($network)
     i=$((i+1))
   done
 
-  nodes="$(kind get nodes --name $CLUSTER_NAME)"
+  nodes="$(kind get nodes --name $cluster_name)"
   for node in $nodes; do
     i=1
     for network in $networks; do
@@ -345,12 +349,14 @@ function update_kind_ipam_routes {
 }
 
 function configure_vlan_subnets {
+  local cluster_name="$1"
+
   if [[ ${#VLAN_SUBNETS[@]} -eq 0 ]]; then
     return
   fi
   echo "Configuring VLAN subnets"
 
-  bridge_id=$(docker network inspect kind -f {{.ID}})
+  bridge_id=$(docker network inspect $cluster_name -f {{.ID}})
   bridge_interface="br-${bridge_id:0:12}"
   
   vlan_interfaces=()
@@ -402,14 +408,15 @@ function configure_vlan_subnets {
 }
 
 function delete_vlan_subnets {
+  local cluster_name="$1"
+
   echo "Deleting VLAN subnets"
 
-  bridge_id=$(docker network inspect -f '{{.ID}}' kind 2>/dev/null || true)
+  bridge_id=$(docker network inspect -f '{{.ID}}' $cluster_name 2>/dev/null || true)
   if [[ -z "$bridge_id" ]]; then
-    echo "kind network not found, skipping VLAN subnet deletion."
+    echo "$cluster_name network not found, skipping VLAN subnet deletion"
     return
   fi
-
   bridge_interface="br-${bridge_id:0:12}"
   vlan_interface_prefix="br-${bridge_id:0:7}."
 
@@ -439,13 +446,14 @@ function delete_network_by_filter {
 }
 
 function delete_networks {
-  if [[ $FLEXIBLE_IPAM == true ]]; then
-    delete_network_by_filter "kind"
-  fi
-  delete_network_by_filter "antrea"
+  local cluster_name=$1
+  delete_network_by_filter "^antrea-${cluster_name}-"
+  delete_network_by_filter "^${cluster_name}$"
 }
 
 function load_images {
+  local cluster_name=$1
+
   echo "load images"
   set +e
   for img in $IMAGES; do
@@ -454,7 +462,7 @@ function load_images {
       echoerr "docker image $img not found"
       continue
     fi
-    kind load docker-image $img --name $CLUSTER_NAME > /dev/null 2>&1
+    kind load docker-image $img --name $cluster_name > /dev/null 2>&1
     if [[ $? -ne 0 ]]; then
       echoerr "docker image $img failed to load"
       continue
@@ -465,17 +473,7 @@ function load_images {
 }
 
 function create {
-  if [[ -z $CLUSTER_NAME ]]; then
-    echoerr "cluster-name not provided"
-    exit 1
-  fi
-
-  # Having a simple validation check for now.
-  # TODO: Making this comprehensive check confirming with rfc1035/rfc1123
-  if [[ "$CLUSTER_NAME" =~ [^a-z0-9-] ]]; then
-     echoerr "Invalid string. Conform to rfc1035/rfc1123"
-     exit 1
-  fi
+  local cluster_name=$CLUSTER_NAME
 
   if [[ "$IP_FAMILY" != "ipv4" ]] && [[ "$IP_FAMILY" != "ipv6" ]] && [[ "$IP_FAMILY" != "dual" ]]; then
     echoerr "Invalid value for --ip-family \"$IP_FAMILY\", expected \"ipv4\", \"ipv6\", or \"dual\""
@@ -492,9 +490,9 @@ function create {
   fi
 
   set +e
-  kind get clusters | grep -x "$CLUSTER_NAME" > /dev/null 2>&1
+  kind get clusters | grep -x "$cluster_name" > /dev/null 2>&1
   if [[ $? -eq 0 ]]; then
-    echoerr "cluster $CLUSTER_NAME already created"
+    echoerr "cluster $cluster_name already created"
     exit 0
   fi
   set -e
@@ -547,9 +545,11 @@ EOF
     IMAGE_OPT="--image kindest/node:${K8S_VERSION}"
   fi
 
-  flock ~/.antrea/.clusters.lock --command "echo \"$CLUSTER_NAME $(date +%s)\" >> ~/.antrea/.clusters"
-  rm -rf ~/.antrea/.clusters.lock
-  kind create cluster --name $CLUSTER_NAME --config $config_file $IMAGE_OPT
+  (
+    flock -x 200
+    echo "$cluster_name $(date +%s)" >> ~/.antrea/.clusters
+  ) 200>>~/.antrea/.clusters.lock
+  kind create cluster --name $cluster_name --config $config_file $IMAGE_OPT
 
   # force coredns to run on control-plane node because it
   # is attached to kind bridge and uses host dns.
@@ -561,16 +561,16 @@ spec:
   template:
     spec:
       nodeSelector:
-        kubernetes.io/hostname: $CLUSTER_NAME-control-plane
+        kubernetes.io/hostname: $cluster_name-control-plane
 EOF
 )
   kubectl patch deployment coredns -p "$patch" -n kube-system
 
-  configure_networks
-  configure_extra_networks
-  configure_vlan_subnets
-  setup_external_servers
-  load_images
+  configure_networks $cluster_name
+  configure_extra_networks $cluster_name
+  configure_vlan_subnets $cluster_name
+  setup_external_servers $cluster_name
+  load_images $cluster_name
   if [[ $FLEXIBLE_IPAM == true ]]; then
       update_kind_ipam_routes "add"
   fi
@@ -581,11 +581,11 @@ EOF
     if [[ $PROXY == false ]]; then
       cmd+=" --no-proxy"
     fi
-    echo "$cmd $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
-    eval "$cmd $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
+    echo "$cmd $(get_encap_mode) | kubectl apply --context kind-$cluster_name -f -"
+    eval "$cmd $(get_encap_mode) | kubectl apply --context kind-$cluster_name -f -"
 
     if [[ $PROMETHEUS == true ]]; then
-      kubectl apply --context kind-$CLUSTER_NAME -f $THIS_DIR/../../build/yamls/antrea-prometheus-rbac.yml
+      kubectl apply --context kind-$cluster_name -f $THIS_DIR/../../build/yamls/antrea-prometheus-rbac.yml
     fi
   fi
 
@@ -596,21 +596,26 @@ EOF
   done
 }
 
-function destroy {
-  update_kind_ipam_routes "del"
-  if [[ $UNTIL_TIME_IN_MINS != "" ]]; then
-      if [[ -e ~/.antrea/.clusters ]]; then
-          clean_kind
-      fi
-  else
-      kind delete cluster --name $CLUSTER_NAME
-  fi
-  destroy_external_servers
-  delete_vlan_subnets
-  delete_networks
+function delete {
+  local cluster_name="$1"
+  delete_vlan_subnets $cluster_name
+  kind delete cluster --name $cluster_name
+  delete_networks $cluster_name
 }
 
-function printUnixTimestamp {
+function destroy {
+  update_kind_ipam_routes "del"
+  destroy_external_servers
+  if [[ "$CLUSTER_NAME" == "*" ]]; then
+      if [[ -e ~/.antrea/.clusters ]]; then
+          clean_old_clusters
+      fi
+  else
+      delete $CLUSTER_NAME
+  fi
+}
+
+function print_unix_timestamp {
     runtimeOS="$(uname)"
     if [[ "$runtimeOS" == "Darwin" ]]; then
         echo $(date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$1" "+%s")
@@ -620,14 +625,15 @@ function printUnixTimestamp {
 }
 
 function setup_external_servers {
+  local cluster_name="$1"
   if [[ $DEPLOY_EXTERNAL_AGNHOST == true ]]; then
-    docker run -d --name antrea-external-agnhost-$RANDOM --network kind -it --rm registry.k8s.io/e2e-test-images/agnhost:2.40 netexec &> /dev/null
+    docker run -d --name antrea-external-agnhost-$RANDOM --network $cluster_name -it --rm registry.k8s.io/e2e-test-images/agnhost:2.40 netexec &> /dev/null
   fi
 
   if [[ $DEPLOY_EXTERNAL_FRR == true ]]; then
     docker run -d \
       --name antrea-external-frr-$RANDOM \
-      --network kind --cap-add=NET_BIND_SERVICE \
+      --network $cluster_name --cap-add=NET_BIND_SERVICE \
       --cap-add=NET_ADMIN \
       --cap-add=NET_RAW \
       --cap-add=SYS_ADMIN \
@@ -647,7 +653,7 @@ function destroy_external_servers {
   docker rm -f $cid &> /dev/null || true
 }
 
-function clean_kind {
+function clean_old_clusters {
     echo "=== Cleaning up stale kind clusters ==="
     (
       flock -x 200
@@ -661,9 +667,9 @@ function clean_kind {
           # Calculate the time difference
           time_difference=$((current_timestamp - creationTimestamp))
           # Check if the creation happened more than 1 hour ago (3600 seconds)
-          if (( time_difference > 3600 )); then
+          if (( time_difference > $UNTIL_TIME_IN_MINS )); then
               echo "The creation of $name happened more than 1 hour ago."
-              kind delete cluster --name "$name" || echo "Cluster could not be deleted"
+              delete "$name" || echo "Cluster could not be deleted"
           else
               echo "The creation of $name happened within the last hour."
               echo "$name $creationTimestamp" >> ~/.antrea/.clusters.swp
@@ -671,7 +677,6 @@ function clean_kind {
       done < ~/.antrea/.clusters
       mv ~/.antrea/.clusters.swp ~/.antrea/.clusters
     ) 200>>~/.antrea/.clusters.lock
-    rm -rf ~/.antrea/.clusters.lock
 }
 
 if ! command -v kind &> /dev/null
@@ -857,6 +862,13 @@ if version_lt "$kind_version" "0.12.0" && [[ "$KUBE_PROXY_MODE" == "none" ]]; th
 fi
 
 if [[ $ACTION == "create" ]]; then
+    # Having a simple validation check for now.
+    # TODO: Making this comprehensive check confirming with rfc1035/rfc1123
+    if [[ "$CLUSTER_NAME" =~ [^a-z0-9-] ]]; then
+        echoerr "Invalid string. Conform to rfc1035/rfc1123"
+        exit 1
+    fi
+
     if [[ ! -z $SUBNETS ]] && [[ ! -z $EXTRA_NETWORKS ]]; then
         echoerr "Only one of '--subnets' and '--extra-networks' can be specified"
         exit 1
