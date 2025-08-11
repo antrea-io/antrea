@@ -404,7 +404,12 @@ function configure_vlan_subnets {
 function delete_vlan_subnets {
   echo "Deleting VLAN subnets"
 
-  bridge_id=$(docker network inspect kind -f {{.ID}})
+  bridge_id=$(docker network inspect -f '{{.ID}}' kind 2>/dev/null || true)
+  if [[ -z "$bridge_id" ]]; then
+    echo "kind network not found, skipping VLAN subnet deletion."
+    return
+  fi
+
   bridge_interface="br-${bridge_id:0:12}"
   vlan_interface_prefix="br-${bridge_id:0:7}."
 
