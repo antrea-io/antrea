@@ -87,7 +87,7 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 
 	protocolFilter := filter.NewProtocolFilter(o.ProtocolFilter)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocolFilter)
-	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o, protocolFilter)
+	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, o, protocolFilter)
 	var l7Listener *connections.L7Listener
 	var eventMapGetter connections.L7EventMapGetter
 	if l7FlowExporterEnabled {
@@ -226,12 +226,6 @@ func (exp *FlowExporter) resetFlowExporter() {
 func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
 	currTime := time.Now()
 	var expireTime1, expireTime2 time.Duration
-	// We export records from denyConnStore first, then conntrackConnStore. We enforce the ordering to handle a
-	// special case: for an inter-node connection with egress drop network policy, both conntrackConnStore and
-	// denyConnStore from the same Node will send out records to Flow Aggregator. If the record from conntrackConnStore
-	// arrives FA first, FA will not be able to capture the deny network policy metadata, and it will keep waiting
-	// for a record from destination Node to finish flow correlation until timeout. Later on we probably should
-	// consider doing a record deduplication between conntrackConnStore and denyConnStore before exporting records.
 	exp.expiredConns, expireTime1 = exp.denyConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
 	exp.expiredConns, expireTime2 = exp.conntrackConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
 	// Select the shorter time out among two connection stores to do the next round of export.
