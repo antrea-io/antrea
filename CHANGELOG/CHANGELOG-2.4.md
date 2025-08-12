@@ -1,5 +1,19 @@
 # Changelog 2.4
 
+## 2.4.1 - 2025-08-13
+
+### Added
+
+- Add resource requests for Windows container in Antrea deployment. ([#7254](https://github.com/antrea-io/antrea/pull/7254), [@XinShuYang])
+
+### Fixed
+
+- Add missing Run calls for nodeStore / serviceStore to start the garbage collection routines and fix a memory leak for FlowAggregator. ([#7343](https://github.com/antrea-io/antrea/pull/7343), [@antoninbas])
+- Improve SR-IOV device assignment to ensure it's idempotent. ([#7322](https://github.com/antrea-io/antrea/pull/7322), [@luolanzone])
+- Add validation to ensure IP range start is not greater than end in IPPool. ([#7308](https://github.com/antrea-io/antrea/pull/7308), [@wenqiq])
+- Improve secondary interface reconciliation and fix a nil pointer exception when both SR-IOV and VLAN interfaces are enabled in Antrea SecondaryNetwork. ([#7286](https://github.com/antrea-io/antrea/pull/7286), [@jianjuns])
+- Remove trailing whitespace from default manifests to fix `antrea-config` ConfigMap formatting issues. ([#7311](https://github.com/antrea-io/antrea/pull/7311), [@antoninbas])
+
 ## 2.4.0 - 2025-07-09
 
 ### Added
