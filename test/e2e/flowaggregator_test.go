@@ -1601,7 +1601,7 @@ func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstS
 		if err := json.Unmarshal([]byte(collectorOutput), &response); err != nil {
 			return false, fmt.Errorf("error when unmarshalling output from IPFIX collector Pod: %w", err)
 		}
-		allRecords := make([]string, len(response.FlowRecords))
+		allRecords = make([]string, len(response.FlowRecords))
 		for idx := range response.FlowRecords {
 			allRecords[idx] = response.FlowRecords[idx].Data
 		}

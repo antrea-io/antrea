@@ -23,6 +23,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/filter"
+	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -53,6 +54,14 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 		if conn.Zone != zoneFilter {
 			continue
 		}
+
+		if conn.Mark&openflow.ConnAllowedCTMark.GetValue() == 0 {
+			if klog.V(7).Enabled() {
+				klog.InfoS("Ignoring connection because ct mark is not set", "conn", conn)
+			}
+			continue
+		}
+
 		srcIP := conn.FlowKey.SourceAddress
 		dstIP := conn.FlowKey.DestinationAddress
 
