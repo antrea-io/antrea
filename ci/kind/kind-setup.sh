@@ -615,15 +615,6 @@ function destroy {
   fi
 }
 
-function print_unix_timestamp {
-    runtimeOS="$(uname)"
-    if [[ "$runtimeOS" == "Darwin" ]]; then
-        echo $(date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$1" "+%s")
-    else
-        echo $(date -d "$1" '+%s')
-    fi
-}
-
 function setup_external_servers {
   local cluster_name="$1"
   if [[ $DEPLOY_EXTERNAL_AGNHOST == true ]]; then
@@ -666,8 +657,8 @@ function clean_old_clusters {
           fi
           # Calculate the time difference
           time_difference=$((current_timestamp - creationTimestamp))
-          # Check if the creation happened more than 1 hour ago (3600 seconds)
-          if (( time_difference > $UNTIL_TIME_IN_MINS )); then
+          # Check if the creation happened more than UNTIL_TIME_IN_MINS ago
+          if (( time_difference > $UNTIL_TIME_IN_MINS * 60)); then
               echo "The creation of $name happened more than 1 hour ago."
               delete "$name" || echo "Cluster could not be deleted"
           else
