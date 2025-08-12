@@ -15,17 +15,22 @@
 package connections
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/vmware/go-ipfix/pkg/registry"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/objectstore"
 )
 
@@ -35,6 +40,7 @@ const (
 
 type connectionStore struct {
 	connections            map[connection.ConnectionKey]*connection.Connection
+	networkPolicyQuerier   querier.AgentNetworkPolicyInfoQuerier
 	podStore               objectstore.PodStore
 	antreaProxier          proxy.Proxier
 	expirePriorityQueue    *priorityqueue.ExpirePriorityQueue
@@ -43,11 +49,13 @@ type connectionStore struct {
 }
 
 func NewConnectionStore(
+	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.Proxier,
 	o *options.FlowExporterOptions) connectionStore {
 	return connectionStore{
 		connections:            make(map[connection.ConnectionKey]*connection.Connection),
+		networkPolicyQuerier:   npQuerier,
 		podStore:               podStore,
 		antreaProxier:          proxier,
 		expirePriorityQueue:    priorityqueue.NewExpirePriorityQueue(o.ActiveFlowTimeout, o.IdleFlowTimeout),
@@ -140,6 +148,50 @@ func lookupServiceProtocol(protoID uint8) (corev1.Protocol, error) {
 		return "", fmt.Errorf("unknown protocol identifier: %d", protoID)
 	}
 	return serviceProto, nil
+}
+
+func (cs *connectionStore) addNetworkPolicyMetadata(conn *connection.Connection) {
+	// Retrieve NetworkPolicy Name and Namespace by using the ingress and egress
+	// IDs stored in the connection label.
+	if len(conn.Labels) != 0 {
+		if klog.V(4).Enabled() {
+			klog.InfoS("Setting NetworkPolicy metadata from connection labels", "labels", hex.EncodeToString(conn.Labels))
+		}
+		ingressOfID := binary.LittleEndian.Uint32(conn.Labels[:4])
+		egressOfID := binary.LittleEndian.Uint32(conn.Labels[4:8])
+		if ingressOfID != 0 {
+			policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressOfID)
+			rule := cs.networkPolicyQuerier.GetRuleByFlowID(ingressOfID)
+			if policy == nil || rule == nil {
+				// This should not happen because the rule flow ID to rule mapping is
+				// preserved for max(5s, flowPollInterval) even after the rule deletion.
+				klog.InfoS("Cannot find NetworkPolicy or rule", "ingressOfID", ingressOfID)
+			} else {
+				conn.IngressNetworkPolicyName = policy.Name
+				conn.IngressNetworkPolicyNamespace = policy.Namespace
+				conn.IngressNetworkPolicyUID = string(policy.UID)
+				conn.IngressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
+				conn.IngressNetworkPolicyRuleName = rule.Name
+				conn.IngressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
+			}
+		}
+		if egressOfID != 0 {
+			policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressOfID)
+			rule := cs.networkPolicyQuerier.GetRuleByFlowID(egressOfID)
+			if policy == nil || rule == nil {
+				// This should not happen because the rule flow ID to rule mapping is
+				// preserved for max(5s, flowPollInterval) even after the rule deletion.
+				klog.InfoS("Cannot find NetworkPolicy or rule", "egressOfID", egressOfID)
+			} else {
+				conn.EgressNetworkPolicyName = policy.Name
+				conn.EgressNetworkPolicyNamespace = policy.Namespace
+				conn.EgressNetworkPolicyUID = string(policy.UID)
+				conn.EgressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
+				conn.EgressNetworkPolicyRuleName = rule.Name
+				conn.EgressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
+			}
+		}
+	}
 }
 
 func (cs *connectionStore) AcquireConnStoreLock() {

@@ -651,6 +651,14 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				Action().Drop().
 				Done(),
+			ConntrackCommitTable.ofTable.BuildFlow(priorityHigh).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(true).
+				MatchCTStateTrk(true).
+				MatchCTZone(f.snatCtZones[ipProtocol]).
+				Action().GotoTable(ConntrackCommitTable.GetNext()).
+				Done(),
 			// This generates the flow to match the first packet of non-Service connection and mark the source of the connection
 			// by copying PktSourceField to ConnSourceCTMarkField.
 			ConntrackCommitTable.ofTable.BuildFlow(priorityNormal).
@@ -658,10 +666,32 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
+				// Probbaly not needed anymore because of high priority flow above
 				MatchCTStateSNAT(false).
 				MatchCTMark(NotServiceCTMark).
 				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
 				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
+				LoadToCtMark(ConnAllowedCTMark).
+				CTDone().
+				Done(),
+			// This does not work as expected: https://github.com/openvswitch/ovs-issues/issues/370
+			// ConntrackCommitTable.ofTable.BuildFlow(priorityLow).
+			// 	Cookie(cookieID).
+			// 	MatchProtocol(ipProtocol).
+			// 	MatchCTStateNew(true).
+			// 	MatchCTStateTrk(true).
+			// 	MatchCTStateSNAT(false).
+			// 	Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
+			// 	LoadToCtMark(ConnAllowedCTMark).
+			// 	CTDone().
+			// 	Done(),
+			ConntrackCommitTable.ofTable.BuildFlow(priorityLow).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(true).
+				MatchCTStateTrk(true).
+				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
+				LoadToCtMark(ConnAllowedCTMark).
 				CTDone().
 				Done(),
 		)
@@ -3071,7 +3101,7 @@ func (f *featureService) podHairpinSNATFlow(endpoint net.IP) binding.Flow {
 		MatchSrcIP(endpoint).
 		MatchDstIP(endpoint).
 		Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-		LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
+		LoadToCtMark(ConnSNATCTMark, HairpinCTMark, ConnAllowedCTMark).
 		CTDone().
 		Done()
 }
@@ -3091,7 +3121,7 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 			MatchCTStateTrk(true).
 			MatchRegMark(FromGatewayRegMark, ToGatewayRegMark).
 			Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-			LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
+			LoadToCtMark(ConnSNATCTMark, HairpinCTMark, ConnAllowedCTMark).
 			CTDone().
 			Done())
 
@@ -3113,7 +3143,7 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToExternalAddressRegMark, NotDSRServiceRegMark). // Do not SNAT DSR traffic.
 				Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-				LoadToCtMark(ConnSNATCTMark).
+				LoadToCtMark(ConnSNATCTMark, ConnAllowedCTMark).
 				CTDone().
 				Done())
 		}
