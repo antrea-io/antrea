@@ -3,8 +3,8 @@ module antrea.io/antrea
 go 1.24.0
 
 require (
-	antrea.io/libOpenflow v0.15.0
-	antrea.io/ofnet v0.14.0
+	antrea.io/libOpenflow v0.16.0
+	antrea.io/ofnet v0.15.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.35.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Mellanox/sriovnet v1.1.0

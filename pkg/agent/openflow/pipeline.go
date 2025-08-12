@@ -651,15 +651,19 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				Action().Drop().
 				Done(),
-			// This generates the flow to match the first packet of non-Service connection and mark the source of the connection
-			// by copying PktSourceField to ConnSourceCTMarkField.
+			// This flow matches the first packet of all non-SNAT connections to commit them to the main /
+			// DNAT CtZone and to  mark the source of the connection by copying PktSourceField to
+			// ConnSourceCTMarkField. SNAT connections have already been committed to the main / DNAT
+			// CtZone, prior to being committed to the SNAT CtZone.
+			// Note that matching on ct_state=-snat with MatchCTStateSNAT(false) does not work because of
+			// https://github.com/openvswitch/ovs-issues/issues/370. Matching on ct_zone only supports exact
+			// match, so it is not ideal.
 			ConntrackCommitTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
-				MatchCTStateSNAT(false).
-				MatchCTMark(NotServiceCTMark).
+				MatchCTMark(NotConnSNATCTMark).
 				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
 				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 				CTDone().
@@ -754,7 +758,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchCTMark(HairpinCTMark).
 				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				SNAT(&binding.IPRange{StartIP: virtualIP, EndIP: virtualIP}, nil).
-				LoadToCtMark(ServiceCTMark, HairpinCTMark).
+				LoadToCtMark(ServiceCTMark, ConnSNATCTMark, HairpinCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to unSNAT reply packets of connections committed in SNAT CT zone by the above flow.
@@ -778,7 +782,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchCTMark(HairpinCTMark).
 				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				SNAT(&binding.IPRange{StartIP: gatewayIP, EndIP: gatewayIP}, nil).
-				LoadToCtMark(ServiceCTMark, HairpinCTMark).
+				LoadToCtMark(ServiceCTMark, ConnSNATCTMark, HairpinCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to match the first packet of NodePort / LoadBalancer connection (non-hairpin) initiated
@@ -792,7 +796,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchCTMark(ConnSNATCTMark).
 				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				SNAT(&binding.IPRange{StartIP: gatewayIP, EndIP: gatewayIP}, nil).
-				LoadToCtMark(ServiceCTMark).
+				LoadToCtMark(ServiceCTMark, ConnSNATCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to unSNAT reply packets of connections committed in SNAT CT zone by the above flows.
@@ -2525,7 +2529,6 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},
 		).
 		LoadToCtMark(ServiceCTMark).
-		MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 		CTDone().
 		Done()
 }
@@ -2540,9 +2543,6 @@ func (f *featureService) dsrServiceNoDNATFlows() []binding.Flow {
 			MatchRegMark(DSRServiceRegMark).
 			Action().
 			CT(true, EndpointDNATTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-			// Note that the ct mark cannot be read from conntrack by ct action because the connection is in invalid state.
-			// We load it more for consistency.
-			MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 			CTDone().
 			Done())
 	}
@@ -3072,6 +3072,7 @@ func (f *featureService) podHairpinSNATFlow(endpoint net.IP) binding.Flow {
 		MatchDstIP(endpoint).
 		Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 		LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
+		MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 		CTDone().
 		Done()
 }
@@ -3092,6 +3093,7 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 			MatchRegMark(FromGatewayRegMark, ToGatewayRegMark).
 			Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 			LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
+			MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 			CTDone().
 			Done())
 
@@ -3114,6 +3116,7 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToExternalAddressRegMark, NotDSRServiceRegMark). // Do not SNAT DSR traffic.
 				Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 				LoadToCtMark(ConnSNATCTMark).
+				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 				CTDone().
 				Done())
 		}
