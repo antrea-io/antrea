@@ -79,10 +79,14 @@ func run(configFile string) error {
 		serviceStore,
 		configFile,
 	)
-
 	if err != nil {
 		return err
 	}
+
+	go podStore.Run(stopCh)
+	go nodeStore.Run(stopCh)
+	go serviceStore.Run(stopCh)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
