@@ -700,9 +700,10 @@ func run(o *Options) error {
 		return err
 	}
 
+	var podStore objectstore.PodStore
 	var flowExporter *flowexporter.FlowExporter
 	if enableFlowExporter {
-		podStore := objectstore.NewPodStore(localPodInformer.Get())
+		podStore = objectstore.NewPodStore(localPodInformer.Get())
 		flowExporterOptions := &flowexporteroptions.FlowExporterOptions{
 			FlowCollectorAddr:      o.flowCollectorAddr,
 			FlowCollectorProto:     o.flowCollectorProto,
@@ -1031,6 +1032,7 @@ func run(o *Options) error {
 
 	// Start the goroutine to periodically export IPFIX flow records.
 	if enableFlowExporter {
+		go podStore.Run(stopCh)
 		go flowExporter.Run(stopCh)
 	}
 
