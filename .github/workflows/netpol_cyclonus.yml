@@ -16,7 +16,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: make
       - name: Install Kind
         run: |
