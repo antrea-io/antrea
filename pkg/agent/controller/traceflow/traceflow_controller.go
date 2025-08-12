@@ -434,7 +434,7 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 		}
 		if !liveTraffic {
 			dstPodInterface, hasInterface := c.interfaceStore.GetInterfaceByIP(tf.Spec.Destination.IP)
-			if hasInterface {
+			if hasInterface && intf.VLANID == dstPodInterface.VLANID {
 				packet.DestinationMAC = dstPodInterface.MAC
 			}
 		}
@@ -446,7 +446,7 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 			} else {
 				packet.DestinationIP = dstPodInterfaces[0].GetIPv4Addr()
 			}
-			if !liveTraffic {
+			if !liveTraffic && intf.VLANID == dstPodInterfaces[0].VLANID {
 				packet.DestinationMAC = dstPodInterfaces[0].MAC
 			}
 		} else {

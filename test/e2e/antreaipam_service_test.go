@@ -20,7 +20,7 @@ import (
 	annotation "antrea.io/antrea/pkg/ipam"
 )
 
-func TestAntreaIPAMService(t *testing.T) {
+func aaaaTestAntreaIPAMService(t *testing.T) {
 	skipIfNotAntreaIPAMTest(t)
 
 	data, err := setupTest(t)

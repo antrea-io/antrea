@@ -224,6 +224,7 @@ func TestParsePacketIn(t *testing.T) {
 	xreg0 := make([]byte, 8)
 	binary.BigEndian.PutUint32(xreg0[0:4], openflow.RemoteSNATRegMark.GetValue()<<openflow.RemoteSNATRegMark.GetField().GetRange().Offset()) // RemoteSNATRegMark in 32bit reg0
 	binary.BigEndian.PutUint32(xreg0[4:8], 2)                                                                                                // outputPort in 32bit reg1
+	matchInPort := openflow15.NewInPortField(200)
 	matchOutPort := &openflow15.MatchField{
 		Class: openflow15.OXM_CLASS_PACKET_REGS,
 		Field: openflow15.NXM_NX_REG0,
@@ -305,7 +306,7 @@ func TestParsePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: openflow.OutputTable.GetID(),
 					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark, *matchCTSrc},
+						Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark, *matchCTSrc, *matchInPort},
 					},
 					Data: util.NewBuffer(pktBytesPodToIP),
 				},
@@ -379,7 +380,7 @@ func TestParsePacketIn(t *testing.T) {
 					Match: openflow15.Match{
 						// We are omitting matchCTSrc intentionally here to test
 						// the case where there is no valid ct_nw_src match in the packet metadata.
-						Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort},
+						Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort, *matchInPort},
 					},
 					Data: util.NewBuffer(pktBytesPodToIP),
 				},
@@ -451,7 +452,7 @@ func TestParsePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: openflow.OutputTable.GetID(),
 					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchOutPort, *matchTunDst, *matchPktMark},
+						Fields: []openflow15.MatchField{*matchOutPort, *matchTunDst, *matchPktMark, *matchInPort},
 					},
 					Data: util.NewBuffer(pktBytesPodToIP),
 				},
@@ -508,7 +509,7 @@ func TestParsePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: openflow.EgressRuleTable.GetID(),
 					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchTFEgressConjID, *matchCTSrc},
+						Fields: []openflow15.MatchField{*matchTFEgressConjID, *matchCTSrc, *matchInPort},
 					},
 					Data: util.NewBuffer(pktBytesPodToPod),
 				},
@@ -573,7 +574,7 @@ func TestParsePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: openflow.IngressRuleTable.GetID(),
 					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchTFIngressConjID},
+						Fields: []openflow15.MatchField{*matchTFIngressConjID, *matchInPort},
 					},
 					Data: util.NewBuffer(pktBytesPodToPod),
 				},
@@ -638,7 +639,7 @@ func TestParsePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: openflow.EgressMetricTable.GetID(),
 					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchAPConjID, *matchCTSrc},
+						Fields: []openflow15.MatchField{*matchAPConjID, *matchCTSrc, *matchInPort},
 					},
 					Data: util.NewBuffer(pktBytesPodToPod),
 				},

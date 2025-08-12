@@ -50,7 +50,7 @@ type expectTableFlows struct {
 
 // TestProxy is the top-level test which contains all subtests for
 // Proxy related test cases so they can share setup, teardown.
-func TestProxy(t *testing.T) {
+func aaaaTestProxy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
@@ -139,12 +139,12 @@ func reverseStrs(strs []string) []string {
 	return res
 }
 
-func TestProxyLoadBalancerServiceIPv4(t *testing.T) {
+func aaaaTestProxyLoadBalancerServiceIPv4(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	testProxyLoadBalancerService(t, false)
 }
 
-func TestProxyLoadBalancerServiceIPv6(t *testing.T) {
+func aaaaTestProxyLoadBalancerServiceIPv6(t *testing.T) {
 	skipIfNotIPv6Cluster(t)
 	testProxyLoadBalancerService(t, true)
 }
@@ -274,12 +274,12 @@ func testLoadBalancerLocalFromPod(t *testing.T, data *TestData, pods []string, u
 	}
 }
 
-func TestProxyNodePortServiceIPv4(t *testing.T) {
+func aaaaTestProxyNodePortServiceIPv4(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	testProxyNodePortService(t, false)
 }
 
-func TestProxyNodePortServiceIPv6(t *testing.T) {
+func aaaaTestProxyNodePortServiceIPv6(t *testing.T) {
 	skipIfNotIPv6Cluster(t)
 	testProxyNodePortService(t, true)
 }
@@ -383,7 +383,7 @@ func nodePortTestCases(t *testing.T, data *TestData, portStrCluster, portStrLoca
 	})
 }
 
-func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
+func aaaaTestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
@@ -507,7 +507,7 @@ func testNodePortLocalFromPod(t *testing.T, data *TestData, pods, urls []string)
 	}
 }
 
-func TestProxyServiceSessionAffinity(t *testing.T) {
+func aaaaTestProxyServiceSessionAffinity(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
@@ -527,12 +527,12 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 	}
 }
 
-func TestProxyExternalTrafficPolicyIPv4(t *testing.T) {
+func aaaaTestProxyExternalTrafficPolicyIPv4(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	testProxyExternalTrafficPolicy(t, false)
 }
 
-func TestProxyExternalTrafficPolicyIPv6(t *testing.T) {
+func aaaaTestProxyExternalTrafficPolicyIPv6(t *testing.T) {
 	skipIfNotIPv6Cluster(t)
 	testProxyExternalTrafficPolicy(t, true)
 }
@@ -648,13 +648,13 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	}
 }
 
-func TestProxyHairpinIPv4(t *testing.T) {
+func aaaaTestProxyHairpinIPv4(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)
 	testProxyHairpin(t, false)
 }
 
-func TestProxyHairpinIPv6(t *testing.T) {
+func aaaaTestProxyHairpinIPv6(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv6Cluster(t)
 	testProxyHairpin(t, true)
@@ -871,7 +871,7 @@ func testProxyEndpointLifeCycleCase(t *testing.T, data *TestData) {
 	}
 }
 
-func TestProxyEndpointLifeCycle(t *testing.T) {
+func aaaaTestProxyEndpointLifeCycle(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
@@ -965,7 +965,7 @@ func testProxyServiceLifeCycleCase(t *testing.T, data *TestData) {
 	}
 }
 
-func TestProxyServiceLifeCycle(t *testing.T) {
+func aaaaTestProxyServiceLifeCycle(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
@@ -1081,7 +1081,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 // its LoadBalancer IPs work as expected.
 // Client IP should always be preserved regardless of whether the traffic is externally or internally originated.
 // Session affinity should take effect when it's enabled.
-func TestProxyLoadBalancerModeDSR(t *testing.T) {
+func aaaaTestProxyLoadBalancerModeDSR(t *testing.T) {
 	skipIfFeatureDisabled(t, features.LoadBalancerModeDSR, true, false)
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 3)

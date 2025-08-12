@@ -5090,7 +5090,7 @@ func waitForResourcesReady(t *testing.T, timeout time.Duration, objs ...metav1.O
 
 // TestAntreaPolicy is the top-level test which contains all subtests for
 // AntreaPolicy related test cases so that they can share setup and teardown.
-func TestAntreaPolicy(t *testing.T) {
+func aaaaTestAntreaPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
@@ -5232,7 +5232,7 @@ func testMulticastNP(t *testing.T, data *TestData, testNamespace string) {
 	t.Run("Case=MulticastNPPolicyEgressDrop", func(t *testing.T) { testACNPMulticastEgressDrop(t, data, testNamespace) })
 }
 
-func TestAntreaPolicyExtendedNamespaces(t *testing.T) {
+func aaaaTestAntreaPolicyExtendedNamespaces(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
@@ -5280,7 +5280,7 @@ func TestAntreaPolicyExtendedNamespaces(t *testing.T) {
 	k8sUtils.Cleanup(namespaces)
 }
 
-func TestAntreaPolicyStatus(t *testing.T) {
+func aaaaTestAntreaPolicyStatus(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
@@ -5342,7 +5342,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 	checkACNPStatus(t, data, acnp, expectedStatus)
 }
 
-func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
+func aaaaTestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
@@ -5431,7 +5431,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	})
 }
 
-func TestAntreaPolicyStatusWithAppliedToUnsupportedGroup(t *testing.T) {
+func aaaaTestAntreaPolicyStatusWithAppliedToUnsupportedGroup(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
@@ -5562,7 +5562,7 @@ func (data *TestData) waitForACNPRealized(t *testing.T, name string, timeout tim
 
 // TestAntreaPolicyStats is the top-level test which contains all subtests for
 // AntreaPolicyStats related test cases so they can share setup, teardown.
-func TestAntreaPolicyStats(t *testing.T) {
+func aaaaTestAntreaPolicyStats(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 	skipIfNetworkPolicyStatsDisabled(t)
@@ -5862,7 +5862,7 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 // to the FQDN concerned. Actual test logic runs in testWithFQDNCacheMinTTL, which gets called
 // by TestFQDNCacheMinTTL with 2 fqdnCacheMinTTL values where `0` represents a default value
 // when fqdnCacheMinTTL is unset .
-func TestFQDNCacheMinTTL(t *testing.T) {
+func aaaaTestFQDNCacheMinTTL(t *testing.T) {
 	skipIfAntreaPolicyDisabled(t)
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)

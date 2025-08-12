@@ -342,18 +342,20 @@ func testIPPoolConversion(t *testing.T, data *TestData) {
 }
 
 func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
+	workerNode := workerNodeName(1)
 	numPods := 2 // Two AntreaIPAM Pods, can be increased
 	PodInfos := make([]PodInfo, numPods)
 	for idx := range PodInfos {
 		PodInfos[idx].Name = randName(fmt.Sprintf("test-antrea-ipam-pod-%d-", idx))
 		PodInfos[idx].Namespace = testAntreaIPAMNamespace
+		PodInfos[idx].NodeName = workerNode
 	}
 	// One Per-Node IPAM Pod
 	PodInfos = append(PodInfos, PodInfo{
 		Name:      randName("test-pod-0-"),
 		Namespace: data.testNamespace,
+		NodeName:  workerNode,
 	})
-	workerNode := workerNodeName(1)
 
 	t.Logf("Creating %d toolbox Pods on '%s'", numPods+1, workerNode)
 	for i := range PodInfos {
@@ -365,20 +367,354 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 	}
 
 	data.runPingMesh(t, PodInfos, toolboxContainerName, true)
+
+	testAntreaIPAMTraceflowIntraNode(t, data, PodInfos, false)
+	testAntreaIPAMTraceflowIntraNode(t, data, PodInfos, true)
+}
+
+func testAntreaIPAMTraceflowIntraNode(t *testing.T, data *TestData, podInfos []PodInfo, liveTraffic bool) {
+	ipamSrcPodDeniedReason := ""
+	if !liveTraffic {
+		ipamSrcPodDeniedReason = "using FlexibleIPAM Pod as source in non-live-traffic Traceflow is not supported"
+	}
+	podIPs := waitForPodIPs(t, data, podInfos)
+	testcases := []testcase{}
+
+	namePostfix := "-ipam-ipam"
+	srcPodInfo := podInfos[0]
+	dstPodInfo := podInfos[1]
+	srcPodIP := podIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, true, ipamSrcPodDeniedReason))
+
+	namePostfix = "-ipam-regular"
+	srcPodInfo = podInfos[0]
+	dstPodInfo = podInfos[2]
+	srcPodIP = podIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, true, ipamSrcPodDeniedReason))
+
+	namePostfix = "-regular-ipam"
+	srcPodInfo = podInfos[2]
+	dstPodInfo = podInfos[0]
+	srcPodIP = podIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, true, ""))
+
+	t.Run("traceflowGroupTest", func(t *testing.T) {
+		for _, tc := range testcases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				runTestTraceflow(t, data, tc)
+			})
+		}
+	})
 }
 
 func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 	maxNodes := 3
 	var PodInfos []PodInfo
+	var allPodInfos []PodInfo
 	for _, namespace := range []string{data.testNamespace, testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
 		createdPodInfos, deletePods := createPodsOnDifferentNodes(t, data, namespace, "differentnodes")
 		defer deletePods()
+		allPodInfos = append(allPodInfos, createdPodInfos...)
 		if len(createdPodInfos) > maxNodes {
 			createdPodInfos = createdPodInfos[:maxNodes]
 		}
 		PodInfos = append(PodInfos, createdPodInfos...)
 	}
+
+	testAntreaIPAMTraceflowInterNode(t, data, allPodInfos, false)
+	testAntreaIPAMTraceflowInterNode(t, data, allPodInfos, true)
+
 	data.runPingMesh(t, PodInfos, toolboxContainerName, true)
+}
+
+func testAntreaIPAMTraceflowInterNode(t *testing.T, data *TestData, podInfos []PodInfo, liveTraffic bool) {
+	ipamSrcPodDeniedReason := ""
+	if !liveTraffic {
+		ipamSrcPodDeniedReason = "using FlexibleIPAM Pod as source in non-live-traffic Traceflow is not supported"
+	}
+	nodeCount := len(podInfos) / 4
+	regularPodInfos := podInfos[0:nodeCount]
+	ipamPodInfos := podInfos[nodeCount : nodeCount*2]
+	ns11PodInfos := podInfos[nodeCount*2 : nodeCount*3]
+	ns12PodInfos := podInfos[nodeCount*3 : nodeCount*4]
+
+	regularPodIPs := waitForPodIPs(t, data, regularPodInfos)
+	ipamPodIPs := waitForPodIPs(t, data, ipamPodInfos)
+	ns11PodIPs := waitForPodIPs(t, data, ns11PodInfos)
+	var testcases []testcase
+
+	namePostfix := "-ipam-ipam"
+	srcPodInfo := ipamPodInfos[0]
+	dstPodInfo := ipamPodInfos[1]
+	srcPodIP := ipamPodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	namePostfix = "-ipam-regular"
+	srcPodInfo = ipamPodInfos[0]
+	dstPodInfo = regularPodInfos[0]
+	if dstPodInfo.NodeName == srcPodInfo.NodeName {
+		dstPodInfo = regularPodInfos[1]
+	}
+	srcPodIP = ipamPodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	namePostfix = "-ipam-vlan11-diff"
+	srcPodInfo = ipamPodInfos[0]
+	dstPodInfo = ns11PodInfos[0]
+	if dstPodInfo.NodeName == srcPodInfo.NodeName {
+		dstPodInfo = ns11PodInfos[1]
+	}
+	srcPodIP = ipamPodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	namePostfix = "-ipam-vlan11-same"
+	srcPodInfo = ipamPodInfos[0]
+	for _, podInfo := range ns11PodInfos {
+		if podInfo.NodeName == srcPodInfo.NodeName {
+			dstPodInfo = podInfo
+			break
+		}
+	}
+	srcPodIP = ipamPodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	t.Run("traceflowGroupTest1", func(t *testing.T) {
+		for _, tc := range testcases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				runTestTraceflow(t, data, tc)
+			})
+		}
+	})
+	testcases = []testcase{}
+
+	namePostfix = "-vlan11-ipam-diff"
+	srcPodInfo = ns11PodInfos[0]
+	dstPodInfo = ipamPodInfos[0]
+	if dstPodInfo.NodeName == srcPodInfo.NodeName {
+		dstPodInfo = ipamPodInfos[1]
+	}
+	srcPodIP = ns11PodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	namePostfix = "-vlan11-ipam-same"
+	srcPodInfo = ns11PodInfos[0]
+	for _, podInfo := range ipamPodInfos {
+		if podInfo.NodeName == srcPodInfo.NodeName {
+			dstPodInfo = podInfo
+			break
+		}
+	}
+	srcPodIP = ns11PodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	namePostfix = "-vlan11-regular-diff"
+	srcPodInfo = ns11PodInfos[0]
+	dstPodInfo = regularPodInfos[0]
+	if dstPodInfo.NodeName == srcPodInfo.NodeName {
+		dstPodInfo = regularPodInfos[1]
+	}
+	srcPodIP = ns11PodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	namePostfix = "-vlan11-regular-same"
+	srcPodInfo = ns11PodInfos[0]
+	for _, podInfo := range regularPodInfos {
+		if podInfo.NodeName == srcPodInfo.NodeName {
+			dstPodInfo = podInfo
+			break
+		}
+	}
+	srcPodIP = ns11PodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	namePostfix = "-vlan11-vlan11"
+	srcPodInfo = ns11PodInfos[0]
+	dstPodInfo = ns11PodInfos[1]
+	srcPodIP = ns11PodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	namePostfix = "-vlan11-vlan12-diff"
+	srcPodInfo = ns11PodInfos[0]
+	dstPodInfo = ns12PodInfos[0]
+	if dstPodInfo.NodeName == srcPodInfo.NodeName {
+		dstPodInfo = ns12PodInfos[1]
+	}
+	srcPodIP = ns11PodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	namePostfix = "-vlan11-vlan12-same"
+	srcPodInfo = ns11PodInfos[0]
+	for _, podInfo := range ns12PodInfos {
+		if podInfo.NodeName == srcPodInfo.NodeName {
+			dstPodInfo = podInfo
+			break
+		}
+	}
+	srcPodIP = ns11PodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ipamSrcPodDeniedReason))
+
+	t.Run("traceflowGroupTest2", func(t *testing.T) {
+		for _, tc := range testcases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				runTestTraceflow(t, data, tc)
+			})
+		}
+	})
+	testcases = []testcase{}
+
+	namePostfix = "-regular-ipam"
+	srcPodInfo = regularPodInfos[0]
+	dstPodInfo = ipamPodInfos[0]
+	if dstPodInfo.NodeName == srcPodInfo.NodeName {
+		dstPodInfo = ipamPodInfos[1]
+	}
+	srcPodIP = regularPodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ""))
+
+	namePostfix = "-regular-vlan11-diff"
+	srcPodInfo = regularPodInfos[0]
+	dstPodInfo = ns11PodInfos[0]
+	if dstPodInfo.NodeName == srcPodInfo.NodeName {
+		dstPodInfo = ns11PodInfos[1]
+	}
+	srcPodIP = regularPodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ""))
+
+	namePostfix = "-regular-vlan11-same"
+	srcPodInfo = regularPodInfos[0]
+	for _, podInfo := range ns11PodInfos {
+		if podInfo.NodeName == srcPodInfo.NodeName {
+			dstPodInfo = podInfo
+			break
+		}
+	}
+	srcPodIP = regularPodIPs[srcPodInfo.Name].IPv4.String()
+	testcases = append(testcases, buildAntreaIPAMTraceflowTestCase(namePostfix, srcPodInfo, dstPodInfo, srcPodIP, liveTraffic, false, ""))
+
+	t.Run("traceflowGroupTest3", func(t *testing.T) {
+		for _, tc := range testcases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				runTestTraceflow(t, data, tc)
+			})
+		}
+	})
+}
+
+func buildAntreaIPAMTraceflowTestCase(postfix string, srcPodInfo PodInfo, dstPodInfo PodInfo, srcPodIP string, liveTraffic bool, intraNode bool, deniedReason string) testcase {
+	prefix := "inter"
+	if intraNode {
+		prefix = "intra"
+	}
+	transportProtocol := "TCP"
+	liveTrafficString := ""
+	if liveTraffic {
+		transportProtocol = "ICMP"
+		liveTrafficString = "Live"
+	}
+	ipProtocol := "IPv4"
+	name := fmt.Sprintf("%sNode%sDstPod%sTraceflow%s%s", prefix, transportProtocol, liveTrafficString, ipProtocol, postfix)
+
+	packet := crdv1beta1.Packet{}
+	if !liveTraffic {
+		packet = crdv1beta1.Packet{
+			IPHeader: &crdv1beta1.IPHeader{
+				Protocol: protocolTCP,
+			},
+			TransportHeader: crdv1beta1.TransportHeader{
+				TCP: &crdv1beta1.TCPHeader{
+					DstPort: 80,
+					SrcPort: 10003,
+					Flags:   &tcpFlags,
+				},
+			},
+		}
+	}
+	expectedResults := []crdv1beta1.NodeResult{
+		{
+			Node: srcPodInfo.NodeName,
+			Observations: []crdv1beta1.Observation{
+				{
+					Component: crdv1beta1.ComponentSpoofGuard,
+					Action:    crdv1beta1.ActionForwarded,
+					SrcPodIP:  srcPodIP,
+				},
+				{
+					Component:     crdv1beta1.ComponentForwarding,
+					ComponentInfo: "Output",
+					Action:        crdv1beta1.ActionForwarded,
+				},
+			},
+		},
+		{
+			Node: dstPodInfo.NodeName,
+			Observations: []crdv1beta1.Observation{
+				{
+					Component: crdv1beta1.ComponentForwarding,
+					Action:    crdv1beta1.ActionReceived,
+				},
+				{
+					Component:     crdv1beta1.ComponentForwarding,
+					ComponentInfo: "Output",
+					Action:        crdv1beta1.ActionDelivered,
+				},
+			},
+		},
+	}
+	if intraNode {
+		expectedResults = []crdv1beta1.NodeResult{
+			{
+				Node: srcPodInfo.NodeName,
+				Observations: []crdv1beta1.Observation{
+					{
+						Component: crdv1beta1.ComponentSpoofGuard,
+						Action:    crdv1beta1.ActionForwarded,
+						SrcPodIP:  srcPodIP,
+					},
+					{
+						Component:     crdv1beta1.ComponentForwarding,
+						ComponentInfo: "Output",
+						Action:        crdv1beta1.ActionDelivered,
+					},
+				},
+			},
+		}
+	}
+	if deniedReason != "" {
+		expectedResults = nil
+	}
+	return testcase{
+		name:      name,
+		ipVersion: 4,
+		tf: &crdv1beta1.Traceflow{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", srcPodInfo.Namespace, srcPodInfo.Name, dstPodInfo.Namespace, dstPodInfo.Name)),
+			},
+			Spec: crdv1beta1.TraceflowSpec{
+				Source: crdv1beta1.Source{
+					Namespace: srcPodInfo.Namespace,
+					Pod:       srcPodInfo.Name,
+				},
+				Destination: crdv1beta1.Destination{
+					Namespace: dstPodInfo.Namespace,
+					Pod:       dstPodInfo.Name,
+				},
+				Packet:      packet,
+				LiveTraffic: liveTraffic,
+			},
+		},
+		expectedPhase:   crdv1beta1.Succeeded,
+		expectedResults: expectedResults,
+		containerName:   toolboxContainerName,
+		deniedReason:    deniedReason,
+	}
 }
 
 func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey *string) {

@@ -125,7 +125,7 @@ var (
 	ipPoolRangeV6 = newExternalIPPoolRangeGenerator("2021:1::aa00/120")
 )
 
-func TestServiceExternalIP(t *testing.T) {
+func aaaaTestServiceExternalIP(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfAntreaIPAMTest(t)

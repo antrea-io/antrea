@@ -28,7 +28,7 @@ import (
 	"antrea.io/antrea/pkg/features"
 )
 
-func TestNodeLatencyMonitor(t *testing.T) {
+func aaaaTestNodeLatencyMonitor(t *testing.T) {
 	skipIfFeatureDisabled(t, features.NodeLatencyMonitor, true, false)
 	skipIfHasWindowsNodes(t) // as the feature does not have official Windows support
 

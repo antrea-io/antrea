@@ -168,9 +168,19 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 	ns = tf.Spec.Source.Namespace
 	srcPod = tf.Spec.Source.Pod
 
+	inPortField := matchers.GetMatchByName(binding.OxmFieldInPort)
+	if inPortField == nil {
+		return nil, nil, nil, fmt.Errorf("error when getting match field inPort")
+	}
+	inPort := inPortField.GetValue().(uint32)
+	var uplinkPort uint32
+	if c.nodeConfig.UplinkNetConfig != nil {
+		uplinkPort = c.nodeConfig.UplinkNetConfig.OFPort
+	}
+
 	obs := []crdv1beta1.Observation{}
 	tableID := pktIn.TableId
-	if tfState.isSender {
+	if tfState.isSender && (c.nodeConfig.UplinkNetConfig == nil || inPort != uplinkPort) {
 		ob := new(crdv1beta1.Observation)
 		ob.Component = crdv1beta1.ComponentSpoofGuard
 		ob.Action = crdv1beta1.ActionForwarded
@@ -344,6 +354,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			}
 			ob.Action = crdv1beta1.ActionForwardedOutOfOverlay
 		} else if outputPort == gwPort { // noEncap
+			ob.Action = crdv1beta1.ActionForwarded
+		} else if c.nodeConfig.UplinkNetConfig != nil && outputPort == uplinkPort { // FlexibleIPAM bridging mode
 			ob.Action = crdv1beta1.ActionForwarded
 		} else {
 			// Output port is Pod port, packet is delivered.

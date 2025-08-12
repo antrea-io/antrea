@@ -1014,6 +1014,19 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 				Action().OutputToRegField(TargetOFPortField)
 			fb = ifDroppedOnly(fb)
 			flows = append(flows, fb.Done())
+			if f.connectUplinkToBridge {
+				// SendToController and Output if output port is uplink port when FlexibleIPAM and BridgingMode is enabled.
+				fb := OutputTable.ofTable.BuildFlow(priorityNormal+3).
+					Cookie(cookieID).
+					MatchRegFieldWithValue(TargetOFPortField, f.uplinkPort).
+					MatchProtocol(ipProtocol).
+					MatchRegMark(OutputToOFPortRegMark).
+					MatchIPDSCP(dataplaneTag).
+					SetHardTimeout(timeout).
+					Action().OutputToRegField(TargetOFPortField)
+				fb = ifDroppedOnly(fb)
+				flows = append(flows, fb.Done())
+			}
 		}
 		// Only SendToController if output port is local gateway and destination IP is gateway.
 		gatewayIP := f.gatewayIPs[ipProtocol]

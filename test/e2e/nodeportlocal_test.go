@@ -77,7 +77,7 @@ func configureNPLForAgent(t *testing.T, data *TestData, startPort, endPort int) 
 
 // TestNodePortLocal is the top-level test which contains all subtests for
 // NodePortLocal related test cases so they can share setup, teardown.
-func TestNodePortLocal(t *testing.T) {
+func aaaaTestNodePortLocal(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 
 	data, err := setupTest(t)

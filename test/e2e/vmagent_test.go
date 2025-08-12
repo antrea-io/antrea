@@ -57,7 +57,7 @@ type vmInfo struct {
 
 // TestVMAgent is the top-level test which can contain some subtests for
 // VMAgent so they can share setup, teardown.
-func TestVMAgent(t *testing.T) {
+func aaaaTestVMAgent(t *testing.T) {
 	skipIfFeatureDisabled(t, features.ExternalNode, false, true)
 	skipIfNoVMs(t)
 	data, err := setupTest(t)

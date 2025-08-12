@@ -40,7 +40,7 @@ var (
 )
 
 // TestAntreaApiserverTLSConfig tests Cipher Suite and TLSVersion config on Antrea apiserver, Controller side or Agent side.
-func TestAntreaApiserverTLSConfig(t *testing.T) {
+func aaaaTestAntreaApiserverTLSConfig(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 

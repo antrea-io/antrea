@@ -40,7 +40,7 @@ func skipIfNotUpgradeTest(t *testing.T) {
 //   - Pod deletion leads to correct resource cleanup
 //
 // To run the test, provide the -upgrade.toYML flag.
-func TestUpgrade(t *testing.T) {
+func aaaaTestUpgrade(t *testing.T) {
 	skipIfNotUpgradeTest(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)

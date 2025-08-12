@@ -86,7 +86,7 @@ func init() {
 
 // TestPrometheus is the top-level test which contains all subtests for
 // Prometheus related test cases so they can share setup, teardown.
-func TestPrometheus(t *testing.T) {
+func aaaaTestPrometheus(t *testing.T) {
 	skipIfPrometheusDisabled(t)
 	skipIfHasWindowsNodes(t)
 

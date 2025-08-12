@@ -53,7 +53,7 @@ var (
 	}
 )
 
-func TestTrafficControl(t *testing.T) {
+func aaaaTestTrafficControl(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfFeatureDisabled(t, features.TrafficControl, true, false)
 

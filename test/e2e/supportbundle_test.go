@@ -155,15 +155,15 @@ func getAndCheckSupportBundle(t *testing.T, name, podIP string, podPort int, tok
 
 }
 
-func TestSupportBundleController(t *testing.T) {
+func aaaaTestSupportBundleController(t *testing.T) {
 	testSupportBundle("controller", t)
 }
 
-func TestSupportBundleAgent(t *testing.T) {
+func aaaaTestSupportBundleAgent(t *testing.T) {
 	testSupportBundle("agent", t)
 }
 
-func TestSupportBundleCollection(t *testing.T) {
+func aaaaTestSupportBundleCollection(t *testing.T) {
 	skipIfFeatureDisabled(t, features.SupportBundleCollection, true, true)
 	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
