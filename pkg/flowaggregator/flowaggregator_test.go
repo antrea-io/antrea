@@ -638,6 +638,10 @@ func TestFlowAggregator_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	mockPodStore.EXPECT().HasSynced().Return(true)
+	mockNodeStore := objectstoretest.NewMockNodeStore(ctrl)
+	mockNodeStore.EXPECT().HasSynced().Return(true)
+	mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
+	mockServiceStore.EXPECT().HasSynced().Return(true)
 	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
 	mockCollector := collectortesting.NewMockInterface(ctrl)
 	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
@@ -669,12 +673,13 @@ func TestFlowAggregator_Run(t *testing.T) {
 		configWatcher:           configWatcher,
 		updateCh:                updateCh,
 		podStore:                mockPodStore,
+		nodeStore:               mockNodeStore,
+		serviceStore:            mockServiceStore,
 	}
 
 	mockCollector.EXPECT().Run(gomock.Any())
 	mockAggregationProcess.EXPECT().Start()
 	mockAggregationProcess.EXPECT().Stop()
-	mockPodStore.EXPECT().Run(gomock.Any())
 
 	// Mock expectations determined by sequence of updateOptions operations below.
 	mockIPFIXExporter.EXPECT().Start().Times(2)

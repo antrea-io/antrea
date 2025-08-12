@@ -159,7 +159,6 @@ func (exp *FlowExporter) GetDenyConnStore() *connections.DenyConnectionStore {
 }
 
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
-	go exp.podStore.Run(stopCh)
 	// Start L7 connection flow socket
 	if features.DefaultFeatureGate.Enabled(features.L7FlowExporter) {
 		go exp.l7Listener.Run(stopCh)
