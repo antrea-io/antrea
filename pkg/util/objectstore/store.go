@@ -337,9 +337,9 @@ func (s *ObjectStore[T]) HasSynced() bool {
 	return s.hasSynced()
 }
 
-// WaitForStoreSync waits for stores to sync. It returns an error if the context is cancelled. You
+// WaitForStoreSyncs waits for stores to sync. It returns an error if the context is cancelled. You
 // need to provide the HasSynced method for each store you want to wait on.
-func WaitForStoreSync(ctx context.Context, storeSyncs ...func() bool) error {
+func WaitForStoreSyncs(ctx context.Context, storeSyncs ...func() bool) error {
 	const storeSyncPollInterval = 100 * time.Millisecond
 	return wait.PollUntilContextCancel(ctx, storeSyncPollInterval, true, func(ctx context.Context) (done bool, err error) {
 		for _, synced := range storeSyncs {

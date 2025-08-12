@@ -243,7 +243,7 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		ctx, cancel := context.WithTimeout(wait.ContextForChannel(stopCh), objectStoreSyncTimeout)
 		defer cancel()
 		klog.InfoS("Waiting for object stores to sync", "timeout", objectStoreSyncTimeout)
-		if err := objectstore.WaitForStoreSync(ctx, fa.podStore.HasSynced, fa.nodeStore.HasSynced, fa.serviceStore.HasSynced); err != nil {
+		if err := objectstore.WaitForStoreSyncs(ctx, fa.podStore.HasSynced, fa.nodeStore.HasSynced, fa.serviceStore.HasSynced); err != nil {
 			// Stores not synced within a reasonable time. We continue with the rest of the
 			// function but there may be error logs when processing records.
 			klog.ErrorS(err, "Object stores not synced", "timeout", objectStoreSyncTimeout)
