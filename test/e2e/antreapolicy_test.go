@@ -49,13 +49,6 @@ import (
 
 // common for all tests.
 var (
-	p80              int32 = 80
-	p81              int32 = 81
-	p6443            int32 = 6443
-	p8080            int32 = 8080
-	p8081            int32 = 8081
-	p8082            int32 = 8082
-	p8085            int32 = 8085
 	allPods          []Pod
 	podsByNamespace  map[string][]Pod
 	k8sUtils         *KubernetesUtils
@@ -4436,19 +4429,9 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 	server1Name, server1IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server1", nodeName(1), data.testNamespace, false)
 	defer cleanupFunc()
 
-	ICMPType := int32(8)
-	ICMPCode := int32(0)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-icmp").
 		SetPriority(1.0).SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}})
-	builder.AddEgress(ACNPRuleBuilder{
-		BaseRuleBuilder: BaseRuleBuilder{
-			Protoc:      ProtocolICMP,
-			ICMPType:    &ICMPType,
-			ICMPCode:    &ICMPCode,
-			PodSelector: map[string]string{"antrea-e2e": server0Name},
-			Action:      crdv1beta1.RuleActionReject,
-		}})
 	builder.AddEgress(ACNPRuleBuilder{
 		BaseRuleBuilder: BaseRuleBuilder{
 			Protoc:      ProtocolICMP,
@@ -4458,6 +4441,16 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 
 	testcases := []podToAddrTestStep{}
 	if clusterInfo.podV4NetworkCIDR != "" {
+		builder.AddEgress(ACNPRuleBuilder{
+			BaseRuleBuilder: BaseRuleBuilder{
+				Name:        "egress-ipv4",
+				Protoc:      ProtocolICMP,
+				ICMPType:    &icmpRequestType,
+				ICMPCode:    &icmpRequestCode,
+				PodSelector: map[string]string{"antrea-e2e": server0Name},
+				Action:      crdv1beta1.RuleActionReject,
+			}})
+
 		testcases = append(testcases, []podToAddrTestStep{
 			{
 				Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
@@ -4474,6 +4467,16 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 		}...)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
+		builder.AddEgress(ACNPRuleBuilder{
+			BaseRuleBuilder: BaseRuleBuilder{
+				Name:        "egress-ipv6",
+				Protoc:      ProtocolICMP,
+				ICMPType:    &icmp6RequestType,
+				ICMPCode:    &icmpRequestCode,
+				PodSelector: map[string]string{"antrea-e2e": server0Name},
+				Action:      crdv1beta1.RuleActionReject,
+			}})
+
 		testcases = append(testcases, []podToAddrTestStep{
 			{
 				Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),

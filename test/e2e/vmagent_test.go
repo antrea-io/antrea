@@ -46,11 +46,6 @@ const (
 	linuxOS              = "Linux"
 )
 
-var (
-	ICMPType = int32(8)
-	ICMPCode = int32(0)
-)
-
 type vmInfo struct {
 	nodeName string
 	osType   string
@@ -630,8 +625,8 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 		ruleFunc(ANNPRuleBuilder{
 			BaseRuleBuilder: BaseRuleBuilder{
 				Protoc:   ProtocolICMP,
-				ICMPType: &ICMPType,
-				ICMPCode: &ICMPCode,
+				ICMPType: &icmpRequestType,
+				ICMPCode: &icmpRequestCode,
 				Action:   ruleAction,
 				IPBlock:  ipBlock,
 			}})
