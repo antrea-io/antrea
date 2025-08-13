@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,17 +73,17 @@ func (mr *MockInterfaceMockRecorder) AddEgressRoutes(tableID, dev, gateway, pref
 }
 
 // AddEgressRule mocks base method.
-func (m *MockInterface) AddEgressRule(tableID, mark uint32) error {
+func (m *MockInterface) AddEgressRule(tableID, mark uint32, isIPv6 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddEgressRule", tableID, mark)
+	ret := m.ctrl.Call(m, "AddEgressRule", tableID, mark, isIPv6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddEgressRule indicates an expected call of AddEgressRule.
-func (mr *MockInterfaceMockRecorder) AddEgressRule(tableID, mark any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddEgressRule(tableID, mark, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressRule", reflect.TypeOf((*MockInterface)(nil).AddEgressRule), tableID, mark)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressRule", reflect.TypeOf((*MockInterface)(nil).AddEgressRule), tableID, mark, isIPv6)
 }
 
 // AddExternalIPConfigs mocks base method.
@@ -196,6 +196,48 @@ func (m *MockInterface) AddSNATRule(snatIP net.IP, mark uint32) error {
 func (mr *MockInterfaceMockRecorder) AddSNATRule(snatIP, mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRule", reflect.TypeOf((*MockInterface)(nil).AddSNATRule), snatIP, mark)
+}
+
+// AddTcFilterPassToGw mocks base method.
+func (m *MockInterface) AddTcFilterPassToGw(gatewayIP net.IP, transportIfindex int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddTcFilterPassToGw", gatewayIP, transportIfindex)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddTcFilterPassToGw indicates an expected call of AddTcFilterPassToGw.
+func (mr *MockInterfaceMockRecorder) AddTcFilterPassToGw(gatewayIP, transportIfindex any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTcFilterPassToGw", reflect.TypeOf((*MockInterface)(nil).AddTcFilterPassToGw), gatewayIP, transportIfindex)
+}
+
+// AddTcFiltersRedirectBetweenGwAndTransport mocks base method.
+func (m *MockInterface) AddTcFiltersRedirectBetweenGwAndTransport(podCIDR, peerPodCIDR *net.IPNet, peerNodeIP net.IP, gwIfindex, transportIfindex int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddTcFiltersRedirectBetweenGwAndTransport", podCIDR, peerPodCIDR, peerNodeIP, gwIfindex, transportIfindex)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddTcFiltersRedirectBetweenGwAndTransport indicates an expected call of AddTcFiltersRedirectBetweenGwAndTransport.
+func (mr *MockInterfaceMockRecorder) AddTcFiltersRedirectBetweenGwAndTransport(podCIDR, peerPodCIDR, peerNodeIP, gwIfindex, transportIfindex any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTcFiltersRedirectBetweenGwAndTransport", reflect.TypeOf((*MockInterface)(nil).AddTcFiltersRedirectBetweenGwAndTransport), podCIDR, peerPodCIDR, peerNodeIP, gwIfindex, transportIfindex)
+}
+
+// AddTcQdiscClsAct mocks base method.
+func (m *MockInterface) AddTcQdiscClsAct(ifindex int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddTcQdiscClsAct", ifindex)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddTcQdiscClsAct indicates an expected call of AddTcQdiscClsAct.
+func (mr *MockInterfaceMockRecorder) AddTcQdiscClsAct(ifindex any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTcQdiscClsAct", reflect.TypeOf((*MockInterface)(nil).AddTcQdiscClsAct), ifindex)
 }
 
 // ClearConntrackEntryForService mocks base method.
@@ -350,6 +392,20 @@ func (m *MockInterface) DeleteSNATRule(mark uint32) error {
 func (mr *MockInterfaceMockRecorder) DeleteSNATRule(mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRule", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRule), mark)
+}
+
+// DeleteTcFiltersRedirectBetweenGwAndTransport mocks base method.
+func (m *MockInterface) DeleteTcFiltersRedirectBetweenGwAndTransport(podCIDR *net.IPNet) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTcFiltersRedirectBetweenGwAndTransport", podCIDR)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteTcFiltersRedirectBetweenGwAndTransport indicates an expected call of DeleteTcFiltersRedirectBetweenGwAndTransport.
+func (mr *MockInterfaceMockRecorder) DeleteTcFiltersRedirectBetweenGwAndTransport(podCIDR any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTcFiltersRedirectBetweenGwAndTransport", reflect.TypeOf((*MockInterface)(nil).DeleteTcFiltersRedirectBetweenGwAndTransport), podCIDR)
 }
 
 // Initialize mocks base method.

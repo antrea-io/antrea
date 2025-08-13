@@ -150,6 +150,26 @@ func TestSyncNeighbors(t *testing.T) {
 	assert.NoError(t, c.syncNeighbor())
 }
 
+func TestSyncIPRules(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockNetlink := netlinktest.NewMockInterface(ctrl)
+
+	c := &Client{
+		netlink:     mockNetlink,
+		egressRules: sync.Map{},
+	}
+
+	rule1 := &netlink.Rule{Family: netlink.FAMILY_V4, Table: 100, Mark: uint32(0xf), Mask: ptr.To(uint32(0xf))}
+	rule2 := &netlink.Rule{Family: netlink.FAMILY_V6, Table: 101, Mark: uint32(0xf), Mask: ptr.To(uint32(0xf))}
+	mockNetlink.EXPECT().RuleList(netlink.FAMILY_ALL).Return([]netlink.Rule{*rule1}, nil)
+	mockNetlink.EXPECT().RuleAdd(rule2)
+
+	c.egressRules.Store(100, rule1)
+	c.egressRules.Store(101, rule2)
+
+	assert.NoError(t, c.syncIPRule())
+}
+
 func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
@@ -680,6 +700,291 @@ COMMIT
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain).Return(nil, nil)
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain).Return(nil, nil)
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain).Return(nil, nil)
+			},
+		},
+		{
+			name:                      "hybrid,wireguard,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true",
+			proxyAll:                  true,
+			multicastEnabled:          true,
+			nodeNetworkPolicyEnabled:  true,
+			nodeLatencyMonitorEnabled: true,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode:      config.TrafficEncapModeHybrid,
+				TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard,
+				TunnelType:            ovsconfig.GeneveTunnel,
+				IPv4Enabled:           true,
+				IPv6Enabled:           true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("172.16.10.0/24"),
+				PodIPv6CIDR: ip.MustParseCIDR("2001:ab03:cd04:55ef::/64"),
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			nodeSNATRandomFully: true,
+			markToSNATIP: map[uint32]string{
+				1: "1.1.1.1",
+				2: "fe80::e643:4bff:fe02",
+			},
+			wireguardPort: 51820,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaForwardChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain, []string{"-j", antreaForwardChain, "-m", "comment", "--comment", "Antrea: jump to Antrea forwarding rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain).Return(
+					map[iptables.Protocol][]string{
+						iptables.ProtocolIPv4: {
+							"-A " + iptables.PreRoutingChain + " -j " + kubeProxyServiceChain,
+							"-A " + iptables.PreRoutingChain + " -j " + antreaPreRoutingChain,
+						},
+						iptables.ProtocolIPv6: {
+							"-A " + iptables.PreRoutingChain + " -j " + antreaPreRoutingChain,
+							"-A " + iptables.PreRoutingChain + " -j " + kubeProxyServiceChain,
+						},
+					}, nil)
+				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain).Return(
+					map[iptables.Protocol][]string{
+						iptables.ProtocolIPv4: {
+							"-A " + iptables.OutputChain + " -j " + antreaOutputChain,
+							"-A " + iptables.OutputChain + " -j " + kubeProxyServiceChain,
+						},
+						iptables.ProtocolIPv6: {
+							"-A " + iptables.OutputChain + " -j " + kubeProxyServiceChain,
+							"-A " + iptables.OutputChain + " -j " + antreaOutputChain,
+						},
+					}, nil)
+				mockIPTables.DeleteRule(iptables.ProtocolIPv6, iptables.NATTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPreRoutingChain)
+				mockIPTables.InsertRule(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaOutputChain)
+				mockIPTables.InsertRule(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaInputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain, []string{"-j", antreaInputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea input rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: drop Pod multicast traffic forwarded via underlay network" -m set --match-set CLUSTER-NODE-IP src -d 224.0.0.0/4 -j DROP
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP dst -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track reply packets sourced from external IPs" -m set --match-set ANTREA-EXTERNAL-IP src -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP dst -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply packets sourced from remote Pods" ! -i antrea-gw0 -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: set connmark for the first Egress request packet" -i antrea-gw0 ! -s 172.16.10.0/24 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POL-EGRESS-RULES - [0:0]
+:ANTREA-POL-INGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-EGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-INGRESS-RULES - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
+-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
+-A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
+COMMIT
+*nat
+:ANTREA-PREROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: DNAT external to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP dst,dst -j DNAT --to-destination 169.254.0.252
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: DNAT local to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP dst,dst -j DNAT --to-destination 169.254.0.252
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: skip masquerade for multicast traffic" -s 172.16.10.0/24 -d 224.0.0.0/4 -j RETURN
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000001/0x000000ff -j SNAT --to 1.1.1.1
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s 169.254.0.253 -j MASQUERADE
+COMMIT
+`, false, false)
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 dst -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track reply packets sourced from external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 src -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 dst -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply packets sourced from remote Pods" ! -i antrea-gw0 -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: set connmark for the first Egress request packet" -i antrea-gw0 ! -s 2001:ab03:cd04:55ef::/64 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POL-EGRESS-RULES - [0:0]
+:ANTREA-POL-INGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-EGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-INGRESS-RULES - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
+-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
+-A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
+COMMIT
+*nat
+:ANTREA-PREROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: DNAT external to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP6 dst,dst -j DNAT --to-destination fc01::aabb:ccdd:eefe
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: DNAT local to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP6 dst,dst -j DNAT --to-destination fc01::aabb:ccdd:eefe
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000002/0x000000ff -j SNAT --to fe80::e643:4bff:fe02
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 2001:ab03:cd04:55ef::/64 -m set ! --match-set ANTREA-POD-IP6 dst ! -o antrea-gw0 -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s fc01::aabb:ccdd:eeff -j MASQUERADE
+COMMIT
+`, false, true)
+			},
+		},
+		{
+			name:                     "hybrid,wireguard,egress=true,multicastEnabled=false,proxyAll=false,nodeNetworkPolicy=false,nodeSNATRandomFully=true",
+			proxyAll:                 false,
+			multicastEnabled:         false,
+			nodeNetworkPolicyEnabled: false,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode:      config.TrafficEncapModeHybrid,
+				TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard,
+				TunnelType:            ovsconfig.GeneveTunnel,
+				IPv4Enabled:           true,
+				IPv6Enabled:           true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("172.16.10.0/24"),
+				PodIPv6CIDR: ip.MustParseCIDR("2001:ab03:cd04:55ef::/64"),
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			nodeSNATRandomFully: true,
+			markToSNATIP: map[uint32]string{
+				1: "1.1.1.1",
+				2: "fe80::e643:4bff:fe02",
+			},
+			wireguardPort: 51820,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaForwardChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain, []string{"-j", antreaForwardChain, "-m", "comment", "--comment", "Antrea: jump to Antrea forwarding rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaInputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain, []string{"-j", antreaInputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea input rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply packets sourced from remote Pods" ! -i antrea-gw0 -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: set connmark for the first Egress request packet" -i antrea-gw0 ! -s 172.16.10.0/24 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
+COMMIT
+*nat
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000001/0x000000ff -j SNAT --to 1.1.1.1
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+COMMIT
+`, false, false)
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply packets sourced from remote Pods" ! -i antrea-gw0 -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: set connmark for the first Egress request packet" -i antrea-gw0 ! -s 2001:ab03:cd04:55ef::/64 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
+COMMIT
+*nat
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000002/0x000000ff -j SNAT --to fe80::e643:4bff:fe02
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 2001:ab03:cd04:55ef::/64 -m set ! --match-set ANTREA-POD-IP6 dst ! -o antrea-gw0 -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+COMMIT
+`, false, true)
 			},
 		},
 		{
@@ -2308,7 +2613,7 @@ func TestEgressRule(t *testing.T) {
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
 
-			assert.NoError(t, c.AddEgressRule(tt.tableID, tt.mark))
+			assert.NoError(t, c.AddEgressRule(tt.tableID, tt.mark, false))
 			assert.NoError(t, c.DeleteEgressRule(tt.tableID, tt.mark))
 		})
 	}
@@ -2601,6 +2906,284 @@ func TestClearConntrackEntryForService(t *testing.T) {
 			}
 			tc.expectedCalls(mockNetlink.EXPECT())
 			assert.NoError(t, c.ClearConntrackEntryForService(tc.svcIP, tc.svcPort, tc.endpointIP, tc.protocol))
+		})
+	}
+}
+
+func TestAddTcFiltersRedirectBetweenGwAndTransport(t *testing.T) {
+	peerPodCIDR := ip.MustParseCIDR("192.168.1.0/24")
+	peerNodeIP := ip.MustParseCIDR("192.168.77.101/24")
+	peerNodeIPInAnotherSubnet := ip.MustParseCIDR("192.168.78.101/24")
+	podCIDR := ip.MustParseCIDR("192.168.0.0/24")
+	nodeTransportAddr := ip.MustParseCIDR("192.168.77.100/24")
+	gwIfindex := 10
+	nodeTransportIfindex := 11
+	filterOnGw := generateTcFilterWithActionRedirect(gwIfindex,
+		nodeTransportIfindex,
+		unix.ETH_P_IP,
+		podCIDR,
+		peerPodCIDR,
+		tcPriorityNormal,
+		1)
+	filterOnTransport := generateTcFilterWithActionRedirect(nodeTransportIfindex,
+		gwIfindex,
+		unix.ETH_P_IP,
+		peerPodCIDR,
+		podCIDR,
+		tcPriorityNormal,
+		1)
+	nodeConfig := &config.NodeConfig{
+		GatewayConfig: &config.GatewayConfig{
+			LinkIndex: gwIfindex,
+			IPv4:      net.ParseIP("192.168.0.1"),
+		},
+		PodIPv4CIDR:                 podCIDR,
+		NodeTransportInterfaceIndex: nodeTransportIfindex,
+		NodeTransportIPv4Addr:       nodeTransportAddr,
+	}
+
+	testCases := []struct {
+		name          string
+		networkConfig *config.NetworkConfig
+		peerPodCIDR   *net.IPNet
+		peerNodeIP    *net.IPNet
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+		expectedErr   string
+	}{
+		{
+			name: "Skip when encap mode",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+			},
+			peerPodCIDR:   peerPodCIDR,
+			peerNodeIP:    peerNodeIP,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name: "Skip when peer Node is in a different subnet",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeHybrid,
+			},
+			peerPodCIDR:   peerPodCIDR,
+			peerNodeIP:    peerNodeIPInAnotherSubnet,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name: "Successfully installed all tc filters",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+			},
+			peerPodCIDR: peerPodCIDR,
+			peerNodeIP:  peerNodeIP,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterReplace(filterOnGw).Times(1)
+				mockNetlink.FilterReplace(filterOnTransport).Times(1)
+			},
+		},
+		{
+			name: "Failed to install all tc filters",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+			},
+			peerPodCIDR: peerPodCIDR,
+			peerNodeIP:  peerNodeIP,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterReplace(filterOnGw).Times(1)
+				mockNetlink.FilterReplace(filterOnTransport).Return(fmt.Errorf("failed to install tc filter")).Times(1)
+			},
+			expectedErr: "failed to install tc filter",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:           mockNetlink,
+				networkConfig:     tc.networkConfig,
+				nodeConfig:        nodeConfig,
+				tcHandleAllocator: newTcHandleAllocator(),
+			}
+			tc.expectedCalls(mockNetlink.EXPECT())
+			err := c.AddTcFiltersRedirectBetweenGwAndTransport(podCIDR,
+				tc.peerPodCIDR,
+				tc.peerNodeIP.IP,
+				gwIfindex,
+				nodeTransportIfindex)
+			v, ok := c.tcFilters.Load(tc.peerPodCIDR.String())
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+				if ok {
+					assert.IsType(t, []netlink.Filter{}, v)
+				}
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+				assert.False(t, ok)
+				assert.Nil(t, v)
+			}
+		})
+	}
+}
+
+func TestDeleteTcFiltersRedirectBetweenGwAndTransport(t *testing.T) {
+	unknownPeerPodCIDR := ip.MustParseCIDR("192.168.2.0/24")
+	peerPodCIDR := ip.MustParseCIDR("192.168.1.0/24")
+	gwIfindex := 10
+	nodeTransportIfindex := 11
+	gwFilter := &netlink.Flower{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: gwIfindex,
+			Priority:  tcPriorityNormal,
+			Handle:    1,
+		},
+	}
+	transportFilter := &netlink.Flower{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: nodeTransportIfindex,
+			Priority:  tcPriorityNormal,
+			Handle:    1,
+		},
+	}
+	existingTcFilters := map[string][]netlink.Filter{peerPodCIDR.String(): {gwFilter, transportFilter}}
+
+	testCases := []struct {
+		name          string
+		peerPodCIDR   *net.IPNet
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+		expectedErr   string
+	}{
+		{
+			name:          "Unknown peer Pod CIDR",
+			peerPodCIDR:   unknownPeerPodCIDR,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name:        "successfully deleted all tc filters",
+			peerPodCIDR: peerPodCIDR,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterDel(gwFilter).Times(1)
+				mockNetlink.FilterDel(transportFilter).Times(1)
+			},
+		},
+		{
+			name:        "Failed to delete all tc filters",
+			peerPodCIDR: peerPodCIDR,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterDel(gwFilter).Times(1)
+				mockNetlink.FilterDel(transportFilter).Return(fmt.Errorf("failed to delete tc filter")).Times(1)
+			},
+			expectedErr: "failed to delete tc filter",
+		},
+		{
+			name:        "Ignore when deleting a tc filter that doesn't exist",
+			peerPodCIDR: peerPodCIDR,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.FilterDel(gwFilter).Times(1)
+				mockNetlink.FilterDel(transportFilter).Return(fmt.Errorf("no such file or directory")).Times(1)
+			},
+			expectedErr: "",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:           mockNetlink,
+				tcHandleAllocator: newTcHandleAllocator(),
+			}
+			for k, v := range existingTcFilters {
+				c.tcFilters.Store(k, v)
+			}
+			tc.expectedCalls(mockNetlink.EXPECT())
+			err := c.DeleteTcFiltersRedirectBetweenGwAndTransport(tc.peerPodCIDR)
+			v, ok := c.tcFilters.Load(tc.peerPodCIDR.String())
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+				assert.False(t, ok)
+				assert.Nil(t, v)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+				assert.True(t, ok)
+				assert.NotNil(t, v)
+			}
+		})
+	}
+}
+
+func TestAddTcFilterPassToGw(t *testing.T) {
+	transportIfindex := 10
+	tests := []struct {
+		name          string
+		gatewayIP     net.IP
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+		expectedErr   string
+	}{
+		{
+			name:      "successfully installed IPv4 tc filter",
+			gatewayIP: net.ParseIP("10.10.0.1"),
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				filter := generateTcFilterWithActionPass(transportIfindex,
+					unix.ETH_P_IP,
+					&net.IPNet{IP: net.ParseIP("10.10.0.1"), Mask: net.CIDRMask(32, 32)},
+					tcPriorityHigh,
+					1)
+				mockNetlink.FilterReplace(filter).Times(1)
+			},
+		},
+		{
+			name:      "successfully installed IPv6 tc filter",
+			gatewayIP: net.ParseIP("fd00::1"),
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				filter := generateTcFilterWithActionPass(transportIfindex,
+					unix.ETH_P_IPV6,
+					&net.IPNet{IP: net.ParseIP("fd00::1"), Mask: net.CIDRMask(128, 128)},
+					tcPriorityHigh,
+					1)
+				mockNetlink.FilterReplace(filter).Times(1)
+			},
+		},
+		{
+			name:      "Failed to add tc filter",
+			gatewayIP: net.ParseIP("10.10.0.1"),
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				filter := generateTcFilterWithActionPass(transportIfindex,
+					unix.ETH_P_IP,
+					&net.IPNet{IP: net.ParseIP("10.10.0.1"), Mask: net.CIDRMask(32, 32)},
+					tcPriorityHigh,
+					1)
+				mockNetlink.FilterReplace(filter).Return(fmt.Errorf("failed to add tc filter")).Times(1)
+			},
+			expectedErr: "failed to add tc filter",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:           mockNetlink,
+				tcHandleAllocator: newTcHandleAllocator(),
+			}
+			tc.expectedCalls(mockNetlink.EXPECT())
+			err := c.AddTcFilterPassToGw(tc.gatewayIP, transportIfindex)
+
+			var gatewayIPNet *net.IPNet
+			if tc.gatewayIP.To4() == nil {
+				gatewayIPNet = &net.IPNet{IP: tc.gatewayIP, Mask: net.CIDRMask(128, 128)}
+			} else {
+				gatewayIPNet = &net.IPNet{IP: tc.gatewayIP, Mask: net.CIDRMask(32, 32)}
+			}
+			v, ok := c.tcFilters.Load(gatewayIPNet.String())
+			if tc.expectedErr == "" {
+				assert.NoError(t, err)
+				assert.True(t, ok)
+				assert.NotNil(t, v)
+			} else {
+				assert.EqualError(t, err, tc.expectedErr)
+				assert.False(t, ok)
+				assert.Nil(t, v)
+			}
 		})
 	}
 }

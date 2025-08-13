@@ -90,6 +90,8 @@ type Controller struct {
 	kubeClient             clientset.Interface
 	serviceLister          corelisters.ServiceLister
 	serviceListerSynced    cache.InformerSynced
+	nodeLister             corelisters.NodeLister
+	nodeListerSynced       cache.InformerSynced
 	crdClient              clientsetversioned.Interface
 	traceflowInformer      crdinformers.TraceflowInformer
 	traceflowLister        crdlisters.TraceflowLister
@@ -115,6 +117,7 @@ func NewTraceflowController(
 	kubeClient clientset.Interface,
 	crdClient clientsetversioned.Interface,
 	serviceInformer coreinformers.ServiceInformer,
+	nodeInformer coreinformers.NodeInformer,
 	traceflowInformer crdinformers.TraceflowInformer,
 	client openflow.Client,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
@@ -163,6 +166,11 @@ func NewTraceflowController(
 		c.serviceLister = serviceInformer.Lister()
 		c.serviceListerSynced = serviceInformer.Informer().HasSynced
 	}
+	// Only used for NoEncap mode.
+	if !c.networkConfig.TrafficEncapMode.SupportsEncap() {
+		c.nodeLister = nodeInformer.Lister()
+		c.nodeListerSynced = nodeInformer.Informer().HasSynced
+	}
 	return c
 }
 
@@ -182,6 +190,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	cacheSyncs := []cache.InformerSynced{c.traceflowListerSynced}
 	if c.enableAntreaProxy {
 		cacheSyncs = append(cacheSyncs, c.serviceListerSynced)
+	}
+	if !c.networkConfig.TrafficEncapMode.SupportsEncap() {
+		cacheSyncs = append(cacheSyncs, c.nodeListerSynced)
 	}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
