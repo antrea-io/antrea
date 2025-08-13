@@ -56,8 +56,8 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 		}
 
 		if conn.Mark&openflow.ConnAllowedCTMark.GetValue() == 0 {
-			if klog.V(7).Enabled() {
-				klog.InfoS("Ignoring connection because ct mark is not set", "conn", conn)
+			if klog.V(4).Enabled() {
+				klog.InfoS("Ignoring connection because ct mark is not set", "mark", conn.Mark, "expected", openflow.ConnAllowedCTMark.GetValue(), "conn", conn)
 			}
 			continue
 		}
