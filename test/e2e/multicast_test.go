@@ -45,8 +45,6 @@ func skipIfMulticastDisabled(tb testing.TB, data *TestData) {
 	}
 }
 
-var igmpQueryType = int32(0x11)
-
 func TestMulticast(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)

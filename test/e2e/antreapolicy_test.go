@@ -49,13 +49,6 @@ import (
 
 // common for all tests.
 var (
-	p80              int32 = 80
-	p81              int32 = 81
-	p6443            int32 = 6443
-	p8080            int32 = 8080
-	p8081            int32 = 8081
-	p8082            int32 = 8082
-	p8085            int32 = 8085
 	allPods          []Pod
 	podsByNamespace  map[string][]Pod
 	k8sUtils         *KubernetesUtils
@@ -3929,18 +3922,16 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 	server1Name, server1IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server1", nodeName(1), data.testNamespace, false)
 	defer cleanupFunc()
 
-	icmpType := int32(8)
-	icmpCode := int32(0)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-icmp").
 		SetPriority(1.0).SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}})
-	builder.AddEgress(ProtocolICMP, nil, nil, nil, &icmpType, &icmpCode, nil, nil, nil, map[string]string{"antrea-e2e": server0Name}, nil, nil,
-		nil, nil, nil, nil, nil, crdv1beta1.RuleActionReject, "", "", nil)
 	builder.AddEgress(ProtocolICMP, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"antrea-e2e": server1Name}, nil, nil,
 		nil, nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "", nil)
 
 	testcases := []podToAddrTestStep{}
 	if clusterInfo.podV4NetworkCIDR != "" {
+		builder.AddEgress(ProtocolICMP, nil, nil, nil, &icmpRequestType, &icmpRequestCode, nil, nil, nil, map[string]string{"antrea-e2e": server0Name}, nil, nil,
+			nil, nil, nil, nil, nil, crdv1beta1.RuleActionReject, "", "egress-ipv4", nil)
 		testcases = append(testcases, []podToAddrTestStep{
 			{
 				Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
@@ -3957,6 +3948,8 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 		}...)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
+		builder.AddEgress(ProtocolICMP, nil, nil, nil, &icmp6RequestType, &icmpRequestCode, nil, nil, nil, map[string]string{"antrea-e2e": server0Name}, nil, nil,
+			nil, nil, nil, nil, nil, crdv1beta1.RuleActionReject, "", "egress-ipv6", nil)
 		testcases = append(testcases, []podToAddrTestStep{
 			{
 				Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
