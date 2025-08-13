@@ -96,14 +96,6 @@ func skipIfTraceflowDisabled(t *testing.T) {
 	skipIfFeatureDisabled(t, features.Traceflow, true, true)
 }
 
-var (
-	protocolICMP   = int32(1)
-	protocolTCP    = int32(6)
-	protocolUDP    = int32(17)
-	protocolICMPv6 = int32(58)
-	tcpFlags       = int32(2) // SYN flag set
-)
-
 // testTraceflowIntraNodeANNP verifies if traceflow can trace intra node traffic with some Antrea NetworkPolicy sets.
 func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 	var err error

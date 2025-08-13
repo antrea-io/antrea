@@ -46,11 +46,6 @@ const (
 	linuxOS              = "Linux"
 )
 
-var (
-	icmpType = int32(8)
-	icmpCode = int32(0)
-)
-
 type vmInfo struct {
 	nodeName string
 	osType   string
@@ -654,7 +649,7 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 			nil, nil, nil, nil, ruleAction, "", "")
 	case ProtocolICMP:
 		peerIPCIDR := fmt.Sprintf("%s/32", nodeIP(0))
-		ruleFunc(ProtocolICMP, nil, nil, nil, &icmpType, &icmpCode, nil, nil, nil, &peerIPCIDR, nil, nil, nil,
+		ruleFunc(ProtocolICMP, nil, nil, nil, &icmpRequestType, &icmpRequestCode, nil, nil, nil, &peerIPCIDR, nil, nil, nil,
 			nil, nil, nil, nil, ruleAction, "", "")
 	}
 	anpRule := builder.Get()
