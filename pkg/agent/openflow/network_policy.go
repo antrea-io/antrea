@@ -2154,7 +2154,33 @@ func (f *featureNetworkPolicy) initFlows() []*openflow15.FlowMod {
 	}
 	flows = append(flows, f.skipPolicyRuleCheckFlows()...)
 	flows = append(flows, f.initLoggingFlows()...)
+	flows = append(flows, f.markEgressServiceConnectionsDefaultAllowedFlows()...)
 	return GetFlowModMessages(flows, binding.AddMessage)
+}
+
+func (f *featureNetworkPolicy) markEgressServiceConnectionsDefaultAllowedFlows() []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	var flows []binding.Flow
+	for _, ipProtocol := range f.ipProtocols {
+		ctZone := CtZone
+		if ipProtocol == binding.ProtocolIPv6 {
+			ctZone = CtZoneV6
+		}
+		// Make sure that ConnAllowedCTMark is set for Service connections which are default allowed.
+		flows = append(flows,
+			EgressMetricTable.ofTable.BuildFlow(priorityLow).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(true).
+				MatchCTStateTrk(true).
+				MatchCTMark(ServiceCTMark).
+				Action().CT(true, EgressMetricTable.GetNext(), ctZone, f.ctZoneSrcField).
+				LoadToCtMark(ConnAllowedCTMark).
+				CTDone().
+				Done(),
+		)
+	}
+	return flows
 }
 
 // skipPolicyRuleCheckFlows generates the flows to forward the packets in an established or related

@@ -15,6 +15,7 @@
 package connections
 
 import (
+	"encoding/binary"
 	"net"
 	"net/netip"
 
@@ -55,9 +56,11 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 			continue
 		}
 
-		if conn.Mark&openflow.ConnAllowedCTMark.GetValue() == 0 {
+		if (conn.Mark&openflow.ServiceCTMark.GetValue() == 1) &&
+			(conn.Mark&openflow.ConnAllowedCTMark.GetValue() == 0) &&
+			(len(conn.Labels) == 0 || binary.LittleEndian.Uint32(conn.Labels[4:8]) == 0) {
 			if klog.V(4).Enabled() {
-				klog.InfoS("Ignoring connection because ct mark is not set", "mark", conn.Mark, "expected", openflow.ConnAllowedCTMark.GetValue(), "conn", conn)
+				klog.InfoS("Ignoring Service connection as it may have been denied by an Egress policy rule", "conn", conn)
 			}
 			continue
 		}

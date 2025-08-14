@@ -662,19 +662,6 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchCTMark(NotServiceCTMark).
 				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
 				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
-				LoadToCtMark(ConnAllowedCTMark).
-				CTDone().
-				Done(),
-			// Make sure that ConnAllowedCTMark is also set for Service connections.
-			ConntrackCommitTable.ofTable.BuildFlow(priorityLow).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchCTStateNew(true).
-				MatchCTStateTrk(true).
-				// MatchCTStateSNAT(false).
-				MatchCTMark(ServiceCTMark).
-				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
-				LoadToCtMark(ConnAllowedCTMark).
 				CTDone().
 				Done(),
 		)
