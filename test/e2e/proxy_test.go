@@ -667,16 +667,17 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	}
 	defer teardownTest(t, data)
 	skipIfProxyDisabled(t, data)
+	skipIfNumNodesLessThan(t, 3)
 
 	node := nodeName(1)
 	workerNodeIP := workerNodeIPv4(1)
-	controllerNodeIP := controlPlaneNodeIPv4()
+	worker2NodeIP := workerNodeIPv4(2)
 	ipProtocol := corev1.IPv4Protocol
 	lbClusterIngressIP := []string{"192.168.240.1"}
 	lbLocalIngressIP := []string{"192.168.240.2"}
 	if isIPv6 {
 		workerNodeIP = workerNodeIPv6(1)
-		controllerNodeIP = controlPlaneNodeIPv6()
+		worker2NodeIP = workerNodeIPv6(2)
 		ipProtocol = corev1.IPv6Protocol
 		lbClusterIngressIP = []string{"fd75::aabb:ccdd:ef00"}
 		lbLocalIngressIP = []string{"fd75::aabb:ccdd:ef01"}
@@ -728,14 +729,14 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	clusterIPUrl := net.JoinHostPort(clusterIPSvc.Spec.ClusterIP, port)
 	workerNodePortClusterUrl := net.JoinHostPort(workerNodeIP, nodePortCluster)
 	workerNodePortLocalUrl := net.JoinHostPort(workerNodeIP, nodePortLocal)
-	controllerNodePortClusterUrl := net.JoinHostPort(controllerNodeIP, nodePortCluster)
+	worker2NodePortClusterUrl := net.JoinHostPort(worker2NodeIP, nodePortCluster)
 	lbClusterUrl := net.JoinHostPort(lbClusterIngressIP[0], port)
 	lbLocalUrl := net.JoinHostPort(lbLocalIngressIP[0], port)
 
 	// These are expected client IP.
 	expectedGatewayIP, _ := nodeGatewayIPs(1)
 	expectedVirtualIP := config.VirtualServiceIPv4.String()
-	expectedControllerIP := controllerNodeIP
+	expectedNodeIP := worker2NodeIP
 	if isIPv6 {
 		_, expectedGatewayIP = nodeGatewayIPs(1)
 		expectedVirtualIP = config.VirtualServiceIPv6.String()
@@ -745,7 +746,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	createAgnhostPod(t, data, agnhost, node, false)
 	t.Run("Non-HostNetwork Endpoints", func(t *testing.T) {
 		testProxyIntraNodeHairpinCases(data, t, expectedGatewayIP, agnhost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
-		testProxyInterNodeHairpinCases(data, t, false, expectedControllerIP, nodeName(0), clusterIPUrl, controllerNodePortClusterUrl, lbClusterUrl)
+		testProxyInterNodeHairpinCases(data, t, false, expectedNodeIP, nodeName(2), clusterIPUrl, worker2NodePortClusterUrl, lbClusterUrl)
 	})
 	require.NoError(t, data.DeletePod(data.testNamespace, agnhost))
 
@@ -754,7 +755,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
 		testProxyIntraNodeHairpinCases(data, t, expectedVirtualIP, agnhostHost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
-		testProxyInterNodeHairpinCases(data, t, true, expectedControllerIP, nodeName(0), clusterIPUrl, controllerNodePortClusterUrl, lbClusterUrl)
+		testProxyInterNodeHairpinCases(data, t, true, expectedNodeIP, nodeName(2), clusterIPUrl, worker2NodePortClusterUrl, lbClusterUrl)
 	})
 }
 
@@ -836,6 +837,9 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 	}
 
 	t.Run("InterNode/ClusterIP", func(t *testing.T) {
+		// If kube-proxy is running, kube-proxy takes precedence over AntreaProxy to handle the ClusterIP traffic, skip
+		// the test.
+		skipIfKubeProxyEnabled(t, data)
 		clientIP, err := probeClientIPFromNode(node, clusterIPUrl, data)
 		require.NoError(t, err, "ClusterIP hairpin should be able to be connected")
 		require.Equal(t, expectedClientIP, clientIP)

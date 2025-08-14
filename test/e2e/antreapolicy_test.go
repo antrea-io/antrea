@@ -3989,6 +3989,7 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 
 func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespace string) {
 	skipIfProxyAllDisabled(t, data)
+	skipIfNumNodesLessThan(t, 3)
 
 	// Create a NodePort Service.
 	ipProtocol := v1.IPv4Protocol
@@ -4011,7 +4012,7 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 
 	// Create another netns to fake an external network on the host network Pod.
 	cmd, testNetns := getCommandInFakeExternalNetwork("sleep 3600", 24, "1.1.1.1", "1.1.1.254")
-	clientNames := []string{"client0", "client1"}
+	clientNames := []string{"client0", "client1", "client2"}
 	for idx, clientName := range clientNames {
 		if err := NewPodBuilder(clientName, data.testNamespace, agnhostImage).OnNode(nodeName(idx)).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {
 			t.Fatalf("Failed to create client Pod: %v", err)
