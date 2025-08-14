@@ -502,6 +502,11 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 	} else if !liveTraffic {
 		return nil, errors.New("destination is not specified")
 	}
+	if !liveTraffic && c.nodeConfig.PodIPv4CIDR != nil && packet.DestinationMAC == nil {
+		if !c.nodeConfig.PodIPv4CIDR.Contains(packet.SourceIP) {
+			packet.DestinationMAC, _ = net.ParseMAC("ff:ff:ff:ff:ff:ff")
+		}
+	}
 
 	if tf.Spec.Packet.IPv6Header != nil {
 		// IP Protocol 0 (IPv6 Hop-by-Hop Option) is not supported by

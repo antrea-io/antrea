@@ -366,7 +366,9 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 		defer deletePodWrapper(t, data, PodInfos[i].Namespace, PodInfos[i].Name)
 	}
 
-	data.runPingMesh(t, PodInfos, toolboxContainerName, true)
+	t.Run("pingMesh", func(t *testing.T) {
+		data.runPingMesh(t, PodInfos, toolboxContainerName, true)
+	})
 
 	testAntreaIPAMTraceflowIntraNode(t, data, PodInfos, false)
 	testAntreaIPAMTraceflowIntraNode(t, data, PodInfos, true)
@@ -375,7 +377,7 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 func testAntreaIPAMTraceflowIntraNode(t *testing.T, data *TestData, podInfos []PodInfo, liveTraffic bool) {
 	ipamSrcPodDeniedReason := ""
 	if !liveTraffic {
-		ipamSrcPodDeniedReason = "using FlexibleIPAM Pod as source in non-live-traffic Traceflow is not supported"
+		//ipamSrcPodDeniedReason = "using FlexibleIPAM Pod as source in non-live-traffic Traceflow is not supported"
 	}
 	podIPs := waitForPodIPs(t, data, podInfos)
 	testcases := []testcase{}
@@ -426,13 +428,15 @@ func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 	testAntreaIPAMTraceflowInterNode(t, data, allPodInfos, false)
 	testAntreaIPAMTraceflowInterNode(t, data, allPodInfos, true)
 
-	data.runPingMesh(t, PodInfos, toolboxContainerName, true)
+	t.Run("pingMesh", func(t *testing.T) {
+		data.runPingMesh(t, PodInfos, toolboxContainerName, true)
+	})
 }
 
 func testAntreaIPAMTraceflowInterNode(t *testing.T, data *TestData, podInfos []PodInfo, liveTraffic bool) {
 	ipamSrcPodDeniedReason := ""
 	if !liveTraffic {
-		ipamSrcPodDeniedReason = "using FlexibleIPAM Pod as source in non-live-traffic Traceflow is not supported"
+		//ipamSrcPodDeniedReason = "using FlexibleIPAM Pod as source in non-live-traffic Traceflow is not supported"
 	}
 	nodeCount := len(podInfos) / 4
 	regularPodInfos := podInfos[0:nodeCount]

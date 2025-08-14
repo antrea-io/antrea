@@ -24,7 +24,6 @@ import (
 	"k8s.io/klog/v2"
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	annotation "antrea.io/antrea/pkg/ipam"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -83,16 +82,16 @@ func (c *Controller) validate(tf *crdv1beta1.Traceflow) (allowed bool, deniedRea
 		if srcPod.Spec.HostNetwork {
 			return false, "using hostNetwork Pod as source in non-live-traffic Traceflow is not supported"
 		}
-		srcNamespace, err := c.namespaceLister.Get(tf.Spec.Source.Namespace)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				err = fmt.Errorf("requested source Pod Namespace %s not found", tf.Spec.Source.Namespace)
-			}
-			return false, err.Error()
-		}
-		if srcPod.Annotations[annotation.AntreaIPAMAnnotationKey] != "" || srcNamespace.Annotations[annotation.AntreaIPAMAnnotationKey] != "" {
-			return false, "using FlexibleIPAM Pod as source in non-live-traffic Traceflow is not supported"
-		}
+		//srcNamespace, err := c.namespaceLister.Get(tf.Spec.Source.Namespace)
+		//if err != nil {
+		//	if apierrors.IsNotFound(err) {
+		//		err = fmt.Errorf("requested source Pod Namespace %s not found", tf.Spec.Source.Namespace)
+		//	}
+		//	return false, err.Error()
+		//}
+		//if srcPod.Annotations[annotation.AntreaIPAMAnnotationKey] != "" || srcNamespace.Annotations[annotation.AntreaIPAMAnnotationKey] != "" {
+		//	return false, "using FlexibleIPAM Pod as source in non-live-traffic Traceflow is not supported"
+		//}
 	}
 	if tf.Spec.Source.Pod == "" && tf.Spec.Destination.Pod == "" {
 		return false, fmt.Sprintf("Traceflow %s has neither source nor destination Pod specified", tf.Name)
