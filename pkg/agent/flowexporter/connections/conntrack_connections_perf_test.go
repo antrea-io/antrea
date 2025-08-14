@@ -143,7 +143,7 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 		Port:     "30000",
 		Protocol: v1.ProtocolTCP,
 	}
-	mockProxier := proxytest.NewMockProxier(ctrl)
+	mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
 
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)

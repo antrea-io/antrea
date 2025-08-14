@@ -42,7 +42,7 @@ type AgentQuerier interface {
 	GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool)
 	GetOpenflowClient() openflow.Client
 	GetOVSCtlClient() ovsctl.OVSCtlClient
-	GetProxier() proxy.Proxier
+	GetProxier() proxy.ProxyQuerier
 	GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier
 	GetMemberlistCluster() memberlist.Interface
 	GetNodeLister() corelisters.NodeLister
@@ -56,7 +56,7 @@ type agentQuerier struct {
 	k8sClient                clientset.Interface
 	ofClient                 openflow.Client
 	ovsBridgeClient          ovsconfig.OVSBridgeClient
-	proxier                  proxy.Proxier
+	proxier                  proxy.ProxyQuerier
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier
 	apiPort                  int
 	nplRange                 string
@@ -72,7 +72,7 @@ func NewAgentQuerier(
 	k8sClient clientset.Interface,
 	ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	proxier proxy.Proxier,
+	proxier proxy.ProxyQuerier,
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier,
 	apiPort int,
 	nplRange string,
@@ -137,8 +137,8 @@ func (aq *agentQuerier) GetOVSCtlClient() ovsctl.OVSCtlClient {
 	return ovsctl.NewClient(aq.nodeConfig.OVSBridge)
 }
 
-// GetProxier returns proxy.Proxier.
-func (aq *agentQuerier) GetProxier() proxy.Proxier {
+// GetProxier returns proxy.ProxyQuerier.
+func (aq *agentQuerier) GetProxier() proxy.ProxyQuerier {
 	return aq.proxier
 }
 

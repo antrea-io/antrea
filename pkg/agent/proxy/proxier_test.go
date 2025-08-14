@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net"
@@ -24,18 +25,23 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/informers"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	kmetrics "k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/component-base/metrics/testutil"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	mccommon "antrea.io/antrea/multicluster/controllers/multicluster/common"
@@ -48,6 +54,7 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	routemock "antrea.io/antrea/pkg/agent/route/testing"
 	antreatypes "antrea.io/antrea/pkg/agent/types"
+	antreaconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
@@ -481,20 +488,12 @@ func newFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 	if o.serviceProxyNameSet {
 		serviceProxyName = testServiceProxyName
 	}
-	fakeClient := fake.NewSimpleClientset()
-	fakeNodeIPChecker := nodeipmock.NewFakeNodeIPChecker()
-	informerFactory := informers.NewSharedInformerFactory(fakeClient, 0)
+	serviceLabelSelector := generateServiceLabelSelector(serviceProxyName)
 	p, _ := newProxier(hostname,
-		serviceProxyName,
-		fakeClient,
-		informerFactory.Core().V1().Services(),
-		informerFactory.Core().V1().Endpoints(),
-		informerFactory.Discovery().V1().EndpointSlices(),
-		informerFactory.Core().V1().Nodes(),
 		ofClient,
 		isIPv6,
 		routeClient,
-		fakeNodeIPChecker,
+		nodeipmock.NewFakeNodeIPChecker(),
 		nodePortAddresses,
 		o.proxyAllEnabled,
 		[]string{skippedServiceNN, skippedClusterIP},
@@ -503,6 +502,11 @@ func newFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 		types.NewGroupCounter(groupIDAllocator, make(chan string, 100)),
 		o.supportNestedService,
 		o.serviceHealthServerDisabled,
+		o.endpointSliceEnabled,
+		true,
+		true,
+		nil,
+		serviceLabelSelector,
 	)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	p.endpointsChanges = newEndpointsChangesTracker(hostname, o.endpointSliceEnabled, isIPv6)
@@ -3683,58 +3687,489 @@ func TestServicesWithSameEndpoints(t *testing.T) {
 	assert.NotContains(t, fp.endpointsInstalledMap, svcPortName2)
 }
 
-func TestMetrics(t *testing.T) {
-	legacyregistry.Reset()
-	metrics.Register()
+func getMetrics() map[string]int {
+	values := make(map[string]int)
+	getCounter := func(c *kmetrics.Counter) {
+		name := fmt.Sprintf("%s_%s", c.Name, c.ConstLabels["ip_family"])
+		v, err := testutil.GetCounterMetricValue(c.CounterMetric)
+		if err != nil {
+			klog.ErrorS(err, "Failed to get metric", "metric", name)
+			return
+		}
+		values[name] = int(v)
+	}
+	getGauge := func(g *kmetrics.Gauge) {
+		name := fmt.Sprintf("%s_%s", g.Name, g.ConstLabels["ip_family"])
+		v, err := testutil.GetGaugeMetricValue(g.GaugeMetric)
+		if err != nil {
+			klog.ErrorS(err, "Failed to get metric", "metric", name)
+			return
+		}
+		values[name] = int(v)
+	}
 
-	for _, tc := range []struct {
-		name     string
-		isIPv6   bool
-		protocol binding.Protocol
-	}{
-		{"IPv4", false, binding.ProtocolTCP},
-		{"IPv6", true, binding.ProtocolTCPv6},
+	for _, c := range []*kmetrics.Counter{
+		metrics.EndpointsUpdatesTotal,
+		metrics.ServicesUpdatesTotal,
+		metrics.EndpointsUpdatesTotalV6,
+		metrics.ServicesUpdatesTotalV6,
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			endpointsUpdateTotalMetric := metrics.EndpointsUpdatesTotal.CounterMetric
-			servicesUpdateTotalMetric := metrics.ServicesUpdatesTotal.CounterMetric
-			endpointsInstallMetric := metrics.EndpointsInstalledTotal.GaugeMetric
-			servicesInstallMetric := metrics.ServicesInstalledTotal.GaugeMetric
-			if tc.isIPv6 {
-				endpointsUpdateTotalMetric = metrics.EndpointsUpdatesTotalV6.CounterMetric
-				servicesUpdateTotalMetric = metrics.ServicesUpdatesTotalV6.CounterMetric
-				endpointsInstallMetric = metrics.EndpointsInstalledTotalV6.GaugeMetric
-				servicesInstallMetric = metrics.ServicesInstalledTotalV6.GaugeMetric
+		getCounter(c)
+	}
+	for _, g := range []*kmetrics.Gauge{
+		metrics.EndpointsInstalledTotal,
+		metrics.ServicesInstalledTotal,
+		metrics.EndpointsInstalledTotalV6,
+		metrics.ServicesInstalledTotalV6,
+	} {
+		getGauge(g)
+	}
+	return values
+}
+
+func generateSvc(clusterIP string, clusterIPs []string, ipFamilies []corev1.IPFamily, port int32) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-svc",
+			Namespace: corev1.NamespaceDefault,
+			Labels: map[string]string{
+				labelServiceProxyName: testServiceProxyName,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP:  clusterIP,
+			ClusterIPs: clusterIPs,
+			IPFamilies: ipFamilies,
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "http",
+					Port:     port,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+}
+
+func generateEps(addressType discovery.AddressType, addresses []string) *discovery.EndpointSlice {
+	var name string
+	switch addressType {
+	case discovery.AddressTypeIPv4:
+		name = "test-svc-ipv4"
+	case discovery.AddressTypeIPv6:
+		name = "test-svc-ipv6"
+	}
+	endpointSlice := &discovery.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: corev1.NamespaceDefault,
+			Labels:    map[string]string{discovery.LabelServiceName: "test-svc"},
+		},
+		AddressType: addressType,
+		Endpoints:   []discovery.Endpoint{},
+		Ports: []discovery.EndpointPort{
+			{
+				Name:     ptr.To("http"),
+				Port:     ptr.To(int32(80)),
+				Protocol: ptr.To(corev1.ProtocolTCP),
+			},
+		},
+	}
+	for _, addr := range addresses {
+		endpointSlice.Endpoints = append(endpointSlice.Endpoints, discovery.Endpoint{Addresses: []string{addr}})
+	}
+	return endpointSlice
+}
+
+func generateSvcAndEps(enableIPv4, enableIPv6 bool) []runtime.Object {
+	objects := make([]runtime.Object, 0, 3)
+
+	var clusterIP string
+	var clusterIPs []string
+	var ipFamilies []corev1.IPFamily
+	if enableIPv4 {
+		clusterIP = "10.96.0.1"
+		clusterIPs = []string{clusterIP}
+		ipFamilies = []corev1.IPFamily{corev1.IPv4Protocol}
+	}
+	if enableIPv6 {
+		if clusterIP == "" {
+			clusterIP = "fd00::1"
+		}
+		clusterIPs = append(clusterIPs, "fd00::1")
+		ipFamilies = append(ipFamilies, corev1.IPv6Protocol)
+	}
+	objects = append(objects, generateSvc(clusterIP, clusterIPs, ipFamilies, 80))
+
+	if enableIPv4 {
+		objects = append(objects, generateEps(discovery.AddressTypeIPv4, []string{"10.244.0.2", "10.244.0.3"}))
+	}
+	if enableIPv6 {
+		objects = append(objects, generateEps(discovery.AddressTypeIPv6, []string{"fd00::100", "fd00::101"}))
+	}
+	return objects
+}
+
+func generateUpdatedSvcAndEps(enableIPv4, enableIPv6 bool) (*corev1.Service, []*discovery.EndpointSlice) {
+	var clusterIP string
+	var clusterIPs []string
+	var ipFamilies []corev1.IPFamily
+	if enableIPv4 {
+		clusterIP = "10.96.0.1"
+		clusterIPs = []string{clusterIP}
+		ipFamilies = []corev1.IPFamily{corev1.IPv4Protocol}
+	}
+	if enableIPv6 {
+		if clusterIP == "" {
+			clusterIP = "fd00::1"
+		}
+		clusterIPs = append(clusterIPs, "fd00::1")
+		ipFamilies = append(ipFamilies, corev1.IPv6Protocol)
+	}
+	svc := generateSvc(clusterIP, clusterIPs, ipFamilies, 8080)
+
+	eps := make([]*discovery.EndpointSlice, 0, 2)
+	if enableIPv4 {
+		eps = append(eps, generateEps(discovery.AddressTypeIPv4, []string{"10.244.0.2"}))
+	}
+	if enableIPv6 {
+		eps = append(eps, generateEps(discovery.AddressTypeIPv6, []string{"fd00::100"}))
+	}
+
+	return svc, eps
+}
+
+func TestMetrics(t *testing.T) {
+	proxyConfig := antreaconfig.AntreaProxyConfig{
+		ProxyAll:             true,
+		ProxyLoadBalancerIPs: ptr.To(true),
+		ServiceProxyName:     testServiceProxyName,
+	}
+	originalEndpointSliceAPIAvailableFn := endpointSliceAPIAvailableFn
+	endpointSliceAPIAvailableFn = func(_ clientset.Interface) (bool, error) {
+		return true, nil
+	}
+	t.Cleanup(func() {
+		endpointSliceAPIAvailableFn = originalEndpointSliceAPIAvailableFn
+	})
+
+	testCases := []struct {
+		name                   string
+		proxierIPv4Enable      bool
+		proxierIPv6Enable      bool
+		svcIPv4Enabled         bool
+		svcIPv6Enabled         bool
+		expectedMetrics        map[string]int // Expected metrics before EndpointSlice and Service objects are updated.
+		expectedUpdatedMetrics map[string]int // Expected metrics after EndpointSlice and Service objects are updated.
+	}{
+		{
+			name:              "IPv4-only proxier, IPv4-only Service",
+			proxierIPv4Enable: true,
+			proxierIPv6Enable: false,
+			svcIPv4Enabled:    true,
+			svcIPv6Enabled:    false,
+			expectedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 2,
+				"total_endpoints_updates_v4":   1,
+				"total_services_installed_v4":  1,
+				"total_services_updates_v4":    1,
+			},
+			expectedUpdatedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 1,
+				"total_endpoints_updates_v4":   2,
+				"total_services_installed_v4":  1,
+				"total_services_updates_v4":    2,
+			},
+		},
+		{
+			name:              "IPv4-only proxier, dual-stack Service",
+			proxierIPv4Enable: true,
+			proxierIPv6Enable: false,
+			svcIPv4Enabled:    true,
+			svcIPv6Enabled:    true,
+			expectedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 2,
+				"total_endpoints_updates_v4":   1,
+				"total_services_installed_v4":  1,
+				"total_services_updates_v4":    1,
+			},
+			expectedUpdatedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 1,
+				"total_endpoints_updates_v4":   2,
+				"total_services_installed_v4":  1,
+				"total_services_updates_v4":    2,
+			},
+		},
+		{
+			name:              "IPv4-only proxier, IPv6-only Service",
+			proxierIPv4Enable: true,
+			proxierIPv6Enable: false,
+			svcIPv4Enabled:    false,
+			svcIPv6Enabled:    true,
+			expectedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+			expectedUpdatedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+		},
+		{
+			name:              "IPv6-only proxier, IPv6-only Service",
+			proxierIPv4Enable: false,
+			proxierIPv6Enable: true,
+			svcIPv4Enabled:    false,
+			svcIPv6Enabled:    true,
+			expectedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 2,
+				"total_endpoints_updates_v6":   1,
+				"total_services_installed_v6":  1,
+				"total_services_updates_v6":    1,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+			expectedUpdatedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 1,
+				"total_endpoints_updates_v6":   2,
+				"total_services_installed_v6":  1,
+				"total_services_updates_v6":    2,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+		},
+		{
+			name:              "IPv6-only proxier, dual-stack Service",
+			proxierIPv4Enable: false,
+			proxierIPv6Enable: true,
+			svcIPv4Enabled:    true,
+			svcIPv6Enabled:    true,
+			expectedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 2,
+				"total_endpoints_updates_v6":   1,
+				"total_services_installed_v6":  1,
+				"total_services_updates_v6":    1,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+			expectedUpdatedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 1,
+				"total_endpoints_updates_v6":   2,
+				"total_services_installed_v6":  1,
+				"total_services_updates_v6":    2,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+		},
+		{
+			name:              "IPv6-only proxier, IPv4-only Service",
+			proxierIPv4Enable: false,
+			proxierIPv6Enable: true,
+			svcIPv4Enabled:    true,
+			svcIPv6Enabled:    false,
+			expectedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+			expectedUpdatedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+		},
+		{
+			name:              "Dual-stack proxier, dual-stack Service",
+			proxierIPv4Enable: true,
+			proxierIPv6Enable: true,
+			svcIPv6Enabled:    true,
+			svcIPv4Enabled:    true,
+			expectedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 2,
+				"total_endpoints_updates_v6":   1,
+				"total_services_installed_v6":  1,
+				"total_services_updates_v6":    1,
+				"total_endpoints_installed_v4": 2,
+				"total_endpoints_updates_v4":   1,
+				"total_services_installed_v4":  1,
+				"total_services_updates_v4":    1,
+			},
+			expectedUpdatedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 1,
+				"total_endpoints_updates_v6":   2,
+				"total_services_installed_v6":  1,
+				"total_services_updates_v6":    2,
+				"total_endpoints_installed_v4": 1,
+				"total_endpoints_updates_v4":   2,
+				"total_services_installed_v4":  1,
+				"total_services_updates_v4":    2,
+			},
+		},
+		{
+			name:              "Dual-stack proxier, IPv4-only Service",
+			proxierIPv4Enable: true,
+			proxierIPv6Enable: true,
+			svcIPv4Enabled:    true,
+			svcIPv6Enabled:    false,
+			expectedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 2,
+				"total_endpoints_updates_v4":   1,
+				"total_services_installed_v4":  1,
+				"total_services_updates_v4":    1,
+			},
+			expectedUpdatedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 0,
+				"total_endpoints_updates_v6":   0,
+				"total_services_installed_v6":  0,
+				"total_services_updates_v6":    0,
+				"total_endpoints_installed_v4": 1,
+				"total_endpoints_updates_v4":   2,
+				"total_services_installed_v4":  1,
+				"total_services_updates_v4":    2,
+			},
+		},
+		{
+			name:              "Dual-stack proxier, IPv6-only Service",
+			proxierIPv4Enable: true,
+			proxierIPv6Enable: true,
+			svcIPv4Enabled:    false,
+			svcIPv6Enabled:    true,
+			expectedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 2,
+				"total_endpoints_updates_v6":   1,
+				"total_services_installed_v6":  1,
+				"total_services_updates_v6":    1,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+			expectedUpdatedMetrics: map[string]int{
+				"total_endpoints_installed_v6": 1,
+				"total_endpoints_updates_v6":   2,
+				"total_services_installed_v6":  1,
+				"total_services_updates_v6":    2,
+				"total_endpoints_installed_v4": 0,
+				"total_endpoints_updates_v4":   0,
+				"total_services_installed_v4":  0,
+				"total_services_updates_v4":    0,
+			},
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			legacyregistry.Reset()
+			metrics.Register()
+
+			ctrl := gomock.NewController(t)
+			mockOFClient, mockRouteClient := getMockClients(ctrl)
+
+			fakeClient := fake.NewClientset(generateSvcAndEps(tt.svcIPv4Enabled, tt.svcIPv6Enabled)...)
+			fakeNodeIPChecker := nodeipmock.NewFakeNodeIPChecker()
+			informerFactory := informers.NewSharedInformerFactory(fakeClient, 0)
+			groupIDAllocator := openflow.NewGroupAllocator()
+
+			proxyServer, err := NewProxyServer("fake-hostname",
+				fakeClient,
+				informerFactory.Core().V1().Services(),
+				informerFactory.Core().V1().Endpoints(),
+				informerFactory.Discovery().V1().EndpointSlices(),
+				informerFactory.Core().V1().Nodes(),
+				mockOFClient,
+				mockRouteClient,
+				fakeNodeIPChecker,
+				tt.proxierIPv4Enable,
+				tt.proxierIPv6Enable,
+				nodePortAddressesIPv4,
+				nodePortAddressesIPv6,
+				proxyConfig,
+				agentconfig.LoadBalancerModeNAT,
+				types.NewGroupCounter(groupIDAllocator, make(chan string, 100)),
+				types.NewGroupCounter(groupIDAllocator, make(chan string, 100)),
+				false,
+			)
+			require.NoError(t, err)
+
+			ctx, cancelFunc := context.WithCancel(context.Background())
+			defer cancelFunc()
+
+			informerFactory.Start(ctx.Done())
+			informerFactory.WaitForCacheSync(ctx.Done())
+
+			mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any()).AnyTimes()
+			mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			mockOFClient.EXPECT().InstallServiceFlows(gomock.Any()).AnyTimes()
+			mockOFClient.EXPECT().UninstallServiceFlows(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			mockOFClient.EXPECT().InstallEndpointFlows(gomock.Any(), gomock.Any()).AnyTimes()
+			mockOFClient.EXPECT().UninstallEndpointFlows(gomock.Any(), gomock.Any()).AnyTimes()
+
+			go proxyServer.Run(ctx)
+
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				assert.Equal(t, tt.expectedMetrics, getMetrics())
+			}, 3*time.Second, 100*time.Millisecond)
+
+			updatedSvc, updatedEps := generateUpdatedSvcAndEps(tt.svcIPv4Enabled, tt.svcIPv6Enabled)
+			_, err = fakeClient.CoreV1().Services(corev1.NamespaceDefault).Update(ctx, updatedSvc, metav1.UpdateOptions{})
+			require.NoError(t, err)
+			for _, eps := range updatedEps {
+				_, err = fakeClient.DiscoveryV1().EndpointSlices(corev1.NamespaceDefault).Update(ctx, eps, metav1.UpdateOptions{})
+				require.NoError(t, err)
 			}
 
-			testClusterIPAdd(t, tc.isIPv6, false, []*corev1.Service{}, []*corev1.Endpoints{}, true)
-			v, err := testutil.GetCounterMetricValue(endpointsUpdateTotalMetric)
-			assert.NoError(t, err)
-			assert.Equal(t, 0, int(v))
-			v, err = testutil.GetCounterMetricValue(servicesUpdateTotalMetric)
-			assert.Equal(t, 0, int(v))
-			assert.NoError(t, err)
-			v, err = testutil.GetGaugeMetricValue(servicesInstallMetric)
-			assert.Equal(t, 1, int(v))
-			assert.NoError(t, err)
-			v, err = testutil.GetGaugeMetricValue(endpointsInstallMetric)
-			assert.Equal(t, 2, int(v))
-			assert.NoError(t, err)
-
-			testClusterIPRemove(t, tc.protocol, tc.isIPv6, false, false)
-
-			v, err = testutil.GetCounterMetricValue(endpointsUpdateTotalMetric)
-			assert.NoError(t, err)
-			assert.Equal(t, 0, int(v))
-			v, err = testutil.GetCounterMetricValue(servicesUpdateTotalMetric)
-			assert.Equal(t, 0, int(v))
-			assert.NoError(t, err)
-			v, err = testutil.GetGaugeMetricValue(servicesInstallMetric)
-			assert.Equal(t, 0, int(v))
-			assert.NoError(t, err)
-			v, err = testutil.GetGaugeMetricValue(endpointsInstallMetric)
-			assert.Equal(t, 0, int(v))
-			assert.NoError(t, err)
+			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				assert.Equal(t, tt.expectedUpdatedMetrics, getMetrics())
+			}, 3*time.Second, 100*time.Millisecond)
 		})
 	}
 }

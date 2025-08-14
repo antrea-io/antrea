@@ -161,7 +161,7 @@ func TestServiceFlows(t *testing.T) {
 	}
 	for i := range testcases {
 		tc := testcases[i]
-		p := proxytest.NewMockProxier(ctrl)
+		p := proxytest.NewMockProxyQuerier(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetProxier().Return(p).Times(2)
 
