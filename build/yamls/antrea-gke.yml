@@ -4155,6 +4155,10 @@ data:
     # AllBeta is a global toggle for beta features. Per-feature key values override the default set by AllBeta.
     #  AllBeta: false
 
+    # Enable PreferSameTrafficDistribution in AntreaProxy, allowing usage of the values PreferSameZone and PreferSameNode in
+    # the Service trafficDistribution field.
+    #  PreferSameTrafficDistribution: false
+
     # Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy. This requires AntreaProxy to
     # be enabled, otherwise this flag will not take effect.
     #  CleanupStaleUDPSvcConntrack: true
@@ -4540,6 +4544,12 @@ data:
       # enabled. This avoids race conditions between kube-proxy and Antrea Proxy, with both trying to
       # bind to the same address, when proxyAll is enabled while kube-proxy has not been removed.
       disableServiceHealthCheckServer: false
+      # The value of the IP address and the port on which AntreaProxy health server listens when proxyAll is enabled. This
+      # server is functionally equivalent to the one of kube-proxy. If it is not specified, it will be automatically set
+      # to "0.0.0.0:10256" for IPv4-only clusters, or "[::]:10256" for IPv6-only and dual-stack clusters. Note that
+      # "[::]:10256" may act as either IPv6-only or dual-stack depending on the system setting of IPV6_V6ONLY
+      # (sysctl: net.ipv6.bindv6only).
+      serviceHealthCheckServerBindAddress: ""
 
     # IPsec tunnel related configurations.
     ipsec:
@@ -5630,7 +5640,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0590de6bed2f6fa138f38ca2e8eb6d6a5bbd50eddedd4ad46df3c320045a8edb
+        checksum/config: f963573c017d2b1abefaf8860e8b898c641e567b9652b9b83c12b1aa6eec313f
       labels:
         app: antrea
         component: antrea-agent
@@ -5876,7 +5886,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0590de6bed2f6fa138f38ca2e8eb6d6a5bbd50eddedd4ad46df3c320045a8edb
+        checksum/config: f963573c017d2b1abefaf8860e8b898c641e567b9652b9b83c12b1aa6eec313f
       labels:
         app: antrea
         component: antrea-controller
