@@ -196,10 +196,7 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	for _, nodeIP := range nodeIPs {
 		healthUrls = append(healthUrls, getHttpURL(nodeIP, healthPort))
 	}
-	var healthOutputTmpl string
-	// If kube-proxy presents, use the following template.
-	if _, err = data.clientset.AppsV1().DaemonSets(kubeNamespace).Get(context.TODO(), "kube-proxy", metav1.GetOptions{}); err == nil {
-		healthOutputTmpl = `{
+	healthOutputTmpl := `{
 	"service": {
 		"namespace": "%s",
 		"name": "agnhost-local"
@@ -207,17 +204,6 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	"localEndpoints": 1,
 	"serviceProxyHealthy": true
 }`
-	} else {
-		// AntreaProxy has not implemented serviceProxyHealthy server yet.
-		// TODO: remove this after https://github.com/antrea-io/antrea/pull/7553 is merged.
-		healthOutputTmpl = `{
-	"service": {
-		"namespace": "%s",
-		"name": "agnhost-local"
-	},
-	"localEndpoints": 1
-}`
-	}
 	healthExpected := fmt.Sprintf(healthOutputTmpl, data.testNamespace)
 
 	port := "8080"

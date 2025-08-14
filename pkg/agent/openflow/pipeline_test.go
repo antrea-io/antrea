@@ -250,11 +250,11 @@ func TestServiceEndpointGroupMaxBuckets(t *testing.T) {
 	}{
 		{
 			name:           "IPv6, remote, non-hostNetwork",
-			sampleEndpoint: proxy.NewBaseEndpointInfo("2001::1", "node1", "", 80, false, true, false, false, nil),
+			sampleEndpoint: proxy.NewBaseEndpointInfo("2001::1", 80, false, true, false, false, nil, nil),
 		},
 		{
 			name:           "IPv4, remote, non-hostNetwork",
-			sampleEndpoint: proxy.NewBaseEndpointInfo("192.168.1.1", "node1", "", 80, false, true, false, false, nil),
+			sampleEndpoint: proxy.NewBaseEndpointInfo("192.168.1.1", 80, false, true, false, false, nil, nil),
 		},
 	}
 
