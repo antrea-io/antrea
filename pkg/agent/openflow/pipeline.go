@@ -1194,10 +1194,12 @@ func (f *featurePodConnectivity) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPo
 }
 
 // l2ForwardOutputHairpinServiceFlow generates the flow to output the packet of hairpin Service connection with IN_PORT
-// action.
+// action. It matches OutputToOFPortRegMark to ensure only packets explicitly marked for output are processed, excluding
+// packets intended for packet-in to the controller.
 func (f *featureService) l2ForwardOutputHairpinServiceFlow() binding.Flow {
 	return OutputTable.ofTable.BuildFlow(priorityHigh).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchRegMark(OutputToOFPortRegMark).
 		MatchCTMark(HairpinCTMark).
 		Action().OutputInPort().
 		Done()
