@@ -57,6 +57,11 @@ const (
 	// flag will not take effect.
 	ServiceTrafficDistribution featuregate.Feature = "ServiceTrafficDistribution"
 
+	// alpha: v2.5
+	// Enable PreferSameTrafficDistribution in AntreaProxy, allowing usage of the values
+	// PreferSameZone and PreferSameNode in the Service trafficDistribution field.
+	PreferSameTrafficDistribution featuregate.Feature = "PreferSameTrafficDistribution"
+
 	// alpha: v1.13
 	// beta: v2.1
 	// Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy.
@@ -202,38 +207,39 @@ var (
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
 	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-		AntreaPolicy:                {Default: true, PreRelease: featuregate.Beta},
-		AntreaProxy:                 {Default: true, PreRelease: featuregate.GA},
-		BGPPolicy:                   {Default: false, PreRelease: featuregate.Alpha},
-		Egress:                      {Default: true, PreRelease: featuregate.Beta},
-		EndpointSlice:               {Default: true, PreRelease: featuregate.GA},
-		TopologyAwareHints:          {Default: true, PreRelease: featuregate.GA},
-		ServiceTrafficDistribution:  {Default: true, PreRelease: featuregate.GA},
-		CleanupStaleUDPSvcConntrack: {Default: true, PreRelease: featuregate.Beta},
-		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},
-		PacketCapture:               {Default: false, PreRelease: featuregate.Alpha},
-		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
-		FlowExporter:                {Default: false, PreRelease: featuregate.Alpha},
-		NFTablesHostNetworkMode:     {Default: false, PreRelease: featuregate.Alpha},
-		NetworkPolicyStats:          {Default: true, PreRelease: featuregate.Beta},
-		NodePortLocal:               {Default: true, PreRelease: featuregate.GA},
-		NodeIPAM:                    {Default: true, PreRelease: featuregate.Beta},
-		Multicast:                   {Default: true, PreRelease: featuregate.Beta},
-		Multicluster:                {Default: false, PreRelease: featuregate.Alpha},
-		SecondaryNetwork:            {Default: false, PreRelease: featuregate.Alpha},
-		ServiceExternalIP:           {Default: true, PreRelease: featuregate.Beta},
-		TrafficControl:              {Default: false, PreRelease: featuregate.Alpha},
-		IPsecCertAuth:               {Default: false, PreRelease: featuregate.Alpha},
-		ExternalNode:                {Default: false, PreRelease: featuregate.Alpha},
-		SupportBundleCollection:     {Default: false, PreRelease: featuregate.Alpha},
-		L7NetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
-		LoadBalancerModeDSR:         {Default: false, PreRelease: featuregate.Alpha},
-		AdminNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
-		EgressTrafficShaping:        {Default: false, PreRelease: featuregate.Alpha},
-		EgressSeparateSubnet:        {Default: true, PreRelease: featuregate.Beta},
-		NodeNetworkPolicy:           {Default: false, PreRelease: featuregate.Alpha},
-		L7FlowExporter:              {Default: false, PreRelease: featuregate.Deprecated},
-		NodeLatencyMonitor:          {Default: false, PreRelease: featuregate.Alpha},
+		AntreaPolicy:                  {Default: true, PreRelease: featuregate.Beta},
+		AntreaProxy:                   {Default: true, PreRelease: featuregate.GA},
+		BGPPolicy:                     {Default: false, PreRelease: featuregate.Alpha},
+		Egress:                        {Default: true, PreRelease: featuregate.Beta},
+		EndpointSlice:                 {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
+		TopologyAwareHints:            {Default: true, PreRelease: featuregate.GA},
+		ServiceTrafficDistribution:    {Default: true, PreRelease: featuregate.GA},
+		PreferSameTrafficDistribution: {Default: false, PreRelease: featuregate.Alpha},
+		CleanupStaleUDPSvcConntrack:   {Default: true, PreRelease: featuregate.Beta},
+		Traceflow:                     {Default: true, PreRelease: featuregate.Beta},
+		PacketCapture:                 {Default: false, PreRelease: featuregate.Alpha},
+		AntreaIPAM:                    {Default: false, PreRelease: featuregate.Alpha},
+		FlowExporter:                  {Default: false, PreRelease: featuregate.Alpha},
+		NFTablesHostNetworkMode:       {Default: false, PreRelease: featuregate.Alpha},
+		NetworkPolicyStats:            {Default: true, PreRelease: featuregate.Beta},
+		NodePortLocal:                 {Default: true, PreRelease: featuregate.GA},
+		NodeIPAM:                      {Default: true, PreRelease: featuregate.Beta},
+		Multicast:                     {Default: true, PreRelease: featuregate.Beta},
+		Multicluster:                  {Default: false, PreRelease: featuregate.Alpha},
+		SecondaryNetwork:              {Default: false, PreRelease: featuregate.Alpha},
+		ServiceExternalIP:             {Default: true, PreRelease: featuregate.Beta},
+		TrafficControl:                {Default: false, PreRelease: featuregate.Alpha},
+		IPsecCertAuth:                 {Default: false, PreRelease: featuregate.Alpha},
+		ExternalNode:                  {Default: false, PreRelease: featuregate.Alpha},
+		SupportBundleCollection:       {Default: false, PreRelease: featuregate.Alpha},
+		L7NetworkPolicy:               {Default: false, PreRelease: featuregate.Alpha},
+		LoadBalancerModeDSR:           {Default: false, PreRelease: featuregate.Alpha},
+		AdminNetworkPolicy:            {Default: false, PreRelease: featuregate.Alpha},
+		EgressTrafficShaping:          {Default: false, PreRelease: featuregate.Alpha},
+		EgressSeparateSubnet:          {Default: true, PreRelease: featuregate.Beta},
+		NodeNetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
+		L7FlowExporter:                {Default: false, PreRelease: featuregate.Deprecated},
+		NodeLatencyMonitor:            {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// AgentGates consists of all known feature gates for the Antrea Agent.
@@ -263,6 +269,7 @@ var (
 		TopologyAwareHints,
 		Traceflow,
 		PacketCapture,
+		PreferSameTrafficDistribution,
 		TrafficControl,
 		EgressTrafficShaping,
 		EgressSeparateSubnet,

@@ -25,6 +25,8 @@ const (
 	// AntreaAgentClusterMembershipPort is the default port for the antrea-agent cluster.
 	// A gossip-based cluster will be created in the background when the egress feature is turned on.
 	AntreaAgentClusterMembershipPort = 10351
+	// AntreaProxyHealthServerPort is the default port for AntreaProxy health server.
+	AntreaProxyHealthServerPort = 10256
 	// WireGuardListenPort is the default port for WireGuard encrypted traffic.
 	WireGuardListenPort = 51820
 	// MulticlusterWireGuardListenPort is the default port for Multi-cluster WireGuard encrypted traffic.

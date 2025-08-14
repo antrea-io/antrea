@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 /*
-// Copyright 2020 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,27 +28,80 @@ limitations under the License.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/v1.34.2/pkg/api/v1/service/util.go
+
 Modifies:
-- Remove consts: "defaultLoadBalancerSourceRanges"
-- Remove functions: "IsAllowAll", "GetLoadBalancerSourceRanges", "GetServiceHealthCheckPathPort"
+
+- Rename package "service" to "util".
+
 */
 
 package util
 
-import v1 "k8s.io/api/core/v1"
+import (
+	"fmt"
+	"strings"
 
+	v1 "k8s.io/api/core/v1"
+	utilnet "k8s.io/utils/net"
+)
+
+const (
+	defaultLoadBalancerSourceRanges = "0.0.0.0/0"
+)
+
+// IsAllowAll checks whether the utilnet.IPNet allows traffic from 0.0.0.0/0
+func IsAllowAll(ipnets utilnet.IPNetSet) bool {
+	for _, s := range ipnets.StringSlice() {
+		if s == "0.0.0.0/0" {
+			return true
+		}
+	}
+	return false
+}
+
+// GetLoadBalancerSourceRanges first try to parse and verify LoadBalancerSourceRanges field from a service.
+// If the field is not specified, turn to parse and verify the AnnotationLoadBalancerSourceRangesKey annotation from a service,
+// extracting the source ranges to allow, and if not present returns a default (allow-all) value.
+func GetLoadBalancerSourceRanges(service *v1.Service) (utilnet.IPNetSet, error) {
+	var ipnets utilnet.IPNetSet
+	var err error
+	// if SourceRange field is specified, ignore sourceRange annotation
+	if len(service.Spec.LoadBalancerSourceRanges) > 0 {
+		specs := service.Spec.LoadBalancerSourceRanges
+		ipnets, err = utilnet.ParseIPNets(specs...)
+
+		if err != nil {
+			return nil, fmt.Errorf("service.Spec.LoadBalancerSourceRanges: %v is not valid. Expecting a list of IP ranges. For example, 10.0.0.0/24. Error msg: %v", specs, err)
+		}
+	} else {
+		val := service.Annotations[v1.AnnotationLoadBalancerSourceRangesKey]
+		val = strings.TrimSpace(val)
+		if val == "" {
+			val = defaultLoadBalancerSourceRanges
+		}
+		specs := strings.Split(val, ",")
+		ipnets, err = utilnet.ParseIPNets(specs...)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %s is not valid. Expecting a comma-separated list of source IP ranges. For example, 10.0.0.0/24,192.168.2.0/24", v1.AnnotationLoadBalancerSourceRangesKey, val)
+		}
+	}
+	return ipnets, nil
+}
+
+// ExternallyAccessible checks if service is externally accessible.
 func ExternallyAccessible(service *v1.Service) bool {
 	return service.Spec.Type == v1.ServiceTypeLoadBalancer ||
 		service.Spec.Type == v1.ServiceTypeNodePort ||
 		(service.Spec.Type == v1.ServiceTypeClusterIP && len(service.Spec.ExternalIPs) > 0)
 }
 
-// ExternalPolicyLocal checks if service has ETP = Local.
+// ExternalPolicyLocal checks if service is externally accessible and has ETP = Local.
 func ExternalPolicyLocal(service *v1.Service) bool {
 	if !ExternallyAccessible(service) {
 		return false
 	}
-	return service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal
+	return service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyLocal
 }
 
 // InternalPolicyLocal checks if service has ITP = Local.

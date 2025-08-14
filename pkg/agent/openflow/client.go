@@ -764,12 +764,12 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 	keyToFlows := map[string][]binding.Flow{}
 	for _, endpoint := range endpoints {
 		var flows []binding.Flow
-		endpointPort, _ := endpoint.Port()
+		endpointPort := endpoint.Port()
 		endpointIP := net.ParseIP(endpoint.IP())
 		portVal := util.PortToUint16(endpointPort)
 		cacheKey := generateEndpointFlowCacheKey(endpoint.IP(), endpointPort, protocol)
 		flows = append(flows, c.featureService.endpointDNATFlow(endpointIP, portVal, protocol))
-		if endpoint.GetIsLocal() {
+		if endpoint.IsLocal() {
 			flows = append(flows, c.featureService.podHairpinSNATFlow(endpointIP))
 		}
 		keyToFlows[cacheKey] = flows
@@ -786,10 +786,7 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoints []p
 	flowCacheKeys := make([]string, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
-		port, err := endpoint.Port()
-		if err != nil {
-			return fmt.Errorf("error when getting port: %w", err)
-		}
+		port := endpoint.Port()
 		flowCacheKeys = append(flowCacheKeys, generateEndpointFlowCacheKey(endpoint.IP(), port, protocol))
 	}
 
@@ -826,7 +823,7 @@ func (c *client) GetServiceFlowKeys(svcIP net.IP, svcPort uint16, protocol bindi
 	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
 	flowKeys := c.getFlowKeysFromCache(c.featureService.cachedFlows, cacheKey)
 	for _, ep := range endpoints {
-		epPort, _ := ep.Port()
+		epPort := ep.Port()
 		cacheKey = generateEndpointFlowCacheKey(ep.IP(), epPort, protocol)
 		flowKeys = append(flowKeys, c.getFlowKeysFromCache(c.featureService.cachedFlows, cacheKey)...)
 	}

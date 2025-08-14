@@ -454,11 +454,6 @@ func run(o *Options) error {
 	var proxyServer *proxy.ProxyServer
 	if o.enableAntreaProxy {
 		proxyServer, err = proxy.NewProxyServer(nodeConfig.Name,
-			k8sClient,
-			serviceInformer,
-			endpointsInformer,
-			endpointSliceInformer,
-			nodeInformer,
 			ofClient,
 			routeClient,
 			nodeIPTracker,
@@ -474,6 +469,7 @@ func run(o *Options) error {
 		if err != nil {
 			return fmt.Errorf("error when creating proxyServer: %v", err)
 		}
+		proxyServer.Initialize(ctx, serviceInformer, endpointSliceInformer, nodeInformer)
 	}
 
 	// We pick a time interval for rule deletion in the async rule cache (part of the
