@@ -4135,6 +4135,10 @@ data:
     # AllBeta is a global toggle for beta features. Per-feature key values override the default set by AllBeta.
     #  AllBeta: false
 
+    # Enable PreferSameTrafficDistribution in AntreaProxy, allowing usage of the values PreferSameZone and PreferSameNode in
+    # the Service trafficDistribution field.
+    #  PreferSameTrafficDistribution: false
+
     # Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy. This requires AntreaProxy to
     # be enabled, otherwise this flag will not take effect.
     #  CleanupStaleUDPSvcConntrack: true
@@ -4520,6 +4524,11 @@ data:
       # enabled. This avoids race conditions between kube-proxy and Antrea proxy, with both trying to
       # bind to the same addresses, when proxyAll is enabled while kube-proxy has not been removed.
       disableServiceHealthCheckServer: false
+      # The value of the IP address and the port that the AntreaProxy health server binds to. If it is not specified,
+      # it will be automatically set to "0.0.0.0:10352" for IPv4-only clusters, or "[::]10352" for IPv6-only and dual-stack
+      # clusters. Note that "[::]10352" may act as either IPv6-only or dual-stack depending on the system setting of
+      # IPV6_V6ONLY (sysctl: net.ipv6.bindv6only).
+      serviceHealthCheckServerBindAddress: ""
 
     # IPsec tunnel related configurations.
     ipsec:
@@ -5610,7 +5619,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: bb8fac5c1560989b411d798cbe1d008b486533e21a967351ad77a1fd7749b85b
+        checksum/config: 8e3cf6ca268970364b73900540669ccb6c89eba2e2e808f1207f19f40b7f21ff
       labels:
         app: antrea
         component: antrea-agent
@@ -5856,7 +5865,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: bb8fac5c1560989b411d798cbe1d008b486533e21a967351ad77a1fd7749b85b
+        checksum/config: 8e3cf6ca268970364b73900540669ccb6c89eba2e2e808f1207f19f40b7f21ff
       labels:
         app: antrea
         component: antrea-controller

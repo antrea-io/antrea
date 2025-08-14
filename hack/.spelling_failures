@@ -10,3 +10,4 @@ generated.pb.go
 generated.proto
 zz_generated
 .golangci.yml
+third_party/proxy/endpointschangetracker.go
