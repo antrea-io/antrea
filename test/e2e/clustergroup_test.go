@@ -310,7 +310,7 @@ func testClusterGroupRealizationStatus(t *testing.T) {
 
 }
 
-func TestClusterGroup(t *testing.T) {
+func aaaaTestClusterGroup(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 

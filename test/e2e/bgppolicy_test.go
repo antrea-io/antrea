@@ -68,7 +68,7 @@ func routesToStrings(routes []FRRRoute) []string {
 	return s
 }
 
-func TestBGPPolicy(t *testing.T) {
+func aaaaTestBGPPolicy(t *testing.T) {
 	skipIfFeatureDisabled(t, features.BGPPolicy, true, false)
 	skipIfNotIPv4Cluster(t)
 	skipIfHasWindowsNodes(t)

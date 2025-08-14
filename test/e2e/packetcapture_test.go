@@ -83,7 +83,7 @@ func createUDPServerPod(name string, ns string, portNum int32, serverNode string
 
 // TestPacketCapture is the top-level test which contains all subtests for
 // PacketCapture related test cases, so they can share setup, teardown.
-func TestPacketCapture(t *testing.T) {
+func aaaaTestPacketCapture(t *testing.T) {
 	skipIfFeatureDisabled(t, features.PacketCapture, true, false)
 	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)

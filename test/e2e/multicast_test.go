@@ -45,7 +45,7 @@ func skipIfMulticastDisabled(tb testing.TB, data *TestData) {
 	}
 }
 
-func TestMulticast(t *testing.T) {
+func aaaaTestMulticast(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)
 

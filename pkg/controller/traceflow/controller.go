@@ -73,6 +73,7 @@ var (
 // Controller is for traceflow.
 type Controller struct {
 	client                 versioned.Interface
+	namespaceLister        corelisters.NamespaceLister
 	podInformer            coreinformers.PodInformer
 	podLister              corelisters.PodLister
 	traceflowInformer      crdinformers.TraceflowInformer
@@ -84,9 +85,10 @@ type Controller struct {
 }
 
 // NewTraceflowController creates a new traceflow controller and adds podIP indexer to podInformer.
-func NewTraceflowController(client versioned.Interface, podInformer coreinformers.PodInformer, traceflowInformer crdinformers.TraceflowInformer) *Controller {
+func NewTraceflowController(client versioned.Interface, namespaceInformer coreinformers.NamespaceInformer, podInformer coreinformers.PodInformer, traceflowInformer crdinformers.TraceflowInformer) *Controller {
 	c := &Controller{
 		client:                client,
+		namespaceLister:       namespaceInformer.Lister(),
 		podInformer:           podInformer,
 		podLister:             podInformer.Lister(),
 		traceflowInformer:     traceflowInformer,

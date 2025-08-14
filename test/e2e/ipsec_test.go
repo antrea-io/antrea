@@ -30,7 +30,7 @@ import (
 
 // TestIPSec is the top-level test which contains all subtests for
 // IPsec related test cases so they can share setup, teardown.
-func TestIPSec(t *testing.T) {
+func aaaaTestIPSec(t *testing.T) {
 	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)

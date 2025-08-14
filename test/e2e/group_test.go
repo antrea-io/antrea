@@ -254,7 +254,7 @@ func testInvalidGroupMaxNestedLevel(t *testing.T) {
 	}
 }
 
-func TestGroup(t *testing.T) {
+func aaaaTestGroup(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 

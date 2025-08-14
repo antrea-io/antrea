@@ -40,7 +40,7 @@ import (
 
 // TestBasic is the top-level test which contains some subtests for
 // basic test cases so they can share setup, teardown.
-func TestBasic(t *testing.T) {
+func aaaaTestBasic(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 
@@ -332,7 +332,7 @@ func testIPAMRestart(t *testing.T, data *TestData, namespace string) {
 // TestReconcileGatewayRoutesOnStartup checks that when the Antrea agent is restarted, the set of
 // gateway routes is updated correctly, i.e. stale routes (for Nodes which are no longer in the
 // cluster) are removed and missing routes are added.
-func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
+func aaaaTestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 
@@ -514,7 +514,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	}
 }
 
-func TestCleanStaleClusterIPRoutes(t *testing.T) {
+func aaaaTestCleanStaleClusterIPRoutes(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 

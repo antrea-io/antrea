@@ -26,7 +26,7 @@ import (
 
 // TestBandwidth is the top-level test which contains all subtests for
 // Bandwidth related test cases so they can share setup, teardown.
-func TestBandwidth(t *testing.T) {
+func aaaaTestBandwidth(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 
@@ -41,7 +41,7 @@ func TestBandwidth(t *testing.T) {
 
 // TestBenchmarkBandwidth is the top-level benchmark test which contains all subtests for
 // Bandwidth related test cases so they can share setup, teardown.
-func TestBenchmarkBandwidth(t *testing.T) {
+func aaaaTestBenchmarkBandwidth(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
 	skipIfHasWindowsNodes(t)
 

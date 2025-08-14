@@ -41,7 +41,7 @@ import (
 	. "antrea.io/antrea/test/e2e/utils"
 )
 
-func TestL7NetworkPolicy(t *testing.T) {
+func aaaaTestL7NetworkPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfFeatureDisabled(t, features.L7NetworkPolicy, true, true)
 

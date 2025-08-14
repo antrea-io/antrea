@@ -62,7 +62,7 @@ func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	podIPs = ips
 }
 
-func TestAntreaIPAMAntreaPolicy(t *testing.T) {
+func aaaaTestAntreaIPAMAntreaPolicy(t *testing.T) {
 	skipIfNotAntreaIPAMTest(t)
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)

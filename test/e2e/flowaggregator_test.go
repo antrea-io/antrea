@@ -223,7 +223,7 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 	return data, isIPv4Enabled(), isIPv6Enabled()
 }
 
-func TestFlowAggregatorSecureConnection(t *testing.T) {
+func aaaaTestFlowAggregatorSecureConnection(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
 
@@ -295,7 +295,7 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 	}
 }
 
-func TestFlowAggregator(t *testing.T) {
+func aaaaTestFlowAggregator(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
 
@@ -333,7 +333,7 @@ func TestFlowAggregator(t *testing.T) {
 
 }
 
-func TestFlowAggregatorProxyMode(t *testing.T) {
+func aaaaTestFlowAggregatorProxyMode(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
 

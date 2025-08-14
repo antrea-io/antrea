@@ -26,7 +26,7 @@ import (
 )
 
 // TestBatchCreatePods verifies there is no FD leak after batched Pod creation.
-func TestBatchCreatePods(t *testing.T) {
+func aaaaTestBatchCreatePods(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 

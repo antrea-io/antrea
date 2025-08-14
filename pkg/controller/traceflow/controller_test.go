@@ -54,6 +54,7 @@ func newController(k8sObjects ...runtime.Object) *traceflowController {
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	controller := NewTraceflowController(crdClient,
+		informerFactory.Core().V1().Namespaces(),
 		informerFactory.Core().V1().Pods(),
 		crdInformerFactory.Crd().V1beta1().Traceflows())
 	controller.traceflowListerSynced = alwaysReady

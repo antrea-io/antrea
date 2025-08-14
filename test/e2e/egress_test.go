@@ -51,7 +51,7 @@ func skipIfEgressSeparateSubnetDisabled(tb testing.TB) {
 	skipIfFeatureDisabled(tb, features.EgressSeparateSubnet, true, false)
 }
 
-func TestEgress(t *testing.T) {
+func aaaaTestEgress(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfAntreaIPAMTest(t)

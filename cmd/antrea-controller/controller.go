@@ -260,7 +260,7 @@ func run(o *Options) error {
 
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, tfInformer)
+		traceflowController = traceflow.NewTraceflowController(crdClient, namespaceInformer, podInformer, tfInformer)
 	}
 
 	// statsAggregator takes stats summaries from antrea-agents, aggregates them, and serves the Stats APIs with the

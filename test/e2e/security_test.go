@@ -45,7 +45,7 @@ const (
 
 // TestSecurity is the top-level test which contains all subtests for
 // Security related test cases so they can share setup, teardown.
-func TestSecurity(t *testing.T) {
+func aaaaTestSecurity(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 

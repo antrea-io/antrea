@@ -32,7 +32,8 @@ func TestControllerValidate(t *testing.T) {
 		name string
 
 		// environment
-		pods []*v1.Pod
+		namespaces []*v1.Namespace
+		pods       []*v1.Pod
 
 		// input
 		oldSpec *crdv1beta1.TraceflowSpec
@@ -84,6 +85,11 @@ func TestControllerValidate(t *testing.T) {
 		},
 		{
 			name: "Valid request",
+			namespaces: []*v1.Namespace{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-ns"},
+				},
+			},
 			pods: []*v1.Pod{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "test-pod"},
@@ -102,11 +108,14 @@ func TestControllerValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-			pods := make([]runtime.Object, 0)
-			for _, p := range tc.pods {
-				pods = append(pods, p)
+			objects := make([]runtime.Object, 0)
+			for _, ns := range tc.namespaces {
+				objects = append(objects, ns)
 			}
-			controller := newController(pods...)
+			for _, p := range tc.pods {
+				objects = append(objects, p)
+			}
+			controller := newController(objects...)
 			controller.informerFactory.Start(stopCh)
 			controller.crdInformerFactory.Start(stopCh)
 			// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created

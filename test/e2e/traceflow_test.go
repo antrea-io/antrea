@@ -51,6 +51,9 @@ type testcase struct {
 	// Source Pod to run ping for live-traffic Traceflow.
 	srcPod       string
 	skipIfNeeded func(t *testing.T)
+
+	deniedReason  string
+	containerName string
 }
 
 // TestTraceflow is the top-level test which contains all subtests for
@@ -2533,6 +2536,12 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 		tc.skipIfNeeded(t)
 	}
 	if _, err := data.CRDClient.CrdV1beta1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
+		if tc.deniedReason != "" {
+			tc.deniedReason = strings.ReplaceAll(tc.deniedReason, "{{name}}", tc.tf.Name)
+			expected := "admission webhook \"traceflowvalidator.antrea.io\" denied the request: " + tc.deniedReason
+			assert.EqualError(t, err, expected)
+			return
+		}
 		t.Fatalf("Error when creating traceflow: %v", err)
 	}
 	defer func() {
@@ -2550,6 +2559,11 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 		}
 		var dstPodIPs *PodIPs
 		srcPod := tc.srcPod
+		srcNamespace := data.testNamespace
+		if srcPod == "" {
+			srcPod = tc.tf.Spec.Source.Pod
+			srcNamespace = tc.tf.Spec.Source.Namespace
+		}
 		if dstIP := tc.tf.Spec.Destination.IP; dstIP != "" {
 			ip := net.ParseIP(dstIP)
 			if ip.To4() != nil {
@@ -2559,18 +2573,28 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			}
 		} else {
 			dstPod := tc.tf.Spec.Destination.Pod
-			podIPs := waitForPodIPs(t, data, []PodInfo{{dstPod, osString, "", ""}})
+			podIPs := waitForPodIPs(t, data, []PodInfo{{dstPod, osString, "", tc.tf.Spec.Destination.Namespace}})
 			dstPodIPs = podIPs[dstPod]
 		}
 		// Give a little time for Nodes to install OVS flows.
 		time.Sleep(time.Second * 2)
 		// Send an ICMP echo packet from the source Pod to the destination.
-		if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, osString, "", ""}, data.testNamespace, dstPodIPs, agnhostContainerName, 2, 0, false); err != nil {
+		containerName := agnhostContainerName
+		if tc.containerName != "" {
+			containerName = tc.containerName
+		}
+		if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, osString, "", srcNamespace}, srcNamespace, dstPodIPs, containerName, 2, 0, false); err != nil {
 			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
 		}
 	}
 
 	tf, err := data.waitForTraceflow(t, tc.tf.Name, tc.expectedPhase)
+	{
+		tf, err := data.CRDClient.CrdV1beta1().Traceflows().Get(context.TODO(), tc.tf.Name, metav1.GetOptions{})
+		t.Logf("AAAA tf: %+v", tf.Spec)
+		t.Logf("AAAA tf: %+v", tf.Status)
+		t.Logf("AAAA err: %+v", err)
+	}
 	if err != nil {
 		t.Fatalf("Error: Get Traceflow failed: %v", err)
 	}

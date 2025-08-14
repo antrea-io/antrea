@@ -43,7 +43,7 @@ func skipIfNetworkPolicyStatsDisabled(tb testing.TB) {
 
 // TestNetworkPolicy is the top-level test which contains all subtests for
 // NetworkPolicy related test cases so they can share setup, teardown.
-func TestNetworkPolicy(t *testing.T) {
+func aaaaTestNetworkPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)

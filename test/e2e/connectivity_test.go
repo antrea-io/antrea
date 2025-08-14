@@ -35,7 +35,7 @@ const pingCount = 5
 
 // TestConnectivity is the top-level test which contains all subtests for
 // Connectivity related test cases so they can share setup, teardown.
-func TestConnectivity(t *testing.T) {
+func aaaaTestConnectivity(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

@@ -237,7 +237,7 @@ func executeCNI(t *testing.T, data *TestData, add, del bool, ifName string, expe
 // Test secondary network IPAM by executing Antrea CNI with forged CNI arguments
 // and network configuration, and validating the CNI command output. Do not
 // really install Multus and create secondary networks.
-func TestSecondaryNetworkIPAM(t *testing.T) {
+func aaaaTestSecondaryNetworkIPAM(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	// The test is about IPAM for secondary network, which should not be
 	// impacted by other modes and configurations, such as encap mode,

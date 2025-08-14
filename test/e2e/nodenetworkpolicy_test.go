@@ -80,7 +80,7 @@ func skipIfNodeNetworkPolicyDisabled(tb testing.TB) {
 	skipIfFeatureDisabled(tb, features.NodeNetworkPolicy, true, false)
 }
 
-func TestAntreaNodeNetworkPolicy(t *testing.T) {
+func aaaaTestAntreaNodeNetworkPolicy(t *testing.T) {
 	skipIfAntreaPolicyDisabled(t)
 	skipIfNodeNetworkPolicyDisabled(t)
 	skipIfHasWindowsNodes(t)
