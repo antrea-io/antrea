@@ -77,7 +77,6 @@ func TestTraceflow(t *testing.T) {
 		testTraceflowInterNode(t, data)
 	})
 	t.Run("testTraceflowExternalIP", func(t *testing.T) {
-		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 		testTraceflowExternalIP(t, data)
 	})
 	t.Run("testTraceflowEgress", func(t *testing.T) {
@@ -2064,6 +2063,12 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 	} else {
 		srcPodIP = podIPs[0].IPv6.String()
 	}
+	expectOutputAction := v1beta1.ActionForwardedOutOfOverlay
+	currentEncapMode, err := data.GetEncapMode()
+	require.NoError(t, err, "Failed to get encap mode")
+	if currentEncapMode == config.TrafficEncapModeNoEncap {
+		expectOutputAction = v1beta1.ActionForwardedOutOfNetwork
+	}
 	testcase := testcase{
 		name:      "nodeIPDestination",
 		ipVersion: 4,
@@ -2099,7 +2104,7 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 					{
 						Component:     v1beta1.ComponentForwarding,
 						ComponentInfo: "Output",
-						Action:        v1beta1.ActionForwardedOutOfOverlay,
+						Action:        expectOutputAction,
 					},
 				},
 			},

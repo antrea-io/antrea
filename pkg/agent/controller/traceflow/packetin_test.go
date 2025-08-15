@@ -690,6 +690,126 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "packet at source Node to external NoEncap",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: 1,
+			},
+			nodeConfig: &config.NodeConfig{
+				TunnelOFPort: 1,
+				GatewayConfig: &config.GatewayConfig{
+					OFPort: 2,
+				},
+			},
+			tfState: &traceflowState{
+				name:     "traceflow-pod-to-ipv4",
+				tag:      1,
+				isSender: true,
+			},
+			pktIn: &ofctrl.PacketIn{
+				PacketIn: &openflow15.PacketIn{
+					TableId: openflow.OutputTable.GetID(),
+					Match: openflow15.Match{
+						Fields: []openflow15.MatchField{*matchOutPort, *matchCTSrc},
+					},
+					Data: util.NewBuffer(pktBytesPodToIP),
+				},
+			},
+			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
+			},
+			expectedTf: &crdv1beta1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "traceflow-pod-to-ipv4",
+				},
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1beta1.Destination{
+						IP: dstIPv4,
+					},
+				},
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
+					DataplaneTag: 1,
+				},
+			},
+			expectedNodeResult: &crdv1beta1.NodeResult{
+				Observations: []crdv1beta1.Observation{
+					{
+						Component: crdv1beta1.ComponentSpoofGuard,
+						Action:    crdv1beta1.ActionForwarded,
+						SrcPodIP:  pod1IPv4,
+					},
+					{
+						Component:     crdv1beta1.ComponentForwarding,
+						ComponentInfo: openflow.OutputTable.GetName(),
+						Action:        crdv1beta1.ActionForwardedOutOfNetwork,
+					},
+				},
+			},
+		},
+		{
+			name: "packet at source Node to remote Pod NoEncap",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: 1,
+			},
+			nodeConfig: &config.NodeConfig{
+				TunnelOFPort: 1,
+				GatewayConfig: &config.GatewayConfig{
+					OFPort: 2,
+				},
+			},
+			tfState: &traceflowState{
+				name:     "traceflow-pod-to-ipv4",
+				tag:      1,
+				isSender: true,
+			},
+			pktIn: &ofctrl.PacketIn{
+				PacketIn: &openflow15.PacketIn{
+					TableId: openflow.OutputTable.GetID(),
+					Match: openflow15.Match{
+						Fields: []openflow15.MatchField{*matchOutPort, *matchCTSrc},
+					},
+					Data: util.NewBuffer(pktBytesPodToPod),
+				},
+			},
+			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
+			},
+			expectedTf: &crdv1beta1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "traceflow-pod-to-ipv4",
+				},
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1beta1.Destination{
+						IP: dstIPv4,
+					},
+				},
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
+					DataplaneTag: 1,
+				},
+			},
+			expectedNodeResult: &crdv1beta1.NodeResult{
+				Observations: []crdv1beta1.Observation{
+					{
+						Component: crdv1beta1.ComponentSpoofGuard,
+						Action:    crdv1beta1.ActionForwarded,
+						SrcPodIP:  pod1IPv4,
+					},
+					{
+						Component:     crdv1beta1.ComponentForwarding,
+						ComponentInfo: openflow.OutputTable.GetName(),
+						Action:        crdv1beta1.ActionForwarded,
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

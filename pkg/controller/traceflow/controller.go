@@ -278,7 +278,8 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 				if ob.Action == crdv1beta1.ActionDelivered ||
 					ob.Action == crdv1beta1.ActionDropped ||
 					ob.Action == crdv1beta1.ActionRejected ||
-					ob.Action == crdv1beta1.ActionForwardedOutOfOverlay {
+					ob.Action == crdv1beta1.ActionForwardedOutOfOverlay ||
+					ob.Action == crdv1beta1.ActionForwardedOutOfNetwork {
 					receiver = true
 				}
 				if ob.TranslatedDstIP != "" {
