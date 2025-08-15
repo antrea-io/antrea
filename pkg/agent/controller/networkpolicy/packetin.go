@@ -260,7 +260,6 @@ func getCTLabelValue(matchers *ofctrl.Matchers) []byte {
 	}
 	ctLabelValue, ok := ctLabel.GetValue().([]byte)
 	if !ok {
-		klog.InfoS("BAD CONVERSION", "value", ctLabel.GetValue(), "type", fmt.Sprintf("%T", ctLabel.GetValue()))
 		return nil
 	}
 	return ctLabelValue

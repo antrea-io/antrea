@@ -662,6 +662,17 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchCTMark(NotServiceCTMark).
 				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
 				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
+				LoadToCtMark(ConnAllowedCTMark).
+				CTDone().
+				Done(),
+			ConntrackCommitTable.ofTable.BuildFlow(priorityLow).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(true).
+				MatchCTStateTrk(true).
+				MatchCTMark(NotHairpinCTMark).
+				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
+				LoadToCtMark(ConnAllowedCTMark).
 				CTDone().
 				Done(),
 		)
@@ -3069,7 +3080,7 @@ func (f *featureService) podHairpinSNATFlow(endpoint net.IP) binding.Flow {
 		MatchSrcIP(endpoint).
 		MatchDstIP(endpoint).
 		Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-		LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
+		LoadToCtMark(ConnSNATCTMark, HairpinCTMark, ConnAllowedCTMark).
 		CTDone().
 		Done()
 }
@@ -3089,7 +3100,7 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 			MatchCTStateTrk(true).
 			MatchRegMark(FromGatewayRegMark, ToGatewayRegMark).
 			Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-			LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
+			LoadToCtMark(ConnSNATCTMark, HairpinCTMark, ConnAllowedCTMark).
 			CTDone().
 			Done())
 
@@ -3111,7 +3122,7 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToExternalAddressRegMark, NotDSRServiceRegMark). // Do not SNAT DSR traffic.
 				Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-				LoadToCtMark(ConnSNATCTMark).
+				LoadToCtMark(ConnSNATCTMark, ConnAllowedCTMark).
 				CTDone().
 				Done())
 		}

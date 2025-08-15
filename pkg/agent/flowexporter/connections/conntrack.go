@@ -15,7 +15,6 @@
 package connections
 
 import (
-	"encoding/binary"
 	"net"
 	"net/netip"
 
@@ -46,22 +45,12 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net
 }
 
 func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) []*connection.Connection {
-
 	filteredConns := conns[:0]
 	gwIPv4, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
 	gwIPv6, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv6)
 
 	for _, conn := range conns {
 		if conn.Zone != zoneFilter {
-			continue
-		}
-
-		egressAllowed := (conn.Mark&openflow.ConnDefaultAllowedEgressCTMark.GetValue() == 1) || (len(conn.Labels) != 0 && binary.LittleEndian.Uint32(conn.Labels[4:8]) != 0)
-		ingressAllowed := (conn.Mark&openflow.ConnDefaultAllowedIngressCTMark.GetValue() == 1) || (len(conn.Labels) != 0 && binary.LittleEndian.Uint32(conn.Labels[:4]) != 0)
-		if !ingressAllowed || !egressAllowed {
-			if klog.V(4).Enabled() {
-				klog.InfoS("Ignoring connection as it may have been denied by a policy rule", "conn", conn)
-			}
 			continue
 		}
 
@@ -92,6 +81,14 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 		}
 
 		if !protocolFilter.Allow(conn.FlowKey.Protocol) {
+			continue
+		}
+
+		policyAllowed := conn.Mark&openflow.ConnAllowedCTMark.GetValue() != 0
+		if !policyAllowed {
+			if klog.V(4).Enabled() {
+				klog.InfoS("Ignoring connection as it may have been denied by a policy rule", "conn", conn)
+			}
 			continue
 		}
 

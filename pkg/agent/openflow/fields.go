@@ -229,8 +229,7 @@ var (
 	// The mark is mostly useful for Service traffic, which is committed to conntrack during
 	// Endpoint selection, and can potentially be denied later on by an Egress policy.
 	// This CT mark is used in CtZone / CtZoneV6.
-	ConnDefaultAllowedEgressCTMark  = binding.NewOneBitCTMark(8)
-	ConnDefaultAllowedIngressCTMark = binding.NewOneBitCTMark(9)
+	ConnAllowedCTMark = binding.NewOneBitCTMark(8)
 )
 
 // Fields using CT label.

@@ -2154,59 +2154,56 @@ func (f *featureNetworkPolicy) initFlows() []*openflow15.FlowMod {
 	}
 	flows = append(flows, f.skipPolicyRuleCheckFlows()...)
 	flows = append(flows, f.initLoggingFlows()...)
-	flows = append(flows, f.markEgressConnectionsDefaultAllowedFlows()...)
-	flows = append(flows, f.markIngressConnectionsDefaultAllowedFlows()...)
+	// flows = append(flows, f.markEgressConnectionsDefaultAllowedFlows()...)
+	// flows = append(flows, f.markIngressConnectionsDefaultAllowedFlows()...)
 	return GetFlowModMessages(flows, binding.AddMessage)
 }
 
-func (f *featureNetworkPolicy) markEgressConnectionsDefaultAllowedFlows() []binding.Flow {
-	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	var flows []binding.Flow
-	for _, ipProtocol := range f.ipProtocols {
-		ctZone := CtZone
-		if ipProtocol == binding.ProtocolIPv6 {
-			ctZone = CtZoneV6
-		}
-		// Make sure that ConnAllowedCTMark is set for Service connections which are default allowed.
-		flows = append(flows,
-			EgressMetricTable.ofTable.BuildFlow(priorityLow).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchCTStateNew(true).
-				MatchCTStateTrk(true).
-				Action().CT(true, EgressMetricTable.GetNext(), ctZone, f.ctZoneSrcField).
-				LoadToCtMark(ConnDefaultAllowedEgressCTMark).
-				CTDone().
-				Done(),
-		)
-	}
-	return flows
-}
+// func (f *featureNetworkPolicy) markEgressConnectionsDefaultAllowedFlows() []binding.Flow {
+// 	cookieID := f.cookieAllocator.Request(f.category).Raw()
+// 	var flows []binding.Flow
+// 	for _, ipProtocol := range f.ipProtocols {
+// 		ctZone := CtZone
+// 		if ipProtocol == binding.ProtocolIPv6 {
+// 			ctZone = CtZoneV6
+// 		}
+// 		flows = append(flows,
+// 			EgressMetricTable.ofTable.BuildFlow(priorityLow).
+// 				Cookie(cookieID).
+// 				MatchProtocol(ipProtocol).
+// 				MatchCTStateNew(true).
+// 				MatchCTStateTrk(true).
+// 				Action().CT(true, EgressMetricTable.GetNext(), ctZone, f.ctZoneSrcField).
+// 				LoadToCtMark(ConnDefaultAllowedEgressCTMark).
+// 				CTDone().
+// 				Done(),
+// 		)
+// 	}
+// 	return flows
+// }
 
-func (f *featureNetworkPolicy) markIngressConnectionsDefaultAllowedFlows() []binding.Flow {
-	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	var flows []binding.Flow
-	for _, ipProtocol := range f.ipProtocols {
-		ctZone := CtZone
-		if ipProtocol == binding.ProtocolIPv6 {
-			ctZone = CtZoneV6
-		}
-		// Make sure that ConnAllowedCTMark is set for Service connections which are default allowed.
-		flows = append(flows,
-			IngressMetricTable.ofTable.BuildFlow(priorityLow).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchCTStateNew(true).
-				MatchCTStateTrk(true).
-				MatchCTMark(NotHairpinCTMark).
-				Action().CT(true, IngressMetricTable.GetNext(), ctZone, f.ctZoneSrcField).
-				LoadToCtMark(ConnDefaultAllowedIngressCTMark).
-				CTDone().
-				Done(),
-		)
-	}
-	return flows
-}
+// func (f *featureNetworkPolicy) markIngressConnectionsDefaultAllowedFlows() []binding.Flow {
+// 	cookieID := f.cookieAllocator.Request(f.category).Raw()
+// 	var flows []binding.Flow
+// 	for _, ipProtocol := range f.ipProtocols {
+// 		ctZone := CtZone
+// 		if ipProtocol == binding.ProtocolIPv6 {
+// 			ctZone = CtZoneV6
+// 		}
+// 		flows = append(flows,
+// 			IngressMetricTable.ofTable.BuildFlow(priorityLow).
+// 				Cookie(cookieID).
+// 				MatchProtocol(ipProtocol).
+// 				MatchCTStateNew(true).
+// 				MatchCTStateTrk(true).
+// 				Action().CT(true, IngressMetricTable.GetNext(), ctZone, f.ctZoneSrcField).
+// 				LoadToCtMark(ConnDefaultAllowedIngressCTMark).
+// 				CTDone().
+// 				Done(),
+// 		)
+// 	}
+// 	return flows
+// }
 
 // skipPolicyRuleCheckFlows generates the flows to forward the packets in an established or related
 // connections to the metric table in the same stage directly, so that these packets would skip the flows
