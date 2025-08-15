@@ -554,6 +554,20 @@ func (f *featurePodConnectivity) gatewayClassifierFlows() []binding.Flow {
 	return flows
 }
 
+// gatewayClassifierFlows generates the flow to mark the packets from the Antrea gateway port and its source IP is from
+// a remote Pod CIDR.
+func (f *featurePodConnectivity) gatewayFromRemotePodClassifierFlow(podCIDR *net.IPNet) binding.Flow {
+	ipProtocol := getIPProtocol(podCIDR.IP)
+	return ClassifierTable.ofTable.BuildFlow(priorityHigh).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchInPort(f.gatewayPort).
+		MatchProtocol(ipProtocol).
+		MatchSrcIPNet(*podCIDR).
+		Action().LoadRegMark(FromGatewayRegMark, RewriteMACRegMark).
+		Action().GotoStage(stageValidation).
+		Done()
+}
+
 // podClassifierFlow generates the flow to mark the packets from a local Pod port.
 // If multi-cluster is enabled, also load podLabelID into LabelIDField.
 func (f *featurePodConnectivity) podClassifierFlow(podOFPort uint32, isAntreaFlexibleIPAM bool, podLabelID *uint32) binding.Flow {

@@ -516,3 +516,11 @@ func (i *Initializer) prepareL7EngineInterfaces() error {
 func (i *Initializer) setTXChecksumOffloadOnGateway() error {
 	return nil
 }
+
+func (i *Initializer) addTcQdiscs() error {
+	return nil
+}
+
+func (i *Initializer) addTcFiltersPassToGw() error {
+	return nil
+}

@@ -22,6 +22,7 @@ package openflow
 import (
 	"net"
 
+	"antrea.io/antrea/pkg/agent/config"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -91,5 +92,44 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaRouting(localGatewayMAC net
 	remoteGatewayMAC net.HardwareAddr,
 	peerIP net.IP,
 	peerPodCIDR *net.IPNet) []binding.Flow {
-	return []binding.Flow{f.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR)}
+	var flows []binding.Flow
+	if f.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeNone &&
+		!f.connectUplinkToBridge {
+		// These two flows are installed only when traffic mode is `noEncap` or `hybrid` and the remote Node is reachable
+		// via a Node host route (not via tunnel). They modify MAC addresses on inter‑Node Pod‑to‑Pod packets:
+		//  - The source MAC is replaced with the local gateway’s MAC.
+		//  - The destination MAC is replaced with the remote transport interface’s MAC.
+		// After that, packets are redirected from antrea-gw0 ingress to the transport interface egress, bypassing the Node
+		// host network. The remote Node receives the packets correctly via its transport interface.
+		// Note: This bypass is supported only in noEncap or hybrid mode. Additionally, the transport interface is not
+		// connected to OVS, and the traffic is not encrypted.
+		cookieID := f.cookieAllocator.Request(f.category).Raw()
+		ipProtocol := getIPProtocol(peerPodCIDR.IP)
+		var srcPodCIDR net.IPNet
+		if ipProtocol == binding.ProtocolIPv6 {
+			srcPodCIDR = *f.nodeConfig.PodIPv6CIDR
+		} else {
+			srcPodCIDR = *f.nodeConfig.PodIPv4CIDR
+		}
+		flows = append(flows,
+			L3ForwardingTable.ofTable.BuildFlow(priorityHigh+1).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchSrcIPNet(srcPodCIDR).
+				MatchDstIPNet(*peerPodCIDR).
+				Action().SetSrcMAC(f.nodeConfig.GatewayConfig.MAC).
+				Action().SetDstMAC(remoteGatewayMAC).
+				Action().LoadRegMark(ToGatewayRegMark).
+				Action().GotoTable(L3DecTTLTable.GetID()).
+				Done(),
+			L2ForwardingCalcTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchDstMAC(remoteGatewayMAC).
+				Action().LoadToRegField(TargetOFPortField, f.gatewayPort).
+				Action().LoadRegMark(OutputToOFPortRegMark).
+				Action().GotoStage(stageConntrack).
+				Done())
+	}
+	flows = append(flows, f.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR))
+	return flows
 }
