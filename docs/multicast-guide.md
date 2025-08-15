@@ -10,6 +10,9 @@ Antrea supports multicast traffic in the following scenarios:
 3. External to Pod - Pods can receive the multicast traffic from external
    hosts.
 
+Multicast is supported in `encap`, `noEncap` and `hybrid` mode, but not in
+`networkPolicyOnly` mode.
+
 ## Table of Contents
 
 <!-- toc -->
