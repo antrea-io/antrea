@@ -581,7 +581,7 @@ local path to the pcapng file as it exits. Users can also create a PacketCapture
 with `kubectl`, but `antctl` makes it easier. For more information about PacketCapture,
 refer to [PacketCapture guide](packetcapture-guide.md).
 
-To start a PacketCapture, users must provide the following arguments:
+To start a PacketCapture, users must provide `--number` and at least one of `--source` or `--destination`.
 
 * `--source` (or `-S`)
 * `--destination` (or `-D`)
@@ -610,6 +610,8 @@ More examples of `antctl packetcapture`:
 $ antctl packetcapture -S pod1 -D pod2
 # Start capturing packets from pod1 in Namespace ns1 to a destination IP
 $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
+# Start capturing packets from pod1 to pod2, captures at both src and dst pods
+$ antctl packetcapture -S pod1 -D pod2 -l Both
 # Start capturing TCP FIN packets from pod1 to pod2, with destination port 80
 $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
 # Start capturing TCP SYNs that are not ACKs from pod1 to pod2, with destination port 80
