@@ -255,3 +255,5 @@ require (
 
 // remove this when https://github.com/mdlayher/ndp/pull/32 gets merged
 replace github.com/mdlayher/ndp => github.com/antrea-io/ndp v0.0.0-20241107040829-6f35f2e50f4c
+
+replace antrea.io/ofnet => github.com/antoninbas/ofnet v0.0.0-20250815031918-68b9f641f6f2

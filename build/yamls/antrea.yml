@@ -4064,7 +4064,7 @@ data:
 
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each
     # agent to a configured collector.
-    #  FlowExporter: false
+      FlowExporter: true
 
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: true
@@ -4270,7 +4270,7 @@ data:
       # IPFIX flow records from each agent to a configured collector. To enable this
       # feature, you need to set "enable" to true, and ensure that the FlowExporter
       # feature gate is also enabled.
-      enable: false
+      enable: true
       # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
       # HOST can either be the DNS name, IP, or Service name of the Flow Collector. If
       # using an IP, it can be either IPv4 or IPv6. However, IPv6 address should be

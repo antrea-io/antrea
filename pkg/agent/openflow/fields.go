@@ -216,7 +216,8 @@ var (
 
 	// CTMark[6]: Mark to indicate the connection is hairpin.
 	// This CT mark is used in CtZone / CtZoneV6 and SNATCtZone / SNATCtZoneV6.
-	HairpinCTMark = binding.NewOneBitCTMark(6)
+	HairpinCTMark    = binding.NewOneBitCTMark(6)
+	NotHairpinCTMark = binding.NewOneBitZeroCTMark(6)
 
 	// CTMark[7]: Mark to indicate the connection should be redirected to an application-aware engine. This mark is only
 	// for L7 NetworkPolicy.
@@ -228,7 +229,8 @@ var (
 	// The mark is mostly useful for Service traffic, which is committed to conntrack during
 	// Endpoint selection, and can potentially be denied later on by an Egress policy.
 	// This CT mark is used in CtZone / CtZoneV6.
-	ConnAllowedCTMark = binding.NewOneBitCTMark(8)
+	ConnDefaultAllowedEgressCTMark  = binding.NewOneBitCTMark(8)
+	ConnDefaultAllowedIngressCTMark = binding.NewOneBitCTMark(9)
 )
 
 // Fields using CT label.

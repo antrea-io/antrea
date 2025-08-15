@@ -2154,11 +2154,12 @@ func (f *featureNetworkPolicy) initFlows() []*openflow15.FlowMod {
 	}
 	flows = append(flows, f.skipPolicyRuleCheckFlows()...)
 	flows = append(flows, f.initLoggingFlows()...)
-	flows = append(flows, f.markEgressServiceConnectionsDefaultAllowedFlows()...)
+	flows = append(flows, f.markEgressConnectionsDefaultAllowedFlows()...)
+	flows = append(flows, f.markIngressConnectionsDefaultAllowedFlows()...)
 	return GetFlowModMessages(flows, binding.AddMessage)
 }
 
-func (f *featureNetworkPolicy) markEgressServiceConnectionsDefaultAllowedFlows() []binding.Flow {
+func (f *featureNetworkPolicy) markEgressConnectionsDefaultAllowedFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
 	for _, ipProtocol := range f.ipProtocols {
@@ -2173,9 +2174,33 @@ func (f *featureNetworkPolicy) markEgressServiceConnectionsDefaultAllowedFlows()
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
-				MatchCTMark(ServiceCTMark).
 				Action().CT(true, EgressMetricTable.GetNext(), ctZone, f.ctZoneSrcField).
-				LoadToCtMark(ConnAllowedCTMark).
+				LoadToCtMark(ConnDefaultAllowedEgressCTMark).
+				CTDone().
+				Done(),
+		)
+	}
+	return flows
+}
+
+func (f *featureNetworkPolicy) markIngressConnectionsDefaultAllowedFlows() []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	var flows []binding.Flow
+	for _, ipProtocol := range f.ipProtocols {
+		ctZone := CtZone
+		if ipProtocol == binding.ProtocolIPv6 {
+			ctZone = CtZoneV6
+		}
+		// Make sure that ConnAllowedCTMark is set for Service connections which are default allowed.
+		flows = append(flows,
+			IngressMetricTable.ofTable.BuildFlow(priorityLow).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(true).
+				MatchCTStateTrk(true).
+				MatchCTMark(NotHairpinCTMark).
+				Action().CT(true, IngressMetricTable.GetNext(), ctZone, f.ctZoneSrcField).
+				LoadToCtMark(ConnDefaultAllowedIngressCTMark).
 				CTDone().
 				Done(),
 		)
