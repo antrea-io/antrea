@@ -334,13 +334,11 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				testCase.externalIPPool,
 				testCase.existingExternalIPPools,
 			)
-			errMsg := err.Error()
 
 			if testCase.errMsg == "" {
-				assert.Empty(t, errMsg)
+				assert.Empty(t, err)
 			} else {
-
-				assert.Equal(t, testCase.errMsg, errMsg)
+				assert.Equal(t, testCase.errMsg, err.Error())
 
 				// test if the same message is returned by ValidateExternalIPPool
 				var fakeObjects []runtime.Object
@@ -395,8 +393,12 @@ func TestParseIPRangeCIDR(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// discard parsed net.IPNet, we only need to make assertions on errMsg.
-			_, errMsg := validation.ParseIPRangeCIDR(testCase.cidr)
-			assert.Equal(t, testCase.errMsg, errMsg)
+			_, err := validation.ParseIPRangeCIDR(testCase.cidr)
+			if testCase.errMsg == "" {
+				assert.Nil(t, err)
+			} else {
+				assert.Equal(t, testCase.errMsg, err.Error())
+			}
 		})
 	}
 }
@@ -428,8 +430,12 @@ func TestParseIPRangeStartEnd(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, _, errMsg := validation.ParseIPRangeStartEnd(testCase.start, testCase.end)
-			assert.Equal(t, testCase.errMsg, errMsg)
+			_, _, err := validation.ParseIPRangeStartEnd(testCase.start, testCase.end)
+			if testCase.errMsg == "" {
+				assert.Nil(t, err)
+			} else {
+				assert.Equal(t, testCase.errMsg, err.Error())
+			}
 		})
 	}
 }
