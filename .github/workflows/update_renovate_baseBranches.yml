@@ -1,0 +1,36 @@
+name: Update Renovate Base Branches
+on:
+  create:
+
+jobs:
+  update-json-and-push:
+    if: startsWith(github.ref, 'refs/heads/release-2')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Run updating script
+        run: |
+          chmod +x update-renovate-baseBranches.sh
+          ./update-renovate-baseBranches.sh "${GITHUB_REF#refs/heads/}"
+        working-directory: hack/
+
+      - name: Configure Git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit changes if any
+        run: |
+          git add .
+          git diff --cached --quiet || git commit -s -m "Update JSON file via workflow"
+
+      - name: Push changes to main branch
+        run: |
+          git push origin main || echo "No changes to push"
+        env:
+          GITHUB_TOKEN: ${{ secrets.ANTREA_WORKFLOW }}
