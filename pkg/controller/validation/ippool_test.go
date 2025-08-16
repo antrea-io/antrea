@@ -120,12 +120,12 @@ func TestParseIPRangeCIDR(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cidr, errMsg := ParseIPRangeCIDR(tt.cidrStr)
+			cidr, err := ParseIPRangeCIDR(tt.cidrStr)
 			if tt.expectedErr != "" {
-				assert.Equal(t, tt.expectedErr, errMsg)
+				assert.Equal(t, tt.expectedErr, err.Error())
 				assert.True(t, cidr == netip.Prefix{})
 			} else {
-				assert.Empty(t, errMsg)
+				assert.Empty(t, err)
 				assert.Equal(t, tt.expectedCidr, cidr.String())
 			}
 		})
@@ -183,12 +183,12 @@ func TestParseIPRangeStartEnd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			start, end, errMsg := ParseIPRangeStartEnd(tt.start, tt.end)
+			start, end, err := ParseIPRangeStartEnd(tt.start, tt.end)
 			if tt.expectedErr != "" {
-				assert.Contains(t, errMsg, tt.expectedErr)
+				assert.Contains(t, err.Error(), tt.expectedErr)
 				assert.True(t, start == netip.Addr{} || end == netip.Addr{})
 			} else {
-				assert.Empty(t, errMsg)
+				assert.Empty(t, err)
 				assert.Equal(t, tt.start, start.String())
 				assert.Equal(t, tt.end, end.String())
 			}
@@ -259,13 +259,11 @@ func TestValidateIPRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errMsg, valid := ValidateIPRange(tt.ipRange)
+			err := ValidateIPRange(tt.ipRange)
 			if tt.expectedErr != "" {
-				assert.False(t, valid)
-				assert.Equal(t, tt.expectedErr, errMsg)
+				assert.Equal(t, tt.expectedErr, err.Error())
 			} else {
-				assert.True(t, valid)
-				assert.Empty(t, errMsg)
+				assert.Empty(t, err)
 			}
 		})
 	}
@@ -375,13 +373,11 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errMsg, valid := ValidateIPRangesAndSubnetInfo(tt.subnetInfo, tt.ipRanges)
+			err := ValidateIPRangesAndSubnetInfo(tt.subnetInfo, tt.ipRanges)
 			if tt.expectedErr != "" {
-				assert.False(t, valid)
-				assert.Contains(t, errMsg, tt.expectedErr)
+				assert.Contains(t, err.Error(), tt.expectedErr)
 			} else {
-				assert.True(t, valid)
-				assert.Empty(t, errMsg)
+				assert.Empty(t, err)
 			}
 		})
 	}
@@ -448,11 +444,11 @@ func TestNormalizeRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := NormalizeRange(tt.ipRange, tt.context)
+			result, err := NormalizeRange(tt.ipRange, tt.context)
 			if tt.expectedErr != "" {
-				assert.Equal(t, tt.expectedErr, result.Error)
+				assert.Equal(t, tt.expectedErr, err.Error())
 			} else {
-				assert.Empty(t, result.Error)
+				assert.Empty(t, err)
 				assert.Equal(t, tt.expectedStart, result.Start.String())
 				assert.Equal(t, tt.expectedEnd, result.End.String())
 				assert.Equal(t, tt.expectedOrigin, result.Origin)
@@ -468,7 +464,8 @@ func TestNormalizeCurrentRanges(t *testing.T) {
 		{Start: "2001:db8::1", End: "2001:db8::5"},
 	}
 
-	normalized := NormalizeCurrentRanges(ipRanges)
+	normalized, err := NormalizeCurrentRanges(ipRanges)
+	require.NoError(t, err)
 	require.Len(t, normalized, 3)
 
 	assert.Equal(t, "192.168.1.0", normalized[0].Start.String())
@@ -619,13 +616,11 @@ func TestValidateIPRangesAndSubnetInfo_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errMsg, valid := ValidateIPRangesAndSubnetInfo(tt.subnetInfo, tt.ipRanges)
+			err := ValidateIPRangesAndSubnetInfo(tt.subnetInfo, tt.ipRanges)
 			if tt.expectedErr != "" {
-				assert.False(t, valid)
-				assert.Contains(t, errMsg, tt.expectedErr)
+				assert.Contains(t, err.Error(), tt.expectedErr)
 			} else {
-				assert.True(t, valid)
-				assert.Empty(t, errMsg)
+				assert.Empty(t, err)
 			}
 		})
 	}

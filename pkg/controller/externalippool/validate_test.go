@@ -330,23 +330,19 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			errMsg, result := validateIPRangesAndSubnetInfoForExternalIPPool(
+			err := validateIPRangesAndSubnetInfoForExternalIPPool(
 				testCase.externalIPPool,
 				testCase.existingExternalIPPools,
 			)
+			errMsg := err.Error()
 
 			if testCase.errMsg == "" {
 				assert.Empty(t, errMsg)
 			} else {
 
 				assert.Equal(t, testCase.errMsg, errMsg)
-				if testCase.errMsg != "" {
-					assert.False(t, result)
-				} else {
-					assert.True(t, result)
-				}
 
-				// test if same message is returned by ValidateExternalIPPool
+				// test if the same message is returned by ValidateExternalIPPool
 				var fakeObjects []runtime.Object
 				for _, existingExternalIPPool := range testCase.existingExternalIPPools {
 					fakeObjects = append(fakeObjects, existingExternalIPPool)
