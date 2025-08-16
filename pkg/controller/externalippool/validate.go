@@ -57,12 +57,15 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 	switch review.Request.Operation {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for ExternalIPPool")
-		if msg, allowed = validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); !allowed {
-			break
+		if err := validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); err != nil {
+			msg = err.Error()
+			allowed = false
 		}
 	case admv1.Update:
 		klog.V(2).Info("Validating UPDATE request for ExternalIPPool")
-		if msg, allowed = validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); !allowed {
+		if err := validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); err != nil {
+			msg = err.Error()
+			allowed = false
 			break
 		}
 		oldIPRangeSet := validation.GetIPRangeSet(oldObj.Spec.IPRanges)
@@ -98,16 +101,16 @@ func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 	}
 }
 
-func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta1.ExternalIPPool, existingExternalIPPools []*crdv1beta1.ExternalIPPool) (msg string, allowed bool) {
+func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta1.ExternalIPPool, existingExternalIPPools []*crdv1beta1.ExternalIPPool) error {
 	ipRanges := externalIPPool.Spec.IPRanges
 	subnetInfo := externalIPPool.Spec.SubnetInfo
-	if msg, allowed = validation.ValidateIPRangesAndSubnetInfo(subnetInfo, ipRanges); !allowed {
-		return
+	if err := validation.ValidateIPRangesAndSubnetInfo(subnetInfo, ipRanges); err != nil {
+		return err
 	}
 	return validateNoOverlappingRanges(ipRanges, existingExternalIPPools, externalIPPool.Name)
 }
 
-func collectExistingRanges(pools []*crdv1beta1.ExternalIPPool, skipPool string) []validation.NormalizedIPRange {
+func collectExistingRanges(pools []*crdv1beta1.ExternalIPPool, skipPool string) ([]validation.NormalizedIPRange, error) {
 	normalized := make([]validation.NormalizedIPRange, 0)
 	for _, pool := range pools {
 		if pool.Name == skipPool {
@@ -115,29 +118,37 @@ func collectExistingRanges(pools []*crdv1beta1.ExternalIPPool, skipPool string) 
 		}
 		context := fmt.Sprintf("ExternalIPPool %s", pool.Name)
 		for _, ipRange := range pool.Spec.IPRanges {
-			normalized = append(normalized, validation.NormalizeRange(ipRange, context))
+			nr, err := validation.NormalizeRange(ipRange, context)
+			if err != nil {
+				return nil, err
+			}
+			normalized = append(normalized, nr)
 		}
 	}
-	return normalized
+	return normalized, nil
 }
 
-func validateNoOverlappingRanges(ipRanges []crdv1beta1.IPRange, existingExternalIPPools []*crdv1beta1.ExternalIPPool, externalIPPoolName string) (string, bool) {
-	existingNormalized := collectExistingRanges(existingExternalIPPools, externalIPPoolName)
-	currentNormalized := validation.NormalizeCurrentRanges(ipRanges)
+func validateNoOverlappingRanges(ipRanges []crdv1beta1.IPRange, existingExternalIPPools []*crdv1beta1.ExternalIPPool, externalIPPoolName string) error {
+	existingNormalized, err := collectExistingRanges(existingExternalIPPools, externalIPPoolName)
+	if err != nil {
+		return err
+	}
+
+	currentNormalized := make([]validation.NormalizedIPRange, 0, len(ipRanges))
+	for _, ipRange := range ipRanges {
+		nr, err := validation.NormalizeRange(ipRange, "")
+		if err != nil {
+			return err
+		}
+		currentNormalized = append(currentNormalized, nr)
+	}
 
 	for _, cur := range currentNormalized {
-		if cur.Error != "" {
-			return cur.Error, false
-		}
 		for _, existing := range existingNormalized {
-			if existing.Error != "" {
-				// Skip invalid existing ranges (shouldn't happen in practice)
-				continue
-			}
 			if validation.Overlaps(cur.Start, cur.End, existing.Start, existing.End) {
-				return fmt.Sprintf("%s overlaps with %s", cur.Origin, existing.Origin), false
+				return fmt.Errorf("%s overlaps with %s", cur.Origin, existing.Origin)
 			}
 		}
 	}
-	return "", true
+	return nil
 }

@@ -38,65 +38,63 @@ func GetIPRangeSet(ipRanges []crdv1beta1.IPRange) sets.Set[string] {
 }
 
 // ParseIPRangeCIDR parses a CIDR string into a netip.Prefix
-func ParseIPRangeCIDR(cidrStr string) (netip.Prefix, string) {
+func ParseIPRangeCIDR(cidrStr string) (netip.Prefix, error) {
 	cidr, err := netip.ParsePrefix(cidrStr)
 	if err != nil {
-		return cidr, fmt.Sprintf("invalid cidr %s", cidrStr)
+		return cidr, fmt.Errorf("invalid cidr %s", cidrStr)
 	}
-	return cidr.Masked(), ""
+	return cidr.Masked(), nil
 }
 
 // ParseIPRangeStartEnd parses start and end IP addresses
-func ParseIPRangeStartEnd(startStr, endStr string) (netip.Addr, netip.Addr, string) {
+func ParseIPRangeStartEnd(startStr, endStr string) (netip.Addr, netip.Addr, error) {
 	start, err := netip.ParseAddr(startStr)
 	if err != nil {
-		return start, netip.Addr{}, fmt.Sprintf("invalid start ip address %s", startStr)
+		return start, netip.Addr{}, fmt.Errorf("invalid start ip address %s", startStr)
 	}
 
 	end, err := netip.ParseAddr(endStr)
 	if err != nil {
-		return start, end, fmt.Sprintf("invalid end ip address %s", endStr)
+		return start, end, fmt.Errorf("invalid end ip address %s", endStr)
 	}
-	return start, end, ""
+	return start, end, nil
 }
 
 // ValidateIPRange validates an IP range specification
-func ValidateIPRange(ipRange crdv1beta1.IPRange) (string, bool) {
-	start, end, errMsg := ParseIPRangeStartEnd(ipRange.Start, ipRange.End)
-	if errMsg != "" {
-		return errMsg, false
+func ValidateIPRange(ipRange crdv1beta1.IPRange) error {
+	start, end, err := ParseIPRangeStartEnd(ipRange.Start, ipRange.End)
+	if err != nil {
+		return err
 	}
 
 	if start.Is4() != end.Is4() {
-		return fmt.Sprintf("range start %s and range end %s should belong to same family",
-			ipRange.Start, ipRange.End), false
+		return fmt.Errorf("range start %s and range end %s should belong to same family",
+			ipRange.Start, ipRange.End)
 	}
 
-	// validate if start address <= end address
-	if start.Compare(end) == 1 {
-		return fmt.Sprintf("range start %s should not be greater than range end %s",
-			ipRange.Start, ipRange.End), false
+	if start.Compare(end) > 0 {
+		return fmt.Errorf("range start %s should not be greater than range end %s",
+			ipRange.Start, ipRange.End)
 	}
-	return "", true
+	return nil
 }
 
 // ValidateIPRangesAndSubnetInfo validates IP ranges and SubnetInfo
-func ValidateIPRangesAndSubnetInfo(subnetInfo *crdv1beta1.SubnetInfo, ipRanges []crdv1beta1.IPRange) (string, bool) {
+func ValidateIPRangesAndSubnetInfo(subnetInfo *crdv1beta1.SubnetInfo, ipRanges []crdv1beta1.IPRange) error {
 	var subnet *netip.Prefix
 	if subnetInfo != nil {
 		gatewayAddr, err := netip.ParseAddr(subnetInfo.Gateway)
 		if err != nil {
-			return fmt.Sprintf("invalid gateway address %s", subnetInfo.Gateway), false
+			return fmt.Errorf("invalid gateway address %s", subnetInfo.Gateway)
 		}
 
-		// Validate prefix length based on IP family
 		if gatewayAddr.Is4() {
 			if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 32 {
-				return fmt.Sprintf("invalid prefixLength %d", subnetInfo.PrefixLength), false
+				return fmt.Errorf("invalid prefixLength %d", subnetInfo.PrefixLength)
 			}
 		} else {
 			if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 128 {
-				return fmt.Sprintf("invalid prefixLength %d", subnetInfo.PrefixLength), false
+				return fmt.Errorf("invalid prefixLength %d", subnetInfo.PrefixLength)
 			}
 		}
 		prefix := netip.PrefixFrom(gatewayAddr, int(subnetInfo.PrefixLength)).Masked()
@@ -106,29 +104,29 @@ func ValidateIPRangesAndSubnetInfo(subnetInfo *crdv1beta1.SubnetInfo, ipRanges [
 	currentRanges := make(map[string][2]netip.Addr)
 
 	for _, ipRange := range ipRanges {
-		cur := NormalizeRange(ipRange, "")
-		if cur.Error != "" {
-			return cur.Error, false
+		cur, err := NormalizeRange(ipRange, "")
+		if err != nil {
+			return err
 		}
 		start, end := cur.Start, cur.End
 		key := cur.Origin
 
 		// Validate range is within subnet
 		if subnet != nil && (!subnet.Contains(start) || !subnet.Contains(end)) {
-			return fmt.Sprintf("%s must be a strict subset of the subnet %s/%d",
-				key, subnetInfo.Gateway, subnetInfo.PrefixLength), false
+			return fmt.Errorf("%s must be a strict subset of the subnet %s/%d",
+				key, subnetInfo.Gateway, subnetInfo.PrefixLength)
 		}
 
 		// Check for overlaps with other ranges in the same pool
 		for existingKey, existingRange := range currentRanges {
 			if Overlaps(start, end, existingRange[0], existingRange[1]) {
-				return fmt.Sprintf("%s overlaps with %s", key, existingKey), false
+				return fmt.Errorf("%s overlaps with %s", key, existingKey)
 			}
 		}
 		currentRanges[key] = [2]netip.Addr{start, end}
 	}
 
-	return "", true
+	return nil
 }
 
 // NormalizedIPRange represents a normalized IP range
@@ -136,38 +134,41 @@ type NormalizedIPRange struct {
 	Start  netip.Addr
 	End    netip.Addr
 	Origin string // describes the origin of the range
-	Error  string
 }
 
 // NormalizeCurrentRanges normalizes all IP ranges
-func NormalizeCurrentRanges(ipRanges []crdv1beta1.IPRange) []NormalizedIPRange {
+func NormalizeCurrentRanges(ipRanges []crdv1beta1.IPRange) ([]NormalizedIPRange, error) {
 	normalized := make([]NormalizedIPRange, 0, len(ipRanges))
 	for _, ipRange := range ipRanges {
-		normalized = append(normalized, NormalizeRange(ipRange, ""))
+		nr, err := NormalizeRange(ipRange, "")
+		if err != nil {
+			return nil, err
+		}
+		normalized = append(normalized, nr)
 	}
-	return normalized
+	return normalized, nil
 }
 
 // NormalizeRange normalizes an IP range specification
-func NormalizeRange(ipRange crdv1beta1.IPRange, context string) NormalizedIPRange {
+func NormalizeRange(ipRange crdv1beta1.IPRange, context string) (NormalizedIPRange, error) {
 	var start, end netip.Addr
 	var origin string
 
 	if ipRange.CIDR != "" {
-		cidr, msg := ParseIPRangeCIDR(ipRange.CIDR)
-		if msg != "" {
-			return NormalizedIPRange{Error: msg}
+		cidr, err := ParseIPRangeCIDR(ipRange.CIDR)
+		if err != nil {
+			return NormalizedIPRange{}, err
 		}
 		start, end = utilip.GetStartAndEndOfPrefix(cidr)
 		origin = fmt.Sprintf("range [%s]", ipRange.CIDR)
 	} else {
-		var msg string
-		start, end, msg = ParseIPRangeStartEnd(ipRange.Start, ipRange.End)
-		if msg != "" {
-			return NormalizedIPRange{Error: msg}
+		var err error
+		start, end, err = ParseIPRangeStartEnd(ipRange.Start, ipRange.End)
+		if err != nil {
+			return NormalizedIPRange{}, err
 		}
-		if msg, valid := ValidateIPRange(ipRange); !valid {
-			return NormalizedIPRange{Error: msg}
+		if err := ValidateIPRange(ipRange); err != nil {
+			return NormalizedIPRange{}, err
 		}
 		origin = fmt.Sprintf("range [%s-%s]", ipRange.Start, ipRange.End)
 	}
@@ -180,7 +181,7 @@ func NormalizeRange(ipRange crdv1beta1.IPRange, context string) NormalizedIPRang
 		Start:  start,
 		End:    end,
 		Origin: origin,
-	}
+	}, nil
 }
 
 // Overlaps checks if two IP ranges overlap
