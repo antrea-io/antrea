@@ -125,6 +125,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 	groupingController := grouping.NewGroupEntityController(groupEntityIndex,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
+		informerFactory.Core().V1().Nodes(),
 		crdInformerFactory.Crd().V1alpha2().ExternalEntities())
 	labelIndex := labelidentity.NewLabelIdentityIndex()
 	labelIdentityController := labelidentity.NewLabelIdentityController(

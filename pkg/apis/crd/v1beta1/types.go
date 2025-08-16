@@ -381,6 +381,11 @@ type GroupSpec struct {
 	// Cannot be set with any other selector except PodSelector.
 	// +optional
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+	// Select all Pods from Nodes matched by this selector, as
+	// workloads in AppliedTo fields.
+	// TODO: put in limitations on the usage NodeSelector? Should we support combining with ns/pod selector? if not, add guardrails/feedback?
+	// +optional
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
 	// IPBlocks describe the IPAddresses/IPBlocks that are matched in to/from.
 	// IPBlocks cannot be set as part of the AppliedTo field.
 	// Cannot be set with any other selector or ServiceReference.

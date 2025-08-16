@@ -1008,7 +1008,7 @@ func (data *TestData) WaitForACNPCreationAndRealization(t *testing.T, name strin
 	return nil
 }
 
-func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string, error) {
+func (k *KubernetesUtils) WaitForPodInNamespace(ns string, pod string) ([]string, error) {
 	log.Infof("Waiting for Pod '%s/%s'", ns, pod)
 	for {
 		k8sPod, err := k.GetPodByLabel(ns, pod)
@@ -1234,7 +1234,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, pod
 		}
 	}
 	for _, pod := range allPods {
-		ips, err := k.waitForPodInNamespace(pod.Namespace(), pod.PodName())
+		ips, err := k.WaitForPodInNamespace(pod.Namespace(), pod.PodName())
 		if ips == nil || err != nil {
 			return nil, fmt.Errorf("unable to wait for Pod '%s/%s': %w", pod.Namespace(), pod.PodName(), err)
 		}
