@@ -230,21 +230,27 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	klog.V(2).InfoS("Received PacketIn for IGMP packet", "in_port", iface.OFPort)
 	podName := "unknown"
 	var srcNode net.IP
+
+	pktData := new(protocol.Ethernet)
+	if err := pktData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
+		return fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
+	}
+	ipPacket, err := parseIPv4Packet(pktData)
+	if err != nil {
+		return fmt.Errorf("failed to parse IPv4 packet from packet-in message: %v", err)
+	}
+
 	switch iface.Type {
 	case interfacestore.ContainerInterface:
 		podName = iface.PodName
 	case interfacestore.TunnelInterface:
-		var err error
-		srcNode, err = s.parseSrcNode(pktIn)
-		if err != nil {
-			return err
-		}
+		// If an IGMP report arrives via a tunnel, extract the Node IP from its source IP.
+		// This works because for remote IGMP reports (sent via packet-out), the source IP
+		// is set to the Node's transport IP (see pkg/agent/openflow/client.go SendIGMPRemoteReportPacketOut).
+		srcNode = ipPacket.NWSrc
 	}
-	pktData := new(protocol.Ethernet)
-	if err := pktData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
-		return fmt.Errorf("failed to parse ethernet packet from packet-in message: %v", err)
-	}
-	igmp, err := parseIGMPPacket(*pktData)
+
+	igmp, err := parseIGMPPacket(ipPacket)
 	if err != nil {
 		return err
 	}
@@ -294,16 +300,6 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	return nil
 }
 
-func (s *IGMPSnooper) parseSrcNode(pktIn *ofctrl.PacketIn) (net.IP, error) {
-	matches := pktIn.GetMatches()
-	tunSrcField := matches.GetMatchByName(binding.NxmFieldTunIPv4Src)
-	if tunSrcField == nil {
-		return nil, errors.New("in_port field not found")
-	}
-	tunSrc := tunSrcField.GetValue().(net.IP)
-	return tunSrc, nil
-}
-
 func generateIGMPQueryPacket(group net.IP, version uint8, queryInterval time.Duration) (util.Message, error) {
 	// The max response time field in IGMP protocol uses a value in units of 1/10 second.
 	// See https://datatracker.ietf.org/doc/html/rfc2236 and https://datatracker.ietf.org/doc/html/rfc3376
@@ -337,7 +333,7 @@ func generateIGMPQueryPacket(group net.IP, version uint8, queryInterval time.Dur
 	return nil, fmt.Errorf("unsupported IGMP version %d", version)
 }
 
-func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
+func parseIPv4Packet(pkt *protocol.Ethernet) (*protocol.IPv4, error) {
 	if pkt.Ethertype != protocol.IPv4_MSG {
 		return nil, errors.New("not IPv4 packet")
 	}
@@ -345,6 +341,10 @@ func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 	if !ok {
 		return nil, errors.New("failed to parse IPv4 packet")
 	}
+	return ipPacket, nil
+}
+
+func parseIGMPPacket(ipPacket *protocol.IPv4) (protocol.IGMPMessage, error) {
 	if ipPacket.Protocol != IGMPProtocolNumber {
 		return nil, errors.New("not IGMP packet")
 	}
