@@ -562,6 +562,9 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 	// try after the error is returned, at this time the host internal interface is already deleted, and the uplink's
 	// name is recovered. So the ips and routes in "adapterConfig" are actually read from the uplink and no need to
 	// move the configurations back. The issue was seen on VM with RHEL 8.4 on azure cloud.
+	// ====== Disclaimer of Azure Support ======
+	// Due to resource constaint, Azure support is not tested since Antrea 2.4.1 (including 2.4.1).
+	// Azure related code and features are offered as-is without verificaion. Azure issues are supported in a best-effort priority.
 	if !hostInterfaceExists(uplinkIfName) {
 		klog.InfoS("The interface with uplink name did not exist on the host, skipping its recovery", "uplinkIfName", uplinkIfName)
 		return nil

@@ -86,6 +86,10 @@ function update_cni_conf {
     content=$(cat $cni_conf_path)
     cni_conf_sha="$(echo -n "$content" | sha256sum | while read -r s _; do echo "$s"; done)"
 
+    # ====== Disclaimer of Azure Support ======
+    # Due to resource constaint, Azure support is not tested since Antrea 2.4.1 (including 2.4.1).
+    # Azure related code and features are offered as-is without verificaion. Azure issues are
+    # supported in a best-effort priority.
     echo "$content" | grep -sq "azure"
     if [[ $? == 0 ]]; then
         # Note that in more recent AKS versions, transparent is the default:
