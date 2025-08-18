@@ -397,7 +397,7 @@ func exportPrometheusMetrics(fs afero.Fs, basedir, metricsSource, filename strin
 	metricsMutex.Lock()
 	defer metricsMutex.Unlock()
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	allMetrics, err := legacyregistry.DefaultGatherer.Gather()
 	if err != nil {
