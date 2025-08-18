@@ -1,7 +1,10 @@
 # Deploying EKS with Antrea
 
-Antrea may run in networkPolicyOnly mode in AKS and EKS clusters. This document
+Antrea may run in networkPolicyOnly mode in EKS and AKS clusters. This document
 describes the steps to create an EKS cluster with Antrea using terraform.
+> [!NOTE]
+> Due to resource constaint, Azure support is not tested since Antrea 2.4.1 (including 2.4.1).
+> Azure related code and features are offered as-is without verificaion. Azure issues are supported in a best-effort priority.
 
 ## Common Prerequisites
 
