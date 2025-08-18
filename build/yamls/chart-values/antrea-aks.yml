@@ -1,3 +1,7 @@
+# ====== Azure Support Disclaimer ======
+# Due to limited resources, Azure support is no longer tested starting with Antrea 2.5.
+# Azure-related code and features are provided as-is and are not verified.
+# Any issues related to Azure will be addressed on a best-effort basis.
 trafficEncapMode: "networkPolicyOnly"
 agent:
   dnsPolicy: "ClusterFirst"
