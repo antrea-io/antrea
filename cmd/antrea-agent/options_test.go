@@ -219,6 +219,7 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 	tests := []struct {
 		name              string
 		igmpQueryVersions []int
+		encapMode         config.TrafficEncapModeType
 		encryptionMode    config.TrafficEncryptionModeType
 		expectedErr       error
 		expectedVersions  []uint8
@@ -226,6 +227,7 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 		{
 			name:              "wrong versions",
 			igmpQueryVersions: []int{1, 3, 4},
+			encapMode:         config.TrafficEncapModeNoEncap,
 			encryptionMode:    config.TrafficEncryptionModeNone,
 			expectedErr:       fmt.Errorf("igmpQueryVersions should be a subset of [1 2 3]"),
 			expectedVersions:  nil,
@@ -233,6 +235,7 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 		{
 			name:              "incorrect encryption mode with IPSec",
 			igmpQueryVersions: []int{1, 2},
+			encapMode:         config.TrafficEncapModeEncap,
 			encryptionMode:    config.TrafficEncryptionModeIPSec,
 			expectedErr:       fmt.Errorf("Multicast feature doesn't work with the current encryption mode 'IPsec'"),
 			expectedVersions:  nil,
@@ -240,6 +243,7 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 		{
 			name:              "incorrect encryption mode with WireGuard",
 			igmpQueryVersions: []int{1, 2},
+			encapMode:         config.TrafficEncapModeEncap,
 			encryptionMode:    config.TrafficEncryptionModeWireGuard,
 			expectedErr:       fmt.Errorf("Multicast feature doesn't work with the current encryption mode 'WireGuard'"),
 			expectedVersions:  nil,
@@ -247,13 +251,23 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 		{
 			name:              "incorrect encryption mode with invalid",
 			igmpQueryVersions: []int{1, 2},
+			encapMode:         config.TrafficEncapModeEncap,
 			encryptionMode:    config.TrafficEncryptionModeInvalid,
 			expectedErr:       fmt.Errorf("Multicast feature doesn't work with the current encryption mode 'invalid'"),
 			expectedVersions:  nil,
 		},
 		{
+			name:              "not supported with networkPolicyOnly mode",
+			igmpQueryVersions: []int{1, 2},
+			encapMode:         config.TrafficEncapModeNetworkPolicyOnly,
+			encryptionMode:    config.TrafficEncryptionModeNone,
+			expectedErr:       fmt.Errorf("Multicast feature doesn't work with the networkPolicyOnly mode"),
+			expectedVersions:  nil,
+		},
+		{
 			name:              "no error",
 			igmpQueryVersions: []int{1, 2},
+			encapMode:         config.TrafficEncapModeNoEncap,
 			encryptionMode:    config.TrafficEncryptionModeNone,
 			expectedErr:       nil,
 			expectedVersions:  []uint8{1, 2},
@@ -267,7 +281,7 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 					Enable:            true,
 					IGMPQueryVersions: tt.igmpQueryVersions},
 			}}
-			err := o.validateMulticastConfig(tt.encryptionMode)
+			err := o.validateMulticastConfig(tt.encapMode, tt.encryptionMode)
 			require.Equal(t, tt.expectedErr, err)
 			if err != nil {
 				assert.Equal(t, tt.expectedVersions, o.igmpQueryVersions)
