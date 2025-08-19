@@ -119,7 +119,7 @@ func HandleFunc(k8sclient clientset.Interface) http.HandlerFunc {
 }
 
 func getFeatureGatesResponse(cfg *Config, component string) []apis.FeatureGateResponse {
-	gatesResp := []apis.FeatureGateResponse{}
+	var gatesResp []apis.FeatureGateResponse
 	for df := range features.DefaultAntreaFeatureGates {
 		if component == AgentMode && features.AgentGates.Has(df) ||
 			component == AgentWindowsMode && features.AgentGates.Has(df) && features.SupportedOnWindows(df) ||
