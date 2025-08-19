@@ -59,6 +59,9 @@ described in the [Google Cloud documentation](https://cloud.google.com/vpc/docs/
 
 * On Azure, there is no way to let VNet forward unknown IPs, hence Antrea
 `Hybrid` mode cannot work on Azure.
+> [!NOTE]
+> Due to resource constaint, Azure support is not tested since Antrea 2.4.1 (including 2.4.1).
+> Azure related code and features are offered as-is without verificaion. Azure issues are supported in a best-effort priority.
 
 If the Node network does allow Pod IPs sent out from the Nodes, you can
 configure Antrea to run in the `Hybrid` mode by setting the `trafficEncapMode`
@@ -93,9 +96,12 @@ to the cloud network routers for the Pod CIDRs of Nodes, and then the cloud
 network is able to route Pod traffic between Nodes. This Route Controller
 functionality is supported by the Cloud Provider implementations of the major
 clouds, including: [AWS](https://github.com/kubernetes/cloud-provider-aws),
-[Azure](https://github.com/kubernetes-sigs/cloud-provider-azure),
 [GCP](https://github.com/kubernetes/cloud-provider-gcp),
-and [vSphere (with NSX-T)](https://github.com/kubernetes/cloud-provider-vsphere).
+[vSphere (with NSX-T)](https://github.com/kubernetes/cloud-provider-vsphere),
+[Azure](https://github.com/kubernetes-sigs/cloud-provider-azure).
+> [!NOTE]
+> Due to resource constaint, Azure support is not tested since Antrea 2.4.1 (including 2.4.1).
+> Azure related code and features are offered as-is without verificaion. Azure issues are supported in a best-effort priority.
 
 * Run a routing protocol or even manually configure routers to add routes to
 the Node network routers. For example, Antrea can work with [kube-router](https://www.kube-router.io)

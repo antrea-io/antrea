@@ -145,7 +145,7 @@ const (
 
 	chainCNIConfStr = `{
 "cniVersion":"%s",
-"name":"azure",
+"name":"dummy_platform_name",
 "type":"antrea",
 "prevResult":%s,
 "ipam":{"type":"unknown"}

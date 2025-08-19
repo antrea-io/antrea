@@ -1,3 +1,7 @@
+# ====== Disclaimer of Azure Support ======
+# Due to resource constaint, Azure support is not tested since Antrea 2.4.1 (including 2.4.1).
+# Azure related code and features are offered as-is without verificaion. Azure issues are
+# supported in a best-effort priority.
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:

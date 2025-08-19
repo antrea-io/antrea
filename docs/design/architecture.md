@@ -302,10 +302,12 @@ another cloud CNI and cloud network to implement Pod IPAM and cross-Node traffic
 forwarding. Refer to the [NetworkPolicyOnly mode design document](policy-only.md)
 for more information.
 
-[Antrea for AKS
+[Antrea EKS support](../eks-installation.md) and [Antrea for AKS
 Engine](https://github.com/Azure/aks-engine/blob/master/docs/topics/features.md#feat-antrea)
-and [Antrea EKS support](../eks-installation.md) work in `NetworkPolicyOnly`
-mode.
+work in `NetworkPolicyOnly` mode.
+> [!NOTE]
+> Due to resource constaint, Azure support is not tested since Antrea 2.4.1 (including 2.4.1).
+> Azure related code and features are offered as-is without verificaion. Azure issues are supported in a best-effort priority.
 
 ## Features
 
