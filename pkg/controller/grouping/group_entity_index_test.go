@@ -800,6 +800,32 @@ func TestAddPod(t *testing.T) {
 		index.AddPod(podFoo1OnNode)
 		assert.Equal(t, index.entityItems[entityItemKey].nodeLabelItemKey, nodeLabelItemKey)
 	})
+	t.Run("existing group is synced with Pod", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		nodeLabel := map[string]string{"node": "foo"}
+
+		labelSelector := metav1.LabelSelector{
+			MatchLabels: nodeLabel,
+		}
+		selector, _ := metav1.LabelSelectorAsSelector(&labelSelector)
+		selectorNormalizedName := "selector-normalized-name"
+		groupSelector := &types.GroupSelector{
+			NormalizedName: selectorNormalizedName,
+			NodeSelector:   selector,
+		}
+		groupItem := &groupItem{
+			groupType:       groupType1,
+			name:            "group-node-label",
+			selector:        groupSelector,
+			selectorItemKey: getSelectorItemKey(groupSelector),
+		}
+		selectorItem := index.createSelectorItem(groupItem)
+
+		index.AddNode(nodeFoo)
+		index.AddPod(podFoo1OnNode)
+
+		assert.Equal(t, len(selectorItem.labelItemKeys), 1)
+	})
 }
 
 func TestDeletePod(t *testing.T) {
