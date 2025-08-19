@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -49,16 +50,19 @@ var getResourceExportsByClusterIDFunc = getResourceExportsByClusterID
 // CR is deleted. It will also try to clean up all stale ResourceExports during start.
 type StaleResCleanupController struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme                      *runtime.Scheme
+	memberClusterAnnounceSynced cache.InformerSynced
 }
 
 func NewStaleResCleanupController(
 	Client client.Client,
 	Scheme *runtime.Scheme,
+	memberClusterAnnounceSynced cache.InformerSynced,
 ) *StaleResCleanupController {
 	reconciler := &StaleResCleanupController{
-		Client: Client,
-		Scheme: Scheme,
+		Client:                      Client,
+		Scheme:                      Scheme,
+		memberClusterAnnounceSynced: memberClusterAnnounceSynced,
 	}
 	return reconciler
 }
@@ -97,6 +101,10 @@ func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting StaleResCleanupController")
 	defer klog.InfoS("Shutting down StaleResCleanupController")
 
+	if !cache.WaitForCacheSync(stopCh, c.memberClusterAnnounceSynced) {
+		klog.ErrorS(nil, "Fail to sync cache for MemberClusterAnnounce")
+		return
+	}
 	ctx := wait.ContextForChannel(stopCh)
 	go wait.UntilWithContext(ctx, c.cleanUpExpiredMemberClusterAnnounces, memberClusterAnnounceStaleTime/2)
 	<-stopCh
