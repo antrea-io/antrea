@@ -68,6 +68,7 @@ spec:
   captureConfig:
     firstN:
       number: 5
+  # Specify at least one of `source` or `destination`.
   source:
     pod:
       namespace: default
