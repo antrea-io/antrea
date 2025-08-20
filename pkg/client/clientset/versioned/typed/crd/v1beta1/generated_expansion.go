@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@ type ClusterNetworkPolicyExpansion interface{}
 type EgressExpansion interface{}
 
 type ExternalIPPoolExpansion interface{}
+
+type FlowExporterTargetExpansion interface{}
 
 type GroupExpansion interface{}
 

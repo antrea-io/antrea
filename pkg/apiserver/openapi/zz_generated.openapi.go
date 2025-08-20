@@ -101,6 +101,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolList":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus":                       schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterGRPCConfig":                     schema_pkg_apis_crd_v1beta1_FlowExporterGRPCConfig(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterIPFixConfig":                    schema_pkg_apis_crd_v1beta1_FlowExporterIPFixConfig(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTarget":                         schema_pkg_apis_crd_v1beta1_FlowExporterTarget(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTargetList":                     schema_pkg_apis_crd_v1beta1_FlowExporterTargetList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTargetSpec":                     schema_pkg_apis_crd_v1beta1_FlowExporterTargetSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTargetStatus":                   schema_pkg_apis_crd_v1beta1_FlowExporterTargetStatus(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Group":                                      schema_pkg_apis_crd_v1beta1_Group(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition":                             schema_pkg_apis_crd_v1beta1_GroupCondition(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupList":                                  schema_pkg_apis_crd_v1beta1_GroupList(ref),
@@ -4001,6 +4007,226 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_FlowExporterGRPCConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_FlowExporterIPFixConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"transport": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_FlowExporterTarget(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTargetSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTargetStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTargetSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTargetStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_FlowExporterTargetList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTarget"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterTarget", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_FlowExporterTargetSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "FlowExporterTargetSpec defines the desired target for FlowExporter.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"address": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Address is the address of the target including port.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"protocol": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"ipfixConfig": {
+						SchemaProps: spec.SchemaProps{
+							Description: "This provides additional configuration related to ipfix format",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterIPFixConfig"),
+						},
+					},
+					"filter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set of protocols to forward to the target. If nil, send all protocols.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"activeFlowExportTimeout": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"idleFlowExportTimeout": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.FlowExporterIPFixConfig"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_FlowExporterTargetStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "FlowExporterTargetStatus represents information about the status of a Flow Exporter target.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The generation observed by Antrea.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"observedGeneration", "conditions"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
 	}
 }
 
