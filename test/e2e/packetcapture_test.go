@@ -45,9 +45,10 @@ import (
 )
 
 var (
-	icmpProto = intstr.FromString("ICMP")
-	udpProto  = intstr.FromString("UDP")
-	tcpProto  = intstr.FromString("TCP")
+	icmpProto   = intstr.FromString("ICMP")
+	icmpv6Proto = intstr.FromString("ICMPv6")
+	udpProto    = intstr.FromString("UDP")
+	tcpProto    = intstr.FromString("TCP")
 )
 
 type pcTestCase struct {
@@ -633,6 +634,87 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				},
 			},
 		},
+		{
+			name:      "ipv6-tcp-both",
+			ipVersion: 6,
+			pc: getPacketCaptureCR(
+				"ipv6-tcp-both",
+				sftpURL,
+				&crdv1alpha1.Packet{
+					Protocol: &tcpProto,
+					IPFamily: v1.IPv6Protocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						TCP: &crdv1alpha1.TCPHeader{
+							DstPort: ptr.To(serverPodPort),
+						},
+					},
+				},
+				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureSourcePod(data.testNamespace, clientPodName),
+				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
+				packetCaptureHostPublicKey(pubKey1),
+				packetCaptureCapturePoint(crdv1alpha1.CapturePointDestination),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 5,
+				FilePath:       getPcapURL("ipv6-tcp-both"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+		},
+		{
+			name:      "ipv6-icmpv6-both",
+			ipVersion: 6,
+			pc: getPacketCaptureCR(
+				"ipv6-icmpv6-both",
+				sftpURL,
+				&crdv1alpha1.Packet{
+					Protocol: &icmpv6Proto,
+					IPFamily: v1.IPv6Protocol,
+				},
+				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureSourcePod(data.testNamespace, clientPodName),
+				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
+				packetCaptureHostPublicKey(pubKey1),
+				packetCaptureCapturePoint(crdv1alpha1.CapturePointDestination),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 5,
+				FilePath:       getPcapURL("ipv6-icmpv6-both"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+		},
 	}
 
 	t.Run("testPacketCaptureBasic", func(t *testing.T) {
@@ -768,6 +850,54 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 			},
 			numConnections: 1, // running ping command once to capture only an echo reply packet
 		},
+		{
+			name:      "ipv6-icmpv6-echo-echoreply-both",
+			ipVersion: 6,
+			pc: getPacketCaptureCR(
+				"ipv6-icmpv6-echo-echoreply-both",
+				sftpURL,
+				&crdv1alpha1.Packet{
+					Protocol: &icmpv6Proto,
+					IPFamily: v1.IPv6Protocol,
+					TransportHeader: crdv1alpha1.TransportHeader{
+						ICMPv6: &crdv1alpha1.ICMPv6Header{
+							Messages: []crdv1alpha1.ICMPv6MsgMatcher{
+								{Type: intstr.FromString("icmpv6-echo")},
+								{Type: intstr.FromString("icmpv6-echoreply")},
+							},
+						},
+					},
+				},
+				crdv1alpha1.CaptureDirectionBoth,
+				packetCaptureSourcePod(data.testNamespace, clientPodName),
+				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
+				packetCaptureHostPublicKey(pubKey1),
+				packetCaptureFirstN(2),
+				packetCaptureCapturePoint(crdv1alpha1.CapturePointDestination),
+			),
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 2,
+				FilePath:       getPcapURL("ipv6-icmpv6-echo-echoreply-both"),
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{
+						Type:   crdv1alpha1.PacketCaptureStarted,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Started",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureComplete,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+					{
+						Type:   crdv1alpha1.PacketCaptureFileUploaded,
+						Status: metav1.ConditionStatus(v1.ConditionTrue),
+						Reason: "Succeed",
+					},
+				},
+			},
+			numConnections: 1,
+		},
 	}
 	t.Run("testPacketCaptureL4Filters", func(t *testing.T) {
 		for _, tc := range testcases {
@@ -845,7 +975,7 @@ func determineDstPodIPs(t *testing.T, data *TestData, tc pcTestCase, dstPodIPs *
 		protocol := *tc.pc.Spec.Packet.Protocol
 		var podName string
 		switch protocol {
-		case tcpProto, icmpProto:
+		case tcpProto, icmpProto, icmpv6Proto:
 			podName = "tcp-server"
 		case udpProto:
 			podName = "udp-server"
@@ -860,9 +990,11 @@ func determineDstPodIPs(t *testing.T, data *TestData, tc pcTestCase, dstPodIPs *
 
 func generateTraffic(t *testing.T, data *TestData, tc pcTestCase, srcPod string, dstPodIPs *PodIPs) {
 	protocol := *tc.pc.Spec.Packet.Protocol
-	server := dstPodIPs.IPv4.String()
+	var server string
 	if tc.ipVersion == 6 {
 		server = dstPodIPs.IPv6.String()
+	} else {
+		server = dstPodIPs.IPv4.String()
 	}
 	connections := 10
 	if tc.numConnections != 0 {
@@ -870,7 +1002,7 @@ func generateTraffic(t *testing.T, data *TestData, tc pcTestCase, srcPod string,
 	}
 
 	switch protocol {
-	case icmpProto:
+	case icmpProto, icmpv6Proto:
 		if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, getOSString(), "", data.testNamespace},
 			data.testNamespace, dstPodIPs, toolboxContainerName, connections, 0, false); err != nil {
 			t.Logf("Ping(%s) '%s' -> '%v' failed: ERROR (%v)", protocol.StrVal, srcPod, *dstPodIPs, err)
@@ -971,10 +1103,18 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	defer file.Close()
 	var srcIP, dstIP net.IP
 	if srcPodIPs != nil {
-		srcIP = *srcPodIPs.IPv4
+		if tc.ipVersion == 6 {
+			srcIP = *srcPodIPs.IPv6
+		} else {
+			srcIP = *srcPodIPs.IPv4
+		}
 	}
 	if dstPodIPs != nil {
-		dstIP = *dstPodIPs.IPv4
+		if tc.ipVersion == 6 {
+			dstIP = *dstPodIPs.IPv6
+		} else {
+			dstIP = *dstPodIPs.IPv4
+		}
 	}
 	require.NoError(t, verifyPacketFile(t, tc.pc, file, tc.expectedStatus.NumberCaptured, srcIP, dstIP))
 }
@@ -1039,39 +1179,48 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 			return err
 		}
 		packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.Default)
-		ipLayer := packet.Layer(layers.LayerTypeIPv4)
-		require.NotNil(t, ipLayer)
-		ip, _ := ipLayer.(*layers.IPv4)
+		var ipSrcIP, ipDstIP net.IP
+		if pc.Spec.Packet.IPFamily == v1.IPv6Protocol {
+			ipLayer := packet.Layer(layers.LayerTypeIPv6)
+			require.NotNil(t, ipLayer, "Packet should have an IPv6 layer")
+			ip, _ := ipLayer.(*layers.IPv6)
+			ipSrcIP, ipDstIP = ip.SrcIP, ip.DstIP
+		} else {
+			ipLayer := packet.Layer(layers.LayerTypeIPv4)
+			require.NotNil(t, ipLayer, "Packet should have an IPv4 layer")
+			ip, _ := ipLayer.(*layers.IPv4)
+			ipSrcIP, ipDstIP = ip.SrcIP, ip.DstIP
+		}
 		direction := pc.Spec.Direction
 		switch direction {
 		case crdv1alpha1.CaptureDirectionDestinationToSource:
 			if srcIP != nil {
-				assert.Equal(t, srcIP.String(), ip.DstIP.String())
+				assert.Equal(t, srcIP.String(), ipDstIP.String())
 			}
 			if dstIP != nil {
-				assert.Equal(t, dstIP.String(), ip.SrcIP.String())
+				assert.Equal(t, dstIP.String(), ipSrcIP.String())
 			}
 		case crdv1alpha1.CaptureDirectionBoth:
 			if srcIP != nil && dstIP != nil {
-				assert.Contains(t, []string{srcIP.String(), dstIP.String()}, ip.SrcIP.String())
-				assert.Contains(t, []string{srcIP.String(), dstIP.String()}, ip.DstIP.String())
+				assert.Contains(t, []string{srcIP.String(), dstIP.String()}, ipSrcIP.String())
+				assert.Contains(t, []string{srcIP.String(), dstIP.String()}, ipDstIP.String())
 			} else if srcIP != nil {
 				targetIPStr := srcIP.String()
-				isEgress := ip.SrcIP.String() == targetIPStr
-				isIngress := ip.DstIP.String() == targetIPStr
-				assert.True(t, isEgress || isIngress, "Packet (src=%s, dst=%s) does not involve target source Pod %s", ip.SrcIP.String(), ip.DstIP.String(), targetIPStr)
+				isEgress := ipSrcIP.String() == targetIPStr
+				isIngress := ipDstIP.String() == targetIPStr
+				assert.True(t, isEgress || isIngress, "Packet (src=%s, dst=%s) does not involve target source Pod %s", ipSrcIP.String(), ipDstIP.String(), targetIPStr)
 			} else if dstIP != nil {
 				targetIPStr := dstIP.String()
-				isEgress := ip.SrcIP.String() == targetIPStr
-				isIngress := ip.DstIP.String() == targetIPStr
-				assert.True(t, isEgress || isIngress, "Packet (src=%s, dst=%s) does not involve target destination Pod %s", ip.SrcIP.String(), ip.DstIP.String(), targetIPStr)
+				isEgress := ipSrcIP.String() == targetIPStr
+				isIngress := ipDstIP.String() == targetIPStr
+				assert.True(t, isEgress || isIngress, "Packet (src=%s, dst=%s) does not involve target destination Pod %s", ipSrcIP.String(), ipDstIP.String(), targetIPStr)
 			}
 		default:
 			if srcIP != nil {
-				assert.Equal(t, srcIP.String(), ip.SrcIP.String())
+				assert.Equal(t, srcIP.String(), ipSrcIP.String())
 			}
 			if dstIP != nil {
-				assert.Equal(t, dstIP.String(), ip.DstIP.String())
+				assert.Equal(t, dstIP.String(), ipDstIP.String())
 			}
 		}
 
@@ -1168,6 +1317,36 @@ func verifyPacketFile(t *testing.T, pc *crdv1alpha1.PacketCapture, reader io.Rea
 
 					if icmp.TypeCode.Type() == typeValue {
 						if f.Code == nil || icmp.TypeCode.Code() == uint8(*f.Code) {
+							matched = true
+							break
+						}
+					}
+				}
+				assert.True(t, matched)
+			}
+		} else if strings.ToUpper(proto.StrVal) == "ICMPV6" || proto.IntVal == 58 {
+			icmpv6Layer := packet.Layer(layers.LayerTypeICMPv6)
+			require.NotNil(t, icmpv6Layer)
+			icmpv6, _ := icmpv6Layer.(*layers.ICMPv6)
+			if packetSpec.TransportHeader.ICMPv6 != nil {
+				matched := false
+				for _, f := range packetSpec.TransportHeader.ICMPv6.Messages {
+					var typeValue uint8
+					switch f.Type.Type {
+					case intstr.Int:
+						if f.Type.IntVal < 0 || f.Type.IntVal > 255 {
+							require.Fail(t, "Invalid ICMPv6 type number value")
+						}
+						typeValue = uint8(f.Type.IntVal)
+					case intstr.String:
+						if _, ok := capture.ICMPv6MsgTypeMap[crdv1alpha1.ICMPv6MsgType(strings.ToLower(f.Type.StrVal))]; !ok {
+							require.Fail(t, "Invalid ICMPv6 type string value")
+						}
+						typeValue = uint8(capture.ICMPv6MsgTypeMap[crdv1alpha1.ICMPv6MsgType(strings.ToLower(f.Type.StrVal))])
+					}
+
+					if icmpv6.TypeCode.Type() == typeValue {
+						if f.Code == nil || icmpv6.TypeCode.Code() == uint8(*f.Code) {
 							matched = true
 							break
 						}

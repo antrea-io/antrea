@@ -363,15 +363,16 @@ type Source struct {
 type Destination struct {
 	// Pod is the destination Pod, exclusive with destination IP.
 	Pod *PodReference `json:"pod,omitempty"`
-	// IP is the source IPv4 or IPv6 address.
+	// IP is the destination IPv4 or IPv6 address.
 	IP *string `json:"ip,omitempty"`
 }
 
 // TransportHeader describes the spec of a TransportHeader.
 type TransportHeader struct {
-	UDP  *UDPHeader  `json:"udp,omitempty"`
-	TCP  *TCPHeader  `json:"tcp,omitempty"`
-	ICMP *ICMPHeader `json:"icmp,omitempty"`
+	UDP    *UDPHeader    `json:"udp,omitempty"`
+	TCP    *TCPHeader    `json:"tcp,omitempty"`
+	ICMP   *ICMPHeader   `json:"icmp,omitempty"`
+	ICMPv6 *ICMPv6Header `json:"icmpv6,omitempty"`
 }
 
 // UDPHeader describes the spec of a UDP header.
@@ -412,6 +413,17 @@ const (
 	ICMPMsgTypeTimexceed  ICMPMsgType = "icmp-timxceed"  // 11
 )
 
+type ICMPv6MsgType string
+
+const (
+	ICMPv6MsgTypeEcho         ICMPv6MsgType = "icmpv6-echo"        // 128
+	ICMPv6MsgTypeEchoReply    ICMPv6MsgType = "icmpv6-echoreply"   // 129
+	ICMPv6MsgTypeDstUnreach   ICMPv6MsgType = "icmpv6-unreach"     // 1
+	ICMPv6MsgTypePacketTooBig ICMPv6MsgType = "icmpv6-pkt-too-big" // 2
+	ICMPv6MsgTypeTimexceed    ICMPv6MsgType = "icmpv6-timxceed"    // 3
+	ICMPv6MsgTypeParamProblem ICMPv6MsgType = "icmpv6-paramprob"   // 4
+)
+
 // ICMPMsgMatcher describes an ICMP message matching filter with type and code.
 type ICMPMsgMatcher struct {
 	// Type is the type of ICMP message to match.
@@ -420,11 +432,26 @@ type ICMPMsgMatcher struct {
 	Code *int32 `json:"code,omitempty"`
 }
 
+// ICMPv6MsgMatcher describes an ICMPv6 message matching filter with type and code.
+type ICMPv6MsgMatcher struct {
+	// Type is the type of ICMPv6 message to match.
+	Type intstr.IntOrString `json:"type"`
+	// Code is the optional code field of the ICMPv6 message to match.
+	Code *int32 `json:"code,omitempty"`
+}
+
 // ICMPHeader describes the spec of an ICMP header.
 type ICMPHeader struct {
 	// Messages is a list of ICMP message match conditions that are logically ORed. When direction is set to Both,
 	// the specified ICMP message matching conditions will be applied to traffic in both directions.
 	Messages []ICMPMsgMatcher `json:"messages,omitempty"`
+}
+
+// ICMPv6Header describes the spec of an ICMPv6 header.
+type ICMPv6Header struct {
+	// Messages is a list of ICMPv6 message match conditions that are logically ORed. When direction is set to Both,
+	// the specified ICMPv6 message matching conditions will be applied to traffic in both directions.
+	Messages []ICMPv6MsgMatcher `json:"messages,omitempty"`
 }
 
 // Packet includes header info.

@@ -340,6 +340,21 @@ func (c *Controller) validatePacketCapture(spec *crdv1alpha1.PacketCaptureSpec) 
 				}
 			}
 		}
+		if spec.Packet.TransportHeader.ICMPv6 != nil {
+			for _, f := range spec.Packet.TransportHeader.ICMPv6.Messages {
+				switch f.Type.Type {
+				case intstr.Int:
+					if f.Type.IntVal < 0 || f.Type.IntVal > 255 {
+						return fmt.Errorf("invalid ICMPv6 type integer: %d; must be between 0 and 255", f.Type.IntVal)
+					}
+				case intstr.String:
+					if _, ok := capture.ICMPv6MsgTypeMap[crdv1alpha1.ICMPv6MsgType(strings.ToLower(f.Type.StrVal))]; !ok {
+						return fmt.Errorf("invalid ICMPv6 type string: %q; supported values are: %v (case insensitive)",
+							f.Type.StrVal, slices.Collect(maps.Keys(capture.ICMPv6MsgTypeMap)))
+					}
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -529,11 +544,15 @@ func (c *Controller) performCapture(
 	}
 }
 
-func (c *Controller) getPodIP(ctx context.Context, podRef *crdv1alpha1.PodReference) (net.IP, error) {
+func (c *Controller) getPodIP(ctx context.Context, podRef *crdv1alpha1.PodReference, ipFamily v1.IPFamily) (net.IP, error) {
 	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(podRef.Name, podRef.Namespace)
 	var podIP net.IP
 	if len(podInterfaces) > 0 {
-		podIP = podInterfaces[0].GetIPv4Addr()
+		if ipFamily == v1.IPv6Protocol {
+			podIP = podInterfaces[0].GetIPv6Addr()
+		} else {
+			podIP = podInterfaces[0].GetIPv4Addr()
+		}
 	} else {
 		pod, err := c.kubeClient.CoreV1().Pods(podRef.Namespace).Get(ctx, podRef.Name, metav1.GetOptions{})
 		if err != nil {
@@ -543,17 +562,25 @@ func (c *Controller) getPodIP(ctx context.Context, podRef *crdv1alpha1.PodRefere
 		for i, ip := range pod.Status.PodIPs {
 			podIPs[i] = net.ParseIP(ip.IP)
 		}
-		podIP = util.GetIPv4Addr(podIPs)
+		if ipFamily == v1.IPv6Protocol {
+			podIP, _ = util.GetIPWithFamily(podIPs, util.FamilyIPv6)
+		} else {
+			podIP = util.GetIPv4Addr(podIPs)
+		}
 	}
 	if podIP == nil {
-		return nil, fmt.Errorf("cannot find IP with IPv4 address family for Pod %s/%s", podRef.Namespace, podRef.Name)
+		return nil, fmt.Errorf("cannot find IP with %s address family for Pod %s/%s", ipFamily, podRef.Namespace, podRef.Name)
 	}
 	return podIP, nil
 }
 
 func (c *Controller) parseIPs(ctx context.Context, pc *crdv1alpha1.PacketCapture) (srcIP, dstIP net.IP, err error) {
+	ipFamily := v1.IPv4Protocol
+	if pc.Spec.Packet != nil {
+		ipFamily = pc.Spec.Packet.IPFamily
+	}
 	if pc.Spec.Source.Pod != nil {
-		srcIP, err = c.getPodIP(ctx, pc.Spec.Source.Pod)
+		srcIP, err = c.getPodIP(ctx, pc.Spec.Source.Pod, ipFamily)
 		if err != nil {
 			return
 		}
@@ -565,7 +592,7 @@ func (c *Controller) parseIPs(ctx context.Context, pc *crdv1alpha1.PacketCapture
 		}
 	}
 	if pc.Spec.Destination.Pod != nil {
-		dstIP, err = c.getPodIP(ctx, pc.Spec.Destination.Pod)
+		dstIP, err = c.getPodIP(ctx, pc.Spec.Destination.Pod, ipFamily)
 		if err != nil {
 			return
 		}
