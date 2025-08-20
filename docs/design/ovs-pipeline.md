@@ -236,6 +236,7 @@ usability, we assign friendly names to the bits we use.
 | bit 5       |                       | 0b1           | ConnSNATCTMark     | SNAT'd connection for Service.                                  |
 | bit 6       |                       | 0b1           | HairpinCTMark      | Hair-pin connection.                                            |
 | bit 7       |                       | 0b1           | L7NPRedirectCTMark | Connection should be redirected to an application-aware engine. |
+| bit 8       |                       | 0b1           | ConnAllowedCTMark  | Connection has been allowed by NetworkPolicy enforcement.       |
 
 ### OVS Ct Label
 
@@ -257,6 +258,8 @@ the ct zones.
 |---------|--------------|----------------------------------------------------|
 | 65520   | CtZone       | Tracking IPv4 connections that don't require SNAT. |
 | 65521   | SNATCtZone   | Tracking IPv4 connections that require SNAT.       |
+| 65510   | CtZoneV6     | Tracking IPv6 connections that don't require SNAT. |
+| 65511   | SNATCtZoneV6 | Tracking IPv6 connections that require SNAT.       |
 
 ## Antrea Features
 
@@ -1500,10 +1503,10 @@ This table marks connections requiring SNAT within the OVS pipeline, distinct fr
 If you dump the flows of this table, you may see the following:
 
 ```text
-1. table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))
-2. table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark))
-3. table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.23,nw_dst=10.10.0.23 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))
-4. table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.24,nw_dst=10.10.0.24 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))
+1. table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,set_field:0x100/0x100->ct_mark))
+2. table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x100/0x100->ct_mark))
+3. table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.23,nw_dst=10.10.0.23 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,set_field:0x100/0x100->ct_mark))
+4. table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.24,nw_dst=10.10.0.24 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,set_field:0x100/0x100->ct_mark))
 5. table=SNATMark, priority=0 actions=goto_table:SNAT
 ```
 
@@ -1526,6 +1529,10 @@ these flows should be never matched by in-cluster Service traffic.
 Flow 3-4 match the first packet of hairpin Service connections, identified by the same source and destination Pod IP
 addresses. Such hairpin connections will undergo SNAT with the IP address of the local Antrea gateway in table [SNAT].
 Similar to flow 1, `ConnSNATCTMark` and `HairpinCTMark` are persisted to mark the connections.
+
+Note that all flows are marked with `ConnAllowedCTMark`. Flows that require SNAT will not be dropped by ingress
+policies. If we want `ConnAllowedCTMark` to show up in `CtZone` (not `SNATCtZone`), we have to commit the mark here,
+before the connection is committed to `SNATCtZone` in table [SNAT].
 
 Flow 5 is the table-miss flow.
 
@@ -1846,15 +1853,21 @@ This table is in charge of committing non-Service connections in `CtZone`.
 If you dump the flows of this table, you may see the following:
 
 ```text
-1. table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
-2. table=ConntrackCommit, priority=0 actions=goto_table:Output
+1. table=ConntrackCommit, priority=210,ct_state=+new+trk,ct_zone=65521,ip actions=goto_table:Output
+2. table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3],set_field:0x100/0x100->ct_mark))
+3. table=ConntrackCommit, priority=190,ct_state=+new+trk,ip actions=ct(commit,table=Output,zone=65520,exec(set_field:0x100/0x100->ct_mark))
+4. table=ConntrackCommit, priority=0 actions=goto_table:Output
 ```
 
-Flow 1 is designed to match the first packet of non-Service connections with the "tracked" state and `NotServiceCTMark`.
+Flow 1 matches all "SNAT" connections (connections that were last committed to the `SNATCtZone`) and forwards them to
+table [Output].
+Flow 2 is designed to match the first packet of non-Service connections with the "tracked" state and `NotServiceCTMark`.
 Then it commits the relevant connections in `CtZone`, persisting the value of `PktSourceField` to
-`ConnSourceCTMarkField`, and forwards the packets to table [Output].
-
-Flow 2 is the table-miss flow.
+`ConnSourceCTMarkField` and setting `ConnAllowedCTMark`.
+Flow 3 matches the first packet of all other connections (i.e., Service connections). These connections have already
+been committed to `CtZone` during Endpoint selection (DNAT) but need to be marked with `ConnAllowedCTMark` now that
+they have gone through NetworkPolicy enforcement.
+Flow 4 is the table-miss flow.
 
 ### Output
 
