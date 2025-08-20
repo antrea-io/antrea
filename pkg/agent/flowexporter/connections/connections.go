@@ -33,6 +33,19 @@ const (
 	periodicDeleteInterval = time.Minute
 )
 
+type Action byte
+
+const (
+	Add Action = iota
+	Remove
+	Requeue
+)
+
+type Message struct {
+	Conn   *connection.Connection
+	Action Action
+}
+
 type connectionStore struct {
 	connections            map[connection.ConnectionKey]*connection.Connection
 	podStore               objectstore.PodStore
@@ -40,6 +53,9 @@ type connectionStore struct {
 	expirePriorityQueue    *priorityqueue.ExpirePriorityQueue
 	staleConnectionTimeout time.Duration
 	mutex                  sync.Mutex
+
+	subscriberMutex sync.Mutex
+	subscribers     map[string]chan Message
 }
 
 func NewConnectionStore(
@@ -52,6 +68,48 @@ func NewConnectionStore(
 		antreaProxier:          proxier,
 		expirePriorityQueue:    priorityqueue.NewExpirePriorityQueue(o.ActiveFlowTimeout, o.IdleFlowTimeout),
 		staleConnectionTimeout: o.StaleConnectionTimeout,
+	}
+}
+
+func (cs *connectionStore) Subscribe(id string) <-chan Message {
+	cs.subscriberMutex.Lock()
+	defer cs.subscriberMutex.Unlock()
+
+	ch, ok := cs.subscribers[id]
+	if ok {
+		return ch
+	}
+
+	ch = make(chan Message)
+	cs.subscribers[id] = ch
+	return ch
+}
+
+func (cs *connectionStore) Unsubscribe(id string) {
+	cs.subscriberMutex.Lock()
+	defer cs.subscriberMutex.Unlock()
+
+	ch, ok := cs.subscribers[id]
+	if !ok {
+		klog.V(4).InfoS("subscriber not found", "id", id)
+		return
+	}
+
+	close(ch)
+	delete(cs.subscribers, id)
+}
+
+func (cs *connectionStore) notify(action Action, conn *connection.Connection) {
+	cs.subscriberMutex.Lock()
+	defer cs.subscriberMutex.Unlock()
+	msg := Message{
+		Action: action,
+		Conn:   conn,
+	}
+
+	for id, subscriber := range cs.subscribers {
+		subscriber <- msg
+		klog.V(5).InfoS("sent message to subscriber", "id", id, "message", msg)
 	}
 }
 
@@ -161,7 +219,7 @@ func (cs *connectionStore) UpdateConnAndQueue(pqItem *priorityqueue.ItemToExpire
 	conn.AppProtocolName = ""
 	conn.HttpVals = ""
 	if conn.ReadyToDelete || !conn.IsActive {
-		cs.expirePriorityQueue.RemoveItemFromMap(conn)
+		cs.notify(Remove, conn)
 	} else {
 		// For active connections, we update their "prev" stats fields,
 		// reset active expire time and push back into the PQ.

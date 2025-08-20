@@ -260,6 +260,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		existingConn.TCPState = conn.TCPState
 		existingConn.IsActive = utils.CheckConntrackConnActive(existingConn)
 		if existingConn.IsActive {
+			cs.notify(Add, conn)
 			existingItem, exists := cs.expirePriorityQueue.KeyToItem[connKey]
 			if !exists {
 				// If the connKey:pqItem pair does not exist in the map, it shows the
@@ -301,7 +302,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		conn.IsActive = true
 		// Add new antrea connection to connection store and PQ.
 		cs.connections[connKey] = conn
-		cs.expirePriorityQueue.WriteItemToQueue(connKey, conn)
+		cs.notify(Add, conn)
 		klog.V(4).InfoS("New Antrea flow added", "connection", conn)
 	}
 }

@@ -1289,3 +1289,70 @@ type TraceflowList struct {
 
 	Items []Traceflow `json:"items"`
 }
+
+type CommunicationProtocol string
+
+const (
+	ProtoGRPC  CommunicationProtocol = "grpc"
+	ProtoIPFix CommunicationProtocol = "ipfix"
+)
+
+type TransportProtocol string
+
+const (
+	ProtoTCP TransportProtocol = "tcp"
+	ProtoUDP TransportProtocol = "udp"
+	ProtoTLS TransportProtocol = "tls"
+)
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type FlowExporterTarget struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   FlowExporterTargetSpec   `json:"spec,omitempty"`
+	Status FlowExporterTargetStatus `json:"status,omitempty"`
+}
+
+// FlowExporterTargetSpec defines the desired target for FlowExporter.
+type FlowExporterTargetSpec struct {
+	// Address is the address of the target including port.
+	Address  string                `json:"address,omitempty"`
+	Protocol CommunicationProtocol `json:"protocol,omitempty"`
+	// This provides additional configuration related to ipfix format
+	// +optional
+	IPFixConfig *FlowExporterIPFixConfig `json:"ipfixConfig,omitempty"`
+	// Set of protocols to forward to the target. If nil, send all protocols.
+	// +optional
+	Filter                  []string `json:"filter,omitempty"`
+	ActiveFlowExportTimeout *string  `json:"activeFlowExportTimeout,omitempty"`
+	IdleFlowExportTimeout   *string  `json:"idleFlowExportTimeout,omitempty"`
+}
+
+type FlowExporterGRPCConfig struct {
+}
+
+type FlowExporterIPFixConfig struct {
+	Transport TransportProtocol `json:"transport,omitempty"`
+}
+
+// FlowExporterTargetStatus represents information about the status of a Flow Exporter target.
+type FlowExporterTargetStatus struct {
+	// The generation observed by Antrea.
+	ObservedGeneration int64 `json:"observedGeneration"`
+
+	Conditions []metav1.Condition `json:"conditions"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type FlowExporterTargetList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []FlowExporterTarget `json:"items"`
+}
