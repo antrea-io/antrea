@@ -55,7 +55,10 @@ var (
 	pod2IPv4 = "192.168.11.10"
 	pod3IPv4 = "192.168.12.10"
 
-	ipv6                     = "2001:db8::68"
+	pod1IPv6 = "fd00:10:244::10"
+	pod2IPv6 = "fd00:10:244::11"
+	pod3IPv6 = "fd00:10:244::12"
+
 	pod1MAC, _               = net.ParseMAC("aa:bb:cc:dd:ee:0f")
 	pod2MAC, _               = net.ParseMAC("aa:bb:cc:dd:ee:00")
 	ofPortPod1               = uint32(1)
@@ -63,7 +66,9 @@ var (
 	testCaptureTimeout       = int32(1)
 	testCaptureNum     int32 = 15
 
+	tcpProto     = intstr.FromString("TCP")
 	icmpProto    = intstr.FromString("ICMP")
+	icmpv6Proto  = intstr.FromString("ICMPv6")
 	invalidProto = intstr.FromString("INVALID")
 	testFTPUrl   = "sftp://127.0.0.1:22/path"
 
@@ -73,7 +78,10 @@ var (
 			Namespace: "default",
 		},
 		Status: v1.PodStatus{
-			PodIP: pod1IPv4,
+			PodIPs: []v1.PodIP{
+				{IP: pod1IPv4},
+				{IP: pod1IPv6},
+			},
 		},
 	}
 	pod2 = v1.Pod{
@@ -82,7 +90,10 @@ var (
 			Namespace: "default",
 		},
 		Status: v1.PodStatus{
-			PodIP: pod2IPv4,
+			PodIPs: []v1.PodIP{
+				{IP: pod2IPv4},
+				{IP: pod2IPv6},
+			},
 		},
 	}
 	pod3 = v1.Pod{
@@ -92,9 +103,8 @@ var (
 		},
 		Status: v1.PodStatus{
 			PodIPs: []v1.PodIP{
-				{
-					IP: pod3IPv4,
-				},
+				{IP: pod3IPv4},
+				{IP: pod3IPv6},
 			},
 		},
 	}
@@ -221,8 +231,8 @@ func newFakePacketCaptureController(t *testing.T, runtimeObjects []runtime.Objec
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
 
 	ifaceStore := interfacestore.NewInterfaceStore()
-	addPodInterface(ifaceStore, pod1.Namespace, pod1.Name, []string{pod1IPv4, ipv6}, pod1MAC.String(), int32(ofPortPod1))
-	addPodInterface(ifaceStore, pod2.Namespace, pod2.Name, []string{pod2IPv4}, pod2MAC.String(), int32(ofPortPod2))
+	addPodInterface(ifaceStore, pod1.Namespace, pod1.Name, []string{pod1IPv4, pod1IPv6}, pod1MAC.String(), int32(ofPortPod1))
+	addPodInterface(ifaceStore, pod2.Namespace, pod2.Name, []string{pod2IPv4, pod2IPv6}, pod2MAC.String(), int32(ofPortPod2))
 
 	// NewPacketCaptureController dont work on windows
 	pcController, err := NewPacketCaptureController(kubeClient, crdClient, packetCaptureInformer, ifaceStore)
@@ -441,6 +451,155 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 					},
 					FileServer: &crdv1alpha1.PacketCaptureFileServer{
 						URL: "sftp://127.0.0.1:22/aaa",
+					},
+					Timeout: &testCaptureTimeout,
+				},
+			},
+		},
+		{
+			name:                 "pod-to-pod-ipv6-tcp",
+			expectStartedStatus:  metav1.ConditionTrue,
+			expectCompleteStatus: metav1.ConditionTrue,
+			pc: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{Name: "pc-ipv6-tcp", UID: "uid-ipv6-tcp"},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Source: crdv1alpha1.Source{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: pod1.Namespace,
+							Name:      pod1.Name,
+						},
+					},
+					Destination: crdv1alpha1.Destination{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: pod2.Namespace,
+							Name:      pod2.Name,
+						},
+					},
+					CaptureConfig: crdv1alpha1.CaptureConfig{
+						FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
+							Number: 15,
+						},
+					},
+					Packet: &crdv1alpha1.Packet{
+						IPFamily: v1.IPv6Protocol,
+						Protocol: &tcpProto,
+						TransportHeader: crdv1alpha1.TransportHeader{
+							TCP: &crdv1alpha1.TCPHeader{
+								DstPort: &[]int32{80}[0],
+							},
+						},
+					},
+					Timeout:      &testCaptureTimeout,
+					CapturePoint: crdv1alpha1.CapturePointDestination,
+				},
+			},
+		},
+		{
+			name:                 "ipv6-icmpv6-str",
+			expectStartedStatus:  metav1.ConditionTrue,
+			expectCompleteStatus: metav1.ConditionTrue,
+			pc: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{Name: "pc-icmpv6-string", UID: "uid-icmpv6-string"},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Source: crdv1alpha1.Source{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: pod1.Namespace,
+							Name:      pod1.Name,
+						},
+					},
+					Destination: crdv1alpha1.Destination{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: pod2.Namespace,
+							Name:      pod2.Name,
+						},
+					},
+					CaptureConfig: crdv1alpha1.CaptureConfig{
+						FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
+							Number: 15,
+						},
+					},
+					Packet: &crdv1alpha1.Packet{
+						IPFamily: v1.IPv6Protocol,
+						Protocol: &icmpv6Proto,
+						TransportHeader: crdv1alpha1.TransportHeader{
+							ICMPv6: &crdv1alpha1.ICMPv6Header{
+								Messages: []crdv1alpha1.ICMPv6MsgMatcher{
+									{Type: intstr.FromString("icmpv6-echo")},
+								}}},
+					},
+					Timeout: &testCaptureTimeout,
+				},
+			},
+		},
+		{
+			name:                 "ipv6-icmpv6-int",
+			expectStartedStatus:  metav1.ConditionTrue,
+			expectCompleteStatus: metav1.ConditionTrue,
+			pc: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{Name: "pc-icmpv6-int", UID: "uid-icmpv6-int"},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Source: crdv1alpha1.Source{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: pod1.Namespace,
+							Name:      pod1.Name,
+						},
+					},
+					Destination: crdv1alpha1.Destination{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: pod2.Namespace,
+							Name:      pod2.Name,
+						},
+					},
+					CaptureConfig: crdv1alpha1.CaptureConfig{
+						FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
+							Number: 15,
+						},
+					},
+					Packet: &crdv1alpha1.Packet{
+						IPFamily: v1.IPv6Protocol,
+						Protocol: &icmpv6Proto,
+						TransportHeader: crdv1alpha1.TransportHeader{
+							ICMPv6: &crdv1alpha1.ICMPv6Header{
+								Messages: []crdv1alpha1.ICMPv6MsgMatcher{
+									{Type: intstr.FromInt(129)}, // Echo Reply
+								}}},
+					},
+					Timeout:      &testCaptureTimeout,
+					CapturePoint: crdv1alpha1.CapturePointDestination,
+				},
+			},
+		},
+		{
+			name:                "invalid-icmpv6-str",
+			expectStartedStatus: metav1.ConditionFalse,
+			pc: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{Name: "pc-invalid-icmpv6-str", UID: "uid-invalid-icmpv6-str"},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Source: crdv1alpha1.Source{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: pod1.Namespace,
+							Name:      pod1.Name,
+						},
+					},
+					Destination: crdv1alpha1.Destination{
+						Pod: &crdv1alpha1.PodReference{
+							Namespace: pod2.Namespace,
+							Name:      pod2.Name,
+						},
+					},
+					CaptureConfig: crdv1alpha1.CaptureConfig{
+						FirstN: &crdv1alpha1.PacketCaptureFirstNConfig{
+							Number: 15,
+						},
+					},
+					Packet: &crdv1alpha1.Packet{
+						IPFamily: v1.IPv6Protocol,
+						Protocol: &icmpv6Proto,
+						TransportHeader: crdv1alpha1.TransportHeader{
+							ICMPv6: &crdv1alpha1.ICMPv6Header{
+								Messages: []crdv1alpha1.ICMPv6MsgMatcher{
+									{Type: intstr.FromString("invalid-type")},
+								}}},
 					},
 					Timeout: &testCaptureTimeout,
 				},
