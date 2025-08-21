@@ -137,24 +137,10 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 		l7EventMap = cs.l7EventMapGetter.ConsumeL7EventMap()
 	}
 
-	var zones []uint16
 	var connsLens []int
-	if cs.v4Enabled {
-		if cs.connectUplinkToBridge {
-			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
-		} else {
-			zones = append(zones, openflow.CtZone)
-		}
-	}
-	if cs.v6Enabled {
-		if cs.connectUplinkToBridge {
-			zones = append(zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
-		} else {
-			zones = append(zones, openflow.CtZoneV6)
-		}
-	}
 	var totalConns int
 	var filteredConnsList []*connection.Connection
+	zones := cs.getZones()
 	for _, zone := range zones {
 		filteredConnsListPerZone, totalConnsPerZone, err := cs.connDumper.DumpFlows(zone)
 		if err != nil {
@@ -364,4 +350,23 @@ func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[connection.Tu
 			}
 		}
 	}
+}
+
+func (cs *ConntrackConnectionStore) getZones() []uint16 {
+	var zones []uint16
+	if cs.v4Enabled {
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZone)
+		}
+	}
+	if cs.v6Enabled {
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZoneV6)
+		}
+	}
+	return zones
 }
