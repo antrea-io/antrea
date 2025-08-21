@@ -404,6 +404,8 @@ func (fe *FlowExporter) onNewTarget(obj interface{}) {
 	targetRes := obj.(*api.FlowExporterTarget)
 	klog.V(5).InfoS("DEBUG: Received new FlowExporterTarget", "resource", klog.KObj(targetRes))
 
+	consumer := fe.createConsumerFromFlowExporterTarget(targetRes)
+
 	fe.addConsumer(targetRes)
 }
 
@@ -482,6 +484,7 @@ func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExp
 	}
 
 	return &Consumer{
+		id:                  target.Name,
 		ConsumerConfig:      consumerConfig,
 		k8sClient:           fe.k8sClient,
 		expirePriorityQueue: priorityqueue.NewExpirePriorityQueue(activeFlowExportTimeout, idleFlowExportTimeout),

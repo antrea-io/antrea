@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	api "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	k8sutil "antrea.io/antrea/pkg/util/k8s"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,9 +35,14 @@ type ConsumerConfig struct {
 type Consumer struct {
 	*ConsumerConfig
 
+	id string
+
 	k8sClient kubernetes.Interface
 
 	expirePriorityQueue *priorityqueue.ExpirePriorityQueue
+
+	conntrackConnStore *connections.ConntrackConnectionStore
+	denyConnStore      *connections.DenyConnectionStore
 
 	exp       exporter.Interface
 	connected bool
@@ -49,12 +57,85 @@ func (c *Consumer) Reset() {
 	c.connected = false
 }
 
+func (c *Consumer) Run(stopCh <-chan struct{}) {
+	klog.V(4).Info("Consumer started", "id", c.id)
+
+	defaultTimeout := c.expirePriorityQueue.ActiveFlowTimeout
+	expireTimer := time.NewTimer(defaultTimeout)
+	for {
+		select {
+		case <-stopCh:
+			c.Reset()
+			expireTimer.Stop()
+			return
+		case <-expireTimer.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			err := c.Connect(ctx)
+			cancel()
+			if err != nil {
+				klog.ErrorS(err, "Error when initializing flow exporter consumer")
+				c.Reset()
+				// Initializing flow exporter fails, will retry in next cycle.
+				expireTimer.Reset(defaultTimeout)
+				continue
+			}
+
+			// Get
+
+			// Pop out the expired connections from the conntrack priority queue
+			// and the deny priority queue, and send the data records.
+			nextExpireTime, err := c.sendFlowRecords()
+			if err != nil {
+				klog.ErrorS(err, "Error when sending expired flow records")
+				// If there is an error when sending flow records because of
+				// intermittent connectivity, we reset the connection to collector
+				// and retry in the next export cycle to reinitialize the connection
+				// and send flow records.
+				expireTimer.Reset(defaultTimeout)
+				continue
+			}
+			expireTimer.Reset(nextExpireTime)
+		}
+	}
+}
+
+func (c *Consumer) sendFlowRecords() (time.Duration, error) {
+	return 0, nil
+}
+
+// TODO:
+const maxSize = maxConnsToExport
+
+func (c *Consumer) getConntrackFlowsToSend() ([]connection.Connection, time.Duration) {
+	currTime := time.Now()
+	expiredConns := make([]connection.Connection, 0, maxSize)
+	for i := 0; i < maxSize; i++ {
+		pqItem := c.expirePriorityQueue.GetTopExpiredItem(currTime)
+		if pqItem == nil {
+			break
+		}
+		expiredConns = append(expiredConns, *pqItem.Conn)
+		if utils.IsConnectionDying(pqItem.Conn) {
+			// If a conntrack connection is in dying state or connection is not
+			// in the conntrack table, we set the ReadyToDelete flag to true to
+			// do the deletion later.
+			pqItem.Conn.ReadyToDelete = true
+		}
+		if pqItem.IdleExpireTime.Before(currTime) {
+			// No packets have been received during the idle timeout interval,
+			// the connection is therefore considered inactive.
+			pqItem.Conn.IsActive = false
+		}
+		cs.UpdateConnAndQueue(pqItem, currTime)
+	}
+}
+
 func (c *Consumer) Connect(ctx context.Context) error {
 	if c.connected {
 		return nil
 	}
 
-	klog.V(logLevel).Infof("Connecting consumer with address %s", c.address)
+	klog.V(4).Infof("Connecting consumer with address %s", c.address)
 
 	if c.exp == nil {
 		c.exp = c.createExporter()
@@ -139,7 +220,7 @@ func (fe *Consumer) createExporter() exporter.Interface {
 		}
 		return exporter.NewIPFIXExporter(string(collectorProto), fe.nodeName, fe.obsDomainID, fe.v4Enabled, fe.v6Enabled)
 	default:
-		klog.V(logLevel).InfoS("invalid protocol for FlowExporterTarget", "communicationProtocol", fe.commProtocol, "transportProtocol", fe.transportProtocol)
+		klog.V(4).InfoS("invalid protocol for FlowExporterTarget", "communicationProtocol", fe.commProtocol, "transportProtocol", fe.transportProtocol)
 		return nil
 	}
 }
