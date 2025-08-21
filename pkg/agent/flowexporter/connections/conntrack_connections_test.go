@@ -437,3 +437,58 @@ func TestConntrackConnectionStore_Run_NetworkPolicyWait(t *testing.T) {
 	require.NotZero(t, conntrackConnStore.networkPolicyReadyTime)
 	assert.True(t, conntrackConnStore.networkPolicyReadyTime.After(beforeRunTime))
 }
+
+func TestGetZones(t *testing.T) {
+	t.Run("IP v4 enabled", func(t *testing.T) {
+		t.Run("connectUplinkToBridge", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+			mockProxier := proxytest.NewMockProxier(ctrl)
+			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
+			testFlowExporterOptions.ConnectUplinkToBridge = true
+			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
+			zones := conntrackConnStore.getZones()
+			assert.Equal(t, 1, len(zones))
+			assert.Contains(t, zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
+		})
+		t.Run("no connectUplinkToBridge", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+			mockProxier := proxytest.NewMockProxier(ctrl)
+			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
+			testFlowExporterOptions.ConnectUplinkToBridge = false
+			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
+			zones := conntrackConnStore.getZones()
+			assert.Equal(t, 1, len(zones))
+			assert.Contains(t, zones, uint16(openflow.CtZone))
+		})
+	})
+	t.Run("IP v6 enabled", func(t *testing.T) {
+		t.Run("connectUplinkToBridge", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+			mockProxier := proxytest.NewMockProxier(ctrl)
+			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
+			testFlowExporterOptions.ConnectUplinkToBridge = true
+			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, false, true, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
+			zones := conntrackConnStore.getZones()
+			assert.Equal(t, 1, len(zones))
+			assert.Contains(t, zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
+		})
+		t.Run("no connectUplinkToBridge", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+			mockProxier := proxytest.NewMockProxier(ctrl)
+			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
+			testFlowExporterOptions.ConnectUplinkToBridge = false
+			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, false, true, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
+			zones := conntrackConnStore.getZones()
+			assert.Equal(t, 1, len(zones))
+			assert.Contains(t, zones, uint16(openflow.CtZoneV6))
+		})
+	})
+}
