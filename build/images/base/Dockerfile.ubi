@@ -44,7 +44,7 @@ LABEL description="An UBI9 based Docker base image for Antrea."
 USER root
 
 # Skip installing weak dependencies (geolite2-city and geolite2-country) for Suricata as they are not required for Antrea's use case.
-RUN yum install ipset jq yum-plugin-copr -y && \
+RUN yum install ipset jq yum-plugin-copr nftables -y && \
     yum copr enable @oisf/suricata-${SURICATA_VERSION} -y && yum install suricata --setopt=install_weak_deps=False -y && \
     yum remove yum-plugin-copr -y && yum clean all
 
