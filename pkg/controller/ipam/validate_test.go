@@ -325,12 +325,6 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 
 			namespace, pool, statefulSet := initTestObjects(false, false, 0)
 			controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
-			controller.informerFactory.Start(stopCh)
-			controller.crdInformerFactory.Start(stopCh)
-			controller.informerFactory.WaitForCacheSync(stopCh)
-			controller.crdInformerFactory.WaitForCacheSync(stopCh)
-
-			go controller.Run(stopCh)
 
 			review := &admv1.AdmissionReview{
 				Request: tt.request,

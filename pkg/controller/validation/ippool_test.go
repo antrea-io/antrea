@@ -107,7 +107,7 @@ func TestParseIPRangeCIDR(t *testing.T) {
 			expectedErr: "invalid cidr 192.168.1.1/33",
 		},
 		{
-			name:        "invalid ipv6 cidr",
+			name:        "invalid ipv6 CIDR",
 			cidrStr:     "2001:d00::/132",
 			expectedErr: "invalid cidr 2001:d00::/132",
 		},
@@ -127,10 +127,9 @@ func TestParseIPRangeCIDR(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cidr, err := parseIPRangeCIDR(tt.cidrStr)
 			if tt.expectedErr != "" {
-				assert.Equal(t, tt.expectedErr, err.Error())
-				assert.True(t, cidr == netip.Prefix{})
+				assert.EqualError(t, err, tt.expectedErr)
 			} else {
-				assert.Empty(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tt.expectedCidr, cidr.String())
 			}
 		})
@@ -202,10 +201,10 @@ func TestParseIPRangeStartEnd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			start, end, err := parseIPRangeStartEnd(tt.start, tt.end)
 			if tt.expectedErr != "" {
-				assert.Contains(t, err.Error(), tt.expectedErr)
+				assert.EqualError(t, err, tt.expectedErr)
 				assert.True(t, start == netip.Addr{} || end == netip.Addr{})
 			} else {
-				assert.Empty(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tt.start, start.String())
 				assert.Equal(t, tt.end, end.String())
 			}
@@ -278,9 +277,9 @@ func TestValidateIPRange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateIPRange(tt.ipRange)
 			if tt.expectedErr != "" {
-				assert.Equal(t, tt.expectedErr, err.Error())
+				assert.EqualError(t, err, tt.expectedErr)
 			} else {
-				assert.Empty(t, err)
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -295,10 +294,11 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		subnetInfo  *crdv1beta1.SubnetInfo
-		ipRanges    []crdv1beta1.IPRange
-		expectedErr string
+		name                string
+		subnetInfo          *crdv1beta1.SubnetInfo
+		ipRanges            []crdv1beta1.IPRange
+		expectedRangeLength int
+		expectedErr         string
 	}{
 		{
 			name:       "valid CIDR range in subnet",
@@ -306,6 +306,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 			ipRanges: []crdv1beta1.IPRange{
 				{CIDR: "192.168.1.0/26"},
 			},
+			expectedRangeLength: 1,
 		},
 		{
 			name:       "valid start-end range in subnet",
@@ -313,6 +314,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 			ipRanges: []crdv1beta1.IPRange{
 				{Start: "192.168.1.10", End: "192.168.1.20"},
 			},
+			expectedRangeLength: 1,
 		},
 		{
 			name:       "range start outside subnet",
@@ -385,16 +387,78 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 			ipRanges: []crdv1beta1.IPRange{
 				{Start: "192.168.1.1", End: "192.168.1.10"},
 			},
+			expectedRangeLength: 1,
+		},
+		{
+			name:                "empty IP ranges",
+			subnetInfo:          &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
+			ipRanges:            []crdv1beta1.IPRange{},
+			expectedRangeLength: 0,
+		},
+		{
+			name:       "single IP range",
+			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
+			ipRanges: []crdv1beta1.IPRange{
+				{Start: "192.168.1.100", End: "192.168.1.100"},
+			},
+			expectedRangeLength: 1,
+		},
+		{
+			name:       "CIDR at subnet boundary",
+			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
+			ipRanges: []crdv1beta1.IPRange{
+				{CIDR: "192.168.1.0/24"},
+			},
+			expectedRangeLength: 1,
+		},
+		{
+			name:       "range at subnet boundary",
+			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
+			ipRanges: []crdv1beta1.IPRange{
+				{Start: "192.168.1.0", End: "192.168.1.255"},
+			},
+			expectedRangeLength: 1,
+		},
+		{
+			name:       "multiple non-overlapping ranges",
+			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
+			ipRanges: []crdv1beta1.IPRange{
+				{Start: "192.168.1.10", End: "192.168.1.20"},
+				{Start: "192.168.1.30", End: "192.168.1.40"},
+				{Start: "192.168.1.50", End: "192.168.1.60"},
+			},
+			expectedRangeLength: 3,
+		},
+		{
+			name:        "invalid prefix length for IPv4",
+			subnetInfo:  &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 0},
+			ipRanges:    []crdv1beta1.IPRange{{CIDR: "192.168.1.0/24"}},
+			expectedErr: "invalid prefixLength 0",
+		},
+		{
+			name:        "invalid prefix length for IPv6",
+			subnetInfo:  &crdv1beta1.SubnetInfo{Gateway: "2001:db8::1", PrefixLength: 0},
+			ipRanges:    []crdv1beta1.IPRange{{CIDR: "2001:db8::/64"}},
+			expectedErr: "invalid prefixLength 0",
+		},
+		{
+			name:       "range exactly matches subnet",
+			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
+			ipRanges: []crdv1beta1.IPRange{
+				{Start: "192.168.1.0", End: "192.168.1.255"},
+			},
+			expectedRangeLength: 1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ValidateIPRangesAndSubnetInfo(tt.subnetInfo, tt.ipRanges)
+			ranges, err := ValidateIPRangesAndSubnetInfo(tt.subnetInfo, tt.ipRanges)
 			if tt.expectedErr != "" {
-				assert.Contains(t, err.Error(), tt.expectedErr)
+				assert.EqualError(t, err, tt.expectedErr)
 			} else {
-				assert.Empty(t, err)
+				assert.NoError(t, err)
+				assert.Len(t, ranges, tt.expectedRangeLength)
 			}
 		})
 	}
@@ -405,32 +469,39 @@ func TestNormalizeRange(t *testing.T) {
 		name           string
 		ipRange        crdv1beta1.IPRange
 		context        string
+		expectedRange  NormalizedIPRange
 		expectedStart  string
 		expectedEnd    string
 		expectedOrigin string
 		expectedErr    string
 	}{
 		{
-			name:           "valid CIDR range",
-			ipRange:        crdv1beta1.IPRange{CIDR: "192.168.1.0/24"},
-			expectedStart:  "192.168.1.0",
-			expectedEnd:    "192.168.1.255",
-			expectedOrigin: "range [192.168.1.0/24]",
+			name:    "valid CIDR range",
+			ipRange: crdv1beta1.IPRange{CIDR: "192.168.1.0/24"},
+			expectedRange: NormalizedIPRange{
+				Start:  netip.MustParseAddr("192.168.1.0"),
+				End:    netip.MustParseAddr("192.168.1.255"),
+				Origin: "range [192.168.1.0/24]",
+			},
 		},
 		{
-			name:           "valid CIDR range with context",
-			ipRange:        crdv1beta1.IPRange{CIDR: "192.168.1.0/24"},
-			context:        "pool1",
-			expectedStart:  "192.168.1.0",
-			expectedEnd:    "192.168.1.255",
-			expectedOrigin: "range [192.168.1.0/24] of pool1",
+			name:    "valid CIDR range with context",
+			ipRange: crdv1beta1.IPRange{CIDR: "192.168.1.0/24"},
+			context: "pool1",
+			expectedRange: NormalizedIPRange{
+				Start:  netip.MustParseAddr("192.168.1.0"),
+				End:    netip.MustParseAddr("192.168.1.255"),
+				Origin: "range [192.168.1.0/24] of pool1",
+			},
 		},
 		{
-			name:           "valid start-end range",
-			ipRange:        crdv1beta1.IPRange{Start: "192.168.1.1", End: "192.168.1.10"},
-			expectedStart:  "192.168.1.1",
-			expectedEnd:    "192.168.1.10",
-			expectedOrigin: "range [192.168.1.1-192.168.1.10]",
+			name:    "valid start-end range",
+			ipRange: crdv1beta1.IPRange{Start: "192.168.1.1", End: "192.168.1.10"},
+			expectedRange: NormalizedIPRange{
+				Start:  netip.MustParseAddr("192.168.1.1"),
+				End:    netip.MustParseAddr("192.168.1.10"),
+				Origin: "range [192.168.1.1-192.168.1.10]",
+			},
 		},
 		{
 			name:        "invalid CIDR",
@@ -463,12 +534,10 @@ func TestNormalizeRange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := normalizeRange(tt.ipRange, tt.context)
 			if tt.expectedErr != "" {
-				assert.Equal(t, tt.expectedErr, err.Error())
+				assert.EqualError(t, err, tt.expectedErr)
 			} else {
-				assert.Empty(t, err)
-				assert.Equal(t, tt.expectedStart, result.Start.String())
-				assert.Equal(t, tt.expectedEnd, result.End.String())
-				assert.Equal(t, tt.expectedOrigin, result.Origin)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedRange, result)
 			}
 		})
 	}
@@ -557,88 +626,13 @@ func TestOverlaps(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			start1, _ := netip.ParseAddr(tt.range1[0])
-			end1, _ := netip.ParseAddr(tt.range1[1])
-			start2, _ := netip.ParseAddr(tt.range2[0])
-			end2, _ := netip.ParseAddr(tt.range2[1])
+			start1 := netip.MustParseAddr(tt.range1[0])
+			end1 := netip.MustParseAddr(tt.range1[1])
+			start2 := netip.MustParseAddr(tt.range2[0])
+			end2 := netip.MustParseAddr(tt.range2[1])
 
 			result := RangesOverlap(start1, end1, start2, end2)
 			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestValidateIPRangesAndSubnetInfo_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name        string
-		subnetInfo  *crdv1beta1.SubnetInfo
-		ipRanges    []crdv1beta1.IPRange
-		expectedErr string
-	}{
-		{
-			name:       "empty IP ranges",
-			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
-			ipRanges:   []crdv1beta1.IPRange{},
-		},
-		{
-			name:       "single IP range",
-			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
-			ipRanges: []crdv1beta1.IPRange{
-				{Start: "192.168.1.100", End: "192.168.1.100"},
-			},
-		},
-		{
-			name:       "CIDR at subnet boundary",
-			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
-			ipRanges: []crdv1beta1.IPRange{
-				{CIDR: "192.168.1.0/24"},
-			},
-		},
-		{
-			name:       "range at subnet boundary",
-			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
-			ipRanges: []crdv1beta1.IPRange{
-				{Start: "192.168.1.0", End: "192.168.1.255"},
-			},
-		},
-		{
-			name:       "multiple non-overlapping ranges",
-			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
-			ipRanges: []crdv1beta1.IPRange{
-				{Start: "192.168.1.10", End: "192.168.1.20"},
-				{Start: "192.168.1.30", End: "192.168.1.40"},
-				{Start: "192.168.1.50", End: "192.168.1.60"},
-			},
-		},
-		{
-			name:        "invalid prefix length for IPv4",
-			subnetInfo:  &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 0},
-			ipRanges:    []crdv1beta1.IPRange{{CIDR: "192.168.1.0/24"}},
-			expectedErr: "invalid prefixLength 0",
-		},
-		{
-			name:        "invalid prefix length for IPv6",
-			subnetInfo:  &crdv1beta1.SubnetInfo{Gateway: "2001:db8::1", PrefixLength: 0},
-			ipRanges:    []crdv1beta1.IPRange{{CIDR: "2001:db8::/64"}},
-			expectedErr: "invalid prefixLength 0",
-		},
-		{
-			name:       "range exactly matches subnet",
-			subnetInfo: &crdv1beta1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24},
-			ipRanges: []crdv1beta1.IPRange{
-				{Start: "192.168.1.0", End: "192.168.1.255"},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := ValidateIPRangesAndSubnetInfo(tt.subnetInfo, tt.ipRanges)
-			if tt.expectedErr != "" {
-				assert.Contains(t, err.Error(), tt.expectedErr)
-			} else {
-				assert.Empty(t, err)
-			}
 		})
 	}
 }

@@ -107,19 +107,17 @@ func ValidateIPRangesAndSubnetInfo(subnetInfo *crdv1beta1.SubnetInfo, ipRanges [
 		if err != nil {
 			return nil, err
 		}
-		start, end := cur.Start, cur.End
-		key := cur.Origin
 
 		// Validate range is within subnet
-		if subnet != nil && (!subnet.Contains(start) || !subnet.Contains(end)) {
+		if subnet != nil && (!subnet.Contains(cur.Start) || !subnet.Contains(cur.End)) {
 			return nil, fmt.Errorf("%s must be a strict subset of the subnet %s/%d",
-				key, subnetInfo.Gateway, subnetInfo.PrefixLength)
+				cur.Origin, subnetInfo.Gateway, subnetInfo.PrefixLength)
 		}
 
 		// Check for overlaps with other ranges in the same pool
 		for _, existingRange := range currentRanges {
-			if RangesOverlap(start, end, existingRange.Start, existingRange.End) {
-				return nil, fmt.Errorf("%s overlaps with %s", key, existingRange.Origin)
+			if RangesOverlap(cur.Start, cur.End, existingRange.Start, existingRange.End) {
+				return nil, fmt.Errorf("%s overlaps with %s", cur.Origin, existingRange.Origin)
 			}
 		}
 		currentRanges = append(currentRanges, cur)
