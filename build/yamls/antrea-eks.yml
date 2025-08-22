@@ -2969,11 +2969,11 @@ spec:
           name: Started
           type: string
         - jsonPath: .status.conditions[?(@.type=="PacketCaptureComplete")].status
-          description: Whether the capture has completed.
+          description: Whether all captures have completed.
           name: Complete
           type: string
         - jsonPath: .status.conditions[?(@.type=="PacketCaptureFileUploaded")].status
-          description: Whether the capture file has been uploaded to the file server.
+          description: Whether all capture files have been uploaded to the file server.
           name: Uploaded
           type: string
           priority: 10
@@ -2990,6 +2990,12 @@ spec:
               x-kubernetes-validations:
                 - rule: "has(self.source.pod) || has(self.destination.pod)"
                   message: "At least one of source.pod or destination.pod must be specified."
+                - rule: "!(has(self.captureLocation) && self.captureLocation == 'Source') || has(self.source.pod)"
+                  message: "source.pod must be set when captureLocation is 'Source'"
+                - rule: "!(has(self.captureLocation) && self.captureLocation == 'Destination') || has(self.destination.pod)"
+                  message: "destination.pod must be set when captureLocation is 'Destination'"
+                - rule: "!(has(self.captureLocation) && self.captureLocation == 'Both') || (has(self.source.pod) && has(self.destination.pod))"
+                  message: "Both source.pod and destination.pod must be set when captureLocation is 'Both'"
               properties:
                 source:
                   type: object
@@ -3009,7 +3015,9 @@ spec:
                           type: string
                     ip:
                       type: string
-                      format: ipv4
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
                 destination:
                   type: object
                   x-kubernetes-validations:
@@ -3028,13 +3036,15 @@ spec:
                           type: string
                     ip:
                       type: string
-                      format: ipv4
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
                 packet:
                   type: object
                   properties:
                     ipFamily:
                       type: string
-                      enum: [IPv4]
+                      enum: [IPv4, IPv6]
                       default: IPv4
                     protocol:
                       x-kubernetes-int-or-string: true
@@ -3094,13 +3104,32 @@ spec:
                                     type: integer
                                     minimum: 0
                                     maximum: 255
+                        icmpv6:
+                          type: object
+                          properties:
+                            messages:
+                              type: array
+                              items:
+                                type: object
+                                required:
+                                  - type
+                                properties:
+                                  type:
+                                    x-kubernetes-int-or-string: true
+                                  code:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 255
                       x-kubernetes-validations:
-                        - rule: "(has(self.icmp) ? 1 : 0) + (has(self.udp) ? 1 : 0) + (has(self.tcp) ? 1: 0) <= 1"
-                          message: "At most one of 'icmp', 'udp', or 'tcp' may be set"
+                        - rule: "(has(self.icmp) ? 1 : 0) + (has(self.icmpv6) ? 1 : 0) + (has(self.udp) ? 1 : 0) + (has(self.tcp) ? 1: 0) <= 1"
+                          message: "At most one of 'ICMP', 'ICMPv6', 'UDP', or 'TCP' may be set"
                 direction:
                   type: string
                   enum: ["SourceToDestination", "DestinationToSource", "Both"]
                   default: "SourceToDestination"
+                captureLocation:
+                  type: string
+                  enum: ["Source", "Destination", "Both"]
                 timeout:
                   type: integer
                   minimum: 1
@@ -3135,7 +3164,12 @@ spec:
                 numberCaptured:
                   type: integer
                 filePath:
+                  description: 'DEPRECATED: This field is deprecated, please use filePaths instead.'
                   type: string
+                filePaths:
+                  type: array
+                  items:
+                    type: string
                 conditions:
                   type: array
                   items:

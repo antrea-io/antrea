@@ -369,9 +369,10 @@ type Destination struct {
 
 // TransportHeader describes the spec of a TransportHeader.
 type TransportHeader struct {
-	UDP  *UDPHeader  `json:"udp,omitempty"`
-	TCP  *TCPHeader  `json:"tcp,omitempty"`
-	ICMP *ICMPHeader `json:"icmp,omitempty"`
+	UDP    *UDPHeader    `json:"udp,omitempty"`
+	TCP    *TCPHeader    `json:"tcp,omitempty"`
+	ICMP   *ICMPHeader   `json:"icmp,omitempty"`
+	ICMPv6 *ICMPv6Header `json:"icmpv6,omitempty"`
 }
 
 // UDPHeader describes the spec of a UDP header.
@@ -412,6 +413,17 @@ const (
 	ICMPMsgTypeTimexceed  ICMPMsgType = "icmp-timxceed"  // 11
 )
 
+type ICMPv6MsgType string
+
+const (
+	ICMPv6MsgTypeEcho         ICMPv6MsgType = "icmpv6-echo"        // 128
+	ICMPv6MsgTypeEchoReply    ICMPv6MsgType = "icmpv6-echoreply"   // 129
+	ICMPv6MsgTypeDstUnreach   ICMPv6MsgType = "icmpv6-unreach"     // 1
+	ICMPv6MsgTypePacketTooBig ICMPv6MsgType = "icmpv6-pkt-too-big" // 2
+	ICMPv6MsgTypeTimexceed    ICMPv6MsgType = "icmpv6-timxceed"    // 3
+	ICMPv6MsgTypeParamProblem ICMPv6MsgType = "icmpv6-paramprob"   // 4
+)
+
 // ICMPMsgMatcher describes an ICMP message matching filter with type and code.
 type ICMPMsgMatcher struct {
 	// Type is the type of ICMP message to match.
@@ -420,11 +432,26 @@ type ICMPMsgMatcher struct {
 	Code *int32 `json:"code,omitempty"`
 }
 
+// ICMPv6MsgMatcher describes an ICMPv6 message matching filter with type and code.
+type ICMPv6MsgMatcher struct {
+	// Type is the type of ICMPv6 message to match.
+	Type intstr.IntOrString `json:"type"`
+	// Code is the optional code field of the ICMPv6 message to match.
+	Code *int32 `json:"code,omitempty"`
+}
+
 // ICMPHeader describes the spec of an ICMP header.
 type ICMPHeader struct {
 	// Messages is a list of ICMP message match conditions that are logically ORed. When direction is set to Both,
 	// the specified ICMP message matching conditions will be applied to traffic in both directions.
 	Messages []ICMPMsgMatcher `json:"messages,omitempty"`
+}
+
+// ICMPv6Header describes the spec of an ICMPv6 header.
+type ICMPv6Header struct {
+	// Messages is a list of ICMPv6 message match conditions that are logically ORed. When direction is set to Both,
+	// the specified ICMPv6 message matching conditions will be applied to traffic in both directions.
+	Messages []ICMPv6MsgMatcher `json:"messages,omitempty"`
 }
 
 // Packet includes header info.
@@ -488,6 +515,14 @@ const (
 	CaptureDirectionBoth                CaptureDirection = "Both"
 )
 
+type CaptureLocation string
+
+const (
+	CaptureLocationSource      CaptureLocation = "Source"
+	CaptureLocationDestination CaptureLocation = "Destination"
+	CaptureLocationBoth        CaptureLocation = "Both"
+)
+
 type PacketCaptureSpec struct {
 	// Timeout is the timeout for this capture session. If not specified, defaults to 60s.
 	Timeout       *int32        `json:"timeout,omitempty"`
@@ -499,6 +534,9 @@ type PacketCaptureSpec struct {
 	// Direction specifies which packets to capture (source -> destination, destination -> source or both).
 	// If not specified, defaults to SourceToDestination.
 	Direction CaptureDirection `json:"direction,omitempty"`
+	// CaptureLocation specifies where the packet capture should be performed: 'Source', 'Destination', or 'Both'.
+	// Selecting 'Both' may result in two separate capture files. If not specified, defaults to 'Source'.
+	CaptureLocation CaptureLocation `json:"captureLocation,omitempty"`
 	// Packet defines what kind of traffic we want to capture between the source and destination. If not specified,
 	// all kinds of traffic will count.
 	Packet *Packet `json:"packet,omitempty"`
@@ -512,10 +550,13 @@ type PacketCaptureStatus struct {
 	// NumberCaptured records how many packets have been captured. If it reaches the target number, the capture
 	// can be considered as finished.
 	NumberCaptured int32 `json:"numberCaptured"`
-	// FilePath specifies the location where captured packets are stored. It can either be a URL to download the pcap file (if "Spec.FileServer" is specified)
+	// +kubebuilder:validation:Deprecated=true
+	// FilePath(s) specifies the location where captured packets are stored. It can either be a URL to download the pcap file (if "Spec.FileServer" is specified)
 	// or a local file path on the antrea-agent Pod where the packet was captured, formatted as : <antrea-agent-pod-name>:<path>.
 	// When using a local file path, the file will be automatically removed after the PacketCapture resource is deleted.
-	FilePath string `json:"filePath"`
+	// Deprecated: this field is deprecated and will be removed in a future version. Use FilePaths instead.
+	FilePath  string   `json:"filePath,omitempty"`
+	FilePaths []string `json:"filePaths,omitempty"`
 	// Condition represents the latest available observations of the PacketCapture's current state.
 	Conditions []PacketCaptureCondition `json:"conditions"`
 }
@@ -525,10 +566,18 @@ type PacketCaptureConditionType string
 const (
 	// PacketCaptureStarted means this request has been started.
 	PacketCaptureStarted PacketCaptureConditionType = "PacketCaptureStarted"
+	// PacketCaptureAtSrcComplete indicates that the packet capture at the source has completed.
+	PacketCaptureAtSrcComplete PacketCaptureConditionType = "PacketCaptureAtSrcComplete"
+	// PacketCaptureAtDstComplete indicates that the packet capture at the destination has completed.
+	PacketCaptureAtDstComplete PacketCaptureConditionType = "PacketCaptureAtDstComplete"
 	// PacketCaptureComplete means enough packets have been captured and saved in an antrea-agent Pod locally already, but results haven't been
 	// uploaded yet (if a file server has been configured).
 	PacketCaptureComplete PacketCaptureConditionType = "PacketCaptureComplete"
-	// PacketCaptureFileUploaded means the captured packets file has been uploaded to the target file server.
+	// PacketCaptureAtSrcFileUploaded means the captured packet file at the source has been uploaded to the file server.
+	PacketCaptureAtSrcFileUploaded PacketCaptureConditionType = "PacketCaptureAtSrcFileUploaded"
+	// PacketCaptureAtDstFileUploaded means the captured packet file at the destination has been uploaded to the file server.
+	PacketCaptureAtDstFileUploaded PacketCaptureConditionType = "PacketCaptureAtDstFileUploaded"
+	// PacketCaptureFileUploaded means the captured packet file(s) have been uploaded to the target file server.
 	PacketCaptureFileUploaded PacketCaptureConditionType = "PacketCaptureFileUploaded"
 )
 
