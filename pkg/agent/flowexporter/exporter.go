@@ -41,7 +41,6 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/env"
-	k8sutil "antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/util/objectstore"
 )
 
@@ -77,7 +76,7 @@ type FlowExporter struct {
 	nodeUID                string
 
 	targetInformer v1beta1.FlowExporterTargetInformer
-	consumers      map[string]*Consumer
+	consumers      map[string]chan struct{} // Consumers are added and removed dynamically.
 }
 
 func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
@@ -142,9 +141,10 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 		obsDomainID:            obsDomainID,
 		nodeUID:                nodeUID,
 		targetInformer:         targetInformer,
-		consumers:              make(map[string]*Consumer),
+		consumers:              make(map[string]chan struct{}),
 	}
 
+	// TODO: Should this be moved to `Run`?
 	targetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    fe.onNewTarget,
 		UpdateFunc: fe.onTargetUpdate,
@@ -188,43 +188,11 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	defaultTimeout := exp.conntrackPriorityQueue.ActiveFlowTimeout
-	expireTimer := time.NewTimer(defaultTimeout)
-	for {
-		select {
-		case <-stopCh:
-			for _, consumer := range exp.consumers {
-				consumer.Reset()
-			}
-			expireTimer.Stop()
-			return
-		case <-expireTimer.C:
-			for _, consumer := range exp.consumers {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				err := consumer.Connect(ctx)
-				cancel()
-				if err != nil {
-					klog.ErrorS(err, "Error when initializing flow exporter consumer")
-					consumer.Reset()
-					// Initializing flow exporter fails, will retry in next cycle.
-					expireTimer.Reset(defaultTimeout)
-					continue
-				}
-			}
-			// Pop out the expired connections from the conntrack priority queue
-			// and the deny priority queue, and send the data records.
-			nextExpireTime, err := exp.sendFlowRecords()
-			if err != nil {
-				klog.ErrorS(err, "Error when sending expired flow records")
-				// If there is an error when sending flow records because of
-				// intermittent connectivity, we reset the connection to collector
-				// and retry in the next export cycle to reinitialize the connection
-				// and send flow records.
-				expireTimer.Reset(defaultTimeout)
-				continue
-			}
-			expireTimer.Reset(nextExpireTime)
-		}
+	<-stopCh
+
+	// We want to stop all the consumers
+	for _, ch := range exp.consumers {
+		close(ch)
 	}
 }
 
@@ -252,32 +220,6 @@ func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
 	// Clear expiredConns slice after exporting. Allocated memory is kept.
 	exp.expiredConns = exp.expiredConns[:0]
 	return nextExpireTime, nil
-}
-
-// resolveCollectorAddress resolves the collector address provided in the config to an IP address or
-// DNS name. The collector address can be a namespaced reference to a K8s Service, and hence needs
-// resolution (to the Service's ClusterIP). The function also returns a server name to be used in
-// the TLS handshake (when TLS is enabled).
-func (exp *FlowExporter) resolveCollectorAddress(ctx context.Context, collectorAddr string) (string, string, error) {
-	host, port, err := net.SplitHostPort(collectorAddr)
-	if err != nil {
-		return "", "", err
-	}
-	ns, name := k8sutil.SplitNamespacedName(host)
-	if ns == "" {
-		return collectorAddr, "", nil
-	}
-	svc, err := exp.k8sClient.CoreV1().Services(ns).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return "", "", fmt.Errorf("failed to resolve Service: %s/%s", ns, name)
-	}
-	if svc.Spec.ClusterIP == "" {
-		return "", "", fmt.Errorf("ClusterIP is not available for Service: %s/%s", ns, name)
-	}
-	addr := net.JoinHostPort(svc.Spec.ClusterIP, port)
-	dns := fmt.Sprintf("%s.%s.svc", name, ns)
-	klog.V(2).InfoS("Resolved Service address", "address", addr)
-	return addr, dns, nil
 }
 
 // func (exp *FlowExporter) initFlowExporter(ctx context.Context, target *api.FlowExporterTarget) error {
@@ -379,12 +321,12 @@ func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
 		}
 	}
 
-	for _, consumer := range exp.consumers {
-		if err := consumer.Export(conn); err != nil {
-			consumer.Reset()
-			return err
-		}
-	}
+	// for _, consumer := range exp.consumers {
+	// 	if err := consumer.Export(conn); err != nil {
+	// 		consumer.Reset()
+	// 		return err
+	// 	}
+	// }
 
 	exp.numConnsExported += 1
 	if klog.V(5).Enabled() {
@@ -403,8 +345,6 @@ func getMinTime(t1, t2 time.Duration) time.Duration {
 func (fe *FlowExporter) onNewTarget(obj interface{}) {
 	targetRes := obj.(*api.FlowExporterTarget)
 	klog.V(5).InfoS("DEBUG: Received new FlowExporterTarget", "resource", klog.KObj(targetRes))
-
-	consumer := fe.createConsumerFromFlowExporterTarget(targetRes)
 
 	fe.addConsumer(targetRes)
 }
@@ -426,32 +366,36 @@ func (fe *FlowExporter) onTargetDelete(obj interface{}) {
 }
 
 func (fe *FlowExporter) addConsumer(targetRes *api.FlowExporterTarget) error {
-	key := getTargetKey(targetRes)
+	key := consumerID(targetRes)
 	if _, ok := fe.consumers[key]; ok {
 		// Consumer already exist. Report a warning and update/reset it.
 		return nil
 	}
 
 	consumer := fe.createConsumerFromFlowExporterTarget(targetRes)
-	fe.consumers[key] = consumer
+	stopCh := make(chan struct{})
+	consumer.Run(stopCh)
+	fe.consumers[key] = stopCh
 
 	return nil
 }
 
 func (fe *FlowExporter) deleteConsumer(targetRes *api.FlowExporterTarget) error {
-	key := getTargetKey(targetRes)
-	consumer, ok := fe.consumers[key]
+	key := consumerID(targetRes)
+	ch, ok := fe.consumers[key]
 	if !ok {
+		// Consumer never existing, how did that happen?
+		klog.InfoS("consumer not found", "id", key)
 		return nil
 	}
-	consumer.Reset()
+	close(ch)
 	delete(fe.consumers, key)
 
 	return nil
 }
 
-func getTargetKey(target *api.FlowExporterTarget) string {
-	return fmt.Sprintf("%s/%s", target.Namespace, target.Name)
+func consumerID(target *api.FlowExporterTarget) string {
+	return fmt.Sprintf("%s", target.Name)
 }
 
 func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExporterTarget) *Consumer {
@@ -484,9 +428,10 @@ func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExp
 	}
 
 	return &Consumer{
-		id:                  target.Name,
-		ConsumerConfig:      consumerConfig,
-		k8sClient:           fe.k8sClient,
-		expirePriorityQueue: priorityqueue.NewExpirePriorityQueue(activeFlowExportTimeout, idleFlowExportTimeout),
+		id:                                target.Name,
+		ConsumerConfig:                    consumerConfig,
+		k8sClient:                         fe.k8sClient,
+		conntackExpirePriorityQueue:       priorityqueue.NewExpirePriorityQueue(activeFlowExportTimeout, idleFlowExportTimeout),
+		denyConnectionExpirePriorityQueue: priorityqueue.NewExpirePriorityQueue(activeFlowExportTimeout, idleFlowExportTimeout),
 	}
 }
