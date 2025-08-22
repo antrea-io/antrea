@@ -320,9 +320,6 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stopCh := make(chan struct{})
-			defer close(stopCh)
-
 			namespace, pool, statefulSet := initTestObjects(false, false, 0)
 			controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
 
