@@ -82,6 +82,7 @@ require (
 	k8s.io/kubelet v0.33.1
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/controller-runtime v0.21.0
+	sigs.k8s.io/knftables v0.0.19-0.20250918210213-152a9262585d
 	sigs.k8s.io/mcs-api v0.1.0
 	sigs.k8s.io/network-policy-api v0.1.1
 	sigs.k8s.io/yaml v1.4.0
@@ -248,7 +249,6 @@ require (
 	k8s.io/kms v0.33.1 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
-	sigs.k8s.io/knftables v0.0.18 // indirect
 	sigs.k8s.io/kustomize/api v0.19.0 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.19.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
