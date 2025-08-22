@@ -117,6 +117,7 @@ type ExtraConfig struct {
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
 	egressController              *egress.EgressController
 	externalIPPoolController      *externalippool.ExternalIPPoolController
+	ipamController                *ipam.AntreaIPAMController
 	caCertController              *certificate.CACertController
 	statsAggregator               *stats.Aggregator
 	networkPolicyStatusController *controllernetworkpolicy.StatusController
@@ -165,6 +166,7 @@ func NewConfig(
 	npController *controllernetworkpolicy.NetworkPolicyController,
 	egressController *egress.EgressController,
 	externalIPPoolController *externalippool.ExternalIPPoolController,
+	ipamController *ipam.AntreaIPAMController,
 	bundleCollectionController *controllerbundlecollection.Controller,
 	traceflowController *traceflow.Controller) *Config {
 	return &Config{
@@ -186,6 +188,7 @@ func NewConfig(
 			networkPolicyStatusController: networkPolicyStatusController,
 			egressController:              egressController,
 			externalIPPoolController:      externalIPPoolController,
+			ipamController:                ipamController,
 			bundleCollectionController:    bundleCollectionController,
 			traceflowController:           traceflowController,
 		},
@@ -341,7 +344,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) || features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/convert/ippool", webhook.HandleCRDConversion(ipam.ConvertIPPool))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/ippool", webhook.HandlerForValidateFunc(ipam.ValidateIPPool))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/ippool", webhook.HandlerForValidateFunc(c.ipamController.ValidateIPPool))
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
