@@ -88,7 +88,7 @@ func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
-			break
+			return
 		case <-pollTicker.C:
 			_, err := cs.Poll()
 			if err != nil {
@@ -151,11 +151,8 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 			// Delete the connection if it is ready to delete or it was not exported
 			// in the time period as specified by the stale connection timeout.
 			if conn.ReadyToDelete || time.Since(conn.LastExportTime) >= cs.staleConnectionTimeout {
-				if removedItem := cs.expirePriorityQueue.Remove(key); removedItem != nil {
-					// In case ReadyToDelete is true, item should already have been removed from pq
-					klog.V(4).InfoS("Conn removed from cs pq due to stale timeout",
-						"key", key, "conn", removedItem.Conn)
-				}
+				cs.notify(Remove, conn)
+				klog.V(4).InfoS("requested removal of stale connection", "key", key, "conn", conn)
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
@@ -260,17 +257,17 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		existingConn.TCPState = conn.TCPState
 		existingConn.IsActive = utils.CheckConntrackConnActive(existingConn)
 		if existingConn.IsActive {
-			cs.notify(Add, conn)
-			existingItem, exists := cs.expirePriorityQueue.KeyToItem[connKey]
-			if !exists {
-				// If the connKey:pqItem pair does not exist in the map, it shows the
-				// conn was inactive, and was removed from PQ and map. Since it becomes
-				// active again now, we create a new pqItem and add it to PQ and map.
-				cs.expirePriorityQueue.WriteItemToQueue(connKey, existingConn)
-			} else {
-				cs.connectionStore.expirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
-					time.Now().Add(cs.connectionStore.expirePriorityQueue.IdleFlowTimeout))
-			}
+			// cs.notify(Add, conn)
+			// existingItem, exists := cs.expirePriorityQueue.KeyToItem[connKey]
+			// if !exists {
+			// 	// If the connKey:pqItem pair does not exist in the map, it shows the
+			// 	// conn was inactive, and was removed from PQ and map. Since it becomes
+			// 	// active again now, we create a new pqItem and add it to PQ and map.
+			// 	cs.expirePriorityQueue.WriteItemToQueue(connKey, existingConn)
+			// } else {
+			// 	cs.connectionStore.expirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
+			// 		time.Now().Add(cs.connectionStore.expirePriorityQueue.IdleFlowTimeout))
+			// }
 		}
 		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
 	} else {

@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/metrics"
 	api "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	k8sutil "antrea.io/antrea/pkg/util/k8s"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -72,43 +74,43 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 	// When this is closed clean up
 	<-stopCh
 
-	// defaultTimeout := c.conntackExpirePriorityQueue.ActiveFlowTimeout
-	// expireTimer := time.NewTimer(defaultTimeout)
-	// for {
-	// 	select {
-	// 	case <-stopCh:
-	// 		c.Reset()
-	// 		expireTimer.Stop()
-	// 		return
-	// 	case <-expireTimer.C:
-	// 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	// 		err := c.Connect(ctx)
-	// 		cancel()
-	// 		if err != nil {
-	// 			klog.ErrorS(err, "Error when initializing flow exporter consumer")
-	// 			c.Reset()
-	// 			// Initializing flow exporter fails, will retry in next cycle.
-	// 			expireTimer.Reset(defaultTimeout)
-	// 			continue
-	// 		}
+	defaultTimeout := c.conntackExpirePriorityQueue.ActiveFlowTimeout
+	expireTimer := time.NewTimer(defaultTimeout)
+	for {
+		select {
+		case <-stopCh:
+			c.Reset()
+			expireTimer.Stop()
+			return
+		case <-expireTimer.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			err := c.Connect(ctx)
+			cancel()
+			if err != nil {
+				klog.ErrorS(err, "Error when initializing flow exporter consumer")
+				c.Reset()
+				// Initializing flow exporter fails, will retry in next cycle.
+				expireTimer.Reset(defaultTimeout)
+				continue
+			}
 
-	// 		// Get
+			// 		// Get
 
-	// 		// Pop out the expired connections from the conntrack priority queue
-	// 		// and the deny priority queue, and send the data records.
-	// 		nextExpireTime, err := c.sendFlowRecords()
-	// 		if err != nil {
-	// 			klog.ErrorS(err, "Error when sending expired flow records")
-	// 			// If there is an error when sending flow records because of
-	// 			// intermittent connectivity, we reset the connection to collector
-	// 			// and retry in the next export cycle to reinitialize the connection
-	// 			// and send flow records.
-	// 			expireTimer.Reset(defaultTimeout)
-	// 			continue
-	// 		}
-	// 		expireTimer.Reset(nextExpireTime)
-	// 	}
-	// }
+			// 		// Pop out the expired connections from the conntrack priority queue
+			// 		// and the deny priority queue, and send the data records.
+			// 		nextExpireTime, err := c.sendFlowRecords()
+			// 		if err != nil {
+			// 			klog.ErrorS(err, "Error when sending expired flow records")
+			// 			// If there is an error when sending flow records because of
+			// 			// intermittent connectivity, we reset the connection to collector
+			// 			// and retry in the next export cycle to reinitialize the connection
+			// 			// and send flow records.
+			// 			expireTimer.Reset(defaultTimeout)
+			// 			continue
+			// 		}
+			// 		expireTimer.Reset(nextExpireTime)
+		}
+	}
 }
 
 // func (c *Consumer) sendFlowRecords() (time.Duration, error) {
@@ -206,6 +208,7 @@ func (c *Consumer) Connect(ctx context.Context) error {
 	}
 
 	c.connected = true
+	metrics.ReconnectionsToFlowCollector.Inc()
 	return nil
 }
 

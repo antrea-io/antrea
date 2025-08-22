@@ -50,7 +50,7 @@ func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
-			break
+			return
 		case <-pollTicker.C:
 			deleteIfStaleConn := func(key connection.ConnectionKey, conn *connection.Connection) error {
 				if conn.ReadyToDelete || time.Since(conn.LastExportTime) >= ds.staleConnectionTimeout {

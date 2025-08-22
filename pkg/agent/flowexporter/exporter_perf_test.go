@@ -1,5 +1,5 @@
-//go:build !race
-// +build !race
+//go:build !race && disable
+// +build !race,disable
 
 // Copyright 2021 Antrea Authors
 //

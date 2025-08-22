@@ -66,7 +66,6 @@ func NewConnectionStore(
 		connections:            make(map[connection.ConnectionKey]*connection.Connection),
 		podStore:               podStore,
 		antreaProxier:          proxier,
-		expirePriorityQueue:    priorityqueue.NewExpirePriorityQueue(o.ActiveFlowTimeout, o.IdleFlowTimeout),
 		staleConnectionTimeout: o.StaleConnectionTimeout,
 	}
 }
