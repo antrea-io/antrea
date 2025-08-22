@@ -27,6 +27,8 @@ GOLANGCI_LINT_VERSION := v2.1.6
 GOLANGCI_LINT_BINDIR  := $(CURDIR)/.golangci-bin
 GOLANGCI_LINT_BIN     := $(GOLANGCI_LINT_BINDIR)/$(GOLANGCI_LINT_VERSION)/golangci-lint
 
+NO_PULL := 1
+
 # Arguments to pass to go test invocation.
 #
 # Example:

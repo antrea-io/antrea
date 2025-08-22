@@ -478,3 +478,8 @@ testing:
   coverage: false
   simulator:
     enable: false
+
+hostNetworkAcceleration:
+  # -- Enable to accelerate Pod-to-Pod traffic on Node host networking when traffic mode is noEncap or hybrid.
+  # Currently only Pod-to-Pod traffic is supported, and more cases will be supported in the future.
+  enable: false
