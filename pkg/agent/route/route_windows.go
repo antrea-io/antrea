@@ -387,11 +387,11 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 // Run periodically syncs netNatStaticMapping and route. It will not return until stopCh is closed.
 func (c *Client) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting netNatStaticMapping and route sync", "interval", SyncInterval)
-	wait.Until(c.syncIPInfra, SyncInterval, stopCh)
+	wait.Until(c.syncNetworkInfra, SyncInterval, stopCh)
 }
 
-// syncIPInfra is idempotent and can be safely called on every sync operation.
-func (c *Client) syncIPInfra() {
+// syncNetworkConfig is idempotent and can be safely called on every sync operation.
+func (c *Client) syncNetworkInfra() {
 	if err := c.syncRoute(); err != nil {
 		klog.ErrorS(err, "Failed to sync route")
 	}
@@ -401,7 +401,7 @@ func (c *Client) syncIPInfra() {
 			klog.ErrorS(err, "Failed to sync netNatStaticMapping")
 		}
 	}
-	klog.V(3).Info("Successfully synced netNatStaticMapping and route")
+	klog.V(3).Info("Successfully synced network infrastructures")
 }
 
 func (c *Client) syncRoute() error {

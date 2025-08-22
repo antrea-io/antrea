@@ -55,7 +55,7 @@ RUN --mount=type=bind,from=ovs-rpms,source=/tmp/,target=/tmp/build \
     rm -f /etc/yum.repos.d/* && cp /tmp/build/CentOS.repo /etc/yum.repos.d/CentOS.repo && \
     curl https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official -o /etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial && \
     curl https://www.centos.org/keys/RPM-GPG-KEY-CentOS-SIG-Extras -o /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Extras && \
-    yum install iptables-nft logrotate epel-release -y && \
+    yum install iptables-nft nftables logrotate epel-release -y && \
     pushd /tmp/build/ovs-rpms && \
     yum install openvswitch-${OVS_VERSION}-*.rpm openvswitch-ipsec-${OVS_VERSION}-*.rpm python3-openvswitch-${OVS_VERSION}-*.rpm -y && \
     popd && \

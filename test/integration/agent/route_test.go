@@ -68,11 +68,12 @@ var (
 	gwName       = "antrea-gw0"
 	gwConfig     = &config.GatewayConfig{IPv4: gwIP, MAC: gwMAC, Name: gwName}
 	nodeConfig   = &config.NodeConfig{
-		Name:                  "test",
-		PodIPv4CIDR:           podCIDR,
-		NodeIPv4Addr:          nodeIPv4,
-		NodeTransportIPv4Addr: nodeIPv4,
-		GatewayConfig:         gwConfig,
+		Name:                       "test",
+		PodIPv4CIDR:                podCIDR,
+		NodeIPv4Addr:               nodeIPv4,
+		NodeTransportIPv4Addr:      nodeIPv4,
+		GatewayConfig:              gwConfig,
+		NodeTransportInterfaceName: nodeIntf.Name,
 	}
 )
 
@@ -122,17 +123,19 @@ func TestInitialize(t *testing.T) {
 		{
 			name: "noEncap",
 			networkConfig: &config.NetworkConfig{
-				TrafficEncapMode: config.TrafficEncapModeNoEncap,
-				IPv4Enabled:      true,
+				TrafficEncapMode:              config.TrafficEncapModeNoEncap,
+				IPv4Enabled:                   true,
+				EnableHostNetworkAcceleration: true,
 			},
 			expectNoTrackRules: false,
 		},
 		{
 			name: "hybrid with noSNAT",
 			networkConfig: &config.NetworkConfig{
-				TrafficEncapMode: config.TrafficEncapModeHybrid,
-				TunnelType:       ovsconfig.GeneveTunnel,
-				IPv4Enabled:      true,
+				TrafficEncapMode:              config.TrafficEncapModeHybrid,
+				TunnelType:                    ovsconfig.GeneveTunnel,
+				IPv4Enabled:                   true,
+				EnableHostNetworkAcceleration: true,
 			},
 			noSNAT:               true,
 			expectNoTrackRules:   true,
@@ -151,8 +154,9 @@ func TestInitialize(t *testing.T) {
 		{
 			name: "noEncap lock contention",
 			networkConfig: &config.NetworkConfig{
-				TrafficEncapMode: config.TrafficEncapModeNoEncap,
-				IPv4Enabled:      true,
+				TrafficEncapMode:              config.TrafficEncapModeNoEncap,
+				IPv4Enabled:                   true,
+				EnableHostNetworkAcceleration: true,
 			},
 			xtablesHoldDuration: 5 * time.Second,
 			expectNoTrackRules:  false,
@@ -277,6 +281,36 @@ func TestInitialize(t *testing.T) {
 				assert.NoError(t, err, "error executing iptables-save")
 				assert.Equal(t, expectedData, string(actualData), "mismatch iptables data in table %s", table)
 			}
+
+			if tc.networkConfig.EnableHostNetworkAcceleration {
+				expectedNFTables := `table ip antrea {
+	comment "Rules for Antrea"
+	set peer-pod-cidr {
+		type ipv4_addr
+		flags interval
+		comment "Set for storing IPv4 peer Pods CIDRs"
+	}
+
+	flowtable fastpath {
+		hook ingress priority filter
+		devices = { antrea-gw0, eth0 }
+	}
+
+	chain forward {
+		comment "Forward chain for storing rules"
+		type filter hook forward priority filter; policy accept;
+		iif "antrea-gw0" ip saddr 10.10.10.0/24 oif "eth0" ip daddr @peer-pod-cidr flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: local Pod CIDR to remote Pod CIDRs"
+		iif "eth0" ip saddr @peer-pod-cidr oif "antrea-gw0" ip daddr 10.10.10.0/24 flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: remote Pod CIDRs to local Pod CIDR"
+	}
+}
+`
+				output, err := exec.Command("nft", "list", "table", "ip", "antrea").Output()
+				require.NoError(t, err, "error executing nft")
+				assert.Equal(t, expectedNFTables, string(output))
+				// Cleanup the nftables.
+				err = exec.Command("nft", "delete", "table", "ip", "antrea").Run()
+				assert.NoError(t, err, "error deleting nft table")
+			}
 		})
 	}
 }
@@ -327,6 +361,65 @@ func TestIpTablesSync(t *testing.T) {
 		contains := fmt.Sprintf("%s %s %s", tc.Cmd, tc.Chain, tc.RuleSpec)
 		assert.Contains(t, string(actualData), contains, "%s command's output did not contain rule: %s", saveCmd, contains)
 	}
+	close(stopCh)
+}
+
+func TestNFTablesSync(t *testing.T) {
+	skipIfNotInContainer(t)
+	gwLink := createDummyGW(t)
+	defer netlink.LinkDel(gwLink)
+
+	routeClient, err := newTestRouteClient(&config.NetworkConfig{
+		TrafficEncapMode:              config.TrafficEncapModeNoEncap,
+		IPv4Enabled:                   true,
+		EnableHostNetworkAcceleration: true,
+	}, routeClientOptions{})
+	require.NoError(t, err)
+
+	inited := make(chan struct{})
+	err = routeClient.Initialize(nodeConfig, func() {
+		close(inited)
+	})
+	assert.NoError(t, err)
+	<-inited // Node network initialized
+
+	// Flush the rules in the "forward" chain, wait for sync operation to restore them.
+	err = exec.Command("nft", "flush", "chain", "ip", "antrea", "forward").Run()
+	require.NoError(t, err)
+
+	stopCh := make(chan struct{})
+	route.SyncInterval = 2 * time.Second
+	go routeClient.Run(stopCh)
+	time.Sleep(route.SyncInterval) // wait for one iteration of sync operation.
+
+	expected := `table ip antrea {
+	comment "Rules for Antrea"
+	set peer-pod-cidr {
+		type ipv4_addr
+		flags interval
+		comment "Set for storing IPv4 peer Pods CIDRs"
+	}
+
+	flowtable fastpath {
+		hook ingress priority filter
+		devices = { antrea-gw0, eth0 }
+	}
+
+	chain forward {
+		comment "Forward chain for storing rules"
+		type filter hook forward priority filter; policy accept;
+		iif "antrea-gw0" ip saddr 10.10.10.0/24 oif "eth0" ip daddr @peer-pod-cidr flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: local Pod CIDR to remote Pod CIDRs"
+		iif "eth0" ip saddr @peer-pod-cidr oif "antrea-gw0" ip daddr 10.10.10.0/24 flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: remote Pod CIDRs to local Pod CIDR"
+	}
+}
+`
+	got, err := exec.Command("nft", "list", "table", "ip", "antrea").Output()
+	require.NoError(t, err, "error executing nft")
+	assert.Equal(t, expected, string(got))
+
+	// Cleanup the nftables.
+	err = exec.Command("nft", "delete", "table", "ip", "antrea").Run()
+	assert.NoError(t, err, "error deleting nft table")
 	close(stopCh)
 }
 
@@ -495,7 +588,7 @@ func TestSyncGatewayKernelRoute(t *testing.T) {
 	}
 	require.NoError(t, netlink.AddrAdd(gwLink, &netlink.Addr{IPNet: gwNet}), "configuring gw IP failed")
 
-	routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}, routeClientOptions{})
+	routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, IPv4Enabled: true}, routeClientOptions{})
 	require.NoError(t, err)
 	err = routeClient.Initialize(nodeConfig, func() {})
 	assert.NoError(t, err)
