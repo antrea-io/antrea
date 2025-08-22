@@ -35,7 +35,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -383,16 +382,28 @@ func getPacketFile(filePath string) (afero.File, error) {
 // In the PacketCapture spec, at least one of `.Spec.Source.Pod` or `.Spec.Destination.Pod`
 // should be set.
 func (c *Controller) getTargetCaptureDevice(pc *crdv1alpha1.PacketCapture) string {
-	var pod, ns string
-	if pc.Spec.Source.Pod != nil {
-		pod = pc.Spec.Source.Pod.Name
-		ns = pc.Spec.Source.Pod.Namespace
-	} else {
-		pod = pc.Spec.Destination.Pod.Name
-		ns = pc.Spec.Destination.Pod.Namespace
+	// Set CapturePoint to 'Source' if a Source Pod is specified; otherwise, use 'Destination'.
+	if pc.Spec.CapturePoint == "" {
+		if pc.Spec.Source.Pod != nil {
+			pc.Spec.CapturePoint = crdv1alpha1.CapturePointSource
+		} else {
+			pc.Spec.CapturePoint = crdv1alpha1.CapturePointDestination
+		}
 	}
 
-	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
+	var device string
+	switch pc.Spec.CapturePoint {
+	case crdv1alpha1.CapturePointSource:
+		device = c.getPodDevice(pc.Spec.Source.Pod)
+	case crdv1alpha1.CapturePointDestination:
+		device = c.getPodDevice(pc.Spec.Destination.Pod)
+	}
+	return device
+}
+
+// getPodDevice returns the network device name for the given PodReference using the interfaceStore.
+func (c *Controller) getPodDevice(pod *crdv1alpha1.PodReference) string {
+	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace)
 	if len(podInterfaces) == 0 {
 		return ""
 	}
@@ -704,7 +715,7 @@ func (c *Controller) updateStatus(ctx context.Context, pc *crdv1alpha1.PacketCap
 	desiredStatus.Conditions = conditions
 
 	if retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if packetCaptureStatusEqual(toUpdate.Status, desiredStatus) {
+		if crdv1alpha1.PacketCaptureStatusEqual(toUpdate.Status, desiredStatus) {
 			return nil
 		}
 
@@ -727,36 +738,6 @@ func (c *Controller) updateStatus(ctx context.Context, pc *crdv1alpha1.PacketCap
 	return nil
 }
 
-func conditionEqualsIgnoreLastTransitionTime(a, b crdv1alpha1.PacketCaptureCondition) bool {
-	a1 := a
-	a1.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
-	b1 := b
-	b1.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
-	return a1 == b1
-}
-
-var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
-	conditionSliceEqualsIgnoreLastTransitionTime,
-)
-
-func packetCaptureStatusEqual(oldStatus, newStatus crdv1alpha1.PacketCaptureStatus) bool {
-	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
-}
-
-func conditionSliceEqualsIgnoreLastTransitionTime(as, bs []crdv1alpha1.PacketCaptureCondition) bool {
-	if len(as) != len(bs) {
-		return false
-	}
-	for i := range as {
-		a := as[i]
-		b := bs[i]
-		if !conditionEqualsIgnoreLastTransitionTime(a, b) {
-			return false
-		}
-	}
-	return true
-}
-
 func mergeConditions(oldConditions, newConditions []crdv1alpha1.PacketCaptureCondition) []crdv1alpha1.PacketCaptureCondition {
 	finalConditions := make([]crdv1alpha1.PacketCaptureCondition, 0)
 	newConditionMap := make(map[crdv1alpha1.PacketCaptureConditionType]crdv1alpha1.PacketCaptureCondition)
@@ -771,7 +752,7 @@ func mergeConditions(oldConditions, newConditions []crdv1alpha1.PacketCaptureCon
 			continue
 		}
 		// Use the original Condition if the only change is about lastTransition time
-		if conditionEqualsIgnoreLastTransitionTime(newCondition, oldCondition) {
+		if crdv1alpha1.ConditionEqualsIgnoreLastTransitionTime(newCondition, oldCondition) {
 			finalConditions = append(finalConditions, oldCondition)
 		} else {
 			// Use the latest Condition.
