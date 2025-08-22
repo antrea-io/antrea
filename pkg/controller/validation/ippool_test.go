@@ -129,7 +129,7 @@ func TestParseIPRangeCIDR(t *testing.T) {
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectedCidr, cidr.String())
 			}
 		})
@@ -202,9 +202,8 @@ func TestParseIPRangeStartEnd(t *testing.T) {
 			start, end, err := parseIPRangeStartEnd(tt.start, tt.end)
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
-				assert.True(t, start == netip.Addr{} || end == netip.Addr{})
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.start, start.String())
 				assert.Equal(t, tt.end, end.String())
 			}
@@ -457,7 +456,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Len(t, ranges, tt.expectedRangeLength)
 			}
 		})
@@ -466,14 +465,11 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 
 func TestNormalizeRange(t *testing.T) {
 	tests := []struct {
-		name           string
-		ipRange        crdv1beta1.IPRange
-		context        string
-		expectedRange  NormalizedIPRange
-		expectedStart  string
-		expectedEnd    string
-		expectedOrigin string
-		expectedErr    string
+		name          string
+		ipRange       crdv1beta1.IPRange
+		context       string
+		expectedRange NormalizedIPRange
+		expectedErr   string
 	}{
 		{
 			name:    "valid CIDR range",
@@ -536,7 +532,7 @@ func TestNormalizeRange(t *testing.T) {
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectedRange, result)
 			}
 		})
