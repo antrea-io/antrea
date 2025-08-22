@@ -95,7 +95,7 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "existing IPRanges [10.10.20.1-10.10.20.2] cannot be deleted",
+					Message: "existing IPRanges [10.10.20.1-10.10.20.2] cannot be updated or deleted",
 				},
 			},
 		},
@@ -239,7 +239,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				newExternalIPPool("baz", "10.10.20.0/24", "", ""),
 				newExternalIPPool("qux", "10.20.0.0/16", "", ""),
 			},
-			errMsg: "range [10.20.30.0/24] overlaps with range [10.20.0.0/16] of pool qux",
+			errMsg: "range [10.20.30.0/24] overlaps with range [10.20.0.0/16] of ExternalIPPool qux",
 		},
 		{
 			name:           "cidr must not overlap with any existing start-end range",
@@ -247,7 +247,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 			existingExternalIPPools: []*crdv1b1.ExternalIPPool{
 				newExternalIPPool("bar", "", "10.20.30.10", "10.20.30.50"),
 			},
-			errMsg: "range [10.20.30.0/24] overlaps with range [10.20.30.10-10.20.30.50] of pool bar",
+			errMsg: "range [10.20.30.0/24] overlaps with range [10.20.30.10-10.20.30.50] of ExternalIPPool bar",
 		},
 		{
 			name: "cidr must not overlap with any cidr",
@@ -285,7 +285,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				newExternalIPPool("baz", "10.20.0.0/16", "", ""),
 				newExternalIPPool("qux", "10.30.0.0/20", "", ""),
 			},
-			errMsg: "range [10.30.10.0-10.30.20.0] overlaps with range [10.30.0.0/20] of pool qux",
+			errMsg: "range [10.30.10.0-10.30.20.0] overlaps with range [10.30.0.0/20] of ExternalIPPool qux",
 		},
 		{
 			name:           "start-end range must not overlap with any existing start-end range",
@@ -294,7 +294,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				newExternalIPPool("bar", "10.10.0.0/16", "", ""),
 				newExternalIPPool("baz", "", "10.30.20.0", "10.30.40.0"),
 			},
-			errMsg: "range [10.30.10.0-10.30.20.0] overlaps with range [10.30.20.0-10.30.40.0] of pool baz",
+			errMsg: "range [10.30.10.0-10.30.20.0] overlaps with range [10.30.20.0-10.30.40.0] of ExternalIPPool baz",
 		},
 		{
 			name: "start-end range must not overlap with any cidr",
@@ -329,23 +329,17 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			errMsg, result := validateIPRangesAndSubnetInfo(
-				*testCase.externalIPPool,
+			err := validateIPRangesAndSubnetInfoForExternalIPPool(
+				testCase.externalIPPool,
 				testCase.existingExternalIPPools,
 			)
 
 			if testCase.errMsg == "" {
-				assert.Empty(t, errMsg)
+				assert.Empty(t, err)
 			} else {
+				assert.Equal(t, testCase.errMsg, err.Error())
 
-				assert.Equal(t, testCase.errMsg, errMsg)
-				if testCase.errMsg != "" {
-					assert.False(t, result)
-				} else {
-					assert.True(t, result)
-				}
-
-				// test if same message is returned by ValidateExternalIPPool
+				// test if the same message is returned by ValidateExternalIPPool
 				var fakeObjects []runtime.Object
 				for _, existingExternalIPPool := range testCase.existingExternalIPPools {
 					fakeObjects = append(fakeObjects, existingExternalIPPool)
@@ -370,70 +364,6 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				assert.NotNil(t, response.Result)
 				assert.Equal(t, testCase.errMsg, response.Result.Message)
 			}
-		})
-	}
-}
-
-func TestParseIPRangeCIDR(t *testing.T) {
-	testCases := []struct {
-		name   string
-		cidr   string
-		errMsg string
-	}{
-		{
-			name: "valid",
-			cidr: "10.96.10.10/20",
-		},
-		{
-			name:   "invalid ipv4 cidr",
-			cidr:   "10.96.40.50/36",
-			errMsg: "invalid cidr 10.96.40.50/36",
-		},
-		{
-			name:   "invalid ipv6 cidr",
-			cidr:   "2001:d00::/132",
-			errMsg: "invalid cidr 2001:d00::/132",
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			// discard parsed net.IPNet, we only need to make assertions on errMsg.
-			_, errMsg := parseIPRangeCIDR(testCase.cidr)
-			assert.Equal(t, testCase.errMsg, errMsg)
-		})
-	}
-}
-
-func TestParseIPRangeStartEnd(t *testing.T) {
-	testCases := []struct {
-		name   string
-		start  string
-		end    string
-		errMsg string
-	}{
-		{
-			name:  "valid",
-			start: "10.96.10.10",
-			end:   "10.96.10.20",
-		},
-		{
-			name:   "invalid start ip",
-			start:  "10.96.10.1000",
-			end:    "10.96.10.20",
-			errMsg: "invalid start ip address 10.96.10.1000",
-		},
-		{
-			name:   "invalid end ip",
-			start:  "2001:d00::",
-			end:    "2001:g00::",
-			errMsg: "invalid end ip address 2001:g00::",
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			// discard parsed net.IP, we only need to make assertions on errMsg.
-			_, _, errMsg := parseIPRangeStartEnd(testCase.start, testCase.end)
-			assert.Equal(t, testCase.errMsg, errMsg)
 		})
 	}
 }

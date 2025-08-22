@@ -17,7 +17,6 @@ package externalippool
 import (
 	"encoding/json"
 	"fmt"
-	"net/netip"
 
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,7 +25,7 @@ import (
 	"k8s.io/klog/v2"
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/controller/validation"
 )
 
 func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
@@ -58,20 +57,24 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 	switch review.Request.Operation {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for ExternalIPPool")
-		if msg, allowed = validateIPRangesAndSubnetInfo(newObj, externalIPPools); !allowed {
-			break
+		if err := validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); err != nil {
+			msg = err.Error()
+			allowed = false
 		}
 	case admv1.Update:
 		klog.V(2).Info("Validating UPDATE request for ExternalIPPool")
-		if msg, allowed = validateIPRangesAndSubnetInfo(newObj, externalIPPools); !allowed {
+		if err := validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); err != nil {
+			msg = err.Error()
+			allowed = false
 			break
 		}
-		oldIPRangeSet := getIPRangeSet(oldObj.Spec.IPRanges)
-		newIPRangeSet := getIPRangeSet(newObj.Spec.IPRanges)
+		oldIPRangeSet := validation.GetIPRangeSet(oldObj.Spec.IPRanges)
+		newIPRangeSet := validation.GetIPRangeSet(newObj.Spec.IPRanges)
 		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
 		if deletedIPRanges.Len() > 0 {
 			allowed = false
-			msg = fmt.Sprintf("existing IPRanges %v cannot be deleted", sets.List(deletedIPRanges))
+			// Fixed error message to be consistent with IPPool controller
+			msg = fmt.Sprintf("existing IPRanges %v cannot be updated or deleted", sets.List(deletedIPRanges))
 		}
 	case admv1.Delete:
 		// This shouldn't happen with the webhook configuration we include in the Antrea YAML manifests.
@@ -90,155 +93,51 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 	}
 }
 
-func validateIPRangesAndSubnetInfo(externalIPPool crdv1beta1.ExternalIPPool, existingExternalIPPools []*crdv1beta1.ExternalIPPool) (string, bool) {
-	subnetInfo := externalIPPool.Spec.SubnetInfo
-	ipRanges := externalIPPool.Spec.IPRanges
-
-	var subnet *netip.Prefix
-	if subnetInfo != nil {
-		gatewayAddr, err := netip.ParseAddr(subnetInfo.Gateway)
-		if err != nil {
-			return fmt.Sprintf("invalid gateway address %s", subnetInfo.Gateway), false
-		}
-
-		if gatewayAddr.Is4() {
-			if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 32 {
-				return fmt.Sprintf("invalid prefixLength %d", subnetInfo.PrefixLength), false
-			}
-		} else {
-			if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 128 {
-				return fmt.Sprintf("invalid prefixLength %d", subnetInfo.PrefixLength), false
-			}
-		}
-		prefix := netip.PrefixFrom(gatewayAddr, int(subnetInfo.PrefixLength)).Masked()
-		subnet = &prefix
-	}
-
-	// combinedRanges combines both CIDR and start-end style range together mapped to start and end
-	// address of the range. We populate the map with ranges of existing pools and incorporate
-	// the ranges from the current pool as we iterate over them. The map's key is utilized to preserve
-	// the original user-specified input for formatting validation error, if it occurs.
-	combinedRanges := make(map[string][2]netip.Addr)
-	for _, pool := range existingExternalIPPools {
-		// exclude existing ip ranges of the pool which is being updated
-		if pool.Name == externalIPPool.Name {
-			continue
-		}
-		for _, ipRange := range pool.Spec.IPRanges {
-			var key string
-			var start, end netip.Addr
-
-			if ipRange.CIDR != "" {
-				key = fmt.Sprintf("range [%s] of pool %s", ipRange.CIDR, pool.Name)
-				cidr, _ := parseIPRangeCIDR(ipRange.CIDR)
-				start, end = utilip.GetStartAndEndOfPrefix(cidr)
-
-			} else {
-				key = fmt.Sprintf("range [%s-%s] of pool %s", ipRange.Start, ipRange.End, pool.Name)
-				start, end, _ = parseIPRangeStartEnd(ipRange.Start, ipRange.End)
-
-			}
-			combinedRanges[key] = [2]netip.Addr{start, end}
-		}
-	}
-
-	for _, ipRange := range ipRanges {
-		var key string
-		var start, end netip.Addr
-
-		if ipRange.CIDR != "" {
-			key = fmt.Sprintf("range [%s]", ipRange.CIDR)
-			cidr, errMsg := parseIPRangeCIDR(ipRange.CIDR)
-			if errMsg != "" {
-				return errMsg, false
-			}
-			start, end = utilip.GetStartAndEndOfPrefix(cidr)
-
-		} else {
-			key = fmt.Sprintf("range [%s-%s]", ipRange.Start, ipRange.End)
-
-			var errMsg string
-			start, end, errMsg = parseIPRangeStartEnd(ipRange.Start, ipRange.End)
-			if errMsg != "" {
-				return errMsg, false
-			}
-
-			// validate if start and end belong to same ip family
-			if start.Is4() != end.Is4() {
-				return fmt.Sprintf("range start %s and range end %s should belong to same family",
-					ipRange.Start, ipRange.End), false
-			}
-
-			// validate if start address <= end address
-			if start.Compare(end) == 1 {
-				return fmt.Sprintf("range start %s should not be greater than range end %s",
-					ipRange.Start, ipRange.End), false
-			}
-		}
-
-		// validate if range is subset of given subnet info
-		if subnet != nil && (!subnet.Contains(start) || !subnet.Contains(end)) {
-			return fmt.Sprintf("%s must be a strict subset of the subnet %s/%d",
-				key, subnetInfo.Gateway, subnetInfo.PrefixLength), false
-		}
-
-		// validate if the range overlaps with ranges of any existing pool or already processed
-		// range of current pool.
-		for combinedKey, combinedRange := range combinedRanges {
-			if start.Compare(combinedRange[1]) != 1 && end.Compare(combinedRange[0]) != -1 {
-				return fmt.Sprintf("%s overlaps with %s", key, combinedKey), false
-			}
-		}
-
-		combinedRanges[key] = [2]netip.Addr{start, end}
-	}
-	return "", true
-}
-
-func parseIPRangeCIDR(cidrStr string) (netip.Prefix, string) {
-	var cidr netip.Prefix
-	var err error
-
-	cidr, err = netip.ParsePrefix(cidrStr)
-	if err != nil {
-		return cidr, fmt.Sprintf("invalid cidr %s", cidrStr)
-	}
-	cidr = cidr.Masked()
-	return cidr, ""
-}
-
-func parseIPRangeStartEnd(startStr, endStr string) (netip.Addr, netip.Addr, string) {
-	var start, end netip.Addr
-	var err error
-
-	start, err = netip.ParseAddr(startStr)
-	if err != nil {
-		return start, end, fmt.Sprintf("invalid start ip address %s", startStr)
-	}
-
-	end, err = netip.ParseAddr(endStr)
-	if err != nil {
-		return start, end, fmt.Sprintf("invalid end ip address %s", endStr)
-	}
-	return start, end, ""
-}
-
-func getIPRangeSet(ipRanges []crdv1beta1.IPRange) sets.Set[string] {
-	set := sets.New[string]()
-	for _, ipRange := range ipRanges {
-		ipRangeStr := ipRange.CIDR
-		if ipRangeStr == "" {
-			ipRangeStr = fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)
-		}
-		set.Insert(ipRangeStr)
-	}
-	return set
-}
-
 func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 	return &admv1.AdmissionResponse{
 		Result: &metav1.Status{
 			Message: err.Error(),
 		},
 	}
+}
+
+func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta1.ExternalIPPool, existingExternalIPPools []*crdv1beta1.ExternalIPPool) error {
+	ipRanges := externalIPPool.Spec.IPRanges
+	subnetInfo := externalIPPool.Spec.SubnetInfo
+	currentNormalizedIPRanges, err := validation.ValidateIPRangesAndSubnetInfo(subnetInfo, ipRanges)
+	if err != nil {
+		return err
+	}
+	return validateNoOverlappingRanges(currentNormalizedIPRanges, existingExternalIPPools, externalIPPool.Name)
+}
+
+func collectExistingRanges(pools []*crdv1beta1.ExternalIPPool, skipPool string) ([]validation.NormalizedIPRange, error) {
+	normalized := make([]validation.NormalizedIPRange, 0)
+	for _, pool := range pools {
+		if pool.Name == skipPool {
+			continue
+		}
+		normalizedRanges, err := validation.NormalizeRanges(pool.Spec.IPRanges, fmt.Sprintf("ExternalIPPool %s", pool.Name))
+		if err != nil {
+			return nil, err
+		}
+		normalized = append(normalized, normalizedRanges...)
+	}
+	return normalized, nil
+}
+
+func validateNoOverlappingRanges(currentNormalizedIPRanges []validation.NormalizedIPRange, existingExternalIPPools []*crdv1beta1.ExternalIPPool, externalIPPoolName string) error {
+	existingNormalized, err := collectExistingRanges(existingExternalIPPools, externalIPPoolName)
+	if err != nil {
+		return err
+	}
+
+	for _, cur := range currentNormalizedIPRanges {
+		for _, existing := range existingNormalized {
+			if validation.RangesOverlap(cur.Start, cur.End, existing.Start, existing.End) {
+				return fmt.Errorf("%s overlaps with %s", cur.Origin, existing.Origin)
+			}
+		}
+	}
+	return nil
 }
