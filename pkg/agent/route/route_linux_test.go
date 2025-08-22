@@ -15,18 +15,21 @@
 package route
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/knftables"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -1277,8 +1280,9 @@ func TestAddRoutes(t *testing.T) {
 		{
 			name: "noencap IPv4, direct routing",
 			networkConfig: &config.NetworkConfig{
-				TrafficEncapMode: config.TrafficEncapModeNoEncap,
-				IPv4Enabled:      true,
+				TrafficEncapMode:              config.TrafficEncapModeNoEncap,
+				IPv4Enabled:                   true,
+				EnableHostNetworkAcceleration: true,
 			},
 			nodeConfig: &config.NodeConfig{
 				GatewayConfig: &config.GatewayConfig{
@@ -1286,7 +1290,9 @@ func TestAddRoutes(t *testing.T) {
 					IPv4:      net.ParseIP("192.168.1.1"),
 					LinkIndex: 10,
 				},
-				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+				NodeTransportIPv4Addr:      nodeTransPortIPv4Addr,
+				NodeTransportInterfaceName: "eth0",
+				PodIPv4CIDR:                ip.MustParseCIDR("192.168.0.0/24"),
 			},
 			podCIDR:  ip.MustParseCIDR("192.168.10.0/24"),
 			nodeName: "node0",
@@ -1331,14 +1337,27 @@ func TestAddRoutes(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			mockNftables := knftables.NewFake(knftables.IPv4Family, "antrea-test")
 			c := &Client{netlink: mockNetlink,
 				ipset:         mockIPSet,
 				networkConfig: tt.networkConfig,
 				nodeConfig:    tt.nodeConfig,
+				nftables:      mockNftables,
 			}
+			if c.networkConfig.EnableHostNetworkAcceleration {
+				require.NoError(t, c.syncNFTables())
+			}
+
 			tt.expectedIPSetCalls(mockIPSet.EXPECT())
 			tt.expectedNetlinkCalls(mockNetlink.EXPECT())
 			assert.NoError(t, c.AddRoutes(tt.podCIDR, tt.nodeName, tt.nodeIP, tt.nodeGwIP))
+
+			if c.networkConfig.EnableHostNetworkAcceleration {
+				elements, err := mockNftables.ListElements(context.TODO(), "set", antreaNFTSetPeerPodCIDRIPv4)
+				require.NoError(t, err)
+				require.Len(t, elements, 1)
+				require.Equal(t, []string{tt.podCIDR.String()}, elements[0].Key)
+			}
 		})
 	}
 }
@@ -1349,9 +1368,12 @@ func TestDeleteRoutes(t *testing.T) {
 		podCIDR               *net.IPNet
 		existingNodeRoutes    map[string][]*netlink.Route
 		existingNodeNeighbors map[string]*netlink.Neigh
+		existingPodCIDRs      []*net.IPNet
+		expectedPodCIDRs      sets.Set[string]
 		nodeName              string
 		expectedIPSetCalls    func(mockNetlink *ipsettest.MockInterfaceMockRecorder)
 		expectedNetlinkCalls  func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+		nftSet                string
 	}{
 		{
 			name:    "IPv4",
@@ -1360,12 +1382,18 @@ func TestDeleteRoutes(t *testing.T) {
 				"192.168.10.0/24": {{Gw: net.ParseIP("172.16.10.3"), Dst: ip.MustParseCIDR("192.168.10.0/24")}},
 				"192.168.11.0/24": {{Gw: net.ParseIP("172.16.10.4"), Dst: ip.MustParseCIDR("192.168.11.0/24")}},
 			},
+			existingPodCIDRs: []*net.IPNet{
+				ip.MustParseCIDR("192.168.10.0/24"),
+				ip.MustParseCIDR("192.168.11.0/24"),
+			},
+			expectedPodCIDRs: sets.New[string]("192.168.11.0/24"),
 			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
 				mockIPSet.DelEntry(antreaPodIPSet, "192.168.10.0/24")
 			},
 			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteDel(&netlink.Route{Gw: net.ParseIP("172.16.10.3"), Dst: ip.MustParseCIDR("192.168.10.0/24")})
 			},
+			nftSet: antreaNFTSetPeerPodCIDRIPv4,
 		},
 		{
 			name:    "IPv6",
@@ -1374,6 +1402,11 @@ func TestDeleteRoutes(t *testing.T) {
 				"2001:ab03:cd04:55ee:1001::/80": {{Gw: net.ParseIP("fe80::e643:4bff:fe44:1"), Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80")}},
 				"2001:ab03:cd04:55ee:1002::/80": {{Gw: net.ParseIP("fe80::e643:4bff:fe44:2"), Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1002::/80")}},
 			},
+			existingPodCIDRs: []*net.IPNet{
+				ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+				ip.MustParseCIDR("2001:ab03:cd04:55ee:1002::/80"),
+			},
+			expectedPodCIDRs:      sets.New[string]("2001:ab03:cd04:55ee:1002::/80"),
 			existingNodeNeighbors: map[string]*netlink.Neigh{},
 			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
 				mockIPSet.DelEntry(antreaPodIP6Set, "2001:ab03:cd04:55ee:1001::/80")
@@ -1381,6 +1414,7 @@ func TestDeleteRoutes(t *testing.T) {
 			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteDel(&netlink.Route{Gw: net.ParseIP("fe80::e643:4bff:fe44:1"), Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80")})
 			},
+			nftSet: antreaNFTSetPeerPodCIDRIPv6,
 		},
 	}
 	for _, tt := range tests {
@@ -1388,10 +1422,24 @@ func TestDeleteRoutes(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			mockNftables := knftables.NewFake(knftables.InetFamily, "antrea-test")
 			c := &Client{netlink: mockNetlink,
 				ipset:         mockIPSet,
 				nodeRoutes:    sync.Map{},
 				nodeNeighbors: sync.Map{},
+				networkConfig: &config.NetworkConfig{
+					TrafficEncapMode:              config.TrafficEncapModeNoEncap,
+					EnableHostNetworkAcceleration: true,
+					IPv4Enabled:                   true,
+					IPv6Enabled:                   true,
+				},
+				nodeConfig: &config.NodeConfig{
+					GatewayConfig: &config.GatewayConfig{
+						Name: "antrea-gw0",
+					},
+					NodeTransportInterfaceName: "eth0",
+				},
+				nftables: mockNftables,
 			}
 			for podCIDR, nodeRoute := range tt.existingNodeRoutes {
 				c.nodeRoutes.Store(podCIDR, nodeRoute)
@@ -1399,9 +1447,32 @@ func TestDeleteRoutes(t *testing.T) {
 			for podCIDR, nodeNeighbor := range tt.existingNodeNeighbors {
 				c.nodeNeighbors.Store(podCIDR, nodeNeighbor)
 			}
+			require.NoError(t, c.syncNFTables())
+
+			tx := mockNftables.NewTransaction()
+			for _, podCIDR := range tt.existingPodCIDRs {
+				c.podCIDRNFTSet.Store(podCIDR.String(), podCIDR)
+				tx.Add(&knftables.Element{
+					Set: tt.nftSet,
+					Key: []string{podCIDR.String()},
+				})
+			}
+			require.NoError(t, mockNftables.Run(context.TODO(), tx))
+
 			tt.expectedIPSetCalls(mockIPSet.EXPECT())
 			tt.expectedNetlinkCalls(mockNetlink.EXPECT())
 			assert.NoError(t, c.DeleteRoutes(tt.podCIDR))
+
+			elements, err := mockNftables.ListElements(context.TODO(), "set", tt.nftSet)
+			require.NoError(t, err)
+			require.Len(t, elements, len(tt.expectedPodCIDRs))
+
+			gotPodCIDRs := sets.New[string]()
+			for _, e := range elements {
+				require.Len(t, e.Key, 1)
+				gotPodCIDRs.Insert(e.Key[0])
+			}
+			assert.Equal(t, tt.expectedPodCIDRs, gotPodCIDRs)
 		})
 	}
 }
