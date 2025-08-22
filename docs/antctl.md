@@ -603,6 +603,11 @@ The `--direction` (or `-d`) argument can be used to specify the capture directio
 * `DestinationToSource`: Capture packets flowing from destination to source
 * `Both`: Capture packets flowing in both directions
 
+The `--capture-point` (or `-p`) argument can be used to specify the capture point. Valid values are:
+
+* `Source`: Capture packets at the Source, Defaults to 'Source' if a Source Pod is available
+* `Destination`: Capture packets at the Destination
+
 By default, the command will wait for the PacketCapture to succeed or fail, or to
 timeout. The default timeout is 60 seconds, but can be changed with the
 `--timeout` (or `-t`) argument. Add the `--no-wait` flag to start a PacketCapture
@@ -616,6 +621,8 @@ More examples of `antctl packetcapture`:
 $ antctl packetcapture -S pod1 -D pod2
 # Start capturing packets from pod1 in Namespace ns1 to a destination IP
 $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
+# Start capturing packets from pod1 to pod2, captures at dst pod
+$ antctl packetcapture -S pod1 -D pod2 -p Destination
 # Start capturing TCP FIN packets from pod1 to pod2, with destination port 80
 $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
 # Start capturing TCP SYNs that are not ACKs from pod1 to pod2, with destination port 80

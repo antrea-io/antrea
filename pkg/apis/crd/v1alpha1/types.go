@@ -488,6 +488,13 @@ const (
 	CaptureDirectionBoth                CaptureDirection = "Both"
 )
 
+type CapturePoint string
+
+const (
+	CapturePointSource      CapturePoint = "Source"
+	CapturePointDestination CapturePoint = "Destination"
+)
+
 type PacketCaptureSpec struct {
 	// Timeout is the timeout for this capture session. If not specified, defaults to 60s.
 	Timeout       *int32        `json:"timeout,omitempty"`
@@ -499,6 +506,9 @@ type PacketCaptureSpec struct {
 	// Direction specifies which packets to capture (source -> destination, destination -> source or both).
 	// If not specified, defaults to SourceToDestination.
 	Direction CaptureDirection `json:"direction,omitempty"`
+	// CapturePoint specifies where to perform the packet capture: 'Source' or 'Destination'.
+	// If not set, it defaults to 'Source' when source.pod is available, otherwise 'Destination'.
+	CapturePoint CapturePoint `json:"capturePoint,omitempty"`
 	// Packet defines what kind of traffic we want to capture between the source and destination. If not specified,
 	// all kinds of traffic will count.
 	Packet *Packet `json:"packet,omitempty"`
