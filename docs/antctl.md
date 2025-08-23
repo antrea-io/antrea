@@ -616,6 +616,8 @@ More examples of `antctl packetcapture`:
 $ antctl packetcapture -S pod1 -D pod2
 # Start capturing packets from pod1 in Namespace ns1 to a destination IP
 $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
+# Start capturing packets from pod1 to pod2, captures at dst pod
+$ antctl packetcapture -S pod1 -D pod2 -l Destination
 # Start capturing TCP FIN packets from pod1 to pod2, with destination port 80
 $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
 # Start capturing TCP SYNs that are not ACKs from pod1 to pod2, with destination port 80

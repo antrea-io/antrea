@@ -383,16 +383,27 @@ func getPacketFile(filePath string) (afero.File, error) {
 // In the PacketCapture spec, at least one of `.Spec.Source.Pod` or `.Spec.Destination.Pod`
 // should be set.
 func (c *Controller) getTargetCaptureDevice(pc *crdv1alpha1.PacketCapture) string {
-	var pod, ns string
-	if pc.Spec.Source.Pod != nil {
-		pod = pc.Spec.Source.Pod.Name
-		ns = pc.Spec.Source.Pod.Namespace
-	} else {
-		pod = pc.Spec.Destination.Pod.Name
-		ns = pc.Spec.Destination.Pod.Namespace
+	// Set CaptureLocation to 'Source' if a Source Pod is specified; otherwise, use 'Destination'.
+	if pc.Spec.CaptureLocation == "" {
+		if pc.Spec.Source.Pod != nil {
+			pc.Spec.CaptureLocation = crdv1alpha1.CaptureLocationSource
+		} else {
+			pc.Spec.CaptureLocation = crdv1alpha1.CaptureLocationDestination
+		}
 	}
 
-	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
+	var device string
+	if pc.Spec.Source.Pod != nil && pc.Spec.CaptureLocation == crdv1alpha1.CaptureLocationSource {
+		device = c.getPodDevice(pc.Spec.Source.Pod)
+	} else if pc.Spec.Destination.Pod != nil && pc.Spec.CaptureLocation == crdv1alpha1.CaptureLocationDestination {
+		device = c.getPodDevice(pc.Spec.Destination.Pod)
+	}
+	return device
+}
+
+// getPodDevice returns the network device name for the given PodReference using the interfaceStore.
+func (c *Controller) getPodDevice(pod *crdv1alpha1.PodReference) string {
+	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace)
 	if len(podInterfaces) == 0 {
 		return ""
 	}
@@ -408,7 +419,8 @@ func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCap
 	var filePath string
 	var captureErr, uploadErr error
 	func() {
-		localFilePath := nameToPath(pc.Name)
+		localFileName := fmt.Sprintf("%s-%s-%s", pc.Name, pc.Spec.CaptureLocation, env.GetPodName())
+		localFilePath := nameToPath(localFileName)
 		file, err := getPacketFile(localFilePath)
 		if err != nil {
 			captureErr = err
@@ -432,7 +444,7 @@ func (c *Controller) startCapture(ctx context.Context, pc *crdv1alpha1.PacketCap
 		if uploadErr = c.uploadPackets(context.TODO(), pc, file); uploadErr != nil {
 			return
 		}
-		filePath = fmt.Sprintf("%s/%s.pcapng", pc.Spec.FileServer.URL, pc.Name)
+		filePath = fmt.Sprintf("%s/%s-%s-%s.pcapng", pc.Spec.FileServer.URL, pc.Name, pc.Spec.CaptureLocation, env.GetPodName())
 	}()
 
 	if captureErr != nil {
@@ -607,7 +619,8 @@ func (c *Controller) uploadPackets(ctx context.Context, pc *crdv1alpha1.PacketCa
 	if err != nil {
 		return fmt.Errorf("failed to generate SSH client config: %w", err)
 	}
-	return uploader.Upload(pc.Spec.FileServer.URL, c.generatePacketsPathForServer(pc.Name), cfg, outputFile)
+	localFileName := fmt.Sprintf("%s-%s-%s", pc.Name, pc.Spec.CaptureLocation, env.GetPodName())
+	return uploader.Upload(pc.Spec.FileServer.URL, c.generatePacketsPathForServer(localFileName), cfg, outputFile)
 }
 
 func (c *Controller) updateStatus(ctx context.Context, pc *crdv1alpha1.PacketCapture, state packetCaptureState) error {

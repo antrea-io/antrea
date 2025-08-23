@@ -288,6 +288,7 @@ func TestNewPacketCapture(t *testing.T) {
 							},
 						},
 					},
+					CaptureLocation: v1alpha1.CaptureLocationSource,
 				},
 			},
 		},
@@ -375,6 +376,7 @@ func TestNewPacketCapture(t *testing.T) {
 					Packet: &v1alpha1.Packet{
 						IPFamily: v1.IPv4Protocol,
 					},
+					CaptureLocation: v1alpha1.CaptureLocationSource,
 				},
 			},
 		},
@@ -387,6 +389,32 @@ func TestNewPacketCapture(t *testing.T) {
 				direction: "InvalidDirection",
 			},
 			expectErr: "invalid direction: \"InvalidDirection\", must be one of SourceToDestination, DestinationToSource, or Both",
+		},
+		{
+			name: "bad-captLoc",
+			option: packetCaptureOptions{
+				source:          srcPod,
+				dest:            dstPod,
+				flow:            "tcp,tcp_dst=80",
+				captureLocation: "Src",
+			},
+			expectErr: "invalid capture location: \"Src\", must be either Source or Destination",
+		},
+		{
+			name: "no-src-pod-given-captLocSrc",
+			option: packetCaptureOptions{
+				dest:            dstPod,
+				captureLocation: "Source",
+			},
+			expectErr: "a source Pod must be specified when capture-location is 'Source'",
+		},
+		{
+			name: "no-dst-pod-given-captLocDst",
+			option: packetCaptureOptions{
+				source:          srcPod,
+				captureLocation: "Destination",
+			},
+			expectErr: "a destination Pod must be specified when capture-location is 'Destination'",
 		},
 	}
 

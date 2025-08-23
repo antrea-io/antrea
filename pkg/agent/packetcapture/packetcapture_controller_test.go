@@ -20,6 +20,7 @@ import (
 	"io"
 	"net"
 	"slices"
+	"sort"
 	"testing"
 	"time"
 
@@ -138,7 +139,8 @@ func genTestCR(name string, num int32) *crdv1alpha1.PacketCapture {
 			FileServer: &crdv1alpha1.PacketCaptureFileServer{
 				URL: testFTPUrl,
 			},
-			Timeout: &testCaptureTimeout,
+			Timeout:         &testCaptureTimeout,
+			CaptureLocation: crdv1alpha1.CaptureLocationDestination,
 		},
 	}
 	return result
@@ -375,7 +377,8 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 					FileServer: &crdv1alpha1.PacketCaptureFileServer{
 						URL: "sftp://127.0.0.1:22/aaa",
 					},
-					Timeout: &testCaptureTimeout,
+					Timeout:         &testCaptureTimeout,
+					CaptureLocation: crdv1alpha1.CaptureLocationDestination,
 				},
 			},
 		},
@@ -406,7 +409,8 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 					Packet: &crdv1alpha1.Packet{
 						Protocol: &icmpProto,
 					},
-					Timeout: &testCaptureTimeout,
+					Timeout:         &testCaptureTimeout,
+					CaptureLocation: crdv1alpha1.CaptureLocationSource,
 				},
 			},
 		},
@@ -519,6 +523,214 @@ func TestPacketCaptureControllerRun(t *testing.T) {
 					assert.Equal(c, testCaptureNum, result.Status.NumberCaptured)
 				}
 			}, 2*time.Second, 20*time.Millisecond)
+		})
+	}
+}
+
+func TestGetTargetCaptureDevice(t *testing.T) {
+	pod1Ref := &crdv1alpha1.PodReference{Namespace: pod1.Namespace, Name: pod1.Name}
+	pod2Ref := &crdv1alpha1.PodReference{Namespace: pod2.Namespace, Name: pod2.Name}
+
+	pcc := newFakePacketCaptureController(t, nil, nil)
+	pod1Device := pcc.interfaceStore.GetContainerInterfacesByPod(pod1Ref.Name, pod1Ref.Namespace)[0].InterfaceName
+	pod2Device := pcc.interfaceStore.GetContainerInterfacesByPod(pod2Ref.Name, pod2Ref.Namespace)[0].InterfaceName
+	require.NotEmpty(t, pod1Device)
+	require.NotEmpty(t, pod2Device)
+
+	pccPod1Only := newFakePacketCaptureController(t, nil, nil)
+	pccPod1Only.interfaceStore = interfacestore.NewInterfaceStore()
+	addPodInterface(pccPod1Only.interfaceStore, pod1.Namespace, pod1.Name, []string{pod1IPv4}, pod1MAC.String(), int32(ofPortPod1))
+
+	testCases := []struct {
+		name              string
+		controller        *Controller
+		pcSpec            crdv1alpha1.PacketCaptureSpec
+		expectedDevice    string
+		expectedDeviceNum int
+	}{
+		{
+			name:       "Source capture, source Pod is local",
+			controller: pcc.Controller,
+			pcSpec: crdv1alpha1.PacketCaptureSpec{
+				Source:          crdv1alpha1.Source{Pod: pod1Ref},
+				CaptureLocation: crdv1alpha1.CaptureLocationSource,
+			},
+			expectedDevice: pod1Device,
+		},
+		{
+			name:       "Source capture, source Pod is remote",
+			controller: pccPod1Only.Controller,
+			pcSpec: crdv1alpha1.PacketCaptureSpec{
+				Source:          crdv1alpha1.Source{Pod: pod2Ref},
+				CaptureLocation: crdv1alpha1.CaptureLocationSource,
+			},
+			expectedDevice: "",
+		},
+		{
+			name:       "Destination capture, destination Pod is local",
+			controller: pcc.Controller,
+			pcSpec: crdv1alpha1.PacketCaptureSpec{
+				Destination:     crdv1alpha1.Destination{Pod: pod2Ref},
+				CaptureLocation: crdv1alpha1.CaptureLocationDestination,
+			},
+			expectedDevice: pod2Device,
+		},
+		{
+			name:       "Default location (source only)",
+			controller: pcc.Controller,
+			pcSpec: crdv1alpha1.PacketCaptureSpec{
+				Source: crdv1alpha1.Source{Pod: pod1Ref},
+			},
+			expectedDevice: pod1Device,
+		},
+		{
+			name:       "Default location (destination only)",
+			controller: pcc.Controller,
+			pcSpec: crdv1alpha1.PacketCaptureSpec{
+				Destination: crdv1alpha1.Destination{Pod: pod1Ref},
+			},
+			expectedDevice: pod1Device,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pc := &crdv1alpha1.PacketCapture{Spec: tc.pcSpec}
+			device := tc.controller.getTargetCaptureDevice(pc)
+			assert.Equal(t, tc.expectedDevice, device)
+		})
+	}
+}
+
+func TestUpdateStatus(t *testing.T) {
+	pod1Ref := &crdv1alpha1.PodReference{Namespace: pod1.Namespace, Name: pod1.Name}
+	pod2Ref := &crdv1alpha1.PodReference{Namespace: pod2.Namespace, Name: pod2.Name}
+
+	testCases := []struct {
+		name           string
+		initialPC      *crdv1alpha1.PacketCapture
+		state          packetCaptureState
+		expectedStatus crdv1alpha1.PacketCaptureStatus
+	}{
+		{
+			name: "Pending with init error",
+			initialPC: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{Name: "pc-pending-err"},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Source:      crdv1alpha1.Source{Pod: pod1Ref},
+					Destination: crdv1alpha1.Destination{Pod: pod2Ref},
+					FileServer:  &crdv1alpha1.PacketCaptureFileServer{URL: testFTPUrl},
+				},
+			},
+			state: packetCaptureState{
+				phase:      packetCapturePhasePending,
+				captureErr: fmt.Errorf("PacketCapture running count reach limit"),
+			},
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{Type: crdv1alpha1.PacketCaptureStarted, Status: metav1.ConditionFalse, Reason: "NotStarted", Message: "PacketCapture running count reach limit"},
+				},
+			},
+		},
+		{
+			name: "Started and progressing",
+			initialPC: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{Name: "pc-started"},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Source:          crdv1alpha1.Source{Pod: pod1Ref},
+					Destination:     crdv1alpha1.Destination{Pod: pod2Ref},
+					CaptureLocation: crdv1alpha1.CaptureLocationSource,
+					FileServer:      &crdv1alpha1.PacketCaptureFileServer{URL: testFTPUrl},
+				},
+			},
+			state: packetCaptureState{
+				phase:              packetCapturePhaseStarted,
+				capturedPacketsNum: 5,
+			},
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 5,
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{Type: crdv1alpha1.PacketCaptureStarted, Status: metav1.ConditionTrue, Reason: "Started"},
+					{Type: crdv1alpha1.PacketCaptureComplete, Status: metav1.ConditionFalse, Reason: "Progressing"},
+				},
+			},
+		},
+		{
+			name: "Destination location success",
+			initialPC: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{Name: "pc-dst-success"},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Destination:     crdv1alpha1.Destination{Pod: pod2Ref},
+					CaptureLocation: crdv1alpha1.CaptureLocationDestination,
+					FileServer:      &crdv1alpha1.PacketCaptureFileServer{URL: testFTPUrl},
+				},
+			},
+			state: packetCaptureState{
+				phase:              packetCapturePhaseComplete,
+				captureErr:         nil,
+				capturedPacketsNum: 10,
+				uploadErr:          nil,
+				filePath:           "path/to/pc-dst-success-Destination-antrea-agent.pcapng",
+			},
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 10,
+				FilePath:       "path/to/pc-dst-success-Destination-antrea-agent.pcapng",
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{Type: crdv1alpha1.PacketCaptureStarted, Status: metav1.ConditionTrue, Reason: "Started"},
+					{Type: crdv1alpha1.PacketCaptureComplete, Status: metav1.ConditionTrue, Reason: "Succeed"},
+					{Type: crdv1alpha1.PacketCaptureFileUploaded, Status: metav1.ConditionTrue, Reason: "Succeed"},
+				},
+			},
+		},
+		{
+			name: "No status change",
+			initialPC: &crdv1alpha1.PacketCapture{
+				ObjectMeta: metav1.ObjectMeta{Name: "pc-no-change"},
+				Spec: crdv1alpha1.PacketCaptureSpec{
+					Source:          crdv1alpha1.Source{Pod: pod1Ref},
+					Destination:     crdv1alpha1.Destination{Pod: pod2Ref},
+					CaptureLocation: crdv1alpha1.CaptureLocationSource,
+					FileServer:      &crdv1alpha1.PacketCaptureFileServer{URL: testFTPUrl},
+				},
+				Status: crdv1alpha1.PacketCaptureStatus{
+					NumberCaptured: 5,
+					Conditions: []crdv1alpha1.PacketCaptureCondition{
+						{Type: crdv1alpha1.PacketCaptureStarted, Status: metav1.ConditionTrue, Reason: "Started"},
+						{Type: crdv1alpha1.PacketCaptureComplete, Status: metav1.ConditionFalse, Reason: "Progressing"},
+					},
+				},
+			},
+			state: packetCaptureState{
+				phase:              packetCapturePhaseStarted,
+				capturedPacketsNum: 5,
+			},
+			expectedStatus: crdv1alpha1.PacketCaptureStatus{
+				NumberCaptured: 5,
+				Conditions: []crdv1alpha1.PacketCaptureCondition{
+					{Type: crdv1alpha1.PacketCaptureStarted, Status: metav1.ConditionTrue, Reason: "Started"},
+					{Type: crdv1alpha1.PacketCaptureComplete, Status: metav1.ConditionFalse, Reason: "Progressing"},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pcc := newFakePacketCaptureController(t, nil, []runtime.Object{tc.initialPC})
+			err := pcc.updateStatus(context.Background(), tc.initialPC, tc.state)
+			require.NoError(t, err)
+
+			updatedPC, err := pcc.crdClient.CrdV1alpha1().PacketCaptures().Get(context.Background(), tc.initialPC.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+
+			// Sort slices for consistent comparison
+			sort.Slice(tc.expectedStatus.Conditions, func(i, j int) bool {
+				return tc.expectedStatus.Conditions[i].Type < tc.expectedStatus.Conditions[j].Type
+			})
+			sort.Slice(updatedPC.Status.Conditions, func(i, j int) bool {
+				return updatedPC.Status.Conditions[i].Type < updatedPC.Status.Conditions[j].Type
+			})
+			assert.True(t, packetCaptureStatusEqual(tc.expectedStatus, updatedPC.Status), "Expected: %+v\nGot: %+v", tc.expectedStatus, updatedPC.Status)
 		})
 	}
 }
@@ -649,9 +861,10 @@ func TestUploadPackets(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pc := genTestCR("foo", testCaptureNum)
 			pcc := newFakePacketCaptureController(t, nil, nil)
+			expectedFileName := fmt.Sprintf("%s-%s-%s", pc.Name, pc.Spec.CaptureLocation, "antrea-agent")
 			pcc.sftpUploader = &testUploader{
 				url:      testFTPUrl,
-				fileName: pcc.generatePacketsPathForServer(pc.Name),
+				fileName: pcc.generatePacketsPathForServer(expectedFileName),
 				hostKey:  tc.serverHostKey,
 			}
 			pc.Spec.FileServer.HostPublicKey = tc.expectedHostKey
