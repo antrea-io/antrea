@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -48,6 +49,7 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	routemock "antrea.io/antrea/pkg/agent/route/testing"
 	antreatypes "antrea.io/antrea/pkg/agent/types"
+	antreaconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
@@ -481,20 +483,12 @@ func newFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 	if o.serviceProxyNameSet {
 		serviceProxyName = testServiceProxyName
 	}
-	fakeClient := fake.NewSimpleClientset()
-	fakeNodeIPChecker := nodeipmock.NewFakeNodeIPChecker()
-	informerFactory := informers.NewSharedInformerFactory(fakeClient, 0)
+	serviceLabelSelector := generateServiceLabelSelector(serviceProxyName)
 	p, _ := newProxier(hostname,
-		serviceProxyName,
-		fakeClient,
-		informerFactory.Core().V1().Services(),
-		informerFactory.Core().V1().Endpoints(),
-		informerFactory.Discovery().V1().EndpointSlices(),
-		informerFactory.Core().V1().Nodes(),
 		ofClient,
 		isIPv6,
 		routeClient,
-		fakeNodeIPChecker,
+		nodeipmock.NewFakeNodeIPChecker(),
 		nodePortAddresses,
 		o.proxyAllEnabled,
 		[]string{skippedServiceNN, skippedClusterIP},
@@ -503,6 +497,11 @@ func newFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 		types.NewGroupCounter(groupIDAllocator, make(chan string, 100)),
 		o.supportNestedService,
 		o.serviceHealthServerDisabled,
+		o.endpointSliceEnabled,
+		true,
+		true,
+		nil,
+		serviceLabelSelector,
 	)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	p.endpointsChanges = newEndpointsChangesTracker(hostname, o.endpointSliceEnabled, isIPv6)
@@ -3915,4 +3914,81 @@ func TestServiceHealthServer(t *testing.T) {
 		fp := newFakeProxier(nil, nil, nil, nil, false, withProxyAll, withoutServiceHealthServer)
 		assert.Nil(t, fp.serviceHealthServer)
 	})
+}
+
+func TestNewProxyServer(t *testing.T) {
+	proxyConfig := antreaconfig.AntreaProxyConfig{
+		ProxyAll:             true,
+		ProxyLoadBalancerIPs: ptr.To(true),
+		ServiceProxyName:     "antrea",
+	}
+	testCases := []struct {
+		name       string
+		ipv4Enable bool
+		ipv6Enable bool
+	}{
+		{
+			name:       "IPv4",
+			ipv4Enable: true,
+			ipv6Enable: false,
+		},
+		{
+			name:       "IPv6",
+			ipv4Enable: false,
+			ipv6Enable: true,
+		},
+		{
+			name:       "IPv4",
+			ipv4Enable: true,
+			ipv6Enable: true,
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewSimpleClientset()
+			fakeNodeIPChecker := nodeipmock.NewFakeNodeIPChecker()
+			informerFactory := informers.NewSharedInformerFactory(fakeClient, 0)
+			groupIDAllocator := openflow.NewGroupAllocator()
+
+			ctrl := gomock.NewController(t)
+			mockOFClient, mockRouteClient := getMockClients(ctrl)
+
+			proxyServer, err := NewProxyServer("unit-test",
+				fakeClient,
+				informerFactory.Core().V1().Services(),
+				informerFactory.Core().V1().Endpoints(),
+				informerFactory.Discovery().V1().EndpointSlices(),
+				informerFactory.Core().V1().Nodes(),
+				mockOFClient,
+				mockRouteClient,
+				fakeNodeIPChecker,
+				tt.ipv4Enable,
+				tt.ipv6Enable,
+				nodePortAddressesIPv4,
+				nodePortAddressesIPv6,
+				proxyConfig,
+				agentconfig.LoadBalancerModeNAT,
+				types.NewGroupCounter(groupIDAllocator, make(chan string, 100)),
+				types.NewGroupCounter(groupIDAllocator, make(chan string, 100)),
+				false,
+			)
+			require.NoError(t, err)
+
+			gotProxier := proxyServer.GetProxier()
+			if tt.ipv4Enable && tt.ipv6Enable {
+				p, ok := gotProxier.(*metaProxierWrapper)
+				require.True(t, ok)
+				require.NotNil(t, p.ipv4Proxier)
+				require.NotNil(t, p.ipv6Proxier)
+			} else if tt.ipv4Enable && !tt.ipv6Enable {
+				p, ok := gotProxier.(*proxier)
+				require.True(t, ok)
+				require.False(t, p.isIPv6)
+			} else if !tt.ipv4Enable && tt.ipv6Enable {
+				p, ok := gotProxier.(*proxier)
+				require.True(t, ok)
+				require.True(t, p.isIPv6)
+			}
+		})
+	}
 }
