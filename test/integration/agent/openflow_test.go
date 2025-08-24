@@ -850,7 +850,7 @@ func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []
 		if ep.GetIsLocal() {
 			hairpinFlows.flows = append(hairpinFlows.flows, &ofTestUtils.ExpectFlow{
 				MatchStr: fmt.Sprintf("priority=190,ct_state=+new+trk,ip,nw_src=%s,nw_dst=%s", ep.IP(), ep.IP()),
-				ActStr:   "ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+				ActStr:   "ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,set_field:0x100/0x100->ct_mark))",
 			})
 		}
 	}
@@ -1492,7 +1492,9 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+inv+trk,ip", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", outputStageTable, ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+new+trk,ct_zone=65521,ip", ActStr: fmt.Sprintf("goto_table:%s", outputStageTable)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3],set_field:0x100/0x100->ct_mark))", outputStageTable, ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(set_field:0x100/0x100->ct_mark))", outputStageTable, ctZone)},
 		)
 		tableSNATFlows.flows = append(tableSNATFlows.flows,
 			&ofTestUtils.ExpectFlow{
@@ -1517,8 +1519,8 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ip,reg0=0/0x200%s,nw_dst=%s", matchVLANString, podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
 		)
 		tableSNATMarkFlows.flows = append(tableSNATMarkFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))", ctZone)},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(set_field:0x20/0x20->ct_mark))", ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,set_field:0x100/0x100->ct_mark))", ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(set_field:0x20/0x20->ct_mark,set_field:0x100/0x100->ct_mark))", ctZone)},
 		)
 		tableL3DecTTLFlows.flows = append(tableL3DecTTLFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ip,reg0=0x2/0xf", ActStr: "goto_table:SNATMark"},
@@ -1537,7 +1539,9 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+inv+trk,ipv6", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ipv6", ActStr: fmt.Sprintf("ct(commit,table=Output,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", ctZoneV6)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+new+trk,ct_zone=65511,ipv6", ActStr: fmt.Sprintf("goto_table:%s", outputStageTable)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ipv6", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3],set_field:0x100/0x100->ct_mark))", outputStageTable, ctZoneV6)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(set_field:0x100/0x100->ct_mark))", outputStageTable, ctZoneV6)},
 		)
 		tableSNATFlows.flows = append(tableSNATFlows.flows,
 			&ofTestUtils.ExpectFlow{
@@ -1562,8 +1566,8 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ipv6,reg0=0/0x200,ipv6_dst=%s", podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
 		)
 		tableSNATMarkFlows.flows = append(tableSNATMarkFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff", ActStr: "ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x12/0xff,reg4=0x200000/0x2200000", ActStr: "ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark))"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff", ActStr: "ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,set_field:0x100/0x100->ct_mark))"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x12/0xff,reg4=0x200000/0x2200000", ActStr: "ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x100/0x100->ct_mark))"},
 		)
 		tableL3DecTTLFlows.flows = append(tableL3DecTTLFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ipv6,reg0=0x2/0xf", ActStr: "goto_table:SNATMark"},

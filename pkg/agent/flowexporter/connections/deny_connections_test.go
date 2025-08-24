@@ -132,7 +132,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				mockPodStore.EXPECT().GetPodByIPAndTime(tuple.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 			}
 
-			denyConnStore := NewDenyConnectionStore(mockPodStore, mockProxier, testFlowExporterOptions, filter.NewProtocolFilter(c.protocolFilter))
+			denyConnStore := NewDenyConnectionStore(nil, mockPodStore, mockProxier, testFlowExporterOptions, filter.NewProtocolFilter(c.protocolFilter))
 
 			denyConnStore.AddOrUpdateConn(&c.testFlow, refTime.Add(-(time.Second * 20)), uint64(60))
 			expConn := c.testFlow

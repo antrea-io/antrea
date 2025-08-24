@@ -40,6 +40,7 @@ type featurePodConnectivity struct {
 	hostIfacePort uint32
 	tunnelPort    uint32
 	ctZones       map[binding.Protocol]int
+	snatCtZones   map[binding.Protocol]int
 	localCIDRs    map[binding.Protocol]net.IPNet
 	nodeIPs       map[binding.Protocol]net.IP
 	nodeConfig    *config.NodeConfig
@@ -73,6 +74,7 @@ func newFeaturePodConnectivity(
 	enableTrafficControl bool,
 	enableL7FlowExporter bool) *featurePodConnectivity {
 	ctZones := make(map[binding.Protocol]int)
+	snatCtZones := make(map[binding.Protocol]int)
 	gatewayIPs := make(map[binding.Protocol]net.IP)
 	localCIDRs := make(map[binding.Protocol]net.IPNet)
 	nodeIPs := make(map[binding.Protocol]net.IP)
@@ -81,6 +83,7 @@ func newFeaturePodConnectivity(
 		switch ipProtocol {
 		case binding.ProtocolIP:
 			ctZones[ipProtocol] = CtZone
+			snatCtZones[ipProtocol] = SNATCtZone
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv4
 			nodeIPs[ipProtocol] = nodeConfig.NodeIPv4Addr.IP
 			if nodeConfig.PodIPv4CIDR != nil {
@@ -89,6 +92,7 @@ func newFeaturePodConnectivity(
 			ipCtZoneTypeRegMarks[ipProtocol] = IPCtZoneTypeRegMark
 		case binding.ProtocolIPv6:
 			ctZones[ipProtocol] = CtZoneV6
+			snatCtZones[ipProtocol] = SNATCtZoneV6
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv6
 			nodeIPs[ipProtocol] = nodeConfig.NodeIPv6Addr.IP
 			if nodeConfig.PodIPv6CIDR != nil {
@@ -119,6 +123,7 @@ func newFeaturePodConnectivity(
 		hostIfacePort:         nodeConfig.HostInterfaceOFPort,
 		tunnelPort:            nodeConfig.TunnelOFPort,
 		ctZones:               ctZones,
+		snatCtZones:           snatCtZones,
 		localCIDRs:            localCIDRs,
 		nodeIPs:               nodeIPs,
 		nodeConfig:            nodeConfig,
