@@ -260,6 +260,16 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 				return fmt.Errorf("invalid NodePort IP address `%s`: %w", nodePortAddress, err)
 			}
 		}
+
+		if err := validation.ValidatePort(o.config.AntreaProxy.ProxyHealthServerPort); err != nil {
+			return fmt.Errorf("health server port is invalid: %w", err)
+		}
+
+		if o.config.AntreaProxy.ProxyHealthServerBindAddress != "" {
+			if net.ParseIP(o.config.AntreaProxy.ProxyHealthServerBindAddress) == nil {
+				return fmt.Errorf("health server bind IP address %s is invalid", o.config.AntreaProxy.ProxyHealthServerBindAddress)
+			}
+		}
 	}
 
 	ok, defaultLoadBalancerMode := config.GetLoadBalancerModeFromStr(o.config.AntreaProxy.DefaultLoadBalancerMode)
@@ -442,6 +452,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	}
 	if o.config.AntreaProxy.DefaultLoadBalancerMode == "" {
 		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
+	}
+	if o.config.AntreaProxy.ProxyHealthServerPort == 0 {
+		o.config.AntreaProxy.ProxyHealthServerPort = apis.AntreaProxyHealthServerPort
 	}
 	if o.config.ClusterMembershipPort == 0 {
 		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
