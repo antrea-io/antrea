@@ -92,6 +92,13 @@ const (
 
 	preNodeNetworkPolicyIngressRulesChain = "ANTREA-POL-PRE-INGRESS-RULES"
 	preNodeNetworkPolicyEgressRulesChain  = "ANTREA-POL-PRE-EGRESS-RULES"
+
+	// tcChain is the default chain of tc.
+	tcChain uint32 = 0
+	// tcPriorityHigh and tcPriorityNormal define the priorities of filters added by Antrea.
+	// Note: lower values indicate higher priority.
+	tcPriorityHigh   uint16 = 40000
+	tcPriorityNormal uint16 = 40010
 )
 
 // Client implements Interface.
@@ -183,6 +190,10 @@ type Client struct {
 	// wireguardPort is the port used for the WireGuard UDP tunnels. When WireGuard is enabled (used as the encryption
 	// mode), we add iptables rules to the filter table to accept input and output UDP traffic destined to this port.
 	wireguardPort int
+	// tcFilters caches tc filters to bypass Node host network for Pod-to-Pod traffic.
+	tcFilters sync.Map
+	// tcHandleAllocator is responsible for allocating IDs for tc filter handles.
+	tcHandleAllocator *tcHandleAllocator
 }
 
 // NewClient returns a route client.
@@ -218,7 +229,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 			antreaExternalIPIPSet:  {},
 			antreaExternalIPIP6Set: {},
 		},
-		wireguardPort: wireguardPort,
+		wireguardPort:     wireguardPort,
+		tcHandleAllocator: newTcHandleAllocator(),
 	}, nil
 }
 
@@ -2586,6 +2598,255 @@ func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6
 			c.nodeNetworkPolicyIPTablesIPv4.Delete(iptablesChain)
 		}
 	}
+
+	return nil
+}
+
+func (c *Client) AddTcQdiscClsAct(ifindex int) error {
+	qdisc := &netlink.Clsact{
+		QdiscAttrs: netlink.QdiscAttrs{
+			LinkIndex: ifindex,
+			Parent:    netlink.HANDLE_CLSACT,
+		},
+	}
+
+	err := c.netlink.QdiscDel(qdisc)
+	klog.Info("Cleaning stale tc qdisc clsact on interface to clear stale tc filters")
+	if err != nil {
+		klog.ErrorS(err, "Failed to clean stale tc qdisc")
+	}
+
+	klog.InfoS("Adding tc qdisc clsact on interface", "qdisc", qdisc, "ifindex", ifindex)
+	err = c.netlink.QdiscReplace(qdisc)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type tcHandleKey struct {
+	ifIndex  int
+	priority uint16
+}
+
+type allocatorState struct {
+	handleCounter uint32
+	recycled      []uint32
+}
+type tcHandleAllocator struct {
+	mu         sync.Mutex
+	allocators map[tcHandleKey]*allocatorState
+}
+
+func newTcHandleAllocator() *tcHandleAllocator {
+	return &tcHandleAllocator{
+		allocators: make(map[tcHandleKey]*allocatorState),
+	}
+}
+
+func (t *tcHandleAllocator) allocate(ifIndex int, priority uint16) uint32 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	key := tcHandleKey{ifIndex, priority}
+	allocator, exist := t.allocators[key]
+
+	if !exist {
+		allocator = &allocatorState{}
+		t.allocators[key] = allocator
+	}
+
+	var id uint32
+	if len(allocator.recycled) != 0 {
+		id = allocator.recycled[len(allocator.recycled)-1]
+		allocator.recycled = allocator.recycled[:len(allocator.recycled)-1]
+	} else {
+		allocator.handleCounter += 1
+		id = allocator.handleCounter
+	}
+	return id
+}
+
+func (t *tcHandleAllocator) release(ifIndex int, priority uint16, id uint32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	key := tcHandleKey{ifIndex, priority}
+	allocator, exists := t.allocators[key]
+	if exists {
+		allocator.recycled = append(allocator.recycled, id)
+	}
+}
+
+func generateTcFilterWithActionPass(fromIfindex int,
+	protocol uint16,
+	destCIDR *net.IPNet,
+	priority uint16,
+	handle uint32) *netlink.Flower {
+	filter := &netlink.Flower{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: fromIfindex,
+			Parent:    netlink.HANDLE_MIN_INGRESS,
+			Protocol:  protocol,
+			Priority:  priority,
+			Chain:     ptr.To(tcChain),
+			Handle:    handle,
+		},
+		EthType:    protocol,
+		DestIP:     destCIDR.IP,
+		DestIPMask: destCIDR.Mask,
+		Actions: []netlink.Action{
+			&netlink.GenericAction{
+				ActionAttrs: netlink.ActionAttrs{
+					Action: netlink.TC_ACT_OK,
+				},
+			},
+		},
+	}
+	return filter
+}
+
+func generateTcFilterWithActionRedirect(fromIfindex int,
+	toIfindex int,
+	protocol uint16,
+	sourceCIDR *net.IPNet,
+	destCIDR *net.IPNet,
+	priority uint16,
+	handle uint32) *netlink.Flower {
+	filter := &netlink.Flower{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: fromIfindex,
+			Parent:    netlink.HANDLE_MIN_INGRESS,
+			Protocol:  protocol,
+			Priority:  priority,
+			Chain:     ptr.To(tcChain),
+			Handle:    handle,
+		},
+		EthType:    protocol,
+		SrcIP:      sourceCIDR.IP,
+		SrcIPMask:  sourceCIDR.Mask,
+		DestIP:     destCIDR.IP,
+		DestIPMask: destCIDR.Mask,
+		Actions: []netlink.Action{
+			netlink.NewMirredAction(toIfindex),
+		},
+	}
+	return filter
+}
+
+func (c *Client) AddTcFiltersRedirectBetweenGwAndTransport(podCIDR *net.IPNet,
+	peerPodCIDR *net.IPNet,
+	peerNodeIP net.IP,
+	gwIfindex int,
+	transportIfindex int) error {
+	if c.connectUplinkToBridge ||
+		c.networkConfig.TrafficEncapMode != config.TrafficEncapModeNoEncap &&
+			c.networkConfig.TrafficEncapMode != config.TrafficEncapModeHybrid {
+		return nil
+	}
+
+	isIPv6 := peerPodCIDR.IP.To4() == nil
+	// If the remote Pod CIDR is reachable through tunnel, skip it.
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid &&
+		(!isIPv6 && !c.nodeConfig.NodeTransportIPv4Addr.Contains(peerNodeIP) ||
+			isIPv6 && !c.nodeConfig.NodeTransportIPv6Addr.Contains(peerNodeIP)) {
+		return nil
+	}
+
+	protocol := uint16(unix.ETH_P_IP)
+	if isIPv6 {
+		protocol = uint16(unix.ETH_P_IPV6)
+	}
+
+	// Allocate handles for tc filters.
+	gwTcHandle := c.tcHandleAllocator.allocate(gwIfindex, tcPriorityNormal)
+	transPortTcHandle := c.tcHandleAllocator.allocate(transportIfindex, tcPriorityNormal)
+
+	// Rollback if the tc filters are not installed successfully.
+	success := false
+	defer func() {
+		if !success {
+			c.tcHandleAllocator.release(gwIfindex, tcPriorityNormal, gwTcHandle)
+			c.tcHandleAllocator.release(transportIfindex, tcPriorityNormal, transPortTcHandle)
+		}
+	}()
+
+	// Create bidirectional tc redirect filters
+	filters := []netlink.Filter{
+		generateTcFilterWithActionRedirect(gwIfindex, transportIfindex, protocol, podCIDR, peerPodCIDR, tcPriorityNormal, gwTcHandle),
+		generateTcFilterWithActionRedirect(transportIfindex, gwIfindex, protocol, peerPodCIDR, podCIDR, tcPriorityNormal, transPortTcHandle),
+	}
+
+	// Install all tc filters.
+	for _, filter := range filters {
+		klog.InfoS("Adding tc filter to redirect Pod-to-Pod traffic between gateway and transport interface", "filter", filter)
+		if err := c.netlink.FilterReplace(filter); err != nil {
+			return err
+		}
+	}
+	c.tcFilters.Store(peerPodCIDR.String(), filters)
+	success = true
+
+	return nil
+}
+
+func (c *Client) DeleteTcFiltersRedirectBetweenGwAndTransport(peerPodCIDR *net.IPNet) error {
+	podCIDRStr := peerPodCIDR.String()
+	filtersRaw, exists := c.tcFilters.Load(podCIDRStr)
+	if !exists {
+		return nil
+	}
+
+	filters := filtersRaw.([]netlink.Filter)
+	// Delete all tc filters.
+	for _, filter := range filters {
+		klog.InfoS("Deleting tc filter to redirect Pod-to-Pod traffic between gateway and transport interface", "filter", filter)
+		if err := c.netlink.FilterDel(filter); err != nil && err.Error() != "no such file or directory" {
+			return err
+		}
+	}
+	// Release tc handles after all tc filters are deleted successfully.
+	for _, filter := range filters {
+		c.tcHandleAllocator.release(filter.Attrs().LinkIndex, filter.Attrs().Priority, filter.Attrs().Handle)
+	}
+	c.tcFilters.Delete(podCIDRStr)
+
+	return nil
+}
+
+func (c *Client) AddTcFilterPassToGw(gatewayIP net.IP, transportIfindex int) error {
+	var protocol uint16
+	var gatewayIPNet *net.IPNet
+	if gatewayIP.To4() == nil {
+		protocol = unix.ETH_P_IPV6
+		gatewayIPNet = &net.IPNet{IP: gatewayIP, Mask: net.CIDRMask(128, 128)}
+	} else {
+		protocol = unix.ETH_P_IP
+		gatewayIPNet = &net.IPNet{IP: gatewayIP, Mask: net.CIDRMask(32, 32)}
+	}
+
+	handle := c.tcHandleAllocator.allocate(transportIfindex, tcPriorityHigh)
+	success := false
+	defer func() {
+		if !success {
+			c.tcHandleAllocator.release(transportIfindex, tcPriorityHigh, handle)
+		}
+	}()
+
+	filter := generateTcFilterWithActionPass(transportIfindex,
+		protocol,
+		gatewayIPNet,
+		tcPriorityHigh,
+		handle)
+	// Add the tc filter to ignore the packets destined for the gateway IP because this IP is on host network, and it
+	// should not be bypassed.
+	klog.InfoS("Adding tc filter to pass traffic destined from gateway IP", "filter", filter)
+	err := c.netlink.FilterReplace(filter)
+	if err != nil {
+		return err
+	}
+	c.tcFilters.Store(gatewayIPNet.String(), []netlink.Filter{filter})
+	success = true
 
 	return nil
 }
