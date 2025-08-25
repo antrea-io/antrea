@@ -38,10 +38,10 @@ jobs:
           runner: ubuntu-latest
           suffix: amd64
         - platform: linux/arm64
-          runner: github-arm64-2c-8gb
+          runner: oracle-vm-2cpu-8gb-arm64
           suffix: arm64
         - platform: linux/arm/v7
-          runner: github-arm64-2c-8gb
+          runner: oracle-vm-2cpu-8gb-arm64
           suffix: arm
     runs-on: ${{ matrix.runner }}
     env:

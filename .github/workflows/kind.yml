@@ -280,7 +280,7 @@ jobs:
   test-e2e-ipam-feature-enabled:
     name: E2e tests on a Kind cluster on Linux with FlexibleIPAM feature enabled
     needs: [build-antrea-coverage-image]
-    runs-on: [ubuntu-latest-4-cores]
+    runs-on: [oracle-vm-4cpu-16gb-x86-64]
     steps:
       - uses: actions/checkout@v5
         with:
