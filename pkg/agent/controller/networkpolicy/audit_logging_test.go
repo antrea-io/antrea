@@ -208,23 +208,24 @@ func TestRedirectPacketLog(t *testing.T) {
 	assert.Contains(t, actual, expected)
 }
 
+func generateRegMatch(regID int, data []byte) openflow15.MatchField {
+	baseData := make([]byte, 8)
+	if regID%2 == 0 {
+		copy(baseData[0:4], data)
+	} else {
+		copy(baseData[4:8], data)
+	}
+	return openflow15.MatchField{
+		Class: openflow15.OXM_CLASS_PACKET_REGS,
+		// convert reg (4-byte) ID to xreg (8-byte) ID
+		Field:   uint8(regID / 2),
+		HasMask: false,
+		Value:   &openflow15.ByteArrayField{Data: baseData},
+	}
+}
+
 func TestGetNetworkPolicyInfo(t *testing.T) {
 	prepareMockOFTablesWithCache()
-	generateMatch := func(regID int, data []byte) openflow15.MatchField {
-		baseData := make([]byte, 8)
-		if regID%2 == 0 {
-			copy(baseData[0:4], data)
-		} else {
-			copy(baseData[4:8], data)
-		}
-		return openflow15.MatchField{
-			Class: openflow15.OXM_CLASS_PACKET_REGS,
-			// convert reg (4-byte) ID to xreg (8-byte) ID
-			Field:   uint8(regID / 2),
-			HasMask: false,
-			Value:   &openflow15.ByteArrayField{Data: baseData},
-		}
-	}
 	testPriority, testRule, testLogLabel := "61800", "test-rule", "test-log-label"
 	// only need 4 bytes of register data for the disposition
 	// this will go into the openflow.APDispositionField register
@@ -424,7 +425,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Inject disposition and redirect match.
-			dispositionMatch := generateMatch(openflow.APDispositionField.GetRegID(), tc.dispositionData)
+			dispositionMatch := generateRegMatch(openflow.APDispositionField.GetRegID(), tc.dispositionData)
 			matchers := []openflow15.MatchField{dispositionMatch}
 			// Inject ingress/egress match when case is not K8s default drop.
 			if tc.expectedCalls != nil {
@@ -436,7 +437,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				} else {
 					regID = openflow.TFEgressConjIDField.GetRegID()
 				}
-				ingressMatch := generateMatch(regID, conjunctionData)
+				ingressMatch := generateRegMatch(regID, conjunctionData)
 				matchers = append(matchers, ingressMatch)
 			}
 			if tc.tableIDInReg != nil {
@@ -452,7 +453,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 					}
 				}
 				if !found {
-					tableMatch := generateMatch(tableMatchRegID, tableRegData)
+					tableMatch := generateRegMatch(tableMatchRegID, tableRegData)
 					matchers = append(matchers, tableMatch)
 				}
 			}
