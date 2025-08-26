@@ -15,6 +15,8 @@
 package connections
 
 import (
+	"time"
+
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 )
 
@@ -26,4 +28,13 @@ type ConnTrackDumper interface {
 	DumpFlows(zoneFilter uint16) ([]*connection.Connection, int, error)
 	// GetMaxConnections returns the size of the connection tracking table.
 	GetMaxConnections() (int, error)
+}
+
+type ConnectionStoreGetter interface {
+	GetConnByKey(connKey connection.ConnectionKey) (*connection.Connection, bool)
+}
+
+type DenyConnectionStoreUpdater interface {
+	ConnectionStoreGetter
+	AddOrUpdateConn(conn *connection.Connection, timeSeen time.Time, bytes uint64)
 }
