@@ -342,6 +342,9 @@ func (i *Initializer) initInterfaceStore() error {
 			if port.Name == i.ovsBridge {
 				// Need not to load the OVS bridge port to the interfaceStore
 				intf = nil
+			} else if i.connectUplinkToBridge && port.Name == i.nodeConfig.UplinkNetConfig.Name {
+				// Need not load the FlexibleIPAM uplink internal port to the interfaceStore
+				intf = nil
 			} else {
 				var err error
 				intf, err = externalnode.ParseHostInterfaceConfig(i.ovsBridgeClient, port, ovsPort)
