@@ -51,8 +51,8 @@ import (
 	"antrea.io/antrea/pkg/util/runtime"
 )
 
-func newAgentInitializer(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore) *Initializer {
-	return &Initializer{ovsBridgeClient: ovsBridgeClient, ifaceStore: ifaceStore, hostGateway: "antrea-gw0"}
+func newAgentInitializer(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore, connectUplinkToBridge bool) *Initializer {
+	return &Initializer{ovsBridgeClient: ovsBridgeClient, ifaceStore: ifaceStore, hostGateway: "antrea-gw0", connectUplinkToBridge: connectUplinkToBridge}
 }
 
 func convertExternalIDMap(in map[string]interface{}) map[string]string {
@@ -70,7 +70,7 @@ func TestInitInterfaceStore(t *testing.T) {
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
 
 	store := interfacestore.NewInterfaceStore()
-	initializer := newAgentInitializer(mockOVSBridgeClient, store)
+	initializer := newAgentInitializer(mockOVSBridgeClient, store, true)
 	uplinkNetConfig := config.AdapterNetConfig{Name: "eth-antrea-test-1"}
 	initializer.nodeConfig = &config.NodeConfig{UplinkNetConfig: &uplinkNetConfig}
 
@@ -96,7 +96,13 @@ func TestInitInterfaceStore(t *testing.T) {
 			interfacestore.NewContainerInterface("p2", uuid2, "pod2", "ns2", "eth0", "netns2", p2NetMAC, []net.IP{p2NetIP}, 0),
 		)),
 	}
-	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
+	uuid3 := uuid.New().String()
+	ovsPortUplinkInternal := ovsconfig.OVSPortData{UUID: uuid3, Name: "eth-antrea-test-1", IFName: "eth-antrea-test-1", OFPort: 100,
+		ExternalIDs: map[string]string{
+			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
+		},
+	}
+	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2, ovsPortUplinkInternal}
 
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
 	initializer.initInterfaceStore()
@@ -808,7 +814,7 @@ func TestSetOVSDatapath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := mock.NewController(t)
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
-			initializer := newAgentInitializer(mockOVSBridgeClient, nil)
+			initializer := newAgentInitializer(mockOVSBridgeClient, nil, false)
 			tt.expectedCalls(mockOVSBridgeClient)
 
 			err := initializer.setOVSDatapath()
