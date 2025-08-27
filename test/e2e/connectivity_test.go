@@ -60,7 +60,7 @@ func TestConnectivity(t *testing.T) {
 	t.Run("testOVSRestartSameNode", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
 		skipIfHasWindowsNodes(t)
-		testOVSRestartSameNode(t, data, data.testNamespace)
+		testOVSRestartSameNode(t, data, data.testNamespace, false)
 	})
 	t.Run("testOVSFlowReplay", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
@@ -425,7 +425,7 @@ func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData, namespa
 // testOVSRestartSameNode verifies that datapath flows are not removed when the Antrea Agent Pod is
 // stopped gracefully (e.g. as part of a RollingUpdate). The test sends ARP requests every 1s and
 // checks that there is no packet loss during the restart.
-func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
+func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string, force bool) {
 	workerNode := workerNodeName(1)
 	t.Logf("Creating two toolbox test Pods on '%s'", workerNode)
 	podNames, podIPs, cleanupFn := createTestToolboxPods(t, data, 2, namespace, workerNode)
@@ -469,8 +469,24 @@ func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
 	time.Sleep(3 * time.Second)
 
 	t.Logf("Restarting antrea-agent on Node '%s'", workerNode)
-	if _, err := data.deleteAntreaAgentOnNode(workerNode, 30 /* grace period in seconds */, defaultTimeout); err != nil {
-		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", workerNode, err)
+	if !force {
+		if _, err := data.deleteAntreaAgentOnNode(workerNode, 30 /* grace period in seconds */, defaultTimeout); err != nil {
+			t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", workerNode, err)
+		}
+	} else {
+		signalAgent := func(nodeName, signal string) {
+			cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
+			if testOptions.providerName != "kind" {
+				cmd = "sudo " + cmd
+			}
+			rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
+			if rc != 0 || err != nil {
+				t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
+					cmd, nodeName, rc, stdout, stderr, err)
+			}
+		}
+		// Send "KILL" signal to antrea-agent.
+		signalAgent(workerNode, "KILL")
 	}
 
 	if err := <-resCh; err != nil {
