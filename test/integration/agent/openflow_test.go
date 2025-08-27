@@ -1493,7 +1493,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+new+trk,ct_zone=65521,ip", ActStr: fmt.Sprintf("goto_table:%s", outputStageTable)},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3],set_field:0x100/0x100->ct_mark))", outputStageTable, ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0/0x10,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3],set_field:0x100/0x100->ct_mark))", outputStageTable, ctZone)},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(set_field:0x100/0x100->ct_mark))", outputStageTable, ctZone)},
 		)
 		tableSNATFlows.flows = append(tableSNATFlows.flows,
@@ -1540,7 +1540,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+new+trk,ct_zone=65511,ipv6", ActStr: fmt.Sprintf("goto_table:%s", outputStageTable)},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ipv6", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3],set_field:0x100/0x100->ct_mark))", outputStageTable, ctZoneV6)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0/0x10,ipv6", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3],set_field:0x100/0x100->ct_mark))", outputStageTable, ctZoneV6)},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(set_field:0x100/0x100->ct_mark))", outputStageTable, ctZoneV6)},
 		)
 		tableSNATFlows.flows = append(tableSNATFlows.flows,

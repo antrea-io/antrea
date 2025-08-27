@@ -81,19 +81,19 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 
 	tuple := connection.Tuple{SourceAddress: srcAddr, DestinationAddress: dstAddr, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	antreaFlow := getFlow(tuple)
-	tuple = connection.Tuple{SourceAddress: srcAddr, DestinationAddress: svcAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	antreaServiceFlow := getFlow(tuple)
-	tuple = connection.Tuple{SourceAddress: srcAddr, DestinationAddress: gwAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	antreaGWFlow := getFlow(tuple)
 	nonAntreaFlow := &connection.Connection{
 		FlowKey: tuple,
 		Zone:    100,
+		Mark:    openflow.ConnAllowedCTMark.GetValue(),
 	}
 	nonAllowedFlow := &connection.Connection{
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
-		Mark:    openflow.ConnAllowedCTMark.GetValue(),
 	}
+	tuple = connection.Tuple{SourceAddress: srcAddr, DestinationAddress: svcAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	antreaServiceFlow := getFlow(tuple)
+	tuple = connection.Tuple{SourceAddress: srcAddr, DestinationAddress: gwAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	antreaGWFlow := getFlow(tuple)
 	testVarietyFlows := []*connection.Connection{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow, nonAllowedFlow}
 	tuple = connection.Tuple{SourceAddress: srcAddr, DestinationAddress: netip.MustParseAddr("5.3.2.1"), Protocol: 17, SourcePort: 60001, DestinationPort: 200}
 	antreaUPDFlow := getFlow(tuple)

@@ -1854,13 +1854,13 @@ If you dump the flows of this table, you may see the following:
 
 ```text
 1. table=ConntrackCommit, priority=210,ct_state=+new+trk,ct_zone=65521,ip actions=goto_table:Output
-2. table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3],set_field:0x100/0x100->ct_mark))
+2. table=ConntrackCommit, priority=200,ct_state=+new+trk,ct_mark=0/0x10,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3],set_field:0x100/0x100->ct_mark))
 3. table=ConntrackCommit, priority=190,ct_state=+new+trk,ip actions=ct(commit,table=Output,zone=65520,exec(set_field:0x100/0x100->ct_mark))
 4. table=ConntrackCommit, priority=0 actions=goto_table:Output
 ```
 
-Flow 1 matches all "SNAT" connections (connections that were last committed to the `SNATCtZone`) and forwards them to
-table [Output].
+Flow 1 matches all "SNAT" connections (connections that were last tracked in the `SNATCtZone`) and forwards them to
+table [Output]. These connections should not be committed (again) to the main / DNAT `CtZone`.
 Flow 2 is designed to match the first packet of non-Service connections with the "tracked" state and `NotServiceCTMark`.
 Then it commits the relevant connections in `CtZone`, persisting the value of `PktSourceField` to
 `ConnSourceCTMarkField` and setting `ConnAllowedCTMark`.
