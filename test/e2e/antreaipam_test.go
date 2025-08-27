@@ -279,8 +279,10 @@ func TestAntreaIPAM(t *testing.T) {
 	t.Run("testAntreaIPAMOVSRestartSameNode", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
 		skipIfHasWindowsNodes(t)
-		testOVSRestartSameNode(t, data, testAntreaIPAMNamespace)
-		testOVSRestartSameNode(t, data, testAntreaIPAMNamespace11)
+		testOVSRestartSameNode(t, data, testAntreaIPAMNamespace, false)
+		testOVSRestartSameNode(t, data, testAntreaIPAMNamespace11, false)
+		testOVSRestartSameNode(t, data, testAntreaIPAMNamespace, true)
+		testOVSRestartSameNode(t, data, testAntreaIPAMNamespace11, true)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMOVSFlowReplay", func(t *testing.T) {
