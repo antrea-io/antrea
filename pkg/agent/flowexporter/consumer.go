@@ -10,8 +10,10 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	api "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/querier"
 	k8sutil "antrea.io/antrea/pkg/util/k8s"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -37,7 +39,8 @@ type Consumer struct {
 
 	id string
 
-	k8sClient kubernetes.Interface
+	k8sClient     kubernetes.Interface
+	egressQuerier querier.EgressQuerier
 
 	conntrackConnStore          *connections.ConntrackConnectionStore
 	conntackExpirePriorityQueue *priorityqueue.ExpirePriorityQueue
@@ -49,6 +52,9 @@ type Consumer struct {
 	connected bool
 
 	expiredConns []connection.Connection
+
+	// TODO: This is not the right way to do it. How do we pull this out?
+	flowTypeFn func(conn connection.Connection) uint8
 }
 
 func (c *Consumer) GetID() string {
@@ -65,14 +71,12 @@ func (c *Consumer) Reset() {
 }
 
 func (c *Consumer) Run(stopCh <-chan struct{}) {
-	klog.V(4).Info("Consumer started", "id", c.id)
+	klog.V(4).InfoS("Consumer started", "id", c.id)
 
-	// Queue updater
+	c.expiredConns = make([]connection.Connection, 0, 2*maxConnsToExport)
 
-	// Conn export
-
-	// When this is closed clean up
-	<-stopCh
+	conntrackStoreSubCh := c.conntrackConnStore.Subscribe(c.id)
+	denyStoreSubCh := c.denyConnStore.Subscribe(c.id)
 
 	defaultTimeout := c.conntackExpirePriorityQueue.ActiveFlowTimeout
 	expireTimer := time.NewTimer(defaultTimeout)
@@ -82,7 +86,59 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 			c.Reset()
 			expireTimer.Stop()
 			return
+		case msg := <-conntrackStoreSubCh:
+			klog.V(5).InfoS("DEBUG: received event from conntrack store", "msg", msg)
+			connKey := connection.NewConnectionKey(msg.Conn)
+
+			switch msg.Action {
+			case connections.AddOrUpdate:
+				existingItem, exists := c.conntackExpirePriorityQueue.KeyToItem[connKey]
+				if !exists {
+					// If the connKey:pqItem pair does not exist in the map, it shows the
+					// conn was inactive, and was removed from PQ and map. Since it becomes
+					// active again now, we create a new pqItem and add it to PQ and map.
+					c.conntackExpirePriorityQueue.WriteItemToQueue(connKey, msg.Conn)
+				} else {
+					c.conntackExpirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
+						time.Now().Add(c.conntackExpirePriorityQueue.IdleFlowTimeout))
+				}
+			case connections.Remove:
+				c.conntackExpirePriorityQueue.RemoveItemFromMap(msg.Conn)
+			case connections.Requeue:
+				existingItem, exists := c.conntackExpirePriorityQueue.KeyToItem[connKey]
+				if exists {
+					// TODO: Requeue time might be better included as part of message.
+					c.conntackExpirePriorityQueue.ResetActiveExpireTimeAndPush(existingItem, time.Now())
+				}
+			}
+		case msg := <-denyStoreSubCh:
+			klog.V(5).InfoS("DEBUG: received event from deny store", "msg", msg)
+			connKey := connection.NewConnectionKey(msg.Conn)
+
+			switch msg.Action {
+			case connections.AddOrUpdate:
+				existingItem, exists := c.denyConnectionExpirePriorityQueue.KeyToItem[connKey]
+				if !exists {
+					// If the connKey:pqItem pair does not exist in the map, it shows the
+					// conn was inactive, and was removed from PQ and map. Since it becomes
+					// active again now, we create a new pqItem and add it to PQ and map.
+					c.denyConnectionExpirePriorityQueue.WriteItemToQueue(connKey, msg.Conn)
+				} else {
+					c.denyConnectionExpirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
+						time.Now().Add(c.denyConnectionExpirePriorityQueue.IdleFlowTimeout))
+				}
+			case connections.Remove:
+				c.denyConnectionExpirePriorityQueue.RemoveItemFromMap(msg.Conn)
+			case connections.Requeue:
+				existingItem, exists := c.denyConnectionExpirePriorityQueue.KeyToItem[connKey]
+				if exists {
+					// TODO: Requeue time might be better included as part of message.
+					c.denyConnectionExpirePriorityQueue.ResetActiveExpireTimeAndPush(existingItem, time.Now())
+				}
+			}
 		case <-expireTimer.C:
+			klog.V(5).InfoS("DEBUG: Begin sending flow records")
+
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			err := c.Connect(ctx)
 			cancel()
@@ -94,84 +150,101 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 				continue
 			}
 
-			// 		// Get
-
-			// 		// Pop out the expired connections from the conntrack priority queue
-			// 		// and the deny priority queue, and send the data records.
-			// 		nextExpireTime, err := c.sendFlowRecords()
-			// 		if err != nil {
-			// 			klog.ErrorS(err, "Error when sending expired flow records")
-			// 			// If there is an error when sending flow records because of
-			// 			// intermittent connectivity, we reset the connection to collector
-			// 			// and retry in the next export cycle to reinitialize the connection
-			// 			// and send flow records.
-			// 			expireTimer.Reset(defaultTimeout)
-			// 			continue
-			// 		}
-			// 		expireTimer.Reset(nextExpireTime)
+			// Pop out the expired connections from the conntrack priority queue
+			// and the deny priority queue, and send the data records.
+			nextExpireTime, err := c.sendFlowRecords()
+			if err != nil {
+				klog.ErrorS(err, "Error when sending expired flow records")
+				// If there is an error when sending flow records because of
+				// intermittent connectivity, we reset the connection to collector
+				// and retry in the next export cycle to reinitialize the connection
+				// and send flow records.
+				expireTimer.Reset(defaultTimeout)
+				continue
+			}
+			expireTimer.Reset(nextExpireTime)
 		}
 	}
 }
 
-// func (c *Consumer) sendFlowRecords() (time.Duration, error) {
-// 	currTime := time.Now()
-// 	var expireTime1, expireTime2 time.Duration
-// 	// We export records from denyConnStore first, then conntrackConnStore. We enforce the ordering to handle a
-// 	// special case: for an inter-node connection with egress drop network policy, both conntrackConnStore and
-// 	// denyConnStore from the same Node will send out records to Flow Aggregator. If the record from conntrackConnStore
-// 	// arrives FA first, FA will not be able to capture the deny network policy metadata, and it will keep waiting
-// 	// for a record from destination Node to finish flow correlation until timeout. Later on we probably should
-// 	// consider doing a record deduplication between conntrackConnStore and denyConnStore before exporting records.
-// 	c.expiredConns, expireTime1 = c.denyConnStore.GetExpiredConns(c.expiredConns, currTime, maxConnsToExport)
-// 	c.expiredConns, expireTime2 = c.conntrackConnStore.GetExpiredConns(c.expiredConns, currTime, maxConnsToExport)
-// 	// Select the shorter time out among two connection stores to do the next round of export.
-// 	nextExpireTime := getMinTime(expireTime1, expireTime2)
-// 	for i := range c.expiredConns {
-// 		conn := &c.expiredConns[i]
-// 		klog.InfoS("DEBUG: Sending flow records", "Connection", conn)
-// 		if err := c.exportConn(conn); err != nil {
-// 			klog.ErrorS(err, "Error when sending expired flow record")
-// 			return nextExpireTime, err
-// 		}
-// 	}
-// 	// Clear expiredConns slice after exporting. Allocated memory is kept.
-// 	exp.expiredConns = exp.expiredConns[:0]
-// 	return nextExpireTime, nil
-// }
+func (c *Consumer) sendFlowRecords() (time.Duration, error) {
+	currTime := time.Now()
+	var expireTime1, expireTime2 time.Duration
+	// We export records from denyConnStore first, then conntrackConnStore. We enforce the ordering to handle a
+	// special case: for an inter-node connection with egress drop network policy, both conntrackConnStore and
+	// denyConnStore from the same Node will send out records to Flow Aggregator. If the record from conntrackConnStore
+	// arrives FA first, FA will not be able to capture the deny network policy metadata, and it will keep waiting
+	// for a record from destination Node to finish flow correlation until timeout. Later on we probably should
+	// consider doing a record deduplication between conntrackConnStore and denyConnStore before exporting records.
+	c.expiredConns, expireTime1 = c.denyConnStore.GetExpiredConns(c.denyConnectionExpirePriorityQueue, c.expiredConns, currTime, maxConnsToExport)
+	c.expiredConns, expireTime2 = c.conntrackConnStore.GetExpiredConns(c.conntackExpirePriorityQueue, c.expiredConns, currTime, maxConnsToExport)
+	// Select the shorter time out among two connection stores to do the next round of export.
+	nextExpireTime := getMinTime(expireTime1, expireTime2)
+	klog.V(5).InfoS("DEBUG: About to send flows", "Len", len(c.expiredConns))
+	for i := range c.expiredConns {
+		conn := &c.expiredConns[i]
+		klog.InfoS("DEBUG: Sending flow records", "Connection", conn)
+		if err := c.exportConn(conn); err != nil {
+			klog.ErrorS(err, "Error when sending expired flow record")
+			return nextExpireTime, err
+		}
+	}
+	// Clear expiredConns slice after exporting. Allocated memory is kept.
+	c.expiredConns = c.expiredConns[:0]
+	klog.V(5).InfoS("DEBUG: Send complete")
+	return nextExpireTime, nil
+}
 
-// TODO:
-const maxSize = maxConnsToExport
+func (c *Consumer) exportConn(conn *connection.Connection) error {
+	klog.V(5).InfoS("DEBUG: ExportConn", "Key", conn.FlowKey)
+	conn.FlowType = c.flowTypeFn(*conn)
+	if conn.FlowType == utils.FlowTypeUnsupported {
+		return nil
+	}
+	if conn.FlowType == utils.FlowTypeToExternal {
+		if conn.SourcePodNamespace != "" && conn.SourcePodName != "" {
+			c.fillEgressInfo(conn)
+		} else {
+			// Skip exporting the Pod-to-External connection at the Egress Node if it's different from the Source Node
+			return nil
+		}
+	}
 
-// func (c *Consumer) getConntrackFlowsToSend() ([]connection.Connection, time.Duration) {
-// 	currTime := time.Now()
-// 	expiredConns := make([]connection.Connection, 0, maxSize)
-// 	for i := 0; i < maxSize; i++ {
-// 		pqItem := c.conntackExpirePriorityQueue.GetTopExpiredItem(currTime)
-// 		if pqItem == nil {
-// 			break
-// 		}
-// 		expiredConns = append(expiredConns, *pqItem.Conn)
-// 		if utils.IsConnectionDying(pqItem.Conn) {
-// 			// If a conntrack connection is in dying state or connection is not
-// 			// in the conntrack table, we set the ReadyToDelete flag to true to
-// 			// do the deletion later.
-// 			pqItem.Conn.ReadyToDelete = true
-// 		}
-// 		if pqItem.IdleExpireTime.Before(currTime) {
-// 			// No packets have been received during the idle timeout interval,
-// 			// the connection is therefore considered inactive.
-// 			pqItem.Conn.IsActive = false
-// 		}
-// 		cs.UpdateConnAndQueue(pqItem, currTime)
-// 	}
-// }
+	if err := c.Export(conn); err != nil {
+		c.Reset()
+		return err
+	}
+
+	// exp.numConnsExported += 1
+	klog.V(5).InfoS("Record for connection sent successfully", "flowKey", conn.FlowKey, "connection", conn)
+	return nil
+}
+
+func (c *Consumer) fillEgressInfo(conn *connection.Connection) {
+	egress, err := c.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
+	if err != nil {
+		// Egress is not enabled or no Egress is applied to this Pod
+		return
+	}
+
+	// TODO: This should only happen once.
+	// Right now this happens with ALL consumers which is bad. We're duplicating the work.
+	conn.EgressName = egress.Name
+	conn.EgressUID = string(egress.UID)
+	conn.EgressIP = egress.EgressIP
+	conn.EgressNodeName = egress.EgressNode
+	if klog.V(5).Enabled() {
+		klog.InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "EgressNode", conn.EgressNodeName, "SourcePod", klog.KRef(conn.SourcePodNamespace, conn.SourcePodName))
+	}
+}
 
 func (c *Consumer) Connect(ctx context.Context) error {
 	if c.connected {
+		klog.V(5).Info("DEBUG: Already connected", "ID", c.GetID())
 		return nil
 	}
 
-	klog.V(4).Infof("Connecting consumer with address %s", c.address)
+	klog.V(4).Infof("DEBUG: Connecting consumer with address %s", c.address)
 
 	if c.exp == nil {
 		c.exp = c.createExporter()
@@ -242,7 +315,7 @@ func (c *Consumer) resolveAddress(ctx context.Context) (string, string, error) {
 	}
 	addr := net.JoinHostPort(svc.Spec.ClusterIP, port)
 	dns := fmt.Sprintf("%s.%s.svc", name, ns)
-	klog.V(2).InfoS("Resolved Service address", "address", addr)
+	klog.V(2).InfoS("DEBUG: Resolved Service address", "address", addr)
 	return addr, dns, nil
 }
 
@@ -261,34 +334,7 @@ func (fe *Consumer) createExporter() exporter.Interface {
 		}
 		return exporter.NewIPFIXExporter(string(collectorProto), fe.nodeName, fe.obsDomainID, fe.v4Enabled, fe.v6Enabled)
 	default:
-		klog.V(4).InfoS("invalid protocol for FlowExporterTarget", "communicationProtocol", fe.commProtocol, "transportProtocol", fe.transportProtocol)
+		klog.V(4).InfoS("DEBUG: invalid protocol for FlowExporterTarget", "communicationProtocol", fe.commProtocol, "transportProtocol", fe.transportProtocol)
 		return nil
 	}
 }
-
-// func (c *Consumer) exportConn(conn *connection.Connection) error {
-// 	conn.FlowType = exp.findFlowType(*conn)
-// 	if conn.FlowType == utils.FlowTypeUnsupported {
-// 		return nil
-// 	}
-// 	if conn.FlowType == utils.FlowTypeToExternal {
-// 		if conn.SourcePodNamespace != "" && conn.SourcePodName != "" {
-// 			exp.fillEgressInfo(conn)
-// 		} else {
-// 			// Skip exporting the Pod-to-External connection at the Egress Node if it's different from the Source Node
-// 			return nil
-// 		}
-// 	}
-
-// 	if err := c.Export(conn); err != nil {
-// 		c.Reset()
-// 		return err
-// 	}
-
-// 	c.numConnsExported += 1
-// 	if klog.V(5).Enabled() {
-// 		klog.InfoS("Record for connection sent successfully", "flowKey", conn.FlowKey, "connection", conn)
-// 	}
-// 	return nil
-
-// }

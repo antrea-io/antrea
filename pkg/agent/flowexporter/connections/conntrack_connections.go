@@ -257,19 +257,9 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		existingConn.TCPState = conn.TCPState
 		existingConn.IsActive = utils.CheckConntrackConnActive(existingConn)
 		if existingConn.IsActive {
-			// cs.notify(Add, conn)
-			// existingItem, exists := cs.expirePriorityQueue.KeyToItem[connKey]
-			// if !exists {
-			// 	// If the connKey:pqItem pair does not exist in the map, it shows the
-			// 	// conn was inactive, and was removed from PQ and map. Since it becomes
-			// 	// active again now, we create a new pqItem and add it to PQ and map.
-			// 	cs.expirePriorityQueue.WriteItemToQueue(connKey, existingConn)
-			// } else {
-			// 	cs.connectionStore.expirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
-			// 		time.Now().Add(cs.connectionStore.expirePriorityQueue.IdleFlowTimeout))
-			// }
+			cs.notify(AddOrUpdate, existingConn)
 		}
-		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
+		klog.V(4).InfoS("DEBUG: Antrea flow updated", "connection", existingConn)
 	} else {
 		cs.fillPodInfo(conn)
 		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
@@ -299,16 +289,18 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		conn.IsActive = true
 		// Add new antrea connection to connection store and PQ.
 		cs.connections[connKey] = conn
-		cs.notify(Add, conn)
-		klog.V(4).InfoS("New Antrea flow added", "connection", conn)
+		cs.notify(AddOrUpdate, conn)
+		klog.V(4).InfoS("DEBUG: New Antrea flow added", "connection", conn)
 	}
 }
 
-func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
+func (cs *ConntrackConnectionStore) GetExpiredConns(pq *priorityqueue.ExpirePriorityQueue, expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
+	klog.V(5).InfoS("DEBUG: Getting expired connections from Conntrack Store", "PQlen", len(pq.KeyToItem))
 	cs.AcquireConnStoreLock()
 	defer cs.ReleaseConnStoreLock()
+	klog.V(5).InfoS("DEBUG (Locked): Getting expired connections from Conntrack Store", "PQlen", len(pq.KeyToItem))
 	for i := 0; i < maxSize; i++ {
-		pqItem := cs.connectionStore.expirePriorityQueue.GetTopExpiredItem(currTime)
+		pqItem := pq.GetTopExpiredItem(currTime)
 		if pqItem == nil {
 			break
 		}
@@ -324,9 +316,14 @@ func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []connection.Co
 			// the connection is therefore considered inactive.
 			pqItem.Conn.IsActive = false
 		}
-		cs.UpdateConnAndQueue(pqItem, currTime)
+		cs.PrepareExport(pqItem, currTime)
+		if pqItem.Conn.ReadyToDelete || !pqItem.Conn.IsActive {
+			pq.RemoveItemFromMap(pqItem.Conn)
+		} else {
+			pq.ResetActiveExpireTimeAndPush(pqItem, currTime)
+		}
 	}
-	return expiredConns, cs.connectionStore.expirePriorityQueue.GetExpiryFromExpirePriorityQueue()
+	return expiredConns, pq.GetExpiryFromExpirePriorityQueue()
 }
 
 // deleteConnWithoutLock deletes the connection from the connection map given
@@ -339,10 +336,6 @@ func (cs *ConntrackConnectionStore) deleteConnWithoutLock(connKey connection.Con
 	delete(cs.connections, connKey)
 	metrics.TotalAntreaConnectionsInConnTrackTable.Dec()
 	return nil
-}
-
-func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
-	return cs.connectionStore.expirePriorityQueue
 }
 
 func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[connection.Tuple]L7ProtocolFields) {

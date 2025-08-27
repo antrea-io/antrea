@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
@@ -57,23 +58,21 @@ import (
 const maxConnsToExport = 64
 
 type FlowExporter struct {
-	conntrackConnStore     *connections.ConntrackConnectionStore
-	denyConnStore          *connections.DenyConnectionStore
-	numConnsExported       uint64 // used for unit tests.
-	v4Enabled              bool
-	v6Enabled              bool
-	k8sClient              kubernetes.Interface
-	nodeRouteController    *noderoute.Controller
-	isNetworkPolicyOnly    bool
-	conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue
-	denyPriorityQueue      *priorityqueue.ExpirePriorityQueue
-	expiredConns           []connection.Connection
-	egressQuerier          querier.EgressQuerier
-	podStore               objectstore.PodStore
-	l7Listener             *connections.L7Listener
-	nodeName               string
-	obsDomainID            uint32
-	nodeUID                string
+	conntrackConnStore  *connections.ConntrackConnectionStore
+	denyConnStore       *connections.DenyConnectionStore
+	numConnsExported    uint64 // used for unit tests.
+	v4Enabled           bool
+	v6Enabled           bool
+	k8sClient           kubernetes.Interface
+	nodeRouteController *noderoute.Controller
+	isNetworkPolicyOnly bool
+	expiredConns        []connection.Connection
+	egressQuerier       querier.EgressQuerier
+	podStore            objectstore.PodStore
+	l7Listener          *connections.L7Listener
+	nodeName            string
+	obsDomainID         uint32
+	nodeUID             string
 
 	targetInformer v1beta1.FlowExporterTargetInformer
 	consumers      map[string]chan struct{} // Consumers are added and removed dynamically.
@@ -124,24 +123,22 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 	klog.InfoS("Retrieved this Node's UID from K8s", "nodeName", nodeName, "nodeUID", nodeUID)
 
 	fe := &FlowExporter{
-		conntrackConnStore:     conntrackConnStore,
-		denyConnStore:          denyConnStore,
-		v4Enabled:              v4Enabled,
-		v6Enabled:              v6Enabled,
-		k8sClient:              k8sClient,
-		nodeRouteController:    nodeRouteController,
-		isNetworkPolicyOnly:    trafficEncapMode.IsNetworkPolicyOnly(),
-		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
-		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
-		expiredConns:           make([]connection.Connection, 0, maxConnsToExport*2),
-		egressQuerier:          egressQuerier,
-		podStore:               podStore,
-		l7Listener:             l7Listener,
-		nodeName:               nodeName,
-		obsDomainID:            obsDomainID,
-		nodeUID:                nodeUID,
-		targetInformer:         targetInformer,
-		consumers:              make(map[string]chan struct{}),
+		conntrackConnStore:  conntrackConnStore,
+		denyConnStore:       denyConnStore,
+		v4Enabled:           v4Enabled,
+		v6Enabled:           v6Enabled,
+		k8sClient:           k8sClient,
+		nodeRouteController: nodeRouteController,
+		isNetworkPolicyOnly: trafficEncapMode.IsNetworkPolicyOnly(),
+		expiredConns:        make([]connection.Connection, 0, maxConnsToExport*2),
+		egressQuerier:       egressQuerier,
+		podStore:            podStore,
+		l7Listener:          l7Listener,
+		nodeName:            nodeName,
+		obsDomainID:         obsDomainID,
+		nodeUID:             nodeUID,
+		targetInformer:      targetInformer,
+		consumers:           make(map[string]chan struct{}),
 	}
 
 	// TODO: Should this be moved to `Run`?
@@ -196,68 +193,6 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	}
 }
 
-func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
-	currTime := time.Now()
-	var expireTime1, expireTime2 time.Duration
-	// We export records from denyConnStore first, then conntrackConnStore. We enforce the ordering to handle a
-	// special case: for an inter-node connection with egress drop network policy, both conntrackConnStore and
-	// denyConnStore from the same Node will send out records to Flow Aggregator. If the record from conntrackConnStore
-	// arrives FA first, FA will not be able to capture the deny network policy metadata, and it will keep waiting
-	// for a record from destination Node to finish flow correlation until timeout. Later on we probably should
-	// consider doing a record deduplication between conntrackConnStore and denyConnStore before exporting records.
-	exp.expiredConns, expireTime1 = exp.denyConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
-	exp.expiredConns, expireTime2 = exp.conntrackConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
-	// Select the shorter time out among two connection stores to do the next round of export.
-	nextExpireTime := getMinTime(expireTime1, expireTime2)
-	for i := range exp.expiredConns {
-		conn := &exp.expiredConns[i]
-		klog.InfoS("DEBUG: Sending flow records", "Connection", conn)
-		if err := exp.exportConn(conn); err != nil {
-			klog.ErrorS(err, "Error when sending expired flow record")
-			return nextExpireTime, err
-		}
-	}
-	// Clear expiredConns slice after exporting. Allocated memory is kept.
-	exp.expiredConns = exp.expiredConns[:0]
-	return nextExpireTime, nil
-}
-
-// func (exp *FlowExporter) initFlowExporter(ctx context.Context, target *api.FlowExporterTarget) error {
-// 	addr, name, err := exp.resolveCollectorAddress(ctx, target.Spec.Address)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	var tlsConfig *exporter.TLSConfig
-// 	if target.Spec.Protocol == api.ProtoGRPC ||
-// 		(target.Spec.Protocol == api.ProtoIPFix && target.Spec.IPFixConfig.Transport == api.ProtoTLS) {
-// 		// if CA certificate, client certificate and key do not exist during initialization,
-// 		// it will retry to obtain the credentials in next export cycle
-// 		ca, err := getCACert(ctx, exp.k8sClient)
-// 		if err != nil {
-// 			return fmt.Errorf("cannot retrieve CA cert: %w", err)
-// 		}
-// 		cert, key, err := getClientCertKey(ctx, exp.k8sClient)
-// 		if err != nil {
-// 			return fmt.Errorf("cannot retrieve client cert and key: %v", err)
-// 		}
-// 		tlsConfig = &exporter.TLSConfig{
-// 			ServerName: name,
-// 			CAData:     ca,
-// 			CertData:   cert,
-// 			KeyData:    key,
-// 		}
-// 	}
-
-// 	if err := exp.exporter.ConnectToCollector(addr, tlsConfig); err != nil {
-// 		return err
-// 	}
-
-// 	// exp.exporterConnected = true
-// 	// metrics.ReconnectionsToFlowCollector.Inc()
-
-// 	return nil
-// }
-
 func (exp *FlowExporter) findFlowType(conn connection.Connection) uint8 {
 	// TODO: support Pod-To-External flows in network policy only mode.
 	if exp.isNetworkPolicyOnly {
@@ -302,37 +237,7 @@ func (exp *FlowExporter) fillEgressInfo(conn *connection.Connection) {
 	conn.EgressUID = string(egress.UID)
 	conn.EgressIP = egress.EgressIP
 	conn.EgressNodeName = egress.EgressNode
-	if klog.V(5).Enabled() {
-		klog.InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "EgressNode", conn.EgressNodeName, "SourcePod", klog.KRef(conn.SourcePodNamespace, conn.SourcePodName))
-	}
-}
-
-func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
-	conn.FlowType = exp.findFlowType(*conn)
-	if conn.FlowType == utils.FlowTypeUnsupported {
-		return nil
-	}
-	if conn.FlowType == utils.FlowTypeToExternal {
-		if conn.SourcePodNamespace != "" && conn.SourcePodName != "" {
-			exp.fillEgressInfo(conn)
-		} else {
-			// Skip exporting the Pod-to-External connection at the Egress Node if it's different from the Source Node
-			return nil
-		}
-	}
-
-	// for _, consumer := range exp.consumers {
-	// 	if err := consumer.Export(conn); err != nil {
-	// 		consumer.Reset()
-	// 		return err
-	// 	}
-	// }
-
-	exp.numConnsExported += 1
-	if klog.V(5).Enabled() {
-		klog.InfoS("Record for connection sent successfully", "flowKey", conn.FlowKey, "connection", conn)
-	}
-	return nil
+	klog.V(5).InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "EgressNode", conn.EgressNodeName, "SourcePod", klog.KRef(conn.SourcePodNamespace, conn.SourcePodName))
 }
 
 func getMinTime(t1, t2 time.Duration) time.Duration {
@@ -399,12 +304,12 @@ func consumerID(target *api.FlowExporterTarget) string {
 }
 
 func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExporterTarget) *Consumer {
-	activeFlowExportTimeout, err := time.ParseDuration(*target.Spec.ActiveFlowExportTimeout)
+	activeFlowExportTimeout, err := time.ParseDuration(ptr.Deref(target.Spec.ActiveFlowExportTimeout, "5s"))
 	if err != nil {
 		klog.V(5).ErrorS(err, "Failed to parse ActiveFlowExportTimeout from FlowExporterTarget", "FlowExporterTarget", klog.KObj(target))
 		activeFlowExportTimeout = 5 * time.Second // TODO: Create constant for default
 	}
-	idleFlowExportTimeout, err := time.ParseDuration(*target.Spec.IdleFlowExportTimeout)
+	idleFlowExportTimeout, err := time.ParseDuration(ptr.Deref(target.Spec.IdleFlowExportTimeout, "15s"))
 	if err != nil {
 		klog.V(5).ErrorS(err, "Failed to parse IdleFlowExportTimeout from FlowExporterTarget", "FlowExporterTarget", klog.KObj(target))
 		idleFlowExportTimeout = 15 * time.Second
@@ -431,7 +336,12 @@ func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExp
 		id:                                target.Name,
 		ConsumerConfig:                    consumerConfig,
 		k8sClient:                         fe.k8sClient,
+		conntrackConnStore:                fe.conntrackConnStore,
 		conntackExpirePriorityQueue:       priorityqueue.NewExpirePriorityQueue(activeFlowExportTimeout, idleFlowExportTimeout),
+		denyConnStore:                     fe.denyConnStore,
 		denyConnectionExpirePriorityQueue: priorityqueue.NewExpirePriorityQueue(activeFlowExportTimeout, idleFlowExportTimeout),
+
+		egressQuerier: fe.egressQuerier,
+		flowTypeFn:    fe.findFlowType,
 	}
 }

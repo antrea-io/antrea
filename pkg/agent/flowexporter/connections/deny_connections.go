@@ -54,11 +54,11 @@ func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
 		case <-pollTicker.C:
 			deleteIfStaleConn := func(key connection.ConnectionKey, conn *connection.Connection) error {
 				if conn.ReadyToDelete || time.Since(conn.LastExportTime) >= ds.staleConnectionTimeout {
-					if removedItem := ds.expirePriorityQueue.Remove(key); removedItem != nil {
-						// In case ReadyToDelete is true, item should already have been removed from pq
-						klog.V(4).InfoS("Conn removed from ds pq due to stale timeout",
-							"key", key, "conn", removedItem.Conn)
-					}
+					ds.notify(Remove, conn)
+					// In case ReadyToDelete is true, item should already have been removed from pq
+					klog.V(4).InfoS("Conn removed from ds pq due to stale timeout",
+						"key", key, "conn", conn)
+
 					if err := ds.deleteConnWithoutLock(key); err != nil {
 						return err
 					}
@@ -86,13 +86,7 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *connection.Connection, time
 		conn.OriginalPackets += 1
 		conn.StopTime = timeSeen
 		conn.IsActive = true
-		existingItem, exists := ds.expirePriorityQueue.KeyToItem[connKey]
-		if !exists {
-			ds.expirePriorityQueue.WriteItemToQueue(connKey, conn)
-		} else {
-			ds.connectionStore.expirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
-				time.Now().Add(ds.connectionStore.expirePriorityQueue.IdleFlowTimeout))
-		}
+		ds.notify(AddOrUpdate, conn)
 		klog.V(4).InfoS("Deny connection has been updated", "connection", conn)
 	} else {
 		if !ds.protocolFilter.Allow(conn.FlowKey.Protocol) {
@@ -119,16 +113,17 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *connection.Connection, time
 		metrics.TotalDenyConnections.Inc()
 		conn.IsActive = true
 		ds.connections[connKey] = conn
-		ds.expirePriorityQueue.WriteItemToQueue(connKey, conn)
+		ds.notify(AddOrUpdate, conn)
 		klog.V(4).InfoS("New deny connection added", "connection", conn)
 	}
 }
 
-func (ds *DenyConnectionStore) GetExpiredConns(expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
+func (ds *DenyConnectionStore) GetExpiredConns(pq *priorityqueue.ExpirePriorityQueue, expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
+	klog.V(5).InfoS("DEBUG: Getting expired connections from Deny Store", "len", len(pq.KeyToItem))
 	ds.AcquireConnStoreLock()
 	defer ds.ReleaseConnStoreLock()
 	for i := 0; i < maxSize; i++ {
-		pqItem := ds.connectionStore.expirePriorityQueue.GetTopExpiredItem(currTime)
+		pqItem := pq.GetTopExpiredItem(currTime)
 		if pqItem == nil {
 			break
 		}
@@ -143,9 +138,14 @@ func (ds *DenyConnectionStore) GetExpiredConns(expiredConns []connection.Connect
 			// we consider the connection to be inactive.
 			pqItem.Conn.IsActive = false
 		}
-		ds.UpdateConnAndQueue(pqItem, currTime)
+		ds.PrepareExport(pqItem, currTime)
+		if pqItem.Conn.ReadyToDelete || !pqItem.Conn.IsActive {
+			pq.RemoveItemFromMap(pqItem.Conn)
+		} else {
+			pq.ResetActiveExpireTimeAndPush(pqItem, currTime)
+		}
 	}
-	return expiredConns, ds.connectionStore.expirePriorityQueue.GetExpiryFromExpirePriorityQueue()
+	return expiredConns, pq.GetExpiryFromExpirePriorityQueue()
 }
 
 // deleteConnWithoutLock deletes the connection from the connection map given
@@ -158,8 +158,4 @@ func (ds *DenyConnectionStore) deleteConnWithoutLock(connKey connection.Connecti
 	delete(ds.connections, connKey)
 	metrics.TotalDenyConnections.Dec()
 	return nil
-}
-
-func (ds *DenyConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
-	return ds.connectionStore.expirePriorityQueue
 }

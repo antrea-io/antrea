@@ -36,7 +36,7 @@ const (
 type Action byte
 
 const (
-	Add Action = iota
+	AddOrUpdate Action = iota
 	Remove
 	Requeue
 )
@@ -67,6 +67,7 @@ func NewConnectionStore(
 		podStore:               podStore,
 		antreaProxier:          proxier,
 		staleConnectionTimeout: o.StaleConnectionTimeout,
+		subscribers:            make(map[string]chan Message),
 	}
 }
 
@@ -79,6 +80,7 @@ func (cs *connectionStore) Subscribe(id string) <-chan Message {
 		return ch
 	}
 
+	// TODO: Buffered channel?
 	ch = make(chan Message)
 	cs.subscribers[id] = ch
 	return ch
@@ -101,6 +103,8 @@ func (cs *connectionStore) Unsubscribe(id string) {
 func (cs *connectionStore) notify(action Action, conn *connection.Connection) {
 	cs.subscriberMutex.Lock()
 	defer cs.subscriberMutex.Unlock()
+	klog.V(5).InfoS("DEBUG: notifying subscribers", "num_subscribers", len(cs.subscribers))
+
 	msg := Message{
 		Action: action,
 		Conn:   conn,
@@ -108,7 +112,7 @@ func (cs *connectionStore) notify(action Action, conn *connection.Connection) {
 
 	for id, subscriber := range cs.subscribers {
 		subscriber <- msg
-		klog.V(5).InfoS("sent message to subscriber", "id", id, "message", msg)
+		klog.V(5).InfoS("DEBUG: sent message to subscriber", "id", id, "message", msg)
 	}
 }
 
@@ -227,6 +231,22 @@ func (cs *connectionStore) UpdateConnAndQueue(pqItem *priorityqueue.ItemToExpire
 		conn.PrevTCPState = conn.TCPState
 		conn.PrevReverseBytes = conn.ReverseBytes
 		conn.PrevReversePackets = conn.ReversePackets
-		cs.expirePriorityQueue.ResetActiveExpireTimeAndPush(pqItem, currTime)
+		cs.notify(Requeue, pqItem.Conn)
+	}
+}
+
+func (cs *connectionStore) PrepareExport(pqItem *priorityqueue.ItemToExpire, currTime time.Time) {
+	conn := pqItem.Conn
+	conn.LastExportTime = currTime
+	conn.AppProtocolName = ""
+	conn.HttpVals = ""
+	if !conn.ReadyToDelete && conn.IsActive {
+		// For active connections, we update their "prev" stats fields,
+		// reset active expire time and push back into the PQ.
+		conn.PrevBytes = conn.OriginalBytes
+		conn.PrevPackets = conn.OriginalPackets
+		conn.PrevTCPState = conn.TCPState
+		conn.PrevReverseBytes = conn.ReverseBytes
+		conn.PrevReversePackets = conn.ReversePackets
 	}
 }

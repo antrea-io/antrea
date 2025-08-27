@@ -715,7 +715,7 @@ func run(o *Options) error {
 			ConnectUplinkToBridge:  connectUplinkToBridge,
 			ProtocolFilter:         o.config.FlowExporter.ProtocolFilter,
 		}
-		flowExporter, err = flowexporter.NewFlowExporter(
+		flowExporter, err = flowexporter.NewFlowExporterWithInformer(
 			podStore,
 			proxier,
 			k8sClient,
@@ -732,7 +732,9 @@ func run(o *Options) error {
 			flowExporterOptions,
 			egressController,
 			l7FlowExporterController,
-			l7FlowExporterEnabled)
+			l7FlowExporterEnabled,
+			crdInformerFactory.Crd().V1beta1().FlowExporterTargets(),
+		)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}
