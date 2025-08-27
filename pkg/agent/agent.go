@@ -339,18 +339,15 @@ func (i *Initializer) initInterfaceStore() error {
 		case interfacestore.AntreaIPsecTunnel:
 			intf = parseTunnelInterfaceFunc(port, ovsPort)
 		case interfacestore.AntreaHost:
-			if port.Name == i.ovsBridge {
-				// Need not to load the OVS bridge port to the interfaceStore
-				intf = nil
-			} else if i.connectUplinkToBridge && port.Name == i.nodeConfig.UplinkNetConfig.Name {
-				// Need not load the FlexibleIPAM uplink internal port to the interfaceStore
-				intf = nil
-			} else {
+			if i.nodeType == config.ExternalNode {
 				var err error
 				intf, err = externalnode.ParseHostInterfaceConfig(i.ovsBridgeClient, port, ovsPort)
 				if err != nil {
 					return fmt.Errorf("failed to get interfaceConfig by port %s: %v", port.Name, err)
 				}
+			} else {
+				// No need to load the OVS host Interface to the interfaceStore
+				intf = nil
 			}
 		case interfacestore.AntreaContainer:
 			// The port should be for a container interface.

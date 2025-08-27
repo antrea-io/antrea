@@ -99,7 +99,7 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 			controller := mock.NewController(t)
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 			store := interfacestore.NewInterfaceStore()
-			initializer := newAgentInitializer(mockOVSBridgeClient, store, false)
+			initializer := newAgentInitializer(mockOVSBridgeClient, store)
 			initializer.nodeType = config.K8sNode
 			initializer.connectUplinkToBridge = tt.connectUplinkToBridge
 			initializer.nodeConfig = nodeConfig
