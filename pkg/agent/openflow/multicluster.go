@@ -174,7 +174,7 @@ func (f *featureMulticluster) snatConntrackFlows(serviceCIDR net.IPNet, localGat
 			MatchCTStateNew(true).
 			MatchCTStateTrk(true).
 			Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], nil).
-			LoadToCtMark(ConnSNATCTMark, ConnAllowedCTMark).
+			LoadToCtMark(ConnSNATCTMark).
 			CTDone().
 			Done(),
 		// This generates the flow to perform SNAT for the cross-cluster Service connections.
