@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,7 +76,9 @@ type FlowExporter struct {
 	nodeUID             string
 
 	targetInformer v1beta1.FlowExporterTargetInformer
-	consumers      map[string]chan struct{} // Consumers are added and removed dynamically.
+
+	consumerMutex sync.RWMutex
+	consumers     map[string]chan struct{} // Consumers are added and removed dynamically.
 }
 
 func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
@@ -187,6 +190,8 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 
 	<-stopCh
 
+	exp.consumerMutex.RLock()
+	defer exp.consumerMutex.RUnlock()
 	// We want to stop all the consumers
 	for _, ch := range exp.consumers {
 		close(ch)
@@ -264,13 +269,23 @@ func (fe *FlowExporter) onTargetUpdate(oldObj interface{}, newObj interface{}) {
 }
 
 func (fe *FlowExporter) onTargetDelete(obj interface{}) {
-	targetRes := obj.(*api.FlowExporterTarget)
+	var targetRes *api.FlowExporterTarget
+	switch o := obj.(type) {
+	case cache.DeletedFinalStateUnknown:
+		targetRes = o.Obj.(*api.FlowExporterTarget)
+	default:
+		targetRes = obj.(*api.FlowExporterTarget)
+	}
+
 	klog.V(5).InfoS("DEBUG: FlowExporterTarget deleted", "resource", klog.KObj(targetRes))
 
 	fe.deleteConsumer(targetRes)
 }
 
 func (fe *FlowExporter) addConsumer(targetRes *api.FlowExporterTarget) error {
+	fe.consumerMutex.Lock()
+	defer fe.consumerMutex.Unlock()
+
 	key := consumerID(targetRes)
 	if _, ok := fe.consumers[key]; ok {
 		// Consumer already exist. Report a warning and update/reset it.
@@ -279,13 +294,16 @@ func (fe *FlowExporter) addConsumer(targetRes *api.FlowExporterTarget) error {
 
 	consumer := fe.createConsumerFromFlowExporterTarget(targetRes)
 	stopCh := make(chan struct{})
-	consumer.Run(stopCh)
+	go consumer.Run(stopCh)
 	fe.consumers[key] = stopCh
 
 	return nil
 }
 
 func (fe *FlowExporter) deleteConsumer(targetRes *api.FlowExporterTarget) error {
+	fe.consumerMutex.Lock()
+	defer fe.consumerMutex.Unlock()
+
 	key := consumerID(targetRes)
 	ch, ok := fe.consumers[key]
 	if !ok {

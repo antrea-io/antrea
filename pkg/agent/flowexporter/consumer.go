@@ -77,6 +77,8 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 
 	conntrackStoreSubCh := c.conntrackConnStore.Subscribe(c.id)
 	denyStoreSubCh := c.denyConnStore.Subscribe(c.id)
+	defer c.conntrackConnStore.Unsubscribe(c.id)
+	defer c.denyConnStore.Unsubscribe(c.id)
 
 	defaultTimeout := c.conntackExpirePriorityQueue.ActiveFlowTimeout
 	expireTimer := time.NewTimer(defaultTimeout)
@@ -240,7 +242,7 @@ func (c *Consumer) fillEgressInfo(conn *connection.Connection) {
 
 func (c *Consumer) Connect(ctx context.Context) error {
 	if c.connected {
-		klog.V(5).Info("DEBUG: Already connected", "ID", c.GetID())
+		klog.V(5).InfoS("DEBUG: Already connected", "ID", c.GetID())
 		return nil
 	}
 

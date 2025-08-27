@@ -15,6 +15,8 @@
 package ipfix
 
 import (
+	"sync"
+
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 )
@@ -29,12 +31,20 @@ type IPFIXRegistry interface {
 
 type ipfixRegistry struct{}
 
+var registryLock sync.Mutex
+var loaded bool
+
 func NewIPFIXRegistry() *ipfixRegistry {
 	return &ipfixRegistry{}
 }
 
 func (reg *ipfixRegistry) LoadRegistry() {
-	ipfixregistry.LoadRegistry()
+	registryLock.Lock()
+	defer registryLock.Unlock()
+	if !loaded {
+		ipfixregistry.LoadRegistry()
+		loaded = true
+	}
 }
 
 func (reg *ipfixRegistry) GetInfoElement(name string, enterpriseID uint32) (*ipfixentities.InfoElement, error) {
