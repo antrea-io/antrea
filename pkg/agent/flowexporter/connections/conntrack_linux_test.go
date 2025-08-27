@@ -222,18 +222,18 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		DestinationPodNamespace:    "",
 		DestinationPodName:         "",
 		TCPState:                   "ESTABLISHED",
-		Labels:                     []byte{1, 0, 0, 0, 2, 0, 0, 0},
+		Labels:                     []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1},
 	}
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/dump-conntrack", false, "-m", "-s").Return(ovsctlCmdOutput, nil)
 
 	conns, totalConns, err := connDumper.DumpFlows(uint16(openflow.CtZone))
 	require.NoError(t, err, "conntrackNetdev.DumpConnections function returned error")
+	require.Len(t, outputFlow, totalConns, "Number of connections in conntrack table should be equal to outputFlow")
 	require.Len(t, conns, 1)
 	// stop time is the current time when the dumped flows are parsed. Therefore,
 	// validating is difficult.
 	expConn.StopTime = conns[0].StopTime
-	assert.Equal(t, conns[0], expConn, "filtered connection and expected connection should be same")
-	assert.Equal(t, len(outputFlow), totalConns, "Number of connections in conntrack table should be equal to outputFlow")
+	assert.Equal(t, expConn, conns[0], "filtered connection and expected connection should be same")
 }
 
 func TestConnTrackSystem_GetMaxConnections(t *testing.T) {

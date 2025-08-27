@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"slices"
 	"time"
 
 	"antrea.io/libOpenflow/openflow15"
@@ -130,9 +129,6 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	denyConn.OriginalDestinationPort = tuple.DestinationPort
 	denyConn.Mark = getCTMarkValue(matchers)
 	denyConn.Labels = getCTLabelValue(matchers)
-	// The slice is reversed compared to what we get from conntrack.
-	// Reverse can be called on a nil slice.
-	slices.Reverse(denyConn.Labels)
 	nwDstValue := getCTNwDstValue(matchers)
 	dstPortValue := getCTTpDstValue(matchers)
 	if nwDstValue.IsValid() {
@@ -252,6 +248,7 @@ func getCTMarkValue(matchers *ofctrl.Matchers) uint32 {
 	return ctMarkValue
 }
 
+// getCTLabelValue returns the conntrack label as a []byte using a big-endian representation.
 func getCTLabelValue(matchers *ofctrl.Matchers) []byte {
 	ctLabel := matchers.GetMatchByName("NXM_NX_CT_LABEL")
 	if ctLabel == nil {

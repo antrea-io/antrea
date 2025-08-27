@@ -157,8 +157,8 @@ func (cs *connectionStore) addNetworkPolicyMetadata(conn *connection.Connection)
 		if klog.V(4).Enabled() {
 			klog.InfoS("Setting NetworkPolicy metadata from connection labels", "labels", hex.EncodeToString(conn.Labels))
 		}
-		ingressOfID := binary.LittleEndian.Uint32(conn.Labels[:4])
-		egressOfID := binary.LittleEndian.Uint32(conn.Labels[4:8])
+		ingressOfID := binary.BigEndian.Uint32(conn.Labels[12:16])
+		egressOfID := binary.BigEndian.Uint32(conn.Labels[8:12])
 		if ingressOfID != 0 {
 			policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressOfID)
 			rule := cs.networkPolicyQuerier.GetRuleByFlowID(ingressOfID)
