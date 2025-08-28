@@ -96,7 +96,13 @@ func TestInitInterfaceStore(t *testing.T) {
 			interfacestore.NewContainerInterface("p2", uuid2, "pod2", "ns2", "eth0", "netns2", p2NetMAC, []net.IP{p2NetIP}, 0),
 		)),
 	}
-	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
+	uuid3 := uuid.New().String()
+	ovsPortUplinkInternal := ovsconfig.OVSPortData{UUID: uuid3, Name: "eth-antrea-test-1", IFName: "eth-antrea-test-1", OFPort: 100,
+		ExternalIDs: map[string]string{
+			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
+		},
+	}
+	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2, ovsPortUplinkInternal}
 
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
 	initializer.initInterfaceStore()
