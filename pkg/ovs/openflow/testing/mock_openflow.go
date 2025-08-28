@@ -1771,6 +1771,20 @@ func (mr *MockFlowBuilderMockRecorder) MatchCTStateTrk(isSet any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateTrk", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateTrk), isSet)
 }
 
+// MatchCTZone mocks base method.
+func (m *MockFlowBuilder) MatchCTZone(zone int) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTZone", zone)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTZone indicates an expected call of MatchCTZone.
+func (mr *MockFlowBuilderMockRecorder) MatchCTZone(zone any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTZone", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTZone), zone)
+}
+
 // MatchConjID mocks base method.
 func (m *MockFlowBuilder) MatchConjID(value uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()

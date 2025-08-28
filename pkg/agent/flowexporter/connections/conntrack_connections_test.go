@@ -118,7 +118,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				StartTime: refTime,
 				StopTime:  refTime,
 				FlowKey:   tuple1,
-				Labels:    []byte{0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0},
+				Labels:    []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
 				Mark:      openflow.ServiceCTMark.GetValue(),
 			},
 			expectedConn: connection.Connection{
@@ -126,7 +126,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				StopTime:                       refTime,
 				LastExportTime:                 refTime,
 				FlowKey:                        tuple1,
-				Labels:                         []byte{0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0},
+				Labels:                         []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
 				Mark:                           openflow.ServiceCTMark.GetValue(),
 				IsPresent:                      true,
 				IsActive:                       true,
@@ -254,7 +254,7 @@ func testAddNewConn(mockPodStore *objectstoretest.MockPodStore, mockProxier *pro
 	serviceStr := fmt.Sprintf("%s:%d/%s", conn.OriginalDestinationAddress.String(), conn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 
-	ingressOfID := binary.LittleEndian.Uint32(conn.Labels[:4])
+	ingressOfID := binary.BigEndian.Uint32(conn.Labels[12:16])
 	npQuerier.EXPECT().GetNetworkPolicyByRuleFlowID(ingressOfID).Return(&np1)
 	npQuerier.EXPECT().GetRuleByFlowID(ingressOfID).Return(&rule1)
 }
