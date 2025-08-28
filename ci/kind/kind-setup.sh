@@ -420,20 +420,23 @@ function delete_vlan_subnets {
   bridge_interface="br-${bridge_id:0:12}"
   vlan_interface_prefix="br-${bridge_id:0:7}."
 
-  found_vlan_interfaces=$(docker_run_with_host_net ip -br link show type vlan | cut -d " " -f 1)
-  for interface in $found_vlan_interfaces ; do
-    if [[ $interface =~ ${vlan_interface_prefix}[0-9]+@${bridge_interface} ]]; then
-      interface_name=${interface%@*}
-      docker_run_with_host_net iptables -t filter -D FORWARD -i $bridge_interface -o $interface_name -j ACCEPT || true
-      docker_run_with_host_net iptables -t filter -D FORWARD -o $bridge_interface -i $interface_name -j ACCEPT || true
-      docker_run_with_host_net ip link del $interface_name
-    fi
-  done
+    found_vlan_interfaces=$(docker_run_with_host_net ip -br link show type vlan | cut -d " " -f 1)
+    for interface in $found_vlan_interfaces ; do
+      if [[ $interface =~ ${vlan_interface_prefix}[0-9]+@${bridge_interface} ]]; then
+        interface_name=${interface%@*}
+        docker_run_with_host_net iptables -t filter -D FORWARD -i $bridge_interface -o $interface_name -j ACCEPT || true
+        docker_run_with_host_net iptables -t filter -D FORWARD -o $bridge_interface -i $interface_name -j ACCEPT || true
+        docker_run_with_host_net ip link del $interface_name
+      fi
+    done
 
-  if [[ $FLEXIBLE_IPAM == true ]]; then
-    docker_run_with_host_net iptables -t nat -D POSTROUTING ! -o $bridge_interface -s 192.168.240.0/24 -m set --match-set excluded_subnets dst -j RETURN || true
-    docker_run_with_host_net iptables -t nat -D POSTROUTING ! -o $bridge_interface -s 10.244.0.0/16 -m set ! --match-set excluded_subnets dst -j MASQUERADE || true
-    docker_run_with_host_net ipset destroy excluded_subnets || true  
+    if [[ $FLEXIBLE_IPAM == true ]]; then
+      docker_run_with_host_net iptables -t nat -D POSTROUTING ! -o $bridge_interface -s 192.168.240.0/24 -m set --match-set excluded_subnets dst -j RETURN || true
+      docker_run_with_host_net iptables -t nat -D POSTROUTING ! -o $bridge_interface -s 10.244.0.0/16 -m set ! --match-set excluded_subnets dst -j MASQUERADE || true
+      docker_run_with_host_net ipset destroy excluded_subnets || true  
+    fi
+  else
+    echo "kind network not found, skipping VLAN subnet deletion."
   fi
 }
 
