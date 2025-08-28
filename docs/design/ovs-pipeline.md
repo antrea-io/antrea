@@ -1657,11 +1657,11 @@ Flows 3-5 matches packets destined for the local Antrea gateway, tunnel, uplink 
 `ToTunnelRegMark` or `ToUplinkRegMark`, respectively, and forwards them to table [IngressMetric] directly to bypass
 all tables for ingress security.
 
-Flow 5 matches packets from hairpin connections with `HairpinCTMark` and forwards them to table [ConntrackCommit]
+Flow 6 matches packets from hairpin connections with `HairpinCTMark` and forwards them to table [ConntrackCommit]
 directly to bypass all tables for ingress security. Refer to this PR
 [#5687](https://github.com/antrea-io/antrea/pull/5687) for more information.
 
-Flow 6 is the table-miss flow.
+Flow 7 is the table-miss flow.
 
 ### AntreaPolicyIngressRule
 
