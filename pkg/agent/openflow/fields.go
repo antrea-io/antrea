@@ -156,6 +156,9 @@ var (
 	// reg4[28]: Mark to indicate that whether the traffic's source is a local Pod or the Node.
 	FromLocalRegMark = binding.NewOneBitRegMark(4, 28)
 
+	// reg4[29]: Mark to indicate that this is the first packet of a connection.
+	FirstPacketRegMark = binding.NewOneBitRegMark(4, 29)
+
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.
 	TFEgressConjIDField = binding.NewRegField(5, 0, 31)
@@ -222,6 +225,13 @@ var (
 	// for L7 NetworkPolicy.
 	// This CT mark is used in CtZone / CtZoneV6.
 	L7NPRedirectCTMark = binding.NewOneBitCTMark(7)
+
+	// CTMark[8]: Mark to indicate that the connection does not violate (i.e., is not denied by)
+	// any NetworkPolicy.
+	// The mark is mostly useful for Service traffic, which is committed to conntrack during
+	// Endpoint selection, and can potentially be denied later on by an Egress policy.
+	// This CT mark is used in CtZone / CtZoneV6.
+	ConnAllowedCTMark = binding.NewOneBitCTMark(8)
 )
 
 // Fields using CT label.

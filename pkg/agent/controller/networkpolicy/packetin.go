@@ -134,6 +134,7 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 	denyConn.OriginalDestinationAddress = tuple.DestinationAddress
 	denyConn.OriginalDestinationPort = tuple.DestinationPort
 	denyConn.Mark = getCTMarkValue(matchers)
+	denyConn.Labels = getCTLabelValue(matchers)
 	nwDstValue := getCTNwDstValue(matchers)
 	dstPortValue := getCTTpDstValue(matchers)
 	if nwDstValue.IsValid() {
@@ -256,6 +257,19 @@ func getCTMarkValue(matchers *ofctrl.Matchers) uint32 {
 		return 0
 	}
 	return ctMarkValue
+}
+
+// getCTLabelValue returns the conntrack label as a []byte using a big-endian representation.
+func getCTLabelValue(matchers *ofctrl.Matchers) []byte {
+	ctLabel := matchers.GetMatchByName("NXM_NX_CT_LABEL")
+	if ctLabel == nil {
+		return nil
+	}
+	ctLabelValue, ok := ctLabel.GetValue().([]byte)
+	if !ok {
+		return nil
+	}
+	return ctLabelValue
 }
 
 func getCTNwDstValue(matchers *ofctrl.Matchers) netip.Addr {

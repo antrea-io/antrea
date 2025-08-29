@@ -83,7 +83,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	}
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	connStore := NewConnectionStore(mockPodStore, nil, testFlowExporterOptions)
+	connStore := NewConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions)
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -108,7 +108,7 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// test on deny connection store
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	denyConnStore := NewDenyConnectionStore(mockPodStore, nil, testFlowExporterOptions, filter.NewProtocolFilter(nil))
+	denyConnStore := NewDenyConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions, filter.NewProtocolFilter(nil))
 	tuple := connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	conn := &connection.Connection{
 		FlowKey: tuple,

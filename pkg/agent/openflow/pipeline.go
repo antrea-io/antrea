@@ -643,6 +643,14 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchCTMark(NotServiceCTMark).
 				Action().GotoStage(stageEgressSecurity).
 				Done(),
+			ConntrackStateTable.ofTable.BuildFlow(priorityLow).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(true).
+				MatchCTStateTrk(true).
+				Action().LoadRegMark(FirstPacketRegMark).
+				Action().GotoStage(stagePreRouting).
+				Done(),
 			// This generates the flow to drop invalid packets.
 			ConntrackStateTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
@@ -651,8 +659,10 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				Action().Drop().
 				Done(),
-			// This generates the flow to match the first packet of non-Service connection and mark the source of the connection
-			// by copying PktSourceField to ConnSourceCTMarkField.
+			// This generates the flow to match the first packet of non-Service connections and mark the
+			// source of the connection by copying PktSourceField to ConnSourceCTMarkField. It also marks
+			// the connection with ConnAllowedCTMark as the connection has successfully gone through policy
+			// enforcement.
 			ConntrackCommitTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
@@ -662,6 +672,18 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchCTMark(NotServiceCTMark).
 				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
 				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
+				LoadToCtMark(ConnAllowedCTMark).
+				CTDone().
+				Done(),
+			// This flow adds the missing ConnAllowedCTMark to all other connections (that have previously
+			// been committed).
+			ConntrackCommitTable.ofTable.BuildFlow(priorityLow).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchRegMark(FirstPacketRegMark).
+				MatchCTStateTrk(true).
+				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
+				LoadToCtMark(ConnAllowedCTMark).
 				CTDone().
 				Done(),
 		)

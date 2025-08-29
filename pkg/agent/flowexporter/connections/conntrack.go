@@ -23,6 +23,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/filter"
+	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -44,7 +45,6 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net
 }
 
 func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) []*connection.Connection {
-
 	filteredConns := conns[:0]
 	gwIPv4, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
 	gwIPv6, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv6)
@@ -53,6 +53,7 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 		if conn.Zone != zoneFilter {
 			continue
 		}
+
 		srcIP := conn.FlowKey.SourceAddress
 		dstIP := conn.FlowKey.DestinationAddress
 
@@ -80,6 +81,14 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 		}
 
 		if !protocolFilter.Allow(conn.FlowKey.Protocol) {
+			continue
+		}
+
+		policyAllowed := conn.Mark&openflow.ConnAllowedCTMark.GetValue() != 0
+		if !policyAllowed {
+			if klog.V(5).Enabled() {
+				klog.InfoS("Ignoring connection as it may have been denied by a policy rule", "conn", conn)
+			}
 			continue
 		}
 
