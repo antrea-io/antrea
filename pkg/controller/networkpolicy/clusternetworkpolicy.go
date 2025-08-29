@@ -704,6 +704,8 @@ func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1beta1
 		var atg *antreatypes.AppliedToGroup
 		if at.NodeSelector != nil {
 			atg = n.createAppliedToGroup("", nil, nil, nil, at.NodeSelector)
+		} else if labelSelector := n.getNodeSelector(at.Group); labelSelector != nil {
+			atg = n.createAppliedToGroup("", nil, nil, nil, labelSelector)
 		} else if at.Group != "" {
 			atg = n.createAppliedToGroupForGroup("", at.Group)
 		} else if at.Service != nil {
@@ -820,4 +822,30 @@ func (n *NetworkPolicyController) processRefGroupOrClusterGroup(g, namespace str
 		return ag, ipb
 	}
 	return nil, ipb
+}
+
+// getNodeSelector returns the given group's nodeSelector if the group can be found in the store and
+// it contains a valid nodeSelector. Otherwise nil is returned.
+func (n *NetworkPolicyController) getNodeSelector(group string) *metav1.LabelSelector {
+	if group == "" {
+		return nil
+	}
+
+	obj, found, _ := n.internalGroupStore.Get(group)
+	if !found {
+		return nil
+	}
+
+	selector := obj.(*antreatypes.Group).Selector
+	if selector == nil {
+		return nil
+	}
+
+	nodeSelector := selector.NodeSelector
+	if nodeSelector == nil {
+		return nil
+	}
+
+	labelSelector, _ := metav1.ParseToLabelSelector(nodeSelector.String())
+	return labelSelector
 }
