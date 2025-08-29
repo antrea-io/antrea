@@ -164,6 +164,19 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
+      - flowexportertargets
+      - flowexportertargets/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
       - packetcaptures
     verbs:
       - get
