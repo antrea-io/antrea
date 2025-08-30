@@ -383,16 +383,28 @@ func getPacketFile(filePath string) (afero.File, error) {
 // In the PacketCapture spec, at least one of `.Spec.Source.Pod` or `.Spec.Destination.Pod`
 // should be set.
 func (c *Controller) getTargetCaptureDevice(pc *crdv1alpha1.PacketCapture) string {
-	var pod, ns string
-	if pc.Spec.Source.Pod != nil {
-		pod = pc.Spec.Source.Pod.Name
-		ns = pc.Spec.Source.Pod.Namespace
-	} else {
-		pod = pc.Spec.Destination.Pod.Name
-		ns = pc.Spec.Destination.Pod.Namespace
+	// Set CapturePoint to 'Source' if a Source Pod is specified; otherwise, use 'Destination'.
+	if pc.Spec.CapturePoint == "" {
+		if pc.Spec.Source.Pod != nil {
+			pc.Spec.CapturePoint = crdv1alpha1.CapturePointSource
+		} else {
+			pc.Spec.CapturePoint = crdv1alpha1.CapturePointDestination
+		}
 	}
 
-	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
+	var device string
+	switch pc.Spec.CapturePoint {
+	case crdv1alpha1.CapturePointSource:
+		device = c.getPodDevice(pc.Spec.Source.Pod)
+	case crdv1alpha1.CapturePointDestination:
+		device = c.getPodDevice(pc.Spec.Destination.Pod)
+	}
+	return device
+}
+
+// getPodDevice returns the network device name for the given PodReference using the interfaceStore.
+func (c *Controller) getPodDevice(pod *crdv1alpha1.PodReference) string {
+	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod.Name, pod.Namespace)
 	if len(podInterfaces) == 0 {
 		return ""
 	}
