@@ -45,6 +45,7 @@ type Connection struct {
 	StopTime time.Time
 	// LastExportTime is used to decide whether a connection is stale.
 	LastExportTime time.Time
+	LastUpdateTime time.Time
 	IsActive       bool
 	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
 	IsPresent bool

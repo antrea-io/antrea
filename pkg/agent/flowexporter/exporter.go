@@ -57,12 +57,36 @@ import (
 // e.g. min(50 + 0.1 * connectionStore.size(), 200)
 const maxConnsToExport = 64
 
+type prevState struct {
+	PrevPackets, PrevBytes               uint64
+	PrevReversePackets, PrevReverseBytes uint64
+	PrevTCPState                         string
+}
+
+func (p prevState) Populate(c *connection.Connection) {
+	c.PrevBytes = p.PrevBytes
+	c.PrevPackets = p.PrevPackets
+	c.PrevReverseBytes = p.PrevReverseBytes
+	c.PrevReversePackets = p.PrevReversePackets
+	c.PrevTCPState = p.PrevTCPState
+}
+
+func PrevStateFromConnection(c *connection.Connection) prevState {
+	return prevState{
+		PrevPackets:        c.OriginalPackets,
+		PrevBytes:          c.OriginalBytes,
+		PrevReversePackets: c.PrevReversePackets,
+		PrevReverseBytes:   c.PrevReverseBytes,
+		PrevTCPState:       c.TCPState,
+	}
+}
+
 type FlowExporter struct {
-	collectorProto         string
-	collectorAddr          string
-	exporter               exporter.Interface
-	exporterConnected      bool
-	conntrackConnStore     *connections.ConntrackConnectionStore
+	collectorProto    string
+	collectorAddr     string
+	exporter          exporter.Interface
+	exporterConnected bool
+	// conntrackConnStore     *connections.ConntrackConnectionStore
 	denyConnStore          *connections.DenyConnectionStore
 	numConnsExported       uint64 // used for unit tests.
 	v4Enabled              bool
@@ -78,6 +102,10 @@ type FlowExporter struct {
 	l7Listener             *connections.L7Listener
 	nodeName               string
 	obsDomainID            uint32
+
+	ctStore        connections.CTStore
+	ctFetcher      *connections.ConntrackFetcher
+	prevStateCache map[connection.ConnectionKey]prevState
 }
 
 func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
@@ -94,7 +122,9 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 		l7Listener = connections.NewL7Listener(podL7FlowExporterAttrGetter, podStore)
 		eventMapGetter = l7Listener
 	}
-	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, o)
+	store := connections.NewConntrackStore(o.StaleConnectionTimeout)
+	fetcher := connections.NewConntrackFetcher(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, egressQuerier, nodeRouteController, trafficEncapMode.IsNetworkPolicyOnly(), o)
+
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
@@ -127,17 +157,17 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 	}
 
 	return &FlowExporter{
-		collectorProto:         o.FlowCollectorProto,
-		collectorAddr:          o.FlowCollectorAddr,
-		exporter:               exp,
-		conntrackConnStore:     conntrackConnStore,
+		collectorProto: o.FlowCollectorProto,
+		collectorAddr:  o.FlowCollectorAddr,
+		exporter:       exp,
+		// conntrackConnStore:     conntrackConnStore,
 		denyConnStore:          denyConnStore,
 		v4Enabled:              v4Enabled,
 		v6Enabled:              v6Enabled,
 		k8sClient:              k8sClient,
 		nodeRouteController:    nodeRouteController,
 		isNetworkPolicyOnly:    trafficEncapMode.IsNetworkPolicyOnly(),
-		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
+		conntrackPriorityQueue: priorityqueue.NewExpirePriorityQueue(o.ActiveFlowTimeout, o.IdleFlowTimeout),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]connection.Connection, 0, maxConnsToExport*2),
 		egressQuerier:          egressQuerier,
@@ -145,6 +175,10 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 		l7Listener:             l7Listener,
 		nodeName:               nodeName,
 		obsDomainID:            obsDomainID,
+
+		ctStore:        store,
+		ctFetcher:      fetcher,
+		prevStateCache: make(map[connection.ConnectionKey]prevState),
 	}, nil
 }
 
@@ -166,8 +200,11 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	// Start the goroutine to periodically delete stale deny connections.
 	go exp.denyConnStore.RunPeriodicDeletion(stopCh)
 
+	go exp.ctStore.Run(stopCh)
+	go exp.ctFetcher.Run(stopCh, exp.ctStore)
+
 	// Start the goroutine to poll conntrack flows.
-	go exp.conntrackConnStore.Run(stopCh)
+	// go exp.conntrackConnStore.Run(stopCh)
 
 	if exp.nodeRouteController != nil {
 		// Wait for NodeRouteController to have processed the initial list of Nodes so that
@@ -176,6 +213,9 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 			return
 		}
 	}
+
+	// Subscribe to changes in store
+	sub := exp.ctStore.Subscribe()
 
 	defaultTimeout := exp.conntrackPriorityQueue.ActiveFlowTimeout
 	expireTimer := time.NewTimer(defaultTimeout)
@@ -187,7 +227,33 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 			}
 			expireTimer.Stop()
 			return
+		case u := <-sub.C():
+			if u.Deleted {
+				exp.conntrackPriorityQueue.Remove(u.Key)
+				continue
+			}
+
+			conns := exp.ctStore.GetEntries()
+			conn, ok := conns[u.Key]
+			if !ok {
+				continue
+			}
+
+			klog.V(5).InfoS("DEBUGX4: Received update for connection", "update", u, "isActive", conn.IsActive)
+			// if conn.IsActive { // TODO: What exactly is "IsActive" used for?
+			item, ok := exp.conntrackPriorityQueue.KeyToItem[u.Key]
+			if !ok {
+				klog.V(5).InfoS("DEBUGX4: Wrote to queue", "update", u)
+				exp.conntrackPriorityQueue.WriteItemToQueue(u.Key, &conn)
+			} else {
+				klog.V(5).InfoS("DEBUGX4: updated queue item", "update", u)
+				exp.conntrackPriorityQueue.Update(item, item.ActiveExpireTime,
+					time.Now().Add(exp.conntrackPriorityQueue.IdleFlowTimeout))
+			}
+			// }
+
 		case <-expireTimer.C:
+			klog.V(5).InfoS("DEBUGX3: Processing expired items", "len", len(exp.conntrackPriorityQueue.KeyToItem))
 			if !exp.exporterConnected {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				err := exp.initFlowExporter(ctx)
@@ -223,6 +289,46 @@ func (exp *FlowExporter) resetFlowExporter() {
 	exp.exporterConnected = false
 }
 
+func (exp *FlowExporter) getExpiredCTConns(expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
+	conns := exp.ctStore.GetEntries()
+	for i := 0; i < maxConnsToExport; i++ {
+		pqItem := exp.conntrackPriorityQueue.GetTopExpiredItem(currTime)
+		if pqItem == nil {
+			continue
+		}
+		klog.V(5).InfoS("DEBUGX3: Exporting conn", "connKey", pqItem.Conn.FlowKey)
+		connKey := connection.NewConnectionKey(pqItem.Conn)
+		conn, ok := conns[connKey]
+		if !ok {
+			continue
+		}
+
+		if utils.IsConnectionDying(&conn) {
+			// ???
+		}
+
+		if pqItem.IdleExpireTime.Before(currTime) {
+			conn.IsActive = false
+		}
+
+		if conn.ReadyToDelete || !conn.IsActive {
+			exp.conntrackPriorityQueue.RemoveItemFromMap(&conn)
+		} else {
+			exp.conntrackPriorityQueue.ResetActiveExpireTimeAndPush(pqItem, currTime)
+		}
+
+		conn.AppProtocolName = ""
+		conn.HttpVals = ""
+
+		prevState := exp.prevStateCache[connKey]
+		prevState.Populate(&conn)
+		expiredConns = append(expiredConns, conn)
+
+		exp.prevStateCache[connKey] = PrevStateFromConnection(&conn)
+	}
+	return expiredConns, exp.conntrackPriorityQueue.GetExpiryFromExpirePriorityQueue()
+}
+
 func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
 	currTime := time.Now()
 	var expireTime1, expireTime2 time.Duration
@@ -233,9 +339,11 @@ func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
 	// for a record from destination Node to finish flow correlation until timeout. Later on we probably should
 	// consider doing a record deduplication between conntrackConnStore and denyConnStore before exporting records.
 	exp.expiredConns, expireTime1 = exp.denyConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
-	exp.expiredConns, expireTime2 = exp.conntrackConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
+	exp.expiredConns, expireTime2 = exp.getExpiredCTConns(exp.expiredConns, currTime, maxConnsToExport)
+	// exp.expiredConns, expireTime2 = exp.conntrackConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
 	// Select the shorter time out among two connection stores to do the next round of export.
 	nextExpireTime := getMinTime(expireTime1, expireTime2)
+	klog.V(5).InfoS("DEBUGX3: Sending flow records", "len", len(exp.expiredConns))
 	for i := range exp.expiredConns {
 		if err := exp.exportConn(&exp.expiredConns[i]); err != nil {
 			klog.ErrorS(err, "Error when sending expired flow record")
