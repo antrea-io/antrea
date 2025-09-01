@@ -649,3 +649,19 @@ func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, i
 func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error {
 	return errors.New("DeleteNodeNetworkPolicyIPTables is not implemented on Windows")
 }
+
+func (c *Client) AddTcQdiscClsAct(ifindex int) error {
+	return errors.New("AddTcQdiscClsAct is not implemented on Windows")
+}
+
+func (c *Client) AddTcFiltersRedirectBetweenGwAndTransport(podCIDR, peerPodCIDR *net.IPNet, peerNodeIP net.IP, gwIfindex, transportIfindex int) error {
+	return errors.New("AddTcFiltersRedirectBetweenGwAndTransport is not implemented on Windows")
+}
+
+func (c *Client) DeleteTcFiltersRedirectBetweenGwAndTransport(peerPodCIDR *net.IPNet) error {
+	return errors.New("DeleteTcFiltersRedirectBetweenGwAndTransport is not implemented on Windows")
+}
+
+func (c *Client) AddTcFilterPassToGw(gatewayIP net.IP, transportIfindex int) error {
+	return errors.New("AddTcFilterPassToGw is not implemented on Windows")
+}

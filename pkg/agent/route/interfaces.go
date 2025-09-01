@@ -121,4 +121,18 @@ type Interface interface {
 
 	// DeleteNodeNetworkPolicyIPTables deletes iptables chains and rules within the chains for NodeNetworkPolicy.
 	DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error
+
+	// AddTcQdiscClsAct adds tc qdisc clsact for an interface.
+	AddTcQdiscClsAct(ifindex int) error
+
+	// AddTcFiltersRedirectBetweenGwAndTransport adds tc filters to redirect Pod-to-Pod traffic between antrea-gw0 and
+	// transport interface, bypassing Node host networking.
+	AddTcFiltersRedirectBetweenGwAndTransport(podCIDR, peerPodCIDR *net.IPNet, peerNodeIP net.IP, gwIfindex, transportIfindex int) error
+
+	// DeleteTcFiltersRedirectBetweenGwAndTransport deletes the tc filters to redirect Pod-to-Pod traffic between
+	// antrea-gw0 and transport interface egress.
+	DeleteTcFiltersRedirectBetweenGwAndTransport(podCIDR *net.IPNet) error
+
+	// AddTcFilterPassToGw adds a tc filter to pass any traffic received on transport interface and destined for antrea-gw0.
+	AddTcFilterPassToGw(gatewayIP net.IP, transportIfindex int) error
 }
