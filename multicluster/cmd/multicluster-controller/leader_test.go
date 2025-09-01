@@ -42,6 +42,7 @@ func initMockManager(mockManager *mocks.MockManager) {
 
 	mockManager.EXPECT().GetWebhookServer().Return(&webhook.DefaultServer{}).AnyTimes()
 	mockManager.EXPECT().GetWebhookServer().Return(&webhook.DefaultServer{}).AnyTimes()
+	mockManager.EXPECT().GetAPIReader().Return(fakeClient).AnyTimes()
 	mockManager.EXPECT().GetClient().Return(fakeClient).AnyTimes()
 	mockManager.EXPECT().GetScheme().Return(common.TestScheme).AnyTimes()
 	mockManager.EXPECT().GetControllerOptions().Return(config.Controller{
