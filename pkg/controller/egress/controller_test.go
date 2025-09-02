@@ -189,6 +189,7 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 	groupingController := grouping.NewGroupEntityController(groupEntityIndex,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
+		informerFactory.Core().V1().Nodes(),
 		crdInformerFactory.Crd().V1alpha2().ExternalEntities())
 	controller := NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPAllocator, egressGroupStore)
 	return &egressController{
