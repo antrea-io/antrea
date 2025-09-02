@@ -21,7 +21,6 @@ docs/feature-gates.md
 docs/getting-started.md
 docs/gke-installation.md
 docs/kubernetes-installers.md
-docs/maintainers/antrea-docker-image.md
 docs/maintainers/build-kubemark.md
 docs/maintainers/getting-started-gif.md
 docs/maintainers/release.md
