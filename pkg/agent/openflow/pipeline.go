@@ -654,7 +654,7 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 			// This flow matches all "SNAT" connections (i.e., connections that were last tracked in the
 			// SNATCtZone), and forwards them directly to the next table. These connections have already
 			// been committed pre-SNAT to the main / DNAT CtZone, and there is no simple way to commit them
-			// again. The ConnAllowedCTMark has already been applied to these connections.
+			// again. The ConnSourceCTMarkField has already been loaded for these connections.
 			// Note that matching on ct_state=-snat with MatchCTStateSNAT(false) does not work because of
 			// https://github.com/openvswitch/ovs-issues/issues/370.
 			ConntrackCommitTable.ofTable.BuildFlow(priorityHigh).
@@ -665,29 +665,15 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchCTZone(f.snatCtZones[ipProtocol]).
 				Action().GotoTable(ConntrackCommitTable.GetNext()).
 				Done(),
-			// This generates the flow to match the first packet of non-Service connections and mark the
-			// source of the connection by copying PktSourceField to ConnSourceCTMarkField. It also marks
-			// the connection with ConnAllowedCTMark as the connection has successfully gone through policy
-			// enforcement.
+			// This generates the flow to match the first packet of all other (non-SNAT) connections and
+			// mark the source of the connection by copying PktSourceField to ConnSourceCTMarkField.
 			ConntrackCommitTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
-				MatchCTMark(NotServiceCTMark).
 				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
 				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
-				LoadToCtMark(ConnAllowedCTMark).
-				CTDone().
-				Done(),
-			// This flow adds the missing ConnAllowedCTMark to the Service connections that were previously committed.
-			ConntrackCommitTable.ofTable.BuildFlow(priorityLow).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchCTStateNew(true).
-				MatchCTStateTrk(true).
-				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
-				LoadToCtMark(ConnAllowedCTMark).
 				CTDone().
 				Done(),
 		)
@@ -2551,7 +2537,6 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},
 		).
 		LoadToCtMark(ServiceCTMark).
-		MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 		CTDone().
 		Done()
 }
@@ -2566,9 +2551,6 @@ func (f *featureService) dsrServiceNoDNATFlows() []binding.Flow {
 			MatchRegMark(DSRServiceRegMark).
 			Action().
 			CT(true, EndpointDNATTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-			// Note that the ct mark cannot be read from conntrack by ct action because the connection is in invalid state.
-			// We load it more for consistency.
-			MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 			CTDone().
 			Done())
 	}
@@ -3097,10 +3079,8 @@ func (f *featureService) podHairpinSNATFlow(endpoint net.IP) binding.Flow {
 		MatchSrcIP(endpoint).
 		MatchDstIP(endpoint).
 		Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-		// All SNAT flows need to be marked with ConnAllowedCTMark when they are committed
-		// to the DNAT CtZone. We cannot update the mark later on after switching to the
-		// SNAT CtZone. These connections cannot be dropped by ingress network policies.
-		LoadToCtMark(ConnSNATCTMark, HairpinCTMark, ConnAllowedCTMark).
+		LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
+		MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 		CTDone().
 		Done()
 }
@@ -3120,10 +3100,8 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 			MatchCTStateTrk(true).
 			MatchRegMark(FromGatewayRegMark, ToGatewayRegMark).
 			Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-			// All SNAT flows need to be marked with ConnAllowedCTMark when they are committed
-			// to the DNAT CtZone. We cannot update the mark later on after switching to the
-			// SNAT CtZone. These connections cannot be dropped by ingress network policies.
-			LoadToCtMark(ConnSNATCTMark, HairpinCTMark, ConnAllowedCTMark).
+			LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
+			MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 			CTDone().
 			Done())
 
@@ -3145,10 +3123,8 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToExternalAddressRegMark, NotDSRServiceRegMark). // Do not SNAT DSR traffic.
 				Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-				// All SNAT flows need to be marked with ConnAllowedCTMark when they are committed
-				// to the DNAT CtZone. We cannot update the mark later on after switching to the
-				// SNAT CtZone. These connections cannot be dropped by ingress network policies.
-				LoadToCtMark(ConnSNATCTMark, ConnAllowedCTMark).
+				LoadToCtMark(ConnSNATCTMark).
+				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 				CTDone().
 				Done())
 		}
