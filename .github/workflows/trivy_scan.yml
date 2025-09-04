@@ -40,7 +40,7 @@ jobs:
         docker pull antrea/antrea-controller-ubuntu:latest
         docker pull antrea/antrea-controller-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}
     - name: Install Trivy
-      uses: aquasecurity/setup-trivy@v0.2.3
+      uses: aquasecurity/setup-trivy@v0.2.4
     - name: Get current UTC date
       id: date
       run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
@@ -68,7 +68,7 @@ jobs:
         key: ${{ steps.restore-db-cache.outputs.cache-primary-key }}
     - name: Run Trivy vulnerability scanner on latest antrea-agent Docker image
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@0.32.0
+      uses: aquasecurity/trivy-action@0.33.0
       # we cannot use .trivy.yml as we need to override some config parameters
       # and that is not supported by aquasecurity/trivy-action
       with:
@@ -85,9 +85,12 @@ jobs:
       env:
         TRIVY_SKIP_DB_UPDATE: true
         TRIVY_SKIP_JAVA_DB_UPDATE: true
+    - name: Show Trivy vulnerability scan report of latest antrea-agent Docker image
+      if: ${{ always() && steps.pull.conclusion == 'success' }}
+      run: cat trivy.agent.latest.txt || true
     - name: Run Trivy vulnerability scanner on latest antrea-controller Docker image
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@0.32.0
+      uses: aquasecurity/trivy-action@0.33.0
       # we cannot use .trivy.yml as we need to override some config parameters
       # and that is not supported by aquasecurity/trivy-action
       with:
@@ -103,9 +106,12 @@ jobs:
       env:
         TRIVY_SKIP_DB_UPDATE: true
         TRIVY_SKIP_JAVA_DB_UPDATE: true
+    - name: Show Trivy vulnerability scan report of latest antrea-controller Docker image
+      if: ${{ always() && steps.pull.conclusion == 'success' }}
+      run: cat trivy.controller.latest.txt || true
     - name: Run Trivy vulnerability scanner on antrea-agent Docker image for latest released version
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@0.32.0
+      uses: aquasecurity/trivy-action@0.33.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-agent-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}'
@@ -119,9 +125,12 @@ jobs:
       env:
         TRIVY_SKIP_DB_UPDATE: true
         TRIVY_SKIP_JAVA_DB_UPDATE: true
+    - name: Show Trivy vulnerability scan report of latest released antrea-agent Docker image
+      if: ${{ always() && steps.pull.conclusion == 'success' }}
+      run: cat trivy.agent.${{ steps.find-antrea-greatest-version.outputs.antrea_version }}.txt || true
     - name: Run Trivy vulnerability scanner on antrea-controller Docker image for latest released version
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@0.32.0
+      uses: aquasecurity/trivy-action@0.33.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-controller-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}'
@@ -135,6 +144,9 @@ jobs:
       env:
         TRIVY_SKIP_DB_UPDATE: true
         TRIVY_SKIP_JAVA_DB_UPDATE: true
+    - name: Show Trivy vulnerability scan report of latest released antrea-controller Docker image
+      if: ${{ always() && steps.pull.conclusion == 'success' }}
+      run: cat trivy.controller.${{ steps.find-antrea-greatest-version.outputs.antrea_version }}.txt || true
     - name: Upload Trivy scan reports
       if: ${{ always() && steps.pull.conclusion == 'success' }}
       uses: actions/upload-artifact@v4
