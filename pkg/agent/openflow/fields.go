@@ -212,7 +212,8 @@ var (
 
 	// CTMark[5]: Mark to indicate SNAT is performed on the connection for Service.
 	// This CT mark is only used in CtZone / CtZoneV6.
-	ConnSNATCTMark = binding.NewOneBitCTMark(5)
+	ConnSNATCTMark    = binding.NewOneBitCTMark(5)
+	NotConnSNATCTMark = binding.NewOneBitZeroCTMark(5)
 
 	// CTMark[6]: Mark to indicate the connection is hairpin.
 	// This CT mark is used in CtZone / CtZoneV6 and SNATCtZone / SNATCtZoneV6.

@@ -187,6 +187,7 @@ func (f *featureMulticluster) snatConntrackFlows(serviceCIDR net.IPNet, localGat
 			MatchDstIPNet(serviceCIDR).
 			Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 			SNAT(&binding.IPRange{StartIP: localGatewayIP, EndIP: localGatewayIP}, nil).
+			LoadToCtMark(ConnSNATCTMark).
 			CTDone().
 			Done(),
 		// This generates the flow to unSNAT reply packets of connections committed in SNAT CT zone by the above flows.
