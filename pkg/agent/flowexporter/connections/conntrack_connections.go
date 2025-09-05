@@ -16,6 +16,7 @@ package connections
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -54,6 +55,7 @@ type ConntrackConnectionStore struct {
 	// networkPolicyReadyTime is set to the current time when we are done waiting on networkPolicyWait.
 	networkPolicyReadyTime time.Time
 	connectionStore
+	zoneZeroCache ZoneZeroCache
 }
 
 func NewConntrackConnectionStore(
@@ -74,6 +76,7 @@ func NewConntrackConnectionStore(
 		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
 		networkPolicyWait:     networkPolicyWait,
+		zoneZeroCache:         NewZoneZeroCache(),
 	}
 }
 
@@ -154,6 +157,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
+				cs.zoneZeroCache.Delete(conn)
 			}
 		} else {
 			conn.IsPresent = false
@@ -192,6 +196,16 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 // or adds a new connection with the resolved K8s metadata.
 func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection) {
 	conn.IsPresent = true
+
+	if conn.Zone == 0 {
+		cs.zoneZeroCache.Add(conn)
+		return
+	}
+
+	if zoneZero := cs.zoneZeroCache.GetMatching(conn); zoneZero != nil {
+		CorrelateExternal(zoneZero, conn)
+	}
+
 	connKey := connection.NewConnectionKey(conn)
 
 	existingConn, exists := cs.connections[connKey]
@@ -224,12 +238,6 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
 	} else {
 		cs.fillPodInfo(conn)
-		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
-			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
-			// information for both srcPod and dstPod
-			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
-			return
-		}
 		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
 			clusterIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
@@ -312,6 +320,7 @@ func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePrio
 
 func (cs *ConntrackConnectionStore) getZones() []uint16 {
 	var zones []uint16
+	zones = append(zones, 0)
 	if cs.v4Enabled {
 		if cs.connectUplinkToBridge {
 			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
@@ -327,4 +336,79 @@ func (cs *ConntrackConnectionStore) getZones() []uint16 {
 		}
 	}
 	return zones
+}
+
+func NewZoneZeroCache() ZoneZeroCache {
+	return ZoneZeroCache{
+		cache: map[string]*connection.Connection{},
+	}
+}
+
+// A cache holding zone zero connections for correlating the zone zero and antrea flows that make up an external flow.
+type ZoneZeroCache struct {
+	cache map[string]*connection.Connection
+}
+
+// Given a conn, generate a key that is unique to this connection
+// but can also be derived for the matching antrea ct_zone record.
+func (c ZoneZeroCache) generateKey(conn *connection.Connection) string {
+	destinationAddress := conn.FlowKey.DestinationAddress.String()
+	replyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
+	return fmt.Sprintf("%s-%s", destinationAddress, replyDestinationPort)
+}
+
+// Add the given zone zero connection to the cache.
+func (c ZoneZeroCache) Add(conn *connection.Connection) error {
+	if conn.Zone != 0 {
+		return fmt.Errorf("Cannot add connections to cache that are not zone zero. Connection has zone %v", conn.Zone)
+	}
+	key := c.generateKey(conn)
+	c.cache[key] = conn
+	return nil
+}
+
+// Return true if the given connection is in the cache.
+func (c ZoneZeroCache) Contains(conn *connection.Connection) bool {
+	key := c.generateKey(conn)
+	_, ok := c.cache[key]
+	return ok
+}
+
+// Given an antrea zone connection, generate a key that will equal the corresponding zone zero connection.
+func (c ZoneZeroCache) generateKeyFromAntreaZone(conn *connection.Connection) string {
+	destinationAddress := conn.FlowKey.DestinationAddress.String()
+	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.FlowKey.SourcePort), 10)
+	return fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
+}
+
+// Given an antrea ct zone connection, if there is a corresponding zone zero connection, return it. Otherwise return nil.
+func (c ZoneZeroCache) GetMatching(conn *connection.Connection) *connection.Connection {
+	key := c.generateKeyFromAntreaZone(conn)
+	if match, ok := c.cache[key]; ok {
+		return match
+	}
+	return nil
+}
+
+// Given a pair of matching connections, modify the antreaZone connection by
+// filling in the fields needed from the zoneZero connection
+func CorrelateExternal(zoneZero, antreaZone *connection.Connection) {
+	antreaZone.FlowKey.SourcePort = zoneZero.FlowKey.SourcePort
+	antreaZone.FlowKey.SourceAddress = zoneZero.FlowKey.SourceAddress
+	antreaZone.ProxySnatIP = zoneZero.ProxySnatIP
+	antreaZone.ProxySnatPort = zoneZero.ProxySnatPort
+	antreaZone.OriginalDestinationAddress = zoneZero.OriginalDestinationAddress
+}
+
+// Given a connection key, delete it from the cache. Log an error
+// if it didn't exist in the cache
+func (c ZoneZeroCache) Delete(conn *connection.Connection) {
+	destinationAddress := conn.FlowKey.DestinationAddress
+	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
+
+	key := fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
+	if _, ok := c.cache[key]; !ok {
+		klog.V(5).InfoS("Delete connection from ZoneZeroCache failed. Did not exist.", "conn", conn)
+	}
+	delete(c.cache, key)
 }
