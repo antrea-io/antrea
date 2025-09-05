@@ -22,6 +22,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,6 +81,7 @@ func init() {
 	utilruntime.Must(mcv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(antreacrdv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(antreacrdv1beta1.AddToScheme(scheme))
+	utilruntime.Must(networkingv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
