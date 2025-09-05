@@ -27,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/objectstore"
 )
@@ -36,9 +37,15 @@ type DenyConnectionStore struct {
 	protocolFilter filter.ProtocolFilter
 }
 
-func NewDenyConnectionStore(podStore objectstore.PodStore, proxier proxy.Proxier, o *options.FlowExporterOptions, protocolFilter filter.ProtocolFilter) *DenyConnectionStore {
+func NewDenyConnectionStore(
+	npQuerier querier.AgentNetworkPolicyInfoQuerier,
+	podStore objectstore.PodStore,
+	proxier proxy.Proxier,
+	o *options.FlowExporterOptions,
+	protocolFilter filter.ProtocolFilter,
+) *DenyConnectionStore {
 	return &DenyConnectionStore{
-		connectionStore: NewConnectionStore(podStore, proxier, o),
+		connectionStore: NewConnectionStore(npQuerier, podStore, proxier, o),
 		protocolFilter:  protocolFilter,
 	}
 }
@@ -116,6 +123,9 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *connection.Connection, time
 		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
 			ds.fillServiceInfo(conn, serviceStr)
 		}
+		// For intra-Node flows which are denied by an ingress policy rule, we can retrieve
+		// egress policy information from the CT labels.
+		ds.addNetworkPolicyMetadata(conn)
 		metrics.TotalDenyConnections.Inc()
 		conn.IsActive = true
 		ds.connections[connKey] = conn
