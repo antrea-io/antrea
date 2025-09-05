@@ -38,7 +38,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
     - name: Cache licensing information for dependencies
