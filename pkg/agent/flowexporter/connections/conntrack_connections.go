@@ -359,6 +359,7 @@ func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[connection.Tu
 
 func (cs *ConntrackConnectionStore) getZones() []uint16 {
 	var zones []uint16
+	zones = append(zones, 0)
 	if cs.v4Enabled {
 		if cs.connectUplinkToBridge {
 			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))

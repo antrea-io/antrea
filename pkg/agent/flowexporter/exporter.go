@@ -329,10 +329,11 @@ func (exp *FlowExporter) findFlowType(conn connection.Connection) uint8 {
 		klog.V(5).InfoS("Flows where the source or destination IP is a gateway IP will not be exported")
 		return utils.FlowTypeUnsupported
 	}
+
 	if !srcIsPod {
-		klog.V(5).InfoS("Flows where the source is not a Pod will not be exported")
-		return utils.FlowTypeUnsupported
+		return utils.FlowTypeFromExternal
 	}
+
 	if !dstIsPod {
 		return utils.FlowTypeToExternal
 	}
