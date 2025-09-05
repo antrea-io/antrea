@@ -78,6 +78,13 @@ type FlowRecord struct {
 	EgressNodeName                       string
 }
 
+func IpAddressAsString(bytes []byte) string {
+	if len(bytes) == 0 {
+		return ""
+	}
+	return net.IP(bytes).String()
+}
+
 // GetFlowRecord converts flowpb.Flow to FlowRecord.
 // It assumes that record.Aggregation is set, so it should only be used in Aggregate mode.
 func GetFlowRecord(record *flowpb.Flow) (*FlowRecord, error) {
@@ -113,21 +120,14 @@ func GetFlowRecord(record *flowpb.Flow) (*FlowRecord, error) {
 		}
 	}
 
-	ipAddressAsString := func(bytes []byte) string {
-		if len(bytes) == 0 {
-			return ""
-		}
-		return net.IP(bytes).String()
-	}
-
 	return &FlowRecord{
 		FlowStartSeconds:                  record.StartTs.AsTime(),
 		FlowEndSeconds:                    record.EndTs.AsTime(),
 		FlowEndSecondsFromSourceNode:      record.Aggregation.EndTsFromSource.AsTime(),
 		FlowEndSecondsFromDestinationNode: record.Aggregation.EndTsFromDestination.AsTime(),
 		FlowEndReason:                     uint8(record.EndReason),
-		SourceIP:                          ipAddressAsString(record.Ip.Source),
-		DestinationIP:                     ipAddressAsString(record.Ip.Destination),
+		SourceIP:                          IpAddressAsString(record.Ip.Source),
+		DestinationIP:                     IpAddressAsString(record.Ip.Destination),
 		SourceTransportPort:               uint16(record.Transport.SourcePort),
 		DestinationTransportPort:          uint16(record.Transport.DestinationPort),
 		ProtocolIdentifier:                uint8(record.Transport.ProtocolNumber),
@@ -145,7 +145,7 @@ func GetFlowRecord(record *flowpb.Flow) (*FlowRecord, error) {
 		DestinationPodName:                record.K8S.DestinationPodName,
 		DestinationPodNamespace:           record.K8S.DestinationPodNamespace,
 		DestinationNodeName:               record.K8S.DestinationNodeName,
-		DestinationClusterIP:              ipAddressAsString(record.K8S.DestinationClusterIp),
+		DestinationClusterIP:              IpAddressAsString(record.K8S.DestinationClusterIp),
 		DestinationServicePort:            uint16(record.K8S.DestinationServicePort),
 		DestinationServicePortName:        record.K8S.DestinationServicePortName,
 		IngressNetworkPolicyName:          record.K8S.IngressNetworkPolicyName,
@@ -170,7 +170,7 @@ func GetFlowRecord(record *flowpb.Flow) (*FlowRecord, error) {
 		ThroughputFromDestinationNode:        record.Aggregation.ThroughputFromDestination,
 		ReverseThroughputFromDestinationNode: record.Aggregation.ReverseThroughputFromDestination,
 		EgressName:                           record.K8S.EgressName,
-		EgressIP:                             ipAddressAsString(record.K8S.EgressIp),
+		EgressIP:                             IpAddressAsString(record.K8S.EgressIp),
 		AppProtocolName:                      record.App.ProtocolName,
 		HttpVals:                             string(record.App.HttpVals),
 		EgressNodeName:                       record.K8S.EgressNodeName,

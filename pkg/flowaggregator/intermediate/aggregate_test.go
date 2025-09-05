@@ -387,6 +387,215 @@ func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 	runCorrelationAndCheckResult(t, ap, clock, record1, nil, true, flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL, false)
 }
 
+var destinationPodName = "nginx-deployment-HASH"
+var destinationPodNamespace = "some-namespace"
+var destinationServicePortName = "namespace/service-name:portname"
+var sourceNodePackets = uint64(1005)
+var destinationNodePackets = uint64(999)
+var currTime = time.Now()
+var sourceNodeWindow = 1 * time.Minute
+var sourceNodeStart = timestamppb.New(currTime)
+var sourceNodeEnd = timestamppb.New(currTime.Add(sourceNodeWindow))
+var octetTotalCount = uint64(2050)
+
+// TODO pull this out into a helper function
+var sourceNodeThroughPut = octetTotalCount * 8 / uint64(sourceNodeEnd.Seconds-sourceNodeStart.Seconds)
+
+var destinationNodeWindow = 2 * time.Minute
+var destinationNodeStart = timestamppb.New(currTime)
+var destinationNodeEnd = timestamppb.New(currTime.Add(destinationNodeWindow))
+var destinationNodeThroughPut = octetTotalCount * 8 / uint64(destinationNodeEnd.Seconds-destinationNodeStart.Seconds)
+
+var sourceNodeIP = &flowpb.IP{
+	Source:      []byte{0xac, 0x12, 0x00, 0x01}, // 172.12.18.01 // TODO pull this into const
+	Destination: []byte{0x0e, 0xec, 0x01, 0x03}, // 10.244.1.3
+}
+var sampleTransport = &flowpb.Transport{
+	ProtocolNumber:  6,
+	SourcePort:      50634,
+	DestinationPort: 80,
+}
+
+var sourceNodeStats = &flowpb.Stats{
+	PacketTotalCount: sourceNodePackets,
+	OctetTotalCount:  octetTotalCount,
+}
+
+func generateSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
+	sourceNodeRecord := &flowpb.Flow{
+		K8S: &flowpb.Kubernetes{
+			FlowType:                   flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+			DestinationServicePortName: "incomplete-service-name",
+		},
+		Ip:           sourceNodeIP,
+		Transport:    sampleTransport,
+		Stats:        sourceNodeStats,
+		ReverseStats: &flowpb.Stats{},
+		StartTs:      sourceNodeStart,
+		EndTs:        sourceNodeEnd,
+		Zone:         0,
+	}
+	sourceNodeFlowKey, _ := getFlowKeyFromRecord(sourceNodeRecord)
+	return sourceNodeRecord, sourceNodeFlowKey
+}
+
+func generateDestinationNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
+	destinationNodeRecord := &flowpb.Flow{
+		K8S: &flowpb.Kubernetes{
+			DestinationPodName:         destinationPodName,
+			DestinationPodNamespace:    destinationPodNamespace,
+			FlowType:                   flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+			DestinationServicePortName: destinationServicePortName,
+		},
+		Ip: &flowpb.IP{
+			Source:      []byte{0x0a, 0xf4, 0x02, 0x01}, // 10.244.2.1
+			Destination: []byte{0x0e, 0xec, 0x01, 0x03}, // 10.244.1.3
+		},
+		Transport: sampleTransport,
+		Stats: &flowpb.Stats{
+			PacketTotalCount: destinationNodePackets,
+			OctetTotalCount:  octetTotalCount,
+		},
+		ReverseStats: &flowpb.Stats{},
+		StartTs:      destinationNodeStart,
+		EndTs:        destinationNodeEnd,
+		Zone:         65520,
+	}
+	destinationNodeFlowKey, _ := getFlowKeyFromRecord(destinationNodeRecord)
+	return destinationNodeRecord, destinationNodeFlowKey
+}
+
+func newAggregationProcess() *aggregationProcess {
+	recordChan := make(chan *flowpb.Flow)
+	input := AggregationInput{
+		RecordChan:            recordChan,
+		WorkerNum:             2,
+		ActiveExpiryTimeout:   testActiveExpiry,
+		InactiveExpiryTimeout: testInactiveExpiry,
+	}
+	clock := clocktesting.NewFakeClock(time.Now())
+	ap, _ := initAggregationProcessWithClock(input, clock)
+	return ap
+}
+
+func assertCorrelatedStats(t *testing.T, flowRecord *AggregationFlowRecord) {
+	aggregation := flowRecord.Record.Aggregation
+	assertStats(t, aggregation)
+	assert.Equal(t, destinationNodePackets, aggregation.StatsFromDestination.PacketTotalCount, "Expected StatsFromDestination to equal destinationNode's flow's stats")
+	assert.Equal(t, destinationNodeThroughPut, aggregation.ThroughputFromDestination, "Expected ThroughputFromDestination to equal destinationNode's flow's throughout")
+}
+
+func assertStats(t *testing.T, aggregation *flowpb.Aggregation) {
+	assert.NotNil(t, aggregation.StatsFromSource, "Expected StatsFromSource to be initialized for population")
+	assert.NotNil(t, aggregation.StatsFromDestination, "Expected StatsFromDestination to be initialized for population")
+	assert.Equal(t, sourceNodePackets, aggregation.StatsFromSource.PacketTotalCount, "Expected StatsFromSource values to equal sourceNode's flow's source stats")
+	assert.Equal(t, sourceNodeThroughPut, aggregation.ThroughputFromSource, "Expected ThroughputFromSource to equal sourceNode's flow's throughput")
+}
+
+func assertUncorrelatedStats(t *testing.T, flowRecord *AggregationFlowRecord) {
+	aggregation := flowRecord.Record.Aggregation
+	assertStats(t, aggregation)
+	assert.Equal(t, sourceNodePackets, aggregation.StatsFromDestination.PacketTotalCount)
+	assert.Equal(t, sourceNodeThroughPut, aggregation.ThroughputFromDestination)
+}
+
+func assertPriorityQueueRecordInitialized(t *testing.T, ap *aggregationProcess) {
+	assert.Equal(t, 1, len(ap.expirePriorityQueue))
+	recordForExport := ap.expirePriorityQueue.Peek().flowRecord
+	assert.NotNil(t, recordForExport)
+	assert.NotEmpty(t, ap.expirePriorityQueue.Peek().activeExpireTime)
+	assert.NotEmpty(t, ap.expirePriorityQueue.Peek().inactiveExpireTime)
+}
+
+func assertUpdated(t *testing.T, record *AggregationFlowRecord) {
+	assert.True(t, record.ReadyToSend)
+	assert.NotNil(t, record.Record.Aggregation)
+	assert.Equal(t, record.Record.Ip.Source, []byte{0xac, 0x12, 0x00, 0x01})  // 172.12.18.01
+	assert.Equal(t, destinationPodName, record.Record.K8S.DestinationPodName) // TODO this is may become redundant
+	assert.Equal(t, destinationServicePortName, record.Record.K8S.DestinationServicePortName)
+}
+
+// TestCorrelateRecordsForFromExternalFlow validates flows received by the FlowAggregator
+// are correctly correlated as they come from the source node and destination node
+func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
+	t.Run("correlation not required because the external to pod connection happen to hit the node that had the pod", func(t *testing.T) {
+		ap := newAggregationProcess()
+		record := &flowpb.Flow{
+			K8S: &flowpb.Kubernetes{
+				DestinationPodName:         destinationPodName,
+				FlowType:                   flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+				DestinationServicePortName: destinationServicePortName,
+			},
+			Ip:           sourceNodeIP,
+			Transport:    sampleTransport,
+			Stats:        sourceNodeStats,
+			ReverseStats: &flowpb.Stats{},
+			StartTs:      sourceNodeStart,
+			EndTs:        sourceNodeEnd,
+		}
+		flowKey, _ := getFlowKeyFromRecord(record)
+
+		ap.addOrUpdateRecordInMap(flowKey, record, false)
+
+		assertPriorityQueueRecordInitialized(t, ap)
+		recordForExport := ap.expirePriorityQueue.Peek().flowRecord
+		assertUpdated(t, recordForExport)
+		assertUncorrelatedStats(t, recordForExport)
+	})
+	t.Run("source node flow arrives first", func(t *testing.T) {
+		ap := newAggregationProcess()
+		destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
+		sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
+
+		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
+
+		assert.Equal(t, 1, len(ap.FromExternalFlowMap))
+		assertPriorityQueueRecordInitialized(t, ap)
+		assert.False(t, ap.expirePriorityQueue.Pop().(*ItemToExpire).flowRecord.ReadyToSend)
+
+		ap.addOrUpdateRecordInMap(destinationNodeRecordFlowKey, destinationNodeRecord, false)
+		recordForExport := ap.expirePriorityQueue.Pop().(*ItemToExpire).flowRecord
+
+		assertUpdated(t, recordForExport)
+		assertCorrelatedStats(t, recordForExport)
+	})
+
+	t.Run("destination node flow arrives first", func(t *testing.T) {
+		ap := newAggregationProcess()
+
+		destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
+		sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
+
+		ap.addOrUpdateRecordInMap(destinationNodeRecordFlowKey, destinationNodeRecord, false)
+		assert.Nil(t, sourceNodeRecord.Aggregation)
+		assertPriorityQueueRecordInitialized(t, ap)
+		assert.Equal(t, 1, len(ap.FromExternalFlowMap))
+		recordForExport := ap.expirePriorityQueue.Pop().(*ItemToExpire).flowRecord
+
+		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
+
+		assertUpdated(t, recordForExport)
+		assertCorrelatedStats(t, recordForExport)
+	})
+
+	t.Run("source node flow arrives multiple times", func(t *testing.T) {
+		ap := newAggregationProcess()
+		sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
+
+		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
+		// Second add does not panic
+		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
+	})
+	t.Run("destionation node flow arrives multiple times", func(t *testing.T) {
+		ap := newAggregationProcess()
+		sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
+
+		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
+		// Second add does not panic
+		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
+	})
+}
+
 func TestAggregateRecordsForInterNodeFlow(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
@@ -603,6 +812,7 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 		return nil
 	}
 
+	fromExternalRecord, _ := generateSourceNodeFlowAndFlowKey()
 	testCases := []struct {
 		name               string
 		records            []*flowpb.Flow
@@ -645,6 +855,12 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 			0,
 			0,
 		},
+		{
+			"Expired flow is properly removed from map",
+			[]*flowpb.Flow{fromExternalRecord},
+			0,
+			0,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -676,6 +892,17 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 					err := ap.ForAllExpiredFlowRecordsDo(testCallback)
 					assert.NoError(t, err)
 				}
+			case "Expired flow is properly removed from map":
+				assert.Equal(t, 1, len(ap.expirePriorityQueue))
+				for range 2 {
+					pqItem := ap.expirePriorityQueue.Peek()
+					pqItem.inactiveExpireTime = time.Time{}
+					err := ap.ForAllExpiredFlowRecordsDo(testCallback)
+					assert.NoError(t, err)
+				}
+
+				assert.Equal(t, 0, len(ap.FromExternalFlowMap),
+					"Expected record to be cleared from IP Port map after reaching max retries")
 			default:
 				break
 			}
