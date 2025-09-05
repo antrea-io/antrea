@@ -31,6 +31,7 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
@@ -102,6 +103,7 @@ type flowAggregator struct {
 	recordCh                    chan *flowpb.Flow
 	exportersMutex              sync.Mutex
 	certificateProvider         *certificate.Provider
+	nodeLister                  listers.NodeLister
 }
 
 func NewFlowAggregator(
@@ -111,6 +113,7 @@ func NewFlowAggregator(
 	nodeStore objectstore.NodeStore,
 	serviceStore objectstore.ServiceStore,
 	configFile string,
+	nodeLister listers.NodeLister,
 ) (*flowAggregator, error) {
 	if len(configFile) == 0 {
 		return nil, fmt.Errorf("configFile is empty string")
@@ -166,7 +169,8 @@ func NewFlowAggregator(
 		APIServer:                   opt.Config.APIServer,
 		logTickerDuration:           time.Minute,
 		// We support buffering a small amount of flow records.
-		recordCh:            make(chan *flowpb.Flow, 128),
+		recordCh:              make(chan *flowpb.Flow, 128),
+		nodeLister: nodeLister,
 		certificateProvider: newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
 		certificateUpdateCh: make(chan struct{}, 1),
 	}
@@ -238,7 +242,7 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 		ActiveExpiryTimeout:   fa.activeFlowRecordTimeout,
 		InactiveExpiryTimeout: fa.inactiveFlowRecordTimeout,
 	}
-	fa.aggregationProcess, err = intermediate.InitAggregationProcess(apInput)
+	fa.aggregationProcess, err = intermediate.InitAggregationProcess(apInput, fa.nodeLister)
 	return err
 }
 
