@@ -1,0 +1,140 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:base",
+    ":gitSignOff", // Add commit Sign-Off for renovate commits
+    "helpers:pinGitHubActionDigests", // Pins GitHub Actions to exact commit SHAs for security
+  ],
+
+  // Allow only certain package managers and implicitly disable all others
+  enabledManagers: ["gomod", "github-actions"],
+
+  // Active release branches
+  baseBranches: ["main", "release-2.4", "release-2.3", "release-2.2"],
+  prConcurrentLimit: 9,
+  prHourlyLimit: 0,
+
+  postUpdateOptions: ["gomodTidy"],
+
+  // Don't separate major, minor and patch in different PRs
+  separateMajorMinor: false,
+  separateMinorPatch: false,
+
+  // Labels to include in the PR
+  labels: ["dependencies"],
+
+  // Enabling security updates based on GitHub's Dependabot-style security alerts
+  vulnerabilityAlerts: {
+    enabled: true,
+  },
+
+  packageRules: [
+    // Disable all regular updates for active release branches
+    // Don't write any rules before this rule
+    {
+      matchBaseBranches: ["release-2.4", "release-2.3", "release-2.2"],
+      groupName: "all dependencies active release branches",
+      groupSlug: "all-deps-active-release-branches",
+      enabled: false,
+    },
+
+    // Disable indirect go dependencies updates, resource: https://github.com/renovatebot/renovate/discussions/35225#discussioncomment-13666269
+    {
+      matchManagers: ["gomod"],
+      matchDepTypes: ["indirect"],
+      enabled: false,
+    },
+
+    {
+      matchManagers: ["gomod"],
+      matchBaseBranches: ["main"],
+      addLabels: ["go"],
+    },
+
+    {
+      matchManagers: ["gomod"],
+      matchPackagePrefixes: ["golang.org/x/"],
+      groupName: "golang.org/x",
+      groupSlug: "golang.org/x",
+      matchBaseBranches: ["main"],
+    },
+
+    {
+      matchManagers: ["gomod"],
+      matchPackagePrefixes: ["github.com/prometheus/"],
+      groupName: "Prometheus dependencies",
+      groupSlug: "prometheus-dependencies",
+      matchBaseBranches: ["main"],
+    },
+
+    {
+      matchManagers: ["gomod"],
+      matchPackageNames: [
+        "github.com/onsi/ginkgo/v2",
+        "github.com/onsi/gomega",
+      ],
+      groupName: "Ginkgo dependencies",
+      groupSlug: "ginko-dependencies",
+      matchBaseBranches: ["main"],
+    },
+
+    {
+      matchManagers: ["gomod"],
+      matchPackagePrefixes: [
+        "k8s.io/",
+        "sigs.k8s.io/",
+        "github.com/containernetworking/",
+        "github.com/vmware/go-ipfix",
+        "github.com/TomCodeLV/OVSDB-golang-lib",
+        "antrea.io/ofnet",
+        "antrea.io/libOpenflow",
+        "github.com/ClickHouse/clickhouse-go/v2", // auto-upgrade involves dependency conflicts
+        "github.com/aws/", // Updates are too frequent
+      ],
+      enabled: false,
+    },
+
+    // Only allow patch updates for these dependencies
+    {
+      matchManagers: ["gomod"],
+      matchPackagePrefixes: ["github.com/k8snetworkplumbingwg/"],
+      matchUpdateTypes: ["major", "minor"],
+      enabled: false,
+    },
+
+    {
+      matchManagers: ["github-actions"],
+      matchBaseBranches: ["main"],
+      addLabels: ["github_actions"],
+    },
+
+    {
+      matchManagers: ["github-actions"],
+      matchPackageNames: [
+        "actions/upload-artifact",
+        "actions/download-artifact",
+      ],
+      groupName: "artifact actions",
+      groupSlug: "artifact-actions",
+      matchBaseBranches: ["main"],
+    },
+
+    {
+      matchManagers: ["github-actions"],
+      matchPackageNames: [
+        "aquasecurity/setup-trivy",
+        "aquasecurity/trivy-action",
+      ],
+      groupName: "trivy actions",
+      groupSlug: "trivy-actions",
+      matchBaseBranches: ["main"],
+    },
+
+    {
+      // Disable updates for the windows GitHub runner image
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["windows"],
+      enabled: false,
+    },
+  ],
+}
