@@ -44,7 +44,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
       with:
         driver: docker
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
     - name: Build Antrea UBI9 Docker image

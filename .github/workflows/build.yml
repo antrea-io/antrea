@@ -204,7 +204,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
       with:
         driver: ${{ needs.check-env.outputs.docker_driver }}
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
     - name: Build Antrea UBI9 Docker image without pushing to registry
