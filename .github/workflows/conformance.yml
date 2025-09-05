@@ -59,7 +59,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           ref: ${{ inputs.antrea-version }}
           fetch-depth: 0
@@ -76,7 +76,7 @@ jobs:
           fi
       - name: Set up Docker Buildx if required
         if: ${{ steps.check-release.outputs.released == 'false' }}
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
         with:
           driver: docker
       - name: Build Antrea image if required
@@ -89,7 +89,7 @@ jobs:
           KIND_VERSION=$(head -n1 ./ci/kind/version || echo v0.28.0)
           echo "kind_version=${KIND_VERSION}" >> $GITHUB_OUTPUT
       - name: Install Kind
-        uses: helm/kind-action@v1
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1
         with:
           version: ${{ steps.get_kind_version.outputs.kind_version }}
           install_only: true

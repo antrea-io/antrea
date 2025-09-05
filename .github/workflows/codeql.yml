@@ -11,11 +11,11 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         fetch-depth: 0
         show-progress: false
-    - uses: antrea-io/has-changes@v2
+    - uses: antrea-io/has-changes@8af46c0ea505faf5c57d655802471141dc1ecc26 # v2
       id: check_diff
       with:
         paths-ignore: docs/* ci/jenkins/* *.md hack/.notableofcontents
@@ -39,18 +39,18 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         show-progress: false
 
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
       with:
         go-version-file: 'go.mod'
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@f1f6e5f6af878fb37288ce1c627459e94dbf7d01 # v3
       with:
         languages: ${{ matrix.language }}
         config-file: ./.github/codeql-config.yml
@@ -62,7 +62,7 @@ jobs:
         make build
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@f1f6e5f6af878fb37288ce1c627459e94dbf7d01 # v3
       with:
         category: "/language:${{matrix.language}}"
 
@@ -83,17 +83,17 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         show-progress: false
 
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
       with:
         go-version-file: 'go.mod'
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@f1f6e5f6af878fb37288ce1c627459e94dbf7d01 # v3
       with:
         languages: ${{ matrix.language }}
         config-file: ./.github/codeql-config.yml
@@ -102,6 +102,6 @@ jobs:
       run: make windows-bin
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@f1f6e5f6af878fb37288ce1c627459e94dbf7d01 # v3
       with:
         category: "/language:${{matrix.language}}"

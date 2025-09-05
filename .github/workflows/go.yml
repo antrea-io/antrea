@@ -16,11 +16,11 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         fetch-depth: 0
         show-progress: false
-    - uses: antrea-io/has-changes@v2
+    - uses: antrea-io/has-changes@8af46c0ea505faf5c57d655802471141dc1ecc26 # v2
       id: check_diff
       with:
         paths-ignore: docs/* ci/jenkins/* *.md hack/.notableofcontents
@@ -37,17 +37,17 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v5
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
       with:
         go-version-file: 'go.mod'
     - name: Run unit tests
       run: make test-unit
     - name: Codecov
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: .coverage/coverage-unit.txt
@@ -63,17 +63,17 @@ jobs:
     runs-on: [windows-2022]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           show-progress: false
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
         with:
           go-version-file: 'go.mod'
       - name: Run unit tests
         run: make test-unit
       - name: Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: .coverage/coverage-unit.txt
@@ -89,11 +89,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           show-progress: false
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
         with:
           go-version-file: 'go.mod'
       - name: Run integration tests
@@ -105,7 +105,7 @@ jobs:
           cd multicluster
           make test-integration
       - name: Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: .coverage/coverage-integration.txt,multicluster/.coverage/coverage-integration.txt
@@ -124,11 +124,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v5
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
       with:
         go-version-file: 'go.mod'
     - name: Run golangci-lint
@@ -141,11 +141,11 @@ jobs:
     runs-on: [macos-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           show-progress: false
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
         with:
           go-version-file: 'go.mod'
       - name: Run golangci-lint
@@ -158,11 +158,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v5
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
       with:
         go-version-file: 'go.mod'
     - name: Build Antrea binaries for amd64
@@ -195,11 +195,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v5
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
       with:
         go-version-file: 'go.mod'
     - name: Build Antrea windows binaries
@@ -212,11 +212,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v5
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
       with:
         go-version-file: 'go.mod'
     # tidy check need to be run before code generation which will regenerate codes.
@@ -234,18 +234,18 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v5
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
       with:
         go-version-file: 'go.mod'
     - name: Run verify scripts
       run: make verify
     - name: Checking for broken Markdown links
       if: ${{ github.event_name == 'pull_request' }}
-      uses: gaurav-nelson/github-action-markdown-link-check@v1
+      uses: gaurav-nelson/github-action-markdown-link-check@5c5dfc0ac2e225883c0e5f03a85311ec2830d368 # v1
       with:
         # Check modified files only for pull requests. Cronjob "Verify docs" takes care of checking all markdown files.
         check-modified-files-only: yes
@@ -272,11 +272,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           show-progress: false
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
         with:
           go-version-file: 'go.mod'
       - name: Run Go benchmark test
