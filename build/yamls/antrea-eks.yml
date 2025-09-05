@@ -2990,6 +2990,10 @@ spec:
               x-kubernetes-validations:
                 - rule: "has(self.source.pod) || has(self.destination.pod)"
                   message: "At least one of source.pod or destination.pod must be specified."
+                - rule: "!(has(self.capturePoint) && self.capturePoint == 'Source') || has(self.source.pod)"
+                  message: "source.pod must be set when capturePoint is 'Source'"
+                - rule: "!(has(self.capturePoint) && self.capturePoint == 'Destination') || has(self.destination.pod)"
+                  message: "destination.pod must be set when capturePoint is 'Destination'"
               properties:
                 source:
                   type: object
@@ -3101,6 +3105,9 @@ spec:
                   type: string
                   enum: ["SourceToDestination", "DestinationToSource", "Both"]
                   default: "SourceToDestination"
+                capturePoint:
+                  type: string
+                  enum: ["Source", "Destination"]
                 timeout:
                   type: integer
                   minimum: 1
