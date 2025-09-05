@@ -18,14 +18,19 @@ import (
 	"container/heap"
 	"fmt"
 	"net"
+	"net/netip"
+	"strconv"
 	"sync"
 	"time"
 
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	"k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 )
 
 var (
@@ -57,8 +62,12 @@ type aggregationProcess struct {
 	// record map.
 	inactiveExpiryTimeout time.Duration
 	// stopChan is the channel to receive stop message
-	stopChan chan bool
-	clock    clock.Clock
+	stopChan            chan bool
+	clock               clock.Clock
+	FromExternalFlowMap map[string]*FromExternalFlowStash
+	// FromExternalCache stores flows that need correlation
+	FromExternalCache map[string]*flowpb.Flow
+	nodeLister        listers.NodeLister
 }
 
 type AggregationInput struct {
@@ -68,7 +77,16 @@ type AggregationInput struct {
 	InactiveExpiryTimeout time.Duration
 }
 
-func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) (*aggregationProcess, error) {
+// Holds the two records that make up the FromExternal records
+type FromExternalFlowStash struct {
+	// The record from conntrack zone 0 containing the original source IP
+	SourceNodeFlow *AggregationFlowRecord
+	// The record from the antrea conntrack zone containing the destination
+	// pod information
+	DestinationNodeFlow *AggregationFlowRecord
+}
+
+func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock, nodeLister listers.NodeLister) (*aggregationProcess, error) {
 	if input.RecordChan == nil {
 		return nil, fmt.Errorf("cannot create aggregationProcess process without input channel")
 	}
@@ -86,11 +104,14 @@ func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) 
 		input.InactiveExpiryTimeout,
 		make(chan bool),
 		clock,
+		make(map[string]*FromExternalFlowStash),
+		make(map[string]*flowpb.Flow),
+		nodeLister,
 	}, nil
 }
 
-func InitAggregationProcess(input AggregationInput) (*aggregationProcess, error) {
-	return initAggregationProcessWithClock(input, clock.RealClock{})
+func InitAggregationProcess(input AggregationInput, nodeLister listers.NodeLister) (*aggregationProcess, error) {
+	return initAggregationProcessWithClock(input, clock.RealClock{}, nodeLister)
 }
 
 func (a *aggregationProcess) Start() {
@@ -123,20 +144,6 @@ func (a *aggregationProcess) GetNumFlows() int64 {
 func (a *aggregationProcess) aggregateRecordByFlowKey(record *flowpb.Flow) error {
 	flowKey, isIPv4 := getFlowKeyFromRecord(record)
 	a.addOrUpdateRecordInMap(flowKey, record, isIPv4)
-	return nil
-}
-
-// ForAllRecordsDo takes in callback function to process the operations to flowkey->records pairs in the map
-func (a *aggregationProcess) ForAllRecordsDo(callback FlowKeyRecordMapCallBack) error {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-	for k, v := range a.flowKeyRecordMap {
-		err := callback(k, v)
-		if err != nil {
-			klog.Errorf("Callback execution failed for flow with key: %v, records: %v, error: %v", k, v, err)
-			return err
-		}
-	}
 	return nil
 }
 
@@ -303,7 +310,7 @@ func (a *aggregationProcess) ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMa
 		}
 		// Delete the flow record if it is expired because of inactive expiry timeout.
 		if pqItem.inactiveExpireTime.Before(currTime) {
-			if err = a.deleteFlowKeyFromMapWithoutLock(*pqItem.flowKey); err != nil {
+			if err := a.deleteFlowKeyFromMapWithoutLock(*pqItem.flowKey); err != nil {
 				return fmt.Errorf("error while deleting flow record after inactive expiry: %v", err)
 			}
 			continue
@@ -345,7 +352,17 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	correlationRequired := isCorrelationRequired(record.K8S.FlowType, record)
+	if a.FromExternalCorrelationRequired(record) {
+		// Cache the record if not yet ready for correlation and return. Otherwise, pass through the correlated record
+		if a.CacheIfNew(record) {
+			return
+		} else {
+			record = a.CorrelateExternal(record)
+			flowKey, _ = getFlowKeyFromRecord(record)
+		}
+	}
+
+	correlationRequired := isCorrelationRequired(record)
 
 	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
@@ -379,15 +396,15 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 		// Add all the new stat fields and initialize them.
 		if correlationRequired {
 			if isRecordFromSrc(record) {
-				a.addFieldsForStatsAggregation(record, true, false)
-				a.addFieldsForThroughputCalculation(record, true, false)
+				addFieldsForStatsAggregation(record, true, false)
+				a.addFieldsForThroughputCalculation(record, record, true, false)
 			} else {
-				a.addFieldsForStatsAggregation(record, false, true)
-				a.addFieldsForThroughputCalculation(record, false, true)
+				addFieldsForStatsAggregation(record, false, true)
+				a.addFieldsForThroughputCalculation(record, record, false, true)
 			}
 		} else {
-			a.addFieldsForStatsAggregation(record, true, true)
-			a.addFieldsForThroughputCalculation(record, true, true)
+			addFieldsForStatsAggregation(record, true, true)
+			a.addFieldsForThroughputCalculation(record, record, true, true)
 		}
 		aggregationRecord = &AggregationFlowRecord{
 			Record:                    record,
@@ -638,40 +655,46 @@ func (a *aggregationProcess) ResetStatAndThroughputElementsInRecord(record *flow
 	return nil
 }
 
-func (a *aggregationProcess) addFieldsForStatsAggregation(record *flowpb.Flow, fillSrcStats, fillDstStats bool) {
-	record.Aggregation.StatsFromSource = &flowpb.Stats{}
-	record.Aggregation.ReverseStatsFromSource = &flowpb.Stats{}
-	record.Aggregation.StatsFromDestination = &flowpb.Stats{}
-	record.Aggregation.ReverseStatsFromDestination = &flowpb.Stats{}
-	copyStats := func(from, to *flowpb.Stats) {
-		to.PacketTotalCount = from.PacketTotalCount
-		to.PacketDeltaCount = from.PacketDeltaCount
-		to.OctetTotalCount = from.OctetTotalCount
-		to.OctetDeltaCount = from.OctetDeltaCount
-	}
+func copyStats(from, to *flowpb.Stats) {
+	to.PacketTotalCount = from.PacketTotalCount
+	to.PacketDeltaCount = from.PacketDeltaCount
+	to.OctetTotalCount = from.OctetTotalCount
+	to.OctetDeltaCount = from.OctetDeltaCount
+}
+
+func addFieldsForStatsAggregation(flow *flowpb.Flow, fillSrcStats, fillDstStats bool) {
+	copyFieldsForStatsAggregation(flow, flow, fillSrcStats, fillDstStats)
+}
+
+func copyFieldsForStatsAggregation(from, to *flowpb.Flow, fillSrcStats, fillDstStats bool) {
+	to.Aggregation.StatsFromSource = &flowpb.Stats{}
+	to.Aggregation.ReverseStatsFromSource = &flowpb.Stats{}
+	to.Aggregation.StatsFromDestination = &flowpb.Stats{}
+	to.Aggregation.ReverseStatsFromDestination = &flowpb.Stats{}
 	if fillSrcStats {
-		copyStats(record.Stats, record.Aggregation.StatsFromSource)
-		copyStats(record.ReverseStats, record.Aggregation.ReverseStatsFromSource)
+		copyStats(from.Stats, to.Aggregation.StatsFromSource)
+		copyStats(from.ReverseStats, to.Aggregation.ReverseStatsFromSource)
 	}
+
 	if fillDstStats {
-		copyStats(record.Stats, record.Aggregation.StatsFromDestination)
-		copyStats(record.ReverseStats, record.Aggregation.ReverseStatsFromDestination)
+		copyStats(from.Stats, to.Aggregation.StatsFromDestination)
+		copyStats(from.ReverseStats, to.Aggregation.ReverseStatsFromDestination)
 	}
 }
 
-func (a *aggregationProcess) addFieldsForThroughputCalculation(record *flowpb.Flow, fillSrcStats, fillDstStats bool) {
-	timeStart := record.StartTs.Seconds
-	timeEnd := record.EndTs.Seconds
-	byteCount := record.Stats.OctetTotalCount
-	reverseByteCount := record.ReverseStats.OctetTotalCount
+func (a *aggregationProcess) addFieldsForThroughputCalculation(from, to *flowpb.Flow, fillSrcStats, fillDstStats bool) {
+	timeStart := from.StartTs.Seconds
+	timeEnd := from.EndTs.Seconds
+	byteCount := from.Stats.OctetTotalCount
+	reverseByteCount := from.ReverseStats.OctetTotalCount
 
-	record.Aggregation.EndTsFromSource = &timestamppb.Timestamp{}
+	to.Aggregation.EndTsFromSource = &timestamppb.Timestamp{}
 	if fillSrcStats {
-		record.Aggregation.EndTsFromSource.Seconds = timeEnd
+		to.Aggregation.EndTsFromSource.Seconds = timeEnd
 	}
-	record.Aggregation.EndTsFromDestination = &timestamppb.Timestamp{}
+	to.Aggregation.EndTsFromDestination = &timestamppb.Timestamp{}
 	if fillDstStats {
-		record.Aggregation.EndTsFromDestination.Seconds = timeEnd
+		to.Aggregation.EndTsFromDestination.Seconds = timeEnd
 	}
 
 	// Initialize the throughput elements.
@@ -682,15 +705,15 @@ func (a *aggregationProcess) addFieldsForThroughputCalculation(record *flowpb.Fl
 		throughput = byteCount * 8 / uint64(timeEnd-timeStart)
 		reverseThroughput = reverseByteCount * 8 / uint64(timeEnd-timeStart)
 	}
-	record.Aggregation.Throughput = throughput
-	record.Aggregation.ReverseThroughput = reverseThroughput
+	to.Aggregation.Throughput = throughput
+	to.Aggregation.ReverseThroughput = reverseThroughput
 	if fillSrcStats {
-		record.Aggregation.ThroughputFromSource = throughput
-		record.Aggregation.ReverseThroughputFromSource = reverseThroughput
+		to.Aggregation.ThroughputFromSource = throughput
+		to.Aggregation.ReverseThroughputFromSource = reverseThroughput
 	}
 	if fillDstStats {
-		record.Aggregation.ThroughputFromDestination = throughput
-		record.Aggregation.ReverseThroughputFromDestination = reverseThroughput
+		to.Aggregation.ThroughputFromDestination = throughput
+		to.Aggregation.ReverseThroughputFromDestination = reverseThroughput
 	}
 }
 
@@ -753,9 +776,136 @@ func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 // isCorrelationRequired returns true for InterNode flowType when
 // either the egressNetworkPolicyRuleAction is not deny (drop/reject) or
 // the ingressNetworkPolicyRuleAction is not reject.
-func isCorrelationRequired(flowType flowpb.FlowType, record *flowpb.Flow) bool {
+func isCorrelationRequired(record *flowpb.Flow) bool {
+	flowType := record.K8S.FlowType
 	return flowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE &&
 		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP &&
 		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT &&
 		record.K8S.IngressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+}
+
+// Returns true if the given ip is a Gateway IP from one of the nodes on the cluster.
+// If there are errors, they are logged and false is returned.
+func (a *aggregationProcess) isGateway(ip []byte) bool {
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		klog.Errorf("Failed to determine if ip is gateway. IP %v could not be converted to Addr", ip)
+		return false
+	}
+	if a.nodeLister == nil {
+		klog.Error("Failed to determine if ip is gateway. NodeLister is required but is nil")
+		return false
+	}
+	nodes, err := a.nodeLister.List(labels.Everything())
+	if err != nil {
+		klog.Errorf("Failed to determine if ip is gateway: %v", err)
+		return false
+	}
+
+	if len(nodes) == 0 {
+		klog.Error("Failed to determine if ip is gateway. NodeLister returned 0 nodes")
+	}
+
+	for _, node := range nodes {
+		podCIDR := node.Spec.PodCIDR
+		if podCIDR == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(podCIDR)
+		if err != nil {
+			klog.Errorf("Failed to determine if ip is gateway. Could not parse pod CIDR %s for node %s: %v", podCIDR, node.Name, err)
+			return false
+		}
+		gatewayAddr := prefix.Addr().Next()
+		if addr == gatewayAddr {
+			return true
+		}
+	}
+	return false
+}
+
+// Returns true if record is FromExternal and represents the flow created from
+// an external connection where the sourceNode and destinationNode are the same.
+// When a flow goes through two distinct nodes, the sourceNode flow has empty destinationNode
+// and the destinationNode has the gatewayIP as the sourceAddress. If flow is invaldate, false
+// is returned
+func (a *aggregationProcess) FromExternalCorrelationRequired(flow *flowpb.Flow) bool {
+	if flow.K8S == nil || flow.K8S.FlowType != flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL {
+		return false
+	}
+	if flow.Ip == nil {
+		klog.Errorf("Failed to determine correlation of FromExternal record required. Ip missing from flow %v", flow)
+		return false
+	}
+	// DestinationNode flows have source IP as the gateway
+	if a.isGateway(flow.Ip.Source) {
+		return true
+	}
+	// SourceNode flows do not have podName
+	if flow.K8S == nil || flow.K8S.DestinationPodName == "" {
+		return true
+	}
+	return false
+}
+
+// Return a key unique to the pair of flows that make up a FromExternal flow
+func (a *aggregationProcess) generateFromExternalCacheKey(record *flowpb.Flow) string {
+	var gateway string
+	var SNATPort string
+
+	if a.isGateway(record.Ip.Source) {
+		// Is Destination Flow
+		gateway = flowrecord.IpAddressAsString(record.Ip.Source)
+		SNATPort = strconv.FormatUint(uint64(record.Transport.SourcePort), 10)
+	} else {
+		// Is SourceFlow
+		gateway = flowrecord.IpAddressAsString(record.ProxySnatIp)
+		SNATPort = strconv.FormatUint(uint64(record.ProxySnatPort), 10)
+	}
+
+	destinationAddress := flowrecord.IpAddressAsString(record.Ip.Destination)
+	destinationPort := strconv.FormatUint(uint64(record.Transport.DestinationPort), 10)
+
+	return fmt.Sprintf("%s-%s-%s-%s",
+		SNATPort,
+		gateway,
+		destinationAddress,
+		destinationPort,
+	)
+}
+
+// If FromExternal flow is not yet in the cache, cache it and return true.
+// If the flow is in the cache, return false
+func (a *aggregationProcess) CacheIfNew(flow *flowpb.Flow) bool {
+	key := a.generateFromExternalCacheKey(flow)
+	if _, exists := a.FromExternalCache[key]; !exists {
+		a.FromExternalCache[key] = flow
+		return true
+	}
+	return false
+}
+
+// Return a correlated flow from the given flow and it's matching record from the cache. Returns
+// nil if there was no matching flow in cache. Upon successful correlation, delete the flow from
+// the cache.
+func (a *aggregationProcess) CorrelateExternal(flow *flowpb.Flow) *flowpb.Flow {
+	key := a.generateFromExternalCacheKey(flow)
+	cachedFlow, exists := a.FromExternalCache[key]
+	if !exists {
+		return nil
+	}
+	delete(a.FromExternalCache, key)
+	if a.isGateway(flow.Ip.Source) {
+		flow.Ip.Source = cachedFlow.Ip.Source
+		if flow.K8S != nil {
+			flow.K8S.DestinationServiceIp = cachedFlow.K8S.DestinationServiceIp
+		}
+		return flow
+	} else {
+		cachedFlow.Ip.Source = flow.Ip.Source
+		if cachedFlow.K8S != nil {
+			cachedFlow.K8S.DestinationServiceIp = flow.K8S.DestinationServiceIp
+		}
+		return cachedFlow
+	}
 }

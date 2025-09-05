@@ -252,11 +252,21 @@ func TestLookupIPInPodSubnets(t *testing.T) {
 			isInPodSubnets: false,
 			isGwIP:         false,
 		},
+		{
+			name:           "controller is nil",
+			ips:            []string{"1.1.10.101", "2001:4860:0010::101"},
+			isInPodSubnets: false,
+			isGwIP:         false,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, ip := range tc.ips {
+				if tc.name == "controller is nil" {
+					c.Controller = nil
+				}
+
 				isInPodSubnets, isGwIP := c.Controller.LookupIPInPodSubnets(netip.MustParseAddr(ip))
 				assert.Equal(t, tc.isInPodSubnets, isInPodSubnets)
 				assert.Equal(t, tc.isGwIP, isGwIP)

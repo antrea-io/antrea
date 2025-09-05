@@ -749,7 +749,7 @@ func run(o *Options) error {
 			flowExporterOptions,
 			egressController,
 			podNetworkWait,
-		)
+			serviceInformer)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}

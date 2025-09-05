@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -311,12 +312,12 @@ func TestFlowAggregator(t *testing.T) {
 
 	if v4Enabled {
 		t.Run("IPv4", func(t *testing.T) { testHelper(t, data, false) })
+		t.Run("testExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, false) })
 	}
 
 	if v6Enabled {
 		t.Run("IPv6", func(t *testing.T) { testHelper(t, data, true) })
 	}
-
 }
 
 func TestFlowAggregatorProxyMode(t *testing.T) {
@@ -1942,6 +1943,102 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 		return fmt.Errorf("error when checking recordmetrics for Flow Aggregator: %w", err)
 	}
 	return nil
+}
+
+// Create a connection to the given service via the given nodeIndex's IP and return the source IP and source Port.
+// If the connection fails, retry 2 more times with a 1 second wait in between.
+func createExternalToPodConnection(t *testing.T, service *corev1.Service, nodeIndex int) (string, string) {
+	var sourceIP string
+	var sourcePort string
+	url := fmt.Sprintf("http://%s:%d", clusterInfo.nodes[nodeIndex].ipv4Addr, service.Spec.Ports[0].NodePort)
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := net.DialTimeout(network, addr, 10*time.Second)
+			if err != nil {
+				return nil, err
+			}
+			localAddr := conn.LocalAddr().(*net.TCPAddr)
+			sourceIP = localAddr.IP.String()
+			sourcePort = strconv.Itoa(localAddr.Port)
+
+			return conn, nil
+		},
+	}
+	client := &http.Client{
+		Transport: transport,
+	}
+	maxAttempts := 3
+	for i := range maxAttempts {
+		resp, err := client.Get(url)
+		if err == nil {
+			defer resp.Body.Close()
+			break
+		}
+		if i+1 != maxAttempts {
+			time.Sleep(time.Second)
+		} else {
+			t.Fatalf("Failed to reach pod: %v", err)
+		}
+	}
+	return sourceIP, sourcePort
+}
+
+func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
+	nodeName := nodeName(1)
+	nginxPodName, nginxIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "external-to-pod-flows", nodeName, data.testNamespace, false)
+	defer cleanupFunc()
+
+	nodePortService := "node-port-service"
+	service, err := data.CreateServiceWithAnnotations(nodePortService, data.testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to create service %s", nodePortService)
+	}
+
+	// Trigger FlowAggregator's ipfixExporter process to start
+	createExternalToPodConnection(t, service, 0)
+	time.Sleep(time.Second * 5)
+	flushFlowsFromCollector(t, data, isIPv6)
+
+	tc := []struct {
+		node int
+	}{
+		{node: 0}, {node: 1},
+	}
+	for _, tc := range tc {
+		t.Run(fmt.Sprintf("Testing connection to node %v", tc.node), func(t *testing.T) {
+			sourceIP, _ := createExternalToPodConnection(t, service, tc.node)
+
+			testFlow1 := testFlow{
+				dstPodName: nginxPodName,
+			}
+			testFlow1.srcIP = sourceIP
+			testFlow1.dstIP = nginxIP.IPv4.String()
+			records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", testFlow1.srcIP, testFlow1.dstIP)
+			for _, record := range records {
+				assert := assert.New(t)
+				assert.Contains(record, testFlow1.dstPodName, "Aggregated Record does not have Source Pod name: %s", testFlow1.srcPodName)
+			}
+			flushFlowsFromCollector(t, data, isIPv6)
+		})
+	}
+}
+
+func flushFlowsFromCollector(t *testing.T, data *TestData, isIPv6 bool) {
+	var cmd string
+	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
+	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
+		require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
+	}
+	if !isIPv6 {
+		cmd = fmt.Sprintf("curl http://%s:8080/reset", ipfixCollectorIP.IPv4.String())
+	} else {
+		cmd = fmt.Sprintf("curl http://[%s]:8080/reset", ipfixCollectorIP.IPv6.String())
+	}
+	_, _, _, err = data.RunCommandOnNode(controlPlaneNodeName(), cmd)
+	if err != nil {
+		require.NoErrorf(t, err, "failed to reach the ipfix collector's '/reset' endpoint to flush it's cache of flows")
+	}
 }
 
 type ClickHouseFullRow struct {

@@ -73,6 +73,7 @@ func BenchmarkPoll(b *testing.B) {
 	conns := generateConns()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
+		mockConnDumper.EXPECT().DumpFlows(uint16(0)).Return(nil, 0, nil)
 		mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(conns, testNumOfConns, nil)
 		connStore.Poll()
 		b.StopTimer()
@@ -212,6 +213,7 @@ func getNewConn() *connection.Connection {
 		OriginalDestinationAddress: svc,
 		OriginalDestinationPort:    30000,
 		TCPState:                   "SYN_SENT",
+		Zone:                       65520,
 	}
 }
 

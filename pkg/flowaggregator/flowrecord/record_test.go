@@ -15,6 +15,7 @@
 package flowrecord
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -91,4 +92,45 @@ func TestGetFlowRecord(t *testing.T) {
 
 	t.Run("ipv4", func(t *testing.T) { runTest(t, true) })
 	t.Run("ipv6", func(t *testing.T) { runTest(t, false) })
+}
+
+func TestIpAddressAsString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		expected string
+	}{
+		{
+			name:     "IPv4",
+			input:    net.ParseIP("192.168.1.1").To4(),
+			expected: "192.168.1.1",
+		},
+		{
+			name:     "IPv6",
+			input:    net.ParseIP("2001:db8::1").To16(),
+			expected: "2001:db8::1",
+		},
+		{
+			name:     "IPv6_Full",
+			input:    []byte{0x20, 0x01, 0x0d, 0xb8, 0x85, 0xa3, 0x00, 0x00, 0x00, 0x00, 0x8a, 0x2e, 0x03, 0x70, 0x73, 0x34},
+			expected: "2001:db8:85a3::8a2e:370:7334",
+		},
+		{
+			name:     "nil",
+			input:    nil,
+			expected: "",
+		},
+		{
+			name:     "empty slice",
+			input:    []byte{},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := IpAddressAsString(tt.input)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
 }
