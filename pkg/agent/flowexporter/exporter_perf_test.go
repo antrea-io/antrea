@@ -168,7 +168,7 @@ func NewFlowExporterForTest(tb testing.TB, o *options.FlowExporterOptions) *Flow
 	v6Enabled := testWithIPv6
 
 	l7Listener := connections.NewL7Listener(nil, nil)
-	denyConnStore := connections.NewDenyConnectionStore(nil, nil, o, filter.NewProtocolFilter(nil))
+	denyConnStore := connections.NewDenyConnectionStore(nil, nil, nil, o, filter.NewProtocolFilter(nil))
 	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, l7Listener, o)
 
 	return &FlowExporter{

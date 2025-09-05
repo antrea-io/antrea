@@ -20,9 +20,11 @@ package connections
 import (
 	"fmt"
 	"net/netip"
+	"slices"
 	"time"
 
 	"github.com/ti-mo/conntrack"
+	"golang.org/x/sys/cpu"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -154,6 +156,12 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *connection.Connection 
 		DestinationPodNamespace:    "",
 		DestinationPodName:         "",
 		TCPState:                   "",
+	}
+	// github.com/ti-mo/conntrack uses native endianness (binary.NativeEndian), but we require a
+	// big-endian representation for the Labels / LabelsMask fields in connection.Connection.
+	if !cpu.IsBigEndian {
+		slices.Reverse(newConn.Labels)
+		slices.Reverse(newConn.LabelsMask)
 	}
 	if conn.ProtoInfo.TCP != nil {
 		newConn.TCPState = stateToString(conn.ProtoInfo.TCP.State)
