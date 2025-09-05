@@ -22,6 +22,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -59,6 +61,9 @@ type validator interface {
 // interface.
 type resourceValidator struct {
 	networkPolicyController *NetworkPolicyController
+	// priorityTracker is only used by tierValidator to track priority reservations.
+	// Other validators leave this as nil.
+	priorityTracker *tierPriorityTracker
 }
 
 // antreaPolicyValidator implements the validator interface for Antrea-native
@@ -73,6 +78,124 @@ type groupValidator resourceValidator
 
 // adminPolicyValidator implements the validator interface for the AdminNetworkPolicy resource.
 type adminPolicyValidator resourceValidator
+
+// tierPriorityTracker manages in-memory tracking of Tier priorities currently being validated/created
+// to prevent race conditions in priority overlap detection.
+type tierPriorityTracker struct {
+	mu sync.Mutex
+	// pendingPriorities tracks priorities that are currently being validated/created
+	// Key is the priority value, value contains the reservation details
+	pendingPriorities map[int32]*priorityReservation
+	// timeout for how long to wait for pending operations
+	validationTimeout time.Duration
+	// creationTimeout for how long to wait for actual Tier creation in K8s
+	creationTimeout time.Duration
+}
+
+// priorityReservation tracks a single priority reservation
+type priorityReservation struct {
+	tierName string
+	// waitChan is closed when this reservation is released
+	waitChan chan struct{}
+	// createdAt tracks when this reservation was made
+	createdAt time.Time
+}
+
+func newTierPriorityTracker() *tierPriorityTracker {
+	return &tierPriorityTracker{
+		pendingPriorities: make(map[int32]*priorityReservation),
+		validationTimeout: 30 * time.Second, // timeout for waiting for other validations
+		creationTimeout:   60 * time.Second, // timeout for waiting for actual K8s creation
+	}
+}
+
+// reservePriorityForValidation attempts to reserve a priority for validation.
+// This reservation will persist until the Tier is actually created in K8s and detected by the informer.
+// Returns true if the reservation was successful, false if the priority is already taken.
+func (t *tierPriorityTracker) reservePriorityForValidation(priority int32, tierName string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Check if priority is already being processed
+	if existing, exists := t.pendingPriorities[priority]; exists {
+		// Check if the existing reservation has timed out
+		if time.Since(existing.createdAt) > t.creationTimeout {
+			klog.Warningf("Tier priority %d reservation for %s has timed out, allowing new reservation", priority, existing.tierName)
+			close(existing.waitChan)
+			delete(t.pendingPriorities, priority)
+		} else {
+			klog.V(4).InfoS("Priority is already reserved by another Tier", "priority", priority, "existingTier", existing.tierName)
+			return false
+		}
+	}
+
+	// Reserve the priority
+	reservation := &priorityReservation{
+		tierName:  tierName,
+		waitChan:  make(chan struct{}),
+		createdAt: time.Now(),
+	}
+	t.pendingPriorities[priority] = reservation
+
+	klog.V(4).InfoS("Reserved priority for Tier validation", "priority", priority, "tier", tierName)
+	return true
+}
+
+// waitForPriorityAvailable waits for a priority to become available if it's currently reserved.
+// Returns true if the priority becomes available, false on timeout.
+func (t *tierPriorityTracker) waitForPriorityAvailable(priority int32) bool {
+	t.mu.Lock()
+	existing, exists := t.pendingPriorities[priority]
+	if !exists {
+		t.mu.Unlock()
+		return true // Priority is not currently reserved for creation
+	}
+	klog.V(2).InfoS("Tier priority is currently reserved by another tier for creation", "priority", priority, "tier", existing.tierName)
+	waitChan := existing.waitChan
+	t.mu.Unlock()
+
+	// Wait for the existing operation to complete
+	select {
+	case <-waitChan:
+		return true
+	case <-time.After(t.validationTimeout):
+		klog.Warningf("Timeout waiting for Tier priority %d to become available", priority)
+		return false
+	}
+}
+
+// releasePriorityReservation releases a priority reservation when the Tier creation is complete.
+// This should be called when the informer detects the new Tier.
+func (t *tierPriorityTracker) releasePriorityReservation(priority int32, tierName string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if existing, exists := t.pendingPriorities[priority]; exists {
+		if existing.tierName == tierName {
+			close(existing.waitChan)
+			delete(t.pendingPriorities, priority)
+			klog.V(4).InfoS("Released priority reservation for Tier", "priority", priority, "tier", tierName)
+		} else {
+			klog.Warningf("Attempted to release priority %d for Tier %s, but it's reserved by %s", priority, tierName, existing.tierName)
+		}
+	}
+}
+
+// cleanupExpiredReservations removes reservations that have exceeded the creation timeout.
+// This should be called periodically to prevent memory leaks from failed creations.
+func (t *tierPriorityTracker) cleanupExpiredReservations() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	now := time.Now()
+	for priority, reservation := range t.pendingPriorities {
+		if now.Sub(reservation.createdAt) > t.creationTimeout {
+			klog.Warningf("Cleaning up expired priority %d reservation for Tier %s (age: %v)", priority, reservation.tierName, now.Sub(reservation.createdAt))
+			close(reservation.waitChan)
+			delete(t.pendingPriorities, priority)
+		}
+	}
+}
 
 var (
 	// reservedTierPriorities stores the reserved priority range from 251, 252, 254 and 255.
@@ -143,6 +266,7 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 	// tv is an instance of tierValidator to validate Tier resource events.
 	tv := tierValidator{
 		networkPolicyController: networkPolicyController,
+		priorityTracker:         newTierPriorityTracker(),
 	}
 	// gv is an instance of groupValidator to validate ClusterGroup
 	// resource events.
@@ -156,6 +280,10 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 	vr.RegisterTierValidator(&tv)
 	vr.RegisterGroupValidator(&gv)
 	vr.RegisterAdminNetworkPolicyValidator(&av)
+
+	// Start cleanup routine for expired reservations from the tierValidator
+	go tv.startCleanupRoutine()
+
 	return &vr
 }
 
@@ -496,6 +624,38 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *crdv1beta1.Tier,
 		}
 	}
 	return warnings, reason, allowed
+}
+
+// startCleanupRoutine starts a background routine to clean up expired priority reservations
+func (t *tierValidator) startCleanupRoutine() {
+	if t.priorityTracker == nil {
+		klog.ErrorS(nil, "Priority tracker is nil, cannot start cleanup routine")
+		return
+	}
+
+	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
+	defer ticker.Stop()
+
+	for range ticker.C {
+		t.priorityTracker.cleanupExpiredReservations()
+	}
+}
+
+// OnTierCreate should be called when a new Tier is detected by the informer.
+// This releases the priority reservation for the created Tier.
+func (t *tierValidator) OnTierCreate(tier *crdv1beta1.Tier) {
+	if tier != nil && t.priorityTracker != nil {
+		t.priorityTracker.releasePriorityReservation(tier.Spec.Priority, tier.Name)
+	}
+}
+
+// OnTierDelete should be called when a Tier is deleted.
+// This ensures any stale reservations are cleaned up.
+func (t *tierValidator) OnTierDelete(tier *crdv1beta1.Tier) {
+	if tier != nil && t.priorityTracker != nil {
+		// In case there was a stale reservation, clean it up
+		t.priorityTracker.releasePriorityReservation(tier.Spec.Priority, tier.Name)
+	}
 }
 
 func (v *antreaPolicyValidator) tierExists(name string) bool {
@@ -997,15 +1157,32 @@ func (t *tierValidator) createValidate(curObj interface{}, userInfo authenticati
 		return nil, fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers), false
 	}
 	curTier := curObj.(*crdv1beta1.Tier)
+	priority := curTier.Spec.Priority
+	tierName := curTier.Name
+
 	// Tier priority must not overlap reserved tier's priority.
-	if reservedTierPriorities.Has(curTier.Spec.Priority) {
-		return nil, fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority), false
+	if reservedTierPriorities.Has(priority) {
+		return nil, fmt.Sprintf("tier %s priority %d is reserved", tierName, priority), false
 	}
-	// Tier priority must not overlap existing tier's priority
-	trs, err := t.networkPolicyController.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, strconv.FormatInt(int64(curTier.Spec.Priority), 10))
+	// The priorityTracker should always be available for tierValidator
+	if t.priorityTracker == nil {
+		return nil, "internal error: priority tracker not initialized", false
+	}
+	// First, wait for the priority to be available if it's currently reserved
+	if !t.priorityTracker.waitForPriorityAvailable(priority) {
+		return nil, fmt.Sprintf("timeout waiting for priority %d to become available", priority), false
+	}
+	// Check for priority overlap with existing tiers (while no other validation is in progress)
+	trs, err := t.networkPolicyController.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, strconv.FormatInt(int64(priority), 10))
 	if err != nil || len(trs) > 0 {
-		return nil, fmt.Sprintf("tier %s priority %d overlaps with existing Tier", curTier.Name, curTier.Spec.Priority), false
+		return nil, fmt.Sprintf("tier %s priority %d overlaps with existing Tier", tierName, priority), false
 	}
+	// Now reserve the priority for this Tier creation
+	// This reservation will persist until the Tier is actually created and detected by the informer
+	if !t.priorityTracker.reservePriorityForValidation(priority, tierName) {
+		return nil, fmt.Sprintf("failed to reserve priority %d for Tier %s (already taken)", priority, tierName), false
+	}
+	klog.InfoS("Reserved priority for Tier creation", "priority", priority, "tier", tierName)
 	return nil, "", true
 }
 

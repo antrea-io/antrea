@@ -16,9 +16,12 @@ package networkpolicy
 
 import (
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -2871,6 +2874,165 @@ func TestValidateTier(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTierPriorityTracker(t *testing.T) {
+	t.Run("ReservePriorityForValidation", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+
+		// Test successful reservation
+		success := tracker.reservePriorityForValidation(100, "tier1")
+		assert.True(t, success, "Should successfully reserve priority 100")
+
+		// Test reservation conflict - same priority should fail
+		success = tracker.reservePriorityForValidation(100, "tier2")
+		assert.False(t, success, "Should fail to reserve already reserved priority 100")
+
+		// Test different priority should succeed
+		success = tracker.reservePriorityForValidation(200, "tier3")
+		assert.True(t, success, "Should successfully reserve different priority 200")
+	})
+
+	t.Run("WaitForPriorityAvailable", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+		tracker.validationTimeout = 100 * time.Millisecond // Short timeout for testing
+
+		// Test available priority
+		available := tracker.waitForPriorityAvailable(100)
+		assert.True(t, available, "Should return true for available priority")
+
+		// Reserve a priority
+		tracker.reservePriorityForValidation(200, "tier1")
+
+		// Test waiting for reserved priority (should timeout)
+		start := time.Now()
+		available = tracker.waitForPriorityAvailable(200)
+		elapsed := time.Since(start)
+
+		assert.False(t, available, "Should return false when waiting times out")
+		assert.GreaterOrEqual(t, elapsed, 100*time.Millisecond, "Should wait for at least the timeout duration")
+	})
+
+	t.Run("ReleasePriorityReservation", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+
+		// Reserve a priority
+		success := tracker.reservePriorityForValidation(100, "tier1")
+		require.True(t, success)
+
+		// Release the reservation
+		tracker.releasePriorityReservation(100, "tier1")
+
+		// Should be able to reserve again
+		success = tracker.reservePriorityForValidation(100, "tier2")
+		assert.True(t, success, "Should be able to reserve priority after release")
+
+		// Test releasing wrong tier name (should not release)
+		tracker.releasePriorityReservation(100, "wrong-tier")
+		success = tracker.reservePriorityForValidation(100, "tier3")
+		assert.False(t, success, "Should not release reservation for wrong tier name")
+	})
+
+	t.Run("CleanupExpiredReservations", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+		tracker.creationTimeout = 50 * time.Millisecond // Short timeout for testing
+
+		// Reserve a priority
+		success := tracker.reservePriorityForValidation(100, "tier1")
+		require.True(t, success)
+
+		// Wait for expiration
+		time.Sleep(100 * time.Millisecond)
+
+		// Cleanup expired reservations
+		tracker.cleanupExpiredReservations()
+
+		// Should be able to reserve again after cleanup
+		success = tracker.reservePriorityForValidation(100, "tier2")
+		assert.True(t, success, "Should be able to reserve priority after cleanup")
+	})
+
+	t.Run("ConcurrentReservations", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+		tracker.validationTimeout = 200 * time.Millisecond
+
+		var wg sync.WaitGroup
+		var results sync.Map
+
+		// Try to reserve the same priority from multiple goroutines
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				tierName := fmt.Sprintf("tier%d", id)
+				success := tracker.reservePriorityForValidation(100, tierName)
+				results.Store(id, success)
+			}(i)
+		}
+
+		wg.Wait()
+
+		// Count successful reservations
+		successCount := 0
+		results.Range(func(key, value interface{}) bool {
+			if value.(bool) {
+				successCount++
+			}
+			return true
+		})
+
+		assert.Equal(t, 1, successCount, "Only one goroutine should successfully reserve the priority")
+	})
+
+	t.Run("ConcurrentWaitAndRelease", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+		tracker.validationTimeout = 500 * time.Millisecond
+
+		// Reserve a priority
+		success := tracker.reservePriorityForValidation(100, "tier1")
+		require.True(t, success)
+
+		var wg sync.WaitGroup
+		waitResult := make(chan bool, 1)
+
+		// Start waiting in another goroutine
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			available := tracker.waitForPriorityAvailable(100)
+			waitResult <- available
+		}()
+		// Release after a short delay
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			tracker.releasePriorityReservation(100, "tier1")
+		}()
+		wg.Wait()
+
+		// The waiting should succeed after release
+		select {
+		case result := <-waitResult:
+			assert.True(t, result, "Wait should succeed after priority is released")
+		case <-time.After(1 * time.Second):
+			t.Fatal("Wait operation timed out")
+		}
+	})
+
+	t.Run("TimeoutExpiredReservation", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+		tracker.creationTimeout = 50 * time.Millisecond
+
+		// Reserve a priority
+		success := tracker.reservePriorityForValidation(100, "tier1")
+		require.True(t, success)
+
+		// Wait for expiration
+		time.Sleep(100 * time.Millisecond)
+
+		// Try to reserve the same priority with a new tier - should succeed due to timeout
+		success = tracker.reservePriorityForValidation(100, "tier2")
+		assert.True(t, success, "Should allow new reservation when existing one has timed out")
+	})
 }
 
 func TestValidateAdminNetworkPolicy(t *testing.T) {

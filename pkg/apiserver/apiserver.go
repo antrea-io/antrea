@@ -310,6 +310,8 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 		// Get new NetworkPolicyValidator
 		v := controllernetworkpolicy.NewNetworkPolicyValidator(c.networkPolicyController)
+		// Set up Tier event handlers to notify validator when Tiers are actually created/deleted
+		c.networkPolicyController.SetupTierEventHandlersForValidator(v)
 		// Install handlers for NetworkPolicy related validation
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandlerForValidateFunc(v.Validate))
