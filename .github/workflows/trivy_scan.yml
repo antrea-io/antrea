@@ -47,7 +47,7 @@ jobs:
     - name: Restore Trivy DB cache
       if: ${{ !inputs.no-cache }}
       id: restore-db-cache
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
       with:
         path: ${{ github.workspace }}/.cache/trivy
         key: cache-trivy-db-${{ steps.date.outputs.date }}
@@ -62,7 +62,7 @@ jobs:
         for i in {1..5}; do trivy image --download-db-only --cache-dir $GITHUB_WORKSPACE/.cache/trivy && break || sleep 1; done
     - name: Save Trivy DB cache
       if: ${{ !inputs.no-cache && steps.restore-db-cache.outputs.cache-hit != 'true' }}
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4
       with:
         path: ${{ github.workspace }}/.cache/trivy
         key: ${{ steps.restore-db-cache.outputs.cache-primary-key }}

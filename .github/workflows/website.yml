@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Update website source
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1
       with:
         repo: antrea-io/website
         ref: refs/heads/main

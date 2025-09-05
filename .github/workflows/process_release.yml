@@ -8,9 +8,9 @@ jobs:
   upload-release-assets:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
       with:
         go-version-file: 'go.mod'
         # make sure the latest patch version is used
@@ -23,7 +23,7 @@ jobs:
         mkdir assets
         VERSION="${TAG:10}" ./hack/release/prepare-assets.sh ./assets
     - name: Upload all assets
-      uses: alexellis/upload-assets@0.4.1
+      uses: alexellis/upload-assets@13926a61cdb2cb35f5fdef1c06b8b591523236d3 # 0.4.1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -41,7 +41,7 @@ jobs:
         version=${TAG:10}
         echo "version=$version" >> $GITHUB_OUTPUT
     - name: Update website source
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1
       with:
         repo: antrea-io/website
         ref: refs/heads/main
@@ -49,7 +49,7 @@ jobs:
         token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "antrea-repository":"antrea-io/antrea", "antrea-ref":"{0}" }}', steps.get-version.outputs.version) }}
     - name: Update Helm index with Antrea archive
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1
       with:
         repo: antrea-io/website
         ref: refs/heads/main
@@ -57,7 +57,7 @@ jobs:
         token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "archive-url":"https://github.com/antrea-io/antrea/releases/download/{0}/antrea-chart.tgz" }}', steps.get-version.outputs.version) }}
     - name: Update Helm index with Flow Aggregator archive
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1
       with:
         repo: antrea-io/website
         ref: refs/heads/main
