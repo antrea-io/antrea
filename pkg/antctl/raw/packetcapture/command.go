@@ -52,14 +52,15 @@ var (
 )
 
 type packetCaptureOptions struct {
-	source    string
-	dest      string
-	nowait    bool
-	timeout   time.Duration
-	number    int32
-	flow      string
-	outputDir string
-	direction string
+	source          string
+	dest            string
+	nowait          bool
+	timeout         time.Duration
+	number          int32
+	flow            string
+	outputDir       string
+	captureLocation string
+	direction       string
 }
 
 var options = &packetCaptureOptions{}
@@ -68,10 +69,14 @@ var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Po
   $ antctl packetcapture -S pod1 -D pod2
   Start capturing packets from pod1 in Namespace ns1 to a destination IP
   $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
+  Start capturing packets from pod1 to pod2, captures at dst pod
+  $ antctl packetcapture -S pod1 -D pod2 -l Destination
   Start capturing TCP FIN packets from pod1 to pod2, with destination port 80
   $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
   Start capturing TCP SYNs that are not ACKs from pod1 to pod2, with destination port 80
   $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+syn-ack
+  Start capturing IPv6 TCP SYNs packets from pod1 to pod2, with destination port 80
+  $ antctl packetcapture -S pod1 -D pod2 -f ipv6,tcp,tcp_dst=80,tcp_flags=+syn
   Start capturing UDP packets from pod1 to pod2, with destination port 1234
   $ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
   Start capturing ICMP destination unreachable (host unreachable) packets from pod1 to pod2
@@ -80,6 +85,10 @@ var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Po
   $ antctl packetcapture -S pod1 -D pod2 -f icmp,icmp_type=8
   Start capturing packets in both directions between pod1 and pod2
   $ antctl packetcapture -S pod1 -D pod2 -d Both
+  Start capturing ICMPv6 destination unreachable (host unreachable) packets from pod1 to pod2
+  $ antctl packetcapture -S pod1 -D pod2 -f ipv6,icmpv6,icmpv6_type=icmpv6-unreach,icmpv6_code=1
+  Start capturing ICMPv6 echo reply packets from pod1 to pod2
+  $ antctl packetcapture -S pod1 -D pod2 -f ipv6,icmpv6,icmpv6_type=129
   Save the packets file to a specified directory
   $ antctl packetcapture -S 192.168.123.123 -D pod2 -f tcp,tcp_dst=80 -o /tmp
 `
@@ -98,15 +107,17 @@ func init() {
 	Command.Flags().StringVarP(&options.dest, "destination", "D", "", "destination of the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().Int32VarP(&options.number, "number", "n", 1, "target number of packets to capture, the capture will stop when it is reached")
 	Command.Flags().StringVarP(&options.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst, icmp_type, icmp_code")
+	Command.Flags().StringVarP(&options.captureLocation, "capture-location", "l", "", "specify where the packet capture should be performed: Source or Destination")
 	Command.Flags().BoolVarP(&options.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 	Command.Flags().StringVarP(&options.outputDir, "output-dir", "o", ".", "save the packets file to the target directory")
 	Command.Flags().StringVarP(&options.direction, "direction", "d", "SourceToDestination", "direction of the traffic to capture: SourceToDestination, DestinationToSource, or Both")
 }
 
 var protocols = map[string]int32{
-	"icmp": 1,
-	"tcp":  6,
-	"udp":  17,
+	"icmp":   1,
+	"tcp":    6,
+	"udp":    17,
+	"icmpv6": 58,
 }
 
 var tcpFlags = map[string]int32{
@@ -207,7 +218,7 @@ func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Confi
 		for _, cond := range res.Status.Conditions {
 			if cond.Type == v1alpha1.PacketCaptureComplete && cond.Status == metav1.ConditionTrue {
 				latestPC = res
-				if cond.Reason == "Failed" {
+				if cond.Reason == "Failed" || cond.Reason == "Timeout" {
 					return false, errors.New(cond.Message)
 				}
 				return true, nil
@@ -239,7 +250,7 @@ func parseEndpoint(endpoint string) (*v1alpha1.PodReference, *string) {
 	var pod *v1alpha1.PodReference
 	var ip *string
 	parsedIP := net.ParseIP(endpoint)
-	if parsedIP != nil && parsedIP.To4() != nil {
+	if parsedIP != nil && (parsedIP.To4() != nil || parsedIP.To16() != nil) {
 		ip = ptr.To(parsedIP.String())
 	} else {
 		split := strings.Split(endpoint, "/")
@@ -313,7 +324,12 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 		return nil, err
 	}
 	var pkt v1alpha1.Packet
-	pkt.IPFamily = v1.IPv4Protocol
+	_, isIPv6 := fields["ipv6"]
+	if isIPv6 {
+		pkt.IPFamily = v1.IPv6Protocol
+	} else {
+		pkt.IPFamily = v1.IPv4Protocol
+	}
 	for k, v := range protocols {
 		if _, ok := fields[k]; ok {
 			pkt.Protocol = ptr.To(intstr.FromInt32(v))
@@ -418,6 +434,40 @@ func parseFlow(options *packetCaptureOptions) (*v1alpha1.Packet, error) {
 	} else if _, codeOK := fields["icmp_code"]; codeOK {
 		return nil, fmt.Errorf("icmp_type must be specified when icmp_code is provided")
 	}
+	if t, ok := fields["icmpv6_type"]; ok {
+		var icmpv6Type intstr.IntOrString
+		if val, err := strconv.ParseUint(t, 0, 8); err == nil {
+			icmpv6Type = intstr.FromInt32(int32(val))
+		} else {
+			_, found := capture.ICMPv6MsgTypeMap[v1alpha1.ICMPv6MsgType(t)]
+			if !found {
+				return nil, fmt.Errorf("unknown icmpv6_type: %s", t)
+			}
+			icmpv6Type = intstr.FromString(t)
+		}
+
+		pkt.TransportHeader.ICMPv6 = new(v1alpha1.ICMPv6Header)
+
+		c, ok := fields["icmpv6_code"]
+		if ok {
+			icmpv6Code, err := strconv.ParseUint(c, 0, 8)
+			if err != nil {
+				return nil, err
+			}
+			pkt.TransportHeader.ICMPv6.Messages = []v1alpha1.ICMPv6MsgMatcher{
+				{
+					Type: icmpv6Type,
+					Code: ptr.To(int32(icmpv6Code)),
+				},
+			}
+		} else {
+			pkt.TransportHeader.ICMPv6.Messages = []v1alpha1.ICMPv6MsgMatcher{
+				{Type: icmpv6Type},
+			}
+		}
+	} else if _, codeOK := fields["icmpv6_code"]; codeOK {
+		return nil, fmt.Errorf("icmpv6_type must be specified when icmpv6_code is provided")
+	}
 	return &pkt, nil
 }
 
@@ -435,6 +485,27 @@ func parseDirection(direction string) (v1alpha1.CaptureDirection, error) {
 	}
 }
 
+func parseCaptureLocation(captLocStr string) (v1alpha1.CaptureLocation, error) {
+	switch v1alpha1.CaptureLocation(captLocStr) {
+	case v1alpha1.CaptureLocationSource, v1alpha1.CaptureLocationDestination:
+		return v1alpha1.CaptureLocation(captLocStr), nil
+	default:
+		return "", fmt.Errorf("invalid capture location: %q, must be either Source or Destination", captLocStr)
+	}
+}
+
+func determineCaptureLocation(options *packetCaptureOptions) (v1alpha1.CaptureLocation, error) {
+	captLocStr := options.captureLocation
+	if captLocStr == "" {
+		if options.source != "" {
+			captLocStr = "Source"
+		} else {
+			captLocStr = "Destination"
+		}
+	}
+	return parseCaptureLocation(captLocStr)
+}
+
 func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, error) {
 	if options.source == "" && options.dest == "" {
 		return nil, errors.New("must specify at least one of --source or --destination")
@@ -444,7 +515,7 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 	if options.source != "" {
 		src.Pod, src.IP = parseEndpoint(options.source)
 		if src.Pod == nil && src.IP == nil {
-			return nil, fmt.Errorf("source should be in the format of Namespace/Pod, Pod, or IPv4")
+			return nil, fmt.Errorf("source should be in the format of Namespace/Pod, Pod, or IPv4/IPv6")
 		}
 	}
 
@@ -452,7 +523,7 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 	if options.dest != "" {
 		dst.Pod, dst.IP = parseEndpoint(options.dest)
 		if dst.Pod == nil && dst.IP == nil {
-			return nil, fmt.Errorf("destination should be in the format of Namespace/Pod, Pod, or IPv4")
+			return nil, fmt.Errorf("destination should be in the format of Namespace/Pod, Pod, or IPv4/IPv6")
 		}
 	}
 
@@ -469,6 +540,21 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 		return nil, err
 	}
 
+	captureLocation, err := determineCaptureLocation(options)
+	if err != nil {
+		return nil, err
+	}
+	switch captureLocation {
+	case v1alpha1.CaptureLocationSource:
+		if src.Pod == nil {
+			return nil, fmt.Errorf("a source Pod must be specified when capture-location is 'Source'")
+		}
+	case v1alpha1.CaptureLocationDestination:
+		if dst.Pod == nil {
+			return nil, fmt.Errorf("a destination Pod must be specified when capture-location is 'Destination'")
+		}
+	}
+
 	name := getPCName(options)
 	timeout := int32(options.timeout.Seconds())
 	pc := &v1alpha1.PacketCapture{
@@ -476,11 +562,12 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 			Name: name,
 		},
 		Spec: v1alpha1.PacketCaptureSpec{
-			Source:      src,
-			Destination: dst,
-			Direction:   direction,
-			Timeout:     &timeout,
-			Packet:      pkt,
+			Source:          src,
+			Destination:     dst,
+			Direction:       direction,
+			Timeout:         &timeout,
+			Packet:          pkt,
+			CaptureLocation: captureLocation,
 			CaptureConfig: v1alpha1.CaptureConfig{
 				FirstN: &v1alpha1.PacketCaptureFirstNConfig{
 					Number: options.number,

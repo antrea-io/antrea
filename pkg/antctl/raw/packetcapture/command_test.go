@@ -43,6 +43,7 @@ const (
 	srcPod        = "default/pod-1"
 	dstPod        = "pod-2"
 	ipv4          = "192.168.10.10"
+	ipv6          = "fd00:10:244::10"
 	testNum int32 = 10
 )
 
@@ -115,6 +116,16 @@ func TestPacketCaptureRun(t *testing.T) {
 				nowait: true,
 				number: testNum,
 				flow:   "udp,udp_src=1234,udp_dst=1234",
+			},
+		},
+		{
+			name: "pod-2-ipv6",
+			option: packetCaptureOptions{
+				source: srcPod,
+				dest:   ipv6,
+				nowait: true,
+				number: testNum,
+				flow:   "ipv6,icmpv6,icmpv6_type=128",
 			},
 		},
 		{
@@ -288,6 +299,7 @@ func TestNewPacketCapture(t *testing.T) {
 							},
 						},
 					},
+					CaptureLocation: v1alpha1.CaptureLocationSource,
 				},
 			},
 		},
@@ -375,6 +387,7 @@ func TestNewPacketCapture(t *testing.T) {
 					Packet: &v1alpha1.Packet{
 						IPFamily: v1.IPv4Protocol,
 					},
+					CaptureLocation: v1alpha1.CaptureLocationSource,
 				},
 			},
 		},
@@ -387,6 +400,77 @@ func TestNewPacketCapture(t *testing.T) {
 				direction: "InvalidDirection",
 			},
 			expectErr: "invalid direction: \"InvalidDirection\", must be one of SourceToDestination, DestinationToSource, or Both",
+		},
+		{
+			name: "bad-captLoc",
+			option: packetCaptureOptions{
+				source:          srcPod,
+				dest:            dstPod,
+				flow:            "tcp,tcp_dst=80",
+				captureLocation: "Src",
+			},
+			expectErr: "invalid capture location: \"Src\", must be either Source or Destination",
+		},
+		{
+			name: "no-src-pod-given-captLocSrc",
+			option: packetCaptureOptions{
+				dest:            dstPod,
+				captureLocation: "Source",
+			},
+			expectErr: "a source Pod must be specified when capture-location is 'Source'",
+		},
+		{
+			name: "no-dst-pod-given-captLocDst",
+			option: packetCaptureOptions{
+				source:          srcPod,
+				captureLocation: "Destination",
+			},
+			expectErr: "a destination Pod must be specified when capture-location is 'Destination'",
+		},
+		{
+			name: "pod-2-pod-ipv6-icmpv6",
+			option: packetCaptureOptions{
+				source: srcPod,
+				dest:   dstPod,
+				flow:   "ipv6,icmpv6,icmpv6_type=128,icmpv6_code=0",
+				number: testNum,
+			},
+			expectPC: &v1alpha1.PacketCapture{
+				Spec: v1alpha1.PacketCaptureSpec{
+					Source: v1alpha1.Source{
+						Pod: &v1alpha1.PodReference{
+							Namespace: "default",
+							Name:      "pod-1",
+						},
+					},
+					Destination: v1alpha1.Destination{
+						Pod: &v1alpha1.PodReference{
+							Namespace: "default",
+							Name:      "pod-2",
+						},
+					},
+					Timeout: ptr.To(int32(0)),
+					CaptureConfig: v1alpha1.CaptureConfig{
+						FirstN: &v1alpha1.PacketCaptureFirstNConfig{
+							Number: testNum,
+						},
+					},
+					Packet: &v1alpha1.Packet{
+						IPFamily: v1.IPv6Protocol,
+						Protocol: ptr.To(intstr.FromInt(58)),
+						TransportHeader: v1alpha1.TransportHeader{
+							ICMPv6: &v1alpha1.ICMPv6Header{
+								Messages: []v1alpha1.ICMPv6MsgMatcher{{
+									Type: intstr.FromInt32(128), // Echo
+									Code: ptr.To(int32(0)),
+								},
+								},
+							},
+						},
+					},
+					CaptureLocation: v1alpha1.CaptureLocationSource,
+				},
+			},
 		},
 	}
 
