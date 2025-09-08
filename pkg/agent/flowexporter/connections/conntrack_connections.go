@@ -88,7 +88,7 @@ func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
-			break
+			return
 		case <-pollTicker.C:
 			_, err := cs.Poll()
 			if err != nil {
