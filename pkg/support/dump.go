@@ -25,6 +25,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/common/expfmt"
@@ -389,36 +390,36 @@ func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OV
 }
 
 func exportPrometheusMetrics(fs afero.Fs, basedir, metricsSource, filename string) error {
-    allMetrics, err := legacyregistry.DefaultGatherer.Gather()
-    if err != nil {
-        return fmt.Errorf("failed to gather metrics: %w", err)
-    }
+	allMetrics, err := legacyregistry.DefaultGatherer.Gather()
+	if err != nil {
+		return fmt.Errorf("failed to gather metrics: %w", err)
+	}
 
-    var buf bytes.Buffer
-    encoder := expfmt.NewEncoder(&buf, expfmt.NewFormat(expfmt.TypeTextPlain))
-    prefix := "antrea_" + metricsSource + "_"
-    metricsFound := false
+	var buf bytes.Buffer
+	encoder := expfmt.NewEncoder(&buf, expfmt.NewFormat(expfmt.TypeTextPlain))
+	prefix := "antrea_" + metricsSource + "_"
+	metricsFound := false
 
-    for _, mf := range allMetrics {
-        if mf == nil {
-            continue
-        }
-        metricName := mf.GetName()
-        if strings.HasPrefix(metricName, prefix) {
-            if err := encoder.Encode(mf); err != nil {
-                return fmt.Errorf("failed to encode metric %s: %w", metricName, err)
-            }
-            metricsFound = true
-        }
-    }
+	for _, mf := range allMetrics {
+		if mf == nil {
+			continue
+		}
+		metricName := mf.GetName()
+		if strings.HasPrefix(metricName, prefix) {
+			if err := encoder.Encode(mf); err != nil {
+				return fmt.Errorf("failed to encode metric %s: %w", metricName, err)
+			}
+			metricsFound = true
+		}
+	}
 
-    if !metricsFound {
-        return fmt.Errorf("no metrics found with prefix %s", prefix)
-    }
+	if !metricsFound {
+		return fmt.Errorf("no metrics found with prefix %s", prefix)
+	}
 
-    if err := writeFile(fs, filepath.Join(basedir, filename), "metrics", buf.Bytes()); err != nil {
-        return fmt.Errorf("failed to write metrics to file: %w", err)
-    }
+	if err := writeFile(fs, filepath.Join(basedir, filename), "metrics", buf.Bytes()); err != nil {
+		return fmt.Errorf("failed to write metrics to file: %w", err)
+	}
 
-    return nil
+	return nil
 }
