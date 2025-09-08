@@ -312,13 +312,13 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 				// Prepare connection map
 				conn = flowexportertesting.GetConnection(isIPv6, tt.isConnPresent, tt.statusFlag, tt.protoID, tt.tcpState)
 				connKey := connection.NewConnectionKey(conn)
-				conn.OriginalPackets = tt.originalPackets
-				conn.ReversePackets = tt.reversePackets
+				conn.OriginalStats.Packets = tt.originalPackets
+				conn.OriginalStats.ReversePackets = tt.reversePackets
 				flowExp.conntrackConnStore.AddOrUpdateConn(conn)
 				assert.Equalf(t, getNumOfConntrackConns(flowExp.conntrackConnStore), 1, "connection is expected to be in the connection map")
 				assert.Equalf(t, flowExp.conntrackPriorityQueue.Len(), 1, "pqItem is expected to be in the expire priority queue")
-				conn.PrevPackets = tt.prevPackets
-				conn.PrevReversePackets = tt.prevReversePackets
+				conn.PreviousStats.Packets = tt.prevPackets
+				conn.PreviousStats.ReversePackets = tt.prevReversePackets
 				pqItem = flowExp.conntrackPriorityQueue.KeyToItem[connKey]
 				pqItem.ActiveExpireTime = tt.activeExpireTime
 				pqItem.IdleExpireTime = tt.idleExpireTime
@@ -329,7 +329,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 				flowExp.denyConnStore.AddOrUpdateConn(denyConn, time.Now(), uint64(60))
 				assert.Equalf(t, getNumOfDenyConns(flowExp.denyConnStore), 1, "deny connection is expected to be in the connection map")
 				assert.Equalf(t, flowExp.denyPriorityQueue.Len(), 1, "pqItem is expected to be in the expire priority queue")
-				denyConn.PrevPackets = tt.prevPackets
+				denyConn.PreviousStats.Packets = tt.prevPackets
 				pqItem = flowExp.denyPriorityQueue.KeyToItem[connKey]
 				pqItem.ActiveExpireTime = tt.activeExpireTime
 				pqItem.IdleExpireTime = tt.idleExpireTime
@@ -344,7 +344,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 			switch id {
 			case 0: // conntrack connection being active time out
 				assert.True(t, pqItem.ActiveExpireTime.After(startTime))
-				assert.Equal(t, conn.OriginalPackets, conn.PrevPackets)
+				assert.Equal(t, conn.OriginalStats.Packets, conn.PreviousStats.Packets)
 				assert.Equalf(t, 1, flowExp.conntrackPriorityQueue.Len(), "Length of expire priority queue should be 1")
 			case 1: // conntrack connection being idle time out and becoming inactive
 				assert.False(t, conn.IsActive)
@@ -354,7 +354,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 				assert.Equalf(t, 0, flowExp.conntrackPriorityQueue.Len(), "Length of expire priority queue should be 0")
 			case 3: // deny connection being active time out
 				assert.True(t, pqItem.ActiveExpireTime.After(startTime))
-				assert.Equal(t, denyConn.OriginalPackets, denyConn.PrevPackets)
+				assert.Equal(t, denyConn.OriginalStats.Packets, denyConn.PreviousStats.Packets)
 				assert.Equalf(t, 1, flowExp.denyPriorityQueue.Len(), "Length of expire priority queue should be 1")
 			case 4: // deny connection being active time out and becoming inactive
 				assert.False(t, denyConn.IsActive)

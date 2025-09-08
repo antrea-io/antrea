@@ -213,10 +213,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		// Update the necessary fields that are used in generating flow records.
 		// Can same 5-tuple flow get deleted and added to conntrack table? If so use ID.
 		existingConn.StopTime = conn.StopTime
-		existingConn.OriginalBytes = conn.OriginalBytes
-		existingConn.OriginalPackets = conn.OriginalPackets
-		existingConn.ReverseBytes = conn.ReverseBytes
-		existingConn.ReversePackets = conn.ReversePackets
+		existingConn.OriginalStats = conn.OriginalStats
 		existingConn.TCPState = conn.TCPState
 		existingConn.IsActive = utils.CheckConntrackConnActive(existingConn)
 		if existingConn.IsActive {
