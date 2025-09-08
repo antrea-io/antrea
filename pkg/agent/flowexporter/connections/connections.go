@@ -165,11 +165,8 @@ func (cs *connectionStore) UpdateConnAndQueue(pqItem *priorityqueue.ItemToExpire
 	} else {
 		// For active connections, we update their "prev" stats fields,
 		// reset active expire time and push back into the PQ.
-		conn.PrevBytes = conn.OriginalBytes
-		conn.PrevPackets = conn.OriginalPackets
+		conn.PreviousStats = conn.OriginalStats
 		conn.PrevTCPState = conn.TCPState
-		conn.PrevReverseBytes = conn.ReverseBytes
-		conn.PrevReversePackets = conn.ReversePackets
 		cs.expirePriorityQueue.ResetActiveExpireTimeAndPush(pqItem, currTime)
 	}
 }

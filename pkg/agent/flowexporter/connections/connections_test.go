@@ -56,26 +56,30 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	// Flow-1, which is already in connectionStore
 	tuple1 := connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	testFlows[0] = &connection.Connection{
-		StartTime:       refTime.Add(-(time.Second * 50)),
-		StopTime:        refTime,
-		OriginalPackets: 0xffff,
-		OriginalBytes:   0xbaaaaa0000000000,
-		ReversePackets:  0xff,
-		ReverseBytes:    0xbaaa,
-		FlowKey:         tuple1,
-		IsPresent:       true,
+		StartTime: refTime.Add(-(time.Second * 50)),
+		StopTime:  refTime,
+		FlowKey:   tuple1,
+		IsPresent: true,
+		OriginalStats: connection.Stats{
+			Packets:        0xffff,
+			Bytes:          0xbaaaaa0000000000,
+			ReversePackets: 0xff,
+			ReverseBytes:   0xbaaa,
+		},
 	}
 	// Flow-2, which is not in connectionStore
 	tuple2 := connection.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
 	testFlows[1] = &connection.Connection{
-		StartTime:       refTime.Add(-(time.Second * 20)),
-		StopTime:        refTime,
-		OriginalPackets: 0xbb,
-		OriginalBytes:   0xcbbb,
-		ReversePackets:  0xbbbb,
-		ReverseBytes:    0xcbbbb0000000000,
-		FlowKey:         tuple2,
-		IsPresent:       true,
+		StartTime: refTime.Add(-(time.Second * 20)),
+		StopTime:  refTime,
+		FlowKey:   tuple2,
+		IsPresent: true,
+		OriginalStats: connection.Stats{
+			Packets:        0xbb,
+			Bytes:          0xcbbb,
+			ReversePackets: 0xbbbb,
+			ReverseBytes:   0xcbbbb0000000000,
+		},
 	}
 	for i, flow := range testFlows {
 		connKey := connection.NewConnectionKey(flow)
@@ -91,7 +95,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 
 	resetTwoFields := func(key connection.ConnectionKey, conn *connection.Connection) error {
 		conn.IsPresent = false
-		conn.OriginalPackets = 0
+		conn.OriginalStats.Packets = 0
 		return nil
 	}
 	connStore.ForAllConnectionsDo(resetTwoFields)
@@ -100,7 +104,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		conn, ok := connStore.GetConnByKey(*testFlowKeys[i])
 		assert.Equal(t, ok, true, "connection should be there in connection store")
 		assert.Equal(t, conn.IsPresent, false, "isActive flag should be reset")
-		assert.Equal(t, conn.OriginalPackets, uint64(0), "OriginalPackets should be reset")
+		assert.Equal(t, conn.OriginalStats.Packets, uint64(0), "OriginalPackets should be reset")
 	}
 }
 

@@ -167,10 +167,10 @@ func generateUpdatedConns(conns []*connection.Connection) []*connection.Connecti
 		if conns[i].ReadyToDelete == true {
 			conns[i] = getNewConn()
 		} else { // update rest of connections
-			conns[i].OriginalPackets += 5
-			conns[i].OriginalBytes += 20
-			conns[i].ReversePackets += 2
-			conns[i].ReverseBytes += 10
+			conns[i].OriginalStats.Packets += 5
+			conns[i].OriginalStats.Bytes += 20
+			conns[i].OriginalStats.ReversePackets += 2
+			conns[i].OriginalStats.ReverseBytes += 10
 		}
 		updatedConns[i] = conns[i]
 	}
@@ -201,15 +201,17 @@ func getNewConn() *connection.Connection {
 	}
 	flowKey := connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(randomNum1), DestinationPort: uint16(randomNum2)}
 	return &connection.Connection{
-		StartTime:                  time.Now().Add(-time.Duration(randomNum1) * time.Second),
-		StopTime:                   time.Now(),
-		IsPresent:                  true,
-		ReadyToDelete:              false,
-		FlowKey:                    flowKey,
-		OriginalPackets:            10,
-		OriginalBytes:              100,
-		ReversePackets:             5,
-		ReverseBytes:               50,
+		StartTime:     time.Now().Add(-time.Duration(randomNum1) * time.Second),
+		StopTime:      time.Now(),
+		IsPresent:     true,
+		ReadyToDelete: false,
+		FlowKey:       flowKey,
+		OriginalStats: connection.Stats{
+			Packets:        10,
+			Bytes:          100,
+			ReversePackets: 5,
+			ReverseBytes:   50,
+		},
 		OriginalDestinationAddress: svc,
 		OriginalDestinationPort:    30000,
 		TCPState:                   "SYN_SENT",

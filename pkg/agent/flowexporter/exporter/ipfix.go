@@ -288,33 +288,33 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 		case "protocolIdentifier":
 			ie.SetUnsigned8Value(conn.FlowKey.Protocol)
 		case "packetTotalCount":
-			ie.SetUnsigned64Value(conn.OriginalPackets)
+			ie.SetUnsigned64Value(conn.OriginalStats.Packets)
 		case "octetTotalCount":
-			ie.SetUnsigned64Value(conn.OriginalBytes)
+			ie.SetUnsigned64Value(conn.OriginalStats.Bytes)
 		case "packetDeltaCount":
-			deltaPkts := int64(conn.OriginalPackets) - int64(conn.PrevPackets)
+			deltaPkts := int64(conn.OriginalStats.Packets) - int64(conn.PreviousStats.Packets)
 			if deltaPkts < 0 {
 				klog.InfoS("Packet delta count for connection should not be negative", "packet delta count", deltaPkts)
 			}
 			ie.SetUnsigned64Value(uint64(deltaPkts))
 		case "octetDeltaCount":
-			deltaBytes := int64(conn.OriginalBytes) - int64(conn.PrevBytes)
+			deltaBytes := int64(conn.OriginalStats.Bytes) - int64(conn.PreviousStats.Bytes)
 			if deltaBytes < 0 {
 				klog.InfoS("Byte delta count for connection should not be negative", "byte delta count", deltaBytes)
 			}
 			ie.SetUnsigned64Value(uint64(deltaBytes))
 		case "reversePacketTotalCount":
-			ie.SetUnsigned64Value(conn.ReversePackets)
+			ie.SetUnsigned64Value(conn.OriginalStats.ReversePackets)
 		case "reverseOctetTotalCount":
-			ie.SetUnsigned64Value(conn.ReverseBytes)
+			ie.SetUnsigned64Value(conn.OriginalStats.ReverseBytes)
 		case "reversePacketDeltaCount":
-			deltaPkts := int64(conn.ReversePackets) - int64(conn.PrevReversePackets)
+			deltaPkts := int64(conn.OriginalStats.ReversePackets) - int64(conn.PreviousStats.ReversePackets)
 			if deltaPkts < 0 {
 				klog.InfoS("Reverse packet delta count for connection should not be negative", "packet delta count", deltaPkts)
 			}
 			ie.SetUnsigned64Value(uint64(deltaPkts))
 		case "reverseOctetDeltaCount":
-			deltaBytes := int64(conn.ReverseBytes) - int64(conn.PrevReverseBytes)
+			deltaBytes := int64(conn.OriginalStats.ReverseBytes) - int64(conn.PreviousStats.ReverseBytes)
 			if deltaBytes < 0 {
 				klog.InfoS("Reverse byte delta count for connection should not be negative", "byte delta count", deltaBytes)
 			}

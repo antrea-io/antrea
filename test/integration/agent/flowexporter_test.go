@@ -63,13 +63,15 @@ func createConnsForTest() ([]*connection.Connection, []*connection.ConnectionKey
 	// Flow-1
 	tuple1 := connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	testConn1 := &connection.Connection{
-		StartTime:       refTime.Add(-(time.Second * 50)),
-		StopTime:        refTime,
-		OriginalPackets: 0xffff,
-		OriginalBytes:   0xbaaaaa0000000000,
-		ReversePackets:  0xff,
-		ReverseBytes:    0xbaaa,
-		FlowKey:         tuple1,
+		StartTime: refTime.Add(-(time.Second * 50)),
+		StopTime:  refTime,
+		OriginalStats: connection.Stats{
+			Packets:        0xffff,
+			Bytes:          0xbaaaaa0000000000,
+			ReversePackets: 0xff,
+			ReverseBytes:   0xbaaa,
+		},
+		FlowKey: tuple1,
 	}
 	testConnKey1 := connection.NewConnectionKey(testConn1)
 	testConns[0] = testConn1
@@ -77,13 +79,15 @@ func createConnsForTest() ([]*connection.Connection, []*connection.ConnectionKey
 	// Flow-2
 	tuple2 := connection.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
 	testConn2 := &connection.Connection{
-		StartTime:       refTime.Add(-(time.Second * 20)),
-		StopTime:        refTime,
-		OriginalPackets: 0xbb,
-		OriginalBytes:   0xcbbb,
-		ReversePackets:  0xbbbb,
-		ReverseBytes:    0xcbbbb0000000000,
-		FlowKey:         tuple2,
+		StartTime: refTime.Add(-(time.Second * 20)),
+		StopTime:  refTime,
+		OriginalStats: connection.Stats{
+			Packets:        0xbb,
+			Bytes:          0xcbbb,
+			ReversePackets: 0xbbbb,
+			ReverseBytes:   0xcbbbb0000000000,
+		},
+		FlowKey: tuple2,
 	}
 	testConnKey2 := connection.NewConnectionKey(testConn2)
 	testConns[1] = testConn2

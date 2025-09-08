@@ -257,15 +257,17 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 		flowKey := connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(i), DestinationPort: uint16(i)}
 		randomDuration := getRandomNum(255)
 		conn := &connection.Connection{
-			StartTime:                  time.Now().Add(-time.Duration(randomDuration) * time.Second),
-			StopTime:                   time.Now(),
-			IsPresent:                  true,
-			ReadyToDelete:              false,
-			FlowKey:                    flowKey,
-			OriginalPackets:            100,
-			OriginalBytes:              10,
-			ReversePackets:             50,
-			ReverseBytes:               5,
+			StartTime:     time.Now().Add(-time.Duration(randomDuration) * time.Second),
+			StopTime:      time.Now(),
+			IsPresent:     true,
+			ReadyToDelete: false,
+			FlowKey:       flowKey,
+			OriginalStats: connection.Stats{
+				Packets:        100,
+				Bytes:          10,
+				ReversePackets: 50,
+				ReverseBytes:   5,
+			},
 			SourcePodNamespace:         "ns1",
 			SourcePodName:              "pod1",
 			DestinationPodNamespace:    "ns2",
@@ -303,11 +305,13 @@ func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueu
 		flowKey := connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(i), DestinationPort: uint16(i)}
 		randomDuration := getRandomNum(255)
 		conn := &connection.Connection{
-			StartTime:                     time.Now().Add(-time.Duration(randomDuration) * time.Second),
-			StopTime:                      time.Now(),
-			FlowKey:                       flowKey,
-			OriginalPackets:               10,
-			OriginalBytes:                 100,
+			StartTime: time.Now().Add(-time.Duration(randomDuration) * time.Second),
+			StopTime:  time.Now(),
+			FlowKey:   flowKey,
+			OriginalStats: connection.Stats{
+				Packets: 10,
+				Bytes:   100,
+			},
 			SourcePodNamespace:            "ns1",
 			SourcePodName:                 "pod1",
 			EgressNetworkPolicyName:       "egress-reject",

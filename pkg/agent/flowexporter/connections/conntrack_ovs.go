@@ -195,9 +195,9 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*connection.C
 				return nil, fmt.Errorf("conversion of packets %s to int failed: %v", fields[len(fields)-1], err)
 			}
 			if !isReply {
-				conn.OriginalPackets = uint64(val)
+				conn.OriginalStats.Packets = uint64(val)
 			} else {
-				conn.ReversePackets = uint64(val)
+				conn.OriginalStats.ReversePackets = uint64(val)
 			}
 		case strings.Contains(fs, "bytes"):
 			fs = strings.TrimSuffix(fs, ")")
@@ -207,9 +207,9 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*connection.C
 				return nil, fmt.Errorf("conversion of bytes %s to int failed: %v", fields[len(fields)-1], err)
 			}
 			if !isReply {
-				conn.OriginalBytes = uint64(val)
+				conn.OriginalStats.Bytes = uint64(val)
 			} else {
-				conn.ReverseBytes = uint64(val)
+				conn.OriginalStats.ReverseBytes = uint64(val)
 			}
 		case strings.Contains(fs, "start"):
 			fs = strings.TrimSuffix(fs, ")")

@@ -85,8 +85,8 @@ func IsConnectionDying(conn *connection.Connection) bool {
 // checkConntrackConnActive returns true if there are changes in connection's stats or
 // TCP state, indicating that the connection is active.
 func CheckConntrackConnActive(conn *connection.Connection) bool {
-	if (conn.OriginalPackets > conn.PrevPackets) ||
-		(conn.ReversePackets > conn.PrevReversePackets) ||
+	if (conn.OriginalStats.Packets > conn.PreviousStats.Packets) ||
+		(conn.OriginalStats.ReversePackets > conn.PreviousStats.ReversePackets) ||
 		(conn.TCPState != conn.PrevTCPState) {
 		return true
 	}

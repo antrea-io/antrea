@@ -82,8 +82,8 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *connection.Connection, time
 		if conn.ReadyToDelete {
 			return
 		}
-		conn.OriginalBytes += bytes
-		conn.OriginalPackets += 1
+		conn.OriginalStats.Bytes += bytes
+		conn.OriginalStats.Packets += 1
 		conn.StopTime = timeSeen
 		conn.IsActive = true
 		existingItem, exists := ds.expirePriorityQueue.KeyToItem[connKey]
@@ -102,8 +102,8 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *connection.Connection, time
 		conn.StartTime = timeSeen
 		conn.StopTime = timeSeen
 		conn.LastExportTime = timeSeen
-		conn.OriginalBytes = bytes
-		conn.OriginalPackets = uint64(1)
+		conn.OriginalStats.Bytes = bytes
+		conn.OriginalStats.Packets = uint64(1)
 		ds.fillPodInfo(conn)
 		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
@@ -138,7 +138,7 @@ func (ds *DenyConnectionStore) GetExpiredConns(expiredConns []connection.Connect
 			// flag to true to do the deletion later.
 			pqItem.Conn.ReadyToDelete = true
 		}
-		if pqItem.Conn.OriginalPackets <= pqItem.Conn.PrevPackets {
+		if pqItem.Conn.OriginalStats.Packets <= pqItem.Conn.PreviousStats.Packets {
 			// If a deny connection doesn't have increase in packet count,
 			// we consider the connection to be inactive.
 			pqItem.Conn.IsActive = false

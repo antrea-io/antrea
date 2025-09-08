@@ -145,15 +145,17 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *connection.Connection 
 		},
 		OriginalDestinationAddress: conn.TupleOrig.IP.DestinationAddress,
 		OriginalDestinationPort:    conn.TupleOrig.Proto.DestinationPort,
-		OriginalPackets:            conn.CountersOrig.Packets,
-		OriginalBytes:              conn.CountersOrig.Bytes,
-		ReversePackets:             conn.CountersReply.Packets,
-		ReverseBytes:               conn.CountersReply.Bytes,
-		SourcePodNamespace:         "",
-		SourcePodName:              "",
-		DestinationPodNamespace:    "",
-		DestinationPodName:         "",
-		TCPState:                   "",
+		OriginalStats: connection.Stats{
+			Packets:        conn.CountersOrig.Packets,
+			Bytes:          conn.CountersOrig.Bytes,
+			ReversePackets: conn.CountersReply.Packets,
+			ReverseBytes:   conn.CountersReply.Bytes,
+		},
+		SourcePodNamespace:      "",
+		SourcePodName:           "",
+		DestinationPodNamespace: "",
+		DestinationPodName:      "",
+		TCPState:                "",
 	}
 	if conn.ProtoInfo.TCP != nil {
 		newConn.TCPState = stateToString(conn.ProtoInfo.TCP.State)
