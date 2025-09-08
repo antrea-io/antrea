@@ -50,6 +50,10 @@ func (c *FakeCrdV1beta1) ExternalIPPools() v1beta1.ExternalIPPoolInterface {
 	return newFakeExternalIPPools(c)
 }
 
+func (c *FakeCrdV1beta1) FlowExporterTargets() v1beta1.FlowExporterTargetInterface {
+	return newFakeFlowExporterTargets(c)
+}
+
 func (c *FakeCrdV1beta1) Groups(namespace string) v1beta1.GroupInterface {
 	return newFakeGroups(c, namespace)
 }

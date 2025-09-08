@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@ type Interface interface {
 	Egresses() EgressInformer
 	// ExternalIPPools returns a ExternalIPPoolInformer.
 	ExternalIPPools() ExternalIPPoolInformer
+	// FlowExporterTargets returns a FlowExporterTargetInformer.
+	FlowExporterTargets() FlowExporterTargetInformer
 	// Groups returns a GroupInformer.
 	Groups() GroupInformer
 	// IPPools returns a IPPoolInformer.
@@ -85,6 +87,11 @@ func (v *version) Egresses() EgressInformer {
 // ExternalIPPools returns a ExternalIPPoolInformer.
 func (v *version) ExternalIPPools() ExternalIPPoolInformer {
 	return &externalIPPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// FlowExporterTargets returns a FlowExporterTargetInformer.
+func (v *version) FlowExporterTargets() FlowExporterTargetInformer {
+	return &flowExporterTargetInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // Groups returns a GroupInformer.

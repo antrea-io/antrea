@@ -32,6 +32,7 @@ type CrdV1beta1Interface interface {
 	ClusterNetworkPoliciesGetter
 	EgressesGetter
 	ExternalIPPoolsGetter
+	FlowExporterTargetsGetter
 	GroupsGetter
 	IPPoolsGetter
 	NetworkPoliciesGetter
@@ -66,6 +67,10 @@ func (c *CrdV1beta1Client) Egresses() EgressInterface {
 
 func (c *CrdV1beta1Client) ExternalIPPools() ExternalIPPoolInterface {
 	return newExternalIPPools(c)
+}
+
+func (c *CrdV1beta1Client) FlowExporterTargets() FlowExporterTargetInterface {
+	return newFlowExporterTargets(c)
 }
 
 func (c *CrdV1beta1Client) Groups(namespace string) GroupInterface {
