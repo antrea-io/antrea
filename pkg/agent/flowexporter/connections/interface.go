@@ -38,3 +38,9 @@ type DenyConnectionStoreUpdater interface {
 	ConnectionStoreGetter
 	AddOrUpdateConn(conn *connection.Connection, timeSeen time.Time, bytes uint64)
 }
+
+type AugmentOpt func(*connection.Connection)
+type Augmenter interface {
+	Augment(conn *connection.Connection, opts ...AugmentOpt)
+	// Augment(conn *connection.Connection, opts ...AugmentOpt) *connection.Connection
+}
