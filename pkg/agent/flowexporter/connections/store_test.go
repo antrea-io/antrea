@@ -114,7 +114,7 @@ func TestConnStore_updateConnections(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := &ConnStore{
+			cs := &connStore{
 				subs:    make(map[*subscriber]struct{}),
 				entries: make(map[connection.ConnectionKey]*connection.Connection, 1000),
 			}
@@ -223,7 +223,7 @@ func TestConnStore_removeStaleConnections(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := &ConnStore{
+			cs := &connStore{
 				subs:    make(map[*subscriber]struct{}),
 				entries: make(map[connection.ConnectionKey]*connection.Connection, 1000),
 			}
