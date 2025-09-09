@@ -21,12 +21,16 @@ type CTStore interface {
 }
 
 type UpdateMsg struct {
-	Key     []*connection.Connection
+	Conns   []*connection.Connection
 	Deleted bool
 }
 
 type subscriber struct {
-	ch chan UpdateMsg
+	ch chan UpdateMsg // Same channel as C used by store to notify subscriber
+}
+
+func (s *subscriber) C() <-chan UpdateMsg {
+	return s.ch
 }
 
 var _ CTStore = (*connStore)(nil)
@@ -195,7 +199,7 @@ func (cs *connStore) notify(conns []*connection.Connection, deleted bool) {
 	}
 
 	msg := UpdateMsg{
-		Key:     conns,
+		Conns:   conns,
 		Deleted: deleted,
 	}
 

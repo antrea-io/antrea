@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
@@ -37,6 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/proxy"
+	api "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/querier"
@@ -77,7 +79,10 @@ type FlowExporter struct {
 	podStore               objectstore.PodStore
 	l7Listener             *connections.L7Listener
 	nodeName               string
+	nodeUID                string
 	obsDomainID            uint32
+
+	store connections.CTStore
 }
 
 func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
@@ -98,6 +103,8 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
+
+	ctStore := connections.NewConnStore(o.StaleConnectionTimeout)
 
 	nodeName, err := env.GetNodeName()
 	if err != nil {
@@ -144,7 +151,9 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 		podStore:               podStore,
 		l7Listener:             l7Listener,
 		nodeName:               nodeName,
+		nodeUID:                nodeUID,
 		obsDomainID:            obsDomainID,
+		store:                  ctStore,
 	}, nil
 }
 
@@ -177,45 +186,58 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 		}
 	}
 
-	defaultTimeout := exp.conntrackPriorityQueue.ActiveFlowTimeout
-	expireTimer := time.NewTimer(defaultTimeout)
-	for {
-		select {
-		case <-stopCh:
-			if exp.exporterConnected {
-				exp.resetFlowExporter()
-			}
-			expireTimer.Stop()
-			return
-		case <-expireTimer.C:
-			if !exp.exporterConnected {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				err := exp.initFlowExporter(ctx)
-				cancel()
-				if err != nil {
-					klog.ErrorS(err, "Error when initializing flow exporter")
-					exp.resetFlowExporter()
-					// Initializing flow exporter fails, will retry in next cycle.
-					expireTimer.Reset(defaultTimeout)
-					continue
-				}
-			}
-			// Pop out the expired connections from the conntrack priority queue
-			// and the deny priority queue, and send the data records.
-			nextExpireTime, err := exp.sendFlowRecords()
-			if err != nil {
-				klog.ErrorS(err, "Error when sending expired flow records")
-				// If there is an error when sending flow records because of
-				// intermittent connectivity, we reset the connection to collector
-				// and retry in the next export cycle to reinitialize the connection
-				// and send flow records.
-				exp.resetFlowExporter()
-				expireTimer.Reset(defaultTimeout)
-				continue
-			}
-			expireTimer.Reset(nextExpireTime)
-		}
-	}
+	go exp.store.Run(stopCh)
+	consumer := exp.createConsumerFromFlowExporterTarget(&api.FlowExporterTarget{
+		ObjectMeta: metav1.ObjectMeta{},
+		Spec: api.FlowExporterTargetSpec{
+			Address:                 exp.collectorAddr,
+			Protocol:                api.ProtoGRPC,
+			ActiveFlowExportTimeout: ptr.To("5s"),
+			IdleFlowExportTimeout:   ptr.To("15s"),
+		},
+	})
+
+	go consumer.Run(stopCh)
+
+	// defaultTimeout := exp.conntrackPriorityQueue.ActiveFlowTimeout
+	// expireTimer := time.NewTimer(defaultTimeout)
+	// for {
+	// 	select {
+	// 	case <-stopCh:
+	// 		if exp.exporterConnected {
+	// 			exp.resetFlowExporter()
+	// 		}
+	// 		expireTimer.Stop()
+	// 		return
+	// 	case <-expireTimer.C:
+	// 		if !exp.exporterConnected {
+	// 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// 			err := exp.initFlowExporter(ctx)
+	// 			cancel()
+	// 			if err != nil {
+	// 				klog.ErrorS(err, "Error when initializing flow exporter")
+	// 				exp.resetFlowExporter()
+	// 				// Initializing flow exporter fails, will retry in next cycle.
+	// 				expireTimer.Reset(defaultTimeout)
+	// 				continue
+	// 			}
+	// 		}
+	// 		// Pop out the expired connections from the conntrack priority queue
+	// 		// and the deny priority queue, and send the data records.
+	// 		nextExpireTime, err := exp.sendFlowRecords()
+	// 		if err != nil {
+	// 			klog.ErrorS(err, "Error when sending expired flow records")
+	// 			// If there is an error when sending flow records because of
+	// 			// intermittent connectivity, we reset the connection to collector
+	// 			// and retry in the next export cycle to reinitialize the connection
+	// 			// and send flow records.
+	// 			exp.resetFlowExporter()
+	// 			expireTimer.Reset(defaultTimeout)
+	// 			continue
+	// 		}
+	// 		expireTimer.Reset(nextExpireTime)
+	// 	}
+	// }
 }
 
 func (exp *FlowExporter) resetFlowExporter() {
@@ -379,4 +401,39 @@ func getMinTime(t1, t2 time.Duration) time.Duration {
 		return t1
 	}
 	return t2
+}
+
+func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExporterTarget) *Consumer {
+	activeFlowExportTimeout, err := time.ParseDuration(*target.Spec.ActiveFlowExportTimeout)
+	if err != nil {
+		klog.V(5).ErrorS(err, "Failed to parse ActiveFlowExportTimeout from FlowExporterTarget", "FlowExporterTarget", klog.KObj(target))
+		activeFlowExportTimeout = 5 * time.Second // TODO: Create constant for default
+	}
+	idleFlowExportTimeout, err := time.ParseDuration(*target.Spec.IdleFlowExportTimeout)
+	if err != nil {
+		klog.V(5).ErrorS(err, "Failed to parse IdleFlowExportTimeout from FlowExporterTarget", "FlowExporterTarget", klog.KObj(target))
+		idleFlowExportTimeout = 15 * time.Second
+	}
+
+	consumerConfig := ConsumerConfig{
+		address:           target.Spec.Address,
+		commProtocol:      target.Spec.Protocol,
+		transportProtocol: api.ProtoTLS,
+
+		nodeName:    fe.nodeName,
+		nodeUID:     fe.nodeUID,
+		obsDomainID: fe.obsDomainID,
+
+		v4Enabled: fe.v4Enabled,
+		v6Enabled: fe.v6Enabled,
+
+		activeFlowTimeout: activeFlowExportTimeout,
+		idleFlowTimeout:   idleFlowExportTimeout,
+	}
+
+	if target.Spec.Protocol == api.ProtoIPFix {
+		consumerConfig.transportProtocol = target.Spec.IPFixConfig.Transport
+	}
+
+	return CreateConsumer(fe.k8sClient, fe.store, fe.denyConnStore, consumerConfig)
 }
