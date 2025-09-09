@@ -141,7 +141,10 @@ we guarantee that 0.10 supports at least 1.19, 1.18 and 1.17 (in practice it
 also supports K8s 1.16).
 
 In addition, we strive to support the K8s versions used by default in
-cloud-managed K8s services ([EKS], [AKS] and [GKE] regular channel).
+cloud-managed K8s services ([EKS], [GKE] and [Azure] regular channel).
+> [!NOTE]
+> Due to resource constaint, Azure support is not tested since Antrea 2.4.1 (including 2.4.1).
+> Azure related code and features are offered as-is without verificaion. Azure issues are supported in a best-effort priority.
 
 ## Deprecation policies
 
