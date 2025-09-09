@@ -9,6 +9,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
+type CTStore interface {
+	Run(stopCh <-chan struct{})
+	SubmitConnections(batch []*connection.Connection)
+
+	Subscribe() *subscriber
+	Unsubscribe(*subscriber)
+}
+
 type UpdateMsg struct {
 	Key     []*connection.Connection
 	Deleted bool
@@ -18,8 +26,10 @@ type subscriber struct {
 	ch chan UpdateMsg
 }
 
-type ConnStore struct {
-	updateCh chan []connection.Connection // Used to receive new connections
+var _ CTStore = (*connStore)(nil)
+
+type connStore struct {
+	updateCh chan []*connection.Connection // Used to receive new connections
 	addSubCh chan *subscriber
 	delSubCh chan *subscriber
 	subs     map[*subscriber]struct{}
@@ -31,9 +41,9 @@ type ConnStore struct {
 	gc                     gcHeap
 }
 
-func NewConnStore(staleConnTimeout time.Duration) *ConnStore {
-	return &ConnStore{
-		updateCh: make(chan []connection.Connection, 10),
+func NewConnStore(staleConnTimeout time.Duration) *connStore {
+	return &connStore{
+		updateCh: make(chan []*connection.Connection, 10),
 		addSubCh: make(chan *subscriber, 10),
 		delSubCh: make(chan *subscriber, 10),
 		subs:     make(map[*subscriber]struct{}),
@@ -43,7 +53,7 @@ func NewConnStore(staleConnTimeout time.Duration) *ConnStore {
 	}
 }
 
-func (cs *ConnStore) Run(stopCh <-chan struct{}) {
+func (cs *connStore) Run(stopCh <-chan struct{}) {
 	klog.V(5).Info("ConnStore started")
 
 	gcStaleTicker := time.NewTicker(cs.staleConnectionTimeout)
@@ -64,7 +74,7 @@ func (cs *ConnStore) Run(stopCh <-chan struct{}) {
 	}
 }
 
-func (cs *ConnStore) removeStaleConnections() {
+func (cs *connStore) removeStaleConnections() {
 	now := time.Now().UnixNano()
 	conns := []*connection.Connection{}
 	for len(cs.gc) > 0 {
@@ -93,12 +103,11 @@ func (cs *ConnStore) removeStaleConnections() {
 	cs.notify(conns, true)
 }
 
-func (cs *ConnStore) updateConnections(batch []connection.Connection) {
+func (cs *connStore) updateConnections(batch []*connection.Connection) {
 	updatedConns := make([]*connection.Connection, 0, len(batch))
 	now := time.Now()
 	for i := range batch {
-
-		in := &batch[i] // Copy the connection
+		in := batch[i] // Copy the connection
 		in.IsPresent = true
 		in.LastUpdateTime = now
 
@@ -142,7 +151,7 @@ func (cs *ConnStore) updateConnections(batch []connection.Connection) {
 	cs.notify(updatedConns, false)
 }
 
-func (s *ConnStore) Subscribe() *subscriber {
+func (s *connStore) Subscribe() *subscriber {
 	sub := &subscriber{
 		ch: make(chan UpdateMsg, 100),
 	}
@@ -150,13 +159,21 @@ func (s *ConnStore) Subscribe() *subscriber {
 	return sub
 }
 
-func (s *ConnStore) Unsubscribe(sub *subscriber) {
+func (s *connStore) Unsubscribe(sub *subscriber) {
 	if sub != nil {
 		s.delSubCh <- sub
 	}
 }
 
-func (cs *ConnStore) notify(conns []*connection.Connection, deleted bool) {
+func (s *connStore) SubmitConnections(conns []*connection.Connection) {
+	if len(conns) == 0 {
+		return
+	}
+
+	s.updateCh <- conns
+}
+
+func (cs *connStore) notify(conns []*connection.Connection, deleted bool) {
 	if len(conns) == 0 {
 		return
 	}
