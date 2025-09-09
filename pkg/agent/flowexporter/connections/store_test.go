@@ -22,8 +22,8 @@ func TestConnStore_updateConnections(t *testing.T) {
 		numIncomingUpdatedConns int
 		numNewConns             int
 
-		subs                []subscriber
-		expectedUpdates     int
+		subs            []subscriber
+		expectedUpdates int
 	}{
 		{
 			name: "No connections",
@@ -44,8 +44,8 @@ func TestConnStore_updateConnections(t *testing.T) {
 			}},
 			expectedUpdates: 2,
 		}, {
-			name:                "Update connections - notify subscriber",
-			numExistingConns: 3,
+			name:                    "Update connections - notify subscriber",
+			numExistingConns:        3,
 			numIncomingUpdatedConns: 2,
 			subs: []subscriber{{
 				ch: make(chan UpdateMsg, 1),
@@ -126,7 +126,7 @@ func TestConnStore_updateConnections(t *testing.T) {
 				case <-timeout.C:
 					t.Fatal("timedout waiting for subscriber to receive update")
 				case msg := <-sub.ch:
-					assert.Len(t, msg.Key, tt.expectedUpdates)
+					assert.Len(t, msg.Conns, tt.expectedUpdates)
 					assert.False(t, msg.Deleted)
 					// TODO: Check the actual returned item.
 				}
@@ -221,7 +221,7 @@ func TestConnStore_removeStaleConnections(t *testing.T) {
 			case <-timeout.C:
 				t.Fatal("timedout waiting for subscriber to receive update")
 			case msg := <-sub.ch:
-				assert.Len(t, msg.Key, tt.numConnectionRemoved)
+				assert.Len(t, msg.Conns, tt.numConnectionRemoved)
 				assert.True(t, msg.Deleted)
 			}
 		}
