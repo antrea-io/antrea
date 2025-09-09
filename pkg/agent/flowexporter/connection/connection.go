@@ -16,6 +16,7 @@ package connection
 
 import (
 	"net/netip"
+	"sync/atomic"
 	"time"
 )
 
@@ -46,7 +47,9 @@ type Connection struct {
 	// LastExportTime is used to decide whether a connection is stale.
 	LastExportTime time.Time
 	LastUpdateTime time.Time
-	IsActive       bool
+	// TODO Andrew: govet doesn't like that this value is copied even though I don't expect it to be used by the copies
+	LastUsedTime atomic.Int64
+	IsActive     bool
 	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
 	IsPresent bool
 	// ReadyToDelete marks whether we can safely delete the connection from the connection map.
@@ -99,7 +102,12 @@ type Stats struct {
 	Bytes          uint64
 	ReversePackets uint64
 	ReverseBytes   uint64
-	LastUpdateMs   uint64
+}
+
+func (c *Connection) UpdateLastUsedTime() int64 {
+	now := time.Now()
+	c.LastUsedTime.Store(now.UnixNano())
+	return now.UnixNano()
 }
 
 // NewConnectionKey creates 5-tuple of flow as connection key
