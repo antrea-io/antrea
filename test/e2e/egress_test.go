@@ -902,7 +902,7 @@ func hasIP(data *TestData, nodeName string, ip string) (bool, error) {
 }
 
 func setupIPNeighborChecker(data *TestData, t *testing.T, observerNode, node1, node2, ip string) (checkIPNeighbor func(string), err error) {
-	transportInterface, err := data.GetTransportInterface()
+	transportInterface, err := data.GetTransportInterfaceName()
 	require.NoError(t, err)
 
 	macAddress1, err := data.GetNodeMACAddress(node1, transportInterface)
