@@ -2,6 +2,7 @@ package connections
 
 import (
 	"container/heap"
+	"sync"
 	"time"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
@@ -12,6 +13,8 @@ import (
 type CTStore interface {
 	Run(stopCh <-chan struct{})
 	SubmitConnections(batch []*connection.Connection)
+
+	HasConn(*connection.Connection) bool
 
 	Subscribe() *subscriber
 	Unsubscribe(*subscriber)
@@ -34,7 +37,8 @@ type connStore struct {
 	delSubCh chan *subscriber
 	subs     map[*subscriber]struct{}
 
-	entries map[connection.ConnectionKey]*connection.Connection
+	entries      map[connection.ConnectionKey]*connection.Connection
+	entriesMutex sync.RWMutex
 
 	// TODO Andrew: What is a stale connection?
 	staleConnectionTimeout time.Duration
@@ -42,15 +46,18 @@ type connStore struct {
 }
 
 func NewConnStore(staleConnTimeout time.Duration) *connStore {
-	return &connStore{
+	store := &connStore{
 		updateCh: make(chan []*connection.Connection, 10),
 		addSubCh: make(chan *subscriber, 10),
 		delSubCh: make(chan *subscriber, 10),
 		subs:     make(map[*subscriber]struct{}),
 
-		entries:                make(map[connection.ConnectionKey]*connection.Connection, 1000),
+		entries: make(map[connection.ConnectionKey]*connection.Connection, 1000),
+
 		staleConnectionTimeout: staleConnTimeout,
 	}
+
+	return store
 }
 
 func (cs *connStore) Run(stopCh <-chan struct{}) {
@@ -104,6 +111,8 @@ func (cs *connStore) removeStaleConnections() {
 }
 
 func (cs *connStore) updateConnections(batch []*connection.Connection) {
+	cs.entriesMutex.Lock()
+	defer cs.entriesMutex.Unlock()
 	updatedConns := make([]*connection.Connection, 0, len(batch))
 	now := time.Now()
 	for i := range batch {
@@ -149,6 +158,13 @@ func (cs *connStore) updateConnections(batch []*connection.Connection) {
 	}
 
 	cs.notify(updatedConns, false)
+}
+
+func (s *connStore) HasConn(conn *connection.Connection) bool {
+	s.entriesMutex.RLock()
+	defer s.entriesMutex.RUnlock()
+	_, ok := s.entries[conn.FlowKey]
+	return ok
 }
 
 func (s *connStore) Subscribe() *subscriber {

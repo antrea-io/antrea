@@ -2,7 +2,9 @@ package connections
 
 import (
 	"container/heap"
+	"maps"
 	"net/netip"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,132 +16,102 @@ import (
 )
 
 func TestConnStore_updateConnections(t *testing.T) {
-	conn1 := connection.Connection{
-		FlowKey: tuple1,
-		OriginalStats: connection.Stats{
-			Packets:        10,
-			Bytes:          1000,
-			ReversePackets: 20,
-			ReverseBytes:   2000,
-		},
-	}
-	conn2 := connection.Connection{
-		FlowKey: tuple2,
-		OriginalStats: connection.Stats{
-			Packets:        20,
-			Bytes:          2000,
-			ReversePackets: 30,
-			ReverseBytes:   3000,
-		},
-	}
-	conn3 := connection.Connection{
-		FlowKey: tuple3,
-		OriginalStats: connection.Stats{
-			Packets:        40,
-			Bytes:          4000,
-			ReversePackets: 50,
-			ReverseBytes:   5000,
-		},
-	}
-	conn1Updated := connection.Connection{
-		FlowKey: tuple1,
-		OriginalStats: connection.Stats{
-			Packets:        11,
-			Bytes:          1100,
-			ReversePackets: 22,
-			ReverseBytes:   2200,
-		},
-	}
-	conn2Updated := connection.Connection{
-		FlowKey: tuple2,
-		OriginalStats: connection.Stats{
-			Packets:        22,
-			Bytes:          2200,
-			ReversePackets: 33,
-			ReverseBytes:   3300,
-		},
-	}
-	conn3Updated := connection.Connection{
-		FlowKey: tuple3,
-		OriginalStats: connection.Stats{
-			Packets:        44,
-			Bytes:          4400,
-			ReversePackets: 55,
-			ReverseBytes:   5500,
-		},
-	}
-
 	tests := []struct {
-		name                string
-		incomingConnections []connection.Connection
+		name                    string
+		numExistingConns        int
+		numIncomingUpdatedConns int
+		numNewConns             int
+
 		subs                []subscriber
-		existingEntries     []connection.Connection
-		expectedEntries     []connection.Connection
 		expectedUpdates     int
 	}{
 		{
-			name:                "No connections",
-			incomingConnections: []connection.Connection{},
-			existingEntries:     []connection.Connection{},
+			name: "No connections",
 		}, {
-			name:                "New connections",
-			incomingConnections: []connection.Connection{conn1, conn2, conn3},
-			expectedEntries:     []connection.Connection{conn1, conn2, conn3},
-			expectedUpdates:     3,
+			name:            "New connections",
+			numNewConns:     3,
+			expectedUpdates: 3,
 		}, {
-			name:                "Updated connections",
-			incomingConnections: []connection.Connection{conn1Updated, conn2Updated, conn3Updated},
-			existingEntries:     []connection.Connection{conn1, conn2, conn3},
-			expectedEntries:     []connection.Connection{conn1Updated, conn2Updated, conn3Updated},
-			expectedUpdates:     3,
+			name:                    "Updated connections",
+			numExistingConns:        4,
+			numIncomingUpdatedConns: 3,
+			expectedUpdates:         3,
 		}, {
-			name:                "New connection - notify subscriber",
-			incomingConnections: []connection.Connection{conn1, conn2},
+			name:        "New connection - notify subscriber",
+			numNewConns: 2,
 			subs: []subscriber{{
 				ch: make(chan UpdateMsg, 1),
 			}},
-			expectedEntries: []connection.Connection{conn1, conn2},
 			expectedUpdates: 2,
 		}, {
 			name:                "Update connections - notify subscriber",
-			incomingConnections: []connection.Connection{conn1Updated},
+			numExistingConns: 3,
+			numIncomingUpdatedConns: 2,
 			subs: []subscriber{{
 				ch: make(chan UpdateMsg, 1),
 			}},
-			existingEntries: []connection.Connection{conn1},
-			expectedEntries: []connection.Connection{conn1Updated},
-			expectedUpdates: 1,
+			expectedUpdates: 2,
 		},
 		// TODO Andrew: Add test case for multiple existing entries
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			require.LessOrEqual(t, tt.numIncomingUpdatedConns, tt.numExistingConns)
+
+			existingConns := map[connection.ConnectionKey]*connection.Connection{}
+			for i := 0; i < tt.numExistingConns; i++ {
+				conn := getNewConn()
+				existingConns[conn.FlowKey] = conn
+			}
+
+			expectedEntries := maps.Clone(existingConns)
+
+			newConns := make([]*connection.Connection, 0, tt.numNewConns)
+			for i := 0; i < tt.numNewConns; i++ {
+				conn := getNewConn()
+				newConns = append(newConns, conn)
+				expectedEntries[conn.FlowKey] = conn
+			}
+
+			incomingConns := make([]*connection.Connection, 0, tt.numIncomingUpdatedConns)
+			for _, conn := range existingConns {
+				if len(incomingConns) == tt.numIncomingUpdatedConns {
+					break
+				}
+				newConn := *conn
+				newConn.LastUsedTime = atomic.Int64{}
+				newConn.OriginalStats.Packets += 5
+				newConn.OriginalStats.Bytes += 20
+				newConn.OriginalStats.ReversePackets += 2
+				newConn.OriginalStats.ReverseBytes += 10
+
+				incomingConns = append(incomingConns, &newConn)
+				expectedEntries[newConn.FlowKey] = &newConn
+			}
+			incomingConns = append(incomingConns, newConns...)
+
 			cs := &connStore{
 				subs:    make(map[*subscriber]struct{}),
-				entries: make(map[connection.ConnectionKey]*connection.Connection, 1000),
+				entries: existingConns,
 			}
 
 			for _, sub := range tt.subs {
 				cs.subs[&sub] = struct{}{}
 			}
 
-			for _, entry := range tt.existingEntries {
-				cs.entries[entry.FlowKey] = &entry
-			}
-
 			now := time.Now()
-			cs.updateConnections(tt.incomingConnections)
+			cs.updateConnections(incomingConns)
 
-			for _, want := range tt.expectedEntries {
+			for _, want := range expectedEntries {
 				want.LastUpdateTime = now
 				got, ok := cs.entries[want.FlowKey]
 				require.True(t, ok)
 				assert.True(t, got.IsPresent)
-				if !cmp.Equal(got, &want,
+				if !cmp.Equal(got, want,
 					cmpopts.IgnoreUnexported(netip.Addr{}),
 					cmpopts.EquateApproxTime(1*time.Second),
 					cmpopts.IgnoreFields(connection.Connection{}, "IsPresent", "LastUsedTime")) {
-					t.Errorf("(-want, +got): %s", cmp.Diff(&want, got,
+					t.Errorf("(-want, +got): %s", cmp.Diff(want, got,
 						cmpopts.IgnoreUnexported(netip.Addr{}),
 						cmpopts.EquateApproxTime(1*time.Second),
 						cmpopts.IgnoreFields(connection.Connection{}, "IsPresent", "LastUsedTime"),
