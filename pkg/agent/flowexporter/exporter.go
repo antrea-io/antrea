@@ -82,7 +82,8 @@ type FlowExporter struct {
 	nodeUID                string
 	obsDomainID            uint32
 
-	store connections.CTStore
+	store     connections.CTStore
+	ctFetcher *connections.ConntrackFetcher
 }
 
 func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
@@ -100,9 +101,11 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 		eventMapGetter = l7Listener
 	}
 	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, o)
+
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
+	ctFetcher := connections.NewConntrackFetcher(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, egressQuerier, nodeRouteController, trafficEncapMode.IsNetworkPolicyOnly(), o)
 
 	ctStore := connections.NewConnStore(o.StaleConnectionTimeout)
 
@@ -154,6 +157,7 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 		nodeUID:                nodeUID,
 		obsDomainID:            obsDomainID,
 		store:                  ctStore,
+		ctFetcher:              ctFetcher,
 	}, nil
 }
 
@@ -176,7 +180,7 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	go exp.denyConnStore.RunPeriodicDeletion(stopCh)
 
 	// Start the goroutine to poll conntrack flows.
-	go exp.conntrackConnStore.Run(stopCh)
+	// go exp.conntrackConnStore.Run(stopCh)
 
 	if exp.nodeRouteController != nil {
 		// Wait for NodeRouteController to have processed the initial list of Nodes so that
@@ -191,13 +195,17 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 		ObjectMeta: metav1.ObjectMeta{},
 		Spec: api.FlowExporterTargetSpec{
 			Address:                 exp.collectorAddr,
-			Protocol:                api.ProtoGRPC,
+			Protocol:                api.ProtoIPFix,
 			ActiveFlowExportTimeout: ptr.To("5s"),
 			IdleFlowExportTimeout:   ptr.To("15s"),
+			IPFixConfig: &api.FlowExporterIPFixConfig{
+				Transport: api.ProtoTCP,
+			},
 		},
 	})
 
 	go consumer.Run(stopCh)
+	go exp.ctFetcher.Run(stopCh, exp.store)
 
 	// defaultTimeout := exp.conntrackPriorityQueue.ActiveFlowTimeout
 	// expireTimer := time.NewTimer(defaultTimeout)

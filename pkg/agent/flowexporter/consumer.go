@@ -65,7 +65,7 @@ func CreateConsumer(k8sClient kubernetes.Interface, store connections.CTStore, d
 		store:               store,
 		denyStore:           denyStore,
 		prevStates:          make(map[connection.ConnectionKey]prevState),
-		exportConns:         make([]*connection.Connection, maxConnsToExport),
+		exportConns:         make([]*connection.Connection, 0, maxConnsToExport),
 	}
 
 	return c
@@ -128,7 +128,7 @@ func (c *Consumer) Export(conn *connection.Connection) error {
 	if c.exp == nil {
 		return nil // TODO: Return an error??
 	}
-	klog.V(5).InfoS("Exporting connection", "Consumer", c.address)
+	klog.V(5).InfoS("DEBUG A2: Exporting connection", "Consumer", c.address, "conn", conn)
 	return c.exp.Export(conn)
 }
 
@@ -212,6 +212,7 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 				// intermittent connectivity, we reset the connection to collector
 				// and retry in the next export cycle to reinitialize the connection
 				// and send flow records.
+				c.Reset()
 				exportTicker.Reset(c.activeFlowTimeout)
 				continue
 			}
@@ -261,6 +262,8 @@ func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTi
 		conn.PreviousStats = oldState.stats
 		conn.PrevTCPState = oldState.tcpState
 
+		conn.IsActive = utils.CheckConntrackConnActive(&conn)
+
 		// TODO Andrew: Fill in L7 info then remove from L7 map.
 
 		isIdle := pqItem.IdleExpireTime.Before(currTime)
@@ -290,6 +293,7 @@ func (c *Consumer) handleUpdatedConns(conns []*connection.Connection) {
 	for _, conn := range conns {
 		key := connection.NewConnectionKey(conn)
 
+		klog.V(5).InfoS("DEBUG A1: Received connection", "conn", conn)
 		oldState, ok := c.prevStates[key]
 		// Check if there is any activity on this conn.
 		// If there is no activity since the last time we sent it then no point in
