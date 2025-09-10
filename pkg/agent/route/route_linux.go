@@ -16,6 +16,7 @@ package route
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -308,7 +309,9 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	if c.nodeLatencyMonitorEnabled {
 		c.initNodeLatencyRules()
 	}
-	c.initNftables()
+	if err := c.initNftables(); err != nil {
+		return fmt.Errorf("failed to initialize nftables: %w", err)
+	}
 
 	return nil
 }
@@ -1740,7 +1743,9 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		routes = append(routes, podCIDRRoute)
 
 		// Update the nftset that contains all peer PodCIDRs.
-		c.addPeerPodCIDRToNftset(podCIDR)
+		if err := c.addPeerPodCIDRToNftset(podCIDR); err != nil {
+			return err
+		}
 	} else {
 		// NetworkPolicyOnly mode or NoEncap traffic to a Node on a different subnet.
 		// Routing should be handled by a route which is already present on the host.
@@ -1830,7 +1835,9 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 		}
 	}
 
-	c.deletePeerPodCIDRFromNftset(podCIDR)
+	if err := c.deletePeerPodCIDRFromNftset(podCIDR); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -2609,8 +2616,9 @@ func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6
 	return nil
 }
 
-func (c *Client) initNftables() {
+func (c *Client) initNftables() error {
 	tx := c.nftables.NewTransaction()
+	tx.Add(&knftables.Table{})
 	tx.Add(&knftables.Flowtable{
 		Name:     antreaNftFlowtable,
 		Priority: ptr.To(knftables.FilterIngressPriority),
@@ -2623,11 +2631,14 @@ func (c *Client) initNftables() {
 		Priority: ptr.To(knftables.FilterPriority),
 		Comment:  ptr.To("Antrea: forward chain"),
 	})
-
+	tx.Flush(&knftables.Chain{
+		Name: antreaNftForwardChain,
+	})
 	if c.networkConfig.IPv4Enabled {
 		tx.Add(&knftables.Set{
 			Name:    antreaNftPeerPodCIDRv4Set,
 			Type:    "ipv4_addr",
+			Flags:   []knftables.SetFlag{knftables.IntervalFlag},
 			Comment: ptr.To("Antrea: IPv4 peer Pods CIDRs"),
 		})
 		tx.Add(&knftables.Rule{
@@ -2640,31 +2651,61 @@ func (c *Client) initNftables() {
 				"flow", "add", "@", antreaNftFlowtable,
 				"counter",
 			),
-			Comment: ptr.To("Accelerate IPv4 traffic between local Pod CIDR and remote Pod CIDRs"),
+			Comment: ptr.To("Accelerate IPv4 traffic from local Pod CIDR to remote Pod CIDRs"),
+		})
+		tx.Add(&knftables.Rule{
+			Chain: antreaNftForwardChain,
+			Rule: knftables.Concat(
+				"iif", c.nodeConfig.NodeTransportInterfaceName,
+				"ip", "saddr", "@", antreaNftPeerPodCIDRv4Set,
+				"oif", c.nodeConfig.GatewayConfig.Name,
+				"ip", "daddr", c.nodeConfig.PodIPv4CIDR.String(),
+				"flow", "add", "@", antreaNftFlowtable,
+				"counter",
+			),
+			Comment: ptr.To("Accelerate IPv4 traffic from remote Pod CIDRs to local Pod CIDR"),
 		})
 	}
 	if c.networkConfig.IPv6Enabled {
 		tx.Add(&knftables.Set{
 			Name:    antreaNftPeerPodCIDRv6Set,
 			Type:    "ipv6_addr",
+			Flags:   []knftables.SetFlag{knftables.IntervalFlag},
 			Comment: ptr.To("Antrea: IPv6 peer Pods CIDRs"),
 		})
 		tx.Add(&knftables.Rule{
 			Chain: antreaNftForwardChain,
 			Rule: knftables.Concat(
 				"iif", c.nodeConfig.GatewayConfig.Name,
-				"ip6", "saddr", c.nodeConfig.PodIPv4CIDR.String(),
+				"ip6", "saddr", c.nodeConfig.PodIPv6CIDR.String(),
 				"oif", c.nodeConfig.NodeTransportInterfaceName,
 				"ip6", "daddr", "@", antreaNftPeerPodCIDRv6Set,
 				"flow", "add", "@", antreaNftFlowtable,
 				"counter",
 			),
-			Comment: ptr.To("Accelerate IPv6 traffic between local Pod CIDR and remote Pod CIDRs"),
+			Comment: ptr.To("Accelerate IPv6 traffic from local Pod CIDR to remote Pod CIDRs"),
+		})
+		tx.Add(&knftables.Rule{
+			Chain: antreaNftForwardChain,
+			Rule: knftables.Concat(
+				"iif", c.nodeConfig.NodeTransportInterfaceName,
+				"ip6", "saddr", "@", antreaNftPeerPodCIDRv6Set,
+				"oif", c.nodeConfig.GatewayConfig.Name,
+				"ip6", "daddr", c.nodeConfig.PodIPv6CIDR.String(),
+				"flow", "add", "@", antreaNftFlowtable,
+				"counter",
+			),
+			Comment: ptr.To("Accelerate IPv4 traffic from remote Pod CIDRs to local Pod CIDR"),
 		})
 	}
+
+	if err := c.nftables.Run(context.TODO(), tx); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (c *Client) addPeerPodCIDRToNftset(peerPodCIDR *net.IPNet) {
+func (c *Client) addPeerPodCIDRToNftset(peerPodCIDR *net.IPNet) error {
 	nftSet := antreaNftPeerPodCIDRv4Set
 	if utilnet.IsIPv6(peerPodCIDR.IP) {
 		nftSet = antreaNftPeerPodCIDRv6Set
@@ -2672,12 +2713,13 @@ func (c *Client) addPeerPodCIDRToNftset(peerPodCIDR *net.IPNet) {
 
 	tx := c.nftables.NewTransaction()
 	tx.Add(&knftables.Element{
-		Set:   nftSet,
-		Value: []string{peerPodCIDR.String()},
+		Set: nftSet,
+		Key: []string{peerPodCIDR.String()},
 	})
+	return c.nftables.Run(context.TODO(), tx)
 }
 
-func (c *Client) deletePeerPodCIDRFromNftset(peerPodCIDR *net.IPNet) {
+func (c *Client) deletePeerPodCIDRFromNftset(peerPodCIDR *net.IPNet) error {
 	nftSet := antreaNftPeerPodCIDRv4Set
 	if utilnet.IsIPv6(peerPodCIDR.IP) {
 		nftSet = antreaNftPeerPodCIDRv6Set
@@ -2685,7 +2727,8 @@ func (c *Client) deletePeerPodCIDRFromNftset(peerPodCIDR *net.IPNet) {
 
 	tx := c.nftables.NewTransaction()
 	tx.Delete(&knftables.Element{
-		Set:   nftSet,
-		Value: []string{peerPodCIDR.String()},
+		Set: nftSet,
+		Key: []string{peerPodCIDR.String()},
 	})
+	return c.nftables.Run(context.TODO(), tx)
 }

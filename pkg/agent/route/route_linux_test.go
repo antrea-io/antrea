@@ -15,8 +15,12 @@
 package route
 
 import (
+	"antrea.io/antrea/pkg/agent/util/nftables"
+	"context"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"net"
+	"sigs.k8s.io/knftables"
 	"sync"
 	"testing"
 
@@ -2623,4 +2627,42 @@ func TestClearConntrackEntryForService(t *testing.T) {
 			assert.NoError(t, c.ClearConntrackEntryForService(tc.svcIP, tc.svcPort, tc.endpointIP, tc.protocol))
 		})
 	}
+}
+
+func TestNft(t *testing.T) {
+	nftables, err := nftables.New(true, false)
+	require.NoError(t, err)
+
+	tx := nftables.NewTransaction()
+	tx.Add(&knftables.Table{})
+	tx.Add(&knftables.Flowtable{
+		Name:     antreaNftFlowtable,
+		Priority: ptr.To(knftables.FilterIngressPriority),
+		Devices:  []string{"ens224", "ens192"},
+	})
+	tx.Add(&knftables.Set{
+		Name:    antreaNftPeerPodCIDRv4Set,
+		Type:    "ipv4_addr",
+		Flags:   []knftables.SetFlag{knftables.IntervalFlag},
+		Comment: ptr.To("Antrea: IPv4 peer Pods CIDRs"),
+	})
+
+	tx.Add(&knftables.Element{
+		Set: antreaNftPeerPodCIDRv4Set,
+		Key: []string{"1.1.1.0/24"},
+	})
+	tx.Add(&knftables.Element{
+		Set: antreaNftPeerPodCIDRv4Set,
+		Key: []string{"1.1.2.0/24"},
+	})
+	err = nftables.Run(context.TODO(), tx)
+	require.NoError(t, err)
+
+	tx = nftables.NewTransaction()
+	tx.Delete(&knftables.Element{
+		Set: antreaNftPeerPodCIDRv4Set,
+		Key: []string{"1.1.1.0/24"},
+	})
+	err = nftables.Run(context.TODO(), tx)
+	require.NoError(t, err)
 }
