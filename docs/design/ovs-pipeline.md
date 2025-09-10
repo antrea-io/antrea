@@ -1137,8 +1137,8 @@ If you dump the flows of this table, you may see the following::
 
 ```text
 1. table=EndpointDNAT, priority=200,reg0=0x4000/0x4000 actions=controller(reason=no_match,id=62373,userdata=04)
-2. table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0018,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.24:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
-3. table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0106,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.1.6:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
+2. table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0018,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.24:80),exec(set_field:0x10/0x10->ct_mark))
+3. table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0106,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.1.6:80),exec(set_field:0x10/0x10->ct_mark))
 4. table=EndpointDNAT, priority=190,reg4=0x20000/0x70000 actions=set_field:0x10000/0x70000->reg4,resubmit(,ServiceLB)
 5. table=EndpointDNAT, priority=0 actions=goto_table:AntreaPolicyEgressRule
 ```
