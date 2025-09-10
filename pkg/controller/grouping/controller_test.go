@@ -91,7 +91,13 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
-			c := NewGroupEntityController(index, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().ExternalEntities())
+			c := NewGroupEntityController(
+				index,
+				informerFactory.Core().V1().Pods(),
+				informerFactory.Core().V1().Namespaces(),
+				informerFactory.Core().V1().Nodes(),
+				crdInformerFactory.Crd().V1alpha2().ExternalEntities(),
+			)
 			assert.False(t, index.HasSynced(), "GroupEntityIndex has been synced before starting InformerFactories")
 
 			informerFactory.Start(stopCh)

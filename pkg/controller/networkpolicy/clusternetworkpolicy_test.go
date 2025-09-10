@@ -105,6 +105,12 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			NamespaceSelector: &selectorA,
 		},
 	}
+	cgB := crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: crdv1beta1.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
 	tests := []struct {
 		name                    string
 		inputPolicy             *crdv1beta1.ClusterNetworkPolicy
@@ -1798,6 +1804,128 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAddressGroups:   1,
 		},
 		{
+			name: "egress-rule-on-clustergroup-with-nodeselector",
+			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpO", UID: "uidO"},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Egress: []crdv1beta1.Rule{
+						{
+							Ports: []crdv1beta1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									Group: cgB.Name,
+								},
+							},
+							Action:        &dropAction,
+							EnableLogging: true,
+							LogLabel:      "test-log-label",
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidO",
+				Name: "uidO",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpO",
+					UID:  "uidO",
+				},
+				Priority:     &p10,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{cgB.Name},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority:      0,
+						Action:        &dropAction,
+						EnableLogging: true,
+						LogLabel:      "test-log-label",
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
+			name: "egress-rule-with-applied-to-clustergroup-with-nodeselector",
+			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpS", UID: "uidS"},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{Group: cgB.Name},
+					},
+					Priority: p10,
+					Egress: []crdv1beta1.Rule{
+						{
+							Ports: []crdv1beta1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorA,
+								},
+							},
+							Action:        &dropAction,
+							EnableLogging: true,
+							LogLabel:      "test-log-label",
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidS",
+				Name: "uidS",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpS",
+					UID:  "uidS",
+				},
+				Priority:     &p10,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority:      0,
+						Action:        &dropAction,
+						EnableLogging: true,
+						LogLabel:      "test-log-label",
+					},
+				},
+				AppliedToGroups: []string{cgB.Name},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
 			name: "appliedTo-Node",
 			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpZ", UID: "uidZ"},
@@ -1891,6 +2019,8 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			_, c := newController(nil, nil)
 			c.addClusterGroup(&cgA)
 			c.cgStore.Add(&cgA)
+			c.addClusterGroup(&cgB)
+			c.cgStore.Add(&cgB)
 			c.namespaceStore.Add(&nsA)
 			c.namespaceStore.Add(&nsB)
 			c.namespaceStore.Add(&nsC)
@@ -2444,4 +2574,54 @@ func TestGetACNPsWithRulesMatchingLabelKeysAcrossNSUpdate(t *testing.T) {
 			assert.Equal(t, tt.want, c.getACNPsWithRulesMatchingAnyUpdatedLabels(tt.oldNSLabels, tt.newNSLabels))
 		})
 	}
+}
+
+func TestGetNodeSelector(t *testing.T) {
+	var nilLabelSelector *metav1.LabelSelector
+	t.Run("invalid group", func(t *testing.T) {
+		_, c := newController(nil, nil)
+		labelSelector := c.getNodeSelector("")
+		assert.Equal(t, nilLabelSelector, labelSelector)
+	})
+	t.Run("group is not in group store", func(t *testing.T) {
+		_, c := newController(nil, nil)
+		labelSelector := c.getNodeSelector("missing-cgA")
+		assert.Equal(t, nilLabelSelector, labelSelector)
+	})
+	t.Run("group does not have a selector", func(t *testing.T) {
+		cgE := crdv1beta1.ClusterGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
+			Spec:       crdv1beta1.GroupSpec{ServiceReference: &crdv1beta1.NamespacedName{}},
+		}
+		_, c := newController(nil, nil)
+		c.addClusterGroup(&cgE)
+		labelSelector := c.getNodeSelector(cgE.Name)
+		assert.Equal(t, nilLabelSelector, labelSelector)
+	})
+	t.Run("group does not have a nodeselector", func(t *testing.T) {
+		cgF := crdv1beta1.ClusterGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "cgF", UID: "uidF"},
+			Spec:       crdv1beta1.GroupSpec{},
+		}
+		_, c := newController(nil, nil)
+		c.addClusterGroup(&cgF)
+		labelSelector := c.getNodeSelector(cgF.Name)
+		assert.Equal(t, nilLabelSelector, labelSelector)
+	})
+	t.Run("group has a nodeselector", func(t *testing.T) {
+		matchLabels := map[string]string{"node": "F"}
+		cgF := crdv1beta1.ClusterGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "cgF", UID: "uidF"},
+			Spec: crdv1beta1.GroupSpec{
+				NodeSelector: &metav1.LabelSelector{
+					MatchLabels: matchLabels,
+				},
+			},
+		}
+		_, c := newController(nil, nil)
+		c.addClusterGroup(&cgF)
+		actualNodeSelector := c.getNodeSelector(cgF.Name)
+		expectedNodeSelector := &metav1.LabelSelector{MatchLabels: matchLabels, MatchExpressions: []metav1.LabelSelectorRequirement{}}
+		assert.Equal(t, expectedNodeSelector, actualNodeSelector)
+	})
 }

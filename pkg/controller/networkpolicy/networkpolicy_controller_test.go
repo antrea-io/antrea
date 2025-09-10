@@ -125,6 +125,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 	groupingController := grouping.NewGroupEntityController(groupEntityIndex,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
+		informerFactory.Core().V1().Nodes(),
 		crdInformerFactory.Crd().V1alpha2().ExternalEntities())
 	labelIndex := labelidentity.NewLabelIdentityIndex()
 	labelIdentityController := labelidentity.NewLabelIdentityController(
@@ -2671,6 +2672,17 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			PodSelector: &selectorC,
 		},
 	}
+	selectorD := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"foo4": "bar4",
+		},
+	}
+	cgE := v1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
+		Spec: v1beta1.GroupSpec{
+			NodeSelector: &selectorD,
+		},
+	}
 	nestedCG1 := v1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-B", UID: "uidE"},
 		Spec: v1beta1.GroupSpec{
@@ -2694,11 +2706,6 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
 	podB.Labels = map[string]string{"foo3": "bar3"}
 
-	selectorD := metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			"foo4": "bar4",
-		},
-	}
 	nodeSelector, _ := metav1.LabelSelectorAsSelector(&selectorD)
 	nodeGroup := antreatypes.GroupSelector{
 		NodeSelector: nodeSelector,
@@ -2786,6 +2793,17 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			expEEs:   emptyEEs,
 			expNodes: []*corev1.Node{nodeA},
 		},
+		{
+			name: "atg-for-cg-with-node-selector",
+			inATG: &antreatypes.AppliedToGroup{
+				Name:        cgE.Name,
+				UID:         cgE.UID,
+				SourceGroup: cgE.Name,
+			},
+			expPods:  []*corev1.Pod{podA},
+			expEEs:   emptyEEs,
+			expNodes: []*corev1.Node{nodeA},
+		},
 	}
 	_, c := newController([]runtime.Object{nodeA, nodeB}, nil)
 	stopCh := make(chan struct{})
@@ -2794,7 +2812,7 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
-	clusterGroups := []v1beta1.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
+	clusterGroups := []v1beta1.ClusterGroup{cgA, cgB, cgC, cgD, cgE, nestedCG1, nestedCG2}
 	for i, cg := range clusterGroups {
 		c.cgStore.Add(&clusterGroups[i])
 		c.addClusterGroup(&clusterGroups[i])
