@@ -55,7 +55,7 @@ echo "Spell check start"
 ERROR_LOG="${TMP_DIR}/errors.log"
 skipping_file="${ROOT}/hack/.spelling_failures"
 failing_packages=$(sed "s| | -e |g" "${skipping_file}")
-git ls-files | grep -v -e "${failing_packages}"| xargs misspell > "${ERROR_LOG}"
+git ls-files | grep -v -e "${failing_packages}"| xargs misspell -i "ect" > "${ERROR_LOG}"
 if [[ -s "${ERROR_LOG}" ]]; then
   sed 's/^/error: /' "${ERROR_LOG}"
   echo "Found spelling errors!"
