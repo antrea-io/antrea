@@ -211,7 +211,7 @@ var (
 	NotServiceCTMark = binding.NewOneBitZeroCTMark(4)
 
 	// CTMark[5]: Mark to indicate SNAT is performed on the connection for Service.
-	// This CT mark is only used in CtZone / CtZoneV6.
+	// These CT marks are used in CtZone / CtZoneV6 and SNATCtZone / SNATCtZoneV6.
 	ConnSNATCTMark    = binding.NewOneBitCTMark(5)
 	NotConnSNATCTMark = binding.NewOneBitZeroCTMark(5)
 

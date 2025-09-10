@@ -1562,8 +1562,8 @@ to table [L2ForwardingCalc]. Similar to flow 1, `ServiceCTMark`, `ConnSNATCTMark
 `SNATCtZone`.
 
 Flow 3 matches the subsequent request packets of connections for which SNAT was performed for the first packet, and then
-invokes `ct` action on the packets again to restore the "tracked" state in `SNATCtZone`. The packets with the
-appropriate "tracked" state are forwarded to table [L2ForwardingCalc].
+invokes `ct` action on the packets again to restore the "tracked" state in `SNATCtZone`. The packets with the appropriate
+"tracked" state are forwarded to table [L2ForwardingCalc].
 
 Flow 4 matches the first packet of Service connections requiring SNAT, identified by `ConnSNATCTMark` and
 `FromGatewayRegMark`, indicating the connection is destined for an external Service IP initiated through the Antrea

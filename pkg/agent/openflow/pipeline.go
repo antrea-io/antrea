@@ -652,7 +652,7 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				Action().Drop().
 				Done(),
 			// This flow matches the first packet of all non-SNAT connections to commit them to the main /
-			// DNAT CtZone and to  mark the source of the connection by copying PktSourceField to
+			// DNAT CtZone and to mark the source of the connection by copying PktSourceField to
 			// ConnSourceCTMarkField. SNAT connections have already been committed to the main / DNAT
 			// CtZone, prior to being committed to the SNAT CtZone.
 			// Note that matching on ct_state=-snat with MatchCTStateSNAT(false) does not work because of
