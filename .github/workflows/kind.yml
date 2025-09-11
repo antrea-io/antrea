@@ -930,7 +930,10 @@ jobs:
           kubectl apply -f build/yamls/antrea.yml
       - name: Run Post checks
         run: |
-          ./bin/antctl-linux check installation
+          # In some cases, it seems that NetworkPolicy realization takes a long time in CI, probably
+          # due to a slow runner / oversubscribed infra.
+          # To avoid flakes, we choose a long realization timeout.
+          ./bin/antctl-linux check installation -network-policy-delay 5s
 
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's

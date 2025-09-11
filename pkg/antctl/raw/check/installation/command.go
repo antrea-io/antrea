@@ -45,6 +45,7 @@ func Command() *cobra.Command {
 	command.Flags().StringVarP(&o.antreaNamespace, "namespace", "n", o.antreaNamespace, "Configure Namespace in which Antrea is running")
 	command.Flags().StringVar(&o.runFilter, "run", o.runFilter, "Run only the tests that match the provided regex")
 	command.Flags().StringVar(&o.testImage, "test-image", o.testImage, "Container image override for the installation checker")
+	command.Flags().StringVar(&o.networkPolicyDelay, "network-policy-delay", o.networkPolicyDelay, "Maximum time to wait for a policy to be realized / enforced, as a Go duration string")
 	return command
 }
 
@@ -52,13 +53,15 @@ type options struct {
 	antreaNamespace string
 	runFilter       string
 	// Container image for the installation checker.
-	testImage string
+	testImage          string
+	networkPolicyDelay string
 }
 
 func newOptions() *options {
 	return &options{
-		antreaNamespace: "kube-system",
-		testImage:       check.DefaultTestImage,
+		antreaNamespace:    "kube-system",
+		testImage:          check.DefaultTestImage,
+		networkPolicyDelay: "2s",
 	}
 }
 
@@ -71,6 +74,7 @@ const (
 	kindClientName              = "client"
 	agentDaemonSetName          = "antrea-agent"
 	podReadyTimeout             = 1 * time.Minute
+	minNetworkPolicyDelay       = 1 * time.Second
 )
 
 type notRunnableError struct {
@@ -112,7 +116,8 @@ type testContext struct {
 	// A nil regex indicates that all the tests should be run.
 	runFilterRegex *regexp.Regexp
 	// Container image for the installation checker.
-	testImage string
+	testImage          string
+	networkPolicyDelay time.Duration
 }
 
 type testStats struct {
@@ -142,12 +147,20 @@ func Run(o *options) error {
 		return err
 	}
 
+	networkPolicyDelay, err := time.ParseDuration(o.networkPolicyDelay)
+	if err != nil {
+		return fmt.Errorf("NetworkPolicy delay is not a valid duration string: %w", err)
+	}
+	if networkPolicyDelay < minNetworkPolicyDelay {
+		return fmt.Errorf("NetworkPolicy delay should not be less than %v", minNetworkPolicyDelay)
+	}
+
 	client, config, clusterName, err := check.NewClient()
 	if err != nil {
 		return fmt.Errorf("unable to create Kubernetes client: %w", err)
 	}
 	ctx := context.Background()
-	testContext := NewTestContext(client, config, clusterName, o.antreaNamespace, runFilterRegex, o.testImage)
+	testContext := NewTestContext(client, config, clusterName, o.antreaNamespace, runFilterRegex, o.testImage, networkPolicyDelay)
 	defer check.Teardown(ctx, testContext.Logger, testContext.client, testContext.namespace)
 	if err := testContext.setup(ctx); err != nil {
 		return err
@@ -192,16 +205,18 @@ func NewTestContext(
 	antreaNamespace string,
 	runFilterRegex *regexp.Regexp,
 	testImage string,
+	networkPolicyDelay time.Duration,
 ) *testContext {
 	return &testContext{
-		Logger:          check.NewLogger(fmt.Sprintf("[%s] ", clusterName)),
-		client:          client,
-		config:          config,
-		clusterName:     clusterName,
-		antreaNamespace: antreaNamespace,
-		namespace:       check.GenerateRandomNamespace(testNamespacePrefix),
-		runFilterRegex:  runFilterRegex,
-		testImage:       testImage,
+		Logger:             check.NewLogger(fmt.Sprintf("[%s] ", clusterName)),
+		client:             client,
+		config:             config,
+		clusterName:        clusterName,
+		antreaNamespace:    antreaNamespace,
+		namespace:          check.GenerateRandomNamespace(testNamespacePrefix),
+		runFilterRegex:     runFilterRegex,
+		testImage:          testImage,
+		networkPolicyDelay: networkPolicyDelay,
 	}
 }
 
