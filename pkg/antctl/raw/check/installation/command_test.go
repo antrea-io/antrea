@@ -105,7 +105,7 @@ func TestRun(t *testing.T) {
 			overrideTestsRegistry(t, tc.registry)
 			runFilterRegex, err := compileRunFilter(tc.runFilter)
 			require.NoError(t, err)
-			testContext := NewTestContext(nil, nil, "test-cluster", "kube-system", runFilterRegex, check.DefaultTestImage)
+			testContext := NewTestContext(nil, nil, "test-cluster", "kube-system", runFilterRegex, check.DefaultTestImage, minNetworkPolicyDelay)
 			stats := testContext.runTests(ctx)
 			assert.Equal(t, tc.expectedStats, stats)
 		})

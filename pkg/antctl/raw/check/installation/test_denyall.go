@@ -28,9 +28,6 @@ type DenyAllConnectivityTest struct {
 	networkPolicy *networkingv1.NetworkPolicy
 }
 
-// Provide enough time for policies to be enforced by the CNI plugin.
-const networkPolicyDelay = 2 * time.Second
-
 func init() {
 	RegisterTest("egress-deny-all-connectivity", &DenyAllConnectivityTest{networkPolicy: &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -88,7 +85,10 @@ func (t *DenyAllConnectivityTest) Run(ctx context.Context, testContext *testCont
 		testContext.Log("NetworkPolicy deletion was successful")
 		return nil
 	}()
-	time.Sleep(networkPolicyDelay)
+	// Instead of an arbitrary sleep, we could poll and invoke tcpProbe at reasonable intervals?
+	// Unlike Antrea NetworkPolicies, K8s NetworkPolicies don't have a Status that can be used
+	// to determined whether the policy has been realized.
+	time.Sleep(testContext.networkPolicyDelay)
 	testContext.Log("NetworkPolicy applied successfully")
 	for _, clientPod := range testContext.clientPods {
 		for _, service := range services {
