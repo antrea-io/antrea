@@ -286,6 +286,12 @@ func (b *ofFlowBuilder) MatchCTLabelField(high, low uint64, field *CtLabel) Flow
 	return b
 }
 
+func (b *ofFlowBuilder) MatchCTZone(zone int) FlowBuilder {
+	z := uint16(zone)
+	b.Match.CtZone = &z
+	return b
+}
+
 // MatchInPort adds match condition for matching in_port.
 func (b *ofFlowBuilder) MatchInPort(inPort uint32) FlowBuilder {
 	b.Match.InputPort = inPort

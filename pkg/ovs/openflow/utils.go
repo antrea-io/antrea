@@ -283,6 +283,10 @@ func matchCtStateToString(field *openflow15.MatchField) string {
 	return fmt.Sprintf("ct_state=%s", strings.Join(ctStateStrs, ""))
 }
 
+func matchCtZoneToString(field *openflow15.MatchField) string {
+	return fmt.Sprintf("ct_zone=%d", field.Value.(*openflow15.Uint16Message).Data)
+}
+
 func matchCtMarkToString(field *openflow15.MatchField) string {
 	return fmt.Sprintf("ct_mark=%s", getFieldDataString(field))
 }
@@ -492,6 +496,11 @@ func getFieldDataString(field *openflow15.MatchField) string {
 		fieldStr = fmt.Sprintf("0x%s", trimLeadingZero(fmt.Sprintf("%x", value.Data)))
 		if mask != nil {
 			fieldStr = fmt.Sprintf("%s/0x%s", fieldStr, trimLeadingZero(fmt.Sprintf("%x", mask.(*openflow15.ByteArrayField).Data)))
+		}
+	case *openflow15.Uint16Message:
+		fieldStr = fmt.Sprintf("0x%x", value.Data)
+		if mask != nil && mask.(*openflow15.Uint16Message).Data != 0xffff {
+			fieldStr = fmt.Sprintf("%s/0x%x", fieldStr, mask.(*openflow15.Uint16Message).Data)
 		}
 	case *openflow15.Uint32Message:
 		fieldStr = fmt.Sprintf("0x%x", value.Data)
@@ -964,7 +973,9 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		parts = append(parts, matchCtStateToString(field))
 	}
 
-	// TODO: add support for field "ct_zone"
+	if field, ok := matchMap["ct_zone"]; ok {
+		parts = append(parts, matchCtZoneToString(field))
+	}
 
 	if field, ok := matchMap["ct_mark"]; ok {
 		parts = append(parts, matchCtMarkToString(field))
