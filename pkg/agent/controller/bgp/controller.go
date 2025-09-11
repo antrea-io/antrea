@@ -1018,10 +1018,10 @@ func (c *Controller) updateBGPPeerPasswords(secret *corev1.Secret) {
 	}
 }
 
-// GetBGPPolicyInfo returns Name, RouterID, LocalASN, ListenPort and ConfederationIdentifier of effective BGP Policy applied on the Node.
-func (c *Controller) GetBGPPolicyInfo() (string, string, int32, int32, int32) {
-	var name, routerID string
-	var localASN, listenPort, confederationIdentifier int32
+// GetBGPPolicyInfo returns Name, RouterID, LocalASN, ListenPort, ConfederationIdentifier
+// and MemberASNs of effective BGP Policy applied on the Node.
+func (c *Controller) GetBGPPolicyInfo() (name, routerID string, localASN, listenPort,
+	confederationIdentifier int32, memberASNs sets.Set[uint32]) {
 
 	c.bgpPolicyStateMutex.RLock()
 	defer c.bgpPolicyStateMutex.RUnlock()
@@ -1033,9 +1033,10 @@ func (c *Controller) GetBGPPolicyInfo() (string, string, int32, int32, int32) {
 		listenPort = c.bgpPolicyState.listenPort
 		if c.bgpPolicyState.confederationConfig != nil {
 			confederationIdentifier = c.bgpPolicyState.confederationConfig.identifier
+			memberASNs = c.bgpPolicyState.confederationConfig.memberASNs
 		}
 	}
-	return name, routerID, localASN, listenPort, confederationIdentifier
+	return name, routerID, localASN, listenPort, confederationIdentifier, memberASNs
 }
 
 // GetBGPPeerStatus returns current status of BGP Peers of effective BGP Policy applied on the Node.

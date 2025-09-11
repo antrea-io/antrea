@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/apis"
@@ -34,13 +35,14 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			return
 		}
 
-		bgpPolicyName, routerID, localASN, listenPort, confederationIdentifier := bq.GetBGPPolicyInfo()
+		bgpPolicyName, routerID, localASN, listenPort, confederationIdentifier, memberASNs := bq.GetBGPPolicyInfo()
 		bgpPolicyResp := apis.BGPPolicyResponse{
 			BGPPolicyName:           bgpPolicyName,
 			RouterID:                routerID,
 			LocalASN:                localASN,
 			ListenPort:              listenPort,
 			ConfederationIdentifier: confederationIdentifier,
+			MemberASNs:              sets.List(memberASNs),
 		}
 		if bgpPolicyName == "" {
 			http.Error(w, "there is no effective bgp policy applied to the Node", http.StatusNotFound)
