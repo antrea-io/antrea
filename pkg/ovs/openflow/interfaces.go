@@ -290,6 +290,7 @@ type FlowBuilder interface {
 	MatchCTStateSNAT(isSet bool) FlowBuilder
 	MatchCTMark(marks ...*CtMark) FlowBuilder
 	MatchCTLabelField(high, low uint64, field *CtLabel) FlowBuilder
+	MatchCTZone(zone int) FlowBuilder
 	MatchPktMark(value uint32, mask *uint32) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchDstPort(port uint16, portMask *uint16) FlowBuilder

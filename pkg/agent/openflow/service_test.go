@@ -39,11 +39,11 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 			"cookie=0x1030000000000, table=EndpointDNAT, priority=200,reg0=0x4000/0x4000 actions=controller(id=32776,reason=no_match,userdata=04,max_len=65535)",
 			"cookie=0x1030000000000, table=EndpointDNAT, priority=190,reg4=0x20000/0x70000 actions=set_field:0x10000/0x70000->reg4,resubmit:ServiceLB",
 			"cookie=0x1030000000000, table=L3Forwarding, priority=190,ct_mark=0x10/0x10,reg0=0x202/0x20f actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
-			"cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
-			"cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark))",
-			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=169.254.0.253),exec(set_field:0x10/0x10->ct_mark,set_field:0x40/0x40->ct_mark))",
-			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x3/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark,set_field:0x40/0x40->ct_mark))",
-			"cookie=0x1030000000000, table=SNAT, priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ip,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark))",
+			"cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+			"cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=169.254.0.253),exec(set_field:0x10/0x10->ct_mark,set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x3/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark,set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+			"cookie=0x1030000000000, table=SNAT, priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ip,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark,set_field:0x20/0x20->ct_mark))",
 			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=-new-rpl+trk,ct_mark=0x20/0x20,ip actions=ct(table=L2ForwardingCalc,zone=65521,nat)",
 			"cookie=0x1030000000000, table=Output, priority=210,ct_mark=0x40/0x40,reg0=0x200000/0x600000 actions=IN_PORT",
 		}
@@ -60,7 +60,7 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 		}
 		if dsrEnabled {
 			flows = append(flows,
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,ip,reg4=0x2000000/0x2000000 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,ip,reg4=0x2000000/0x2000000 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520)",
 			)
 		}
 	} else {
@@ -72,12 +72,12 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 			"cookie=0x1030000000000, table=EndpointDNAT, priority=200,reg0=0x4000/0x4000 actions=controller(id=32776,reason=no_match,userdata=04,max_len=65535)",
 			"cookie=0x1030000000000, table=EndpointDNAT, priority=190,reg4=0x20000/0x70000 actions=set_field:0x10000/0x70000->reg4,resubmit:ServiceLB",
 			"cookie=0x1030000000000, table=L3Forwarding, priority=190,ct_mark=0x10/0x10,reg0=0x202/0x20f actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
-			"cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
-			"cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ipv6,reg0=0x12/0xff,reg4=0x200000/0x2200000 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark))",
-			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ipv6,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=fc01::aabb:ccdd:eeff),exec(set_field:0x10/0x10->ct_mark,set_field:0x40/0x40->ct_mark))",
-			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ipv6,reg0=0x3/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=fec0:10:10::1),exec(set_field:0x10/0x10->ct_mark,set_field:0x40/0x40->ct_mark))",
+			"cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+			"cookie=0x1030000000000, table=SNATMark, priority=200,ct_state=+new+trk,ipv6,reg0=0x12/0xff,reg4=0x200000/0x2200000 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ipv6,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=fc01::aabb:ccdd:eeff),exec(set_field:0x10/0x10->ct_mark,set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ipv6,reg0=0x3/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=fec0:10:10::1),exec(set_field:0x10/0x10->ct_mark,set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
 			"cookie=0x1030000000000, table=SNAT, priority=200,ct_state=-new-rpl+trk,ct_mark=0x20/0x20,ipv6 actions=ct(table=L2ForwardingCalc,zone=65511,nat)",
-			"cookie=0x1030000000000, table=SNAT, priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ipv6,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=fec0:10:10::1),exec(set_field:0x10/0x10->ct_mark))",
+			"cookie=0x1030000000000, table=SNAT, priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ipv6,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=fec0:10:10::1),exec(set_field:0x10/0x10->ct_mark,set_field:0x20/0x20->ct_mark))",
 			"cookie=0x1030000000000, table=Output, priority=210,ct_mark=0x40/0x40,reg0=0x200000/0x600000 actions=IN_PORT",
 		}
 		if proxyAllEnabled {
@@ -93,7 +93,7 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 		}
 		if dsrEnabled {
 			flows = append(flows,
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,ipv6,reg4=0x2000000/0x2000000 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,ipv6,reg4=0x2000000/0x2000000 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510)",
 			)
 		}
 	}
