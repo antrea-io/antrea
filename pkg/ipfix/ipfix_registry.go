@@ -15,11 +15,15 @@
 package ipfix
 
 import (
+	"sync"
+
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 )
 
 var _ IPFIXRegistry = new(ipfixRegistry)
+
+var loadRegistryMutex sync.RWMutex
 
 // IPFIXRegistry interface is added to facilitate unit testing without involving the code from go-ipfix library.
 type IPFIXRegistry interface {
@@ -34,9 +38,14 @@ func NewIPFIXRegistry() *ipfixRegistry {
 }
 
 func (reg *ipfixRegistry) LoadRegistry() {
+	loadRegistryMutex.Lock()
+	defer loadRegistryMutex.Unlock()
+
 	ipfixregistry.LoadRegistry()
 }
 
 func (reg *ipfixRegistry) GetInfoElement(name string, enterpriseID uint32) (*ipfixentities.InfoElement, error) {
+	loadRegistryMutex.RLock()
+	defer loadRegistryMutex.RUnlock()
 	return ipfixregistry.GetInfoElement(name, enterpriseID)
 }
