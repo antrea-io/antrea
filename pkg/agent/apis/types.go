@@ -216,23 +216,29 @@ func (r ServiceExternalIPInfo) SortRows() bool {
 
 // BGPPolicyResponse describes the response struct of bgppolicy command.
 type BGPPolicyResponse struct {
-	BGPPolicyName           string `json:"name,omitempty"`
-	RouterID                string `json:"routerID,omitempty"`
-	LocalASN                int32  `json:"localASN,omitempty"`
-	ListenPort              int32  `json:"listenPort,omitempty"`
-	ConfederationIdentifier int32  `json:"confederationIdentifier,omitempty"`
+	BGPPolicyName           string   `json:"name,omitempty"`
+	RouterID                string   `json:"routerID,omitempty"`
+	LocalASN                int32    `json:"localASN,omitempty"`
+	ListenPort              int32    `json:"listenPort,omitempty"`
+	ConfederationIdentifier int32    `json:"confederationIdentifier,omitempty"`
+	MemberASNs              []uint32 `json:"memberASNs,omitempty"`
 }
 
 func (r BGPPolicyResponse) GetTableHeader() []string {
-	return []string{"NAME", "ROUTER-ID", "LOCAL-ASN", "LISTEN-PORT", "CONFEDERATION-IDENTIFIER"}
+	return []string{"NAME", "ROUTER-ID", "LOCAL-ASN", "LISTEN-PORT", "CONFEDERATION-IDENTIFIER", "MEMBER-ASNs"}
 }
 
-func (r BGPPolicyResponse) GetTableRow(_ int) []string {
+func (r BGPPolicyResponse) GetTableRow(maxColumnLength int) []string {
 	confederationIdentifierStr := ""
+	memberASNs := []string{}
 	if r.ConfederationIdentifier != 0 {
 		confederationIdentifierStr = strconv.Itoa(int(r.ConfederationIdentifier))
 	}
-	return []string{r.BGPPolicyName, r.RouterID, strconv.Itoa(int(r.LocalASN)), strconv.Itoa(int(r.ListenPort)), confederationIdentifierStr}
+	for _, memberASN := range r.MemberASNs {
+		memberASNs = append(memberASNs, strconv.Itoa(int(memberASN)))
+	}
+	return []string{r.BGPPolicyName, r.RouterID, strconv.Itoa(int(r.LocalASN)), strconv.Itoa(int(r.ListenPort)),
+		confederationIdentifierStr, printers.GenerateTableElementWithSummary(memberASNs, maxColumnLength)}
 }
 
 func (r BGPPolicyResponse) SortRows() bool {

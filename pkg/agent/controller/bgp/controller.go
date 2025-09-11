@@ -118,6 +118,15 @@ type bgpPolicyState struct {
 	peerConfigs map[string]bgp.PeerConfig
 }
 
+type BGPPolicyInfo struct {
+	BGPPolicyName           string
+	RouterID                string
+	LocalASN                int32
+	ListenPort              int32
+	ConfederationIdentifier int32
+	MemberASNs              []uint32
+}
+
 type Controller struct {
 	nodeInformer     cache.SharedIndexInformer
 	nodeLister       corelisters.NodeLister
@@ -1018,24 +1027,28 @@ func (c *Controller) updateBGPPeerPasswords(secret *corev1.Secret) {
 	}
 }
 
-// GetBGPPolicyInfo returns Name, RouterID, LocalASN, ListenPort and ConfederationIdentifier of effective BGP Policy applied on the Node.
-func (c *Controller) GetBGPPolicyInfo() (string, string, int32, int32, int32) {
-	var name, routerID string
-	var localASN, listenPort, confederationIdentifier int32
+// GetBGPPolicyInfo returns BGPPolicyInfo which includes
+// BGPPolicyName, RouterID, LocalASN, ListenPort, ConfederationIdentifier
+// and MemberASNs of effective BGP Policy applied on the Node.
+func (c *Controller) GetBGPPolicyInfo() *BGPPolicyInfo {
+	var bgpPolicyInfo *BGPPolicyInfo
 
 	c.bgpPolicyStateMutex.RLock()
 	defer c.bgpPolicyStateMutex.RUnlock()
 
 	if c.bgpPolicyState != nil {
-		name = c.bgpPolicyState.bgpPolicyName
-		routerID = c.bgpPolicyState.routerID
-		localASN = c.bgpPolicyState.localASN
-		listenPort = c.bgpPolicyState.listenPort
+		bgpPolicyInfo = &BGPPolicyInfo{
+			BGPPolicyName: c.bgpPolicyState.bgpPolicyName,
+			RouterID:      c.bgpPolicyState.routerID,
+			LocalASN:      c.bgpPolicyState.localASN,
+			ListenPort:    c.bgpPolicyState.listenPort,
+		}
 		if c.bgpPolicyState.confederationConfig != nil {
-			confederationIdentifier = c.bgpPolicyState.confederationConfig.identifier
+			bgpPolicyInfo.ConfederationIdentifier = c.bgpPolicyState.confederationConfig.identifier
+			bgpPolicyInfo.MemberASNs = sets.List(c.bgpPolicyState.confederationConfig.memberASNs)
 		}
 	}
-	return name, routerID, localASN, listenPort, confederationIdentifier
+	return bgpPolicyInfo
 }
 
 // GetBGPPeerStatus returns current status of BGP Peers of effective BGP Policy applied on the Node.

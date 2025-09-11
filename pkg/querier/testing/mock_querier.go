@@ -392,15 +392,11 @@ func (mr *MockAgentBGPPolicyInfoQuerierMockRecorder) GetBGPPeerStatus(ctx any) *
 }
 
 // GetBGPPolicyInfo mocks base method.
-func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPolicyInfo() (string, string, int32, int32, int32) {
+func (m *MockAgentBGPPolicyInfoQuerier) GetBGPPolicyInfo() *bgp0.BGPPolicyInfo {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBGPPolicyInfo")
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(string)
-	ret2, _ := ret[2].(int32)
-	ret3, _ := ret[3].(int32)
-	ret4, _ := ret[4].(int32)
-	return ret0, ret1, ret2, ret3, ret4
+	ret0, _ := ret[0].(*bgp0.BGPPolicyInfo)
+	return ret0
 }
 
 // GetBGPPolicyInfo indicates an expected call of GetBGPPolicyInfo.

@@ -2432,13 +2432,9 @@ func getServiceName(name string) string {
 
 func TestGetBGPPolicyInfo(t *testing.T) {
 	testCases := []struct {
-		name                            string
-		existingState                   *bgpPolicyState
-		expectedBgpPolicyName           string
-		expectedASN                     int32
-		expectedRouterID                string
-		expectedListenPort              int32
-		expectedConfederationIdentifier int32
+		name                  string
+		existingState         *bgpPolicyState
+		expectedBgpPolicyInfo *BGPPolicyInfo
 	}{
 		{
 			name: "bgpPolicyState exists",
@@ -2450,10 +2446,12 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 				nil,
 				nil,
 			),
-			expectedBgpPolicyName: bgpPolicyName1,
-			expectedASN:           int32(64512),
-			expectedRouterID:      nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-			expectedListenPort:    int32(179),
+			expectedBgpPolicyInfo: &BGPPolicyInfo{
+				BGPPolicyName: bgpPolicyName1,
+				LocalASN:      int32(64512),
+				RouterID:      nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				ListenPort:    int32(179),
+			},
 		},
 		{
 			name: "bgpPolicyState exists with confederation",
@@ -2463,13 +2461,19 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				nil,
 				nil,
-				&confederationConfig{identifier: int32(65000)},
+				&confederationConfig{
+					identifier: int32(65000),
+					memberASNs: sets.New(uint32(64513)),
+				},
 			),
-			expectedBgpPolicyName:           bgpPolicyName1,
-			expectedASN:                     int32(64512),
-			expectedRouterID:                nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
-			expectedListenPort:              int32(179),
-			expectedConfederationIdentifier: int32(65000),
+			expectedBgpPolicyInfo: &BGPPolicyInfo{
+				BGPPolicyName:           bgpPolicyName1,
+				LocalASN:                int32(64512),
+				RouterID:                nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				ListenPort:              int32(179),
+				ConfederationIdentifier: int32(65000),
+				MemberASNs:              []uint32{64513},
+			},
 		},
 		{
 			name:          "bgpPolicyState does not exist",
@@ -2483,12 +2487,8 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
 
-			actualBgpPolicyName, actualRouterID, actualASN, actualListenPort, actualConfederationIdentifier := c.GetBGPPolicyInfo()
-			assert.Equal(t, tt.expectedBgpPolicyName, actualBgpPolicyName)
-			assert.Equal(t, tt.expectedRouterID, actualRouterID)
-			assert.Equal(t, tt.expectedASN, actualASN)
-			assert.Equal(t, tt.expectedListenPort, actualListenPort)
-			assert.Equal(t, tt.expectedConfederationIdentifier, actualConfederationIdentifier)
+			actualBgpPolicyInfo := c.GetBGPPolicyInfo()
+			assert.Equal(t, tt.expectedBgpPolicyInfo, actualBgpPolicyInfo)
 		})
 	}
 }

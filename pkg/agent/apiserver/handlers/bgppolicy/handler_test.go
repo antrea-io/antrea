@@ -25,6 +25,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/pkg/agent/controller/bgp"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
@@ -32,12 +33,12 @@ func TestBGPPolicyQuery(t *testing.T) {
 	tests := []struct {
 		name             string
 		expectedStatus   int
-		expectedResponse apis.BGPPolicyResponse
+		expectedResponse *apis.BGPPolicyResponse
 	}{
 		{
 			name:           "bgpPolicyState exists",
 			expectedStatus: http.StatusOK,
-			expectedResponse: apis.BGPPolicyResponse{
+			expectedResponse: &apis.BGPPolicyResponse{
 				BGPPolicyName: "policy-1",
 				RouterID:      "192.168.1.2",
 				LocalASN:      64512,
@@ -47,12 +48,13 @@ func TestBGPPolicyQuery(t *testing.T) {
 		{
 			name:           "bgpPolicyState exists with confederation",
 			expectedStatus: http.StatusOK,
-			expectedResponse: apis.BGPPolicyResponse{
+			expectedResponse: &apis.BGPPolicyResponse{
 				BGPPolicyName:           "policy-1",
 				RouterID:                "192.168.1.2",
 				LocalASN:                64512,
 				ListenPort:              179,
 				ConfederationIdentifier: 65000,
+				MemberASNs:              []uint32{64513, 64514},
 			},
 		},
 		{
@@ -65,8 +67,19 @@ func TestBGPPolicyQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			q := queriertest.NewMockAgentBGPPolicyInfoQuerier(ctrl)
-			q.EXPECT().GetBGPPolicyInfo().Return(tt.expectedResponse.BGPPolicyName, tt.expectedResponse.RouterID,
-				tt.expectedResponse.LocalASN, tt.expectedResponse.ListenPort, tt.expectedResponse.ConfederationIdentifier)
+			if tt.expectedResponse != nil {
+				q.EXPECT().GetBGPPolicyInfo().Return(&bgp.BGPPolicyInfo{
+					BGPPolicyName:           tt.expectedResponse.BGPPolicyName,
+					RouterID:                tt.expectedResponse.RouterID,
+					LocalASN:                tt.expectedResponse.LocalASN,
+					ListenPort:              tt.expectedResponse.ListenPort,
+					ConfederationIdentifier: tt.expectedResponse.ConfederationIdentifier,
+					MemberASNs:              tt.expectedResponse.MemberASNs,
+				})
+			} else {
+				q.EXPECT().GetBGPPolicyInfo().Return(nil)
+			}
+
 			handler := HandleFunc(q)
 
 			req, err := http.NewRequest(http.MethodGet, "", nil)
@@ -77,8 +90,8 @@ func TestBGPPolicyQuery(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
 
 			if tt.expectedStatus == http.StatusOK {
-				var received apis.BGPPolicyResponse
-				err = json.Unmarshal(recorder.Body.Bytes(), &received)
+				received := &apis.BGPPolicyResponse{}
+				err = json.Unmarshal(recorder.Body.Bytes(), received)
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedResponse, received)
 			}
