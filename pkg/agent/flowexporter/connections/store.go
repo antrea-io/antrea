@@ -77,6 +77,8 @@ func (cs *connStore) Run(stopCh <-chan struct{}) {
 			cs.updateConnections(batch)
 		case sub := <-cs.addSubCh:
 			cs.subs[sub] = struct{}{}
+			// TODO Andrew: Notify current state to subscriber or should we just wait until next update?
+			// If we wait we may miss old events, if we update right away could we potentially send duplicates?
 		case sub := <-cs.delSubCh:
 			delete(cs.subs, sub)
 		case <-gcStaleTicker.C:
@@ -117,10 +119,11 @@ func (cs *connStore) removeStaleConnections() {
 func (cs *connStore) updateConnections(batch []*connection.Connection) {
 	cs.entriesMutex.Lock()
 	defer cs.entriesMutex.Unlock()
+	klog.V(5).InfoS("DEBUG A1: New Connections Received", "len", len(batch))
 	updatedConns := make([]*connection.Connection, 0, len(batch))
 	now := time.Now()
 	for i := range batch {
-		in := batch[i] // Copy the connection
+		in := batch[i]
 		in.IsPresent = true
 		in.LastUpdateTime = now
 

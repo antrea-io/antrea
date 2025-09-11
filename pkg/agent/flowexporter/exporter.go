@@ -21,11 +21,13 @@ import (
 	"net"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
@@ -39,6 +41,8 @@ import (
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/proxy"
 	api "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/querier"
@@ -57,7 +61,13 @@ import (
 // can be taking a fraction of the size of connection store to approximate the
 // number of expired connections, while having a min and a max to handle edge cases,
 // e.g. min(50 + 0.1 * connectionStore.size(), 200)
-const maxConnsToExport = 64
+const (
+	maxConnsToExport = 64
+	// How long to wait before retrying the processing of a FlowExporterTarget.
+	minRetryDelay  = 5 * time.Second
+	maxRetryDelay  = 300 * time.Second
+	defaultWorkers = 4
+)
 
 type FlowExporter struct {
 	collectorProto         string
@@ -82,6 +92,14 @@ type FlowExporter struct {
 	nodeUID                string
 	obsDomainID            uint32
 
+	targetInformer crdinformers.FlowExporterTargetInformer
+	fetLister      crdlisters.FlowExporterTargetLister
+	queue          workqueue.TypedRateLimitingInterface[string]
+
+	consumerStopChs map[string]chan struct{}
+	addConsumerCh   chan *api.FlowExporterTarget
+	rmConsumerCh    chan string
+
 	store     connections.CTStore
 	ctFetcher *connections.ConntrackFetcher
 }
@@ -90,6 +108,17 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
 	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *options.FlowExporterOptions,
 	egressQuerier querier.EgressQuerier, podL7FlowExporterAttrGetter connections.PodL7FlowExporterAttrGetter, l7FlowExporterEnabled bool) (*FlowExporter, error) {
+
+	return NewFlowExporterWithInformer(podStore, proxier, k8sClient, nodeRouteController,
+		trafficEncapMode, nodeConfig, v4Enabled, v6Enabled, serviceCIDRNet, serviceCIDRNetv6,
+		ovsDatapathType, proxyEnabled, npQuerier, o,
+		egressQuerier, podL7FlowExporterAttrGetter, l7FlowExporterEnabled, nil)
+}
+
+func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
+	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
+	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *options.FlowExporterOptions,
+	egressQuerier querier.EgressQuerier, podL7FlowExporterAttrGetter connections.PodL7FlowExporterAttrGetter, l7FlowExporterEnabled bool, targetInformer crdinformers.FlowExporterTargetInformer) (*FlowExporter, error) {
 
 	protocolFilter := filter.NewProtocolFilter(o.ProtocolFilter)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocolFilter)
@@ -136,7 +165,7 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 		exp = exporter.NewIPFIXExporter(collectorProto, nodeName, obsDomainID, v4Enabled, v6Enabled)
 	}
 
-	return &FlowExporter{
+	fe := &FlowExporter{
 		collectorProto:         o.FlowCollectorProto,
 		collectorAddr:          o.FlowCollectorAddr,
 		exporter:               exp,
@@ -156,9 +185,27 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sCl
 		nodeName:               nodeName,
 		nodeUID:                nodeUID,
 		obsDomainID:            obsDomainID,
+		targetInformer:         targetInformer,
+		fetLister:              targetInformer.Lister(),
 		store:                  ctStore,
 		ctFetcher:              ctFetcher,
-	}, nil
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "flowexportertarget",
+			},
+		),
+		addConsumerCh:   make(chan *api.FlowExporterTarget),
+		rmConsumerCh:    make(chan string),
+		consumerStopChs: make(map[string]chan struct{}),
+	}
+
+	targetInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		AddFunc:    fe.onNewTarget,
+		DeleteFunc: fe.onTargetDelete,
+	}, 0)
+
+	return fe, nil
 }
 
 func genObservationID(nodeName string) uint32 {
@@ -179,9 +226,6 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	// Start the goroutine to periodically delete stale deny connections.
 	go exp.denyConnStore.RunPeriodicDeletion(stopCh)
 
-	// Start the goroutine to poll conntrack flows.
-	// go exp.conntrackConnStore.Run(stopCh)
-
 	if exp.nodeRouteController != nil {
 		// Wait for NodeRouteController to have processed the initial list of Nodes so that
 		// the list of Pod subnets is up-to-date.
@@ -190,67 +234,82 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 		}
 	}
 
-	go exp.store.Run(stopCh)
-	consumer := exp.createConsumerFromFlowExporterTarget(&api.FlowExporterTarget{
-		ObjectMeta: metav1.ObjectMeta{},
-		Spec: api.FlowExporterTargetSpec{
-			Address:                 exp.collectorAddr,
-			Protocol:                api.ProtoIPFix,
-			ActiveFlowExportTimeout: ptr.To("5s"),
-			IdleFlowExportTimeout:   ptr.To("15s"),
-			IPFixConfig: &api.FlowExporterIPFixConfig{
-				Transport: api.ProtoTCP,
-			},
-		},
-	})
+	klog.V(5).Info("DEBUG A3: waiting for FlowExporterTarget informer cache")
+	cacheSyncs := []cache.InformerSynced{exp.targetInformer.Informer().HasSynced}
+	if !cache.WaitForNamedCacheSync("FlowExporter", stopCh, cacheSyncs...) {
+		return
+	}
+	klog.V(5).Info("DEBUG A3: FlowExporterTarget informer cache synced")
 
-	go consumer.Run(stopCh)
+	go exp.store.Run(stopCh)
+
 	go exp.ctFetcher.Run(stopCh, exp.store)
 
-	// defaultTimeout := exp.conntrackPriorityQueue.ActiveFlowTimeout
-	// expireTimer := time.NewTimer(defaultTimeout)
-	// for {
-	// 	select {
-	// 	case <-stopCh:
-	// 		if exp.exporterConnected {
-	// 			exp.resetFlowExporter()
-	// 		}
-	// 		expireTimer.Stop()
-	// 		return
-	// 	case <-expireTimer.C:
-	// 		if !exp.exporterConnected {
-	// 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	// 			err := exp.initFlowExporter(ctx)
-	// 			cancel()
-	// 			if err != nil {
-	// 				klog.ErrorS(err, "Error when initializing flow exporter")
-	// 				exp.resetFlowExporter()
-	// 				// Initializing flow exporter fails, will retry in next cycle.
-	// 				expireTimer.Reset(defaultTimeout)
-	// 				continue
-	// 			}
-	// 		}
-	// 		// Pop out the expired connections from the conntrack priority queue
-	// 		// and the deny priority queue, and send the data records.
-	// 		nextExpireTime, err := exp.sendFlowRecords()
-	// 		if err != nil {
-	// 			klog.ErrorS(err, "Error when sending expired flow records")
-	// 			// If there is an error when sending flow records because of
-	// 			// intermittent connectivity, we reset the connection to collector
-	// 			// and retry in the next export cycle to reinitialize the connection
-	// 			// and send flow records.
-	// 			exp.resetFlowExporter()
-	// 			expireTimer.Reset(defaultTimeout)
-	// 			continue
-	// 		}
-	// 		expireTimer.Reset(nextExpireTime)
-	// 	}
-	// }
+	for range defaultWorkers {
+		go wait.Until(exp.worker, time.Second, stopCh)
+	}
+
+	for {
+		select {
+		case <-stopCh:
+			for k, ch := range exp.consumerStopChs {
+				close(ch)
+				delete(exp.consumerStopChs, k)
+			}
+			return
+		case res := <-exp.addConsumerCh:
+			klog.V(5).InfoS("DEBUG A3: Adding consumer", "name", res.Name)
+
+			consumer := exp.createConsumerFromFlowExporterTarget(res)
+			stopCh := make(chan struct{})
+			go consumer.Run(stopCh)
+			exp.consumerStopChs[res.Name] = stopCh
+		case name := <-exp.rmConsumerCh:
+			klog.V(5).InfoS("DEBUG A3: Adding consumer", "name", name)
+			ch, ok := exp.consumerStopChs[name]
+			if ok {
+				close(ch)
+				delete(exp.consumerStopChs, name)
+			}
+		}
+	}
 }
 
-func (exp *FlowExporter) resetFlowExporter() {
-	exp.exporter.CloseConnToCollector()
-	exp.exporterConnected = false
+func (exp *FlowExporter) worker() {
+	for exp.processNextWorkItem() {
+	}
+}
+
+func (exp *FlowExporter) processNextWorkItem() bool {
+	key, quit := exp.queue.Get()
+	if quit {
+		return false
+	}
+	defer exp.queue.Done(key)
+	if err := exp.syncFlowExporterTarget(key); err == nil {
+		// If no error occurs we Forget this item so it does not get queued again until
+		// another change happens.
+		exp.queue.Forget(key)
+	} else {
+		// Put the item back on the workqueue to handle any transient errors.
+		exp.queue.AddRateLimited(key)
+		klog.ErrorS(err, "Error syncing FlowExporterTarget", "key", key)
+	}
+	return true
+}
+
+func (exp *FlowExporter) syncFlowExporterTarget(key string) error {
+	res, err := exp.fetLister.Get(key)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			exp.rmConsumerCh <- key
+			return nil
+		}
+		return err
+	}
+
+	exp.addConsumerCh <- res.DeepCopy()
+	return nil
 }
 
 func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
@@ -450,4 +509,29 @@ func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExp
 	}
 
 	return CreateConsumer(fe.k8sClient, fe.store, fe.denyConnStore, consumerConfig)
+}
+
+func (fe *FlowExporter) onNewTarget(obj any) {
+	targetRes := obj.(*api.FlowExporterTarget)
+	klog.V(5).InfoS("DEBUG: Received new FlowExporterTarget", "resource", klog.KObj(targetRes))
+	fe.queue.Add(targetRes.Name)
+}
+
+func (fe *FlowExporter) onTargetDelete(obj any) {
+	targetRes, ok := obj.(*api.FlowExporterTarget)
+	if !ok {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Received unexpected object: %v", obj)
+			return
+		}
+		targetRes, ok = deletedState.Obj.(*api.FlowExporterTarget)
+		if !ok {
+			klog.Errorf("DeletedFinalStateUnknown contains non-FlowExportTarget object: %v", deletedState.Obj)
+			return
+		}
+	}
+
+	klog.V(5).InfoS("DEBUG: FlowExporterTarget deleted", "resource", klog.KObj(targetRes))
+	fe.queue.Add(targetRes.Name)
 }
