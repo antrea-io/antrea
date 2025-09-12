@@ -1147,11 +1147,15 @@ func TestPodControllerAddPod(t *testing.T) {
 		tmpPodNamespace := "testns"
 		tmpPodKey := podKeyGet(tmpPodName, tmpPodNamespace)
 		_, err := podController.assignSriovVFDeviceID(tmpPodName, tmpPodNamespace, sriovResourceName1, interfaceName)
+		require.NoError(t, err, "error while assigning unused VfDevice ID")
 		vfDeviceIDInfoCache, exists := podController.vfDeviceIDUsageMap.Load(tmpPodKey)
 		assert.True(t, exists)
 		vfDeviceIDsInfo := vfDeviceIDInfoCache.([]podSriovVFDeviceIDInfo)
-		assert.Equal(t, interfaceName, vfDeviceIDsInfo[0].ifName, "incorrect interface name")
-		require.NoError(t, err, "error while assigning unused VfDevice ID")
+		assert.Contains(t, vfDeviceIDsInfo, podSriovVFDeviceIDInfo{
+			resourceName: sriovResourceName1,
+			vfDeviceID:   sriovDeviceID11,
+			ifName:       interfaceName,
+		}, "expected interface assignment not found in cache")
 		// The second call would get the assigned SR-IOV device ID directly.
 		deviceID, err := podController.assignSriovVFDeviceID(tmpPodName, tmpPodNamespace, sriovResourceName1, interfaceName)
 		_, exists = podController.vfDeviceIDUsageMap.Load(tmpPodKey)
