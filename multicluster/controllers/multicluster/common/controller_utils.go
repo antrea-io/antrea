@@ -17,21 +17,30 @@ package common
 import (
 	"context"
 	"fmt"
+	"net"
 	"regexp"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
-// DiscoverServiceCIDRByInvalidServiceCreation creates an invalid Service to get returned error, and analyzes
+var createDiscoveryClientFn = createDiscoveryClient
+
+// discoverServiceCIDRByInvalidServiceCreation creates an invalid Service to get returned error, and analyzes
 // the error message to get Service CIDR.
 // TODO: add dual-stack support.
-func DiscoverServiceCIDRByInvalidServiceCreation(ctx context.Context, k8sClient client.Client, namespace string) (string, error) {
+func discoverServiceCIDRByInvalidServiceCreation(ctx context.Context, k8sClient client.Client, namespace string) (string, error) {
 	invalidSvcSpec := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "invalid-svc",
@@ -76,6 +85,73 @@ func parseServiceCIDRFromError(msg string) (string, error) {
 	}
 
 	return match[1], nil
+}
+
+func isK8sVersionGreaterThanOrEqualTo(discoveryClient discovery.DiscoveryInterface, expectedVersion string) (bool, error) {
+	versionInfo, err := discoveryClient.ServerVersion()
+	if err != nil {
+		return false, err
+	}
+	vers, err := version.ParseGeneric(versionInfo.GitVersion)
+	if err != nil {
+		return false, err
+	}
+	return vers.AtLeast(version.MustParseGeneric(expectedVersion)), nil
+}
+
+func getClusterServiceCIDR(ctx context.Context, apiReader client.Reader) (string, error) {
+	// A ServiceCIDR CR named 'kubernetes' will be created by default since v1.33.0.
+	// We will retrieve it to get the Service CIDR.
+	var svcCIDR networkingv1.ServiceCIDR
+	err := apiReader.Get(ctx, types.NamespacedName{Name: "kubernetes"}, &svcCIDR)
+	if err != nil {
+		return "", fmt.Errorf("failed to get ServiceCIDR 'kubernetes': %w", err)
+	}
+
+	for _, cidr := range svcCIDR.Spec.CIDRs {
+		if isIPv4CIDR(cidr) {
+			return cidr, nil
+		}
+	}
+	return "", fmt.Errorf("IPv4 Service CIDR not found")
+}
+
+func createDiscoveryClient(config *rest.Config) (discovery.DiscoveryInterface, error) {
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return discoveryClient, nil
+}
+
+func DiscoverClusterServiceCIDR(ctx context.Context, mgrConfig *rest.Config, apiReader client.Reader, client client.Client, namespace string) (string, error) {
+	var versionMatched bool
+	var cidr string
+	discoveryClient, err := createDiscoveryClientFn(mgrConfig)
+	if err != nil {
+		return "", err
+	}
+	versionMatched, err = isK8sVersionGreaterThanOrEqualTo(discoveryClient, "v1.33.0")
+	if versionMatched {
+		cidr, err = getClusterServiceCIDR(ctx, apiReader)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if !versionMatched || err != nil {
+		klog.InfoS("Falling back to legacy Service CIDR detection", "error", err)
+		cidr, err = discoverServiceCIDRByInvalidServiceCreation(context.TODO(), client, namespace)
+		if err != nil {
+			return "", err
+		}
+	}
+	return cidr, nil
+}
+
+func isIPv4CIDR(cidr string) bool {
+	ip, _, err := net.ParseCIDR(cidr)
+	return err == nil && ip.To4() != nil
 }
 
 func NewClusterInfoResourceExportName(clusterID string) string {

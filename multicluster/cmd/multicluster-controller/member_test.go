@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -93,7 +94,7 @@ func TestRunMember(t *testing.T) {
 			setupManagerAndCertControllerFunc = func(isLeader bool, o *Options) (ctrl.Manager, error) {
 				return mockMemberManager, nil
 			}
-			member.ServiceCIDRDiscoverFn = func(ctx context.Context, k8sClient client.Client, namespace string) (string, error) {
+			member.ServiceCIDRDiscoverFn = func(ctx context.Context, mgrConfig *rest.Config, apiReader client.Reader, k8sClient client.Client, namespace string) (string, error) {
 				return "10.101.0.0/16", nil
 			}
 			ctrl.SetupSignalHandler = mockSetupSignalHandler
